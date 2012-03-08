@@ -44,15 +44,15 @@
     npy_intp i;\
     for(i = 0; i < n; i++, ip1 += is1, op1 += os1)
 
-typedef npy_cdouble cunaryfunc(npy_cdouble);
+typedef npy_double cunaryfunc(npy_double);
 
 NPY_NO_EXPORT void
 MyUFunc_D_D(char **args, npy_intp *dimensions, npy_intp *steps, void *func)
 {
     cunaryfunc *f = (cunaryfunc *)func;
     UNARY_LOOP {
-        npy_cdouble in1 = *(npy_cdouble *)ip1;
-        npy_cdouble *out = (npy_cdouble *)op1;
+        npy_double in1 = *(npy_double *)ip1;
+        npy_double *out = (npy_double *)op1;
         *out = f(in1);
     }
 }
@@ -76,7 +76,7 @@ ufunc_from_ptr(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "n|s", &func_ptr, &func_name)) return NULL;
     data[0] = (void *)func_ptr;
     func = data[0];
-    printf("%f" , func(4.3));
+    printf("%f %f ** \n" , func(4.3), func(0.0));
     ret = PyUFunc_FromFuncAndData(funcs, data, types, 1, 1, 1, PyUFunc_None, func_name, "doc", 0);
 
     return ret;

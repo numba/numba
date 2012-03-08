@@ -6,6 +6,7 @@ import __builtin__
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
+import numba
 
 if sys.maxint > 2**33:
     _plat_bits = 64
@@ -69,7 +70,7 @@ def pythontype_to_strtype(typ):
         return 'f64'
     elif issubclass(typ, int):
         return 'i%d' % _plat_bits
-    elif isinstance(typ, (types.BuiltinFunctionType, types.FunctionType)):
+    elif issubclass(typ, (types.BuiltinFunctionType, types.FunctionType)):
         return ["func"]
 
 def map_to_function(func, typs, mod):
@@ -271,12 +272,11 @@ class Translate(object):
         fpm.finalize()
 
     def make_ufunc(self, name=None):
-        import llvm._core as core
         ee = le.ExecutionEngine.new(self.mod)
         if name is None:
             name = self.func.func_name
-        return core.make_ufunc(ee.get_pointer_to_function(self.lfunc), 
-                               name)
+        return numba.make_ufunc(ee.get_pointer_to_function(self.lfunc), 
+                                name)
 
     # This won't convert any llvm types.  It assumes 
     #  the llvm types in args are either fixed or not-yet specified.
