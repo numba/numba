@@ -7,3 +7,20 @@ Dependencies:
   * LLVM
   * llvm-py
   * numpy
+
+* Compile LLVM 3.1 --- get from svn: 
+
+svn co http://llvm.org/svn/llvm-project/llvm/trunk llvm
+./configure --enable-optimized
+# Be sure your compiler architecture is same as version of Python you will use
+#  e.g. -arch i386 or -arch x86_64.  It might be best to be explicit about this.
+make install
+
+
+* Clone LLVM-py from github
+
+git clone git://github.com/ContinuumIO/llvm-py.git
+python setup.py install
+
+* Build Numba
+python setup.py install
