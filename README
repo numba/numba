@@ -1,0 +1,9 @@
+Numba is a NumPy aware optimizing compiler for Python.  It uses the remarkable LLVM compiler
+infrastructure to compile Python byte-code to machine code especially for use in the NumPy
+run-time and SciPy modules.
+
+Dependencies:
+	
+  * LLVM
+  * llvm-py
+  * numpy
