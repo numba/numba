@@ -6,7 +6,7 @@ import __builtin__
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
-import numba
+from ._ext import make_ufunc
 
 if sys.maxint > 2**33:
     _plat_bits = 64
@@ -167,7 +167,7 @@ def resolve_type(arg1, arg2):
 def func_resolve_type(mod, func, args):
     # already an llvm function
     if func.val and func.val is func._llvm:
-        typs = [llvmtype_to_str(x) for x in func._llvm.type.pointee.args]
+        typs = [llvmtype_to_strtype(x) for x in func._llvm.type.pointee.args]
         lfunc = func._llvm
     else:
         # we need to generate the function including the types
@@ -237,7 +237,7 @@ class Translate(object):
         #   Once to get the type of the return, and again to 
         #   emit the instructions. 
         #   Or, we assume the function has been called already
-        #   and the return type is transknown and passed in. 
+        #   and the return type is known and passed in. 
         self.ret_ltype = double
         # The arg_ltypes we will be able to get from what is passed in
         argnames = self.fco.co_varnames[:self.fco.co_argcount]
@@ -275,7 +275,7 @@ class Translate(object):
         ee = le.ExecutionEngine.new(self.mod)
         if name is None:
             name = self.func.func_name
-        return numba.make_ufunc(ee.get_pointer_to_function(self.lfunc), 
+        return make_ufunc(ee.get_pointer_to_function(self.lfunc), 
                                 name)
 
     # This won't convert any llvm types.  It assumes 
@@ -283,7 +283,7 @@ class Translate(object):
     def func_resolve_type(self, func, args):
         # already an llvm function
         if func.val and func.val is func._llvm:
-            typs = [llvmtype_to_str(x) for x in func._llvm.type.pointee.args]
+            typs = [llvmtype_to_strtype(x) for x in func._llvm.type.pointee.args]
             lfunc = func._llvm
         # The function is one of the delayed list
         elif func.val in self._delaylist:
@@ -370,6 +370,20 @@ class Translate(object):
             res = self.builder.srem(arg1, arg2)
             # FIXME:  Add urem
         self.stack.append(Variable(res))
+
+    def op_BINARY_POWER(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        args = [arg1.llvm(arg1.typ), arg2.llvm(arg2.typ)]
+        if arg2.typ[0] == 'i':
+            INTR = getattr(lc, 'INTR_POWI')
+        else: # make sure it's float
+            INTR = getattr(lc, 'INTR_POW')
+        typs = [str_to_llvmtype(x.typ) for x in [arg1, arg2]]
+        func = lc.Function.intrinsic(self.mod, INTR, typs)
+        res = self.builder.call(func, args)
+        self.stack.append(Variable(res))
+        
 
     def op_RETURN_VALUE(self, i, op, arg):
         val = self.stack.pop(-1)

@@ -27,7 +27,7 @@ _intp = lc.Type.int(_plat_bits)
 _intp_star = lc.Type.pointer(_intp)
 _void_star = lc.Type.pointer(lc.Type.int(8))
 _numpy_struct = lc.Type.struct(_pyobject_head+\
-      [_void_star           # data
+      [_void_star,          # data
        lc.Type.int(32),     # nd
        _intp_star,          # dimensions
        _intp_star,          # strides
@@ -64,7 +64,7 @@ def llvmtype_to_strtype(typ):
          typ.pointee.kind == lc.TYPE_FUNCTION:
         return ['func'] + typ.pointee.args
     elif typ.kind == lc.TYPE_POINTER and \
-         typ.pointee.kind == lc.TYPE_STRUCT
+        typ.pointee.kind == lc.TYPE_STRUCT:
         return ['arr[]']
 
 # We don't support all types....
@@ -106,7 +106,7 @@ class Variable(object):
             self.typ = llvmtype_to_strtype(val.type)
         else:
             self._llvm = None
-            if isinstance(val, numpy.ndarray)
+            if isinstance(val, numpy.ndarray):
                 self.typ = pythontype_to_strtype(val.dtype)
             else:
                 self.typ = pythontype_to_strtype(type(val))
@@ -129,7 +129,7 @@ class Variable(object):
             elif typ[0] == 'func':
                 res = map_to_function(self.val, typ[1:], mod)
             elif typ[:3] == 'arr':
-
+                pass
             return res
 
 # Add complex, unsigned, and bool 
@@ -431,7 +431,7 @@ class Translate(object):
         self.stack.append(Variable(res))
 
     def op_GET_ITER(self, i, op, arg):
-        
+        pass
 
 
 
