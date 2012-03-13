@@ -14,7 +14,7 @@ t.translate()
 print t.mod
 res = t.make_ufunc()
 
-sinc = vectorize(sinc)
+#sinc = vectorize(sinc)
 
 from numpy import linspace
 print res(linspace(-5,5,50))
