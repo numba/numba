@@ -3,6 +3,8 @@ import sys
 import types
 import __builtin__
 
+import numpy as np
+
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
@@ -51,6 +53,8 @@ def itercode(code):
                 extended_arg = oparg*65536L
 
         yield num, op, oparg
+
+
 
 # Convert llvm Type object to kind-bits string
 def llvmtype_to_strtype(typ):
@@ -135,6 +139,15 @@ def str_to_llvmtype(str):
         return lc.Type.int(num)
     raise TypeError, "Invalid Type"
 
+def convert_to_llvmtype(typ):
+    dt = np.dtype(typ)
+    return str_to_llvmtype("%s%s" % (dt.kind, 8*dt.itemsize))
+
+def convert_to_ctypes(typ):
+    import ctypes
+    from numpy.ctypeslib import _typecodes
+    return _typecodes[np.dtype(typ).str]
+        
 # Add complex, unsigned, and bool
 def typcmp(type1, type2):
     if type1==type2:
@@ -208,7 +221,7 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
                           '!=':lc.ICMP_NE}
 
 class Translate(object):
-    def __init__(self, func):
+    def __init__(self, func, ret_type='d', arg_types=['d']):
         self.func = func
         self.fco = func.func_code
         self.names = self.fco.co_names
@@ -226,22 +239,23 @@ class Translate(object):
         self.mod = lc.Module.new(func.func_name+'_mod')        
 
         self._delaylist = [range, xrange, enumerate]
+        self.ret_type = ret_type
+        self.arg_types = arg_types
         self.setup_func()
+        self.ee = None
 
     def setup_func(self):
-        # XXX: Fix the typing here.
-        double = lc.Type.double()
         # The return type will not be known until the return
         #   function is created.   So, we will need to 
         #   walk through the code twice....
         #   Once to get the type of the return, and again to 
-        #   emit the instructions. 
-        #   Or, we assume the function has been called already
-        #   and the return type is known and passed in. 
-        self.ret_ltype = double
+        #   emit the instructions.
+        # For now, we assume the function has been called already
+        #   or the return type is otherwise known and passed in
+        self.ret_ltype = convert_to_llvmtype(self.ret_type)
         # The arg_ltypes we will be able to get from what is passed in
         argnames = self.fco.co_varnames[:self.fco.co_argcount]
-        self.arg_ltypes = [double for arg in argnames]
+        self.arg_ltypes = [convert_to_llvmtype(x) for x in self.arg_types]
         ty_func = lc.Type.function(self.ret_ltype, self.arg_ltypes)        
         self.lfunc = self.mod.add_function(ty_func, self.func.func_name)
         self._locals = [None]*len(self.fco.co_varnames)
@@ -271,11 +285,24 @@ class Translate(object):
         fpm.run(self.lfunc)
         fpm.finalize()
 
+    def get_ctypes_func(self, llvm=True):
+        if self.ee is None:
+            self.ee = le.ExecutionEngine.new(self.mod)
+        import ctypes
+        prototype = ctypes.CFUNCTYPE(convert_to_ctypes(self.ret_type),
+                                     *[convert_to_ctypes(x) for x in self.arg_types])
+        if llvm:
+            return prototype(self.ee.get_pointer_to_function(self.lfunc))
+        else:
+            return prototype(self.func)
+        
+
     def make_ufunc(self, name=None):
-        ee = le.ExecutionEngine.new(self.mod)
+        if self.ee is None:
+            self.ee = le.ExecutionEngine.new(self.mod)
         if name is None:
             name = self.func.func_name
-        return make_ufunc(ee.get_pointer_to_function(self.lfunc), 
+        return make_ufunc(self.ee.get_pointer_to_function(self.lfunc), 
                                 name)
 
     # This won't convert any llvm types.  It assumes 

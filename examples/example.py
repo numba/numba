@@ -12,9 +12,13 @@ from numba.translate import Translate
 t = Translate(sinc)
 t.translate()
 print t.mod
-res = t.make_ufunc()
+sinc = t.make_ufunc()
 
 #sinc = vectorize(sinc)
 
 from numpy import linspace
-print res(linspace(-5,5,50))
+x = linspace(-5,5,1001)
+y = sinc(x)
+from pylab import plot, show
+plot(x,y)
+show()
