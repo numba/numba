@@ -38,26 +38,38 @@ class CallSite(object):
 
 from translate import Translate
 
-# The __ufunc_map__ global maps from Python functions to a (ufunc,
-# Translate) pair.  This added reference prevents the translator and
-# its generated LLVM code from being garbage collected when we leave
-# the scope of the vectorize decorator.
+# The __tr_map__ global maps from Python functions to a Translate
+# object.  This added reference prevents the translator and its
+# generated LLVM code from being garbage collected when we leave the
+# scope of a decorator.
+
 # See: https://github.com/ContinuumIO/numba/issues/5
 
-__ufunc_map__ = {}
+__tr_map__ = {}
 
 def vectorize(func):
-    global __ufunc_map__
+    global __tr_map__
     try:
-        if func not in __ufunc_map__:
+        if func not in __tr_map__:
             t = Translate(func)
             t.translate()
-            ret_val = t.make_ufunc()
-            __ufunc_map__[func] = (ret_val, t)
+            __tr_map__[func] = t
         else:
-            ret_val = __ufunc_map__[func][0]
-	return ret_val
+            t = __tr_map__[func]
+        return t.make_ufunc()
     except:
 	print "Warning: Could not create fast version..."
 	import numpy
 	return numpy.vectorize(func)
+
+# XXX Proposed name; compile() would mask builtin of same name.
+
+def numba_compile(func, *args, **kws):
+    global __tr_map__
+    if func not in __tr_map__:
+        t = Translate(func)
+        t.translate()
+        __tr_map__[func] = t
+    else:
+        t = __tr_map__[func]
+    return t.get_ctypes_func(*args, **kws)
