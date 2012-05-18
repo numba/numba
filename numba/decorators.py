@@ -63,13 +63,15 @@ def vectorize(func):
 	return numpy.vectorize(func)
 
 # XXX Proposed name; compile() would mask builtin of same name.
-
-def numba_compile(func, *args, **kws):
-    global __tr_map__
-    if func not in __tr_map__:
-        t = Translate(func)
-        t.translate()
-        __tr_map__[func] = t
-    else:
-        t = __tr_map__[func]
-    return t.get_ctypes_func(*args, **kws)
+def numba_compile(*args, **kws):
+    def _numba_compile(func):
+        global __tr_map__
+        llvm = kws.pop('llvm', True)
+        if func not in __tr_map__:
+            t = Translate(func, *args, **kws)
+            t.translate()
+            __tr_map__[func] = t
+        else:
+            t = __tr_map__[func]
+        return t.get_ctypes_func(llvm)
+    return _numba_compile

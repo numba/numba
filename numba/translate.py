@@ -238,7 +238,7 @@ class Translate(object):
 
         self.mod = lc.Module.new(func.func_name+'_mod')        
 
-        self._delaylist = [range, xrange, enumerate]
+        self._delaylist = [range, xrange, enumerate, len]
         self.ret_type = ret_type
         self.arg_types = arg_types
         self.setup_func()
@@ -433,7 +433,7 @@ class Translate(object):
             res = self.builder.fcmp(_compare_mapping_float[cmpop], 
                                     arg1, arg2)
         else: # integer FIXME: need unsigned as well...
-            res = self.builer.icmp(_compare_mapping_sint[cmpop], 
+            res = self.builder.icmp(_compare_mapping_sint[cmpop], 
                                     arg1, arg2)
         self.stack.append(Variable(res))
 
@@ -464,13 +464,5 @@ class Translate(object):
     def op_GET_ITER(self, i, op, arg):
         pass
 
-
-
-
-
-
-    
-
-
-        
-
+    def op_SETUP_LOOP(self, i, op, arg):
+        pass
