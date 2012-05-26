@@ -6,9 +6,9 @@ import os
 include_dirs = [os.path.join('..', 'src')]
 
 extensions = [
-    Extension("consumer", ["consumer.pyx", "../src/extensibletype.c"],
+    Extension("consumer", ["consumer.pyx"],
               include_dirs=include_dirs),
-    Extension("provider", ["provider.c", "../src/extensibletype.c"])]
+    Extension("provider", ["provider.pyx"])]
 
 setup(cmdclass={'build_ext': build_ext},
       ext_modules=extensions)
