@@ -80,11 +80,78 @@ static PyTypeObject PyExtensibleType_Type = {
 
 
 static PyTypeObject *
-PyExtensibleType_GetMetaClass(void) {
-  if (PyType_Ready(&PyExtensibleType_Type) < 0) {
-    return NULL;
-  }
+PyExtensibleType_Init_(void) {
   return &PyExtensibleType_Type;
+}
+
+
+static PyTypeObject *
+PyExtensibleType_GetMetaClass(void) {
+  /* Performs roughly the equivalent of:
+
+     d = sys.modules.setdefault('_extensibletype', {})
+     return d.setdefault('extensibletype', our_extensibletype);
+
+     If another module got to sys.modules first, the
+     static PyExtensibleType_Type defined above is left unused.
+   */
+  PyObject *sys = 0;
+  PyObject *modules = 0;
+  PyObject *d = 0;
+  PyObject *extensibletype = 0;
+  PyTypeObject *retval;
+  
+  sys = PyImport_ImportModule("sys");
+  if (!sys) goto bad;
+  modules = PyObject_GetAttrString(sys, "modules");
+  if (!modules) goto bad;
+  if (!PyDict_Check(modules)) {
+      PyErr_SetString(PyExc_TypeError,
+                      "sys.modules is not a dict");
+      goto bad;
+  }
+
+  d = PyDict_GetItemString(modules, "_extensibletype");
+  if (d) {
+    Py_INCREF(d); /* borrowed ref */
+    if (!PyDict_Check(d)) {
+      PyErr_SetString(PyExc_TypeError,
+                      "sys.modules['_extensibletype'] is not a dict");
+      goto bad;
+    }
+  } else {
+    d = PyDict_New();
+    if (!d) goto bad;
+    if (PyDict_SetItemString(modules, "_extensibletype", d) < 0) goto bad;
+  }
+
+  extensibletype = PyDict_GetItemString(d, "extensibletype");
+  if (extensibletype) {
+    Py_INCREF(extensibletype); /* borrowed reference */
+    if (!PyType_Check(extensibletype) || 
+        ((PyTypeObject*)extensibletype)->tp_basicsize !=
+        sizeof(PyHeapExtensibleTypeObject)) {
+      PyErr_SetString(PyExc_TypeError,
+                      "'extensibletype' found but is wrong type or size");
+    }
+    retval = (PyTypeObject*)extensibletype;
+  } else {
+    /* not found; create it */
+    if (PyType_Ready(&PyExtensibleType_Type) < 0) goto bad;
+    if (PyDict_SetItemString(d, "extensibletype", 
+                             (PyObject*)&PyExtensibleType_Type) < 0) goto bad;
+    Py_INCREF((PyObject*)&PyExtensibleType_Type);
+    retval = (PyTypeObject*)&PyExtensibleType_Type;
+  }
+  goto ret;
+ bad:
+  retval = NULL;
+ ret:
+  Py_XDECREF(sys);
+  Py_XDECREF(modules);
+  Py_XDECREF(d);
+  Py_XDECREF(extensibletype);
+  return retval;
 }
 
 

@@ -89,10 +89,12 @@ int ProviderType_Ready() {
 #endif
   };
 
-  ((PyObject*)&Provider_Type)->ob_type = PyExtensibleType_GetMetaClass();
-  Py_INCREF(((PyObject*)&Provider_Type)->ob_type);
+  PyTypeObject *extensibletype = PyExtensibleType_GetMetaClass();
+  if (!extensibletype) return -1;
+  ((PyObject*)&Provider_Type)->ob_type = extensibletype;
 
-  if (PyType_Ready(&Provider_Type) < 0) {
+  if (PyType_Ready((PyTypeObject*)&Provider_Type) < 0) {
     return -1;
   }
-  return 
+  return 0;
+}
