@@ -3,3 +3,6 @@
 *.o
 /demo/build
 *.so
+
+/demo/consumer.c
+/demo/provider.c
