@@ -4,6 +4,21 @@
 extern "C" {
 #endif
 
+#ifdef __GNUC__
+  /* Test for GCC > 2.95 */
+  #if __GNUC__ > 2 || (__GNUC__ == 2 && (__GNUC_MINOR__ > 95))
+    #define likely(x)   __builtin_expect(!!(x), 1)
+    #define unlikely(x) __builtin_expect(!!(x), 0)
+  #else /* __GNUC__ > 2 ... */
+    #define likely(x)   (x)
+    #define unlikely(x) (x)
+  #endif /* __GNUC__ > 2 ... */
+#else /* __GNUC__ */
+  #define likely(x)   (x)
+  #define unlikely(x) (x)
+#endif /* __GNUC__ */
+
+
 #include <Python.h>
 #include <structmember.h>
 
@@ -18,7 +33,42 @@ typedef struct {
   PyExtensibleTypeObjectEntry *etp_custom_slots;
 } PyHeapExtensibleTypeObject;
 
-static PyTypeObject PyExtensibleType_Type = {
+
+
+static PyTypeObject *PyExtensibleType_TypePtr = NULL;
+
+#define PyCustomSlots_Check(obj) \
+  ((obj)->ob_type->ob_type == PyExtensibleType_TypePtr)
+
+#define PyCustomSlots_Count(obj) \
+  (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_count)
+
+#define PyCustomSlots_Table(obj) \
+  (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_custom_slots)
+
+static void *PyCustomSlots_Find(PyObject *obj,
+                                unsigned long id,
+                                unsigned long mask) {
+  PyExtensibleTypeObjectEntry *entries;
+  Py_ssize_t i;
+  if (likely(PyCustomSlots_Check(obj))) {
+    entries = PyCustomSlots_Table(obj);
+    for (i = 0; i != PyCustomSlots_Count(obj); ++i) {
+      if ((entries[i].id & mask) == id) {
+        return entries[i].data;
+      }
+    }
+  }
+  return 0;
+}
+
+
+/*
+The metaclass definition. Do not use directly, but instead call
+PyExtensibleType_Import.
+*/
+
+static PyTypeObject _PyExtensibleType_Type_Candidate = {
   PyVarObject_HEAD_INIT(&PyType_Type, 0)
 #if PY_VERSION_HEX < 0x02050000
   (char *)"extensibletype",  /*tp_name*/
@@ -78,15 +128,8 @@ static PyTypeObject PyExtensibleType_Type = {
   #endif
 };
 
-
 static PyTypeObject *
-PyExtensibleType_Init_(void) {
-  return &PyExtensibleType_Type;
-}
-
-
-static PyTypeObject *
-PyExtensibleType_GetMetaClass(void) {
+PyExtensibleType_Import(void) {
   /* Performs roughly the equivalent of:
 
      d = sys.modules.setdefault('_extensibletype', {})
@@ -100,6 +143,10 @@ PyExtensibleType_GetMetaClass(void) {
   PyObject *d = 0;
   PyObject *extensibletype = 0;
   PyTypeObject *retval;
+
+  if (PyExtensibleType_TypePtr != 0) {
+    return PyExtensibleType_TypePtr;
+  }
   
   sys = PyImport_ImportModule("sys");
   if (!sys) goto bad;
@@ -137,12 +184,17 @@ PyExtensibleType_GetMetaClass(void) {
     retval = (PyTypeObject*)extensibletype;
   } else {
     /* not found; create it */
-    if (PyType_Ready(&PyExtensibleType_Type) < 0) goto bad;
+    if (PyType_Ready(&_PyExtensibleType_Type_Candidate) < 0) goto bad;
     if (PyDict_SetItemString(d, "extensibletype", 
-                             (PyObject*)&PyExtensibleType_Type) < 0) goto bad;
-    Py_INCREF((PyObject*)&PyExtensibleType_Type);
-    retval = (PyTypeObject*)&PyExtensibleType_Type;
+                             (PyObject*)&_PyExtensibleType_Type_Candidate) < 0) goto bad;
+    retval = (PyTypeObject*)&_PyExtensibleType_Type_Candidate;
+    Py_INCREF((PyObject*)retval);
   }
+
+
+  /* Initialize the global variable used in macros */
+  PyExtensibleType_TypePtr = retval;
+
   goto ret;
  bad:
   retval = NULL;

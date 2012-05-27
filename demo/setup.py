@@ -6,7 +6,7 @@ import os
 include_dirs = [os.path.join('..', 'src')]
 
 extensions = [
-    Extension("consumer", ["consumer.pyx"],
+    Extension("consumer", ["consumer.pyx", "consumer_c_code.c"],
               include_dirs=include_dirs),
     Extension("provider", ["provider.pyx"])]
 

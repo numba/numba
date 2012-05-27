@@ -5,4 +5,4 @@ cdef extern from "provider_c_code.h":
     PyObject Provider_Type
 
 ProviderType_Ready()
-Provider = <object>&Provider_Type
+Provider = <object><PyObject*>&Provider_Type

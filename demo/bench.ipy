@@ -1,0 +1,12 @@
+import provider
+import consumer
+
+p = provider.Provider()
+
+print consumer.sum_baseline(p, 10)
+print consumer.sum_lookups(p, 10)
+
+
+n = int(1e6)
+%timeit consumer.sum_baseline(p, n)
+%timeit consumer.sum_lookups(p, n)

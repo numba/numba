@@ -1,5 +1,6 @@
 #include "structmember.h"
 #include "../src/extensibletype.h"
+#include "thestandard.h"
 
 #if PY_VERSION_HEX < 0x02050000
   #define NAMESTR(n) ((char *)(n))
@@ -7,9 +8,12 @@
   #define NAMESTR(n) (n)
 #endif
 
-PyExtensibleTypeObjectEntry my_custom_slots[2] = {
-  {0, NULL},
-  {0, NULL}
+double func(double x) {
+  return x * x;
+}
+
+PyExtensibleTypeObjectEntry my_custom_slots[1] = {
+  {EXTENSIBLETYPE_DOUBLE_FUNC_SLOT, func}
 };
 
 static PyObject *Provider_new(PyTypeObject *t, PyObject *a, PyObject *k) {
@@ -29,7 +33,7 @@ typedef struct {
 
 PyHeapExtensibleTypeObject Provider_Type;
 
-int ProviderType_Ready() {
+int ProviderType_Ready(void) {
   /* Set as_number, as_buffer etc. to 0; these could of course be
      explicitly initialized too */
   memset(&Provider_Type, 0, sizeof(PyHeapExtensibleTypeObject));
@@ -89,9 +93,11 @@ int ProviderType_Ready() {
 #endif
   };
 
-  PyTypeObject *extensibletype = PyExtensibleType_GetMetaClass();
+  PyTypeObject *extensibletype = PyExtensibleType_Import();
   if (!extensibletype) return -1;
   ((PyObject*)&Provider_Type)->ob_type = extensibletype;
+  Provider_Type.etp_count = 1;
+  Provider_Type.etp_custom_slots = my_custom_slots;
 
   if (PyType_Ready((PyTypeObject*)&Provider_Type) < 0) {
     return -1;

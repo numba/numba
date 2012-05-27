@@ -8,7 +8,11 @@ print 'hi'
 import time
 import consumer
 print 'bar'
-T = consumer.f()
+
+print consumer.f(a, 4)
+print consumer.f(object(), 4)
+
+1/0
 print 'foo'
 #time.sleep(2)
 class A(object):
