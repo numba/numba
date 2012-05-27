@@ -191,7 +191,7 @@ PyExtensibleType_Import(void) {
     if (PyDict_SetItemString(modules, "_extensibletype", d) < 0) goto bad;
   }
 
-  extensibletype = PyDict_GetItemString(d, "extensibletype");
+  extensibletype = PyDict_GetItemString(d, "extensibletype-v1");
   if (extensibletype) {
     Py_INCREF(extensibletype); /* borrowed reference */
     if (!PyType_Check(extensibletype) || 
@@ -204,7 +204,7 @@ PyExtensibleType_Import(void) {
   } else {
     /* not found; create it */
     if (PyType_Ready(&_PyExtensibleType_Type_Candidate) < 0) goto bad;
-    if (PyDict_SetItemString(d, "extensibletype", 
+    if (PyDict_SetItemString(d, "extensibletype-v1", 
                              (PyObject*)&_PyExtensibleType_Type_Candidate) < 0) goto bad;
     retval = (PyTypeObject*)&_PyExtensibleType_Type_Candidate;
     Py_INCREF((PyObject*)retval);
