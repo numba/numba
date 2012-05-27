@@ -12,7 +12,7 @@ double func(double x) {
   return x * x;
 }
 
-PyExtensibleTypeObjectEntry my_custom_slots[1] = {
+PyCustomSlot my_custom_slots[1] = {
   {EXTENSIBLETYPE_DOUBLE_FUNC_SLOT, func}
 };
 

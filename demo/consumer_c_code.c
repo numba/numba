@@ -7,8 +7,9 @@ void init_c_code(void) {
 }
 
 double call_func(PyObject *obj){
+  PyCustomSlot *slot = PyCustomSlots_Find(obj, EXTENSIBLETYPE_DOUBLE_FUNC_SLOT, 0xffffff00);
   double (*funcptr)(double);
-  funcptr = PyCustomSlots_Find(obj, EXTENSIBLETYPE_DOUBLE_FUNC_SLOT, 0xffffff00);
-  if (likely(funcptr)) return funcptr(3.0);
-  else return 0.0;
+  if (unlikely(slot == 0)) return 0.0;
+  funcptr = slot->data;
+  return (*funcptr)(3.0);
 }

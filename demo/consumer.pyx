@@ -28,10 +28,11 @@ def sum_lookups(obj, int n):
 def sum_baseline(obj, int n):
     # Do the same work as sum_lookups, but only do the lookup once
     cdef double s = 0
-    if not PyCustomSlots_Check(obj):
-        return 0.0
-    cdef funcptr_t funcptr = <funcptr_t>PyCustomSlots_Find(
+    cdef PyCustomSlot *slot = PyCustomSlots_Find(
             obj, EXTENSIBLETYPE_DOUBLE_FUNC_SLOT, 0xffffff00)
+    if slot == NULL:
+        return 0.0
+    cdef funcptr_t funcptr = <funcptr_t>slot.data
     for i in range(n):
         s += funcptr(3.0)
     return s

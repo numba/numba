@@ -25,17 +25,19 @@ extern "C" {
 typedef struct {
     unsigned long id;
     void *data;
-} PyExtensibleTypeObjectEntry;
+} PyCustomSlot;
 
 typedef struct {
   PyHeapTypeObject etp_base;
-  Py_ssize_t etp_count; /* length of tpe_entries array */
-  PyExtensibleTypeObjectEntry *etp_custom_slots;
+  Py_ssize_t etp_count; /* length of tpe_custom_slots array */
+  PyCustomSlot *etp_custom_slots;
 } PyHeapExtensibleTypeObject;
 
 
 
 static PyTypeObject *PyExtensibleType_TypePtr = NULL;
+
+#define PyCustomSlots_Init PyExtensibleType_Import
 
 #define PyCustomSlots_Check(obj) \
   ((obj)->ob_type->ob_type == PyExtensibleType_TypePtr)
@@ -46,10 +48,10 @@ static PyTypeObject *PyExtensibleType_TypePtr = NULL;
 #define PyCustomSlots_Table(obj) \
   (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_custom_slots)
 
-static void *PyCustomSlots_Find(PyObject *obj,
-                                unsigned long id,
-                                unsigned long mask) {
-  PyExtensibleTypeObjectEntry *entries;
+static PyCustomSlot *PyCustomSlots_Find(PyObject *obj,
+                                        unsigned long id,
+                                        unsigned long mask) {
+  PyCustomSlot *entries;
   Py_ssize_t i;
   /* We unroll and make hitting the first slot likely(); this saved
      about 2 cycles on the test system with gcc 4.6.3, -O2 */
@@ -57,11 +59,11 @@ static void *PyCustomSlots_Find(PyObject *obj,
     if (likely(PyCustomSlots_Count(obj) > 0)) {
       entries = PyCustomSlots_Table(obj);
       if (likely((entries[0].id & mask) == id)) {
-        return entries[0].data;
+        return &entries[0];
       } else {
         for (i = 1; i != PyCustomSlots_Count(obj); ++i) {
           if ((entries[i].id & mask) == id) {
-            return entries[i].data;
+            return &entries[i];
           }
         }
       }
