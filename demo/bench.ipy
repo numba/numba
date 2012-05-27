@@ -3,6 +3,8 @@ import consumer
 
 p = provider.Provider()
 
+print consumer.sum_baseline(object(), 10)
+print consumer.sum_lookups(object(), 10)
 print consumer.sum_baseline(p, 10)
 print consumer.sum_lookups(p, 10)
 
