@@ -76,6 +76,17 @@ The metaclass definition. Do not use directly, but instead call
 PyExtensibleType_Import.
 */
 
+static PyObject *_PyExtensibleType_new(PyTypeObject *t, PyObject *a, PyObject *k) {
+  PyHeapExtensibleTypeObject* new_type, *base_type;
+  PyObject *o = (*PyType_Type.tp_new)(t, a, k);
+  if (!o) return 0;
+  new_type = (PyHeapExtensibleTypeObject*)o;
+  base_type = (PyHeapExtensibleTypeObject*)((PyTypeObject*)o)->tp_base;
+  new_type->etp_count = base_type->etp_count;
+  new_type->etp_custom_slots = base_type->etp_custom_slots;
+  return o;
+}
+
 static PyTypeObject _PyExtensibleType_Type_Candidate = {
   PyVarObject_HEAD_INIT(&PyType_Type, 0)
 #if PY_VERSION_HEX < 0x02050000
@@ -122,7 +133,7 @@ static PyTypeObject _PyExtensibleType_Type_Candidate = {
   0, /*tp_dictoffset*/
   0, /*tp_init*/
   0, /*tp_alloc*/
-  0, /*tp_new*/
+  &_PyExtensibleType_new, /*tp_new*/
   0, /*tp_free*/
   0, /*tp_is_gc*/
   0, /*tp_bases*/
