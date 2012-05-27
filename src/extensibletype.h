@@ -51,11 +51,19 @@ static void *PyCustomSlots_Find(PyObject *obj,
                                 unsigned long mask) {
   PyExtensibleTypeObjectEntry *entries;
   Py_ssize_t i;
+  /* We unroll and make hitting the first slot likely(); this saved
+     about 2 cycles on the test system with gcc 4.6.3, -O2 */
   if (likely(PyCustomSlots_Check(obj))) {
-    entries = PyCustomSlots_Table(obj);
-    for (i = 0; i != PyCustomSlots_Count(obj); ++i) {
-      if ((entries[i].id & mask) == id) {
-        return entries[i].data;
+    if (likely(PyCustomSlots_Count(obj) > 0)) {
+      entries = PyCustomSlots_Table(obj);
+      if (likely((entries[0].id & mask) == id)) {
+        return entries[0].data;
+      } else {
+        for (i = 1; i != PyCustomSlots_Count(obj); ++i) {
+          if ((entries[i].id & mask) == id) {
+            return entries[i].data;
+          }
+        }
       }
     }
   }
