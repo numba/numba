@@ -9,9 +9,6 @@ cdef extern from "thestandard.h":
 
 # Import call_func from a seperately compiled C file to avoid inlining it
 
-
-
-
 ctypedef double (*funcptr_t)(double)
 cdef extern:
     double call_func(object)
@@ -30,7 +27,6 @@ def sum_lookups(obj, int n):
 
 def sum_baseline(obj, int n):
     # Do the same work as sum_lookups, but only do the lookup once
-    cdef int i
     cdef double s = 0
     if not PyCustomSlots_Check(obj):
         return 0.0

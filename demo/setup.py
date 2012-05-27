@@ -3,16 +3,13 @@ from distutils.extension import Extension
 from Cython.Distutils import build_ext
 import os
 
-include_dirs = [os.path.join('..', 'src')]
+include_dirs = [os.path.join('..', 'include')]
 
 extensions = [
     Extension("consumer", ["consumer.pyx", "consumer_c_code.c"],
               include_dirs=include_dirs),
-    Extension("provider", ["provider.pyx"])]
+    Extension("provider", ["provider.pyx"],
+              include_dirs=include_dirs)]
 
 setup(cmdclass={'build_ext': build_ext},
       ext_modules=extensions)
-
-# Note setuptools messes things up, as usual, and a hack is needed to
-# have it work together with Cython, see, e.g.,
-# https://github.com/pydata/pandas/fake_pyrex

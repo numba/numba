@@ -1,6 +1,6 @@
 #include "structmember.h"
-#include "../src/extensibletype.h"
 #include "thestandard.h"
+#include "extensibletype.h"
 
 #if PY_VERSION_HEX < 0x02050000
   #define NAMESTR(n) ((char *)(n))
