@@ -11,8 +11,8 @@ def sqr(x):
 def compute_stuff(x):
     a = np.ones(3) + x
     b = 2 * a
-    #c = sqr(b).sum()  # XXX method binding is not implemented yet for AD
     c = np.sum(sqr(b))
+    print 'HELLO', c   # <-- way easier to do this than in Theano
     return c
 
 

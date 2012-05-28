@@ -119,6 +119,12 @@ class FrameVM(object):
         #print 'LOAD_FAST', self.varnames[arg]
         self.stack.append(self._locals[arg])
 
+    def op_PRINT_ITEM(self, i, op, arg):
+        print self.stack.pop(-1),
+
+    def op_PRINT_NEWLINE(self, i, op, arg):
+        print ''
+
     def op_STORE_FAST(self, i, op, arg):
         #print 'STORE_FAST', self.varnames[arg]
         self._locals[arg] = self.stack.pop(-1)
