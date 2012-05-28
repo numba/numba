@@ -147,8 +147,10 @@ class Watcher(object):
     def grad_fn(self, rval, ival):
         sy = self.svars[id(rval)]
         sx = self.svars[id(ival)]
-
         dydx = theano.tensor.grad(sy, sx)
-
         return theano.function([sx], dydx)
 
+    def recalculate_fn(self, rval, ival):
+        sy = self.svars[id(rval)]
+        sx = self.svars[id(ival)]
+        return theano.function([sx], sy)

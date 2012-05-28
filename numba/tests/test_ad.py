@@ -23,6 +23,10 @@ def test_foo():
     y = w.call(compute_stuff, x)
     assert y == 12
 
+    f = w.recalculate_fn(y, x)
+    assert f(x) == 12
+    assert f(x + 1) != 12
+
 
 def test_grad():
     x = np.zeros(3)
