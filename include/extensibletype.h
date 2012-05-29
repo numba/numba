@@ -39,8 +39,18 @@ static PyTypeObject *PyExtensibleType_TypePtr = NULL;
 
 #define PyCustomSlots_Init PyExtensibleType_Import
 
+static int PyCustomSlots_CheckHierarchy(PyObject *obj) {
+  PyTypeObject *metaclass = obj->ob_type->ob_type;
+  while (1) {
+    if (metaclass == PyExtensibleType_TypePtr) return 1;
+    else if (metaclass == &PyType_Type) return 0;
+    metaclass = metaclass->tp_base;
+  }
+}
+
 #define PyCustomSlots_Check(obj) \
-  ((obj)->ob_type->ob_type == PyExtensibleType_TypePtr)
+  (likely((obj)->ob_type->ob_type == PyExtensibleType_TypePtr) ? 1 :    \
+   PyCustomSlots_CheckHierarchy(obj))
 
 #define PyCustomSlots_Count(obj) \
   (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_count)
