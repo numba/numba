@@ -61,7 +61,8 @@ int ProviderType_Ready(void) {
     0, /*tp_getattro*/
     0, /*tp_setattro*/
     &Provider_Type.etp_base.as_buffer, /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_CHECKTYPES|Py_TPFLAGS_BASETYPE, /*tp_flags*/
+    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_CHECKTYPES|Py_TPFLAGS_BASETYPE|
+        PyExtensibleType_TPFLAGS_IS_EXTENSIBLE, /*tp_flags*/
     0, /*tp_doc*/
     0, /*tp_traverse*/
     0, /*tp_clear*/

@@ -4,86 +4,7 @@
 extern "C" {
 #endif
 
-#if defined(__GNUC__) && (__GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 95))
-  #define PY_CUSTOMSLOTS_LIKELY(x)   __builtin_expect(!!(x), 1)
-  #define PY_CUSTOMSLOTS_UNLIKELY(x) __builtin_expect(!!(x), 0)
-#else
-  #define PY_CUSTOMSLOTS_LIKELY(x)   (x)
-  #define PY_CUSTOMSLOTS_UNLIKELY(x)   (x)
-#endif
-
-
-#include <Python.h>
-#include <structmember.h>
-#include <stdint.h>
-
-/* Some stdint.h implementations:
-
-Portable: http://www.azillionmonkeys.com/qed/pstdint.h
-MSVC: http://msinttypes.googlecode.com/svn/trunk/stdint.h
-*/
-
-typedef struct {
-  uint32_t id;
-  uint32_t flags;
-  void *data;
-} PyCustomSlot;
-
-typedef struct {
-  PyHeapTypeObject etp_base;
-  Py_ssize_t etp_count; /* length of tpe_custom_slots array */
-  PyCustomSlot *etp_custom_slots;
-} PyHeapExtensibleTypeObject;
-
-
-
-static PyTypeObject *PyExtensibleType_TypePtr = NULL;
-
-#define PyCustomSlots_Init PyExtensibleType_Import
-
-static int PyCustomSlots_CheckHierarchy(PyObject *obj) {
-  PyTypeObject *metaclass = obj->ob_type->ob_type;
-  while (1) {
-    if (metaclass == PyExtensibleType_TypePtr) return 1;
-    else if (metaclass == &PyType_Type) return 0;
-    metaclass = metaclass->tp_base;
-  }
-}
-
-#define PyCustomSlots_Check(obj) \
-  (PY_CUSTOMSLOTS_LIKELY((obj)->ob_type->ob_type == PyExtensibleType_TypePtr) \
-   ? 1 : PyCustomSlots_CheckHierarchy(obj))
-
-#define PyCustomSlots_Count(obj) \
-  (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_count)
-
-#define PyCustomSlots_Table(obj) \
-  (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_custom_slots)
-
-static PyCustomSlot *PyCustomSlots_Find(PyObject *obj,
-                                        uint32_t id,
-                                        Py_ssize_t start) {
-  PyCustomSlot *entries;
-  Py_ssize_t i;
-  /* We unroll and make hitting the first slot likely(); this saved
-     about 2 cycles on the test system with gcc 4.6.3, -O2 */
-  if (PY_CUSTOMSLOTS_LIKELY(PyCustomSlots_Check(obj))) {
-    if (PY_CUSTOMSLOTS_LIKELY(PyCustomSlots_Count(obj) > start)) {
-      entries = PyCustomSlots_Table(obj);
-      if (PY_CUSTOMSLOTS_LIKELY(entries[start].id == id)) {
-        return &entries[start];
-      } else {
-        for (i = start + 1; i != PyCustomSlots_Count(obj); ++i) {
-          if (entries[i].id == id) {
-            return &entries[i];
-          }
-        }
-      }
-    }
-  }
-  return 0;
-}
-
+#include "customslots.h"
 
 /*
 The metaclass definition. Do not use directly, but instead call
@@ -98,6 +19,7 @@ static PyObject *_PyExtensibleType_new(PyTypeObject *t, PyObject *a, PyObject *k
   base_type = (PyHeapExtensibleTypeObject*)((PyTypeObject*)o)->tp_base;
   new_type->etp_count = base_type->etp_count;
   new_type->etp_custom_slots = base_type->etp_custom_slots;
+  ((PyTypeObject*)new_type)->tp_flags |= PyExtensibleType_TPFLAGS_IS_EXTENSIBLE;
   return o;
 }
 
@@ -160,6 +82,8 @@ static PyTypeObject _PyExtensibleType_Type_Candidate = {
   0, /*tp_version_tag*/
   #endif
 };
+
+static PyTypeObject *PyExtensibleType_TypePtr = 0;
 
 static PyTypeObject *
 PyExtensibleType_Import(void) {

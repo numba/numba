@@ -1,10 +1,6 @@
 #include <Python.h>
-#include <extensibletype.h>
+#include <customslots.h>
 #include "thestandard.h"
-
-void init_c_code(void) {
-  PyExtensibleType_Import();
-}
 
 double call_func(PyObject *obj){
   PyCustomSlot *slot = PyCustomSlots_Find(obj, EXTENSIBLETYPE_DOUBLE_FUNC_SLOT, 0);

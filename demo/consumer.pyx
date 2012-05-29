@@ -2,7 +2,7 @@ cdef double nan
 
 from numpy import nan
 cimport cython
-from extensibletype cimport *
+from customslots cimport *
 
 cdef extern from "thestandard.h":
     unsigned long EXTENSIBLETYPE_DOUBLE_FUNC_SLOT
@@ -12,10 +12,6 @@ cdef extern from "thestandard.h":
 ctypedef double (*funcptr_t)(double)
 cdef extern:
     double call_func(object)
-    void init_c_code()
-
-PyExtensibleType_Import()
-init_c_code()
 
 def sum_lookups(obj, int n):
     # Do the lookup n times

@@ -1,9 +1,7 @@
-cdef extern from "extensibletype.h":
+cdef extern from "customslots.h":
     ctypedef struct PyCustomSlot:
         unsigned long id
         void *data
-
-    type PyExtensibleType_Import()
 
     int PyCustomSlots_Check(obj)
     Py_ssize_t PyCustomSlots_Count(obj)
