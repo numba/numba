@@ -9,4 +9,6 @@ cdef extern from "extensibletype.h":
     Py_ssize_t PyCustomSlots_Count(obj)
     PyCustomSlot *PyCustomSlots_Table(obj)
 
-    PyCustomSlot *PyCustomSlots_Find(obj, unsigned long id, unsigned long mask)
+    ctypedef unsigned long uint32_t
+
+    PyCustomSlot *PyCustomSlots_Find(obj, uint32_t id, Py_ssize_t start)

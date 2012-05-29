@@ -21,10 +21,18 @@ extern "C" {
 
 #include <Python.h>
 #include <structmember.h>
+#include <stdint.h>
+
+/* Some stdint.h implementations:
+
+Portable: http://www.azillionmonkeys.com/qed/pstdint.h
+MSVC: http://msinttypes.googlecode.com/svn/trunk/stdint.h
+*/
 
 typedef struct {
-    unsigned long id;
-    void *data;
+  uint32_t id;
+  uint32_t flags;
+  void *data;
 } PyCustomSlot;
 
 typedef struct {
@@ -59,20 +67,20 @@ static int PyCustomSlots_CheckHierarchy(PyObject *obj) {
   (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_custom_slots)
 
 static PyCustomSlot *PyCustomSlots_Find(PyObject *obj,
-                                        unsigned long id,
-                                        unsigned long mask) {
+                                        uint32_t id,
+                                        Py_ssize_t start) {
   PyCustomSlot *entries;
   Py_ssize_t i;
   /* We unroll and make hitting the first slot likely(); this saved
      about 2 cycles on the test system with gcc 4.6.3, -O2 */
   if (likely(PyCustomSlots_Check(obj))) {
-    if (likely(PyCustomSlots_Count(obj) > 0)) {
+    if (likely(PyCustomSlots_Count(obj) > start)) {
       entries = PyCustomSlots_Table(obj);
-      if (likely((entries[0].id & mask) == id)) {
-        return &entries[0];
+      if (likely(entries[start].id == id)) {
+        return &entries[start];
       } else {
-        for (i = 1; i != PyCustomSlots_Count(obj); ++i) {
-          if ((entries[i].id & mask) == id) {
+        for (i = start + 1; i != PyCustomSlots_Count(obj); ++i) {
+          if (entries[i].id == id) {
             return &entries[i];
           }
         }
