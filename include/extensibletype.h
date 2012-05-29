@@ -95,43 +95,20 @@ PyExtensibleType_Import(void) {
      If another module got to sys.modules first, the
      static PyExtensibleType_Type defined above is left unused.
    */
-  PyObject *sys = 0;
-  PyObject *modules = 0;
-  PyObject *d = 0;
+  PyObject *module = 0;
   PyObject *extensibletype = 0;
   PyTypeObject *retval;
 
   if (PyExtensibleType_TypePtr != 0) {
     return PyExtensibleType_TypePtr;
   }
-  
-  sys = PyImport_ImportModule("sys");
-  if (!sys) goto bad;
-  modules = PyObject_GetAttrString(sys, "modules");
-  if (!modules) goto bad;
-  if (!PyDict_Check(modules)) {
-      PyErr_SetString(PyExc_TypeError,
-                      "sys.modules is not a dict");
-      goto bad;
-  }
 
-  d = PyDict_GetItemString(modules, "_extensibletype");
-  if (d) {
-    Py_INCREF(d); /* borrowed ref */
-    if (!PyDict_Check(d)) {
-      PyErr_SetString(PyExc_TypeError,
-                      "sys.modules['_extensibletype'] is not a dict");
-      goto bad;
-    }
-  } else {
-    d = PyDict_New();
-    if (!d) goto bad;
-    if (PyDict_SetItemString(modules, "_extensibletype", d) < 0) goto bad;
-  }
+  module = PyImport_AddModule("_extensibletype"); /* borrowed ref */
+  if (!module) goto bad;
 
-  extensibletype = PyDict_GetItemString(d, "extensibletype-v1");
-  if (extensibletype) {
-    Py_INCREF(extensibletype); /* borrowed reference */
+  if (PyObject_HasAttrString(module, "extensibletype_v1")) {
+    extensibletype = PyObject_GetAttrString(module, "extensibletype_v1");
+    if (!extensibletype) goto bad;
     if (!PyType_Check(extensibletype) || 
         ((PyTypeObject*)extensibletype)->tp_basicsize !=
         sizeof(PyHeapExtensibleTypeObject)) {
@@ -142,12 +119,11 @@ PyExtensibleType_Import(void) {
   } else {
     /* not found; create it */
     if (PyType_Ready(&_PyExtensibleType_Type_Candidate) < 0) goto bad;
-    if (PyDict_SetItemString(d, "extensibletype-v1", 
-                             (PyObject*)&_PyExtensibleType_Type_Candidate) < 0) goto bad;
+    if (PyObject_SetAttrString(module, "extensibletype_v1", 
+        (PyObject*)&_PyExtensibleType_Type_Candidate) < 0) goto bad;
     retval = (PyTypeObject*)&_PyExtensibleType_Type_Candidate;
     Py_INCREF((PyObject*)retval);
   }
-
 
   /* Initialize the global variable used in macros */
   PyExtensibleType_TypePtr = retval;
@@ -156,9 +132,7 @@ PyExtensibleType_Import(void) {
  bad:
   retval = NULL;
  ret:
-  Py_XDECREF(sys);
-  Py_XDECREF(modules);
-  Py_XDECREF(d);
+  /* module is borrowed */
   Py_XDECREF(extensibletype);
   return retval;
 }
