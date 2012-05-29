@@ -4,19 +4,13 @@
 extern "C" {
 #endif
 
-#ifdef __GNUC__
-  /* Test for GCC > 2.95 */
-  #if __GNUC__ > 2 || (__GNUC__ == 2 && (__GNUC_MINOR__ > 95))
-    #define likely(x)   __builtin_expect(!!(x), 1)
-    #define unlikely(x) __builtin_expect(!!(x), 0)
-  #else /* __GNUC__ > 2 ... */
-    #define likely(x)   (x)
-    #define unlikely(x) (x)
-  #endif /* __GNUC__ > 2 ... */
-#else /* __GNUC__ */
-  #define likely(x)   (x)
-  #define unlikely(x) (x)
-#endif /* __GNUC__ */
+#if defined(__GNUC__) && (__GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 95))
+  #define PY_CUSTOMSLOTS_LIKELY(x)   __builtin_expect(!!(x), 1)
+  #define PY_CUSTOMSLOTS_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#else
+  #define PY_CUSTOMSLOTS_LIKELY(x)   (x)
+  #define PY_CUSTOMSLOTS_UNLIKELY(x)   (x)
+#endif
 
 
 #include <Python.h>
@@ -57,8 +51,8 @@ static int PyCustomSlots_CheckHierarchy(PyObject *obj) {
 }
 
 #define PyCustomSlots_Check(obj) \
-  (likely((obj)->ob_type->ob_type == PyExtensibleType_TypePtr) ? 1 :    \
-   PyCustomSlots_CheckHierarchy(obj))
+  (PY_CUSTOMSLOTS_LIKELY((obj)->ob_type->ob_type == PyExtensibleType_TypePtr) \
+   ? 1 : PyCustomSlots_CheckHierarchy(obj))
 
 #define PyCustomSlots_Count(obj) \
   (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_count)
@@ -73,10 +67,10 @@ static PyCustomSlot *PyCustomSlots_Find(PyObject *obj,
   Py_ssize_t i;
   /* We unroll and make hitting the first slot likely(); this saved
      about 2 cycles on the test system with gcc 4.6.3, -O2 */
-  if (likely(PyCustomSlots_Check(obj))) {
-    if (likely(PyCustomSlots_Count(obj) > start)) {
+  if (PY_CUSTOMSLOTS_LIKELY(PyCustomSlots_Check(obj))) {
+    if (PY_CUSTOMSLOTS_LIKELY(PyCustomSlots_Count(obj) > start)) {
       entries = PyCustomSlots_Table(obj);
-      if (likely(entries[start].id == id)) {
+      if (PY_CUSTOMSLOTS_LIKELY(entries[start].id == id)) {
         return &entries[start];
       } else {
         for (i = start + 1; i != PyCustomSlots_Count(obj); ++i) {
