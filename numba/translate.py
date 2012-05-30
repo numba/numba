@@ -15,6 +15,44 @@ if sys.maxint > 2**33:
 else:
     _plat_bits = 32
 
+_int32 = lc.Type.int(32)
+_intp = lc.Type.int(_plat_bits)
+_intp_star = lc.Type.pointer(_intp)
+_void_star = lc.Type.pointer(lc.Type.int(8))
+
+_pyobject_head = [_intp, lc.Type.pointer(lc.Type.int(32))]
+if hasattr(sys, 'getobjects'):
+    _trace_refs_ = True
+    _pyobject_head = [lc.Type.pointer(lc.Type.int(32)),
+                      lc.Type.pointer(lc.Type.int(32))] + \
+                      _pyobject_head
+else:
+    _trace_refs_ = False
+
+_head_len = len(_pyobject_head)
+_numpy_struct = lc.Type.struct(_pyobject_head+\
+      [_void_star,          # data
+       lc.Type.int(32),     # nd
+       _intp_star,          # dimensions
+       _intp_star,          # strides
+       _void_star,          # base
+       _void_star,          # descr
+       lc.Type.int(32),     # flags
+       _void_star,          # weakreflist 
+       _void_star,          # maskna_dtype
+       _void_star,          # maskna_data
+       _intp_star,          # masna_strides
+      ])
+_numpy_array = lc.Type.pointer(_numpy_struct)
+
+_BASE_ARRAY_FIELD_OFS = len(_pyobject_head)
+
+_numpy_array_field_ofs = {
+    'data' : _BASE_ARRAY_FIELD_OFS,
+    'ndim' : _BASE_ARRAY_FIELD_OFS + 1,
+    'shape' : _BASE_ARRAY_FIELD_OFS + 2,
+    'strides' : _BASE_ARRAY_FIELD_OFS + 3,
+}
 
 # Translate Python bytecode to LLVM IR
 
@@ -140,14 +178,25 @@ def str_to_llvmtype(str):
     raise TypeError, "Invalid Type"
 
 def convert_to_llvmtype(typ):
+    if isinstance(typ, list):
+        return _numpy_array
     dt = np.dtype(typ)
     return str_to_llvmtype("%s%s" % (dt.kind, 8*dt.itemsize))
 
 def convert_to_ctypes(typ):
     import ctypes
     from numpy.ctypeslib import _typecodes
+    if isinstance(typ, list):
+        crnt_elem = typ[0]
+        dimcount = 1
+        while isinstance(crnt_elem, list):
+            crnt_elem = crnt_elem[0]
+            dimcount += 1
+        return np.ctypeslib.ndpointer(dtype = np.dtype(crnt_elem),
+                                      ndim = dimcount,
+                                      flags = 'C_CONTIGUOUS')
     return _typecodes[np.dtype(typ).str]
-        
+
 # Add complex, unsigned, and bool
 def typcmp(type1, type2):
     if type1==type2:
@@ -234,7 +283,9 @@ class Translate(object):
             try:
                 self._myglobals[name] = func.func_globals[name]
             except KeyError:
-                self._myglobals[name] = __builtin__.__getattribute__(name)
+                # Assumption here is that any name not in globals or
+                # builtins is an attribtue.
+                self._myglobals[name] = getattr(__builtin__, name, None)
 
         self.mod = lc.Module.new(func.func_name+'_mod')        
 
@@ -466,3 +517,20 @@ class Translate(object):
 
     def op_SETUP_LOOP(self, i, op, arg):
         pass
+
+    def op_LOAD_ATTR(self, i, op, arg):
+        objarg = self.stack.pop(-1)
+        # Make this a map on types in the future (thinking this is
+        # what typemap was destined to do...)
+        objarg_llvm_val = objarg.llvm()
+        print i, op, self.names[arg], objarg, objarg.typ, objarg_llvm_val.type,
+        if objarg_llvm_val.type == _numpy_array:
+            field_index = _numpy_array_field_ofs[self.names[arg]]
+        else:
+            raise NotImplementedError('LOAD_ATTR only supported for Numpy '
+                                      'arrays.')
+        res_addr = self.builder.gep(objarg_llvm_val, 
+                                    [lc.Constant.int(_int32, 0),
+                                     lc.Constant.int(_int32, field_index)])
+        res = self.builder.load(res_addr)
+        self.stack.append(Variable(res))

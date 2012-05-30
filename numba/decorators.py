@@ -75,3 +75,18 @@ def numba_compile(*args, **kws):
             t = __tr_map__[func]
         return t.get_ctypes_func(llvm)
     return _numba_compile
+
+from kerneltranslate import Translate as KernelTranslate
+
+def numba_kompile(*args, **kws):
+    def _numba_kompile(func):
+        global __tr_map__
+        llvm = kws.pop('llvm', True)
+        if func not in __tr_map__:
+            t = KernelTranslate(func)
+            t.translate()
+            __tr_map__[func] = t
+        else:
+            t = __tr_map__[func]
+        return t.get_ctypes_func(llvm)
+    return _numba_kompile

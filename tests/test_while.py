@@ -15,6 +15,7 @@ def while_loop_fn_0(max_index, indexable):
     acc = 0.
     while i < max_index:
         acc += indexable[i]
+        i += 1
     return acc
 
 # ______________________________________________________________________
@@ -24,6 +25,17 @@ def while_loop_fn_1(indexable):
     acc = 0.
     while i < len(indexable):
         acc += indexable[i]
+        i += 1
+    return acc
+
+# ______________________________________________________________________
+
+def while_loop_fn_2(ndarr):
+    i = 0
+    acc = 0.
+    while i < ndarr.shape[0]:
+        acc += ndarr[i]
+        i += 1
     return acc
 
 # ______________________________________________________________________
@@ -41,6 +53,9 @@ class TestWhile(unittest.TestCase):
 
     def test_while_loop_fn_1(self):
         self._do_test(while_loop_fn_1, [['d']], numpy.array([1., 2., 3.]))
+
+    def test_while_loop_fn_2(self):
+        self._do_test(while_loop_fn_2, [['d']], numpy.array([1., 2., 3.]))
 
 # ______________________________________________________________________
 
