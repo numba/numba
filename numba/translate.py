@@ -144,7 +144,10 @@ class Variable(object):
         else:
             self._llvm = None
             self.typ = pythontype_to_strtype(type(val))
-    
+
+    def __repr__(self):
+        return '<Variable(val=%r, _llvm=%r, typ=%r)>' % (self.val, self._llvm, self.typ)
+
     def llvm(self, typ=None, mod=None):
         if self._llvm:
             if typ is not None and typ != self.typ:
@@ -220,8 +223,15 @@ def resolve_type(arg1, arg2):
     elif arg2._llvm is not None:
         typ = arg2.typ
     else:
-        raise TypeError, "Both types not valid"
-                
+        try:
+            str_to_llvmtype(arg1.typ)
+            typ = arg1.typ
+        except TypeError:
+            try:
+                str_to_llvmtype(arg2.typ)
+                typ = arg2.typ
+            except TypeError:
+                raise TypeError, "Both types not valid"
     return typ, arg1.llvm(typ), arg2.llvm(typ)
 
 # This won't convert any llvm types.  It assumes 
@@ -317,24 +327,42 @@ class Translate(object):
         entry = self.lfunc.append_basic_block('Entry')
         self.blocks = {0:entry}
         self.stack = []
+        self.loop_stack = []
+        self.loop_variants = {}
 
     def translate(self):
         """Translate the function
         """
-        for i, op, arg in itercode(self.costr):
-            name = opcode.opname[op]
-            # Change the builder if the line-number 
-            # is in the list of blocks. 
-            if i in self.blocks.keys():
-                self.builder = lc.Builder.new(self.blocks[i])
-            getattr(self, 'op_'+name)(i, op, arg)
-    
+        for pass_number in (1, 2):
+            self.op_LOAD_FAST = getattr(self, 'op_LOAD_FAST_%d' % pass_number)
+            self.op_STORE_FAST = getattr(self, 'op_STORE_FAST_%d' %
+                                         pass_number)
+            for i, op, arg in itercode(self.costr):
+                name = opcode.opname[op]
+                # Change the builder if the line-number 
+                # is in the list of blocks. 
+                if i in self.blocks.keys():
+                    self.builder = lc.Builder.new(self.blocks[i])
+                    if i == 0 and pass_number == 2:
+                        self.alloca_loop_variants()
+                getattr(self, 'op_'+name)(i, op, arg)
+            if pass_number == 1 and len(self.loop_variants) == 0:
+                break
+            elif __debug__:
+                print self.loop_variants
+
         # Perform code optimization
         fpm = lp.FunctionPassManager.new(self.mod)
         fpm.initialize()
         fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
         fpm.run(self.lfunc)
         fpm.finalize()
+
+    def alloca_loop_variants(self):
+        raise NotImplementedError('Allocate local variables')
+        for local_index in self.loop_variants.keys():
+            loop_rval = self.loop_variants[local_index]
+            self._locals[local_index] = self.builder.alloca(XXX)
 
     def get_ctypes_func(self, llvm=True):
         if self.ee is None:
@@ -383,12 +411,38 @@ class Translate(object):
         llvm_args = [arg.llvm(typ) for typ, arg in zip(typs, args)]
         return lfunc, llvm_args
 
-
-    def op_LOAD_FAST(self, i, op, arg):
+    def op_LOAD_FAST_1(self, i, op, arg):
         self.stack.append(Variable(self._locals[arg]))
 
-    def op_STORE_FAST(self, i, op, arg):
+    op_LOAD_FAST = op_LOAD_FAST_1
+
+    def op_LOAD_FAST_2(self, i, op, arg):
+        if arg in self.loop_variants:
+            raise NotImplementedError('FIXME')
+        else:
+            return self.op_LOAD_FAST_1(i, op, arg)
+
+    def op_STORE_FAST_1(self, i, op, arg):
+        '''First pass implementation of STORE_FAST.  Safe unless the
+        fast local gets assigned to in a loop.'''
+        # This treatment of fast-locals is unsafe in the presence of loops!
+        if len(self.loop_stack) > 0:
+            # We've detect a loop variant local.  Going to have to
+            # restart symbolic execution adding LLVM load/stores
+            # from/to a stack allocated variable.
+            if arg not in self.loop_variants:
+                self.loop_variants[arg] = {}
+            self.loop_variants[arg][i] = self.stack[-1]
         self._locals[arg] = self.stack.pop(-1)
+
+    op_STORE_FAST = op_STORE_FAST_1
+
+    def op_STORE_FAST_2(self, i, op, arg):
+        if arg in self.loop_variants:
+            raise NotImplementedError('FIXME')
+        else:
+            assert len(self.loop_stack) == 0, "Internal compiler error!"
+            return self.op_STORE_FAST_1(i, op, arg)
 
     def op_LOAD_GLOBAL(self, i, op, arg):
         self.stack.append(Variable(self._myglobals[self.names[arg]]))
@@ -407,6 +461,13 @@ class Translate(object):
             res = self.builder.add(arg1, arg2)
         self.stack.append(Variable(res))
 
+    def op_INPLACE_ADD(self, i, op, arg):
+        # FIXME: Trivial inspection seems to illustrate a mostly
+        # identical semantics to BINARY_ADD for numerical inputs.
+        # Verify this, or figure out what the corner cases are that
+        # require a separate symbolic execution procedure.
+        return self.op_BINARY_ADD(i, op, arg)
+  
     def op_BINARY_SUBTRACT(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
@@ -513,10 +574,18 @@ class Translate(object):
         self.stack.append(Variable(res))
 
     def op_GET_ITER(self, i, op, arg):
-        pass
+        raise NotImplementedError('FIXME')
 
     def op_SETUP_LOOP(self, i, op, arg):
-        pass
+        print "SETUP_LOOP", i, op, arg
+        self.loop_stack.append((i, arg))
+        predecessor = self.builder.block
+        loop_entry = self.lfunc.append_basic_block("LOOP_%d" % i)
+        self.blocks[i+3] = loop_entry
+        # Connect everything up.
+        self.builder.position_at_end(predecessor)
+        self.builder.branch(loop_entry)
+        self.builder.position_at_end(loop_entry)
 
     def op_LOAD_ATTR(self, i, op, arg):
         objarg = self.stack.pop(-1)
@@ -534,3 +603,10 @@ class Translate(object):
                                      lc.Constant.int(_int32, field_index)])
         res = self.builder.load(res_addr)
         self.stack.append(Variable(res))
+
+    def op_JUMP_ABSOLUTE(self, i, op, arg):
+        print "JUMP_ABSOLUTE", i, op, arg
+        self.builder.branch(self.blocks[arg])
+
+    def op_POP_BLOCK(self, i, op, arg):
+        self.loop_stack.pop(-1)
