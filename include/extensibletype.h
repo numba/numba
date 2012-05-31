@@ -137,6 +137,31 @@ PyExtensibleType_Import(void) {
   return retval;
 }
 
+static int
+PyExtensibleType_Ready(PyHeapExtensibleTypeObject *type,
+                       Py_ssize_t slot_table_size) {
+  PyTypeObject *base = ((PyTypeObject*)type)->tp_base;
+  if (base != 0 && (base->tp_flags & PyExtensibleType_TPFLAGS_IS_EXTENSIBLE)) {
+    PyErr_SetString(PyExc_NotImplementedError,
+                    "PyExtensibleType_Ready: Support for subclasses not "
+                    "implemented yet");
+    return -1;
+  }
+
+  /* Import metaclass and assign it to ob_type */
+  PyTypeObject *metaclass = PyExtensibleType_Import();
+  if (!metaclass) return -1;
+  Py_INCREF(metaclass);
+  ((PyObject*)type)->ob_type = metaclass;
+
+  /* PyType_Ready */
+  if (PyType_Ready((PyTypeObject*)type) < 0) return -1;
+  
+  /* Set flag bit */
+  ((PyTypeObject*)type)->tp_flags |= PyExtensibleType_TPFLAGS_IS_EXTENSIBLE;
+
+  return 0;
+}
 
 
 #ifdef __cplusplus
