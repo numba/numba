@@ -32,6 +32,9 @@ PyCustomSlot my_custom_slots[1] = {
   {EXTENSIBLETYPE_DOUBLE_FUNC_SLOT, func}
 };
 
+/* PS! PS! PS! This struct is still not tested on all Python 2.x;
+   perhaps there are more #ifdefs. Also TODO: Python 3.0 and
+   buffers! */
 PyHeapExtensibleTypeObject Provider_Type = {
   /* PyHeapTypeObject etp_heaptype */
   {
@@ -49,6 +52,7 @@ PyHeapExtensibleTypeObject Provider_Type = {
 #if PY_MAJOR_VERSION < 3
       0, /*tp_compare*/
 #else
+#error please insert ifdefs for remaining fields as well
       0, /*reserved*/
 #endif
       0, /*tp_repr*/
