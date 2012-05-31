@@ -40,9 +40,9 @@ typedef struct {
 } PyCustomSlot;
 
 typedef struct {
-  PyHeapTypeObject etp_base;
-  Py_ssize_t etp_count; /* length of tpe_custom_slots array */
-  PyCustomSlot *etp_custom_slots;
+  PyHeapTypeObject etp_heaptype;
+  Py_ssize_t etp_custom_slot_count; /* length of tpe_custom_slots array */
+  PyCustomSlot *etp_custom_slot_table;
 } PyHeapExtensibleTypeObject;
 
 #define PyCustomSlots_Check(obj) \
@@ -50,10 +50,10 @@ typedef struct {
    PyExtensibleType_TPFLAGS_IS_EXTENSIBLE)
 
 #define PyCustomSlots_Count(obj) \
-  (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_count)
+  (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_custom_slot_count)
 
 #define PyCustomSlots_Table(obj) \
-  (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_custom_slots)
+  (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_custom_slot_table)
 
 static PY_CUSTOMSLOTS_INLINE PyCustomSlot *
 PyCustomSlots_Find(PyObject *obj,

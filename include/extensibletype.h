@@ -17,8 +17,8 @@ static PyObject *_PyExtensibleType_new(PyTypeObject *t, PyObject *a, PyObject *k
   if (!o) return 0;
   new_type = (PyHeapExtensibleTypeObject*)o;
   base_type = (PyHeapExtensibleTypeObject*)((PyTypeObject*)o)->tp_base;
-  new_type->etp_count = base_type->etp_count;
-  new_type->etp_custom_slots = base_type->etp_custom_slots;
+  new_type->etp_custom_slot_count = base_type->etp_custom_slot_count;
+  new_type->etp_custom_slot_table = base_type->etp_custom_slot_table;
   ((PyTypeObject*)new_type)->tp_flags |= PyExtensibleType_TPFLAGS_IS_EXTENSIBLE;
   return o;
 }
