@@ -13,7 +13,7 @@ double func(double x) {
 }
 
 PyCustomSlot my_custom_slots[1] = {
-  {EXTENSIBLETYPE_DOUBLE_FUNC_SLOT, 0, func}
+  {EXTENSIBLETYPE_DOUBLE_FUNC_SLOT, func}
 };
 
 static PyObject *Provider_new(PyTypeObject *t, PyObject *a, PyObject *k) {

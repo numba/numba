@@ -17,11 +17,3 @@ Contents:
 
  * ``demo/`` contains (crufty) proof-of-concept and benchmarking code
 
-
-TODO
-----
-
- * Check if any performance is lost by doing an "unlikely" walk of
-   the metaclass ``tp_base``
-
- * Give the likely/unlikely macros other names, etc.

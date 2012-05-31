@@ -35,8 +35,7 @@ MSVC: http://msinttypes.googlecode.com/svn/trunk/stdint.h
 #define PyExtensibleType_TPFLAGS_IS_EXTENSIBLE (1L<<22)
 
 typedef struct {
-  uint32_t id;
-  uint32_t flags;
+  uintptr_t id;
   void *data;
 } PyCustomSlot;
 
@@ -58,7 +57,7 @@ typedef struct {
 
 static PY_CUSTOMSLOTS_INLINE PyCustomSlot *
 PyCustomSlots_Find(PyObject *obj,
-                   uint32_t id,
+                   uintptr_t id,
                    Py_ssize_t expected_pos) {
   PyCustomSlot *entries;
   Py_ssize_t i;
