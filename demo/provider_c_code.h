@@ -61,8 +61,7 @@ int ProviderType_Ready(void) {
     0, /*tp_getattro*/
     0, /*tp_setattro*/
     &Provider_Type.etp_base.as_buffer, /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_CHECKTYPES|Py_TPFLAGS_BASETYPE|
-        PyExtensibleType_TPFLAGS_IS_EXTENSIBLE, /*tp_flags*/
+    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_CHECKTYPES|Py_TPFLAGS_BASETYPE, /*tp_flags*/
     0, /*tp_doc*/
     0, /*tp_traverse*/
     0, /*tp_clear*/
@@ -94,13 +93,10 @@ int ProviderType_Ready(void) {
 #endif
   };
 
-  PyTypeObject *extensibletype = PyExtensibleType_Import();
-  if (!extensibletype) return -1;
-  ((PyObject*)&Provider_Type)->ob_type = extensibletype;
   Provider_Type.etp_count = 1;
   Provider_Type.etp_custom_slots = my_custom_slots;
 
-  if (PyType_Ready((PyTypeObject*)&Provider_Type) < 0) {
+  if (PyExtensibleType_Ready(&Provider_Type, 1) < 0) {
     return -1;
   }
   return 0;

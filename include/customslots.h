@@ -20,6 +20,18 @@ MSVC: http://msinttypes.googlecode.com/svn/trunk/stdint.h
   #define PY_CUSTOMSLOTS_UNLIKELY(x)   (x)
 #endif
 
+/* inline attribute */
+#if defined(__GNUC__)
+  #define PY_CUSTOMSLOTS_INLINE __inline__
+#elif defined(_MSC_VER)
+  #define PY_CUSTOMSLOTS_INLINE __inline
+#elif defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
+  #define PY_CUSTOMSLOTS_INLINE inline
+#else
+  #define PY_CUSTOMSLOTS_INLINE
+#endif
+
+
 #define PyExtensibleType_TPFLAGS_IS_EXTENSIBLE (1L<<22)
 
 typedef struct {
@@ -44,23 +56,23 @@ typedef struct {
 #define PyCustomSlots_Table(obj) \
   (((PyHeapExtensibleTypeObject*)(obj)->ob_type)->etp_custom_slots)
 
-static PyCustomSlot *PyCustomSlots_Find(PyObject *obj,
-                                        uint32_t id,
-                                        Py_ssize_t start) {
+static PY_CUSTOMSLOTS_INLINE PyCustomSlot *
+PyCustomSlots_Find(PyObject *obj,
+                   uint32_t id,
+                   Py_ssize_t expected_pos) {
   PyCustomSlot *entries;
   Py_ssize_t i;
   /* We unroll and make hitting the first slot likely(); this saved
      about 2 cycles on the test system with gcc 4.6.3, -O2 */
   if (PY_CUSTOMSLOTS_LIKELY(PyCustomSlots_Check(obj))) {
-    if (PY_CUSTOMSLOTS_LIKELY(PyCustomSlots_Count(obj) > start)) {
-      entries = PyCustomSlots_Table(obj);
-      if (PY_CUSTOMSLOTS_LIKELY(entries[start].id == id)) {
-        return &entries[start];
-      } else {
-        for (i = start + 1; i != PyCustomSlots_Count(obj); ++i) {
-          if (entries[i].id == id) {
-            return &entries[i];
-          }
+    entries = PyCustomSlots_Table(obj);
+    if (PY_CUSTOMSLOTS_LIKELY(PyCustomSlots_Count(obj) > expected_pos &&
+                              entries[expected_pos].id == id)) {
+      return &entries[expected_pos];
+    } else {
+      for (i = 0; i != PyCustomSlots_Count(obj); ++i) {
+        if (entries[i].id == id) {
+          return &entries[i];
         }
       }
     }
