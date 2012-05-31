@@ -36,7 +36,11 @@ MSVC: http://msinttypes.googlecode.com/svn/trunk/stdint.h
 
 typedef struct {
   uintptr_t id;
-  void *data;
+  union {
+    void *pointer;
+    Py_ssize_t objoffset;
+    uintptr_t flags;
+  } data;
 } PyCustomSlot;
 
 typedef struct {

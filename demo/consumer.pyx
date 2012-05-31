@@ -28,7 +28,7 @@ def sum_baseline(obj, int n):
             obj, EXTENSIBLETYPE_DOUBLE_FUNC_SLOT, 0)
     if slot == NULL:
         return 0.0
-    cdef funcptr_t funcptr = <funcptr_t>slot.data
+    cdef funcptr_t funcptr = <funcptr_t>slot.data.pointer
     for i in range(n):
         s += funcptr(3.0)
     return s
