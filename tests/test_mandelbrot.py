@@ -26,8 +26,9 @@ def mandel_1(real_coord, imag_coord, max_iters):
     z_real = 0.
     z_imag = 0.
     while i < max_iters:
-        z_real = z_real * z_real - z_imag * z_imag + real_coord
-        z_imag = 2 * z_real * z_imag + imag_coord
+        z_real_n = z_real * z_real - z_imag * z_imag + real_coord
+        z_imag = 2. * z_real * z_imag + imag_coord
+        z_real = z_real_n
         if (z_real * z_real + z_imag * z_imag) >= 4:
             return i
         i += 1

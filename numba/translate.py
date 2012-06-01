@@ -150,6 +150,7 @@ class Variable(object):
 
     def llvm(self, typ=None, mod=None):
         if self._llvm:
+            print typ, self.typ
             if typ is not None and typ != self.typ:
                 raise ValueError, "type mismatch"
             return self._llvm
@@ -165,8 +166,10 @@ class Variable(object):
                                       int(self.val))
             elif typ[0] == 'func':
                 res = map_to_function(self.val, typ[1:], mod)
-
             return res
+
+    def is_phi(self):
+        return isinstance(self._llvm, lc.PHINode)
 
 # Add complex, unsigned, and bool 
 def str_to_llvmtype(str):
@@ -319,37 +322,120 @@ class Translate(object):
         self.arg_ltypes = [convert_to_llvmtype(x) for x in self.arg_types]
         ty_func = lc.Type.function(self.ret_ltype, self.arg_ltypes)        
         self.lfunc = self.mod.add_function(ty_func, self.func.func_name)
-        self._locals = [None]*len(self.fco.co_varnames)
+        self.nlocals = len(self.fco.co_varnames)
+        self._locals = [None] * self.nlocals
         for i, name in enumerate(argnames):
             self.lfunc.args[i].name = name
             # Store away arguments in locals
-            self._locals[i] = self.lfunc.args[i]
+            self._locals[i] = Variable(self.lfunc.args[i])
         entry = self.lfunc.append_basic_block('Entry')
         self.blocks = {0:entry}
+        self.blocks_in = {0 : set()}
+        self.blocks_out = {0 : set()}
+        self.blocks_locals_read = {0 : set()}
+        self.blocks_locals_write = {0 : set(range(self.fco.co_argcount))}
+        self.blocks_locals = {}
         self.stack = []
         self.loop_stack = []
-        self.loop_variants = {}
+
+    def add_block(self, instruction_index):
+        if instruction_index not in self.blocks:
+            self.blocks[instruction_index] = self.lfunc.append_basic_block(
+                'BLOCK_%d' % instruction_index)
+            self.blocks_in[instruction_index] = set()
+            self.blocks_out[instruction_index] = set()
+            self.blocks_locals_read[instruction_index] = set()
+            self.blocks_locals_write[instruction_index] = set()
+
+    def build_cfg(self):
+        # FIXME: Make sure this list is exhaustive.
+        opmap = opcode.opmap
+        JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']
+        JUMP_FORWARD = opmap['JUMP_FORWARD']
+        JUMP_IF_FALSE_OR_POP = opmap['JUMP_IF_FALSE_OR_POP']
+        JUMP_IF_TRUE_OR_POP = opmap['JUMP_IF_TRUE_OR_POP']
+        LOAD_FAST = opmap['LOAD_FAST']
+        POP_JUMP_IF_FALSE = opmap['POP_JUMP_IF_FALSE']
+        POP_JUMP_IF_TRUE = opmap['POP_JUMP_IF_TRUE']
+        RETURN_VALUE = opmap['RETURN_VALUE']
+        SETUP_LOOP = opmap['SETUP_LOOP']
+        STORE_FAST = opmap['STORE_FAST']
+        crnt_block = 0
+        last_was_jump = True # At start there is no prior basic block
+                             # to link up with, so skip building a
+                             # fallthrough edge.
+        for i, op, arg in itercode(self.costr):
+            if i in self.blocks:
+                if not last_was_jump:
+                    print crnt_block, i
+                    self.blocks_in[i].add(crnt_block)
+                    self.blocks_out[crnt_block].add(i)
+                crnt_block = i
+            last_was_jump = False
+            if op == JUMP_ABSOLUTE:
+                self.add_block(arg)
+                self.blocks_in[arg].add(crnt_block)
+                self.blocks_out[crnt_block].add(arg)
+                self.add_block(i + 3)
+                last_was_jump = True
+            elif op == JUMP_FORWARD:
+                target = i + arg + 3
+                self.add_block(target)
+                self.blocks_in[target].add(crnt_block)
+                self.blocks_out[crnt_block].add(target)
+                self.add_block(i + 3)
+                last_was_jump = True
+            elif op in (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP):
+                raise NotImplementedError('FIXME')
+            elif op == LOAD_FAST:
+                # Not sure if we care about local variable users at
+                # the moment (more concerned with reaches analysis).
+                # Might help us eliminate unneeded phi nodes...
+                self.blocks_locals_read[crnt_block].add(arg)
+            elif op in (POP_JUMP_IF_FALSE, POP_JUMP_IF_TRUE):
+                self.add_block(i + 3)
+                self.add_block(arg)
+                self.blocks_in[i + 3].add(crnt_block)
+                self.blocks_in[arg].add(crnt_block)
+                self.blocks_out[crnt_block].add(i + 3)
+                self.blocks_out[crnt_block].add(arg)
+                last_was_jump = True
+            elif op == RETURN_VALUE:
+                if i + 1 < len(self.costr):
+                    self.add_block(i + 1)
+                last_was_jump = True
+            elif op == SETUP_LOOP:
+                self.add_block(i + 3)
+                self.blocks_in[i + 3].add(crnt_block)
+                self.blocks_out[crnt_block].add(i + 3)
+                last_was_jump = True # Not technically true, but we've
+                                     # already built the proper CFG
+                                     # edges, so skip the fallthrough
+                                     # plumbing.
+            elif op == STORE_FAST:
+                self.blocks_locals_write[crnt_block].add(arg)
 
     def translate(self):
         """Translate the function
         """
-        for pass_number in (1, 2):
-            self.op_LOAD_FAST = getattr(self, 'op_LOAD_FAST_%d' % pass_number)
-            self.op_STORE_FAST = getattr(self, 'op_STORE_FAST_%d' %
-                                         pass_number)
-            for i, op, arg in itercode(self.costr):
-                name = opcode.opname[op]
-                # Change the builder if the line-number 
-                # is in the list of blocks. 
-                if i in self.blocks.keys():
-                    self.builder = lc.Builder.new(self.blocks[i])
-                    if i == 0 and pass_number == 2:
-                        self.alloca_loop_variants()
-                getattr(self, 'op_'+name)(i, op, arg)
-            if pass_number == 1 and len(self.loop_variants) == 0:
-                break
-            elif __debug__:
-                print self.loop_variants
+        self.build_cfg()
+        for i, op, arg in itercode(self.costr):
+            name = opcode.opname[op]
+            # Change the builder if the line-number 
+            # is in the list of blocks.
+            if i in self.blocks.keys():
+                # Emit a branch to link blocks up if the previous
+                # block was not explicitly branched out of...
+                if i > 0:
+                    bb_instrs = self.builder.basic_block.instructions
+                    if ((len(bb_instrs) == 0) or
+                        (not bb_instrs[-1].is_terminator)):
+                        self.builder.branch(self.blocks[i])
+                    self.blocks_locals[crnt_block] = self._locals[:]
+                crnt_block = i
+                self.builder = lc.Builder.new(self.blocks[i])
+                self.build_phi_nodes(crnt_block)
+            getattr(self, 'op_'+name)(i, op, arg)
 
         # Perform code optimization
         fpm = lp.FunctionPassManager.new(self.mod)
@@ -358,11 +444,28 @@ class Translate(object):
         fpm.run(self.lfunc)
         fpm.finalize()
 
-    def alloca_loop_variants(self):
-        raise NotImplementedError('Allocate local variables')
-        for local_index in self.loop_variants.keys():
-            loop_rval = self.loop_variants[local_index]
-            self._locals[local_index] = self.builder.alloca(XXX)
+        print self.lfunc
+
+    def build_phi_nodes(self, crnt_block):
+        '''Determine if any phi nodes need to be created, and if so,
+        do it.'''
+        if len(self.blocks_in[crnt_block]) > 1:
+            for local in xrange(self.nlocals):
+                if self._locals[local] is not None:
+                    oldlocal = self._locals[local]
+                    print "local, oldlocal =", local, oldlocal
+                    newlocal = self.builder.phi(
+                        str_to_llvmtype(oldlocal.typ))
+                    self._locals[local] = Variable(newlocal)
+                    for pred in self.blocks_in[crnt_block]:
+                        if pred in self.blocks_locals:
+                            pred_locals = self.blocks_locals[pred]
+                            print pred_locals[local]
+                            if pred_locals[local] is not None:
+                                newlocal.add_incoming(
+                                    pred_locals[local].llvm(
+                                        llvmtype_to_strtype(newlocal.type)),
+                                    self.blocks[pred])
 
     def get_ctypes_func(self, llvm=True):
         if self.ee is None:
@@ -411,38 +514,14 @@ class Translate(object):
         llvm_args = [arg.llvm(typ) for typ, arg in zip(typs, args)]
         return lfunc, llvm_args
 
-    def op_LOAD_FAST_1(self, i, op, arg):
+    def op_LOAD_FAST(self, i, op, arg):
         self.stack.append(Variable(self._locals[arg]))
 
-    op_LOAD_FAST = op_LOAD_FAST_1
-
-    def op_LOAD_FAST_2(self, i, op, arg):
-        if arg in self.loop_variants:
-            raise NotImplementedError('FIXME')
-        else:
-            return self.op_LOAD_FAST_1(i, op, arg)
-
-    def op_STORE_FAST_1(self, i, op, arg):
-        '''First pass implementation of STORE_FAST.  Safe unless the
-        fast local gets assigned to in a loop.'''
-        # This treatment of fast-locals is unsafe in the presence of loops!
-        if len(self.loop_stack) > 0:
-            # We've detect a loop variant local.  Going to have to
-            # restart symbolic execution adding LLVM load/stores
-            # from/to a stack allocated variable.
-            if arg not in self.loop_variants:
-                self.loop_variants[arg] = {}
-            self.loop_variants[arg][i] = self.stack[-1]
+    def op_STORE_FAST(self, i, op, arg):
+        # FIXME: if the current basic block dominates any previously
+        # created phi nodes, we'll have to patch them to also use this
+        # value.
         self._locals[arg] = self.stack.pop(-1)
-
-    op_STORE_FAST = op_STORE_FAST_1
-
-    def op_STORE_FAST_2(self, i, op, arg):
-        if arg in self.loop_variants:
-            raise NotImplementedError('FIXME')
-        else:
-            assert len(self.loop_stack) == 0, "Internal compiler error!"
-            return self.op_STORE_FAST_1(i, op, arg)
 
     def op_LOAD_GLOBAL(self, i, op, arg):
         self.stack.append(Variable(self._myglobals[self.names[arg]]))
@@ -454,6 +533,7 @@ class Translate(object):
     def op_BINARY_ADD(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
+        print arg1, arg2
         typ, arg1, arg2 = resolve_type(arg1, arg2)
         if typ[0] == 'f':
             res = self.builder.fadd(arg1, arg2)
@@ -526,10 +606,11 @@ class Translate(object):
 
     def op_RETURN_VALUE(self, i, op, arg):
         val = self.stack.pop(-1)
+        print "RETURN_VALUE", val, val.val
         if val.val is None:
             self.builder.ret(lc.Constant.real(self.ret_ltype, 0))
         else:
-            self.builder.ret(val.llvm())
+            self.builder.ret(val.llvm(llvmtype_to_strtype(self.ret_ltype)))
         # Add a new block at the next instruction if not at end
         if i+1 < len(self.costr) and i+1 not in self.blocks.keys():
             blk = self.lfunc.append_basic_block("RETURN_%d" % i)
@@ -553,10 +634,16 @@ class Translate(object):
         # We need to create two blocks.
         #  One for the next instruction (just past the jump)
         #  and another for the block to be jumped to.
-        cont = self.lfunc.append_basic_block("CONT_%d"% i )
-        if_false = self.lfunc.append_basic_block("IF_FALSE_%d" % i)
-        self.blocks[i+3]=cont
-        self.blocks[arg]=if_false
+        if (i + 3) not in self.blocks:
+            cont = self.lfunc.append_basic_block("CONT_%d"% i )
+            self.blocks[i+3]=cont
+        else:
+            cont = self.blocks[i+3]
+        if arg not in self.blocks:
+            if_false = self.lfunc.append_basic_block("IF_FALSE_%d" % i)
+            self.blocks[arg]=if_false
+        else:
+            if_false = self.blocks[arg]
         arg1 = self.stack.pop(-1)
         self.builder.cbranch(arg1.llvm(), cont, if_false)
 
@@ -579,13 +666,17 @@ class Translate(object):
     def op_SETUP_LOOP(self, i, op, arg):
         print "SETUP_LOOP", i, op, arg
         self.loop_stack.append((i, arg))
-        predecessor = self.builder.block
-        loop_entry = self.lfunc.append_basic_block("LOOP_%d" % i)
-        self.blocks[i+3] = loop_entry
-        # Connect everything up.
-        self.builder.position_at_end(predecessor)
-        self.builder.branch(loop_entry)
-        self.builder.position_at_end(loop_entry)
+        if (i + 3) not in self.blocks:
+            loop_entry = self.lfunc.append_basic_block("LOOP_%d" % i)
+            self.blocks[i+3] = loop_entry
+            # Connect blocks up if this was not an anticipated change
+            # in the basic block structure.
+            predecessor = self.builder.block
+            self.builder.position_at_end(predecessor)
+            self.builder.branch(loop_entry)
+            self.builder.position_at_end(loop_entry)
+        else:
+            loop_entry = self.blocks[i+3]
 
     def op_LOAD_ATTR(self, i, op, arg):
         objarg = self.stack.pop(-1)
@@ -610,3 +701,12 @@ class Translate(object):
 
     def op_POP_BLOCK(self, i, op, arg):
         self.loop_stack.pop(-1)
+
+    def op_JUMP_FORWARD(self, i, op, arg):
+        target_i = i + arg + 3
+        if target_i not in self.blocks:
+            target = self.lfunc.append_basic_block("TARGET_%d" % target_i)
+            self.blocks[target_i] = target
+        else:
+            target = self.blocks[target_i]
+        self.builder.branch(target)

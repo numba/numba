@@ -5,7 +5,6 @@ from numba.decorators import numba_compile
 
 import numpy
 
-import sys
 import unittest
 
 # ______________________________________________________________________
@@ -40,6 +39,16 @@ def while_loop_fn_2(ndarr):
 
 # ______________________________________________________________________
 
+def while_loop_fn_3(count):
+    i = 0
+    acc = 1.
+    while i < count:
+        acc *= 2
+        i += 1
+    return acc
+
+# ______________________________________________________________________
+
 class TestWhile(unittest.TestCase):
     def _do_test(self, function, arg_types, *args, **kws):
         _numba_compile = (numba_compile(arg_types = arg_types)
@@ -57,10 +66,16 @@ class TestWhile(unittest.TestCase):
     def test_while_loop_fn_2(self):
         self._do_test(while_loop_fn_2, [['d']], numpy.array([1., 2., 3.]))
 
+    def test_while_loop_fn_3(self):
+        compiled_fn = numba_compile(arg_types = ['l'])(while_loop_fn_3)
+        compiled_result = compiled_fn(3)
+        self.assertEqual(compiled_result, while_loop_fn_2(3))
+        self.assertEqual(compiled_result, 8.)
+
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    unittest.main(*sys.argv[1:])
+    unittest.main()
 
 # ______________________________________________________________________
 # End of test_while.py
