@@ -42,3 +42,24 @@ def test_grad():
     print dy_dx_fn(x + 2)
 
 
+def test_loop():
+
+    def repeat_double(x, N):
+        print 'N', N
+        for i in range(N):
+            x = x + x
+            print 'i', i, 'x', x
+        assert i == N - 1
+        return x
+
+    #repeat_double(0, 4)
+
+    x = np.zeros(3)
+    w = Watcher([x])
+    y = w.call(repeat_double, x, 4)
+
+    f = w.recalculate_fn(y, x)
+    y2 = f(x + 1)
+    assert np.all(y == 0)
+    assert np.all(y2 == 16)
+

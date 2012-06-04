@@ -9,6 +9,7 @@ def itercode(code):
     extended_arg = 0
     n = len(code)
     while i < n:
+        print ' -> i', i
         c = code[i]
         num = i
         op = ord(c)
@@ -21,4 +22,14 @@ def itercode(code):
             if op == opcode.EXTENDED_ARG:
                 extended_arg = oparg*65536L
 
-        yield num, op, oparg
+        delta = yield num, op, oparg
+        if delta is not None:
+            print '->delta', delta
+            abs_rel, dst = delta
+            if abs_rel == 'abs':
+                i = dst
+            elif abs_rel == 'rel':
+                i += dst
+            else:
+                assert 0
+

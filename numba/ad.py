@@ -1,3 +1,11 @@
+"""
+Example of how to use byte-code execution technique to trace accesses to numpy arrays.
+
+This file demonstrates two applications of this technique:
+* optimize numpy computations for repeated calling
+* provide automatic differentiation of procedural code
+
+"""
 
 import __builtin__
 import os
@@ -11,8 +19,17 @@ import theano
 
 from .utils import itercode
 
+# Opcode help: http://docs.python.org/library/dis.html
+
+# XXX: support full calling convention for named args, *args and **kwargs
+
 
 class FrameVM(object):
+    """
+    A Class for evaluating a code block of CPython bytecode,
+    and tracking accesses to numpy arrays.
+
+    """
     def __init__(self, watcher, func):
         print 'FrameVM', func
         self.watcher = watcher
@@ -39,15 +56,21 @@ class FrameVM(object):
                     #print 'WARNING: name lookup failed', name
                     pass
 
-        self._locals = [None]*len(self.fco.co_varnames)
+        self._locals = [None] * len(self.fco.co_varnames)
         for i, name in enumerate(self.argnames):
             #print 'i', args, self.argnames, self.fco.co_varnames
             self._locals[i] = args[i]
 
-        for i, op, arg in itercode(self.costr):
+        self.code_iter = itercode(self.costr)
+        jmp = None
+        while True:
+            try:
+                i, op, arg = self.code_iter.send(jmp)
+            except StopIteration:
+                break
             name = opcode.opname[op]
-            #print 'OP: ', name
-            getattr(self, 'op_' + name)(i, op, arg)
+            #print 'OP: ', i, name
+            jmp = getattr(self, 'op_' + name)(i, op, arg)
 
         return self.rval
 
@@ -62,6 +85,17 @@ class FrameVM(object):
             s2 = self.watcher.svars.get(id(arg2), arg2)
             self.watcher.svars[id(r)] = s1 + s2
             #print 'added sym'
+
+    def op_BINARY_SUBTRACT(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        r = arg1 - arg2
+        self.stack.append(r)
+        if (id(arg1) in self.watcher.svars 
+                or id(arg2) in self.watcher.svars):
+            s1 = self.watcher.svars.get(id(arg1), arg1)
+            s2 = self.watcher.svars.get(id(arg2), arg2)
+            self.watcher.svars[id(r)] = s1 - s2
 
     def op_BINARY_MULTIPLY(self, i, op, arg):
         arg2 = self.stack.pop(-1)
@@ -82,10 +116,12 @@ class FrameVM(object):
             self.stack = self.stack[:-arg]
         func = self.stack.pop(-1)
         recurse = True
+
         if func.__module__ and func.__module__.startswith('numpy'):
             recurse = False
-        if 'built-in method' in str(func):
+        if 'built-in' in str(func):
             recurse = False
+
         if recurse:
             vm = FrameVM(self.watcher, func)
             rval = vm.call(args, {})
@@ -101,6 +137,45 @@ class FrameVM(object):
                 else:
                     raise NotImplementedError(func)
         self.stack.append(rval)
+
+    def op_COMPARE_OP(self, i, op, arg):
+        opname = opcode.cmp_op[arg]
+        left = self.stack.pop(-1)
+        right = self.stack.pop(-1)
+        if 0: pass
+        elif opname == '==': self.stack.append(left == right)
+        elif opname == '!=': self.stack.append(left != right)
+        else:
+            raise NotImplementedError('comparison: %s' % opname)
+
+
+    def op_FOR_ITER(self, i, op, arg):
+        # either push tos.next()
+        # or pop tos and send (arg)
+        tos = self.stack[-1]
+        try:
+            next = tos.next()
+            print 'next', next
+            self.stack.append(next)
+        except StopIteration:
+            self.stack.pop(-1)
+            return ('rel', arg)
+
+    def op_JUMP_ABSOLUTE(self, i, op, arg):
+        print 'sending', arg
+        return ('abs', arg)
+
+    def op_JUMP_IF_TRUE(self, i, op, arg):
+        tos = self.stack[-1]
+        if tos:
+            return ('rel', arg)
+
+    def op_GET_ITER(self, i, op, arg):
+        # replace tos -> iter(tos)
+        tos = self.stack[-1]
+        self.stack[-1] = iter(tos)
+        if id(tos) in self.watcher.svars:
+            raise NotImplementedError('iterator of watched value')
 
     def op_LOAD_GLOBAL(self, i, op, arg):
         #print 'LOAD_GLOBAL', self.names[arg]
@@ -119,15 +194,33 @@ class FrameVM(object):
         #print 'LOAD_FAST', self.varnames[arg]
         self.stack.append(self._locals[arg])
 
+    def op_POP_BLOCK(self, i, op, arg):
+        print 'pop block, what to do?'
+
+    def op_POP_TOP(self, i, op, arg):
+        self.stack.pop(-1)
+
     def op_PRINT_ITEM(self, i, op, arg):
         print self.stack.pop(-1),
 
     def op_PRINT_NEWLINE(self, i, op, arg):
         print ''
 
+    def op_SETUP_LOOP(self, i, op, arg):
+        print 'SETUP_LOOP, what to do?'
+
     def op_STORE_FAST(self, i, op, arg):
         #print 'STORE_FAST', self.varnames[arg]
         self._locals[arg] = self.stack.pop(-1)
+
+    def op_RAISE_VARARGS(self, i, op, arg):
+        if 1 <= arg:
+            exc = self.stack.pop(-1)
+        if 2 <= arg:
+            param = self.stack.pop(-1)
+        if 3 <= arg:
+            tb = self.stack.pop(-1)
+        raise NotImplementedError('exception handling')
 
     def op_RETURN_VALUE(self, i, op, arg):
         self.rval = self.stack.pop(-1)
