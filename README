@@ -4,7 +4,7 @@ machine code especially for use in the NumPy run-time and SciPy
 modules.
 
 Dependencies:
-	
+
   * LLVM 3.1
   * llvm-py (from ContinuumIO/llvm-py fork)
   * numpy
@@ -24,3 +24,6 @@ python setup.py install
 
 * Build Numba
 python setup.py install
+
+* Follow Numba
+Join numba@librelist.org
