@@ -3,6 +3,8 @@
 
 import opcode
 
+from .utils import itercode
+
 # ______________________________________________________________________
 
 class ControlFlowGraph (object):
@@ -30,7 +32,6 @@ class ControlFlowGraph (object):
 
     @classmethod
     def build_cfg (cls, code_obj, *args, **kws):
-        from .translate import itercode
         ret_val = cls(*args, **kws)
         opmap = opcode.opmap
         JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']

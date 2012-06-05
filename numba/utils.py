@@ -9,7 +9,8 @@ def itercode(code):
     extended_arg = 0
     n = len(code)
     while i < n:
-        print ' -> i', i
+        if __debug__:
+            print ' -> i', i
         c = code[i]
         num = i
         op = ord(c)
