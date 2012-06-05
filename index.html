@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Numba by ContinuumIO</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="javascripts/scale.fix.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>Numba</h1>
+        <p>NumPy aware dynamic Python compiler using LLVM</p>
+        <p class="view"><a href="https://github.com/ContinuumIO/numba">View the Project on GitHub <small>ContinuumIO/numba</small></a></p>
+        <ul>
+          <li><a href="https://github.com/ContinuumIO/numba/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/ContinuumIO/numba/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/ContinuumIO/numba">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h3>Welcome to Numba</h3>
+
+<p>Numba is a translator of Python byte-code to LLVM IR which can then be used to create machine code.  It is a dynamic compiler which is used intentionally in places where you might otherwise want to right C, C++, Fortran, or Cython code.  </p>
+
+<p>Example: </p>
+
+<p>@numba.vectorize
+def sinc(x):
+    if x == 0:
+       return 0.0
+    else:
+       return sin(pi*x)/(pi*x)</p>
+
+<p>This will compile to machine code using LLVM and build a NumPy ufunc that uses the corresponding loop for it's code. </p>
+
+<h3>Authors and Contributors</h3>
+
+<p><a href="https://github.com/teoliphant" class="user-mention">@teoliphant</a>
+<a href="https://github.com/jriehl" class="user-mention">@jriehl</a>
+<a href="https://github.com/jaberg" class="user-mention">@jaberg</a></p>
+
+<h3>Support or Contact</h3>
+
+<p>Email <a href="mailto:numba@librelist.com">numba@librelist.com</a></p>
+      </section>
+    </div>
+    <footer>
+      <p>Project maintained by <a href="https://github.com/ContinuumIO">ContinuumIO</a></p>
+      <p>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></p>
+    </footer>
+    <!--[if !IE]><script>fixScale(document);</script><!--<![endif]-->
+    
+  </body>
+</html>
