@@ -151,7 +151,6 @@ class Variable(object):
 
     def llvm(self, typ=None, mod=None):
         if self._llvm:
-            print typ, self.typ
             if typ is not None and typ != self.typ:
                 raise ValueError, "type mismatch"
             return self._llvm
@@ -387,37 +386,70 @@ class Translate(object):
         fpm.run(self.lfunc)
         fpm.finalize()
 
-        print self.lfunc
+        if __debug__:
+            print self.lfunc
+
+    def add_phi_incomming(self, phi, crnt_block, pred, local):
+        '''Take one of three actions:
+
+        1. If the predecessor block has already been visited, add its
+        exit value for the given local to the phi node under
+        construction.
+
+        2. If the predecessor has not been visited, but the block that
+        defines the reaching definition for that local value, add the
+        definition value to the phi node under construction.
+
+        3. If the reaching definition has not been visited, add a
+        pending call to PHINode.add_incoming() which will be caught by
+        op_STORE_LOCAL().
+        '''
+        if pred in self.blocks_locals:
+            pred_locals = self.blocks_locals[pred]
+            assert pred_locals[local] is not None, ("Internal error.  "
+                "Local value definition missing from block that has "
+                "already been visited.")
+            phi.add_incoming(pred_locals[local].llvm(
+                    llvmtype_to_strtype(phi.type)), self.blocks[pred])
+        else:
+            reaching_defs = self.cfg.get_reaching_definitions(crnt_block)
+            definition_block = reaching_defs[pred][local]
+            if definition_block in self.blocks_locals:
+                defn_locals = self.blocks_locals[definition_block]
+                assert defn_locals[local] is not None, ("Internal error.  "
+                    "Local value definition missing from block that has "
+                    "already been visited.")
+                phi.add_incomming(defn_locals[local].llvm(
+                        llvmtype_to_strtype(phi.type)), self.blocks[pred])
+            else:
+                definition_index = self.cfg.blocks_writer[definition_block][
+                    local]
+                if definition_index in self.pending_phis:
+                    self.pending_phis[definition_index][1].append(
+                        self.blocks[pred])
+                else:
+                    # Note that the same reaching definition might
+                    # "arrive" via more than one predecessor block, so we
+                    # keep a list of predecessors, not just one.
+                    self.pending_phis[definition_index] = (phi,
+                                                           [self.blocks[pred]])
 
     def build_phi_nodes(self, crnt_block):
         '''Determine if any phi nodes need to be created, and if so,
         do it.'''
         preds = self.cfg.blocks_in[crnt_block]
         if len(preds) > 1:
-            for local in self.cfg.phi_needed(crnt_block):
-                if self._locals[local] is not None:
+            phis_needed = self.cfg.phi_needed(crnt_block)
+            if len(phis_needed) > 0:
+                reaching_defs = self.cfg.get_reaching_definitions(crnt_block)
+                for local in phis_needed:
+                    # Infer type from current local value.
                     oldlocal = self._locals[local]
-                    print "local, oldlocal =", local, oldlocal
                     phi = self.builder.phi(str_to_llvmtype(oldlocal.typ))
                     newlocal = Variable(phi)
                     self._locals[local] = newlocal
                     for pred in preds:
-                        if pred in self.blocks_locals:
-                            pred_locals = self.blocks_locals[pred]
-                            print pred_locals[local]
-                            if pred_locals[local] is not None:
-                                phi.add_incoming(
-                                    pred_locals[local].llvm(
-                                        llvmtype_to_strtype(phi.type)),
-                                    self.blocks[pred])
-                        # FIXME: Need to remember the reaching
-                        # definition location, not the value itself.
-                        # See op_STORE_FAST()...
-                        elif newlocal in self.pending_phis:
-                            self.pending_phis[newlocal][1].append(pred)
-                        else:
-                            self.pending_phis[newlocal] = (
-                                phi, [self.blocks[pred]])
+                        self.add_phi_incomming(phi, crnt_block, pred, local)
 
     def get_ctypes_func(self, llvm=True):
         if self.ee is None:
@@ -470,17 +502,13 @@ class Translate(object):
         self.stack.append(Variable(self._locals[arg]))
 
     def op_STORE_FAST(self, i, op, arg):
-        # FIXME This is totally incorrect for the general case!
-        # Pending phi's should be indexed by instruction index, and
-        # only added for that instruction.  This assumes that a local
-        # is written once and only once past the CFG join.
         oldval = self._locals[arg]
         newval = self.stack.pop(-1)
-        if oldval in self.pending_phis:
-            phi, preds = self.pending_phis[oldval]
-            for pred in preds:
+        if i in self.pending_phis:
+            phi, pred_lblocks = self.pending_phis[i]
+            for pred_lblock in pred_lblocks:
                 phi.add_incoming(newval.llvm(llvmtype_to_strtype(phi.type)),
-                                 pred)
+                                 pred_lblock)
         self._locals[arg] = newval
 
     def op_LOAD_GLOBAL(self, i, op, arg):
@@ -493,7 +521,6 @@ class Translate(object):
     def op_BINARY_ADD(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        print arg1, arg2
         typ, arg1, arg2 = resolve_type(arg1, arg2)
         if typ[0] == 'f':
             res = self.builder.fadd(arg1, arg2)
@@ -566,7 +593,6 @@ class Translate(object):
 
     def op_RETURN_VALUE(self, i, op, arg):
         val = self.stack.pop(-1)
-        print "RETURN_VALUE", val, val.val
         if val.val is None:
             self.builder.ret(lc.Constant.real(self.ret_ltype, 0))
         else:
@@ -624,7 +650,6 @@ class Translate(object):
         raise NotImplementedError('FIXME')
 
     def op_SETUP_LOOP(self, i, op, arg):
-        print "SETUP_LOOP", i, op, arg
         self.loop_stack.append((i, arg))
         if (i + 3) not in self.blocks:
             loop_entry = self.lfunc.append_basic_block("LOOP_%d" % i)
@@ -643,7 +668,9 @@ class Translate(object):
         # Make this a map on types in the future (thinking this is
         # what typemap was destined to do...)
         objarg_llvm_val = objarg.llvm()
-        print i, op, self.names[arg], objarg, objarg.typ, objarg_llvm_val.type,
+        if __debug__:
+            print i, op, self.names[arg], objarg, objarg.typ,
+            print objarg_llvm_val.type
         if objarg_llvm_val.type == _numpy_array:
             field_index = _numpy_array_field_ofs[self.names[arg]]
         else:
@@ -656,7 +683,6 @@ class Translate(object):
         self.stack.append(Variable(res))
 
     def op_JUMP_ABSOLUTE(self, i, op, arg):
-        print "JUMP_ABSOLUTE", i, op, arg
         self.builder.branch(self.blocks[arg])
 
     def op_POP_BLOCK(self, i, op, arg):
