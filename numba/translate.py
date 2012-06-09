@@ -56,6 +56,8 @@ _numpy_array_field_ofs = {
     'ndim' : _BASE_ARRAY_FIELD_OFS + 1,
     'shape' : _BASE_ARRAY_FIELD_OFS + 2,
     'strides' : _BASE_ARRAY_FIELD_OFS + 3,
+    # Skipping base for now...
+    'descr' : _BASE_ARRAY_FIELD_OFS + 5,
 }
 
 # Translate Python bytecode to LLVM IR
@@ -132,7 +134,7 @@ class Variable(object):
     def llvm(self, typ=None, mod=None):
         if self._llvm:
             if typ is not None and typ != self.typ:
-                raise ValueError, "type mismatch"
+                raise ValueError("type mismatch (%r != %r)" % (typ, self.typ))
             return self._llvm
         else:
             if typ is None:
@@ -151,23 +153,38 @@ class Variable(object):
     def is_phi(self):
         return isinstance(self._llvm, lc.PHINode)
 
+    def is_module(self):
+        return isinstance(self.val, types.ModuleType)
+
 # Add complex, unsigned, and bool 
 def str_to_llvmtype(str):
+    n_pointer = 0
+    if str.endswith('*'):
+        n_pointer = str.count('*')
+        str = str[:-n_pointer]
     if str[0] == 'f':
         if str[1:] == '32':
-            return lc.Type.float()
+            ret_val = lc.Type.float()
         elif str[1:] == '64':
-            return lc.Type.double()
+            ret_val = lc.Type.double()
     elif str[0] == 'i':
         num = int(str[1:])
-        return lc.Type.int(num)
-    raise TypeError, "Invalid Type"
+        ret_val = lc.Type.int(num)
+    else:
+        raise TypeError, "Invalid Type"
+    for _ in xrange(n_pointer):
+        ret_val = lc.Type.pointer(ret_val)
+    return ret_val
 
 def convert_to_llvmtype(typ):
+    n_pointer = 0
     if isinstance(typ, list):
         return _numpy_array
+    elif typ.endswith('*'):
+        n_pointer = typ.count('*')
+        typ = typ[:-n_pointer]
     dt = np.dtype(typ)
-    return str_to_llvmtype("%s%s" % (dt.kind, 8*dt.itemsize))
+    return str_to_llvmtype("%s%s%s" % (dt.kind, 8*dt.itemsize, "*" * n_pointer))
 
 def convert_to_ctypes(typ):
     import ctypes
@@ -178,10 +195,25 @@ def convert_to_ctypes(typ):
         while isinstance(crnt_elem, list):
             crnt_elem = crnt_elem[0]
             dimcount += 1
-        return np.ctypeslib.ndpointer(dtype = np.dtype(crnt_elem),
-                                      ndim = dimcount,
-                                      flags = 'C_CONTIGUOUS')
-    return _typecodes[np.dtype(typ).str]
+        # FIXME: At some point we should add a type check to the
+        # wrapper code s.t. it ensures the given argument conforms to
+        # the following:
+        #     np.ctypeslib.ndpointer(dtype = np.dtype(crnt_elem),
+        #                            ndim = dimcount,
+        #                            flags = 'C_CONTIGUOUS')
+        # For now, we'll just allow any Python objects, and hope for the best.
+        return ctypes.py_object
+    n_pointer = 0
+    if typ.endswith('*'):
+        n_pointer = typ.count('*')
+        typ = typ[:-n_pointer]
+        if __debug__:
+            print("convert_to_ctypes(): n_pointer = %d, typ' = %r" %
+                  (n_pointer, typ))
+    ret_val = _typecodes[np.dtype(typ).str]
+    for _ in xrange(n_pointer):
+        ret_val = ctypes.POINTER(ret_val)
+    return ret_val
 
 # Add complex, unsigned, and bool
 def typcmp(type1, type2):
@@ -261,6 +293,36 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
                           '>=':lc.ICMP_UGE,
                           '<=':lc.ICMP_ULE,
                           '!=':lc.ICMP_NE}
+
+EXTERN_TYPEMAP = {
+    'PyArray_Zeros' : lc.Type.function(_numpy_array,
+                                       [_intp, _intp_star, _void_star, _intp]),
+}
+
+def build_zeros_like(translator, args):
+    assert (len(args) == 1 and
+            args[0]._llvm is not None and
+            args[0]._llvm.type == _numpy_array)
+    larr = args[0]._llvm
+    largs = [translator.builder.load(
+            translator.builder.gep(larr, [
+                    lc.Constant.int(_int32, 0),
+                    lc.Constant.int(_int32,
+                                    _numpy_array_field_ofs[field_name])]))
+            for field_name in ('ndim', 'shape', 'descr')]
+    # Patch the first argument to platform size.
+    if largs[0].type != _intp:
+        largs[0] = translator.builder.sext(largs[0], _intp)
+    largs.append(lc.Constant.int(_intp, 0))
+    lfunc = translator.get_extern('PyArray_Zeros')
+    if __debug__:
+        print "build_zeros_like(): lfunc =", str(lfunc)
+        print "build_zeros_like(): largs =", [str(arg) for arg in largs]
+    return lfunc, largs
+
+PY_CALL_TO_LLVM_CALL_MAP = {
+    np.zeros_like : build_zeros_like,
+}
 
 class LLVMControlFlowGraph (ControlFlowGraph):
     def __init__ (self, translator):
@@ -367,7 +429,7 @@ class Translate(object):
         fpm.finalize()
 
         if __debug__:
-            print self.lfunc
+            print self.mod
 
     def add_phi_incomming(self, phi, crnt_block, pred, local):
         '''Take one of three actions:
@@ -462,6 +524,7 @@ class Translate(object):
         elif func.val in self._delaylist:
             return None, DelayedObj(func.val, args)
         else:
+            # Assume we are calling into an intrinsic function...
             # we need to generate the function including the types
             typs = [arg.typ if arg._llvm is not None else '' for arg in args]
             # pick first one as choice
@@ -477,6 +540,17 @@ class Translate(object):
 
         llvm_args = [arg.llvm(typ) for typ, arg in zip(typs, args)]
         return lfunc, llvm_args
+
+    def get_extern(self, extern_name):
+        try:
+            ret_val = self.mod.get_function_named(extern_name)
+        except Exception:
+            if extern_name in EXTERN_TYPEMAP:
+                ret_val = self.mod.add_function(EXTERN_TYPEMAP[extern_name],
+                                                extern_name)
+            else:
+                raise ValueError("Unknown extern symbol %r." % (extern_name,))
+        return ret_val
 
     def op_LOAD_FAST(self, i, op, arg):
         self.stack.append(Variable(self._locals[arg]))
@@ -544,6 +618,16 @@ class Translate(object):
         else: # typ[0] == 'i'
             res = self.builder.sdiv(arg1, arg2)
             # XXX: FIXME-need udiv as
+        self.stack.append(Variable(res))
+
+    def op_BINARY_FLOOR_DIVIDE(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        typ, arg1, arg2 = resolve_type(arg1, arg2)
+        if typ[0] == 'i':
+            res = self.builder.sdiv(arg1, arg2)
+        else:
+            raise NotImplementedError('// for type %r' % typ)
         self.stack.append(Variable(res))
 
     def op_BINARY_MODULO(self, i, op, arg):
@@ -619,7 +703,10 @@ class Translate(object):
         if arg > 0:
             self.stack = self.stack[:-arg]
         func = self.stack.pop(-1)
-        func, args = self.func_resolve_type(func, args)
+        if func.val in PY_CALL_TO_LLVM_CALL_MAP:
+            func, args = PY_CALL_TO_LLVM_CALL_MAP[func.val](self, args)
+        else:
+            func, args = self.func_resolve_type(func, args)
         if func is None: # A delayed-result (i.e. range or xrange)
             res = args
         else:
@@ -645,21 +732,25 @@ class Translate(object):
 
     def op_LOAD_ATTR(self, i, op, arg):
         objarg = self.stack.pop(-1)
-        # Make this a map on types in the future (thinking this is
-        # what typemap was destined to do...)
-        objarg_llvm_val = objarg.llvm()
         if __debug__:
-            print i, op, self.names[arg], objarg, objarg.typ,
-            print objarg_llvm_val.type
-        if objarg_llvm_val.type == _numpy_array:
-            field_index = _numpy_array_field_ofs[self.names[arg]]
+            print "op_LOAD_ATTR():", i, op, self.names[arg], objarg, objarg.typ
+        if objarg.is_module():
+            res = getattr(objarg.val, self.names[arg])
         else:
-            raise NotImplementedError('LOAD_ATTR only supported for Numpy '
-                                      'arrays.')
-        res_addr = self.builder.gep(objarg_llvm_val, 
-                                    [lc.Constant.int(_int32, 0),
-                                     lc.Constant.int(_int32, field_index)])
-        res = self.builder.load(res_addr)
+            # Make this a map on types in the future (thinking this is
+            # what typemap was destined to do...)
+            objarg_llvm_val = objarg.llvm()
+            if __debug__:
+                print "op_LOAD_ATTR():", objarg_llvm_val.type
+            if objarg_llvm_val.type == _numpy_array:
+                field_index = _numpy_array_field_ofs[self.names[arg]]
+            else:
+                raise NotImplementedError('LOAD_ATTR only supported for Numpy '
+                                          'arrays.')
+            res_addr = self.builder.gep(objarg_llvm_val, 
+                                        [lc.Constant.int(_int32, 0),
+                                         lc.Constant.int(_int32, field_index)])
+            res = self.builder.load(res_addr)
         self.stack.append(Variable(res))
 
     def op_JUMP_ABSOLUTE(self, i, op, arg):
@@ -676,3 +767,18 @@ class Translate(object):
         else:
             target = self.blocks[target_i]
         self.builder.branch(target)
+
+    def op_UNPACK_SEQUENCE(self, i, op, arg):
+        objarg = self.stack.pop(-1)
+        objarg_llvm_val = objarg.llvm()
+        # FIXME: Is there some type checking we can do so a bad call
+        # to getelementptr doesn't kill the whole process (assuming
+        # asserts are live in LLVM)?!
+        llvm_vals = [
+            self.builder.load(
+                self.builder.gep(objarg_llvm_val,
+                                 [lc.Constant.int(_int32, index)]))
+            for index in xrange(arg)]
+        llvm_vals.reverse()
+        for llvm_val in llvm_vals:
+            self.stack.append(Variable(llvm_val))

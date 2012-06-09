@@ -67,12 +67,12 @@ def numba_compile(*args, **kws):
     def _numba_compile(func):
         global __tr_map__
         llvm = kws.pop('llvm', True)
-        if func not in __tr_map__:
-            t = Translate(func, *args, **kws)
-            t.translate()
-            __tr_map__[func] = t
-        else:
-            t = __tr_map__[func]
+        if func in __tr_map__:
+            print("Warning: Previously compiled version of %r may be "
+                  "garbage collected!" % (func,))
+        t = Translate(func, *args, **kws)
+        t.translate()
+        __tr_map__[func] = t
         return t.get_ctypes_func(llvm)
     return _numba_compile
 
