@@ -1,8 +1,12 @@
 *~
-
 *.o
-/demo/build
 *.so
+*.pyc
+
+/build
+/demo/build
 
 /demo/consumer.c
 /demo/provider.c
+
+/extensibletype/extensibletype.c
