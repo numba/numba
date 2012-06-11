@@ -12,53 +12,10 @@ import llvm.ee as le
 from utils import itercode
 from ._ext import make_ufunc
 from .cfg import ControlFlowGraph
-
-
-if sys.maxint > 2**33:
-    _plat_bits = 64
-else:
-    _plat_bits = 32
-
-_int32 = lc.Type.int(32)
-_intp = lc.Type.int(_plat_bits)
-_intp_star = lc.Type.pointer(_intp)
-_void_star = lc.Type.pointer(lc.Type.int(8))
-
-_pyobject_head = [_intp, lc.Type.pointer(lc.Type.int(32))]
-if hasattr(sys, 'getobjects'):
-    _trace_refs_ = True
-    _pyobject_head = [lc.Type.pointer(lc.Type.int(32)),
-                      lc.Type.pointer(lc.Type.int(32))] + \
-                      _pyobject_head
-else:
-    _trace_refs_ = False
-
-_head_len = len(_pyobject_head)
-_numpy_struct = lc.Type.struct(_pyobject_head+\
-      [_void_star,          # data
-       lc.Type.int(32),     # nd
-       _intp_star,          # dimensions
-       _intp_star,          # strides
-       _void_star,          # base
-       _void_star,          # descr
-       lc.Type.int(32),     # flags
-       _void_star,          # weakreflist 
-       _void_star,          # maskna_dtype
-       _void_star,          # maskna_data
-       _intp_star,          # masna_strides
-      ])
-_numpy_array = lc.Type.pointer(_numpy_struct)
-
-_BASE_ARRAY_FIELD_OFS = len(_pyobject_head)
-
-_numpy_array_field_ofs = {
-    'data' : _BASE_ARRAY_FIELD_OFS,
-    'ndim' : _BASE_ARRAY_FIELD_OFS + 1,
-    'shape' : _BASE_ARRAY_FIELD_OFS + 2,
-    'strides' : _BASE_ARRAY_FIELD_OFS + 3,
-    # Skipping base for now...
-    'descr' : _BASE_ARRAY_FIELD_OFS + 5,
-}
+from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
+    _void_star, _pyobject_head, _trace_refs_, _head_len, _numpy_struct, \
+    _numpy_array, _numpy_array_field_ofs
+from .multiarray_api import MultiarrayAPI
 
 # Translate Python bytecode to LLVM IR
 
@@ -129,13 +86,29 @@ class Variable(object):
             self.typ = pythontype_to_strtype(type(val))
 
     def __repr__(self):
-        return '<Variable(val=%r, _llvm=%r, typ=%r)>' % (self.val, self._llvm, self.typ)
+        return ('<Variable(val=%r, _llvm=%r, typ=%r)>' %
+                (self.val, self._llvm, self.typ))
 
-    def llvm(self, typ=None, mod=None):
+    def llvm(self, typ=None, mod=None, builder = None):
         if self._llvm:
+            ret_val = self._llvm
             if typ is not None and typ != self.typ:
-                raise ValueError("type mismatch (%r != %r)" % (typ, self.typ))
-            return self._llvm
+                ltyp = str_to_llvmtype(typ)
+                if ltyp.kind == ret_val.type.kind and builder:
+                    if typ[0] == 'i':
+                        if ltyp.width > ret_val.type.width:
+                            ret_val = builder.sext(ret_val, ltyp)
+                        else:
+                            print("Warning: Performing downcast.  May lose "
+                                  "information.")
+                            ret_val = builder.trunc(ret_val, ltyp)
+                    else:
+                        raise NotImplementedError("Don't know how to cast "
+                                                  "from %r to %r yet!" % ())
+                else:
+                    raise ValueError("type mismatch (%r != %r.typ)" %
+                                     (typ, self))
+            return ret_val
         else:
             if typ is None:
                 typ = 'f64'
@@ -231,8 +204,9 @@ def typcmp(type1, type2):
 # Both inputs are Variable objects
 #  Resolves types on one of them. 
 #  Won't work if both need resolving
-#  Does not up-cast llvm types
-def resolve_type(arg1, arg2):
+# Currently delegates casting to Variable.llvm(), but only in the
+# presence of a builder instance.
+def resolve_type(arg1, arg2, builder = None):
     if arg1._llvm is not None:
         typ = arg1.typ
     elif arg2._llvm is not None:
@@ -247,7 +221,9 @@ def resolve_type(arg1, arg2):
                 typ = arg2.typ
             except TypeError:
                 raise TypeError, "Both types not valid"
-    return typ, arg1.llvm(typ), arg2.llvm(typ)
+    return (typ,
+            arg1.llvm(typ, builder = builder),
+            arg2.llvm(typ, builder = builder))
 
 # This won't convert any llvm types.  It assumes 
 #  the llvm types in args are either fixed or not-yet specified.
@@ -294,11 +270,6 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
                           '<=':lc.ICMP_ULE,
                           '!=':lc.ICMP_NE}
 
-EXTERN_TYPEMAP = {
-    'PyArray_Zeros' : lc.Type.function(_numpy_array,
-                                       [_intp, _intp_star, _void_star, _intp]),
-}
-
 def build_zeros_like(translator, args):
     assert (len(args) == 1 and
             args[0]._llvm is not None and
@@ -310,11 +281,9 @@ def build_zeros_like(translator, args):
                     lc.Constant.int(_int32,
                                     _numpy_array_field_ofs[field_name])]))
             for field_name in ('ndim', 'shape', 'descr')]
-    # Patch the first argument to platform size.
-    if largs[0].type != _intp:
-        largs[0] = translator.builder.sext(largs[0], _intp)
-    largs.append(lc.Constant.int(_intp, 0))
-    lfunc = translator.get_extern('PyArray_Zeros')
+    largs.append(lc.Constant.int(_int32, 0))
+    lfunc = translator.ma_obj.load_PyArray_Zeros(translator.mod,
+                                                 translator.builder)
     if __debug__:
         print "build_zeros_like(): lfunc =", str(lfunc)
         print "build_zeros_like(): largs =", [str(arg) for arg in largs]
@@ -358,13 +327,13 @@ class Translate(object):
                 # builtins is an attribtue.
                 self._myglobals[name] = getattr(__builtin__, name, None)
 
-        self.mod = lc.Module.new(func.func_name+'_mod')        
-
+        self.mod = lc.Module.new(func.func_name+'_mod')
         self._delaylist = [range, xrange, enumerate, len]
         self.ret_type = ret_type
         self.arg_types = arg_types
         self.setup_func()
         self.ee = None
+        self.ma_obj = None
 
     def setup_func(self):
         # The return type will not be known until the return
@@ -541,16 +510,12 @@ class Translate(object):
         llvm_args = [arg.llvm(typ) for typ, arg in zip(typs, args)]
         return lfunc, llvm_args
 
-    def get_extern(self, extern_name):
-        try:
-            ret_val = self.mod.get_function_named(extern_name)
-        except Exception:
-            if extern_name in EXTERN_TYPEMAP:
-                ret_val = self.mod.add_function(EXTERN_TYPEMAP[extern_name],
-                                                extern_name)
-            else:
-                raise ValueError("Unknown extern symbol %r." % (extern_name,))
-        return ret_val
+    def _init_ma_obj(self):
+        '''Builds the MultiarrayAPI object and adds a PyArray_API
+        variable to the current module under construction.'''
+        if self.ma_obj is None:
+            self.ma_obj = MultiarrayAPI()
+            self.ma_obj.set_PyArray_API(self.mod)
 
     def op_LOAD_FAST(self, i, op, arg):
         self.stack.append(Variable(self._locals[arg]))
@@ -575,7 +540,7 @@ class Translate(object):
     def op_BINARY_ADD(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        typ, arg1, arg2 = resolve_type(arg1, arg2)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.fadd(arg1, arg2)
         else: # typ[0] == 'i'
@@ -592,7 +557,7 @@ class Translate(object):
     def op_BINARY_SUBTRACT(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        typ, arg1, arg2 = resolve_type(arg1, arg2)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.fsub(arg1, arg2)
         else: # typ[0] == 'i'
@@ -602,7 +567,7 @@ class Translate(object):
     def op_BINARY_MULTIPLY(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        typ, arg1, arg2 = resolve_type(arg1, arg2)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.fmul(arg1, arg2)
         else: # typ[0] == 'i'
@@ -612,7 +577,7 @@ class Translate(object):
     def op_BINARY_DIVIDE(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        typ, arg1, arg2 = resolve_type(arg1, arg2)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.fdiv(arg1, arg2)
         else: # typ[0] == 'i'
@@ -623,7 +588,7 @@ class Translate(object):
     def op_BINARY_FLOOR_DIVIDE(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        typ, arg1, arg2 = resolve_type(arg1, arg2)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'i':
             res = self.builder.sdiv(arg1, arg2)
         else:
@@ -633,7 +598,7 @@ class Translate(object):
     def op_BINARY_MODULO(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        typ, arg1, arg2 = resolve_type(arg1, arg2)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.frem(arg1, arg2)
         else: # typ[0] == 'i'
@@ -660,7 +625,8 @@ class Translate(object):
         if val.val is None:
             self.builder.ret(lc.Constant.real(self.ret_ltype, 0))
         else:
-            self.builder.ret(val.llvm(llvmtype_to_strtype(self.ret_ltype)))
+            self.builder.ret(val.llvm(llvmtype_to_strtype(self.ret_ltype),
+                                      builder = self.builder))
         # Add a new block at the next instruction if not at end
         if i+1 < len(self.costr) and i+1 not in self.blocks.keys():
             blk = self.lfunc.append_basic_block("RETURN_%d" % i)
@@ -671,7 +637,7 @@ class Translate(object):
         cmpop = opcode.cmp_op[arg]
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        typ, arg1, arg2 = resolve_type(arg1, arg2)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.fcmp(_compare_mapping_float[cmpop], 
                                     arg1, arg2)
@@ -704,6 +670,7 @@ class Translate(object):
             self.stack = self.stack[:-arg]
         func = self.stack.pop(-1)
         if func.val in PY_CALL_TO_LLVM_CALL_MAP:
+            self._init_ma_obj()
             func, args = PY_CALL_TO_LLVM_CALL_MAP[func.val](self, args)
         else:
             func, args = self.func_resolve_type(func, args)

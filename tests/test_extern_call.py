@@ -23,7 +23,7 @@ class TestExternCall(unittest.TestCase):
         testarr = numpy.array([1., 2, 3, 4, 5])
         testfn = numba_compile(arg_types = [['d']], ret_type = ['d'])(
             call_zeros_like)
-        self.assertEqual(testfn(testarr), numpy.zeros_like(testarr))
+        self.assertTrue((testfn(testarr) == numpy.zeros_like(testarr)).all())
 
 # ______________________________________________________________________
 
