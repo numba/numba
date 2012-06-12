@@ -23,13 +23,20 @@ def test_binsort():
     nbins = 64
     p = np.zeros(nbins, dtype=np.uint16)
     binsizes = np.random.randint(0, 7, size=nbins).astype(np.uint8)
-    num_by_size = np.bincount(binsizes).astype(np.uint8)
+    num_by_size = np.zeros(8, dtype=np.uint8)
+    x = np.bincount(binsizes).astype(np.uint8)
+    num_by_size[:x.shape[0]] = x
     extensibletype.bucket_argsort(p, binsizes, num_by_size)
     assert np.all(sorted(binsizes) == binsizes[p][::-1])
 
 def test_basic():
     n=64
-    keys = draw_hashes(np.random, n)
-    from ..extensibletype import test
-    test(keys)
+    prehashes = draw_hashes(np.random, n)
+    p, r, m_f, m_g, d = extensibletype.perfect_hash(prehashes, repeat=10**6)
+    hashes = ((prehashes >> r) & m_f) ^ d[prehashes & m_g]
+    print p
+    print d
+    hashes.sort()
+    print hashes
+    assert len(hashes) == len(np.unique(hashes))
     

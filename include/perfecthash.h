@@ -47,19 +47,91 @@ void _PyCustomSlots_bucket_argsort(uint16_t *p, uint8_t *binsizes,
   uint16_t *sort_bins[BIN_LIMIT];
   int binsize, ibin, nbins;
   nbins = 0;
+  /* We know how many bins there are of each size, so place pointers
+     for each size along on the output array p */
   for (binsize = BIN_LIMIT - 1; binsize >= 0; --binsize) {
     sort_bins[binsize] = p;
     p += number_of_bins_by_size[binsize];
     nbins += number_of_bins_by_size[binsize];
   }
+  /* Then simply write indices to the bins */
   for (ibin = 0; ibin != nbins; ++ibin) {
     binsize = binsizes[ibin];
-    *sort_bins[binsize] = ibin;
+    sort_bins[binsize][0] = ibin;
     sort_bins[binsize]++;
   }
 }
 
+int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
+                                     uint64_t *hashes,
+                                     uint8_t *binsizes,
+                                     uint16_t *bins,
+                                     uint16_t *p,
+                                     uint8_t *taken,
+                                     PyCustomSlots_Entry *entries_copy) {
+  uint16_t *d = (void*)((char*)table + sizeof(PyCustomSlots_Table));
+  uint16_t nbins = table->b;
+  uint64_t m_f = table->m_f;
+  uint8_t r = table->r;
+  int i, j, bin;
 
+  /* Step 1: Validate that f is 1:1 in each bin */
+  for (j = 0; j != nbins; ++j) {
+    int k, t;
+    bin = p[j];
+    for (k = 0; k != binsizes[bin]; ++k) {
+      for (t = k + 1; t < binsizes[bin]; ++t) {
+        if (((hashes[bins[BIN_LIMIT * bin + k]] >> r) & m_f) ==
+            ((hashes[bins[BIN_LIMIT * bin + t]] >> r) & m_f)) {
+          return -1;
+        }
+      }
+    }
+  }
+
+  /* Step 2: Attempt to assign displacements d[bin], starting with
+     the largest bin */
+  for (i = 0; i != nbins; ++i) {
+    taken[i] = 0;
+  }
+  for (j = 0; j != nbins; ++j) {
+    uint16_t dval;
+    bin = p[j];
+    if (binsizes[bin] == 0) {
+      d[bin] = 0;
+    } else {
+      for (dval = 0; dval != nbins; ++dval) {
+        int k;
+        int collides = 0;
+        for (k = 0; k != binsizes[bin]; ++k) {
+          uint16_t slot = (((hashes[bins[BIN_LIMIT * bin + k]] >> r) & m_f) ^
+                           dval);
+          if (taken[slot]) {
+            collides = 1;
+            break;
+          }
+        }
+        if (!collides) break;
+      }
+      if (dval == nbins) {
+        /* no appropriate dval found */
+        return -1;
+      } else {
+        int k;
+        /* mark slots as taken and shuffle in table elements */
+        for (k = 0; k != binsizes[bin]; ++k) {
+          uint16_t slot = (((hashes[bins[BIN_LIMIT * bin + k]] >> r) & m_f) ^
+                           dval);
+          taken[slot] = 1;
+          table->entries[slot] = entries_copy[bins[BIN_LIMIT * bin + k]];
+        }
+        /* record dval */
+        d[bin] = dval;
+      }
+    }
+  }
+  return 0;
+}
 
 int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
   uint16_t bin, j;
@@ -67,13 +139,11 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
   uint16_t i, n = table->n, b = table->b;
   uint64_t m_f = PyCustomSlots_roundup_2pow(table->n) - 1;
   uint64_t m_g = (b - 1) & 0xffff;
-  uint64_t *bin_hashes = malloc(sizeof(uint64_t) * b * BIN_LIMIT);
-  uint64_t *bin_data = malloc(sizeof(uint16_t) * b * BIN_LIMIT);
+  uint16_t *bins = malloc(sizeof(uint16_t) * b * BIN_LIMIT);
   uint8_t *binsizes = malloc(sizeof(uint8_t) * b);
   uint16_t *p = malloc(sizeof(uint16_t) * b);
   uint8_t *taken = malloc(sizeof(uint8_t) * n);
   uint8_t number_of_bins_by_size[BIN_LIMIT];
-  uint16_t *d = (void*)((char*)table + sizeof(PyCustomSlots_Table));
   PyCustomSlots_Entry *entries_copy = malloc(sizeof(PyCustomSlots_Entry) * n);
 
   for (i = 0; i != n; ++i) {
@@ -96,86 +166,26 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
       printf("ERROR 1\n");
       return -1;
     }
-    bin_hashes[BIN_LIMIT * bin + binsize - 1] = hashes[i];
-    bin_data[BIN_LIMIT * bin + binsize - 1] = i;
+    bins[BIN_LIMIT * bin + binsize - 1] = i;
     number_of_bins_by_size[binsize - 1]--;
     number_of_bins_by_size[binsize]++;
   }
 
   /* argsort the bins (p stores permutation) from largest to
      smallest, using binsort */
+  _PyCustomSlots_bucket_argsort(p, binsizes, &number_of_bins_by_size[0]);
 
   /* Find perfect table -- try again for each choice of r */
-  int r;
+  table->m_f = m_f;
+  table->m_g = m_g;
+  int r, retcode;
   for (r = 64; r != -1; --r) {
-    printf("r==================================================%d\n", r);
-    /* Step 1: Validate that f is 1:1 in each bin */
-    for (j = 0; j != b; ++j) {
-      int k, t;
-      bin = p[j];
-      for (k = 0; k != binsizes[bin]; ++k) {
-        for (t = k + 1; t <= binsizes[bin]; ++t) {
-          if (((bin_hashes[BIN_LIMIT * bin + k] >> r) & m_f) ==
-              ((bin_hashes[BIN_LIMIT * bin + t] >> r) & m_f)) {
-            goto next_r;
-          }
-        }
-      }
+    table->r = r;
+    retcode = _PyCustomSlots_FindDisplacements(table, hashes, binsizes, bins, p,
+                                               taken, entries_copy);
+    if (retcode == 0) {
+      break;
     }
-
-    /* Step 2: Attempt to assign displacements d[bin], starting with
-       the largest bin */
-    for (i = 0; i != n; ++i) {
-      taken[i] = 0;
-    }
-    for (j = 0; j != b; ++j) {
-      uint16_t dval;
-      bin = p[j];
-      if (binsizes[bin] == 0) {
-        d[bin] = 0;
-        break;
-      }
-      for (dval = 0; dval != b; ++dval) {
-        printf("%d dval %d\n", bin, dval);
-        int k;
-        int slots_not_taken = 1;
-        for (k = 0; k != binsizes[bin]; ++k) {
-          uint16_t slot = (((bin_hashes[BIN_LIMIT * bin + k] >> r) & m_f) ^
-                           dval);
-          if (taken[slot]) {
-            slots_not_taken = 0;
-            break;
-          }
-        }
-        if (slots_not_taken) {
-          printf("BREAKOUT\n");
-          break;
-        }
-      }
-      if (dval == b) {
-        /* no appropriate dval found */
-        goto next_r;
-      } else {
-        int k;
-        /* mark slots as taken and shuffle in table elements */
-        for (k = 0; k != binsizes[bin]; ++k) {
-          uint16_t slot = (((bin_hashes[BIN_LIMIT * bin + k] >> r) & m_f) ^
-                           dval);
-          taken[slot] = 1;
-          printf(">>%d", bin_data[BIN_LIMIT * bin + k]);
-          table->entries[slot] = entries_copy[bin_data[BIN_LIMIT * bin + k]];
-        }
-        /* record dval */
-        printf(">>>dval%d\n", dval);
-        d[bin] = dval;
-      }
-    }
-
-    break;
-  next_r:
-    continue;
   }
-  table->r = r;
-  printf("%d\n", table->r);
   return 0;
 }
