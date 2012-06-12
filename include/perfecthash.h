@@ -187,5 +187,13 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
       break;
     }
   }
+
+  /*TODO does not free on error... */
+  free(bins);
+  free(binsizes);
+  free(p);
+  free(taken);
+  free(entries_copy);
+
   return 0;
 }
