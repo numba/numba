@@ -81,7 +81,7 @@ class TestWhile(unittest.TestCase):
     def test_while_loop_fn_3(self):
         compiled_fn = numba_compile(arg_types = ['l'])(while_loop_fn_3)
         compiled_result = compiled_fn(3)
-        self.assertEqual(compiled_result, while_loop_fn_2(3))
+        self.assertEqual(compiled_result, while_loop_fn_3(3))
         self.assertEqual(compiled_result, 8.)
 
     def test_while_loop_fn_4(self):

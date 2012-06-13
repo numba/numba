@@ -17,6 +17,9 @@ from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
     _numpy_array, _numpy_array_field_ofs
 from .multiarray_api import MultiarrayAPI
 
+if __debug__:
+    import pprint
+
 # Translate Python bytecode to LLVM IR
 
 # For type-inference we need a mapping showing what the output type
@@ -65,6 +68,24 @@ class DelayedObj(object):
         self.base = base
         self.args = args
 
+    def get_start(self):
+        if len(self.args) > 1:
+            ret_val = self.args[0]
+        else:
+            # FIXME: Need to infer case where this might be over floats.
+            ret_val = Variable(lc.Constant.int(_intp, 0))
+        return ret_val
+
+    def get_inc(self):
+        if len(self.args) > 2:
+            ret_val = self.args[2]
+        else:
+            # FIXME: Need to infer case where this might be over floats.
+            ret_val = Variable(lc.Constant.int(_intp, 1))
+        return ret_val
+
+    def get_stop(self):
+        return self.args[0 if (len(self.args) == 1) else 1]
 
 # Variables placed on the stack. 
 #  They allow an indirection
@@ -274,10 +295,17 @@ def _build_len(translator, args):
     if (len(args) == 1 and
         args[0]._llvm is not None and
         args[0]._llvm.type == _numpy_array):
-        raise NotImplementedError("FIXME")
+        lfunc = None
+        shape_ofs = _numpy_array_field_ofs['shape']
+        largs = translator.builder.load(
+            translator.builder.load(
+                translator.builder.gep(args[0]._llvm, [
+                        lc.Constant.int(_int32, 0),
+                        lc.Constant.int(_int32, shape_ofs)])))
     else:
         raise NotImplementedError("Currently unable to handle calls to len() "
                                   "for arguments that are not Numpy arrays.")
+    return lfunc, largs
 
 def _build_zeros_like(translator, args):
     assert (len(args) == 1 and
@@ -305,19 +333,20 @@ PY_CALL_TO_LLVM_CALL_MAP = {
 }
 
 class LLVMControlFlowGraph (ControlFlowGraph):
-    def __init__ (self, translator):
+    def __init__ (self, translator = None):
         self.translator = translator
         super(LLVMControlFlowGraph, self).__init__()
 
     def add_block (self, key, value = None):
-        if key not in self.translator.blocks:
-            lfunc = self.translator.lfunc
-            lblock = lfunc.append_basic_block('BLOCK_%d' % key)
-            self.translator.blocks[key] = lblock
-        else:
-            lblock = self.translator.blocks[key]
-        if value is None:
-            value = lblock
+        if self.translator is not None:
+            if key not in self.translator.blocks:
+                lfunc = self.translator.lfunc
+                lblock = lfunc.append_basic_block('BLOCK_%d' % key)
+                self.translator.blocks[key] = lblock
+            else:
+                lblock = self.translator.blocks[key]
+            if value is None:
+                value = lblock
         return super(LLVMControlFlowGraph, self).add_block(key, value)
 
     # The following overloaded methods implement a state machine
@@ -425,6 +454,7 @@ class Translate(object):
         self.cfg = None
         self.blocks_locals = {}
         self.pending_phis = {}
+        self.pending_blocks = {}
         self.stack = []
         self.loop_stack = []
 
@@ -452,22 +482,9 @@ class Translate(object):
                     # preceeding basic block.
                     self.blocks_locals[self.crnt_block] = self._locals[:]
 
-                    # Determine if the current block is in the set of
-                    # the next block's predecessors.  If not, change
-                    # out the locals to those of a predecessor that
-                    # has already been symbolically run.
-                    if self.crnt_block not in self.cfg.blocks_in[i]:
-                        next_preds = list(self.cfg.blocks_in[i])
-                        next_preds.sort()
-                        next_preds.reverse()
-                        next_locals = None
-                        for next_pred in next_preds:
-                            if next_pred in self.blocks_locals:
-                                next_locals = self.blocks_locals[next_pred]
-                                break
-                        assert next_locals is not None, ("Internal compiler "
-                                                         "error!")
-                        self._locals = next_locals[:]
+                    # Ensure we are playing with locals that might
+                    # actually precede the next block.
+                    self.check_locals(i)
 
                 self.crnt_block = i
                 self.builder = lc.Builder.new(self.blocks[i])
@@ -499,7 +516,7 @@ class Translate(object):
         pending call to PHINode.add_incoming() which will be caught by
         op_STORE_LOCAL().
         '''
-        if pred in self.blocks_locals:
+        if pred in self.blocks_locals and pred not in self.pending_blocks:
             pred_locals = self.blocks_locals[pred]
             assert pred_locals[local] is not None, ("Internal error.  "
                 "Local value definition missing from block that has "
@@ -509,7 +526,8 @@ class Translate(object):
         else:
             reaching_defs = self.cfg.get_reaching_definitions(crnt_block)
             definition_block = reaching_defs[pred][local]
-            if definition_block in self.blocks_locals:
+            if ((definition_block in self.blocks_locals) and
+                (definition_block not in self.pending_blocks)):
                 defn_locals = self.blocks_locals[definition_block]
                 assert defn_locals[local] is not None, ("Internal error.  "
                     "Local value definition missing from block that has "
@@ -545,6 +563,49 @@ class Translate(object):
                     self._locals[local] = newlocal
                     for pred in preds:
                         self.add_phi_incomming(phi, crnt_block, pred, local)
+
+    def get_preceding_locals(self, preds):
+        '''Given an iterable set of preceding basic blocks, check to
+        see if one of them has already been symbolically executed.  If
+        so, return the symbolic locals recorded as leaving that basic
+        block.  Returns None otherwise.'''
+        pred_list = list(preds)
+        pred_list.sort()
+        pred_list.reverse()
+        next_locals = None
+        for next_pred in pred_list:
+            if next_pred in self.blocks_locals:
+                next_locals = self.blocks_locals[next_pred]
+                break
+        return next_locals
+
+    def check_locals(self, i):
+        '''Given the instruction index of the next block, determine if
+        the current block is in the set of the next block's
+        predecessors.  If not, change out the locals to those of a
+        predecessor that has already been symbolically run.
+        '''
+        if self.crnt_block not in self.cfg.blocks_in[i]:
+            next_locals = self.get_preceding_locals(self.cfg.blocks_in[i])
+            if next_locals is None:
+                if (len(self.stack) > 0 and
+                    isinstance(self.stack[-1].val, DelayedObj)):
+                    # When we detect that we are in a for loop over a
+                    # simple range, fallback to the block dominator so we
+                    # at least have type information for the locals.
+                    assert next_locals is None, "Internal compiler error!"
+                    next_locals = self.get_preceding_locals(
+                        self.cfg.blocks_dom[i])
+                elif len(self.cfg.blocks_in[i]) == 0:
+                    # Ignore unreachable basic blocks (this happens when
+                    # the Python compiler doesn't know that all paths have
+                    # already returned something).
+                    assert i != 0, ("Translate.check_locals() should not be "
+                                    "called for the entry block.")
+                    next_locals = self._locals
+                else:
+                    assert next_locals is not None, "Internal compiler error!"
+            self._locals = next_locals[:]
 
     def get_ctypes_func(self, llvm=True):
         if self.ee is None:
@@ -601,18 +662,57 @@ class Translate(object):
             self.ma_obj = MultiarrayAPI()
             self.ma_obj.set_PyArray_API(self.mod)
 
+    def _revisit_block(self, block_index):
+        block_state = (self.crnt_block, self.builder, self._locals[:])
+        self.crnt_block = block_index
+        self.builder = lc.Builder.new(self.blocks[block_index])
+        self.builder.position_at_beginning(self.blocks[block_index])
+        return block_state
+
+    def _restore_block(self, block_state):
+        self.blocks_locals[self.crnt_block] = self._locals[:]
+        self.crnt_block, self.builder, self._locals = block_state
+
+    def _generate_for_loop(self, i , op, arg, delayer):
+        '''Generates code for a simple for loop (a loop over range,
+        xrange, or arange).'''
+        false_jump_target = self.pending_blocks.pop(i - 3)
+        crnt_block_data = self._revisit_block(i - 3)
+        inc_variable = delayer.val.get_inc()
+        self.op_LOAD_FAST(i - 3, None, arg)
+        self.stack.append(inc_variable)
+        self.op_INPLACE_ADD(i - 3, None, None)
+        self.op_STORE_FAST(i - 3, None, arg)
+        self._restore_block(crnt_block_data)
+        self.op_LOAD_FAST(i, None, arg)
+        self.stack.append(delayer.val.get_stop())
+        # FIXME: This should really test to see if we are increasing
+        # the iteration variable (inc > 0) or decreasing (inc < 0),
+        # and select the comparison operator based on that.  This currently
+        # only works if the increment is a constant integer value.
+        cmp_op_str = '<'
+        llvm_inc = inc_variable._llvm
+        # FIXME: Handle other types.
+        if hasattr(inc_variable, 'as_int') and llvm_inc.as_int() < 0:
+            cmp_op_str = '>='
+        self.op_COMPARE_OP(i, None, opcode.cmp_op.index(cmp_op_str))
+        self.op_POP_JUMP_IF_FALSE(i, None, false_jump_target)
+
     def op_LOAD_FAST(self, i, op, arg):
         self.stack.append(Variable(self._locals[arg]))
 
     def op_STORE_FAST(self, i, op, arg):
         oldval = self._locals[arg]
         newval = self.stack.pop(-1)
-        if i in self.pending_phis:
-            phi, pred_lblocks = self.pending_phis[i]
-            for pred_lblock in pred_lblocks:
-                phi.add_incoming(newval.llvm(llvmtype_to_strtype(phi.type)),
-                                 pred_lblock)
-        self._locals[arg] = newval
+        if isinstance(newval.val, DelayedObj):
+            self._generate_for_loop(i, op, arg, newval)
+        else:
+            if i in self.pending_phis:
+                phi, pred_lblocks = self.pending_phis[i]
+                for pred_lblock in pred_lblocks:
+                    phi.add_incoming(newval.llvm(llvmtype_to_strtype(phi.type)),
+                                     pred_lblock)
+            self._locals[arg] = newval
 
     def op_LOAD_GLOBAL(self, i, op, arg):
         self.stack.append(Variable(self._myglobals[self.names[arg]]))
@@ -657,6 +757,10 @@ class Translate(object):
         else: # typ[0] == 'i'
             res = self.builder.mul(arg1, arg2)
         self.stack.append(Variable(res))
+
+    def op_INPLACE_MULTIPLY(self, i, op, arg):
+        # FIXME: See note for op_INPLACE_ADD
+        return self.op_BINARY_MULTIPLY(i, op, arg)
 
     def op_BINARY_DIVIDE(self, i, op, arg):
         arg2 = self.stack.pop(-1)
@@ -765,9 +869,40 @@ class Translate(object):
         self.stack.append(Variable(res))
 
     def op_GET_ITER(self, i, op, arg):
-        iterable = self.stack.pop(-1)
-        print iterable, self.mod
-        raise NotImplementedError('FIXME')
+        iterable = self.stack[-1].val
+        if isinstance(iterable, DelayedObj):
+            # This is a dirty little hack since we are not popping the
+            # iterable off the stack, and pushing an iterator value
+            # on.  Instead, we're going to branch to a synthetic
+            # basic block, and hope there is a FOR_ITER to handle this
+            # mess.
+            self.stack.append(iterable.get_start())
+            iter_local = None
+            block_writers = self.cfg.blocks_writer[self.crnt_block]
+            for local_index, instr_index in block_writers.iteritems():
+                if instr_index == i:
+                    iter_local = local_index
+                    break
+            assert iter_local is not None, "Internal compiler error!"
+            self.op_STORE_FAST(i, None, iter_local)
+            self.builder.branch(self.blocks[i + 4])
+        else:
+            raise NotImplementedError(
+                "Numba can not currently handle iteration over anything other "
+                "than range, xrange, or arange (got %r)." % (iterable,))
+
+    def op_FOR_ITER(self, i, op, arg):
+        iterable = self.stack[-1].val
+        # Note that we don't actually generate any code here when
+        # rewriting a simple for loop.  Code generation is deferred to
+        # the STORE_FAST that should immediately follow this FOR_ITER
+        # (we need to know the phi node for the iteration local).
+        if isinstance(iterable, DelayedObj):
+            self.pending_blocks[i] = i + arg + 3
+        else:
+            raise NotImplementedError(
+                "Numba can not currently handle iteration over anything other "
+                "than range, xrange, or arange (got %r)." % (iterable,))
 
     def op_SETUP_LOOP(self, i, op, arg):
         self.loop_stack.append((i, arg))
@@ -835,3 +970,6 @@ class Translate(object):
         llvm_vals.reverse()
         for llvm_val in llvm_vals:
             self.stack.append(Variable(llvm_val))
+
+    def op_BINARY_SUBSCR(self, i, op, arg):
+        raise NotImplementedError("FIXME")

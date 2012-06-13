@@ -17,6 +17,8 @@ import pprint
 
 from .utils import itercode
 
+import sys
+
 # ______________________________________________________________________
 
 class ControlFlowGraph (object):
@@ -73,6 +75,8 @@ class ControlFlowGraph (object):
         self.add_edge(self.crnt_block, i)
         self.add_block(i + arg + 3)
         self.add_edge(i, i + arg + 3)
+        self.add_block(i + 3)
+        self.add_edge(i, i + 3)
         self.crnt_block = i
         return False
 
@@ -126,15 +130,21 @@ class ControlFlowGraph (object):
 
     def compute_dom (self):
         '''Compute the dominator relationship in the CFG.'''
+        blocks = set(self.blocks.keys())
+        nonentry_blocks = blocks.copy()
         for block in self.blocks.iterkeys():
-            self.blocks_dom[block] = set((block,))
+            self.blocks_dom[block] = blocks
+            if len(self.blocks_in[block]) == 0:
+                self.blocks_dom[block] = set((block,))
+                nonentry_blocks.remove(block)
         changed = True
         while changed:
             changed = False
-            for block in self.blocks.keys():
+            for block in nonentry_blocks:
                 olddom = self.blocks_dom[block]
-                newdom = olddom.union(*[self.blocks_dom[pred]
-                                        for pred in self.blocks_in[block]])
+                newdom = set.intersection(*[self.blocks_dom[pred]
+                                            for pred in self.blocks_in[block]])
+                newdom.add(block)
                 if newdom != olddom:
                     changed = True
                     self.blocks_dom[block] = newdom
@@ -147,11 +157,8 @@ class ControlFlowGraph (object):
         Note that in the case where there are multiple immediate
         dominators (a join after a non-loop branch), this returns one
         of the predecessors, but is not guaranteed to reliably select
-        one over the others (depends on the order used by iterators
-        over sets).
-
-        Since our data structure stores back edges, we can skip the
-        naive, O(n^2), approach to finding the idom of a given block.'''
+        one over the others (depends on the ordering of the set type
+        iterator).'''
         preds = self.blocks_in[block]
         npreds = len(preds)
         if npreds == 0:
@@ -235,27 +242,62 @@ class ControlFlowGraph (object):
                     if nreaches[local] > 1])
 
     def pprint (self, *args, **kws):
-        pprint.pprint((self.blocks_in, self.blocks_out, self.blocks_reads,
-                       self.blocks_writes, self.blocks_dom), *args, **kws)
+        pprint.pprint(self.__dict__)
+
+    def to_dot (self, graph_name = None):
+        '''Return a dot (digraph visualizer in Graphviz) graph
+        description as a string.'''
+        if graph_name is None:
+            graph_name = 'CFG_%d' % id(self)
+        lines_out = []
+        for block_index in self.blocks:
+            lines_out.append(
+                'BLOCK_%r [shape=box, label="BLOCK_%r\\nr: %r, w: %r"];' %
+                (block_index, block_index,
+                 tuple(self.blocks_reads[block_index]),
+                 tuple(self.blocks_writes[block_index])))
+        for block_index in self.blocks:
+            for out_edge in self.blocks_out[block_index]:
+                lines_out.append('BLOCK_%r -> BLOCK_%r;' %
+                                 (block_index, out_edge))
+        return 'digraph %s {\n%s\n}\n' % (graph_name, '\n'.join(lines_out))
 
 # ______________________________________________________________________
 
 def main (*args, **kws):
-    import importlib
+    import getopt, importlib
+    def get_module_member (member_path):
+        ret_val = None
+        module_split = member_path.rsplit('.', 1)
+        if len(module_split) > 1:
+            module = importlib.import_module(module_split[0])
+            ret_val = getattr(module, module_split[1])
+        return ret_val
+    opts, args = getopt.getopt(args, 'dC:D:')
+    kws.update(opts)
+    dot_out = None
+    cls = ControlFlowGraph
+    for opt_key, opt_val in kws.iteritems():
+        if opt_key == '-d':
+            dot_out = sys.stdout
+        elif opt_key in ('-D', 'dot'):
+            dot_out = open(opt_val, "w")
+        elif opt_key in ('-C', 'cfg_cls'):
+            cls = get_module_member(opt_val)
     for arg in args:
-        module_split = arg.rsplit('.', 1)
-        if len(module_split) != 2:
+        func = get_module_member(arg)
+        if func is None:
             print("Don't know how to handle %r, expecting <module.member> "
                   "arguments.  Skipping..." % (arg,))
+        elif not hasattr(func, 'func_code'):
+            print("Don't know how to handle %r, module member does not "
+                  "have a code object.  Skipping..." % (arg,))
         else:
-            module = importlib.import_module(module_split[0])
-            func = getattr(module, module_split[1])
-            if not hasattr(func, 'func_code'):
-                print("Don't know how to handle %r, module member does not "
-                      "have a code object.  Skipping..." % (arg,))
+            cfg = cls.build_cfg(func.func_code)
+            cfg.compute_dom()
+            if dot_out is not None:
+                dot_out.write(cfg.to_dot())
             else:
-                cfg = ControlFlowGraph.build_cfg(func.func_code)
-                cfg.compute_dom()
                 cfg.pprint()
 
 # ______________________________________________________________________

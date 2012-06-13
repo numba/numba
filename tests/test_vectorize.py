@@ -54,11 +54,8 @@ class TestVectorize(unittest.TestCase):
 
 # ______________________________________________________________________
 
-def main(*args, **kws):
-    unittest.main(*args, **kws)
-
 if __name__ == "__main__":
-    main(*sys.argv[1:])
+    unittest.main()
 
 # ______________________________________________________________________
 # End of test_vectorize.py

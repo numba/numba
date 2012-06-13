@@ -30,6 +30,15 @@ def for_loop_fn_1 (start, stop, inc):
 
 # ______________________________________________________________________
 
+def for_loop_fn_2 (stop):
+    acc = 0
+    for value_0 in range(stop):
+        for value_1 in range(stop):
+            acc += value_0 * value_1
+    return acc
+
+# ______________________________________________________________________
+
 class TestForLoop(unittest.TestCase):
 
     def test_compiled_for_loop_fn_0(self):
@@ -46,6 +55,13 @@ class TestForLoop(unittest.TestCase):
         result = compiled_for_loop_fn(1, 4, 1)
         self.assertEqual(result, 6)
         self.assertEqual(result, for_loop_fn_1(1, 4, 1))
+
+    def test_compiled_for_loop_fn_2(self):
+        compiled_for_loop_fn = numba_compile(arg_types = ['i'],
+                                             ret_type = 'i')(for_loop_fn_2)
+        result = compiled_for_loop_fn(4)
+        self.assertEqual(result, 36)
+        self.assertEqual(result, for_loop_fn_1(4))
 
 # ______________________________________________________________________
 

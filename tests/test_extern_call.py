@@ -18,12 +18,23 @@ def call_zeros_like(arr):
 
 # ______________________________________________________________________
 
+def call_len(arr):
+    return len(arr)
+
+# ______________________________________________________________________
+
 class TestExternCall(unittest.TestCase):
     def test_call_zeros_like(self):
         testarr = numpy.array([1., 2, 3, 4, 5])
         testfn = numba_compile(arg_types = [['d']], ret_type = ['d'])(
             call_zeros_like)
         self.assertTrue((testfn(testarr) == numpy.zeros_like(testarr)).all())
+
+    def test_call_len(self):
+        testarr = numpy.arange(10.)
+        testfn = numba_compile(arg_types = [['d']], ret_type = 'l')(
+            call_len)
+        self.assertEqual(testfn(testarr), 10)
 
 # ______________________________________________________________________
 

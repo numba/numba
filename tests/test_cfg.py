@@ -32,11 +32,11 @@ class TestCFG(unittest.TestCase):
         test_cfg.blocks_writes[4] = set((3,))
         doms = test_cfg.compute_dom()
         self.assertEqual(doms, {0 : set((0,)),
-                                1 : set((0,1,2,4)),
-                                2 : set((0,1,2,4)),
-                                3 : set((0,1,2,3,4)),
+                                1 : set((0,1)),
+                                2 : set((0,1,2)),
+                                3 : set((0,1,2,3)),
                                 4 : set((0,1,2,4)),
-                                5 : set((0,1,2,4,5))})
+                                5 : set((0,1,5))})
         self.assertEqual(tuple(test_cfg.idom(block) for block in xrange(6)),
                          (None, 0, 1, 2, 2, 1))
         self.assertEqual(test_cfg.nreaches(1), {0 : 1,
@@ -70,13 +70,13 @@ class TestCFG(unittest.TestCase):
         test_cfg.blocks_writes[0] = set((0,1,2,3,4,5))
         test_cfg.blocks_writes[2] = set((4,5,6))
         test_cfg.blocks_writes[4] = set((3,))
-        doms = test_cfg.compute_dom()
+        doms = test_cfg.compute_dom()        
         self.assertEqual(doms, {0 : set((0,)),
-                                1 : set((0,1,2,4,6)),
-                                2 : set((0,1,2,4,6)),
-                                3 : set((0,1,2,3,4,6)),
+                                1 : set((0,1,6)),
+                                2 : set((0,1,2,6)),
+                                3 : set((0,1,2,3,6)),
                                 4 : set((0,1,2,4,6)),
-                                5 : set((0,1,2,4,5,6)),
+                                5 : set((0,1,5,6)),
                                 6 : set((0,6))})
         self.assertEqual(tuple(test_cfg.idom(block) for block in xrange(7)),
                          (None, 6, 1, 2, 2, 1, 0))
@@ -110,7 +110,7 @@ class TestCFG(unittest.TestCase):
         self.assertEqual(doms, {0 : set((0,)),
                                 1 : set((0,1)),
                                 2 : set((0,2)),
-                                3 : set((0,1,2,3))})
+                                3 : set((0,3))})
         idoms = tuple(test_cfg.idom(block) for block in xrange(4))
         self.assertEqual(idoms[:-1], (None, 0, 0))
         self.assertIn(idoms[-1], (1, 2))
