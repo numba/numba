@@ -49,6 +49,18 @@ def while_loop_fn_3(count):
 
 # ______________________________________________________________________
 
+def while_loop_fn_4(start, stop, inc):
+    '''Intended to parallel desired translation target for
+    test_forloop.for_loop_fn_1.'''
+    acc = 0
+    i = start
+    while i != stop:
+        acc += i
+        i += inc
+    return acc
+
+# ______________________________________________________________________
+
 class TestWhile(unittest.TestCase):
     def _do_test(self, function, arg_types, *args, **kws):
         _numba_compile = (numba_compile(arg_types = arg_types)
@@ -71,6 +83,13 @@ class TestWhile(unittest.TestCase):
         compiled_result = compiled_fn(3)
         self.assertEqual(compiled_result, while_loop_fn_2(3))
         self.assertEqual(compiled_result, 8.)
+
+    def test_while_loop_fn_4(self):
+        compiled_fn = numba_compile(arg_types = ['l', 'l', 'l'],
+                                    ret_type = 'l')(while_loop_fn_4)
+        compiled_result = compiled_fn(1, 4, 1)
+        self.assertEqual(compiled_result, while_loop_fn_4(1, 4, 1))
+        self.assertEqual(compiled_result, 6)
 
 # ______________________________________________________________________
 

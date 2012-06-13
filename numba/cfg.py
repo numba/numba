@@ -1,7 +1,19 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
+'''cfg
+
+Defines the ControlFlowGraph class, which is used by the Numba
+translator to perform accurate phi node generation.
+
+When used as the main module, displays the control flow graph for
+arguments of the form <module.module_fn>.  Example:
+
+% python -m numba.cfg test_while.while_loop_fn_0
+'''
+# ______________________________________________________________________
 
 import opcode
+import pprint
 
 from .utils import itercode
 
@@ -33,18 +45,9 @@ class ControlFlowGraph (object):
     @classmethod
     def build_cfg (cls, code_obj, *args, **kws):
         ret_val = cls(*args, **kws)
-        opmap = opcode.opmap
-        JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']
-        JUMP_FORWARD = opmap['JUMP_FORWARD']
-        JUMP_IF_FALSE_OR_POP = opmap['JUMP_IF_FALSE_OR_POP']
-        JUMP_IF_TRUE_OR_POP = opmap['JUMP_IF_TRUE_OR_POP']
-        LOAD_FAST = opmap['LOAD_FAST']
-        POP_JUMP_IF_FALSE = opmap['POP_JUMP_IF_FALSE']
-        POP_JUMP_IF_TRUE = opmap['POP_JUMP_IF_TRUE']
-        RETURN_VALUE = opmap['RETURN_VALUE']
-        SETUP_LOOP = opmap['SETUP_LOOP']
-        STORE_FAST = opmap['STORE_FAST']
-        crnt_block = 0
+        opmap = opcode.opname
+        ret_val.crnt_block = 0
+        ret_val.code_len = len(code_obj.co_code)
         ret_val.add_block(0)
         ret_val.blocks_writes[0] = set(range(code_obj.co_argcount))
         last_was_jump = True # At start there is no prior basic block
@@ -53,48 +56,73 @@ class ControlFlowGraph (object):
         for i, op, arg in itercode(code_obj.co_code):
             if i in ret_val.blocks:
                 if not last_was_jump:
-                    ret_val.add_edge(crnt_block, i)
-                crnt_block = i
+                    ret_val.add_edge(ret_val.crnt_block, i)
+                ret_val.crnt_block = i
             last_was_jump = False
-            if op == JUMP_ABSOLUTE:
-                ret_val.add_block(arg)
-                ret_val.add_edge(crnt_block, arg)
-                ret_val.add_block(i + 3)
-                last_was_jump = True
-            elif op == JUMP_FORWARD:
-                target = i + arg + 3
-                ret_val.add_block(target)
-                ret_val.add_edge(crnt_block, target)
-                ret_val.add_block(i + 3)
-                last_was_jump = True
-            elif op in (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP):
-                raise NotImplementedError('FIXME')
-            elif op == LOAD_FAST:
-                # Not sure if we care about local variable users at
-                # the moment (more concerned with reaches analysis).
-                # Might help us eliminate unneeded phi nodes...
-                ret_val.blocks_reads[crnt_block].add(arg)
-            elif op in (POP_JUMP_IF_FALSE, POP_JUMP_IF_TRUE):
-                ret_val.add_block(i + 3)
-                ret_val.add_block(arg)
-                ret_val.add_edge(crnt_block, i + 3)
-                ret_val.add_edge(crnt_block, arg)
-                last_was_jump = True
-            elif op == RETURN_VALUE:
-                if i + 1 < len(code_obj.co_code):
-                    ret_val.add_block(i + 1)
-                last_was_jump = True
-            elif op == SETUP_LOOP:
-                ret_val.add_block(i + 3)
-                ret_val.add_edge(crnt_block, i + 3)
-                last_was_jump = True # Not technically true, but we've
-                                     # already built the proper CFG
-                                     # edges, so skip the fallthrough
-                                     # plumbing.
-            elif op == STORE_FAST:
-                ret_val.blocks_writes[crnt_block].add(arg)
-                ret_val.blocks_writer[crnt_block][arg] = i
+            method_name = "op_" + opmap[op]
+            if hasattr(ret_val, method_name):
+                last_was_jump = getattr(ret_val, method_name)(i, op, arg)
+        del ret_val.crnt_block, ret_val.code_len
         return ret_val
+
+    # NOTE: The following op_OPNAME methods are correct for Python
+    # semantics, but may be overloaded for Numba-specific semantics.
+
+    def op_FOR_ITER (self, i, op, arg):
+        self.add_block(i)
+        self.add_edge(self.crnt_block, i)
+        self.add_block(i + arg + 3)
+        self.add_edge(i, i + arg + 3)
+        self.crnt_block = i
+        return False
+
+    def op_JUMP_ABSOLUTE (self, i, op, arg):
+        self.add_block(arg)
+        self.add_edge(self.crnt_block, arg)
+        self.add_block(i + 3)
+        return True
+
+    def op_JUMP_FORWARD (self, i, op, arg):
+        target = i + arg + 3
+        self.add_block(target)
+        self.add_edge(self.crnt_block, target)
+        self.add_block(i + 3)
+        return True
+
+    def op_JUMP_IF_FALSE_OR_POP (self, i, op, arg):
+        raise NotImplementedError('FIXME')
+
+    op_JUMP_IF_TRUE_OR_POP = op_JUMP_IF_FALSE_OR_POP
+
+    def op_LOAD_FAST (self, i, op, arg):
+        self.blocks_reads[self.crnt_block].add(arg)
+        return False
+
+    def op_POP_JUMP_IF_FALSE (self, i, op, arg):
+        self.add_block(i + 3)
+        self.add_block(arg)
+        self.add_edge(self.crnt_block, i + 3)
+        self.add_edge(self.crnt_block, arg)
+        return True
+
+    op_POP_JUMP_IF_TRUE = op_POP_JUMP_IF_FALSE
+
+    def op_RETURN_VALUE (self, i, op, arg):
+        if i + 1 < self.code_len:
+            self.add_block(i + 1)
+        return True
+
+    def op_SETUP_LOOP (self, i, op, arg):
+        self.add_block(i + 3)
+        self.add_edge(self.crnt_block, i + 3)
+        return True # This is not technically a jump, but we've
+                    # already built the proper CFG edges, so skip the
+                    # fallthrough plumbing.
+
+    def op_STORE_FAST (self, i, op, arg):
+        self.blocks_writes[self.crnt_block].add(arg)
+        self.blocks_writer[self.crnt_block][arg] = i
+        return False
 
     def compute_dom (self):
         '''Compute the dominator relationship in the CFG.'''
@@ -205,6 +233,36 @@ class ControlFlowGraph (object):
         nreaches = self.nreaches(join)
         return set([local for local in nreaches.iterkeys()
                     if nreaches[local] > 1])
+
+    def pprint (self, *args, **kws):
+        pprint.pprint((self.blocks_in, self.blocks_out, self.blocks_reads,
+                       self.blocks_writes, self.blocks_dom), *args, **kws)
+
+# ______________________________________________________________________
+
+def main (*args, **kws):
+    import importlib
+    for arg in args:
+        module_split = arg.rsplit('.', 1)
+        if len(module_split) != 2:
+            print("Don't know how to handle %r, expecting <module.member> "
+                  "arguments.  Skipping..." % (arg,))
+        else:
+            module = importlib.import_module(module_split[0])
+            func = getattr(module, module_split[1])
+            if not hasattr(func, 'func_code'):
+                print("Don't know how to handle %r, module member does not "
+                      "have a code object.  Skipping..." % (arg,))
+            else:
+                cfg = ControlFlowGraph.build_cfg(func.func_code)
+                cfg.compute_dom()
+                cfg.pprint()
+
+# ______________________________________________________________________
+
+if __name__ == "__main__":
+    import sys
+    main(*sys.argv[1:])
 
 # ______________________________________________________________________
 # End of cfg.py

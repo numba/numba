@@ -270,10 +270,20 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
                           '<=':lc.ICMP_ULE,
                           '!=':lc.ICMP_NE}
 
-def build_zeros_like(translator, args):
+def _build_len(translator, args):
+    if (len(args) == 1 and
+        args[0]._llvm is not None and
+        args[0]._llvm.type == _numpy_array):
+        raise NotImplementedError("FIXME")
+    else:
+        raise NotImplementedError("Currently unable to handle calls to len() "
+                                  "for arguments that are not Numpy arrays.")
+
+def _build_zeros_like(translator, args):
     assert (len(args) == 1 and
             args[0]._llvm is not None and
-            args[0]._llvm.type == _numpy_array)
+            args[0]._llvm.type == _numpy_array), (
+        "Expected Numpy array argument to numpy.zeros_like().")
     larr = args[0]._llvm
     largs = [translator.builder.load(
             translator.builder.gep(larr, [
@@ -290,7 +300,8 @@ def build_zeros_like(translator, args):
     return lfunc, largs
 
 PY_CALL_TO_LLVM_CALL_MAP = {
-    np.zeros_like : build_zeros_like,
+    len : _build_len,
+    np.zeros_like : _build_zeros_like,
 }
 
 class LLVMControlFlowGraph (ControlFlowGraph):
@@ -308,6 +319,60 @@ class LLVMControlFlowGraph (ControlFlowGraph):
         if value is None:
             value = lblock
         return super(LLVMControlFlowGraph, self).add_block(key, value)
+
+    # The following overloaded methods implement a state machine
+    # intended to recognize the opcode sequence: GET_ITER, FOR_ITER,
+    # STORE_FAST.  Any other sequence is (currently) rejected in
+    # control-flow analysis.
+
+    def op_GET_ITER (self, i, op, arg):
+        self.saw_get_iter_at = (self.crnt_block, i)
+        return False
+
+    def op_FOR_ITER (self, i, op, arg):
+        if (hasattr(self, "saw_get_iter_at") and
+            self.saw_get_iter_at[1] == i - 1):
+            self.add_block(i)
+            self.add_block(i + 3)
+            self.add_edge(self.crnt_block, i + 3)
+            self.add_edge(i, i + 3)
+            self.add_block(i + arg + 3)
+            self.add_edge(i + 3, i + arg + 3)
+            # The following is practically meaningless since we are
+            # hijacking normal control flow, and injecting a synthetic
+            # basic block at i + 3, but still correct if we want to
+            # enforce some weird loop invariant over the symbolic
+            # execution loop.
+            self.crnt_block = i
+        else:
+            raise NotImplementedError("Unable to handle FOR_ITER appearing "
+                                      "after any opcode other than GET_ITER.")
+        return True
+
+    def op_STORE_FAST (self, i, op, arg):
+        if hasattr(self, "saw_get_iter_at"):
+            get_iter_block, get_iter_index = self.saw_get_iter_at
+            del self.saw_get_iter_at
+            if get_iter_index == i - 4:
+                self.blocks_writes[get_iter_block].add(arg)
+                self.blocks_writer[get_iter_block][arg] = get_iter_index
+                self.blocks_writes[i - 3].add(arg)
+                self.blocks_writer[i - 3][arg] = i - 3
+                self.blocks_reads[i].add(arg)
+                self.add_block(i + 3)
+                self.add_edge(i, i + 3)
+            else:
+                # FIXME: (?) Are there corner cases where this will fail to
+                # eventually detect a pattern miss?
+                raise NotImplementedError(
+                    "Detected GET_ITER, FOR_ITER opcodes not immediately "
+                    "followed by STORE_FAST at instruction index %d." %
+                    (get_iter_index,))
+            ret_val = False
+        else:
+            ret_val = super(LLVMControlFlowGraph, self).op_STORE_FAST(
+                i, op, arg)
+        return ret_val
 
 class Translate(object):
     def __init__(self, func, ret_type='d', arg_types=['d']):
@@ -328,7 +393,7 @@ class Translate(object):
                 self._myglobals[name] = getattr(__builtin__, name, None)
 
         self.mod = lc.Module.new(func.func_name+'_mod')
-        self._delaylist = [range, xrange, enumerate, len]
+        self._delaylist = [range, xrange, enumerate]
         self.ret_type = ret_type
         self.arg_types = arg_types
         self.setup_func()
@@ -368,6 +433,8 @@ class Translate(object):
         """
         self.cfg = LLVMControlFlowGraph.build_cfg(self.fco, self)
         self.cfg.compute_dom()
+        if __debug__:
+            self.cfg.pprint()
         for i, op, arg in itercode(self.costr):
             name = opcode.opname[op]
             # Change the builder if the line-number 
@@ -384,6 +451,23 @@ class Translate(object):
                     # Copy the locals exiting the soon to be
                     # preceeding basic block.
                     self.blocks_locals[self.crnt_block] = self._locals[:]
+
+                    # Determine if the current block is in the set of
+                    # the next block's predecessors.  If not, change
+                    # out the locals to those of a predecessor that
+                    # has already been symbolically run.
+                    if self.crnt_block not in self.cfg.blocks_in[i]:
+                        next_preds = list(self.cfg.blocks_in[i])
+                        next_preds.sort()
+                        next_preds.reverse()
+                        next_locals = None
+                        for next_pred in next_preds:
+                            if next_pred in self.blocks_locals:
+                                next_locals = self.blocks_locals[next_pred]
+                                break
+                        assert next_locals is not None, ("Internal compiler "
+                                                         "error!")
+                        self._locals = next_locals[:]
 
                 self.crnt_block = i
                 self.builder = lc.Builder.new(self.blocks[i])
@@ -681,6 +765,8 @@ class Translate(object):
         self.stack.append(Variable(res))
 
     def op_GET_ITER(self, i, op, arg):
+        iterable = self.stack.pop(-1)
+        print iterable, self.mod
         raise NotImplementedError('FIXME')
 
     def op_SETUP_LOOP(self, i, op, arg):
