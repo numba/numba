@@ -61,6 +61,19 @@ def while_loop_fn_4(start, stop, inc):
 
 # ______________________________________________________________________
 
+def while_loop_fn_5(i_max, j_max):
+    j = 1.
+    acc = 0.
+    while j < j_max:
+        i = 1.
+        while i < i_max:
+            acc += i * j
+            i += 1.
+        j += 1.
+    return acc
+
+# ______________________________________________________________________
+
 class TestWhile(unittest.TestCase):
     def _do_test(self, function, arg_types, *args, **kws):
         _numba_compile = (numba_compile(arg_types = arg_types)
@@ -90,6 +103,12 @@ class TestWhile(unittest.TestCase):
         compiled_result = compiled_fn(1, 4, 1)
         self.assertEqual(compiled_result, while_loop_fn_4(1, 4, 1))
         self.assertEqual(compiled_result, 6)
+
+    def test_while_loop_fn_5(self):
+        compiled_fn = numba_compile(arg_types = ['d', 'd'])(while_loop_fn_5)
+        compiled_result = compiled_fn(3, 4)
+        self.assertEqual(compiled_result, while_loop_fn_5(3, 4))
+        self.assertEqual(compiled_result, 18.)
 
 # ______________________________________________________________________
 

@@ -30,7 +30,7 @@ class TestCFG(unittest.TestCase):
         test_cfg.blocks_writes[0] = set((0,1,2,3,4,5))
         test_cfg.blocks_writes[2] = set((4,5,6))
         test_cfg.blocks_writes[4] = set((3,))
-        doms = test_cfg.compute_dom()
+        doms, reaching = test_cfg.compute_dataflow()
         self.assertEqual(doms, {0 : set((0,)),
                                 1 : set((0,1)),
                                 2 : set((0,1,2)),
@@ -70,7 +70,7 @@ class TestCFG(unittest.TestCase):
         test_cfg.blocks_writes[0] = set((0,1,2,3,4,5))
         test_cfg.blocks_writes[2] = set((4,5,6))
         test_cfg.blocks_writes[4] = set((3,))
-        doms = test_cfg.compute_dom()        
+        doms, reaching = test_cfg.compute_dataflow()
         self.assertEqual(doms, {0 : set((0,)),
                                 1 : set((0,1,6)),
                                 2 : set((0,1,2,6)),
@@ -93,6 +93,44 @@ class TestCFG(unittest.TestCase):
                           4 : {0 : 0, 1 : 0, 2 : 0, 3 : 4, 4 : 2, 5 : 2,
                                6 : 2}})
 
+    def test_loop_3(self):
+        '''Test control flow analysis of a nested loop.  Hand modeled after
+        test_while.while_loop_fn_5.'''
+        test_cfg = cfg.ControlFlowGraph()
+        for block_num in xrange(7):
+            test_cfg.add_block(block_num)
+        test_cfg.add_edge(0, 1)
+        test_cfg.add_edge(1, 2)
+        test_cfg.add_edge(1, 6)
+        test_cfg.add_edge(2, 3)
+        test_cfg.add_edge(3, 4)
+        test_cfg.add_edge(3, 5)
+        test_cfg.add_edge(4, 3)
+        test_cfg.add_edge(5, 1)
+        test_cfg.blocks_reads[1] = set((1,2))
+        test_cfg.blocks_reads[3] = set((0,4))
+        test_cfg.blocks_reads[4] = set((2,3,4))
+        test_cfg.blocks_reads[5] = set((2,))
+        test_cfg.blocks_reads[6] = set((3,))
+        test_cfg.blocks_writes[0] = set((0,1,2,3))
+        test_cfg.blocks_writes[2] = set((4,))
+        test_cfg.blocks_writes[4] = set((3,4))
+        test_cfg.blocks_writes[5] = set((2,))
+        doms, reaching = test_cfg.compute_dataflow()
+        comparison_dataflow_result = {0 : set((0,)),
+                                      1 : set((0,1)),
+                                      2 : set((0,1,2)),
+                                      3 : set((0,1,2,3)),
+                                      4 : set((0,1,2,3,4)),
+                                      5 : set((0,1,2,3,5)),
+                                      6 : set((0,1,6))}
+        self.assertEqual(doms, comparison_dataflow_result)
+        whole_loop = set((1,2,3,4,5))
+        for loop_member in whole_loop:
+            comparison_dataflow_result[loop_member].update(whole_loop)
+        comparison_dataflow_result[6].update(whole_loop)
+        self.assertEqual(reaching, comparison_dataflow_result)
+
     def test_branch_1(self):
         test_cfg = cfg.ControlFlowGraph()
         for block_num in xrange(4):
@@ -106,7 +144,7 @@ class TestCFG(unittest.TestCase):
         test_cfg.blocks_writes[0] = set((0,))
         test_cfg.blocks_writes[1] = set((1,))
         test_cfg.blocks_writes[2] = set((1,))
-        doms = test_cfg.compute_dom()
+        doms, reaching = test_cfg.compute_dataflow()
         self.assertEqual(doms, {0 : set((0,)),
                                 1 : set((0,1)),
                                 2 : set((0,2)),

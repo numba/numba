@@ -30,6 +30,7 @@ class ControlFlowGraph (object):
         self.blocks_writes = {}
         self.blocks_writer = {}
         self.blocks_dom = {}
+        self.blocks_reaching = {}
 
     def add_block (self, key, value = None):
         self.blocks[key] = value
@@ -123,17 +124,28 @@ class ControlFlowGraph (object):
                     # already built the proper CFG edges, so skip the
                     # fallthrough plumbing.
 
+    def _writes_local (self, block, write_instr_index, local_index):
+        self.blocks_writes[block].add(local_index)
+        block_writers = self.blocks_writer[block]
+        old_index = block_writers.get(local_index, -1)
+        # This checks for a corner case that would impact
+        # numba.translate.Translate.build_phi_nodes().
+        assert old_index != write_instr_index, (
+            "Found corner case for STORE_FAST at a CFG join!")
+        block_writers[local_index] = max(write_instr_index, old_index)
+
     def op_STORE_FAST (self, i, op, arg):
-        self.blocks_writes[self.crnt_block].add(arg)
-        self.blocks_writer[self.crnt_block][arg] = i
+        self._writes_local(self.crnt_block, i, arg)
         return False
 
-    def compute_dom (self):
-        '''Compute the dominator relationship in the CFG.'''
+    def compute_dataflow (self):
+        '''Compute the dominator and reaching dataflow relationships
+        in the CFG.'''
         blocks = set(self.blocks.keys())
         nonentry_blocks = blocks.copy()
-        for block in self.blocks.iterkeys():
+        for block in blocks:
             self.blocks_dom[block] = blocks
+            self.blocks_reaching[block] = set((block,))
             if len(self.blocks_in[block]) == 0:
                 self.blocks_dom[block] = set((block,))
                 nonentry_blocks.remove(block)
@@ -148,7 +160,33 @@ class ControlFlowGraph (object):
                 if newdom != olddom:
                     changed = True
                     self.blocks_dom[block] = newdom
-        return self.blocks_dom
+                oldreaching = self.blocks_reaching[block]
+                newreaching = set.union(
+                    *[self.blocks_reaching[pred]
+                      for pred in self.blocks_in[block]])
+                newreaching.add(block)
+                if newreaching != oldreaching:
+                    changed = True
+                    self.blocks_reaching[block] = newreaching
+        return self.blocks_dom, self.blocks_reaching
+
+    def update_for_ssa (self):
+        '''Modify the blocks_writes map to reflect phi nodes inserted
+        for static single assignment representations.'''
+        joins = [block for block in self.blocks.iterkeys()
+                 if len(self.blocks_in[block]) > 1]
+        changed = True
+        while changed:
+            changed = False
+            for block in joins:
+                phis_needed = self.phi_needed(block)
+                for affected_local in phis_needed:
+                    if affected_local not in self.blocks_writes[block]:
+                        changed = True
+                        # NOTE: For this to work, we assume that basic
+                        # blocks are indexed by their instruction
+                        # index in the VM bytecode.
+                        self._writes_local(block, block, affected_local)
 
     def idom (self, block):
         '''Compute the immediate dominator (idom) of the given block
@@ -184,8 +222,9 @@ class ControlFlowGraph (object):
 
         Useful for actually populating phi nodes, once you know you
         need them.'''
-        if hasattr(self, 'reaching_defns'):
-            ret_val = self.reaching_defns
+        has_memoized = hasattr(self, 'reaching_definitions')
+        if has_memoized and block in self.reaching_definitions:
+            ret_val = self.reaching_definitions[block]
         else:
             preds = self.blocks_in[block]
             ret_val = {}
@@ -200,7 +239,9 @@ class ControlFlowGraph (object):
                     crnt_writer_map.update(ret_val[pred])
                     ret_val[pred] = crnt_writer_map
                     crnt = self.idom(crnt)
-            self.reaching_defns = ret_val
+            if not has_memoized:
+                self.reaching_definitions = {}
+            self.reaching_definitions[block] = ret_val
         return ret_val
 
     def nreaches (self, block):
@@ -294,7 +335,7 @@ def main (*args, **kws):
                   "have a code object.  Skipping..." % (arg,))
         else:
             cfg = cls.build_cfg(func.func_code)
-            cfg.compute_dom()
+            cfg.compute_dataflow()
             if dot_out is not None:
                 dot_out.write(cfg.to_dot())
             else:

@@ -403,6 +403,13 @@ class LLVMControlFlowGraph (ControlFlowGraph):
                 i, op, arg)
         return ret_val
 
+    def compute_dataflow (self):
+        """Overload the base class to induce a writer update for phi
+        nodes, otherwise later phi node calculations won't work."""
+        ret_val = super(LLVMControlFlowGraph, self).compute_dataflow()
+        self.update_for_ssa()
+        return ret_val
+
 class Translate(object):
     def __init__(self, func, ret_type='d', arg_types=['d']):
         self.func = func
@@ -421,7 +428,14 @@ class Translate(object):
                 # builtins is an attribtue.
                 self._myglobals[name] = getattr(__builtin__, name, None)
 
-        self.mod = lc.Module.new(func.func_name+'_mod')
+        # NOTE: Was seeing weird corner case where
+        # llvm.core.Module.new() was not returning a module object,
+        # thinking this was caused by compiling the same function
+        # twice while the module was being garbage collected, and
+        # llvm.core.Module.new() would return whatever was left lying
+        # around.  Using the translator address in the module name
+        # might fix this.
+        self.mod = lc.Module.new('%s_mod_%x' % (func.__name__, id(self)))
         self._delaylist = [range, xrange, enumerate]
         self.ret_type = ret_type
         self.arg_types = arg_types
@@ -462,7 +476,7 @@ class Translate(object):
         """Translate the function
         """
         self.cfg = LLVMControlFlowGraph.build_cfg(self.fco, self)
-        self.cfg.compute_dom()
+        self.cfg.compute_dataflow()
         if __debug__:
             self.cfg.pprint()
         for i, op, arg in itercode(self.costr):
@@ -501,6 +515,35 @@ class Translate(object):
         if __debug__:
             print self.mod
 
+    def has_pending_phi(self, instr_index, local_index):
+        return ((instr_index in self.pending_phis) and 
+                (local_index in self.pending_phis[instr_index]))
+
+    def add_pending_phi(self, instr_index, local_index, phi, pred):
+        if instr_index not in self.pending_phis:
+            locals_map = {}
+            self.pending_phis[instr_index] = locals_map
+        else:
+            locals_map = self.pending_phis[instr_index]
+        if local_index not in locals_map:
+            # Note that the same reaching definition might "arrive"
+            # via more than one predecessor block, so we keep a list
+            # of predecessors, not just one.
+            locals_map[local_index] = (phi, [pred])
+        else:
+            assert locals_map[local_index][0] == phi, (
+                "Internal compiler error!")
+            locals_map[local_index][1].append(pred)
+
+    def handle_pending_phi(self, instr_index, local_index, value):
+        phi, pred_lblocks = self.pending_phis[instr_index][local_index]
+        if isinstance(value, Variable):
+            value = value.llvm(llvmtype_to_strtype(phi.type))
+        else:
+            assert isinstance(value, lc.Value), "Internal compiler error!"
+        for pred_lblock in pred_lblocks:
+            phi.add_incoming(value, pred_lblock)
+
     def add_phi_incomming(self, phi, crnt_block, pred, local):
         '''Take one of three actions:
 
@@ -525,6 +568,10 @@ class Translate(object):
                     llvmtype_to_strtype(phi.type)), self.blocks[pred])
         else:
             reaching_defs = self.cfg.get_reaching_definitions(crnt_block)
+            if __debug__:
+                print("add_phi_incomming(): reaching_defs = %s\n    "
+                      "crnt_block=%r, pred=%r, local=%r" %
+                      (pprint.pformat(reaching_defs), crnt_block, pred, local))
             definition_block = reaching_defs[pred][local]
             if ((definition_block in self.blocks_locals) and
                 (definition_block not in self.pending_blocks)):
@@ -537,15 +584,8 @@ class Translate(object):
             else:
                 definition_index = self.cfg.blocks_writer[definition_block][
                     local]
-                if definition_index in self.pending_phis:
-                    self.pending_phis[definition_index][1].append(
-                        self.blocks[pred])
-                else:
-                    # Note that the same reaching definition might
-                    # "arrive" via more than one predecessor block, so we
-                    # keep a list of predecessors, not just one.
-                    self.pending_phis[definition_index] = (phi,
-                                                           [self.blocks[pred]])
+                self.add_pending_phi(definition_index, local, phi,
+                                     self.blocks[pred])
 
     def build_phi_nodes(self, crnt_block):
         '''Determine if any phi nodes need to be created, and if so,
@@ -558,11 +598,33 @@ class Translate(object):
                 for local in phis_needed:
                     # Infer type from current local value.
                     oldlocal = self._locals[local]
+                    # NOTE: Also seeing builder.phi returning
+                    # non-PHINode instances intermittently (see NOTE
+                    # above for llvm.core.Module.new()).
                     phi = self.builder.phi(str_to_llvmtype(oldlocal.typ))
+                    assert isinstance(phi, lc.PHINode), (
+                        "Intermittent llvm-py error encountered (builder.phi()"
+                        " result type was %r, not %r)." %
+                        (type(phi), lc.PHINode))
                     newlocal = Variable(phi)
                     self._locals[local] = newlocal
                     for pred in preds:
                         self.add_phi_incomming(phi, crnt_block, pred, local)
+                    # This is a local write, even if it is synthetic,
+                    # so check to see if we are responsible for back
+                    # patching any pending phis.
+                    if self.has_pending_phi(crnt_block, local):
+                        # FIXME: There may be the potential for a
+                        # corner case where a STORE_FAST occurs at the
+                        # top of a join.  This will cause multiple,
+                        # ambiguous, calls to PHINode.add_incomming()
+                        # (once here, and once in op_STORE_FAST()).
+                        # Currently checking for this in
+                        # numba.cfg.ControlFlowGraph._writes_local().
+                        # Assertion should fail when
+                        # LLVMControlFlowGraph calls
+                        # self.update_for_ssa().
+                        self.handle_pending_phi(crnt_block, local, phi)
 
     def get_preceding_locals(self, preds):
         '''Given an iterable set of preceding basic blocks, check to
@@ -707,11 +769,8 @@ class Translate(object):
         if isinstance(newval.val, DelayedObj):
             self._generate_for_loop(i, op, arg, newval)
         else:
-            if i in self.pending_phis:
-                phi, pred_lblocks = self.pending_phis[i]
-                for pred_lblock in pred_lblocks:
-                    phi.add_incoming(newval.llvm(llvmtype_to_strtype(phi.type)),
-                                     pred_lblock)
+            if self.has_pending_phi(i, arg):
+                self.handle_pending_phi(i, arg, newval)
             self._locals[arg] = newval
 
     def op_LOAD_GLOBAL(self, i, op, arg):
@@ -958,18 +1017,21 @@ class Translate(object):
 
     def op_UNPACK_SEQUENCE(self, i, op, arg):
         objarg = self.stack.pop(-1)
-        objarg_llvm_val = objarg.llvm()
-        # FIXME: Is there some type checking we can do so a bad call
-        # to getelementptr doesn't kill the whole process (assuming
-        # asserts are live in LLVM)?!
-        llvm_vals = [
-            self.builder.load(
-                self.builder.gep(objarg_llvm_val,
-                                 [lc.Constant.int(_int32, index)]))
-            for index in xrange(arg)]
-        llvm_vals.reverse()
-        for llvm_val in llvm_vals:
-            self.stack.append(Variable(llvm_val))
+        if isinstance(objarg, tuple):
+            raise NotImplementedError("FIXME")
+        else:
+            objarg_llvm_val = objarg.llvm()
+            # FIXME: Is there some type checking we can do so a bad call
+            # to getelementptr doesn't kill the whole process (assuming
+            # asserts are live in LLVM)?!
+            llvm_vals = [
+                self.builder.load(
+                    self.builder.gep(objarg_llvm_val,
+                                     [lc.Constant.int(_int32, index)]))
+                for index in xrange(arg)]
+            llvm_vals.reverse()
+            for llvm_val in llvm_vals:
+                self.stack.append(Variable(llvm_val))
 
     def op_BINARY_SUBSCR(self, i, op, arg):
         raise NotImplementedError("FIXME")

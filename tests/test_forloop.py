@@ -61,7 +61,7 @@ class TestForLoop(unittest.TestCase):
                                              ret_type = 'i')(for_loop_fn_2)
         result = compiled_for_loop_fn(4)
         self.assertEqual(result, 36)
-        self.assertEqual(result, for_loop_fn_1(4))
+        self.assertEqual(result, for_loop_fn_2(4))
 
 # ______________________________________________________________________
 
