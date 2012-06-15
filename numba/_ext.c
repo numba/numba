@@ -57,27 +57,58 @@ MyUFunc_D_D(char **args, npy_intp *dimensions, npy_intp *steps, void *func)
     }
 }
 
+typedef npy_double funaryfunc_werror(npy_double *, npy_int32 *);
+
+NPY_NO_EXPORT void
+MyForUFunc_D_D(char **args, npy_intp *dimensions, npy_intp *steps, void *func)
+{
+    funaryfunc_werror *f = (funaryfunc_werror *)func;
+    UNARY_LOOP {
+        npy_double *in1 = (npy_double *)ip1;
+        npy_double *out = (npy_double *)op1;
+        npy_int32 err;
+        *out = f(in1, &err);
+        if (err!=0) *out=NPY_NAN;
+    }
+}
+
 PyUFuncGenericFunction funcs[1] = {MyUFunc_D_D};
 static char types[2] = {NPY_DOUBLE, NPY_DOUBLE};
+
+PyUFuncGenericFunction funcs2[1] = {MyForUFunc_D_D};
 
 static PyObject *
 ufunc_from_ptr(PyObject *self, PyObject *args)
 {
 
-    Py_ssize_t func_ptr; 
+    Py_ssize_t func_ptr;
+    int type = 0;
     char *func_name = "temp"; 
     void **data; 
     PyObject *ret;
-    double(*func)(double);
 
     /* FIXME:  This will not be freed */    
-    data = (void **)malloc(sizeof(void **));
+    data = (void **)malloc(sizeof(void *));
 
-    if (!PyArg_ParseTuple(args, "n|s", &func_ptr, &func_name)) return NULL;
+    if (!PyArg_ParseTuple(args, "n|is", &func_ptr, &type, &func_name)) return NULL;
     data[0] = (void *)func_ptr;
-    func = data[0];
-    printf("%f %f ** \n" , func(4.3), func(0.0));
-    ret = PyUFunc_FromFuncAndData(funcs, data, types, 1, 1, 1, PyUFunc_None, func_name, "doc", 0);
+    if (type == 0) {
+        double(*func)(double);
+        func = data[0];
+        printf("%f %f ** \n" , func(4.3), func(0.0));    
+        ret = PyUFunc_FromFuncAndData(funcs, data, types, 1, 1, 1, PyUFunc_None, func_name, "doc", 0);
+    }
+    else { /* dgamln like function from special/amos */
+        double val = 4.3;
+        npy_int32 err;
+        double(*func2)(double *, npy_int32 *);
+        func2 = data[0];
+        printf("Hello there...%p\n", func2);
+        printf("%f** \n", func2(&val, &err));
+        printf("%d\n", (int)err);               
+        
+        ret = PyUFunc_FromFuncAndData(funcs2, data, types, 1, 1, 1, PyUFunc_None, func_name, "doc", 0);
+    }
 
     return ret;
 }
