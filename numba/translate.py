@@ -45,9 +45,23 @@ def llvmtype_to_strtype(typ):
         return 'f64'
     elif typ.kind == lc.TYPE_INTEGER:
         return 'i%d' % typ.width
-    elif typ.kind == lc.TYPE_POINTER and \
-         typ.pointee.kind == lc.TYPE_FUNCTION:
-        return ['func'] + typ.pointee.args
+    elif typ == _numpy_array: # NOTE: Checks for Numpy arrays need to
+                              # happen before the more general
+                              # recognition of pointer types,
+                              # otherwise it won't ever be used.
+        # FIXME: Need to find a way to stash dtype somewhere in here.
+        return 'arr[]'
+    elif typ.kind == lc.TYPE_POINTER:
+        if typ.pointee.kind == lc.TYPE_FUNCTION:
+            return ['func'] + typ.pointee.args
+        else:
+            n_pointer = 1
+            typ = typ.pointee
+            while typ.kind == lc.TYPE_POINTER:
+                n_pointer += 1
+                typ = typ.pointee
+            return "%s%s" % (llvmtype_to_strtype(typ), "*" * n_pointer)
+    raise NotImplementedError("FIXME: LLVM type conversions for '%s'!" % (typ,))
 
 # We don't support all types....
 def pythontype_to_strtype(typ):
@@ -92,7 +106,7 @@ class DelayedObj(object):
 #  So, that when used in an operation, the correct
 #  LLVM type can be inserted.  
 class Variable(object):
-    def __init__(self, val):
+    def __init__(self, val, argtyp = None):
         if isinstance(val, Variable):
             self.val = val.val
             self._llvm = val._llvm
@@ -101,7 +115,10 @@ class Variable(object):
         self.val = val
         if isinstance(val, lc.Value):
             self._llvm = val
-            self.typ = llvmtype_to_strtype(val.type)
+            if argtyp is None:
+                self.typ = llvmtype_to_strtype(val.type)
+            else:
+                self.typ = convert_to_strtype(argtyp)
         else:
             self._llvm = None
             self.typ = pythontype_to_strtype(type(val))
@@ -116,7 +133,9 @@ class Variable(object):
             if typ is not None and typ != self.typ:
                 ltyp = str_to_llvmtype(typ)
                 if ltyp.kind == ret_val.type.kind and builder:
-                    if typ[0] == 'i':
+                    if ltyp.kind == lc.TYPE_POINTER:
+                        ret_val = builder.bitcast(ret_val, ltyp)
+                    elif typ[0] == 'i':
                         if ltyp.width > ret_val.type.width:
                             ret_val = builder.sext(ret_val, ltyp)
                         else:
@@ -125,7 +144,8 @@ class Variable(object):
                             ret_val = builder.trunc(ret_val, ltyp)
                     else:
                         raise NotImplementedError("Don't know how to cast "
-                                                  "from %r to %r yet!" % ())
+                                                  "from %r to %r yet!" %
+                                                  (self.typ, typ))
                 else:
                     raise ValueError("type mismatch (%r != %r.typ)" %
                                      (typ, self))
@@ -164,31 +184,41 @@ def str_to_llvmtype(str):
     elif str[0] == 'i':
         num = int(str[1:])
         ret_val = lc.Type.int(num)
+    elif str.startswith('arr['):
+        ret_val = _numpy_array
     else:
-        raise TypeError, "Invalid Type"
+        raise TypeError, "Invalid Type: %s" % str
     for _ in xrange(n_pointer):
         ret_val = lc.Type.pointer(ret_val)
     return ret_val
+
+def _handle_list_conversion(typ):
+    assert isinstance(typ, list)
+    crnt_elem = typ[0]
+    dimcount = 1
+    while isinstance(crnt_elem, list):
+        crnt_elem = crnt_elem[0]
+        dimcount += 1
+    return dimcount, crnt_elem
+
+def _dtypeish_to_str(typ):
+    n_pointer = 0
+    if typ.endswith('*'):
+        n_pointer = typ.count('*')
+        typ = typ[:-n_pointer]
+    dt = np.dtype(typ)
+    return ("%s%s%s" % (dt.kind, 8*dt.itemsize, "*" * n_pointer))
 
 def convert_to_llvmtype(typ):
     n_pointer = 0
     if isinstance(typ, list):
         return _numpy_array
-    elif typ.endswith('*'):
-        n_pointer = typ.count('*')
-        typ = typ[:-n_pointer]
-    dt = np.dtype(typ)
-    return str_to_llvmtype("%s%s%s" % (dt.kind, 8*dt.itemsize, "*" * n_pointer))
+    return str_to_llvmtype(_dtypeish_to_str(typ))
 
 def convert_to_ctypes(typ):
     import ctypes
     from numpy.ctypeslib import _typecodes
     if isinstance(typ, list):
-        crnt_elem = typ[0]
-        dimcount = 1
-        while isinstance(crnt_elem, list):
-            crnt_elem = crnt_elem[0]
-            dimcount += 1
         # FIXME: At some point we should add a type check to the
         # wrapper code s.t. it ensures the given argument conforms to
         # the following:
@@ -208,6 +238,15 @@ def convert_to_ctypes(typ):
     for _ in xrange(n_pointer):
         ret_val = ctypes.POINTER(ret_val)
     return ret_val
+
+def convert_to_strtype(typ):
+    # FIXME: This current mapping preserves dtype information, but
+    # loses ndims.
+    arr = 0
+    if isinstance(typ, list):
+        arr = 1
+        _, typ = _handle_list_conversion(typ)
+    return '%s%s%s' % ('arr[' * arr, _dtypeish_to_str(typ), ']' * arr)
 
 # Add complex, unsigned, and bool
 def typcmp(type1, type2):
@@ -459,10 +498,10 @@ class Translate(object):
         self.lfunc = self.mod.add_function(ty_func, self.func.func_name)
         self.nlocals = len(self.fco.co_varnames)
         self._locals = [None] * self.nlocals
-        for i, name in enumerate(argnames):
+        for i, (name, typ) in enumerate(zip(argnames, self.arg_types)):
             self.lfunc.args[i].name = name
             # Store away arguments in locals
-            self._locals[i] = Variable(self.lfunc.args[i])
+            self._locals[i] = Variable(self.lfunc.args[i], typ)
         entry = self.lfunc.append_basic_block('Entry')
         self.blocks = {0:entry}
         self.cfg = None
@@ -783,6 +822,8 @@ class Translate(object):
     def op_BINARY_ADD(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
+        if __debug__:
+            print("op_BINARY_ADD(): %r + %r" % (arg1, arg2))
         typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.fadd(arg1, arg2)
@@ -1017,7 +1058,7 @@ class Translate(object):
 
     def op_UNPACK_SEQUENCE(self, i, op, arg):
         objarg = self.stack.pop(-1)
-        if isinstance(objarg, tuple):
+        if isinstance(objarg.val, tuple):
             raise NotImplementedError("FIXME")
         else:
             objarg_llvm_val = objarg.llvm()
@@ -1033,5 +1074,62 @@ class Translate(object):
             for llvm_val in llvm_vals:
                 self.stack.append(Variable(llvm_val))
 
+    def _build_index_lval(self, arr_var, index_var):
+        '''Given an LLVM pointer to a Numpy array and a Numba index
+        variable (may either be representable as an LLVM i32, or a
+        tuple of Numba index variables for n-dimensional arrays),
+        build the necessary calculations for an index into the data
+        array.'''
+        try:
+            ret_val = index_var.llvm('i32')
+        except:
+            raise NotImplementedError('Index value calculation for %r' %
+                                      (index_var,))
+        return ret_val
+
     def op_BINARY_SUBSCR(self, i, op, arg):
+        index_var = self.stack.pop(-1)
+        arr_var = self.stack.pop(-1)
+        result_val = None
+        if arr_var._llvm is not None:
+            lval = arr_var._llvm
+            ltype = lval.type
+            if ltype == _numpy_array:
+                index_lval = self._build_index_lval(lval, index_var)
+                data_ofs = _numpy_array_field_ofs['data']
+                if __debug__:
+                    print("op_BINARY_SUBSCR(): arr_var.typ = %s" %
+                          (arr_var.typ,))
+                assert ((arr_var.typ is not None) and
+                        (arr_var.typ.startswith('arr[')))
+                result_type = str_to_llvmtype(arr_var.typ[4:-1])
+                result_val = self.builder.load(
+                    self.builder.gep(
+                        self.builder.bitcast(
+                            self.builder.load(
+                                self.builder.gep(
+                                    lval,
+                                    [lc.Constant.int(_int32, 0),
+                                     lc.Constant.int(_int32, data_ofs)])),
+                            lc.Type.pointer(result_type)),
+                        [index_lval]))
+                print self.mod, str(result_val.type), arr_var.typ
+            elif ltype.kind == lc.TYPE_POINTER:
+                result_val = self.builder.load(
+                    self.builder.gep(lval, [index_var.llvm('i32')]))
+            else:
+                raise NotImplementedError(
+                    "Unable ot handle indexing on LLVM type '%s'." %
+                    (str(ltype),))
+        elif isinstance(arr_var.val, tuple):
+            raise NotImplementedError("FIXME")
+        else:
+            raise NotImplementedError("Unable to handle indexing on objects "
+                                      "of type %r." % (type(arr_var.val),))
+        self.stack.append(Variable(result_val))
+
+    def op_BUILD_TUPLE(self, i, op, arg):
+        tvals = self.stack[-arg:]
+        del self.stack[-arg:]
+        print self.mod, tvals
         raise NotImplementedError("FIXME")

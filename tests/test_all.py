@@ -16,6 +16,7 @@ from test_getattr import TestGetattr
 from test_if import TestIf
 from test_mandelbrot import TestMandelbrot
 from test_multiarray_api import TestMultiarrayAPI
+from test_tuple import TestTuple
 from test_vectorize import TestVectorize
 from test_while import TestWhile
 
