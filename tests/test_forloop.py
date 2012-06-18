@@ -39,8 +39,20 @@ def for_loop_fn_2 (stop):
 
 # ______________________________________________________________________
 
-class TestForLoop(unittest.TestCase):
+def for_loop_fn_3 (stop):
+    acc = 0
+    for i in range(stop):
+        for j in range(stop):
+            for k in range(stop):
+                for l in range(stop):
+                    acc += 1
+    return acc
 
+# ______________________________________________________________________
+
+class TestForLoop(unittest.TestCase):
+    @unittest.skipUnless(__debug__, "Requires implementation of iteration "
+                         "over arrays.")
     def test_compiled_for_loop_fn_0(self):
         test_data = numpy.array([1, 2, 3], dtype = 'l')
         compiled_for_loop_fn = numba_compile(
@@ -62,6 +74,13 @@ class TestForLoop(unittest.TestCase):
         result = compiled_for_loop_fn(4)
         self.assertEqual(result, 36)
         self.assertEqual(result, for_loop_fn_2(4))
+
+    def test_compiled_for_loop_fn_3(self):
+        compiled_for_loop_fn = numba_compile(arg_types = ['i'],
+                                             ret_type = 'i')(for_loop_fn_3)
+        result = compiled_for_loop_fn(3)
+        self.assertEqual(result, for_loop_fn_3(3))
+        self.assertEqual(result, 81)
 
 # ______________________________________________________________________
 

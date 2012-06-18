@@ -34,8 +34,9 @@ def filter2d(image, filt):
 
 class TestFilter2d(unittest.TestCase):
     def test_vectorized_filter2d(self):
-        ufilter2d = numba_compile(arg_types = [[['d']], [['d']]])(filter2d)
-        image = numpy.random.random((320, 200))
+        ufilter2d = numba_compile(arg_types = [[['d']], [['d']]],
+                                  ret_type = [['d']])(filter2d)
+        image = numpy.random.random((50, 50))
         filt = numpy.random.random((5, 5))
         filt /= filt.sum()
         plain_old_result = filter2d(image, filt)

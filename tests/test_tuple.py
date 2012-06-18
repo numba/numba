@@ -15,7 +15,10 @@ import unittest
 # ______________________________________________________________________
 
 def tuple_fn_0 (inarr):
-    internal_tuple = (1, 2, 3)
+    i = 1
+    j = 2
+    k = 3
+    internal_tuple = (i, j, k)
     return inarr[internal_tuple]
 
 # ______________________________________________________________________
