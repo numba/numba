@@ -5,6 +5,7 @@ import __builtin__
 
 import numpy as np
 
+from llvm import _ObjectCache, WeakValueDictionary
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
@@ -351,6 +352,14 @@ def _build_len(translator, args):
                                   "for arguments that are not Numpy arrays.")
     return res, None
 
+def _get_py_incref(module):
+    try:
+        ret_val = module.get_function_named('Py_IncRef')
+    except:
+        ret_val = module.add_function(
+            lc.Type.function(_void_star, [_void_star]), 'Py_IncRef')
+    return ret_val
+
 def _build_zeros_like(translator, args):
     assert (len(args) == 1 and
             args[0]._llvm is not None and
@@ -366,8 +375,11 @@ def _build_zeros_like(translator, args):
     largs.append(lc.Constant.int(_int32, 0))
     lfunc = translator.ma_obj.load_PyArray_Zeros(translator.mod,
                                                  translator.builder)
-    res = translator.builder.bitcast(translator.builder.call(lfunc, largs),
-                                     _numpy_array)
+    res = translator.builder.bitcast(
+        translator.builder.call(
+            _get_py_incref(translator.mod),
+            [translator.builder.call(lfunc, largs)]),
+        _numpy_array)
     if __debug__:
         print "build_zeros_like(): lfunc =", str(lfunc)
         print "build_zeros_like(): largs =", [str(arg) for arg in largs]
@@ -388,6 +400,9 @@ class LLVMControlFlowGraph (ControlFlowGraph):
             if key not in self.translator.blocks:
                 lfunc = self.translator.lfunc
                 lblock = lfunc.append_basic_block('BLOCK_%d' % key)
+                assert isinstance(lblock, lc.BasicBlock), (
+                    "Expected %r from llvm-py, got instance of type %r, "
+                    "however." % (lc.BasicBlock, type(lblock)))
                 self.translator.blocks[key] = lblock
             else:
                 lblock = self.translator.blocks[key]
@@ -481,7 +496,17 @@ class Translate(object):
         # llvm.core.Module.new() would return whatever was left lying
         # around.  Using the translator address in the module name
         # might fix this.
+
+        # NOTE: It doesn't.  Have to manually flush the llvm-py object cache
+        # since not even forcing garbage collection is reliable.
+
+        global _ObjectCache
+        setattr(_ObjectCache, '_ObjectCache__instances', WeakValueDictionary())
+
         self.mod = lc.Module.new('%s_mod_%x' % (func.__name__, id(self)))
+        assert isinstance(self.mod, lc.Module), (
+            "Expected %r from llvm-py, got instance of type %r, however." %
+            (lc.Module, type(self.mod)))
         self._delaylist = [range, xrange, enumerate]
         self.ret_type = ret_type
         self.arg_types = arg_types
@@ -503,13 +528,22 @@ class Translate(object):
         self.arg_ltypes = [convert_to_llvmtype(x) for x in self.arg_types]
         ty_func = lc.Type.function(self.ret_ltype, self.arg_ltypes)        
         self.lfunc = self.mod.add_function(ty_func, self.func.func_name)
+        assert isinstance(self.lfunc, lc.Function), (
+            "Expected %r from llvm-py, got instance of type %r, however." %
+            (lc.Function, type(self.lfunc)))
         self.nlocals = len(self.fco.co_varnames)
         self._locals = [None] * self.nlocals
         for i, (name, typ) in enumerate(zip(argnames, self.arg_types)):
+            assert isinstance(self.lfunc.args[i], lc.Argument), (
+                "Expected %r from llvm-py, got instance of type %r, however." %
+                (lc.Argument, type(self.lfunc.args[i])))
             self.lfunc.args[i].name = name
             # Store away arguments in locals
             self._locals[i] = Variable(self.lfunc.args[i], typ)
         entry = self.lfunc.append_basic_block('Entry')
+        assert isinstance(entry, lc.BasicBlock), (
+            "Expected %r from llvm-py, got instance of type %r, however." %
+            (lc.BasicBlock, type(entry)))
         self.blocks = {0:entry}
         self.cfg = None
         self.blocks_locals = {}
