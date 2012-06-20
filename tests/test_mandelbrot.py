@@ -11,6 +11,8 @@ from numba.decorators import numba_compile
 
 import unittest
 
+import numpy as np
+
 # ______________________________________________________________________
 
 #@numba_compile(arg_types = ['d','d','i'], ret_type = 'i')
@@ -34,13 +36,80 @@ def mandel_1(real_coord, imag_coord, max_iters):
         i += 1
     return -1
 
+try:
+    mandel_1c = numba_compile(arg_types = ['d', 'd', 'i'], ret_type = 'i')(
+        mandel_1)
+except:
+    if __debug__:
+        import traceback as tb
+        tb.print_exc()
+    mandel_1c = None
+
+#@numba_compile(arg_types = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])
+def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
+    nb_colors = len(colors)
+    width = image.shape[0]
+    height = image.shape[1]
+    pixel_size = (max_x - min_x) / width
+    for x in range(width):
+        real = min_x + x * pixel_size
+        for y in range(height):
+            imag = min_y + y * pixel_size
+            # For the following to actually compile, mandel_1 must
+            # have already been compiled.
+            color = mandel_1(real, imag, nb_iterations)
+
+            # Would prefer the following, just to show off:
+            #   image[x, y, :] = colors[color % nb_colors]
+            # But that'd require Numba to handle slicing (it doesn't
+            # at the time this version was writen), and it wouldn't
+            # have the type information about the shape.
+
+            col_index = color % nb_colors # Ohh for wont of CSE...
+            image[x, y, 0] = colors[col_index, 0]
+            image[x, y, 1] = colors[col_index, 1]
+            image[x, y, 2] = colors[col_index, 2]
+
+def make_palette():
+    '''Shamefully stolen from
+    http://wiki.cython.org/examples/mandelbrot, though we did correct
+    their spelling mistakes (*smirk*).'''
+    colors = []
+    for i in range(0, 25):
+        colors.append( (i*10, i*8, 50 + i*8), )
+    for i in range(25, 5, -1):
+        colors.append( (50 + i*8, 150+i*2,  i*10), )
+    for i in range(10, 2, -1):
+        colors.append( (0, i*15, 48), )
+    return np.array(colors, dtype=np.uint8)
+
 # ______________________________________________________________________
 
 class TestMandelbrot(unittest.TestCase):
     def test_mandel_1_sanity(self):
-        mandel_1c = numba_compile(arg_types = ['d', 'd', 'i'],
-                                  ret_type = 'i')(mandel_1)
-        self.assertEquals(mandel_1c(0., 0., 20), -1)
+        self.assertNotEqual(mandel_1c, None, "Failed to compile mandel_1().  "
+                            "Traceback should be output if __debug__ is set.")
+        self.assertEqual(mandel_1c(0., 0., 20), -1)
+
+    def test_mandel_1(self):
+        self.assertNotEqual(mandel_1c, None, "Failed to compile mandel_1().  "
+                            "Traceback should be output if __debug__ is set.")
+        vals = np.arange(-1., 1.000001, 0.1)
+        for real in vals:
+            for imag in vals:
+                self.assertEqual(mandel_1c(real, imag, 20),
+                                 mandel_1(real, imag, 20))
+
+    def test_mandel_driver_1(self):
+        mandel_driver_1c = numba_compile(arg_types = [
+                'd', 'd', 'd', 'i', [['b']], [[['b']]]])(mandel_driver_1)
+        palette = make_palette()
+        control_image = np.zeros((50,50,3), dtype = np.uint8)
+        mandel_driver_1(-1., 1., -1., len(palette) - 1, palette, control_image)
+        test_image = np.zeros_like(control_image)
+        self.assertTrue((control_image - test_image == control_image).all())
+        mandel_driver_1c(-1., 1., -1., len(palette) - 1, palette, test_image)
+        self.assertTrue((control_image - test_image == 0).all())
 
 # ______________________________________________________________________
 

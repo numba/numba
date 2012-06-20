@@ -104,6 +104,75 @@ class DelayedObj(object):
     def get_stop(self):
         return self.args[0 if (len(self.args) == 1) else 1]
 
+class _LLVMCaster(object):
+    # NOTE: Using a class to lower namespace polution here.  The
+    # following would be class methods, but we'd have to index them
+    # using "class.method" in the cast dictionary to get the proper
+    # binding, and that'd only succeed after the class has been built.
+
+    def build_pointer_cast(_, builder, lval1, lty2):
+        return builder.bitcast(lval1, lty2)
+
+    def build_int_cast(_, builder, lval1, lty2, unsigned = False):
+        width1 = lval1.type.width
+        width2 = lty2.width
+        ret_val = lval1
+        if width2 > width1:
+            if unsigned:
+                ret_val = builder.zext(lval1, lty2)
+            else:
+                ret_val = builder.sext(lval1, lty2)
+        elif width2 < width1:
+            print("Warning: Perfoming downcast.  May lose information.")
+            ret_val = builder.trunc(lval1, lty2)
+        return ret_val
+
+    def build_float_cast(_, builder, lval1, lty2):
+        raise NotImplementedError("FIXME")
+
+    def build_int_to_float_cast(_, builder, lval1, lty2, unsigned = False):
+        ret_val = None
+        if unsigned:
+            ret_val = builder.uitofp(lval1, lty2)
+        else:
+            ret_val = builder.sitofp(lval1, lty2)
+        return ret_val
+
+    def build_float_to_int_cast(_, builder, lval1, lty2, unsigned = False):
+        ret_val = None
+        if unsigned:
+            ret_val = builder.fptoui(lval1, lty2)
+        else:
+            ret_val = builder.fptosi(lval1, lty2)
+        return ret_val
+
+    CAST_MAP = {
+        lc.TYPE_POINTER : build_pointer_cast,
+        lc.TYPE_INTEGER : build_int_cast,
+        lc.TYPE_FLOAT : build_float_cast,
+        (lc.TYPE_INTEGER, lc.TYPE_FLOAT) : build_int_to_float_cast,
+        (lc.TYPE_INTEGER, lc.TYPE_DOUBLE) : build_int_to_float_cast,
+        (lc.TYPE_FLOAT, lc.TYPE_INTEGER) : build_float_to_int_cast,
+        (lc.TYPE_DOUBLE, lc.TYPE_INTEGER) : build_float_to_int_cast,
+        }
+
+    @classmethod
+    def build_cast(cls, builder, lval1, lty2, *args, **kws):
+        ret_val = None
+        lty1 = lval1.type
+        lkind1 = lty1.kind
+        lkind2 = lty2.kind
+        if lkind1 == lkind2:
+            if lkind1 in cls.CAST_MAP:
+                ret_val = cls.CAST_MAP[lkind1](cls, builder, lval1, lty2,
+                                               *args, **kws)
+        else:
+            map_index = (lkind1, lkind2)
+            if map_index in cls.CAST_MAP:
+                ret_val = cls.CAST_MAP[map_index](cls, builder, lval1, lty2,
+                                                  *args, **kws)
+        return ret_val
+
 # Variables placed on the stack. 
 #  They allow an indirection
 #  So, that when used in an operation, the correct
@@ -137,24 +206,13 @@ class Variable(object):
         if self._llvm:
             ret_val = self._llvm
             if typ is not None and typ != self.typ:
+                ret_val = None
                 ltyp = str_to_llvmtype(typ)
-                if ltyp.kind == ret_val.type.kind and builder:
-                    if ltyp.kind == lc.TYPE_POINTER:
-                        ret_val = builder.bitcast(ret_val, ltyp)
-                    elif typ[0] == 'i':
-                        if ltyp.width > ret_val.type.width:
-                            ret_val = builder.sext(ret_val, ltyp)
-                        else:
-                            print("Warning: Performing downcast.  May lose "
-                                  "information.")
-                            ret_val = builder.trunc(ret_val, ltyp)
-                    else:
-                        raise NotImplementedError("Don't know how to cast "
-                                                  "from %r to %r yet!" %
-                                                  (self.typ, typ))
-                else:
-                    raise ValueError("type mismatch (%r != %r.typ)" %
-                                     (typ, self))
+                if builder:
+                    ret_val = _LLVMCaster.build_cast(builder, self._llvm, ltyp)
+                if ret_val is None:
+                    raise ValueError("Unsupported cast (from %r.typ to %r)" %
+                                     (self, typ))
             return ret_val
         else:
             if typ is None:
@@ -178,6 +236,8 @@ class Variable(object):
 
 # Add complex, unsigned, and bool 
 def str_to_llvmtype(str):
+    if __debug__:
+        print("str_to_llvmtype(): str = %r" % (str,))
     n_pointer = 0
     if str.endswith('*'):
         n_pointer = str.count('*')
@@ -273,6 +333,8 @@ def typcmp(type1, type2):
 # Currently delegates casting to Variable.llvm(), but only in the
 # presence of a builder instance.
 def resolve_type(arg1, arg2, builder = None):
+    if __debug__:
+        print("resolve_type(): arg1 = %r, arg2 = %r" % (arg1, arg2))
     if arg1._llvm is not None:
         typ = arg1.typ
     elif arg2._llvm is not None:
@@ -595,6 +657,45 @@ class Translate(object):
         if __debug__:
             print self.mod
 
+    def _get_ee(self):
+        if self.ee is None:
+            self.ee = le.ExecutionEngine.new(self.mod)
+        return self.ee
+
+    def build_call_to_translated_function(self, target_translator, args):
+        # FIXME: At some point, I assume we'll actually want to index
+        # by argument types, so this will grab the best suited
+        # translation of a function based on the caller circumstance.
+        if len(args) != len(self.arg_types):
+            raise TypeError("Mismatched argument count in call to translated "
+                            "function (%r)." % (self.func))
+        ee = self._get_ee()
+        func_name = '%s_%d' % (self.func.__name__, id(self))
+        try:
+            lfunc_ptr_ptr = target_translator.mod.get_global_variable_named(
+                func_name)
+        except:
+            # FIXME: This is linkage at its grossest (and least
+            # dynamic - what if the called function is recompiled at
+            # some point?).  See if there is some way to link this up
+            # using symbols and module linkage settings.
+            lfunc_ptr_ty = self.lfunc.type
+            lfunc_ptr_ptr = target_translator.mod.add_global_variable(
+                lfunc_ptr_ty, func_name)
+            lfunc_ptr_ptr.initializer = lc.Constant.inttoptr(
+                lc.Constant.int(_intp, ee.get_pointer_to_function(self.lfunc)),
+                lfunc_ptr_ty)
+            lfunc_ptr_ptr.linkage = lc.LINKAGE_INTERNAL
+        lfunc = target_translator.builder.load(lfunc_ptr_ptr)
+        if __debug__:
+            print "build_call_to_translated_function():", str(lfunc)
+        largs = [arg.llvm(convert_to_strtype(param_typ),
+                          builder = target_translator.builder)
+                 for arg, param_typ in zip(args, self.arg_types)]
+        res = target_translator.builder.call(lfunc, largs)
+        res_typ = convert_to_strtype(self.ret_type)
+        return res, res_typ
+
     def has_pending_phi(self, instr_index, local_index):
         return ((instr_index in self.pending_phis) and 
                 (local_index in self.pending_phis[instr_index]))
@@ -750,16 +851,17 @@ class Translate(object):
             self._locals = next_locals[:]
 
     def get_ctypes_func(self, llvm=True):
-        if self.ee is None:
-            self.ee = le.ExecutionEngine.new(self.mod)
+        ee = self._get_ee()
         import ctypes
-        prototype = ctypes.CFUNCTYPE(convert_to_ctypes(self.ret_type),
-                                     *[convert_to_ctypes(x) for x in self.arg_types])
+        prototype = ctypes.CFUNCTYPE(
+            convert_to_ctypes(self.ret_type),
+            *[convert_to_ctypes(x) for x in self.arg_types])
         if llvm:
-            return prototype(self.ee.get_pointer_to_function(self.lfunc))
+            PY_CALL_TO_LLVM_CALL_MAP[self.func] = \
+                self.build_call_to_translated_function
+            return prototype(ee.get_pointer_to_function(self.lfunc))
         else:
             return prototype(self.func)
-        
 
     def make_ufunc(self, name=None):
         if self.ee is None:
@@ -999,6 +1101,8 @@ class Translate(object):
             self.stack = self.stack[:-arg]
         func = self.stack.pop(-1)
         ret_typ = None
+        if __debug__:
+            print("op_CALL_FUNCTION():", func)
         if func.val in PY_CALL_TO_LLVM_CALL_MAP:
             self._init_ma_obj()
             res, ret_typ = PY_CALL_TO_LLVM_CALL_MAP[func.val](self, args)
@@ -1204,12 +1308,20 @@ class Translate(object):
                     self.builder.gep(lval, [index_var.llvm(
                                 'i32', builder = self.builder)]))
             else:
+                if __debug__:
+                    print("op_BINARY_SUBSCR(): %r arr_var = %r (%r)\n%s" %
+                              ((i, op, arg), arr_var, str(arr_var._llvm),
+                               self.mod))
                 raise NotImplementedError(
                     "Unable to handle indexing on LLVM type '%s'." %
                     (str(ltype),))
         elif isinstance(arr_var.val, tuple):
             raise NotImplementedError("FIXME")
         else:
+            if __debug__:
+                print("op_BINARY_SUBSCR(): %r arr_var = %r (%r)\n%s" %
+                          ((i, op, arg), arr_var, str(arr_var._llvm),
+                           self.mod))
             raise NotImplementedError("Unable to handle indexing on objects "
                                       "of type %r." % (type(arr_var.val),))
         self.stack.append(Variable(result_val))
