@@ -27,3 +27,8 @@ def itercode(code):
             assert abs_rel == 'abs' or abs_rel == 'rel'
             i = dst if abs_rel == 'abs' else i + dst
 
+def debugout(val):
+    '''This is a magic function.  If you use it in compiled functions,
+    Numba should generate code for displaying the received value.'''
+    if __debug__:
+        print "debugout (non-translated):", val

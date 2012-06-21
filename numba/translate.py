@@ -10,7 +10,7 @@ import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 
-from utils import itercode
+from utils import itercode, debugout
 from ._ext import make_ufunc
 from .cfg import ControlFlowGraph
 from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
@@ -20,6 +20,8 @@ from .multiarray_api import MultiarrayAPI
 
 if __debug__:
     import pprint
+
+_int32_zero = lc.Constant.int(_int32, 0)
 
 # Translate Python bytecode to LLVM IR
 
@@ -327,6 +329,11 @@ def typcmp(type1, type2):
     else:
         return -1
 
+def typ_isa_number(typ):
+    ret_val = ((not typ.endswith('*')) and
+               (typ.startswith(('i', 'f'))))
+    return ret_val
+
 # Both inputs are Variable objects
 #  Resolves types on one of them. 
 #  Won't work if both need resolving
@@ -335,20 +342,53 @@ def typcmp(type1, type2):
 def resolve_type(arg1, arg2, builder = None):
     if __debug__:
         print("resolve_type(): arg1 = %r, arg2 = %r" % (arg1, arg2))
+    typ = None
+    typ1 = None
+    typ2 = None
     if arg1._llvm is not None:
-        typ = arg1.typ
-    elif arg2._llvm is not None:
-        typ = arg2.typ
+        typ1 = arg1.typ
     else:
         try:
             str_to_llvmtype(arg1.typ)
-            typ = arg1.typ
+            typ1 = arg1.typ
         except TypeError:
-            try:
-                str_to_llvmtype(arg2.typ)
-                typ = arg2.typ
-            except TypeError:
-                raise TypeError, "Both types not valid"
+            pass
+    if arg2._llvm is not None:
+        typ2 = arg2.typ
+    else:
+        try:
+            str_to_llvmtype(arg2.typ)
+            typ2 = arg2.typ
+        except TypeError:
+            pass
+    if typ1 is None and typ2 is None:
+        raise TypeError, "Both types not valid"
+    # The following is trying to enforce C-like upcasting rules where
+    # we try to do the following:
+    # * Use higher precision if the types are identical in kind.
+    # * Use floats instead of integers.
+    if typ1 is None:
+        typ = typ2
+    elif typ2 is None:
+        typ = typ1
+    else:
+        # FIXME: What about arithmetic operations on arrays?  (Though
+        # we'd need to support code generation for them first...)
+        if typ_isa_number(typ1) and typ_isa_number(typ2):
+            if typ1[0] == typ2[0]:
+                if int(typ1[1:]) > int(typ2[1:]):
+                    typ = typ1
+                else:
+                    typ = typ2
+            elif typ1[0] == 'f':
+                typ = typ1
+            elif typ2[0] == 'f':
+                typ = typ2
+        else:
+            # Fall-through case: just use the left hand operand's type...
+            typ = typ1
+    if __debug__:
+        print("resolve_type() ==> %r" % (typ,))
     return (typ,
             arg1.llvm(typ, builder = builder),
             arg2.llvm(typ, builder = builder))
@@ -398,58 +438,154 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
                           '<=':lc.ICMP_ULE,
                           '!=':lc.ICMP_NE}
 
-def _build_len(translator, args):
-    if (len(args) == 1 and
-        args[0]._llvm is not None and
-        args[0]._llvm.type == _numpy_array):
-        lfunc = None
-        shape_ofs = _numpy_array_field_ofs['shape']
-        res = translator.builder.load(
-            translator.builder.load(
-                translator.builder.gep(args[0]._llvm, [
-                        lc.Constant.int(_int32, 0),
-                        lc.Constant.int(_int32, shape_ofs)])))
-    else:
-        raise NotImplementedError("Currently unable to handle calls to len() "
-                                  "for arguments that are not Numpy arrays.")
-    return res, None
+class _LLVMModuleUtils(object):
+    __string_constants = {}
 
-def _get_py_incref(module):
-    try:
-        ret_val = module.get_function_named('Py_IncRef')
-    except:
-        ret_val = module.add_function(
-            lc.Type.function(_void_star, [_void_star]), 'Py_IncRef')
-    return ret_val
+    @classmethod
+    def get_printf(cls, module):
+        try:
+            ret_val = module.get_function_named('printf')
+        except:
+            ret_val = module.add_function(lc.Type.function(_int32, [_void_star]),
+                                          'printf')
+        return ret_val
 
-def _build_zeros_like(translator, args):
-    assert (len(args) == 1 and
+    @classmethod
+    def get_string_constant(cls, module, const_str):
+        if (module, const_str) in cls.__string_constants:
+            ret_val = cls.__string_constants[(module, const_str)]
+        else:
+            lconst_str = lc.Constant.stringz(const_str)
+            ret_val = module.add_global_variable(lconst_str.type, "__STR_%d" % 
+                                                 (len(cls.__string_constants),))
+            ret_val.initializer = lconst_str
+            ret_val.linkage = lc.LINKAGE_INTERNAL
+            cls.__string_constants[(module, const_str)] = ret_val
+        return ret_val
+
+    @classmethod
+    def build_print_string_constant(cls, translator, out_val):
+        # FIXME: This is just a hack to get things going.  There is a
+        # corner case where formatting markup in the string can cause
+        # undefined behavior, and for 100% correctness we'd have to
+        # escape string formatting sequences.
+        llvm_printf = cls.get_printf(translator.mod)
+        return translator.builder.call(llvm_printf, [
+                translator.builder.gep(cls.get_string_constant(translator.mod, 
+                                                               out_val),
+                                       [_int32_zero, _int32_zero])])
+
+    @classmethod
+    def build_print_integer(cls, translator, out_var):
+        llvm_printf = cls.get_printf(translator.mod)
+        return translator.builder.call(
+            translator.builder.bitcast(
+                llvm_printf, lc.Type.function(_int32, [_void_star, _intp])),
+            [translator.builder.gep(
+                    cls.get_string_constant(translator.mod,
+                                            "%d" if _intp.width < 64 else "%ld"),
+                    [_int32_zero, _int32_zero]),
+             out_var.llvm(llvmtype_to_strtype(_intp),
+                          builder = translator.builder)])
+
+    @classmethod
+    def build_print_float(cls, translator, out_var):
+        llvm_printf = cls.get_printf(translator.mod)
+        if int(out_var.typ[1:]) < 64:
+            fmt = "%g"
+            ltyp = lc.Type.float()
+            typ = "f32"
+        else:
+            fmt = "%lg"
+            ltyp = lc.Type.double()
+            typ = "f64"
+        return translator.builder.call(
+            translator.builder.bitcast(
+                llvm_printf, lc.Type.function(_int32, [_void_star, ltyp])),
+            [translator.builder.gep(cls.get_string_constant(translator.mod, fmt),
+                                    [_int32_zero, _int32_zero]),
+             out_var.llvm(typ, builder = translator.builder)])
+
+    @classmethod
+    def build_debugout(cls, translator, args):
+        if translator.optimize:
+            print("Warning: Optimization turned on, debug output code may "
+                  "be optimized out.")
+        res = cls.build_print_string_constant(translator, "debugout: ")
+        for arg in args:
+            arg_type = arg.typ
+            if arg.typ is None:
+                arg_type = type(arg.val)
+            if isinstance(arg.val, str):
+                res = cls.build_print_string_constant(translator, arg.val)
+            elif typ_isa_number(arg_type):
+                if arg_type[0] == 'i':
+                    cls.build_print_integer(translator, arg)
+                else:
+                    assert arg_type[0] == 'f'
+                    cls.build_print_float(translator, arg)
+            else:
+                raise NotImplementedError("Don't know how to output stuff of "
+                                          "type %r at present." % arg_type)
+        res = cls.build_print_string_constant(translator, "\n")
+        return res, None
+
+    @classmethod
+    def build_len(cls, translator, args):
+        if (len(args) == 1 and
             args[0]._llvm is not None and
-            args[0]._llvm.type == _numpy_array), (
-        "Expected Numpy array argument to numpy.zeros_like().")
-    larr = args[0]._llvm
-    largs = [translator.builder.load(
-            translator.builder.gep(larr, [
-                    lc.Constant.int(_int32, 0),
-                    lc.Constant.int(_int32,
-                                    _numpy_array_field_ofs[field_name])]))
-            for field_name in ('ndim', 'shape', 'descr')]
-    largs.append(lc.Constant.int(_int32, 0))
-    lfunc = translator.ma_obj.load_PyArray_Zeros(translator.mod,
-                                                 translator.builder)
-    res = translator.builder.bitcast(
-        translator.builder.call(
-            _get_py_incref(translator.mod),
-            [translator.builder.call(lfunc, largs)]),
-        _numpy_array)
-    if __debug__:
-        print "build_zeros_like(): lfunc =", str(lfunc)
-        print "build_zeros_like(): largs =", [str(arg) for arg in largs]
-    return res, args[0].typ
+            args[0]._llvm.type == _numpy_array):
+            lfunc = None
+            shape_ofs = _numpy_array_field_ofs['shape']
+            res = translator.builder.load(
+                translator.builder.load(
+                    translator.builder.gep(args[0]._llvm, [
+                            _int32_zero, lc.Constant.int(_int32, shape_ofs)])))
+        else:
+            raise NotImplementedError("Currently unable to handle calls to "
+                                      "len() for arguments that are not Numpy "
+                                      "arrays.")
+        return res, None
+
+    @classmethod
+    def get_py_incref(cls, module):
+        try:
+            ret_val = module.get_function_named('Py_IncRef')
+        except:
+            ret_val = module.add_function(
+                lc.Type.function(_void_star, [_void_star]), 'Py_IncRef')
+        return ret_val
+
+    @classmethod
+    def build_zeros_like(cls, translator, args):
+        assert (len(args) == 1 and
+                args[0]._llvm is not None and
+                args[0]._llvm.type == _numpy_array), (
+            "Expected Numpy array argument to numpy.zeros_like().")
+        larr = args[0]._llvm
+        largs = [translator.builder.load(
+                translator.builder.gep(larr, [
+                        _int32_zero,
+                        lc.Constant.int(_int32,
+                                        _numpy_array_field_ofs[field_name])]))
+                for field_name in ('ndim', 'shape', 'descr')]
+        largs.append(_int32_zero)
+        lfunc = translator.ma_obj.load_PyArray_Zeros(translator.mod,
+                                                     translator.builder)
+        res = translator.builder.bitcast(
+            translator.builder.call(
+                cls.get_py_incref(translator.mod),
+                [translator.builder.call(lfunc, largs)]),
+            _numpy_array)
+        if __debug__:
+            print "build_zeros_like(): lfunc =", str(lfunc)
+            print "build_zeros_like(): largs =", [str(arg) for arg in largs]
+        return res, args[0].typ
 
 PY_CALL_TO_LLVM_CALL_MAP = {
-    len : _build_len,
-    np.zeros_like : _build_zeros_like,
+    debugout : _LLVMModuleUtils.build_debugout,
+    len : _LLVMModuleUtils.build_len,
+    np.zeros_like : _LLVMModuleUtils.build_zeros_like,
 }
 
 class LLVMControlFlowGraph (ControlFlowGraph):
@@ -534,7 +670,7 @@ class LLVMControlFlowGraph (ControlFlowGraph):
         return ret_val
 
 class Translate(object):
-    def __init__(self, func, ret_type='d', arg_types=['d']):
+    def __init__(self, func, ret_type='d', arg_types=['d'], **kws):
         self.func = func
         self.fco = func.func_code
         self.names = self.fco.co_names
@@ -575,6 +711,8 @@ class Translate(object):
         self.setup_func()
         self.ee = None
         self.ma_obj = None
+        self.optimize = kws.pop('optimize', True)
+        self.flags = kws
 
     def setup_func(self):
         # The return type will not be known until the return
@@ -648,11 +786,12 @@ class Translate(object):
             getattr(self, 'op_'+name)(i, op, arg)
 
         # Perform code optimization
-        fpm = lp.FunctionPassManager.new(self.mod)
-        fpm.initialize()
-        fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
-        fpm.run(self.lfunc)
-        fpm.finalize()
+        if self.optimize:
+            fpm = lp.FunctionPassManager.new(self.mod)
+            fpm.initialize()
+            fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
+            fpm.run(self.lfunc)
+            fpm.finalize()
 
         if __debug__:
             print self.mod
@@ -1182,7 +1321,7 @@ class Translate(object):
                 raise NotImplementedError('LOAD_ATTR only supported for Numpy '
                                           'arrays.')
             res_addr = self.builder.gep(objarg_llvm_val, 
-                                        [lc.Constant.int(_int32, 0),
+                                        [_int32_zero,
                                          lc.Constant.int(_int32, field_index)])
             res = self.builder.load(res_addr)
         self.stack.append(Variable(res))
@@ -1242,7 +1381,7 @@ class Translate(object):
             strides = self.builder.load(
                 self.builder.gep(
                     arr_lval,
-                    [lc.Constant.int(_int32, 0),
+                    [_int32_zero,
                      lc.Constant.int(_int32,
                                      _numpy_array_field_ofs['strides'])]))
             index_lval = None
@@ -1276,10 +1415,9 @@ class Translate(object):
         data_ofs = _numpy_array_field_ofs['data']
         result_type = str_to_llvmtype(arr_var.typ[4:-1])
         data_ptr = self.builder.load(
-            self.builder.gep(
-                lval,
-                [lc.Constant.int(_int32, 0),
-                 lc.Constant.int(_int32, data_ofs)]))
+            self.builder.gep(lval,
+                             [_int32_zero,
+                              lc.Constant.int(_int32, data_ofs)]))
         if byte_ofs:
             data_ptr = self.builder.gep(data_ptr, [byte_ofs])
         ret_val = self.builder.gep(
@@ -1339,7 +1477,6 @@ class Translate(object):
             print "op_STORE_SUBSCR():", i, op, arg
             print("op_STORE_SUBSCR(): %r[%r] = %r" % (arr_var, index_var,
                                                       store_var))
-            print self.mod
         if arr_var._llvm is not None:
             arr_lval = arr_var._llvm
             arr_ltype = arr_lval.type
@@ -1371,3 +1508,6 @@ class Translate(object):
         else:
             raise NotImplementedError('Indexing on objects/values of type %r.' %
                                       (type(arr_var.val),))
+
+    def op_POP_TOP(self, i, op, arg):
+        self.stack.pop(-1)

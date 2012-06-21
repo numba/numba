@@ -8,6 +8,7 @@ computations.
 # ______________________________________________________________________
 
 from numba.decorators import numba_compile
+from numba.utils import debugout
 
 import unittest
 
@@ -22,6 +23,7 @@ def mandel_1(real_coord, imag_coord, max_iters):
     set given a fixed number of iterations.
     Inspired by code at http://wiki.cython.org/examples/mandelbrot
     '''
+    debugout("mandel_1() ", real_coord, " ", imag_coord)
     # Ideally we'd want to use a for loop, but we'll need to be able
     # to detect and desugar for loops over range/xrange/arange first.
     i = 0
@@ -70,6 +72,15 @@ def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
             image[x, y, 1] = colors[col_index, 1]
             image[x, y, 2] = colors[col_index, 2]
 
+try:
+    mandel_driver_1c = numba_compile(
+        arg_types = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])(mandel_driver_1)
+except:
+    if __debug__:
+        import traceback as tb
+        tb.print_exc()
+    mandel_driver_1c = None
+
 def make_palette():
     '''Shamefully stolen from
     http://wiki.cython.org/examples/mandelbrot, though we did correct
@@ -101,8 +112,9 @@ class TestMandelbrot(unittest.TestCase):
                                  mandel_1(real, imag, 20))
 
     def test_mandel_driver_1(self):
-        mandel_driver_1c = numba_compile(arg_types = [
-                'd', 'd', 'd', 'i', [['b']], [[['b']]]])(mandel_driver_1)
+        self.assertNotEqual(mandel_driver_1c, None, "Failed to compile "
+                            "mandel_driver_1().  Traceback should be output if "
+                            "__debug__ is set.")
         palette = make_palette()
         control_image = np.zeros((50,50,3), dtype = np.uint8)
         mandel_driver_1(-1., 1., -1., len(palette) - 1, palette, control_image)
