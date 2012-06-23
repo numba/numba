@@ -8,7 +8,6 @@ computations.
 # ______________________________________________________________________
 
 from numba.decorators import numba_compile
-from numba.utils import debugout
 
 import unittest
 
@@ -23,7 +22,6 @@ def mandel_1(real_coord, imag_coord, max_iters):
     set given a fixed number of iterations.
     Inspired by code at http://wiki.cython.org/examples/mandelbrot
     '''
-    debugout("mandel_1() ", real_coord, " ", imag_coord)
     # Ideally we'd want to use a for loop, but we'll need to be able
     # to detect and desugar for loops over range/xrange/arange first.
     i = 0
@@ -116,12 +114,13 @@ class TestMandelbrot(unittest.TestCase):
                             "mandel_driver_1().  Traceback should be output if "
                             "__debug__ is set.")
         palette = make_palette()
-        control_image = np.zeros((50,50,3), dtype = np.uint8)
-        mandel_driver_1(-1., 1., -1., len(palette) - 1, palette, control_image)
+        control_image = np.zeros((50, 50, 3), dtype = np.uint8)
+        mandel_driver_1(-1., 1., -1., len(palette), palette, control_image)
         test_image = np.zeros_like(control_image)
         self.assertTrue((control_image - test_image == control_image).all())
-        mandel_driver_1c(-1., 1., -1., len(palette) - 1, palette, test_image)
-        self.assertTrue((control_image - test_image == 0).all())
+        mandel_driver_1c(-1., 1., -1., len(palette), palette, test_image)
+        image_diff = control_image - test_image
+        self.assertTrue((image_diff == 0).all())
 
 # ______________________________________________________________________
 

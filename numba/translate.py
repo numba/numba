@@ -446,8 +446,9 @@ class _LLVMModuleUtils(object):
         try:
             ret_val = module.get_function_named('printf')
         except:
-            ret_val = module.add_function(lc.Type.function(_int32, [_void_star]),
-                                          'printf')
+            ret_val = module.add_function(
+                lc.Type.function(_int32, [_void_star], True),
+                'printf')
         return ret_val
 
     @classmethod
@@ -471,40 +472,35 @@ class _LLVMModuleUtils(object):
         # escape string formatting sequences.
         llvm_printf = cls.get_printf(translator.mod)
         return translator.builder.call(llvm_printf, [
-                translator.builder.gep(cls.get_string_constant(translator.mod, 
+                translator.builder.gep(cls.get_string_constant(translator.mod,
                                                                out_val),
                                        [_int32_zero, _int32_zero])])
 
     @classmethod
-    def build_print_integer(cls, translator, out_var):
+    def build_print_number(cls, translator, out_var):
         llvm_printf = cls.get_printf(translator.mod)
-        return translator.builder.call(
-            translator.builder.bitcast(
-                llvm_printf, lc.Type.function(_int32, [_void_star, _intp])),
-            [translator.builder.gep(
-                    cls.get_string_constant(translator.mod,
-                                            "%d" if _intp.width < 64 else "%ld"),
-                    [_int32_zero, _int32_zero]),
-             out_var.llvm(llvmtype_to_strtype(_intp),
-                          builder = translator.builder)])
-
-    @classmethod
-    def build_print_float(cls, translator, out_var):
-        llvm_printf = cls.get_printf(translator.mod)
-        if int(out_var.typ[1:]) < 64:
-            fmt = "%g"
-            ltyp = lc.Type.float()
-            typ = "f32"
+        if out_var.typ[0] == 'i':
+            if int(out_var.typ[1:]) < 64:
+                fmt = "%d"
+                typ = "i32"
+            else:
+                fmt = "%ld"
+                typ = "i64"
+        elif out_var.typ[0] == 'f':
+            if int(out_var.typ[1:]) < 64:
+                fmt = "%f"
+                typ = "f32"
+            else:
+                fmt = "%lf"
+                typ = "f64"
         else:
-            fmt = "%lg"
-            ltyp = lc.Type.double()
-            typ = "f64"
-        return translator.builder.call(
-            translator.builder.bitcast(
-                llvm_printf, lc.Type.function(_int32, [_void_star, ltyp])),
-            [translator.builder.gep(cls.get_string_constant(translator.mod, fmt),
-                                    [_int32_zero, _int32_zero]),
-             out_var.llvm(typ, builder = translator.builder)])
+            raise NotImplementedError("FIXME (type %r not supported in "
+                                      "build_print_number())" % (out_var.typ,))
+        return translator.builder.call(llvm_printf, [
+                translator.builder.gep(
+                    cls.get_string_constant(translator.mod, fmt),
+                    [_int32_zero, _int32_zero]),
+                out_var.llvm(typ, builder = translator.builder)])
 
     @classmethod
     def build_debugout(cls, translator, args):
@@ -519,11 +515,7 @@ class _LLVMModuleUtils(object):
             if isinstance(arg.val, str):
                 res = cls.build_print_string_constant(translator, arg.val)
             elif typ_isa_number(arg_type):
-                if arg_type[0] == 'i':
-                    cls.build_print_integer(translator, arg)
-                else:
-                    assert arg_type[0] == 'f'
-                    cls.build_print_float(translator, arg)
+                res = cls.build_print_number(translator, arg)
             else:
                 raise NotImplementedError("Don't know how to output stuff of "
                                           "type %r at present." % arg_type)
@@ -581,6 +573,38 @@ class _LLVMModuleUtils(object):
             print "build_zeros_like(): lfunc =", str(lfunc)
             print "build_zeros_like(): largs =", [str(arg) for arg in largs]
         return res, args[0].typ
+
+    @classmethod
+    def get_py_modulo(cls, module, typ):
+        modulo_fn = '__py_modulo_%s' % typ
+        try:
+            ret_val = module.get_function_named(modulo_fn)
+        except:
+            ltyp = str_to_llvmtype(typ)
+            ret_val = module.add_function(
+                lc.Type.function(ltyp, [ltyp, ltyp]), modulo_fn)
+            ret_val.linkage = lc.LINKAGE_INTERNAL
+            entry_block = ret_val.append_basic_block('entry')
+            different_sign_block = ret_val.append_basic_block('different_sign')
+            join_block = ret_val.append_basic_block('join')
+            builder = lc.Builder.new(entry_block)
+            arg2 = ret_val.args[1]
+            srem = builder.srem(ret_val.args[0], arg2)
+            width = int(typ[1:])
+            lbits_shifted = lc.Constant.int(str_to_llvmtype(typ), width - 1)
+            srem_sign = builder.lshr(srem, lbits_shifted)
+            arg2_sign = builder.lshr(arg2, lbits_shifted)
+            same_sign = builder.icmp(lc.ICMP_EQ, srem_sign, arg2_sign)
+            builder.cbranch(same_sign, join_block, different_sign_block)
+            builder.position_at_end(different_sign_block)
+            different_sign_res = builder.add(srem, arg2)
+            builder.branch(join_block)
+            builder.position_at_end(join_block)
+            res = builder.phi(ltyp)
+            res.add_incoming(srem, entry_block)
+            res.add_incoming(different_sign_res, different_sign_block)
+            builder.ret(res)
+        return ret_val
 
 PY_CALL_TO_LLVM_CALL_MAP = {
     debugout : _LLVMModuleUtils.build_debugout,
@@ -1099,7 +1123,7 @@ class Translate(object):
 
     def op_LOAD_CONST(self, i, op, arg):
         const = Variable(self.constants[arg])
-        self.stack.append(const)        
+        self.stack.append(const)
     
     def op_BINARY_ADD(self, i, op, arg):
         arg2 = self.stack.pop(-1)
@@ -1172,8 +1196,14 @@ class Translate(object):
         if typ[0] == 'f':
             res = self.builder.frem(arg1, arg2)
         else: # typ[0] == 'i'
-            res = self.builder.srem(arg1, arg2)
-            # FIXME:  Add urem
+            # NOTE: There is a discrepancy between LLVM remainders and
+            # Python's modulo operator.  See:
+            # http://llvm.org/docs/LangRef.html#i_srem
+            # We handle this using a special function.
+            mod_fn = _LLVMModuleUtils.get_py_modulo(self.mod, typ)
+            res = self.builder.call(mod_fn, [arg1, arg2])
+            # FIXME: Add unsigned integer modulo (which should be the
+            # same as urem).
         self.stack.append(Variable(res))
 
     def op_BINARY_POWER(self, i, op, arg):
