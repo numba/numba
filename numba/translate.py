@@ -10,12 +10,13 @@ import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 
-from utils import itercode, debugout
+from utils import itercode, debugout, Complex64, Complex128
 from ._ext import make_ufunc
 from .cfg import ControlFlowGraph
 from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
-    _void_star, _pyobject_head, _trace_refs_, _head_len, _numpy_struct, \
-    _numpy_array, _numpy_array_field_ofs
+    _void_star, _float, _double, _complex64, _complex128, _pyobject_head, \
+    _trace_refs_, _head_len, _numpy_struct,  _numpy_array, \
+    _numpy_array_field_ofs
 from .multiarray_api import MultiarrayAPI
 
 if __debug__:
@@ -54,6 +55,10 @@ def llvmtype_to_strtype(typ):
                               # otherwise it won't ever be used.
         # FIXME: Need to find a way to stash dtype somewhere in here.
         return 'arr[]'
+    elif typ == _complex64:
+        return 'c64'
+    elif typ == _complex128:
+        return 'c128'
     elif typ.kind == lc.TYPE_POINTER:
         if typ.pointee.kind == lc.TYPE_FUNCTION:
             return ['func'] + typ.pointee.args
@@ -72,6 +77,8 @@ def pythontype_to_strtype(typ):
         return 'f64'
     elif issubclass(typ, int):
         return 'i%d' % _plat_bits
+    elif issubclass(typ, complex):
+        return 'c128'
     elif issubclass(typ, (types.BuiltinFunctionType, types.FunctionType)):
         return ["func"]
     elif issubclass(typ, tuple):
@@ -105,6 +112,11 @@ class DelayedObj(object):
 
     def get_stop(self):
         return self.args[0 if (len(self.args) == 1) else 1]
+
+class MethodReference(object):
+    def __init__(self, object_var, py_method):
+        self.object_var = object_var
+        self.py_method = py_method
 
 class _LLVMCaster(object):
     # NOTE: Using a class to lower namespace polution here.  The
@@ -218,14 +230,19 @@ class Variable(object):
             return ret_val
         else:
             if typ is None:
-                typ = 'f64'
+                typ = 'f64' if self.typ is None else self.typ
             if typ == 'f64':
                 res = lc.Constant.real(lc.Type.double(), float(self.val))
             elif typ == 'f32':
                 res = lc.Constant.real(lc.Type.float(), float(self.val))
             elif typ[0] == 'i':
-                res = lc.Constant.int(lc.Type.int(int(typ[1:])), 
+                res = lc.Constant.int(lc.Type.int(int(typ[1:])),
                                       int(self.val))
+            elif typ[0] == 'c':
+                ltyp = _float if typ[1:] == '64' else _double
+                res = lc.Constant.struct([
+                        lc.Constant.real(ltyp, self.val.real),
+                        lc.Constant.real(ltyp, self.val.imag)])
             elif typ[0] == 'func':
                 res = map_to_function(self.val, typ[1:], mod)
             return res
@@ -252,6 +269,11 @@ def str_to_llvmtype(str):
     elif str[0] == 'i':
         num = int(str[1:])
         ret_val = lc.Type.int(num)
+    elif str[0] == 'c':
+        if str[1:] == '64':
+            ret_val = _complex64
+        elif str[1:] == '128':
+            ret_val = _complex128
     elif str.startswith('arr['):
         ret_val = _numpy_array
     else:
@@ -302,7 +324,17 @@ def convert_to_ctypes(typ):
         if __debug__:
             print("convert_to_ctypes(): n_pointer = %d, typ' = %r" %
                   (n_pointer, typ))
-    ret_val = _typecodes[np.dtype(typ).str]
+    dtype_str = np.dtype(typ).str
+    if dtype_str[1] == 'c':
+        if dtype_str[2:] == '8':
+            ret_val = Complex64
+        elif dtype_str[2:] == '16':
+            ret_val = Complex128
+        else:
+            raise NotImplementedError("Numba does not currently support "
+                                      "ctypes wrapping for type %r." % (typ,))
+    else:
+        ret_val = _typecodes[np.dtype(typ).str]
     for _ in xrange(n_pointer):
         ret_val = ctypes.POINTER(ret_val)
     return ret_val
@@ -554,6 +586,7 @@ class _LLVMModuleUtils(object):
                 args[0]._llvm is not None and
                 args[0]._llvm.type == _numpy_array), (
             "Expected Numpy array argument to numpy.zeros_like().")
+        translator.init_multiarray()
         larr = args[0]._llvm
         largs = [translator.builder.load(
                 translator.builder.gep(larr, [
@@ -606,10 +639,30 @@ class _LLVMModuleUtils(object):
             builder.ret(res)
         return ret_val
 
+    @classmethod
+    def build_conj(cls, translator, args):
+        print args
+        assert ((len(args) == 1) and (args[0]._llvm is not None) and
+                (args[0]._llvm.type in (_complex64, _complex128)))
+        larg = args[0]._llvm
+        elem_ltyp = _float if larg.type == _complex64 else _double
+        new_imag_lval = translator.builder.fmul(
+            lc.Constant.real(elem_ltyp, -1.),
+            translator.builder.extract_value(larg, 1))
+        assert hasattr(translator.builder, 'insert_value'), (
+            "llvm-py support for LLVMBuildInsertValue() required to build "
+            "code for complex conjugates.")
+        res = translator.builder.insert_value(larg, new_imag_lval, 1)
+        return res, None
+
 PY_CALL_TO_LLVM_CALL_MAP = {
     debugout : _LLVMModuleUtils.build_debugout,
     len : _LLVMModuleUtils.build_len,
     np.zeros_like : _LLVMModuleUtils.build_zeros_like,
+    np.complex64.conj : _LLVMModuleUtils.build_conj,
+    np.complex128.conj : _LLVMModuleUtils.build_conj,
+    np.complex64.conjugate : _LLVMModuleUtils.build_conj,
+    np.complex128.conjugate : _LLVMModuleUtils.build_conj,
 }
 
 class LLVMControlFlowGraph (ControlFlowGraph):
@@ -1016,9 +1069,14 @@ class Translate(object):
     def get_ctypes_func(self, llvm=True):
         ee = self._get_ee()
         import ctypes
-        prototype = ctypes.CFUNCTYPE(
-            convert_to_ctypes(self.ret_type),
-            *[convert_to_ctypes(x) for x in self.arg_types])
+        restype = convert_to_ctypes(self.ret_type)
+        prototype = ctypes.CFUNCTYPE(restype,
+                                     *[convert_to_ctypes(x)
+                                       for x in self.arg_types])
+        if hasattr(restype, 'make_ctypes_prototype_wrapper'):
+            # See numba.utils.ComplexMixin for an example of
+            # make_ctypes_prototype_wrapper().
+            prototype = restype.make_ctypes_prototype_wrapper(prototype)
         if llvm:
             PY_CALL_TO_LLVM_CALL_MAP[self.func] = \
                 self.build_call_to_translated_function
@@ -1062,9 +1120,14 @@ class Translate(object):
         llvm_args = [arg.llvm(typ) for typ, arg in zip(typs, args)]
         return lfunc, llvm_args
 
-    def _init_ma_obj(self):
+    def init_multiarray(self):
         '''Builds the MultiarrayAPI object and adds a PyArray_API
-        variable to the current module under construction.'''
+        variable to the current module under construction.
+
+        Should be called by code generators (like
+        _LLVMModuleUtils.build_zeros_like()) that build Numpy-like
+        functionality to ensure the ma_obj member has been
+        initialized.'''
         if self.ma_obj is None:
             self.ma_obj = MultiarrayAPI()
             self.ma_obj.set_PyArray_API(self.mod)
@@ -1273,8 +1336,10 @@ class Translate(object):
         if __debug__:
             print("op_CALL_FUNCTION():", func)
         if func.val in PY_CALL_TO_LLVM_CALL_MAP:
-            self._init_ma_obj()
             res, ret_typ = PY_CALL_TO_LLVM_CALL_MAP[func.val](self, args)
+        elif isinstance(func.val, MethodReference):
+            res, ret_val = PY_CALL_TO_LLVM_CALL_MAP[func.val.py_method](
+                self, [func.val.object_var])
         else:
             func, args = self.func_resolve_type(func, args)
             if func is None: # A delayed-result (i.e. range or xrange)
@@ -1343,17 +1408,34 @@ class Translate(object):
             # Make this a map on types in the future (thinking this is
             # what typemap was destined to do...)
             objarg_llvm_val = objarg.llvm()
+            res = None
             if __debug__:
                 print "op_LOAD_ATTR():", objarg_llvm_val.type
             if objarg_llvm_val.type == _numpy_array:
                 field_index = _numpy_array_field_ofs[self.names[arg]]
+                field_indices = [_int32_zero,
+                                 lc.Constant.int(_int32, field_index)]
+            elif objarg_llvm_val.type in (_complex64, _complex128):
+                # Re-wrap the instance, if we had to convert to an LLVM value.
+                objarg = objarg if objarg._llvm else Variable(objarg_llvm_val)
+                field_name = self.names[arg]
+                if field_name == 'real':
+                    res = self.builder.extract_value(objarg_llvm_val, 0)
+                elif field_name == 'imag':
+                    res = self.builder.extract_value(objarg_llvm_val, 1)
+                elif objarg_llvm_val.type == _complex64:
+                    res = MethodReference(objarg,
+                                          getattr(np.complex64, field_name))
+                else:
+                    res = MethodReference(objarg,
+                                          getattr(np.complex128, field_name))
             else:
-                raise NotImplementedError('LOAD_ATTR only supported for Numpy '
-                                          'arrays.')
-            res_addr = self.builder.gep(objarg_llvm_val, 
-                                        [_int32_zero,
-                                         lc.Constant.int(_int32, field_index)])
-            res = self.builder.load(res_addr)
+                raise NotImplementedError(
+                    'LOAD_ATTR does not presently support LLVM type %r.' %
+                    (str(objarg_llvm_val.type),))
+            if res is None:
+                res_addr = self.builder.gep(objarg_llvm_val, field_indices)
+                res = self.builder.load(res_addr)
         self.stack.append(Variable(res))
 
     def op_JUMP_ABSOLUTE(self, i, op, arg):
