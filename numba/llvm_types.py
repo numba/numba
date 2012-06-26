@@ -45,7 +45,7 @@ _numpy_struct = lc.Type.struct(_pyobject_head+\
        _void_star,          # base
        _void_star,          # descr
        _int32,              # flags
-       _void_star,          # weakreflist 
+       _void_star,          # weakreflist
        _void_star,          # maskna_dtype
        _void_star,          # maskna_data
        _intp_star,          # masna_strides

@@ -3,7 +3,7 @@ import ctypes
 from numpy import complex64, complex128
 
 def itercode(code):
-    """Return a generator of byte-offset, opcode, and argument 
+    """Return a generator of byte-offset, opcode, and argument
     from a byte-code-string
     """
     i = 0
