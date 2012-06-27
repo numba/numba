@@ -84,8 +84,8 @@ class Complex128 (ctypes.Structure, ComplexMixin):
 
 def get_minivect_context():
     from .minivect import miniast
-    from . import types
+    from . import _numba_types
 
     context = miniast.Context()
-    context.typemapper = types.TypeMapper(context)
+    context.typemapper = _numba_types.NumbaTypeMapper(context)
     return context

@@ -10,11 +10,26 @@ __all__ = minitypes.__all__ + [
     'f4', 'f8', 'f16', 'c8', 'c16', 'c32',
 ]
 
+minitypes.Type.is_numba_type = False
+class NumbaType(minitypes.Type):
+    is_numba_type = True
+    is_iterator = False
 
-class TupleType(minitypes.ObjectType):
+class TupleType(NumbaType, minitypes.ObjectType):
     name = "tuple"
 
 tuple_ = TupleType()
+
+class IteratorType(NumbaType, minitypes.ObjectType):
+    is_iterator = True
+    subtypes = ['base_type']
+
+    def __init__(self, base_type, **kwds):
+        super(IteratorType, self).__init__(**kwds)
+        self.base_type = base_type
+
+    def __repr__(self):
+        return "iterator<%s>" % (self.base_type,)
 
 #
 ### Type shorthands

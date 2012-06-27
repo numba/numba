@@ -1,3 +1,7 @@
+import functools
+
+from . import naming, utils, type_inference
+
 
 # Create a new callable object
 #  that creates a fast version of Python code using LLVM
@@ -62,6 +66,32 @@ def vectorize(func):
         import numpy
         return numpy.vectorize(func)
 
+context = utils.get_minivect_context()
+
+def function(f):
+    cache = {}
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        key = args + tuple(kwargs[k] for k in sorted(kwargs))
+        if key in cache:
+            compiled_func = cache[key]
+        else:
+            type_inferer = type_inference.TypeInferer(context, f, key)
+            type_inferer.infer_types()
+
+            types = [context.typemapper.from_python(v) for v in key]
+            func_name = naming.specialized_mangle(f.__name__, types)
+            if __debug__:
+                print 'Inferred return type:', type_inferer.return_type
+            dec = numba_compile(type_inferer.return_type, types,
+                                func_name=func_name)
+            cache[key] = compiled_func = dec(f)
+
+        return compiled_func(*args, **kwargs)
+
+    return wrapper
+
+
 # XXX Proposed name; compile() would mask builtin of same name.
 def numba_compile(*args, **kws):
     def _numba_compile(func):
@@ -70,7 +100,7 @@ def numba_compile(*args, **kws):
         if func in __tr_map__:
             print("Warning: Previously compiled version of %r may be "
                   "garbage collected!" % (func,))
-        t = Translate(func, *args, **kws)
+        t = Translate(context, func, *args, **kws)
         t.translate()
         __tr_map__[func] = t
         return t.get_ctypes_func(llvm)

@@ -144,72 +144,6 @@ class _LLVMCaster(object):
                                                   *args, **kws)
         return ret_val
 
-# Variables placed on the stack.
-#  They allow an indirection
-#  So, that when used in an operation, the correct
-#  LLVM type can be inserted.
-class Variable(object):
-    def __init__(self, val, argtyp = None, exact_typ = None):
-        if isinstance(val, Variable):
-            self.val = val.val
-            self._llvm = val._llvm
-            self.typ = val.typ
-            return
-        self.val = val
-        if isinstance(val, lc.Value):
-            self._llvm = val
-            if argtyp is None:
-                if exact_typ is None:
-                    self.typ = llvmtype_to_strtype(val.type)
-                else:
-                    self.typ = exact_typ
-            else:
-                self.typ = convert_to_strtype(argtyp)
-        else:
-            self._llvm = None
-            self.typ = pythontype_to_strtype(type(val))
-
-    def __repr__(self):
-        return ('<Variable(val=%r, _llvm=%r, typ=%r)>' %
-                (self.val, self._llvm, self.typ))
-
-    def llvm(self, typ=None, mod=None, builder = None):
-        if self._llvm:
-            ret_val = self._llvm
-            if typ is not None and typ != self.typ:
-                ret_val = None
-                ltyp = str_to_llvmtype(typ)
-                if builder:
-                    ret_val = _LLVMCaster.build_cast(builder, self._llvm, ltyp)
-                if ret_val is None:
-                    raise ValueError("Unsupported cast (from %r.typ to %r)" %
-                                     (self, typ))
-            return ret_val
-        else:
-            if typ is None:
-                typ = 'f64' if self.typ is None else self.typ
-            if typ == 'f64':
-                res = lc.Constant.real(lc.Type.double(), float(self.val))
-            elif typ == 'f32':
-                res = lc.Constant.real(lc.Type.float(), float(self.val))
-            elif typ[0] == 'i':
-                res = lc.Constant.int(lc.Type.int(int(typ[1:])),
-                                      int(self.val))
-            elif typ[0] == 'c':
-                ltyp = _float if typ[1:] == '64' else _double
-                res = lc.Constant.struct([
-                        lc.Constant.real(ltyp, self.val.real),
-                        lc.Constant.real(ltyp, self.val.imag)])
-            elif typ[0] == 'func':
-                res = map_to_function(self.val, typ[1:], mod)
-            return res
-
-    def is_phi(self):
-        return isinstance(self._llvm, lc.PHINode)
-
-    def is_module(self):
-        return isinstance(self.val, types.ModuleType)
-
 
 _compare_mapping_float = {'>':lc.FCMP_OGT,
                            '<':lc.FCMP_OLT,
@@ -508,9 +442,11 @@ class LLVMControlFlowGraph (ControlFlowGraph):
         self.update_for_ssa()
         return ret_val
 
-class Translate(object):
-    def __init__(self, func, ret_type='d', arg_types=['d'], **kws):
+class CodeIterator(object):
+    def __init__(self, context, func, **kwds):
+        self.context = context
         self.func = func
+        self.func_name = kwds.get('func_name', func.__name__)
         self.fco = func.func_code
         self.names = self.fco.co_names
         self.varnames = self.fco.co_varnames
@@ -526,6 +462,9 @@ class Translate(object):
                 # builtins is an attribtue.
                 self._myglobals[name] = getattr(__builtin__, name, None)
 
+class Translate(CodeIterator):
+    def __init__(self, context, func, ret_type, arg_types, **kwds):
+        super(Translate, self).__init__(context, func, **kwds)
         # NOTE: Was seeing weird corner case where
         # llvm.core.Module.new() was not returning a module object,
         # thinking this was caused by compiling the same function
@@ -566,7 +505,7 @@ class Translate(object):
         argnames = self.fco.co_varnames[:self.fco.co_argcount]
         self.arg_ltypes = [convert_to_llvmtype(x) for x in self.arg_types]
         ty_func = lc.Type.function(self.ret_ltype, self.arg_ltypes)
-        self.lfunc = self.mod.add_function(ty_func, self.func.func_name)
+        self.lfunc = self.mod.add_function(ty_func, self.func_name)
         assert isinstance(self.lfunc, lc.Function), (
             "Expected %r from llvm-py, got instance of type %r, however." %
             (lc.Function, type(self.lfunc)))
