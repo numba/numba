@@ -81,3 +81,11 @@ class Complex64 (ctypes.Structure, ComplexMixin):
 class Complex128 (ctypes.Structure, ComplexMixin):
     _fields_ = [('real', ctypes.c_double), ('imag', ctypes.c_double)]
     _numpy_ty_ = complex128
+
+def get_minivect_context():
+    from .minivect import miniast
+    from . import types
+
+    context = miniast.Context()
+    context.typemapper = types.TypeMapper(context)
+    return context

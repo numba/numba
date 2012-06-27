@@ -1,19 +1,27 @@
-from .minivect.minitypes import *
+import math
+
+import numpy as np
+
+from numba.minivect.minitypes import *
+from numba.minivect import miniast, minitypes
+
+__all__ = minitypes.__all__ + [
+    'O', 'b', 'i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8',
+    'f4', 'f8', 'f16', 'c8', 'c16', 'c32',
+]
+
+
+class TupleType(minitypes.ObjectType):
+    name = "tuple"
+
+tuple_ = TupleType()
 
 #
 ### Type shorthands
 #
 
-Py_ssize_t = Py_ssize_t_Type()
-char = CharType()
-uchar = CharType(signed=False)
-int_ = IntType()
-bool_ = BoolType()
-object_ = ObjectType()
-
 O = object_
 b = bool_
-
 i1 = int8
 i2 = int16
 i4 = int32
@@ -25,33 +33,70 @@ u8 = uint64
 
 f4 = float_
 f8 = double
-f16 = longdouble
+f16 = float128
 
-# Convert llvm Type object to kind-bits string
-def llvmtype_to_strtype(typ):
-    if typ.kind == lc.TYPE_FLOAT:
-        return 'f32'
-    elif typ.kind == lc.TYPE_DOUBLE:
-        return 'f64'
-    elif typ.kind == lc.TYPE_INTEGER:
-        return 'i%d' % typ.width
-    elif typ == _numpy_array: # NOTE: Checks for Numpy arrays need to
-    # happen before the more general
-    # recognition of pointer types,
-    # otherwise it won't ever be used.
-        # FIXME: Need to find a way to stash dtype somewhere in here.
-        return 'arr[]'
-    elif typ.kind == lc.TYPE_POINTER:
-        if typ.pointee.kind == lc.TYPE_FUNCTION:
-            return ['func'] + typ.pointee.args
+c8 = complex64
+c16 = complex128
+c32 = complex256
+
+class NumbaTypeMapper(minitypes.TypeMapper):
+    def to_llvm(self, type):
+        if type.is_array:
+            return _numpy_array
+        elif type.is_complex:
+            raise NotImplementedError("Complex types not implemented yet")
+
+        return super(NumbaTypeMapper, self).to_llvm(type)
+
+    def from_python(self, value):
+        if isinstance(value, np.ndarray):
+            dtype = _map_dtype(value.dtype)
+            return minitypes.ArrayType(dtype, value.ndim,
+                                       is_c_contig=value.flags['C_CONTIGUOUS'],
+                                       is_f_contig=value.flags['F_CONTIGUOUS'])
+        elif isinstance(value, tuple):
+            return tuple_
         else:
-            n_pointer = 1
-            typ = typ.pointee
-            while typ.kind == lc.TYPE_POINTER:
-                n_pointer += 1
-                typ = typ.pointee
-            return "%s%s" % (llvmtype_to_strtype(typ), "*" * n_pointer)
-    raise NotImplementedError("FIXME: LLVM type conversions for '%s'!" % (typ,))
+            return super(NumbaTypeMapper, self).from_python(value)
+
+def _map_dtype(dtype):
+    """
+    >>> _map_dtype(np.dtype(np.int32))
+    int16
+    >>> _map_dtype(np.dtype(np.object))
+    PyObject *
+    >>> _map_dtype(np.dtype(np.float64))
+    double
+    >>> _map_dtype(np.dtype(np.complex128))
+    complex128
+    """
+    item_idx = int(math.log(dtype.itemsize))
+    if dtype.kind == 'i':
+        return [i1, i2, i4, i8][item_idx]
+    elif dtype.kind == 'u':
+        return [u1, u2, u4, u8][item_idx]
+    elif dtype.kind == 'f':
+        if dtype.itemsize == 2:
+            pass # half floats not supported yet
+        elif dtype.itemsize == 4:
+            return f4
+        elif dtype.itemsize == 8:
+            return f8
+        elif dtype.itemsize == 16:
+            return f16
+    elif dtype.kind == 'b':
+        return i1
+    elif dtype.kind == 'c':
+        if dtype.itemsize == 8:
+            return c8
+        elif dtype.itemsize == 16:
+            return c16
+        elif dtype.itemsize == 32:
+            return c32
+    elif dtype.kind == 'O':
+        return O
+
+    raise NotImplementedError("dtype %s not supported" % (dtype,))
 
 # We don't support all types....
 def pythontype_to_strtype(typ):
@@ -66,6 +111,7 @@ def pythontype_to_strtype(typ):
 
 # Add complex, unsigned, and bool
 def str_to_llvmtype(str):
+    # STR -> LLVM
     if __debug__:
         print("str_to_llvmtype(): str = %r" % (str,))
     n_pointer = 0
@@ -112,6 +158,7 @@ def convert_to_llvmtype(typ):
     return str_to_llvmtype(_dtypeish_to_str(typ))
 
 def convert_to_ctypes(typ):
+    # STR -> CTYPES
     import ctypes
     from numpy.ctypeslib import _typecodes
     if isinstance(typ, list):
@@ -136,6 +183,7 @@ def convert_to_ctypes(typ):
     return ret_val
 
 def convert_to_strtype(typ):
+    # LLVM -> STR
     # FIXME: This current mapping preserves dtype information, but
     # loses ndims.
     arr = 0
@@ -244,3 +292,7 @@ def func_resolve_type(mod, func, args):
 
     llvm_args = [arg.llvm(typ) for typ, arg in zip(typs, args)]
     return lfunc, llvm_args
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
