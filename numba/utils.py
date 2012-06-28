@@ -89,3 +89,5 @@ def get_minivect_context():
     context = miniast.Context()
     context.typemapper = _numba_types.NumbaTypeMapper(context)
     return context
+
+context = get_minivect_context()

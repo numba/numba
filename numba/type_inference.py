@@ -1,48 +1,17 @@
 import opcode
 
-from .minivect import minierror
+from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
-
-class Variable(object):
-    """
-    Variables placed on the stack. They allow an indirection
-    so, that when used in an operation, the correct LLVM type can be inserted.
-    """
-
-    def __init__(self, type, is_local=False, is_global=False,
-                 is_constant=False, name=None):
-        self.name = name
-        self.type = type
-        self.is_local = is_local
-        self.is_constant = is_constant
-        self.is_global = is_global
-
-    @classmethod
-    def from_variable(cls, variable, **kwds):
-        result = cls(variable.type)
-        vars(result).update(kwds)
-        return result
-
-    def __repr__(self):
-        args = []
-        if self.is_local:
-            args.append("is_local=True")
-        if self.is_global:
-            args.append("is_global=True")
-        if self.is_constant:
-            args.append("is_constant=True")
-        if self.name:
-            args.append(name)
-
-        if args:
-            extra_info = ", ".join(args)
-        else:
-            extra_info = ""
-
-        return '<Variable(type=%s%s)>' % (self.type, extra_info)
+from .symtab import Variable
 
 class TypeInferer(translate.CodeIterator):
-    def __init__(self, context, func, input_arguments):
+    """
+    Type inference. Initialize with a minivect context, a Python function,
+    and either runtime function argument values or their given types (as
+    a FunctionType).
+    """
+
+    def __init__(self, context, func, func_signature=None):
         super(TypeInferer, self).__init__(context, func)
         # Name of locals -> type
         self.symtab = {}
@@ -50,9 +19,8 @@ class TypeInferer(translate.CodeIterator):
         self.variables = {}
         self.stack = []
 
-        self.init_globals()
-        self.init_locals(input_arguments)
-
+        self.func_signature = func_signature
+        self.given_return_type = func_signature.return_type
         self.return_variables = []
         self.return_type = None
 
@@ -60,6 +28,9 @@ class TypeInferer(translate.CodeIterator):
         """
         Infer types for the function.
         """
+        self.init_globals()
+        self.init_locals()
+
         for i, op, arg in utils.itercode(self.costr):
             name = opcode.opname[op]
             method = getattr(self, 'op_' + name, None)
@@ -69,31 +40,38 @@ class TypeInferer(translate.CodeIterator):
         # todo: in case of unpromotable types, return object?
         self.return_type = self.return_variables[0].type
         for return_variable in self.return_variables[1:]:
-            self.return_type = self.promote(self.return_type,
-                                            return_variable.type)
+            self.return_type = self.promote_types(
+                        self.return_type, return_variable.type)
+
+        ret_type = self.func_signature.return_type
+        if ret_type and ret_type != self.return_type:
+            self.assert_assignable(ret_type, self.return_type)
+            self.return_type = self.promote_types(ret_type, self.return_type)
+
+        self.func_signature = minitypes.FunctionType(
+                return_type=self.return_type, args=self.func_signature.args)
 
     def init_globals(self):
         for global_name in self.names:
             self.symtab[global_name] = Variable(None, name=global_name)
 
-    def init_locals(self, input_arguments):
-        for i, arg in enumerate(input_arguments):
-            type = self.type_from_pyval(arg)
+    def init_locals(self):
+        arg_types = self.func_signature.args
+        for i, arg_type in enumerate(arg_types):
             varname = self.varnames[i]
-            self.symtab[varname] = Variable(type, is_local=True, name=varname)
+            self.symtab[varname] = Variable(arg_type, is_local=True, name=varname)
 
-        for varname in self.varnames[len(input_arguments):]:
+        for varname in self.varnames[len(arg_types):]:
             self.symtab[varname] = Variable(None, is_local=True, name=varname)
 
+    def promote_types(self, t1, t2):
+        return self.context.promote_types(t1, t2)
+
     def promote(self, v1, v2):
-        return self.context.promote_types(v1.type, v2.type)
+        return self.promote_types(v1.type, v2.type)
 
     def assert_assignable(self, dst_type, src_type):
-        self.promote(dst_type, src_type)
-
-    def getvar(self, arg):
-        varname = self.varnames[arg]
-        return self.symtab[varname]
+        self.promote_types(dst_type, src_type)
 
     def type_from_pyval(self, pyval):
         return self.context.typemapper.from_python(pyval)
@@ -103,10 +81,10 @@ class TypeInferer(translate.CodeIterator):
         self.stack.append(variable)
 
     def op_LOAD_FAST(self, i, op, arg):
-        self.append(i, self.getvar(arg))
+        self.append(i, self.getlocal(arg))
 
     def op_STORE_FAST(self, i, op, arg):
-        oldvar = self.getvar(arg)
+        oldvar = self.getlocal(arg)
         newvar = self.stack.pop()
         if oldvar.type is None:
             oldvar.type = newvar.type
@@ -115,10 +93,11 @@ class TypeInferer(translate.CodeIterator):
                 self.assert_assignable(oldvar.type, newvar.type)
                 oldvar.type = self.promote(oldvar, newvar)
 
+        oldvar.state = newvar
         self.variables[i] = oldvar
 
     def op_LOAD_GLOBAL(self, i, op, arg):
-        self.append(i, self.getvar(arg))
+        self.append(i, self.getglobal(arg))
 
     def op_LOAD_CONST(self, i, op, arg):
         const = self.constants[arg]
@@ -129,7 +108,9 @@ class TypeInferer(translate.CodeIterator):
     def binop(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        self.append(i, Variable(self.promote(arg1, arg2)))
+        variable = Variable(self.promote(arg1, arg2))
+        variable.state = arg1, arg2
+        self.append(i, variable)
 
     op_BINARY_ADD = binop
     op_INPLACE_ADD = binop
@@ -160,16 +141,17 @@ class TypeInferer(translate.CodeIterator):
 
         if func.is_global and func.name and func.name in ('range', 'xrange'):
             type = _types.IteratorType(minitypes.int_) # todo: Make this Py_ssize_t
-            variable = Variable.from_variable(type, type=type)
+            result = Variable.from_variable(type, type=type)
         elif func.type.is_function:
-            variable = Variable(func.type.return_type)
+            result = Variable(func.type.return_type)
         elif func.type.is_object:
-            variable = Variable(minitypes.object_)
+            result = Variable(minitypes.object_)
         else:
             # TODO: implement
             raise NotImplementedError
 
-        self.append(i, variable)
+        result.state = func, args
+        self.append(i, result)
 
     def op_GET_ITER(self, i, op, arg):
         self.append(i, self.stack.pop())
@@ -218,4 +200,7 @@ class TypeInferer(translate.CodeIterator):
         self.variables[i] = Variable(result_type)
 
     def op_POP_TOP(self, i, op, arg):
+        self.variables[i] = self.stack.pop()
+
+    def op_POP_JUMP_IF_FALSE(self, i, op, arg):
         self.variables[i] = self.stack.pop()

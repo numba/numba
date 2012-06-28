@@ -1,6 +1,7 @@
 import functools
 
 from . import naming, utils, type_inference
+from .minivect import minitypes
 
 
 # Create a new callable object
@@ -68,6 +69,32 @@ def vectorize(func):
 
 context = utils.get_minivect_context()
 
+def _compile(func, ret_type=None, arg_types=None, **kwds):
+    global __tr_map__
+
+    func_signature = minitypes.FunctionType(return_type=ret_type,
+                                            args=arg_types)
+    type_inferer = type_inference.TypeInferer(
+            context, func, func_signature=func_signature)
+    type_inferer.infer_types()
+
+    func_signature = type_inferer.func_signature
+    func_name = naming.specialized_mangle(func.__name__,
+                                          type_inferer.func_signature.args)
+
+    if __debug__:
+        print "Symtab:", type_inferer.symtab
+
+    if func in __tr_map__:
+        print("Warning: Previously compiled version of %r may be "
+              "garbage collected!" % (func,))
+    t = Translate(context, func, func_signature=func_signature,
+                  func_name=func_name, symtab=type_inferer.symtab,
+                  variables=type_inferer.variables, **kwds)
+    t.translate()
+    __tr_map__[func] = t
+    return t.get_ctypes_func(llvm)
+
 def function(f):
     cache = {}
     @functools.wraps(f)
@@ -76,34 +103,18 @@ def function(f):
         if key in cache:
             compiled_func = cache[key]
         else:
-            type_inferer = type_inference.TypeInferer(context, f, key)
-            type_inferer.infer_types()
-
             types = [context.typemapper.from_python(v) for v in key]
-            func_name = naming.specialized_mangle(f.__name__, types)
-            if __debug__:
-                print 'Inferred return type:', type_inferer.return_type
-            dec = numba_compile(type_inferer.return_type, types,
-                                func_name=func_name)
-            cache[key] = compiled_func = dec(f)
+            compiled_func = _compile(f, ret_type=None, arg_types=types)
+            cache[key] = compiled_func
 
         return compiled_func(*args, **kwargs)
-
     return wrapper
 
 
 # XXX Proposed name; compile() would mask builtin of same name.
 def numba_compile(*args, **kws):
     def _numba_compile(func):
-        global __tr_map__
-        llvm = kws.pop('llvm', True)
-        if func in __tr_map__:
-            print("Warning: Previously compiled version of %r may be "
-                  "garbage collected!" % (func,))
-        t = Translate(context, func, *args, **kws)
-        t.translate()
-        __tr_map__[func] = t
-        return t.get_ctypes_func(llvm)
+        return _compile(func, *args, **kwargs)
     return _numba_compile
 
 from kerneltranslate import Translate as KernelTranslate

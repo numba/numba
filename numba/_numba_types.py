@@ -1,4 +1,5 @@
 import math
+import types
 
 import numpy as np
 
@@ -13,7 +14,10 @@ __all__ = minitypes.__all__ + [
 minitypes.Type.is_numba_type = False
 class NumbaType(minitypes.Type):
     is_numba_type = True
+
     is_iterator = False
+    is_phi = False
+    is_module = True
 
 class TupleType(NumbaType, minitypes.ObjectType):
     name = "tuple"
@@ -30,6 +34,18 @@ class IteratorType(NumbaType, minitypes.ObjectType):
 
     def __repr__(self):
         return "iterator<%s>" % (self.base_type,)
+
+class PHIType(NumbaType):
+    """
+    Type for phi() values.
+    """
+    is_phi = True
+
+class ModuleType(NumbaType):
+    is_module = True
+
+phi = PHIType()
+module_type = ModuleType()
 
 #
 ### Type shorthands
@@ -59,7 +75,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
         if type.is_array:
             return _numpy_array
         elif type.is_complex:
-            raise NotImplementedError("Complex types not implemented yet")
+            return lc.Type.struct([type.base_type, type.base_type])
 
         return super(NumbaTypeMapper, self).to_llvm(type)
 
@@ -71,6 +87,8 @@ class NumbaTypeMapper(minitypes.TypeMapper):
                                        is_f_contig=value.flags['F_CONTIGUOUS'])
         elif isinstance(value, tuple):
             return tuple_
+        elif isinstance(value, types.ModuleType):
+            return module_type
         else:
             return super(NumbaTypeMapper, self).from_python(value)
 
