@@ -11,7 +11,7 @@ import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 
-from utils import itercode, debugout, Complex64, Complex128
+from utils import itercode, debugout
 from ._ext import make_ufunc
 from .cfg import ControlFlowGraph
 from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
@@ -21,6 +21,7 @@ from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
 from .multiarray_api import MultiarrayAPI
 from .symtab import Variable
 from . import _numba_types as _types
+from ._numba_types import Complex64, Complex128
 
 if __debug__:
     import pprint
@@ -551,7 +552,7 @@ class Translate(CodeIterator):
             # Store away arguments in locals
             variable = self.symtab[name]
             variable.lvalue = self.lfunc.args[i]
-            self._locals[i] = variable.lvalue
+            self._locals[i] = variable
 
         entry = self.lfunc.append_basic_block('Entry')
         assert isinstance(entry, lc.BasicBlock), (
@@ -677,7 +678,7 @@ class Translate(CodeIterator):
         for pred_lblock in pred_lblocks:
             phi.add_incoming(value, pred_lblock)
 
-    def add_phi_incomming(self, phi, crnt_block, pred, local):
+    def add_phi_incoming(self, phi, crnt_block, pred, local):
         '''Take one of three actions:
 
         1. If the predecessor block has already been visited, add its
@@ -697,13 +698,12 @@ class Translate(CodeIterator):
             assert pred_locals[local] is not None, ("Internal error.  "
                 "Local value definition missing from block that has "
                 "already been visited.")
-            # FIXME: fix and readd the below statement !!!
-            #phi.add_incoming(pred_locals[local].llvm(
-            #        llvmtype_to_strtype(phi.type)), self.blocks[pred])
+            variable = pred_locals[local]
+            phi.add_incoming(variable.lvalue, self.blocks[pred])
         else:
             reaching_defs = self.cfg.get_reaching_definitions(crnt_block)
             if __debug__:
-                print("add_phi_incomming(): reaching_defs = %s\n    "
+                print("add_phi_incoming(): reaching_defs = %s\n    "
                       "crnt_block=%r, pred=%r, local=%r" %
                       (pprint.pformat(reaching_defs), crnt_block, pred, local))
             definition_block = reaching_defs[pred][local]
@@ -713,8 +713,9 @@ class Translate(CodeIterator):
                 assert defn_locals[local] is not None, ("Internal error.  "
                     "Local value definition missing from block that has "
                     "already been visited.")
-                phi.add_incomming(defn_locals[local].llvm(
-                        llvmtype_to_strtype(phi.type)), self.blocks[pred])
+                variable = defn_locals[local]
+                # variable.llvm(llvmtype_to_strtype(phi.type))
+                phi.add_incomming(variable.lvalue, self.blocks[pred])
             else:
                 definition_index = self.cfg.blocks_writer[definition_block][
                     local]
@@ -731,12 +732,11 @@ class Translate(CodeIterator):
                 reaching_defs = self.cfg.get_reaching_definitions(crnt_block)
                 for local in phis_needed:
                     # Infer type from current local value.
-                    #oldlocal = self._locals[local]
-                    oldlocal = self.getlocal(local).lvalue
+                    oldlocal = self._locals[local]
                     # NOTE: Also seeing builder.phi returning
                     # non-PHINode instances intermittently (see NOTE
                     # above for llvm.core.Module.new()).
-                    phi = self.builder.phi(oldlocal)
+                    phi = self.builder.phi(oldlocal.ltype)
                     assert isinstance(phi, lc.PHINode), (
                         "Intermittent llvm-py error encountered (builder.phi()"
                         " result type was %r, not %r)." %
@@ -744,7 +744,7 @@ class Translate(CodeIterator):
                     newlocal = Variable(type=_types.phi, lvalue=phi)
                     self._locals[local] = newlocal
                     for pred in preds:
-                        self.add_phi_incomming(phi, crnt_block, pred, local)
+                        self.add_phi_incoming(phi, crnt_block, pred, local)
                     # This is a local write, even if it is synthetic,
                     # so check to see if we are responsible for back
                     # patching any pending phis.
@@ -782,7 +782,6 @@ class Translate(CodeIterator):
         predecessors.  If not, change out the locals to those of a
         predecessor that has already been symbolically run.
         '''
-        # todo: FIX THIS
         if self.crnt_block not in self.cfg.blocks_in[i]:
             next_locals = self.get_preceding_locals(self.cfg.blocks_in[i])
             if next_locals is None:
@@ -810,8 +809,8 @@ class Translate(CodeIterator):
         import ctypes
         restype = _types.convert_to_ctypes(self.ret_type)
         prototype = ctypes.CFUNCTYPE(restype,
-                                     *[convert_to_ctypes(x)
-                                       for x in self.arg_types])
+                                     *[_types.convert_to_ctypes(x)
+                                           for x in self.arg_types])
         if hasattr(restype, 'make_ctypes_prototype_wrapper'):
             # See numba.utils.ComplexMixin for an example of
             # make_ctypes_prototype_wrapper().
@@ -909,20 +908,18 @@ class Translate(CodeIterator):
 
     def op_LOAD_FAST(self, i, op, arg):
         variable = self.variables[i]
-        variable.lvalue = self.getlocal(arg).lvalue
+        variable.lvalue = self._locals[arg].lvalue
 
     def op_STORE_FAST(self, i, op, arg):
-        oldval = self.variables[i]
-        newval = oldval.state
+        oldval = self._locals[arg]
+        newval = self.variables[i].state
         # TODO: handle delayedobj types
         if isinstance(newval.lvalue, DelayedObj):
             self._generate_for_loop(i, op, arg, newval)
         else:
             if self.has_pending_phi(i, arg):
                 self.handle_pending_phi(i, arg, newval)
-            # TODO: create runtime temporary?
-            self._locals[arg] = newval.lvalue
-            oldval.lvalue = newval.lvalue
+            self._locals[arg] = newval
 
     def op_LOAD_GLOBAL(self, i, op, arg):
         self.variables[i].lvalue = self._myglobals[self.names[arg]]

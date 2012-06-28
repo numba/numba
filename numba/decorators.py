@@ -82,8 +82,8 @@ def _compile(func, ret_type=None, arg_types=None, **kwds):
     func_name = naming.specialized_mangle(func.__name__,
                                           type_inferer.func_signature.args)
 
-    if __debug__:
-        print "Symtab:", type_inferer.symtab
+    # if __debug__:
+    #     print "Symtab:", type_inferer.symtab
 
     if func in __tr_map__:
         print("Warning: Previously compiled version of %r may be "
@@ -93,7 +93,7 @@ def _compile(func, ret_type=None, arg_types=None, **kwds):
                   variables=type_inferer.variables, **kwds)
     t.translate()
     __tr_map__[func] = t
-    return t.get_ctypes_func(llvm)
+    return t.get_ctypes_func(kwds.get('llvm', True))
 
 def function(f):
     cache = {}
