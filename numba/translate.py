@@ -363,7 +363,7 @@ def typcmp(type1, type2):
 
 def typ_isa_number(typ):
     ret_val = ((not typ.endswith('*')) and
-               (typ.startswith(('i', 'f'))))
+               (typ.startswith(('i', 'f', 'c'))))
     return ret_val
 
 # Both inputs are Variable objects
@@ -412,7 +412,11 @@ def resolve_type(arg1, arg2, builder = None):
                     typ = typ1
                 else:
                     typ = typ2
-            elif typ1[0] == 'f':
+            elif typ1[0] == 'c': # Complex values trump all...
+                typ = typ1
+            elif typ2[0] == 'c':
+                typ = typ2
+            elif typ1[0] == 'f': # Floating point values trump integers...
                 typ = typ1
             elif typ2[0] == 'f':
                 typ = typ2
@@ -514,25 +518,33 @@ class _LLVMModuleUtils(object):
         if out_var.typ[0] == 'i':
             if int(out_var.typ[1:]) < 64:
                 fmt = "%d"
-                typ = "i32"
+                fmt_args = [out_var.llvm("i32", builder = translator.builder)]
             else:
                 fmt = "%ld"
-                typ = "i64"
+                fmt_args = [out_var.llvm("i64", builder = translator.builder)]
         elif out_var.typ[0] == 'f':
             if int(out_var.typ[1:]) < 64:
                 fmt = "%f"
-                typ = "f32"
+                fmt_args = [out_var.llvm("f32", builder = translator.builder)]
             else:
                 fmt = "%lf"
-                typ = "f64"
+                fmt_args = [out_var.llvm("f64", builder = translator.builder)]
+        elif out_var.typ[0] == 'c':
+            if int(out_var.typ[1:]) < 128:
+                fmt = "(%f%+fj)"
+                lvar = out_var.llvm(out_var.typ, builder = translator.builder)
+            else:
+                fmt = "(%lf%+lfj)"
+                lvar = out_var.llvm(out_var.typ, builder = translator.builder)
+            fmt_args = [translator.builder.extract_value(lvar, 0),
+                        translator.builder.extract_value(lvar, 1)]
         else:
             raise NotImplementedError("FIXME (type %r not supported in "
                                       "build_print_number())" % (out_var.typ,))
         return translator.builder.call(llvm_printf, [
                 translator.builder.gep(
                     cls.get_string_constant(translator.mod, fmt),
-                    [_int32_zero, _int32_zero]),
-                out_var.llvm(typ, builder = translator.builder)])
+                    [_int32_zero, _int32_zero])] + fmt_args)
 
     @classmethod
     def build_debugout(cls, translator, args):
@@ -1168,6 +1180,42 @@ class Translate(object):
         self.op_COMPARE_OP(i, None, opcode.cmp_op.index(cmp_op_str))
         self.op_POP_JUMP_IF_FALSE(i, None, false_jump_target)
 
+    def _generate_complex_op(self, op, arg1, arg2):
+        rres, ires = op(self.builder.extract_value(arg1, 0),
+                        self.builder.extract_value(arg1, 1),
+                        self.builder.extract_value(arg2, 0),
+                        self.builder.extract_value(arg2, 1))
+        ret_val = self.builder.insert_value(
+            self.builder.insert_value(lc.Constant.undef(arg1.type), rres, 0),
+            ires, 1)
+        return ret_val
+
+    def _complex_add(self, arg1r, arg1i, arg2r, arg2i):
+        return (self.builder.fadd(arg1r, arg2r),
+                self.builder.fadd(arg1i, arg2i))
+
+    def _complex_sub(self, arg1r, arg1i, arg2r, arg2i):
+        return (self.builder.fsub(arg1r, arg2r),
+                self.builder.fsub(arg1i, arg2i))
+
+    def _complex_mul(self, arg1r, arg1i, arg2r, arg2i):
+        return (self.builder.fsub(self.builder.fmul(arg1r, arg2r),
+                                  self.builder.fmul(arg1i, arg2i)),
+                self.builder.fadd(self.builder.fmul(arg1i, arg2r),
+                                  self.builder.fmul(arg1r, arg2i)))
+
+    def _complex_div(self, arg1r, arg1i, arg2r, arg2i):
+        divisor = self.builder.fadd(self.builder.fmul(arg2r, arg2r),
+                                    self.builder.fmul(arg2i, arg2i))
+        return (self.builder.fdiv(
+                        self.builder.fadd(self.builder.fmul(arg1r, arg2r),
+                                          self.builder.fmul(arg1i, arg2i)),
+                        divisor),
+                self.builder.fdiv(
+                        self.builder.fsub(self.builder.fmul(arg1i, arg2r),
+                                          self.builder.fmul(arg1i, arg2r)),
+                        divisor))
+
     def op_LOAD_FAST(self, i, op, arg):
         self.stack.append(Variable(self._locals[arg]))
 
@@ -1196,8 +1244,12 @@ class Translate(object):
         typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.fadd(arg1, arg2)
-        else: # typ[0] == 'i'
+        elif typ[0] == 'i':
             res = self.builder.add(arg1, arg2)
+        elif typ[0] == 'c':
+            res = self._generate_complex_op(self._complex_add, arg1, arg2)
+        else:
+            raise NotImplementedError("FIXME")
         self.stack.append(Variable(res))
 
     def op_INPLACE_ADD(self, i, op, arg):
@@ -1206,25 +1258,36 @@ class Translate(object):
         # Verify this, or figure out what the corner cases are that
         # require a separate symbolic execution procedure.
         return self.op_BINARY_ADD(i, op, arg)
-  
+
     def op_BINARY_SUBTRACT(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
         typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.fsub(arg1, arg2)
-        else: # typ[0] == 'i'
+        elif typ[0] == 'i':
             res = self.builder.sub(arg1, arg2)
+        elif typ[0] == 'c':
+            res = self._generate_complex_op(self._complex_sub, arg1, arg2)
+        else:
+            raise NotImplementedError("FIXME")
         self.stack.append(Variable(res))
-    
+
+    def op_INPLACE_SUBTRACT(self, i, op, arg):
+        return self.op_BINARY_SUBTRACT(i, op, arg)
+
     def op_BINARY_MULTIPLY(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
         typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.fmul(arg1, arg2)
-        else: # typ[0] == 'i'
+        elif typ[0] == 'i':
             res = self.builder.mul(arg1, arg2)
+        elif typ[0] == 'c':
+            res = self._generate_complex_op(self._complex_mul, arg1, arg2)
+        else:
+            raise NotImplementedError("FIXME")
         self.stack.append(Variable(res))
 
     def op_INPLACE_MULTIPLY(self, i, op, arg):
@@ -1237,10 +1300,17 @@ class Translate(object):
         typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.fdiv(arg1, arg2)
-        else: # typ[0] == 'i'
+        elif typ[0] == 'i':
             res = self.builder.sdiv(arg1, arg2)
-            # XXX: FIXME-need udiv as
+            # XXX: FIXME-need udiv as well.
+        elif typ[0] == 'c':
+            res = self._generate_complex_op(self._complex_div, arg1, arg2)
+        else:
+            raise NotImplementedError("FIXME")
         self.stack.append(Variable(res))
+
+    def op_INPLACE_DIVIDE(self, i, op, arg):
+        return self.op_BINARY_DIVIDE(i, op, arg)
 
     def op_BINARY_FLOOR_DIVIDE(self, i, op, arg):
         arg2 = self.stack.pop(-1)
@@ -1258,7 +1328,7 @@ class Translate(object):
         typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.frem(arg1, arg2)
-        else: # typ[0] == 'i'
+        elif typ[0] == 'i': # typ[0] == 'i'
             # NOTE: There is a discrepancy between LLVM remainders and
             # Python's modulo operator.  See:
             # http://llvm.org/docs/LangRef.html#i_srem
@@ -1267,6 +1337,8 @@ class Translate(object):
             res = self.builder.call(mod_fn, [arg1, arg2])
             # FIXME: Add unsigned integer modulo (which should be the
             # same as urem).
+        else:
+            raise NotImplementedError('% for type %r' % (typ,))
         self.stack.append(Variable(res))
 
     def op_BINARY_POWER(self, i, op, arg):
@@ -1275,8 +1347,10 @@ class Translate(object):
         args = [arg1.llvm(arg1.typ), arg2.llvm(arg2.typ)]
         if arg2.typ[0] == 'i':
             INTR = getattr(lc, 'INTR_POWI')
-        else: # make sure it's float
+        elif arg2.typ[0] == 'f': # make sure it's float
             INTR = getattr(lc, 'INTR_POW')
+        else:
+            raise NotImplementedError('** for type %r' % (typ,))
         typs = [str_to_llvmtype(x.typ) for x in [arg1, arg2]]
         func = lc.Function.intrinsic(self.mod, INTR, typs)
         res = self.builder.call(func, args)

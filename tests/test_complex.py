@@ -12,6 +12,7 @@ from numba.decorators import numba_compile
 from numba.utils import debugout
 
 import numpy
+import itertools
 
 # ______________________________________________________________________
 
@@ -29,6 +30,13 @@ def get_conj_fn (in_num):
 
 def get_complex_constant_fn ():
     return (3. + 4.j).conjugate()
+
+def prod_sum_fn (coeff, inval, ofs):
+    debugout('prod_sum_fn(): coeff = ', coeff, ', inval = ', inval, ', ofs = ',
+             ofs)
+    ret_val = (coeff * inval) + ofs
+    debugout('prod_sum_fn() ==> ', ret_val)
+    return ret_val
 
 # ______________________________________________________________________
 
@@ -68,6 +76,19 @@ class TestComplex (unittest.TestCase):
             arg_types = [], ret_type = 'D')(get_complex_constant_fn)
         self.assertEqual(get_complex_constant_fn(),
                          compiled_get_complex_constant_fn())
+
+    def test_prod_sum_fn (self):
+        compiled_prod_sum_fn = numba_compile(arg_types = ['D', 'D', 'D'],
+                                             ret_type = 'D')(prod_sum_fn)
+        rng = numpy.arange(-1., 1.1, 0.25)
+        for ar, ai, xr, xi, br, bi in itertools.product(rng, rng, rng, rng, rng,
+                                                        rng):
+            a = numpy.complex128(ar + ai * 1j)
+            x = numpy.complex128(xr + xi * 1j)
+            b = numpy.complex128(br + bi * 1j)
+            print a, x, b
+            self.assertEqual(prod_sum_fn(a, x, b),
+                             compiled_prod_sum_fn(a, x, b))
 
 # ______________________________________________________________________
 
