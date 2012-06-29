@@ -7,6 +7,7 @@ if-then-else statements.
 '''
 # ______________________________________________________________________
 
+import numba
 from numba.decorators import numba_compile
 
 import unittest

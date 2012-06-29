@@ -1,5 +1,6 @@
 import functools
 
+import numba
 from . import naming, utils, type_inference
 from .minivect import minitypes
 
@@ -116,7 +117,9 @@ def function(f):
 # XXX Proposed name; compile() would mask builtin of same name.
 def numba_compile(*args, **kws):
     def _numba_compile(func):
-        return _compile(func, *args, **kwargs)
+        kws.setdefault('ret_type', numba.float64)
+        kws.setdefault('arg_types', [numba.float64])
+        return _compile(func, *args, **kws)
     return _numba_compile
 
 from kerneltranslate import Translate as KernelTranslate
