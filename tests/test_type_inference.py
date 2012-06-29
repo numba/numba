@@ -12,14 +12,14 @@ import unittest
 
 # ______________________________________________________________________
 
-@function
-def simple_func(arg):
+def _simple_func(arg):
     if arg > 0.:
         result = 22.
     else:
         result = 42.
     return result
 
+simple_func = function(_simple_func)
 # ______________________________________________________________________
 
 class TestTypeInference(unittest.TestCase):
@@ -30,4 +30,5 @@ class TestTypeInference(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+    # import dis; dis.dis(_simple_func)
     unittest.main()

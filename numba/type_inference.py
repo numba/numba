@@ -84,14 +84,14 @@ class TypeInferer(translate.CodeIterator):
         self.append(i, self.getlocal(arg))
 
     def op_STORE_FAST(self, i, op, arg):
-        oldvar = self.getlocal(arg)
+        oldvar = Variable.from_variable(self.getlocal(arg))
         newvar = self.stack.pop()
         if oldvar.type is None:
             oldvar.type = newvar.type
-        else:
-            if oldvar.type != newvar.type:
-                self.assert_assignable(oldvar.type, newvar.type)
-                oldvar.type = self.promote(oldvar, newvar)
+            self.getlocal(arg).type = newvar.type
+        elif oldvar.type != newvar.type:
+            self.assert_assignable(oldvar.type, newvar.type)
+            oldvar.type = self.promote(oldvar, newvar)
 
         oldvar.state = newvar
         self.variables[i] = oldvar

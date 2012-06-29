@@ -82,8 +82,10 @@ def _compile(func, ret_type=None, arg_types=None, **kwds):
     func_name = naming.specialized_mangle(func.__name__,
                                           type_inferer.func_signature.args)
 
-    # if __debug__:
-    #     print "Symtab:", type_inferer.symtab
+    if __debug__:
+        print "Symtab:", type_inferer.symtab
+        print func_signature.return_type, func_signature.args
+        print type_inferer.return_variables
 
     if func in __tr_map__:
         print("Warning: Previously compiled version of %r may be "
