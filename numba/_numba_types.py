@@ -20,7 +20,10 @@ class NumbaType(minitypes.Type):
 
     is_iterator = False
     is_phi = False
-    is_module = True
+    is_module = False
+    is_global = False
+    is_builtin = False
+    is_module_attr = False
 
 class TupleType(NumbaType, minitypes.ObjectType):
     name = "tuple"
@@ -46,6 +49,18 @@ class PHIType(NumbaType):
 
 class ModuleType(NumbaType):
     is_module = True
+
+class GlobalType(NumbaType):
+    is_global = True
+
+class BuiltinType(NumbaType):
+    is_builtin = True
+
+class ModuleAttributeType(NumbaType):
+    is_module_attr = True
+
+class RangeType(NumbaType):
+    is_range = True
 
 phi = PHIType()
 module_type = ModuleType()
@@ -233,7 +248,7 @@ def convert_to_ctypes(type):
         else:
             return ctypes.c_longdouble
     elif type.is_int:
-        item_idx = int(math.log(dtype.itemsize))
+        item_idx = int(math.log(type.itemsize))
         if type.is_signed:
             values = [ctypes.c_int8, ctypes.c_int16, ctypes.c_int32,
                       ctypes.c_int64]

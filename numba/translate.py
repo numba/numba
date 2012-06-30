@@ -480,6 +480,24 @@ class CodeIterator(object):
         return self.symtab[varname]
 
 
+def create_binop(float_op, int_op):
+    def binop(self, i, op, arg):
+        result = self.variables[i]
+        arg1, arg2 = result.state
+
+        if arg1.type.is_float and arg1.type == arg2.type:
+            result.lvalue = getattr(self.builder, float_op)(arg1.lvalue,
+                                                            arg2.lvalue)
+        elif arg1.type.is_int and arg2.type.is_int: #arg1.type == arg2.type:
+            result.lvalue = getattr(self.builder, int_op)(arg1.lvalue,
+                                                          arg2.lvalue,
+                                                          "binop_tmp")
+        else:
+            raise NotImplementedError("Binop on types (%s, %s)" % (arg1.type,
+                                                                   arg2.type))
+
+    return binop
+
 class Translate(CodeIterator):
     def __init__(self, context, func, func_signature, symtab, variables,
                  optimize=True, func_name=None, **kwds):
@@ -534,7 +552,13 @@ class Translate(CodeIterator):
         self.ret_ltype = self.to_llvm(self.ret_type)
         # The arg_ltypes we will be able to get from what is passed in
         argnames = self.fco.co_varnames[:self.fco.co_argcount]
-        self.arg_ltypes = [self.to_llvm(type) for type in self.arg_types]
+
+        self.arg_ltypes = []
+        for arg_type in self.arg_types:
+            if arg_type.is_array:
+                arg_type = arg_type.dtype.pointer()
+            self.arg_ltypes.append(self.to_llvm(arg_type))
+
         ty_func = lc.Type.function(self.ret_ltype, self.arg_ltypes)
         self.lfunc = self.mod.add_function(ty_func, self.func_name)
         assert isinstance(self.lfunc, lc.Function), (
@@ -573,6 +597,8 @@ class Translate(CodeIterator):
         self.cfg.compute_dataflow()
         if __debug__:
             self.cfg.pprint()
+
+        self.previous_instruction = -1
         for i, op, arg in itercode(self.costr):
             name = opcode.opname[op]
             # Change the builder if the line-number
@@ -597,7 +623,9 @@ class Translate(CodeIterator):
                 self.crnt_block = i
                 self.builder = lc.Builder.new(self.blocks[i])
                 self.build_phi_nodes(self.crnt_block)
+
             getattr(self, 'op_'+name)(i, op, arg)
+            self.previous_instruction = i
 
         # Perform code optimization
         if self.optimize:
@@ -672,11 +700,12 @@ class Translate(CodeIterator):
     def handle_pending_phi(self, instr_index, local_index, value):
         phi, pred_lblocks = self.pending_phis[instr_index][local_index]
         if isinstance(value, Variable):
-            value = value.llvm(llvmtype_to_strtype(phi.type))
+            lvalue = value.lvalue
         else:
             assert isinstance(value, lc.Value), "Internal compiler error!"
+
         for pred_lblock in pred_lblocks:
-            phi.add_incoming(value, pred_lblock)
+            phi.add_incoming(lvalue, pred_lblock)
 
     def add_phi_incoming(self, phi, crnt_block, pred, local):
         '''Take one of three actions:
@@ -785,8 +814,8 @@ class Translate(CodeIterator):
         if self.crnt_block not in self.cfg.blocks_in[i]:
             next_locals = self.get_preceding_locals(self.cfg.blocks_in[i])
             if next_locals is None:
-                if (len(self.stack) > 0 and
-                    isinstance(self.stack[-1].val, DelayedObj)):
+                if isinstance(self.variables[self.previous_instruction].lvalue,
+                              DelayedObj):
                     # When we detect that we are in a for loop over a
                     # simple range, fallback to the block dominator so we
                     # at least have type information for the locals.
@@ -802,7 +831,11 @@ class Translate(CodeIterator):
                     next_locals = self._locals
                 else:
                     assert next_locals is not None, "Internal compiler error!"
-            self._locals = next_locals[:]
+
+            if next_locals is not None:
+                self._locals = next_locals[:]
+            else:
+                self._locals = []
 
     def get_ctypes_func(self, llvm=True):
         ee = self._get_ee()
@@ -830,16 +863,21 @@ class Translate(CodeIterator):
         return make_ufunc(self.ee.get_pointer_to_function(self.lfunc),
                                 name)
 
-    # This won't convert any llvm types.  It assumes
-    #  the llvm types in args are either fixed or not-yet specified.
     def func_resolve_type(self, func, args):
-        # already an llvm function
+        # This won't convert any llvm types.  It assumes
+        #  the llvm types in args are either fixed or not-yet specified.
+        if func.type.is_range:
+            return None, DelayedObj(func.lvalue, args)
+
+        print func, args
+        # TODO: fix this
         if func.val and func.val is func._llvm:
+            # already an llvm function
             typs = [llvmtype_to_strtype(x) for x in func._llvm.type.pointee.args]
             lfunc = func._llvm
-        # The function is one of the delayed list
         elif func.val in self._delaylist:
-            return None, DelayedObj(func.val, args)
+            # The function is one of the delayed list
+            return None, DelayedObj(func.lvalue, args)
         else:
             # Assume we are calling into an intrinsic function...
             # we need to generate the function including the types
@@ -910,15 +948,15 @@ class Translate(CodeIterator):
         variable = self.variables[i]
         variable.lvalue = self._locals[arg].lvalue
 
-    def op_STORE_FAST(self, i, op, arg):
+    def op_STORE_FAST(self, i, op, arg, newval=None):
         oldval = self._locals[arg]
-        newval = self.variables[i].state
-        # TODO: handle delayedobj types
+        newval = newval or self.variables[i].state
         if isinstance(newval.lvalue, DelayedObj):
             self._generate_for_loop(i, op, arg, newval)
         else:
             if self.has_pending_phi(i, arg):
                 self.handle_pending_phi(i, arg, newval)
+            print 'Assigning to', self.varnames[arg], newval
             self._locals[arg] = newval
 
     def op_LOAD_GLOBAL(self, i, op, arg):
@@ -947,24 +985,11 @@ class Translate(CodeIterator):
 
         variable.lvalue = lvalue
 
-    def binop(self, float_op, int_op, i, op, arg):
-        result = self.variables[i]
-        arg1, arg2 = result.state
-
-        if arg1.type.is_float and arg1.type == arg2.type:
-            result.lvalue = getattr(self.builder, float_op)(arg1.lvalue,
-                                                            arg2.lvalue)
-        elif arg1.type.is_int and arg1.type == arg2.type:
-            result.lvalue = getattr(self.builder, int_op)(arg1.lvalue,
-                                                          arg2.lvalue)
-        else:
-            raise NotImplementedError
-
-    op_BINARY_ADD = functools.partial(binop, 'fadd', 'add')
+    op_BINARY_ADD = create_binop('fadd', 'add')
     op_INPLACE_ADD = op_BINARY_ADD
-    op_BINARY_SUBTRACT = functools.partial(binop, 'fsub', 'sub')
-    op_BINARY_MULTIPLY = functools.partial(binop, 'fmul', 'mul')
-    op_BINARY_DIVIDE = functools.partial(binop, 'fdiv', 'sdiv')
+    op_BINARY_SUBTRACT = create_binop('fsub', 'sub')
+    op_BINARY_MULTIPLY = create_binop('fmul', 'mul')
+    op_BINARY_DIVIDE = create_binop('fdiv', 'sdiv')
 
     def op_BINARY_FLOOR_DIVIDE(self, i, op, arg):
         result = self.variables[i]
@@ -1053,32 +1078,37 @@ class Translate(CodeIterator):
         # number of arguments is arg
         result = self.variables[i]
         func, args = result.state
-        result.lvalue = self.builder.call(func.lvalue,
-                                          [arg.lvalue for arg in args])
+        #llvm_args = [arg.lvalue for arg in args]
+        # result.lvalue = self.builder.call(func.lvalue, llvm_args)
 
-        # todo: the stuff below !
+        res = None
+        if func.type.is_module_attr:
+            if func.lvalue in PY_CALL_TO_LLVM_CALL_MAP:
+                res, ret_typ = PY_CALL_TO_LLVM_CALL_MAP[func.val](self, args)
+        elif isinstance(func.lvalue, MethodReference):
+            res, ret_val = PY_CALL_TO_LLVM_CALL_MAP[func.val.py_method](
+                self, [func.val.object_var])
+        else:
+            func, args = self.func_resolve_type(func, args)
+            if func is None: # A delayed-result (i.e. range or xrange)
+                res = args
+            else:
+                res = self.builder.call(func, args)
 
-#        if func.val in PY_CALL_TO_LLVM_CALL_MAP:
-#            res, ret_typ = PY_CALL_TO_LLVM_CALL_MAP[func.val](self, args)
-#        elif isinstance(func.val, MethodReference):
-#            res, ret_val = PY_CALL_TO_LLVM_CALL_MAP[func.val.py_method](
-#                self, [func.val.object_var])
-#        else:
-#            func, args = self.func_resolve_type(func, args)
-#            if func is None: # A delayed-result (i.e. range or xrange)
-#                res = args
-#            else:
-#                res = self.builder.call(func, args)
+        if res is None:
+            raise NotImplementedError
+
+        result.lvalue = res
 
     def op_GET_ITER(self, i, op, arg):
-        iterable = self.stack[-1].val
+        iterable = self.variables[i].lvalue
         if isinstance(iterable, DelayedObj):
             # This is a dirty little hack since we are not popping the
             # iterable off the stack, and pushing an iterator value
             # on.  Instead, we're going to branch to a synthetic
             # basic block, and hope there is a FOR_ITER to handle this
             # mess.
-            self.stack.append(iterable.get_start())
+            # self.stack.append(iterable.get_start())
             iter_local = None
             block_writers = self.cfg.blocks_writer[self.crnt_block]
             for local_index, instr_index in block_writers.iteritems():
@@ -1086,7 +1116,7 @@ class Translate(CodeIterator):
                     iter_local = local_index
                     break
             assert iter_local is not None, "Internal compiler error!"
-            self.op_STORE_FAST(i, None, iter_local)
+            self.op_STORE_FAST(i, None, iter_local, newval=iterable.get_start())
             self.builder.branch(self.blocks[i + 4])
         else:
             raise NotImplementedError(
@@ -1094,13 +1124,18 @@ class Translate(CodeIterator):
                 "than range, xrange, or arange (got %r)." % (iterable,))
 
     def op_FOR_ITER(self, i, op, arg):
-        iterable = self.stack[-1].val
+        #iterable = self.stack[-1].val
+        iterable = self.variables[i]
+        iterator = iterable.state
+        # print iterable, iterator
+
         # Note that we don't actually generate any code here when
         # rewriting a simple for loop.  Code generation is deferred to
         # the STORE_FAST that should immediately follow this FOR_ITER
         # (we need to know the phi node for the iteration local).
-        if isinstance(iterable, DelayedObj):
+        if isinstance(iterator.lvalue, DelayedObj):
             self.pending_blocks[i] = i + arg + 3
+            iterable.lvalue = iterator.lvalue.get_start().lvalue
         else:
             raise NotImplementedError(
                 "Numba can not currently handle iteration over anything other "

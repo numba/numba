@@ -1,4 +1,5 @@
 import opcode
+import __builtin__
 
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
@@ -53,7 +54,18 @@ class TypeInferer(translate.CodeIterator):
 
     def init_globals(self):
         for global_name in self.names:
-            self.symtab[global_name] = Variable(None, name=global_name)
+            if (global_name in self.func.__globals__ or not
+                    getattr(__builtin__, global_name, None)):
+                # FIXME: analyse the bytecode of the entire module, to determine
+                # overriding of builtins
+                type = _types.GlobalType(name=global_name)
+            else:
+                if global_name in ('range', 'xrange'):
+                    type = _types.RangeType()
+                else:
+                    type = _types.BuiltinType(name=global_name)
+
+            self.symtab[global_name] = Variable(type, name=global_name)
 
     def init_locals(self):
         arg_types = self.func_signature.args
@@ -132,16 +144,14 @@ class TypeInferer(translate.CodeIterator):
         self.return_variables.append(self.variables[i])
 
     def op_CALL_FUNCTION(self, i, op, arg):
-        # Todo: you only want to do this parsing once, save the args
         # number of arguments is arg
-        args = [self.stack[-i] for i in range(arg,0,-1)]
+        args = [self.stack[-idx] for idx in range(arg,0,-1)]
         if arg > 0:
             self.stack = self.stack[:-arg]
         func = self.stack.pop()
 
-        if func.is_global and func.name and func.name in ('range', 'xrange'):
-            type = _types.IteratorType(minitypes.int_) # todo: Make this Py_ssize_t
-            result = Variable.from_variable(type, type=type)
+        if func.type.is_range:
+            result = Variable(func.type)
         elif func.type.is_function:
             result = Variable(func.type.return_type)
         elif func.type.is_object:
@@ -157,11 +167,19 @@ class TypeInferer(translate.CodeIterator):
         self.append(i, self.stack.pop())
 
     def op_FOR_ITER(self, i, op, arg):
-        iterator = self.stack[-1].val
-        if iterator.type.is_numba_type and iterator.type.is_iterator:
-            self.append(i, Variable(iterator.type.base_type))
+        iterator = self.stack[-1]
+        if iterator.type.is_iterator:
+            base_type = iterator.type.base_type
+        elif iterator.type.is_array:
+            base_type = iterator.type.dtype
+        elif iterator.type.is_range:
+            base_type = _types.int32 # todo: Make this Py_ssize_t
         else:
             raise NotImplementedError("Unknown type: %s" % (iterator.type,))
+
+        variable = Variable(base_type)
+        variable.state = iterator
+        self.append(i, variable)
 
     def op_LOAD_ATTR(self, i, op, arg):
         raise NotImplementedError

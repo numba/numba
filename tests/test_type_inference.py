@@ -19,7 +19,14 @@ def _simple_func(arg):
         result = 42.
     return result
 
-simple_func = function(_simple_func)
+#simple_func = function(_simple_func)
+
+def for_loop(start, stop, inc):
+    acc = 0
+    for value in range(start, stop, inc):
+        acc += value
+    return acc
+
 # ______________________________________________________________________
 
 class TestTypeInference(unittest.TestCase):
@@ -30,5 +37,9 @@ class TestTypeInference(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    # import dis; dis.dis(_simple_func)
-    unittest.main()
+    import dis
+    # dis.dis(_simple_func)
+    dis.dis(for_loop)
+    f = function(for_loop)
+    f(0, 10, 1)
+    #unittest.main()
