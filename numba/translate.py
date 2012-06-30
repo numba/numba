@@ -481,17 +481,22 @@ class CodeIterator(object):
 
 
 def create_binop(float_op, int_op):
-    def binop(self, i, op, arg):
-        result = self.variables[i]
+    def binop(self, i, op, arg, result):
         arg1, arg2 = result.state
+
+        if arg1.name and arg2.name:
+            name = "%s_plus_%s" % (arg1.name, arg2.name)
+        else:
+            name = "binop_tmp"
 
         if arg1.type.is_float and arg1.type == arg2.type:
             result.lvalue = getattr(self.builder, float_op)(arg1.lvalue,
-                                                            arg2.lvalue)
+                                                            arg2.lvalue,
+                                                            name)
         elif arg1.type.is_int and arg2.type.is_int: #arg1.type == arg2.type:
             result.lvalue = getattr(self.builder, int_op)(arg1.lvalue,
                                                           arg2.lvalue,
-                                                          "binop_tmp")
+                                                          name)
         else:
             raise NotImplementedError("Binop on types (%s, %s)" % (arg1.type,
                                                                    arg2.type))
@@ -624,7 +629,7 @@ class Translate(CodeIterator):
                 self.builder = lc.Builder.new(self.blocks[i])
                 self.build_phi_nodes(self.crnt_block)
 
-            getattr(self, 'op_'+name)(i, op, arg)
+            getattr(self, 'op_'+name)(i, op, arg, self.variables.get(i))
             self.previous_instruction = i
 
         # Perform code optimization
@@ -924,33 +929,44 @@ class Translate(CodeIterator):
         xrange, or arange).'''
         false_jump_target = self.pending_blocks.pop(i - 3)
         crnt_block_data = self._revisit_block(i - 3)
-        inc_variable = delayer.val.get_inc()
-        self.op_LOAD_FAST(i - 3, None, arg)
-        self.stack.append(inc_variable)
-        self.op_INPLACE_ADD(i - 3, None, None)
-        self.op_STORE_FAST(i - 3, None, arg)
+        inc_variable = delayer.lvalue.get_inc()
+        stop_variable = delayer.lvalue.get_stop()
+
+        iteration_type = self.getlocal(arg).type
+        iteration_variable = Variable(iteration_type)
+        add_variable = Variable(iteration_type)
+        add_variable.state = iteration_variable, inc_variable
+        store_variable = Variable.from_variable(self.getlocal(arg))
+        store_variable.state = add_variable
+
+        self.op_LOAD_FAST(i - 3, None, arg, iteration_variable)
+        self.op_INPLACE_ADD(i - 3, None, None, add_variable)
+        self.op_STORE_FAST(i - 3, None, arg, store_variable)
         self._restore_block(crnt_block_data)
-        self.op_LOAD_FAST(i, None, arg)
-        self.stack.append(delayer.val.get_stop())
+
+        iteration_var = Variable(iteration_type, "<iteration_var>")
+        cmp_var = Variable(_types.bool_)
+        cmp_var.state = iteration_var, stop_variable
+        self.op_LOAD_FAST(i, None, arg, iteration_var)
         # FIXME: This should really test to see if we are increasing
         # the iteration variable (inc > 0) or decreasing (inc < 0),
         # and select the comparison operator based on that.  This currently
         # only works if the increment is a constant integer value.
         cmp_op_str = '<'
-        llvm_inc = inc_variable._llvm
+        llvm_inc = inc_variable.lvalue
         # FIXME: Handle other types.
         if hasattr(inc_variable, 'as_int') and llvm_inc.as_int() < 0:
             cmp_op_str = '>='
-        self.op_COMPARE_OP(i, None, opcode.cmp_op.index(cmp_op_str))
-        self.op_POP_JUMP_IF_FALSE(i, None, false_jump_target)
+        self.op_COMPARE_OP(i, None, opcode.cmp_op.index(cmp_op_str), cmp_var)
+        self.op_POP_JUMP_IF_FALSE(i, None, false_jump_target, cmp_var)
 
-    def op_LOAD_FAST(self, i, op, arg):
-        variable = self.variables[i]
+    def op_LOAD_FAST(self, i, op, arg, variable):
         variable.lvalue = self._locals[arg].lvalue
+        variable.lvalue.name = self.getlocal(arg).name
 
-    def op_STORE_FAST(self, i, op, arg, newval=None):
+    def op_STORE_FAST(self, i, op, arg, variable):
         oldval = self._locals[arg]
-        newval = newval or self.variables[i].state
+        newval = variable.state
         if isinstance(newval.lvalue, DelayedObj):
             self._generate_for_loop(i, op, arg, newval)
         else:
@@ -959,11 +975,10 @@ class Translate(CodeIterator):
             print 'Assigning to', self.varnames[arg], newval
             self._locals[arg] = newval
 
-    def op_LOAD_GLOBAL(self, i, op, arg):
-        self.variables[i].lvalue = self._myglobals[self.names[arg]]
+    def op_LOAD_GLOBAL(self, i, op, arg, variable):
+        variable.lvalue = self._myglobals[self.names[arg]]
 
-    def op_LOAD_CONST(self, i, op, arg):
-        variable = self.variables[i]
+    def op_LOAD_CONST(self, i, op, arg, variable):
         type = variable.type
         ltype = variable.ltype
         constant = self.constants[arg]
@@ -991,16 +1006,14 @@ class Translate(CodeIterator):
     op_BINARY_MULTIPLY = create_binop('fmul', 'mul')
     op_BINARY_DIVIDE = create_binop('fdiv', 'sdiv')
 
-    def op_BINARY_FLOOR_DIVIDE(self, i, op, arg):
-        result = self.variables[i]
+    def op_BINARY_FLOOR_DIVIDE(self, i, op, arg, result):
         arg1, arg2 = result.state
         if arg1.type.is_int and arg1.type == arg2.type:
             result.lvalue = self.builder.sdiv(arg1, arg2)
         else:
             raise NotImplementedError('// for type %r' % typ)
 
-    def op_BINARY_MODULO(self, i, op, arg):
-        result = self.variables[i]
+    def op_BINARY_MODULO(self, i, op, arg, result):
         arg1, arg2 = result.state
         if arg1.type.is_float and arg1.type == arg2.type:
             result.lvalue = self.builder.frem(arg1.lvalue, arg2.lvalue)
@@ -1016,8 +1029,7 @@ class Translate(CodeIterator):
         else:
             raise NotImplementedError
 
-    def op_BINARY_POWER(self, i, op, arg):
-        result = self.variables[i]
+    def op_BINARY_POWER(self, i, op, arg, result):
         arg1, arg2 = result.state
         if arg2.type.is_int:
             INTR = lc.INTR_POWI
@@ -1027,21 +1039,20 @@ class Translate(CodeIterator):
         func = lc.Function.intrinsic(self.mod, INTR, [arg1.ltype, arg2.ltype])
         result.lvalue = self.builder.call(func, [arg1.lvalue, arg2.lvalue])
 
-    def op_COMPARE_OP(self, i, op, arg):
-        result = self.variables[i]
+    def op_COMPARE_OP(self, i, op, arg, result):
         arg1, arg2 = result.state
         cmpop = opcode.cmp_op[arg]
         if arg1.type.is_float and arg1.type == arg2.type:
             result.lvalue = self.builder.fcmp(_compare_mapping_float[cmpop],
                                               arg1.lvalue, arg2.lvalue)
-        elif arg1.type.is_int and arg1.type.is_signed and arg1.type == arg2.type:
+        #elif arg1.type.is_int and arg1.type.is_signed and arg1.type == arg2.type:
+        elif arg1.type.is_int and arg2.type.is_int:
             result.lvalue = self.builder.icmp(_compare_mapping_sint[cmpop],
                                               arg1.lvalue, arg2.lvalue)
         else:
             raise NotImplementedError
 
-    def op_RETURN_VALUE(self, i, op, arg):
-        variable = self.variables[i]
+    def op_RETURN_VALUE(self, i, op, arg, variable):
         if not self.ret_type.is_void:
             variable.lvalue = self.builder.ret(variable.lvalue)
 
@@ -1056,7 +1067,7 @@ class Translate(CodeIterator):
             blk = self.lfunc.append_basic_block("RETURN_%d" % i)
             self.blocks[i+1] = blk
 
-    def op_POP_JUMP_IF_FALSE(self, i, op, arg):
+    def op_POP_JUMP_IF_FALSE(self, i, op, arg, variable):
         # We need to create two blocks.
         #  One for the next instruction (just past the jump)
         #  and another for the block to be jumped to.
@@ -1071,12 +1082,10 @@ class Translate(CodeIterator):
         else:
             if_false = self.blocks[arg]
 
-        arg1 = self.variables[i]
-        self.builder.cbranch(arg1.lvalue, cont, if_false)
+        self.builder.cbranch(variable.lvalue, cont, if_false)
 
-    def op_CALL_FUNCTION(self, i, op, arg):
+    def op_CALL_FUNCTION(self, i, op, arg, result):
         # number of arguments is arg
-        result = self.variables[i]
         func, args = result.state
         #llvm_args = [arg.lvalue for arg in args]
         # result.lvalue = self.builder.call(func.lvalue, llvm_args)
@@ -1100,8 +1109,8 @@ class Translate(CodeIterator):
 
         result.lvalue = res
 
-    def op_GET_ITER(self, i, op, arg):
-        iterable = self.variables[i].lvalue
+    def op_GET_ITER(self, i, op, arg, iterable):
+        iterable = iterable.lvalue
         if isinstance(iterable, DelayedObj):
             # This is a dirty little hack since we are not popping the
             # iterable off the stack, and pushing an iterator value
@@ -1116,16 +1125,17 @@ class Translate(CodeIterator):
                     iter_local = local_index
                     break
             assert iter_local is not None, "Internal compiler error!"
-            self.op_STORE_FAST(i, None, iter_local, newval=iterable.get_start())
+            oldval = Variable(None)
+            oldval.state = iterable.get_start()
+            self.op_STORE_FAST(i, None, iter_local, oldval)
             self.builder.branch(self.blocks[i + 4])
         else:
             raise NotImplementedError(
                 "Numba can not currently handle iteration over anything other "
                 "than range, xrange, or arange (got %r)." % (iterable,))
 
-    def op_FOR_ITER(self, i, op, arg):
+    def op_FOR_ITER(self, i, op, arg, iterable):
         #iterable = self.stack[-1].val
-        iterable = self.variables[i]
         iterator = iterable.state
         # print iterable, iterator
 
@@ -1135,13 +1145,13 @@ class Translate(CodeIterator):
         # (we need to know the phi node for the iteration local).
         if isinstance(iterator.lvalue, DelayedObj):
             self.pending_blocks[i] = i + arg + 3
-            iterable.lvalue = iterator.lvalue.get_start().lvalue
+            iterable.lvalue = iterator.lvalue
         else:
             raise NotImplementedError(
                 "Numba can not currently handle iteration over anything other "
                 "than range, xrange, or arange (got %r)." % (iterable,))
 
-    def op_SETUP_LOOP(self, i, op, arg):
+    def op_SETUP_LOOP(self, i, op, arg, variable):
         self.loop_stack.append((i, arg))
         if (i + 3) not in self.blocks:
             loop_entry = self.lfunc.append_basic_block("LOOP_%d" % i)
@@ -1155,8 +1165,7 @@ class Translate(CodeIterator):
         else:
             loop_entry = self.blocks[i+3]
 
-    def op_LOAD_ATTR(self, i, op, arg):
-        result = self.variables[i]
+    def op_LOAD_ATTR(self, i, op, arg, result):
         objarg = result.state
 
         if __debug__:
@@ -1200,13 +1209,13 @@ class Translate(CodeIterator):
 
         result.lvalue = res
 
-    def op_JUMP_ABSOLUTE(self, i, op, arg):
+    def op_JUMP_ABSOLUTE(self, i, op, arg, variable):
         self.builder.branch(self.blocks[arg])
 
-    def op_POP_BLOCK(self, i, op, arg):
+    def op_POP_BLOCK(self, i, op, arg, variable):
         self.loop_stack.pop(-1)
 
-    def op_JUMP_FORWARD(self, i, op, arg):
+    def op_JUMP_FORWARD(self, i, op, arg, variable):
         target_i = i + arg + 3
         if target_i not in self.blocks:
             target = self.lfunc.append_basic_block("TARGET_%d" % target_i)

@@ -19,13 +19,15 @@ def _simple_func(arg):
         result = 42.
     return result
 
-#simple_func = function(_simple_func)
+simple_func = function(_simple_func)
 
-def for_loop(start, stop, inc):
+def _for_loop(start, stop, inc):
     acc = 0
     for value in range(start, stop, inc):
         acc += value
     return acc
+
+for_loop = function(_for_loop)
 
 # ______________________________________________________________________
 
@@ -34,12 +36,13 @@ class TestTypeInference(unittest.TestCase):
         self.assertEqual(simple_func(-1.), 42.)
         self.assertEqual(simple_func(1.), 22.)
 
+    def test_simple_for(self):
+        self.assertEqual(for_loop(0, 10, 1), 45)
+
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    import dis
+    #import dis
     # dis.dis(_simple_func)
-    dis.dis(for_loop)
-    f = function(for_loop)
-    f(0, 10, 1)
-    #unittest.main()
+    #dis.dis(for_loop)
+    unittest.main()
