@@ -152,13 +152,15 @@ class TypeInferer(translate.CodeIterator):
 
         if func.type.is_range:
             result = Variable(func.type)
+        elif func.type.is_builtin and func.name == 'len':
+            result = Variable(_types.Py_ssize_t)
         elif func.type.is_function:
             result = Variable(func.type.return_type)
         elif func.type.is_object:
             result = Variable(minitypes.object_)
         else:
             # TODO: implement
-            raise NotImplementedError
+            raise NotImplementedError(func.type)
 
         result.state = func, args
         self.append(i, result)

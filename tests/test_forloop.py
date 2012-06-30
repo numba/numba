@@ -64,22 +64,22 @@ class TestForLoop(unittest.TestCase):
         self.assertEqual(result, for_loop_fn_0(testdata))
 
     def test_compiled_for_loop_fn_1(self):
-        compiled_for_loop_fn = numba_compile(arg_types = [i4, i4, i4],
-                                             ret_type = i4)(for_loop_fn_1)
+        compiled_for_loop_fn = numba_compile(arg_types=[i4, i4, i4],
+                                             ret_type=i4)(for_loop_fn_1)
         result = compiled_for_loop_fn(1, 4, 1)
         self.assertEqual(result, 6)
         self.assertEqual(result, for_loop_fn_1(1, 4, 1))
 
     def test_compiled_for_loop_fn_2(self):
-        compiled_for_loop_fn = numba_compile(arg_types = ['i'],
-                                             ret_type = 'i')(for_loop_fn_2)
+        compiled_for_loop_fn = numba_compile(arg_types=[i4],
+                                             ret_type=i4)(for_loop_fn_2)
         result = compiled_for_loop_fn(4)
         self.assertEqual(result, 36)
         self.assertEqual(result, for_loop_fn_2(4))
 
     def test_compiled_for_loop_fn_3(self):
-        compiled_for_loop_fn = numba_compile(arg_types = ['i'],
-                                             ret_type = 'i')(for_loop_fn_3)
+        compiled_for_loop_fn = numba_compile(arg_types=[i4],
+                                             ret_type=i4)(for_loop_fn_3)
         result = compiled_for_loop_fn(3)
         self.assertEqual(result, for_loop_fn_3(3))
         self.assertEqual(result, 81)
@@ -89,6 +89,7 @@ class TestForLoop(unittest.TestCase):
 if __name__ == "__main__":
     import dis; dis.dis(for_loop_fn_1)
     unittest.main()
+    #TestForLoop('test_compiled_for_loop_fn_2').debug()
 
 # ______________________________________________________________________
 # End of test_forloop.py

@@ -6,6 +6,7 @@ import numpy as np
 from numpy import ctypeslib
 # from numpy.ctypeslib import _typecodes
 
+from numba import llvm_types, _ext
 from numba.minivect.minitypes import *
 from numba.minivect import miniast, minitypes
 
@@ -113,6 +114,10 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return _numpy_array
         elif type.is_complex:
             return lc.Type.struct([type.base_type, type.base_type])
+        elif type.is_py_ssize_t:
+            return llvm_types._llvm_py_ssize_t
+        elif type.is_object:
+            return llvm_types._pyobject_head_struct_p
 
         return super(NumbaTypeMapper, self).to_llvm(type)
 
@@ -238,7 +243,7 @@ def convert_to_ctypes(type):
 
     if type.is_pointer:
         return ctypes.POINTER(convert_to_ctypes(type.base_type))
-    elif type.is_object:
+    elif type.is_object or type.is_array:
         return ctypes.py_object
     elif type.is_float:
         if type.itemsize == 4:
@@ -263,16 +268,16 @@ def convert_to_ctypes(type):
             return Complex128
         else:
             return Complex256
-    elif type.is_array:
-        raise NotImplementedError
     elif type.is_c_string:
         return ctypes.c_char_p
     elif type.is_function:
         return_type = convert_to_ctypes(type.return_type)
         arg_types = [covert_to_ctypes(arg_type) for arg_type in type.args]
         return ctypes.CFUNCTYPE(return_type, arg_types)
+    elif type.is_py_ssize_t:
+        return getattr(ctypes, 'c_uint%d' % (_ext.sizeof_py_ssize_t() * 8))
     else:
-        raise NotImplementedError
+        raise NotImplementedError(type)
 
 # NOTE: The following ctypes structures were inspired by Joseph
 # Heller's response to python-list question about ctypes complex

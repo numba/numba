@@ -6,6 +6,7 @@ import functools
 
 import numpy as np
 
+import llvm
 from llvm import _ObjectCache, WeakValueDictionary
 import llvm.core as lc
 import llvm.passes as lp
@@ -60,7 +61,7 @@ class DelayedObj(object):
             ret_val = self.args[0]
         else:
             # FIXME: Need to infer case where this might be over floats.
-            ret_val = Variable(_types.int32, lvalue=lc.Constant.int(_intp, 0))
+            ret_val = Variable(_types.int32, lvalue=lc.Constant.int(_int32, 0))
         return ret_val
 
     def get_inc(self):
@@ -68,7 +69,7 @@ class DelayedObj(object):
             ret_val = self.args[2]
         else:
             # FIXME: Need to infer case where this might be over floats.
-            ret_val = Variable(lc.Constant.int(_intp, 1))
+            ret_val = Variable(type=_types.int32, lvalue=lc.Constant.int(_int32, 1))
         return ret_val
 
     def get_stop(self):
@@ -257,8 +258,8 @@ class _LLVMModuleUtils(object):
     @classmethod
     def build_len(cls, translator, args):
         if (len(args) == 1 and
-            args[0]._llvm is not None and
-            args[0]._llvm.type == _numpy_array):
+            args[0].lvalue is not None and
+            args[0].lvalue.type == _numpy_array):
             lfunc = None
             shape_ofs = _numpy_array_field_ofs['shape']
             res = translator.builder.load(
@@ -266,10 +267,26 @@ class _LLVMModuleUtils(object):
                     translator.builder.gep(args[0]._llvm, [
                             _int32_zero, lc.Constant.int(_int32, shape_ofs)])))
         else:
-            raise NotImplementedError("Currently unable to handle calls to "
-                                      "len() for arguments that are not Numpy "
-                                      "arrays.")
+            return cls.build_object_len(translator, args)
+
         return res, None
+
+    @classmethod
+    def build_object_len(cls, translator, args):
+        from . import llvm_types
+
+        try:
+            PyObject_Length = translator.mod.get_function_named('PyObject_Length')
+        except llvm.LLVMException:
+            signature = lc.Type.function(llvm_types._llvm_py_ssize_t,
+                                         [llvm_types._pyobject_head_struct_p])
+            PyObject_Length = translator.mod.add_function(signature,
+                                                          'PyObject_Length')
+
+        largs = [arg.lvalue for arg in args]
+        print largs
+        result = translator.builder.call(PyObject_Length, largs)
+        return result, None
 
     @classmethod
     def get_py_incref(cls, module):
@@ -561,7 +578,8 @@ class Translate(CodeIterator):
         self.arg_ltypes = []
         for arg_type in self.arg_types:
             if arg_type.is_array:
-                arg_type = arg_type.dtype.pointer()
+                # arg_type = arg_type.dtype.pointer()
+                arg_type = _types.object_
             self.arg_ltypes.append(self.to_llvm(arg_type))
 
         ty_func = lc.Type.function(self.ret_ltype, self.arg_ltypes)
@@ -708,6 +726,7 @@ class Translate(CodeIterator):
             lvalue = value.lvalue
         else:
             assert isinstance(value, lc.Value), "Internal compiler error!"
+            lvalue = value
 
         for pred_lblock in pred_lblocks:
             phi.add_incoming(lvalue, pred_lblock)
@@ -873,7 +892,8 @@ class Translate(CodeIterator):
         #  the llvm types in args are either fixed or not-yet specified.
         if func.type.is_range:
             return None, DelayedObj(func.lvalue, args)
-
+        elif func.type.is_builtin and func.name == 'len':
+            return
         print func, args
         # TODO: fix this
         if func.val and func.val is func._llvm:
@@ -933,6 +953,7 @@ class Translate(CodeIterator):
         stop_variable = delayer.lvalue.get_stop()
 
         iteration_type = self.getlocal(arg).type
+        # iteration_type = _types.int64
         iteration_variable = Variable(iteration_type)
         add_variable = Variable(iteration_type)
         add_variable.state = iteration_variable, inc_variable
@@ -1093,7 +1114,9 @@ class Translate(CodeIterator):
         res = None
         if func.type.is_module_attr:
             if func.lvalue in PY_CALL_TO_LLVM_CALL_MAP:
-                res, ret_typ = PY_CALL_TO_LLVM_CALL_MAP[func.val](self, args)
+                res, ret_typ = PY_CALL_TO_LLVM_CALL_MAP[func.lvalue](self, args)
+        elif func.type.is_builtin and func.name == 'len':
+            res, ret_typ = PY_CALL_TO_LLVM_CALL_MAP[len](self, args)
         elif isinstance(func.lvalue, MethodReference):
             res, ret_val = PY_CALL_TO_LLVM_CALL_MAP[func.val.py_method](
                 self, [func.val.object_var])
