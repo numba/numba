@@ -1,11 +1,14 @@
 import ast
 import opcode
-import __builtin__
+import types
+import __builtin__ as builtins
 
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
 from .symtab import Variable
 from . import visitors, nodes
+
+import numpy
 
 def _infer_types(context, func, ast, func_signature):
     """
@@ -39,7 +42,6 @@ class TypeInferer(visitors.NumbaTransformer):
         """
         Infer types for the function.
         """
-        self.init_globals()
         self.init_locals()
 
         self.return_variable = Variable(None)
@@ -54,17 +56,27 @@ class TypeInferer(visitors.NumbaTransformer):
         self.func_signature = minitypes.FunctionType(
                 return_type=self.return_type, args=self.func_signature.args)
 
-    def init_globals(self):
-        for global_name in self.global_names:
-            if (global_name not in self.func.__globals__ and
-                    getattr(__builtin__, global_name, None)):
-                type = _types.BuiltinType(name=global_name)
+    def init_global(self, global_name):
+        globals = self.func.__globals__
+        # Determine the type of the global, i.e. a builtin, global
+        # or (numpy) module
+        if (global_name not in globals and
+                getattr(builtins, global_name, None)):
+            type = _types.BuiltinType(name=global_name)
+        else:
+            # FIXME: analyse the bytecode of the entire module, to determine
+            # overriding of builtins
+            if isinstance(globals.get(global_name), types.ModuleType):
+                type = _types.ModuleType()
+                type.is_numpy_module = globals[global_name] is numpy
+                if type.is_numpy_module:
+                    type.module = numpy
             else:
-                # FIXME: analyse the bytecode of the entire module, to determine
-                # overriding of builtins
                 type = _types.GlobalType(name=global_name)
 
-            self.symtab[global_name] = Variable(type, name=global_name)
+        variable = Variable(type, name=global_name)
+        self.symtab[global_name] = variable
+        return variable
 
     def init_locals(self):
         arg_types = self.func_signature.args
@@ -150,10 +162,14 @@ class TypeInferer(visitors.NumbaTransformer):
         return node
 
     def visit_Name(self, node):
-        variable = self.symtab[node.id]
-        if (variable.type is None and variable.is_local and
-                isinstance(node.ctx, ast.Load)):
-            raise UnboundLocalError(variable.name)
+        variable = self.symtab.get(node.id)
+        if variable:
+            # local variable
+            if (variable.type is None and variable.is_local and
+                    isinstance(node.ctx, ast.Load)):
+                raise UnboundLocalError(variable.name)
+        else:
+            variable = self.init_global(node.id)
 
         node.variable = variable
         return node
@@ -224,6 +240,81 @@ class TypeInferer(visitors.NumbaTransformer):
         node.variable = Variable(self.type_from_pyval(node.s), is_constant=True)
         return node
 
+    def visit_Tuple(self, node):
+        self.visitlist(node.elts)
+        node.variable = Variable(_types.TupleType(size=len(node.elts)))
+        return node
+
+    def _resolve_attribute_dtype(self, dtype):
+        if dtype.is_numpy_attribute:
+            numpy_attr = getattr(dtype.module, dtype.attr, None)
+            if isinstance(numpy_attr, numpy.dtype):
+                return _types.NumpyDtypeType(dtype=numpy_attr)
+            elif issubclass(numpy_attr, numpy.generic):
+                return _types.NumpyDtypeType(dtype=numpy.dtype(numpy_attr))
+
+    def _get_dtype(self, node, args, dtype=None):
+        "Get the dtype keyword argument from a call to a numpy attribute."
+        for keyword in node.keywords:
+            if keyword.arg == 'dtype':
+                dtype = keyword.value.variable.type
+                return self._resolve_attribute_dtype(dtype)
+        else:
+            # second argument is a dtype
+            if args and args[0].variable.type.is_numpy_dtype:
+                return args[0].variable.type
+
+        return dtype
+
+    def _resolve_empty_like(self, node):
+        "Parse the result type for np.empty_like calls"
+        args = node.args
+        if args:
+            arg = node.args[0]
+            args = args[1:]
+        else:
+            for keyword in node.keywords:
+                if keyword.arg == 'a':
+                    arg = keyword.value
+                    break
+            else:
+                return None
+
+        type = arg.variable.type
+        if type.is_array:
+            dtype = self._get_dtype(node, args)
+            if dtype is None:
+                return type
+            else:
+                if not dtype.is_numpy_dtype:
+                    # We have a dtype that cannot be inferred
+                    # raise NotImplementedError("Uninferred dtype")
+                    return None
+                return minitypes.ArrayType(dtype.resolve(), type.ndim)
+
+    def _resolve_arange(self, node):
+        "Resolve a call to np.arange()"
+        dtype = self._get_dtype(node, node.args, _types.NumpyDtypeType(
+                                        dtype=numpy.dtype(numpy.int64)))
+        if dtype is not None:
+            # return a 1D array type of the given dtype
+            return dtype.resolve()[:]
+
+    def _resolve_numpy_call(self, func_type, node):
+        """
+        Resolve a call of some numpy attribute or sub-attribute.
+        """
+        numpy_func = getattr(func_type.module, func_type.attr)
+        if numpy_func in (numpy.zeros_like, numpy.ones_like,
+                          numpy.empty_like):
+            result_type = self._resolve_empty_like(node)
+        elif numpy_func is numpy.arange:
+            result_type = self._resolve_arange(node)
+        else:
+            result_type = None
+
+        return result_type
+
     def visit_Call(self, node):
         node.func = self.visit(node.func)
         self.visitlist(node.args)
@@ -236,6 +327,11 @@ class TypeInferer(visitors.NumbaTransformer):
             result = Variable(_types.Py_ssize_t)
         elif func_type.is_function:
             result = Variable(func.type.return_type)
+        elif func_type.is_numpy_attribute:
+            result_type = self._resolve_numpy_call(func_type, node)
+            if result_type is None:
+                result_type = minitypes.object_
+            result = Variable(result_type)
         elif func_type.is_object:
             result = Variable(minitypes.object_)
         else:
@@ -256,13 +352,16 @@ class TypeInferer(visitors.NumbaTransformer):
                 result_type = type.base_type
             else:
                 raise AttributeError("'%s' of complex type" % node.attr)
+        elif type.is_numpy_module and getattr(type.module, node.attr):
+            result_type = _types.NumpyAttributeType(module=type.module,
+                                                    attr=node.attr)
         elif type.is_object:
             result_type = type
         elif type.is_array:
             # handle shape/strides/suboffsets etc
             raise NotImplementedError
         else:
-            raise NotImplementedError
+            raise NotImplementedError((node.attr, node.value, type))
 
         node.variable = Variable(result_type)
         return node

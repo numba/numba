@@ -14,6 +14,8 @@ from numba import decorators
 
 import unittest
 
+import numpy
+
 # ______________________________________________________________________
 
 def _simple_func(arg):
@@ -32,6 +34,16 @@ def _for_loop(start, stop, inc):
     return acc
 
 for_loop = decorators.function(_for_loop)
+
+def test_arange():
+    a = numpy.arange(10)
+    b = numpy.arange(10, dtype=numpy.double)
+    return a, b
+
+def test_empty_like(a):
+    b = numpy.empty_like(a)
+    c = numpy.zeros_like(a, dtype=numpy.int32)
+    d = numpy.ones_like(a)
 
 # ______________________________________________________________________
 
@@ -58,11 +70,22 @@ class TestTypeInference(unittest.TestCase):
         self.assertEqual(symtab['value'].type, Py_ssize_t)
         self.assertEqual(sig.return_type, int_)
 
+    def test_type_infer_arange(self):
+        sig, symtab = infer(test_arange, [])
+        self.assertEqual(symtab['a'].type, int64[:])
+        self.assertEqual(symtab['b'].type, double[:])
+
+    def test_empty_like(self):
+        sig, symtab = infer(test_empty_like, [double[:]])
+        self.assertEqual(symtab['b'].type, double[:])
+        self.assertEqual(symtab['c'].type, int32[:])
+        self.assertEqual(symtab['d'].type, double[:])
+
 # ______________________________________________________________________
 
 if __name__ == "__main__":
     #import dis
     # dis.dis(_simple_func)
     #dis.dis(for_loop)
-    TestTypeInference('test_type_infer_for_loop').debug()
+    TestTypeInference('test_empty_like').debug()
     #unittest.main()

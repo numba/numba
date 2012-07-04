@@ -13,13 +13,11 @@ class Variable(object):
         state: state passed from one stage to the next
     """
 
-    def __init__(self, type, is_local=False, is_global=False,
-                 is_constant=False, name=None, lvalue=None):
+    def __init__(self, type, is_constant=False, is_local=True,
+                 name=None, lvalue=None):
         self.name = name
         self.type = type
-        self.is_local = is_local
         self.is_constant = is_constant
-        self.is_global = is_global
         self.lvalue = lvalue
 
     @classmethod
@@ -27,6 +25,14 @@ class Variable(object):
         result = cls(variable.type)
         vars(result).update(kwds)
         return result
+
+    @property
+    def is_local(self):
+        return not self.is_global
+
+    @property
+    def is_global(self):
+        return self.type and self.type.is_global
 
     @property
     def ltype(self):

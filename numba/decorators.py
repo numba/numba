@@ -103,6 +103,10 @@ def _compile(func, ret_type=None, arg_types=None, **kwds):
     return t.get_ctypes_func(kwds.get('llvm', True))
 
 def function(f):
+    """
+    Defines a numba function, that, when called, specializes on the input
+    types.
+    """
     cache = {}
     @functools.wraps(f)
     def wrapper(*args, **kwargs):

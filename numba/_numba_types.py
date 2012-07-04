@@ -20,6 +20,7 @@ class NumbaType(minitypes.Type):
 
 class TupleType(NumbaType, minitypes.ObjectType):
     name = "tuple"
+    size = 0
 
 class IteratorType(NumbaType, minitypes.ObjectType):
     is_iterator = True
@@ -38,8 +39,45 @@ class PHIType(NumbaType):
     """
     is_phi = True
 
-class ModuleType(NumbaType):
+class ModuleType(NumbaType, minitypes.ObjectType):
+    """
+    Represents a type for modules.
+
+    Attributes:
+        is_numpy_module: whether the module is the numpy module
+        module: in case of numpy, the numpy module or a submodule
+    """
     is_module = True
+    is_numpy_module = False
+    module = None
+
+    def __repr__(self):
+        if self.is_numpy_module:
+            return 'numpy'
+        else:
+            return 'ModuleType'
+
+class NumpyAttributeType(NumbaType, minitypes.ObjectType):
+    """
+    Type for attributes of a numpy (sub)module.
+
+    Attributes:
+        module: the numpy (sub)module
+        attr: the attribute name (str)
+    """
+    is_numpy_attribute = True
+    module = None
+    attr = None
+
+    def __repr__(self):
+        return "%s.%s" % (self.module.__name__, self.attr)
+
+class NumpyDtypeType(NumbaType, minitypes.ObjectType):
+    is_numpy_dtype = True
+    dtype = None
+
+    def resolve(self):
+        return _map_dtype(self.dtype)
 
 class GlobalType(NumbaType):
     is_global = True
@@ -128,7 +166,9 @@ class NumbaTypeMapper(minitypes.TypeMapper):
 def _map_dtype(dtype):
     """
     >>> _map_dtype(np.dtype(np.int32))
-    int16
+    int32
+    >>> _map_dtype(np.dtype(np.int64))
+    int64
     >>> _map_dtype(np.dtype(np.object))
     PyObject *
     >>> _map_dtype(np.dtype(np.float64))
@@ -136,7 +176,7 @@ def _map_dtype(dtype):
     >>> _map_dtype(np.dtype(np.complex128))
     complex128
     """
-    item_idx = int(math.log(dtype.itemsize))
+    item_idx = int(math.log(dtype.itemsize, 2))
     if dtype.kind == 'i':
         return [i1, i2, i4, i8][item_idx]
     elif dtype.kind == 'u':
