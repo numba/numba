@@ -1,9 +1,11 @@
 import functools
 
 import numba
-from . import naming, utils, type_inference
+from . import naming, utils
+from . import ast_type_inference as type_inference
 from .minivect import minitypes
 
+import meta.decompiler
 
 # Create a new callable object
 #  that creates a fast version of Python code using LLVM
@@ -70,23 +72,25 @@ def vectorize(func):
 
 context = utils.get_minivect_context()
 
+def _get_ast(func):
+    return meta.decompiler.decompile_func(func)
+
 def _compile(func, ret_type=None, arg_types=None, **kwds):
+    """
+    Compile a numba annotated function.
+
+        - decompile function into a Python ast
+        - run type inference using the given input types
+        - compile the function to LLVM
+    """
     global __tr_map__
+
+    ast = _get_ast(func)
 
     func_signature = minitypes.FunctionType(return_type=ret_type,
                                             args=arg_types)
-    type_inferer = type_inference.TypeInferer(
-            context, func, func_signature=func_signature)
-    type_inferer.infer_types()
-
-    func_signature = type_inferer.func_signature
-    func_name = naming.specialized_mangle(func.__name__,
-                                          type_inferer.func_signature.args)
-
-    if __debug__:
-        print "Symtab:", type_inferer.symtab
-        print func_signature.return_type, func_signature.args
-        print type_inferer.return_variables
+    func_signature, symtab = _infer_types(context, func, ast, func_signature)
+    func_name = naming.specialized_mangle(func.__name__, func_signature.args)
 
     if func in __tr_map__:
         print("Warning: Previously compiled version of %r may be "
@@ -102,13 +106,15 @@ def function(f):
     cache = {}
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
-        key = args + tuple(kwargs[k] for k in sorted(kwargs))
-        if key in cache:
-            compiled_func = cache[key]
+        arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
+        types = tuple(context.typemapper.from_python(value)
+                          for value in arguments)
+        if types in cache:
+            compiled_func = cache[types]
         else:
-            types = [context.typemapper.from_python(v) for v in key]
+
             compiled_func = _compile(f, ret_type=None, arg_types=types)
-            cache[key] = compiled_func
+            cache[types] = compiled_func
 
         return compiled_func(*args, **kwargs)
     return wrapper

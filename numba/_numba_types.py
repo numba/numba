@@ -15,21 +15,11 @@ __all__ = minitypes.__all__ + [
     'f4', 'f8', 'f16', 'c8', 'c16', 'c32',
 ]
 
-minitypes.Type.is_numba_type = False
 class NumbaType(minitypes.Type):
     is_numba_type = True
 
-    is_iterator = False
-    is_phi = False
-    is_module = False
-    is_global = False
-    is_builtin = False
-    is_module_attr = False
-
 class TupleType(NumbaType, minitypes.ObjectType):
     name = "tuple"
-
-tuple_ = TupleType()
 
 class IteratorType(NumbaType, minitypes.ObjectType):
     is_iterator = True
@@ -63,6 +53,7 @@ class ModuleAttributeType(NumbaType):
 class RangeType(NumbaType):
     is_range = True
 
+tuple_ = TupleType()
 phi = PHIType()
 module_type = ModuleType()
 
