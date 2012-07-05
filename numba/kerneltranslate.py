@@ -34,7 +34,7 @@ _numpy_struct = lc.Type.struct(_pyobject_head+\
        _void_star,          # base
        _void_star,          # descr
        lc.Type.int(32),     # flags
-       _void_star,          # weakreflist 
+       _void_star,          # weakreflist
        _void_star,          # maskna_dtype
        _void_star,          # maskna_data
        _intp_star,          # masna_strides
@@ -89,17 +89,17 @@ class DelayedObj(object):
         self.args = args
 
 
-# Variables placed on the stack. 
+# Variables placed on the stack.
 #  They allow an indirection
 #  So, that when used in an operation, the correct
-#  LLVM type can be inserted.  
+#  LLVM type can be inserted.
 class Variable(object):
     def __init__(self, val):
         if isinstance(val, Variable):
             self.val = val.val
             self._llvm = val._llvm
             self.typ = val.typ
-            return 
+            return
         self.val = val
         if isinstance(val, lc.Value):
             self._llvm = val
@@ -110,7 +110,7 @@ class Variable(object):
                 self.typ = pythontype_to_strtype(val.dtype)
             else:
                 self.typ = pythontype_to_strtype(type(val))
-    
+
     def llvm(self, typ=None, mod=None):
         if self._llvm:
             if typ is not None and typ != self.typ:
@@ -124,7 +124,7 @@ class Variable(object):
             elif typ == 'f32':
                 res = lc.Constant.real(lc.Type.float(), float(self.val))
             elif typ[0] == 'i':
-                res = lc.Constant.int(lc.Type.int(int(typ[1:])), 
+                res = lc.Constant.int(lc.Type.int(int(typ[1:])),
                                       int(self.val))
             elif typ[0] == 'func':
                 res = map_to_function(self.val, typ[1:], mod)
@@ -132,7 +132,7 @@ class Variable(object):
                 pass
             return res
 
-# Add complex, unsigned, and bool 
+# Add complex, unsigned, and bool
 def str_to_llvmtype(str):
     if str[0] == 'f':
         if str[1:] == '32':
@@ -158,7 +158,7 @@ def typcmp(type1, type2):
         return -1
 
 # Both inputs are Variable objects
-#  Resolves types on one of them. 
+#  Resolves types on one of them.
 #  Won't work if both need resolving
 #  Does not up-cast llvm types
 def resolve_type(arg1, arg2):
@@ -168,10 +168,10 @@ def resolve_type(arg1, arg2):
         typ = arg2.typ
     else:
         raise TypeError, "Both types not valid"
-                
+
     return typ, arg1.llvm(typ), arg2.llvm(typ)
 
-# This won't convert any llvm types.  It assumes 
+# This won't convert any llvm types.  It assumes
 #  the llvm types in args are either fixed or not-yet specified.
 def func_resolve_type(mod, func, args):
     # already an llvm function
@@ -232,7 +232,7 @@ class Translate(object):
             except KeyError:
                 self._myglobals[name] = __builtin__.__getattribute__(name)
 
-        self.mod = lc.Module.new(func.func_name+'_mod')        
+        self.mod = lc.Module.new(func.func_name+'_mod')
 
         self._delaylist = [range, xrange, enumerate]
         self.setup_func()
@@ -241,17 +241,17 @@ class Translate(object):
         # XXX: Fix the typing here.
         double = lc.Type.double()
         # The return type will not be known until the return
-        #   function is created.   So, we will need to 
+        #   function is created.   So, we will need to
         #   walk through the code twice....
-        #   Once to get the type of the return, and again to 
-        #   emit the instructions. 
+        #   Once to get the type of the return, and again to
+        #   emit the instructions.
         #   Or, we assume the function has been called already
-        #   and the return type is transknown and passed in. 
+        #   and the return type is transknown and passed in.
         self.ret_ltype = double
         # The arg_ltypes we will be able to get from what is passed in
         argnames = self.fco.co_varnames[:self.fco.co_argcount]
         self.arg_ltypes = [double for arg in argnames]
-        ty_func = lc.Type.function(self.ret_ltype, self.arg_ltypes)        
+        ty_func = lc.Type.function(self.ret_ltype, self.arg_ltypes)
         self.lfunc = self.mod.add_function(ty_func, self.func.func_name)
         self._locals = [None]*len(self.fco.co_varnames)
         for i, name in enumerate(argnames):
@@ -267,12 +267,12 @@ class Translate(object):
         """
         for i, op, arg in itercode(self.costr):
             name = opcode.opname[op]
-            # Change the builder if the line-number 
-            # is in the list of blocks. 
+            # Change the builder if the line-number
+            # is in the list of blocks.
             if i in self.blocks.keys():
                 self.builder = lc.Builder.new(self.blocks[i])
             getattr(self, 'op_'+name)(i, op, arg)
-    
+
         # Perform code optimization
         fpm = lp.FunctionPassManager.new(self.mod)
         fpm.initialize()
@@ -285,10 +285,10 @@ class Translate(object):
         ee = le.ExecutionEngine.new(self.mod)
         if name is None:
             name = self.func.func_name
-        return core.make_ufunc(ee.get_pointer_to_function(self.lfunc), 
+        return core.make_ufunc(ee.get_pointer_to_function(self.lfunc),
                                name)
 
-    # This won't convert any llvm types.  It assumes 
+    # This won't convert any llvm types.  It assumes
     #  the llvm types in args are either fixed or not-yet specified.
     def func_resolve_type(self, func, args):
         # already an llvm function
@@ -327,8 +327,8 @@ class Translate(object):
 
     def op_LOAD_CONST(self, i, op, arg):
         const = Variable(self.constants[arg])
-        self.stack.append(const)        
-    
+        self.stack.append(const)
+
     def op_BINARY_ADD(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
@@ -348,7 +348,7 @@ class Translate(object):
         else: # typ[0] == 'i'
             res = self.builder.sub(arg1, arg2)
         self.stack.append(Variable(res))
-    
+
     def op_BINARY_MULTIPLY(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
@@ -399,10 +399,10 @@ class Translate(object):
         arg1 = self.stack.pop(-1)
         typ, arg1, arg2 = resolve_type(arg1, arg2)
         if typ[0] == 'f':
-            res = self.builder.fcmp(_compare_mapping_float[cmpop], 
+            res = self.builder.fcmp(_compare_mapping_float[cmpop],
                                     arg1, arg2)
         else: # integer FIXME: need unsigned as well...
-            res = self.builer.icmp(_compare_mapping_sint[cmpop], 
+            res = self.builer.icmp(_compare_mapping_sint[cmpop],
                                     arg1, arg2)
         self.stack.append(Variable(res))
 
@@ -432,14 +432,3 @@ class Translate(object):
 
     def op_GET_ITER(self, i, op, arg):
         pass
-
-
-
-
-
-
-    
-
-
-        
-
