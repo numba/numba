@@ -24,7 +24,9 @@ from .symtab import Variable
 from . import _numba_types as _types
 from ._numba_types import Complex64, Complex128
 
-from . import visitors, nodes
+from . import visitors, nodes, codevisitor
+
+logger = logging.getLogger(__name__)
 
 if __debug__:
     import pprint
@@ -1402,3 +1404,63 @@ class Translate(CodeIterator):
 
     def op_POP_TOP(self, i, op, arg):
         pass
+
+
+class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
+
+    def __init__(self, context, func, ast, func_signature,
+                 optimize=True, **kwds):
+        super(LLVMCodeGenerator, self).__init__(context, func, ast)
+
+        self.func_signature = func_signature
+
+        # code generation attributes
+        self.mod = lc.Module.new('%s_mod_%x' % (func.__name__, id(self)))
+        self.ee = le.ExecutionEngine.new(self.mod)
+        self.ma_obj = None
+        self.optimize = optimize
+        self.flags = kwds
+
+    def setup_func(self):
+        self.lfunc_type = self.to_llvm(self.func_signature)
+        self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
+
+        self.nlocals = len(self.fco.co_varnames)
+        # Local variables with LLVM types
+        self._locals = [None] * self.nlocals
+
+        for i, (ltype, argname) in enumerate(zip(self.lfunc.args, self.argnames)):
+            ltype.name = argname
+            # Store away arguments in locals
+
+            variable = self.symtab[argname]
+            variable.lvalue = self.lfunc.args[i]
+            self._locals[i] = variable
+
+        entry = self.lfunc.append_basic_block('Entry')
+
+        # Control FLow
+        self.blocks = {0:entry}
+        self.cfg = None
+        self.blocks_locals = {}
+        self.pending_phis = {}
+        self.pending_blocks = {}
+        self.stack = []
+        self.loop_stack = []
+
+    def to_llvm(self, type):
+        return type.to_llvm(self.context)
+
+    def translate(self):
+        self.setup_func()
+        self.visit(self.ast)
+
+        if self.optimize:
+            fpm = lp.FunctionPassManager.new(self.mod)
+            fpm.initialize()
+            fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
+            fpm.run(self.lfunc)
+            fpm.finalize()
+
+    def visit_ConstantNode(self, node):
+        return node.value(self.builder)

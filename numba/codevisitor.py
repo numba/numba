@@ -131,12 +131,12 @@ class CodeGenerationBase(visitors.NumbaVisitor):
         raise NotImplementedError
 
     def visit_Num(self, node):
-        if node.variable.type.is_int:
+        if node.type.is_int:
             return self.generate_constant_int(node.n)
-        elif node.variable.type.is_float:
+        elif node.type.is_float:
             return self.generate_constant_real(node.n)
         else:
-            assert node.variable.type.is_complex
+            assert node.type.is_complex
             return self.generate_constant_complex(node.n)
 
     def generate_constant_int(self, val):

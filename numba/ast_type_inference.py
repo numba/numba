@@ -17,7 +17,7 @@ def _infer_types(context, func, ast, func_signature):
     type_inferer = TypeInferer(context, func, ast,
                                func_signature=func_signature)
     type_inferer.infer_types()
-
+    TypeSettingVisitor(context, func, ast).visit(ast)
     return type_inferer.func_signature, type_inferer.symtab
 
 class TypeInferer(visitors.NumbaTransformer):
@@ -212,6 +212,17 @@ class TypeInferer(visitors.NumbaTransformer):
         node.variable = Variable(node.variable.type)
         return node
 
+    def visit_Compare(self, node):
+        if len(node.ops) != 1:
+            raise NotImplementedError('Multiple operators not supported')
+
+        if len(node.comparators)!=1:
+            raise NotImplementedError('Multiple comparators not supported')
+
+        self.generic_visit(node)
+        node.variable = Variable(minitypes.bool_)
+        return node
+
     def _get_index_type(self, type, index_type):
         if type.is_pointer:
             assert index_type.is_int_like
@@ -298,16 +309,20 @@ class TypeInferer(visitors.NumbaTransformer):
     def visit_Subscript(self, node):
         node.value = self.visit(node.value)
         node.slice = self.visit(node.slice)
+
         if not node.value.variable.type.is_array:
             result_type = self._get_index_type(node.value.variable.type,
                                                node.slice.variable.type)
         else:
-            if (node.slice.variable.type.is_tuple and
+            slice_variable = node.slice.variable
+            slice_type = slice_variable.type
+            if (slice_type.is_tuple and
                     isinstance(node.slice, ast.Index)):
                 node.slice = node.slice.value
 
             slices = None
-            if isinstance(node.slice, (ast.Slice, ast.Ellipsis, ast.Index)):
+            if (isinstance(node.slice, ast.Index) or
+                    slice_type.is_ellipsis or slice_type.is_slice):
                 slices = [node.slice]
             elif isinstance(node.slice, ast.ExtSlice):
                 slices = list(node.slice.dims)
@@ -335,13 +350,12 @@ class TypeInferer(visitors.NumbaTransformer):
         return node
 
     def visit_Ellipsis(self, node):
-        node.variable = Variable(_types.EllipsisType(), is_constant=True,
-                                 constant_value=Ellipsis)
-        return node
+
+        return nodes.ConstNode(Ellipsis, _types.EllipsisType())
 
     def visit_Slice(self, node):
         self.generic_visit(node)
-        variable = Variable(_types.SliceType())
+        type = _types.SliceType()
 
         values = [node.lower, node.upper, node.step]
         constants = []
@@ -353,10 +367,9 @@ class TypeInferer(visitors.NumbaTransformer):
             else:
                 break
         else:
-            variable.is_constant = True
-            variable.constant_value = slice(*constants)
+            return nodes.ConstNode(slice(*constants), type)
 
-        node.variable = variable
+        node.variable = Variable(type)
         return node
 
     def visit_ExtSlice(self, node):
@@ -365,14 +378,10 @@ class TypeInferer(visitors.NumbaTransformer):
         return node
 
     def visit_Num(self, node):
-        node.variable = Variable(self.type_from_pyval(node.n), is_constant=True,
-                                 constant_value=node.n)
-        return node
+        return nodes.ConstNode(node.n)
 
     def visit_Str(self, node):
-        node.variable = Variable(self.type_from_pyval(node.s), is_constant=True,
-                                 constant_value=node.s)
-        return node
+        return nodes.ConstNode(node.s)
 
     def _get_constant_list(self, node):
         if not isinstance(node.ctx, ast.Load):
@@ -551,3 +560,21 @@ class TypeInferer(visitors.NumbaTransformer):
             node.value = nodes.DeferredCoercionNode(value, self.return_variable)
 
         return node
+
+    #
+    ### Unsupported nodes
+    #
+
+    def visit_Global(self, node):
+        raise NotImplementedError("Global keyword")
+
+class TypeSettingVisitor(visitors.NumbaVisitor):
+    """
+    Set node.type for all AST nodes after type inference from node.variable.
+    Allows for deferred coercions (may be removed in the future).
+    """
+
+    def visit(self, node):
+        if isinstance(node, ast.expr):
+            node.type = node.variable.type
+        super(TypeSettingVisitor, self).visit(node)
