@@ -87,6 +87,9 @@ class TypeInferer(visitors.NumbaTransformer):
         for varname in self.varnames[len(arg_types):]:
             self.symtab[varname] = Variable(None, is_local=True, name=varname)
 
+        self.symtab['None'] = Variable(minitypes.object_, is_constant=True,
+                                       constant_value=None)
+
     def promote_types(self, t1, t2):
         return self.context.promote_types(t1, t2)
 
@@ -219,7 +222,9 @@ class TypeInferer(visitors.NumbaTransformer):
             raise NotImplementedError
 
     def _is_newaxis(self, node):
-        return node.variable.type.is_none or node.variable.type.is_newaxis
+        v = node.variable
+        return ((v.type.is_object and v.constant_value is None) or
+                v.type.is_newaxis)
 
     def _unellipsify(self, node, slices, subscript_node):
         """
