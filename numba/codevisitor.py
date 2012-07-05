@@ -1,33 +1,28 @@
 # Copyright (c) 2012, Siu Kwan Lam
 # All rights reserved.
 #
-# Contains the CodeGenerationBase class.
+# Modifications by Continuum Analytics, Inc
 
 import logging
 import ast
 
 import types, dialect
 
-from pymothoa.util.descriptor import Descriptor, instanceof
-from compiler_errors import *
+from .pymothoa.util.descriptor import Descriptor, instanceof
+from .pymothoa.compiler_errors import *
+from . import nodes, visitors
 
 logger = logging.getLogger(__name__)
 
-class CodeGenerationBase(ast.NodeVisitor):
+class CodeGenerationBase(visitors.NumbaVisitor):
 
-    symbols = Descriptor(constant=True, constrains=instanceof(dict))
-    __nodes = Descriptor(constant=True)
-
-    def __init__(self, globalsymbols):
-        '''
-        globalsymbols -- A dict containing global symbols for the function.
-        '''
-        self.symbols = globalsymbols.copy()
-        self.__nodes = []
+    def __init__(self, context, func, ast):
+        super(CodeGenerationBase, self).__init__(context, func, ast)
+        self._nodes = []
 
     @property
     def current_node(self):
-        return self.__nodes[-1]
+        return self._nodes[-1]
 
     def visit(self, node):
         try:
@@ -38,7 +33,7 @@ class CodeGenerationBase(ast.NodeVisitor):
             raise InternalError(node, 'Not yet implemented.')
         else:
             try:
-                self.__nodes.append(node) # push current node
+                self._nodes.append(node) # push current node
                 return fn(node)
             except TypeError as e:
                 logger.exception(e)
@@ -47,10 +42,9 @@ class CodeGenerationBase(ast.NodeVisitor):
                 logger.exception(e)
                 raise InternalError(node, str(e))
             finally:
-                self.__nodes.pop() # pop current node
+                self._nodes.pop() # pop current node
 
     def visit_FunctionDef(self, node):
-        # function def
         with self.generate_function(node.name) as fndef:
             # arguments
             self.visit(node.args)
@@ -67,218 +61,38 @@ class CodeGenerationBase(ast.NodeVisitor):
                 self.visit(stmt)
         # close function
 
-
     def visit_arguments(self, node):
         if node.vararg or node.kwarg or node.defaults:
-            raise FunctionDeclarationError('Does not support variable/keyword/default arguments.')
+            raise FunctionDeclarationError(
+                'Does not support variable/keyword/default arguments.')
 
-        arguments=[]
-        for arg in node.args:
-            if not isinstance(arg.ctx, ast.Param):
-                raise InternalError('Argument is not ast.Param?')
-            name = arg.id
-            arguments.append(name)
-
-        if len(set(arguments)) != len(arguments):
-            raise InternalError(node, '''Argument redeclared.
-This error should have been caught by the Python parser.''')
-
-        self.generate_function_arguments(arguments)
+        self.generate_function_arguments([arg.id for arg in arguments])
 
     def generate_function(self, name):
         raise NotImplementedError
 
-
     def generate_function_arguments(self, arguments):
         raise NotImplementedError
 
-    def visit_Pass(self, node):
-        pass
-
     def visit_Call(self, node):
-        fn = self.visit(node.func)
-
-        if type(fn) is type and issubclass(fn, dialect.Construct):
-            # Special construct for our dialect
-            try:
-                handler = {
-                    dialect.var: self.construct_var,
-                }[fn]
-            except KeyError:
-                raise NotImplementedError(
-                        'This construct has yet to be implemented.'
-                        )
-            else:
-                return handler(fn, node)
-        else:# is a real function call
-            if node.keywords or node.starargs or node.kwargs:
-                raise InvalidCall(node, 'Cannot use keyword or star arguments.')
-
-            args = map(self.visit, node.args)
-            return self.generate_call(fn, args) # return value
-
-        raise InternalError(self.current_node, 'Unreachable')
+        func = self.visit(node.func)
+        return self.generate_call(func, self.visitlist(node.args))
 
     def generate_declare(self,  name, ty):
         raise NotImplementedError
 
-    def construct_var(self, fn, node):
-        if fn is not dialect.var:
-            raise AssertionError('Implementation error.')
-
-        if node.args:
-            raise InvalidUseOfConstruct(
-                    node,
-                    ('Construct "var" must contain at least one'
-                    ' keyword arguments in the form of "var ( name=type )".'),
-                  )
-
-        # for each defined variable
-        for kw in node.keywords:
-            #ty = self.visit(kw.value) # type
-            ty = self.extract_type(kw.value)
-            name = kw.arg             # name
-            if name in self.symbols:
-                raise VariableRedeclarationError(kw.value)
-            variable = self.generate_declare(name, ty)
-            # store new variable to symbol table
-            self.symbols[name] = variable
-        return # return None
-
-    def extract_type(self, node):
-        if isinstance(node, ast.Name): # simple symbols
-            if not isinstance(node.ctx, ast.Load):
-                raise InternalError(node, 'Only load context is possible.')
-            return self.symbols[node.id]
-        elif isinstance(node, ast.Call): # complex type
-            fn = self.visit(node.func)
-            if not issubclass(fn, types.DummyType):
-                raise AssertionError('Not a dummy type.')
-            if fn is types.Slice:
-                # Defining a slice type
-                if len(node.args) != 1:
-                    raise InvalidUseOfConstruct(
-                            node,
-                            ('Slice constructor takes 1 arguments.\n'
-                             'Hint: Slice(ElemType)')
-                          )
-
-                if node.keywords or node.starargs or node.kwargs:
-                    raise InvalidUseOfConstruct(
-                                node,
-                                'Cannot use keyword or star arguments.'
-                            )
-
-                elemty = self.visit(node.args[0])
-
-                if type(elemty) is not type or not issubclass(elemty, types.Type):
-                    raise InvalidUseOfConstruct(
-                                node,
-                                'Expecting a type for element type of array.'
-                          )
-
-                newclsname = '__CustomSlice__%s'%(elemty.__name__)
-                newcls = type(newclsname, (types.GenericUnboundedArray,), {
-                    # List all class members of the new array type.
-                    'elemtype' : elemty,
-                })
-
-                return newcls # return the new array type class object
-            elif fn is types.Vector:
-                # Defining a vector type
-                if len(node.args) != 2:
-                    raise InvalidUseOfConstruct(
-                            node,
-                            ('Vector constructor takes two arguments.\n'
-                             'Hint: Vector(ElemType, ElemCount)')
-                          )
-
-                if node.keywords or node.starargs or node.kwargs:
-                    raise InvalidUseOfConstruct(
-                                node,
-                                'Cannot use keyword or star arguments.'
-                            )
-
-                elemty = self.visit(node.args[0])
-                elemct = self.constant_number(node.args[1])
-
-                if type(elemty) is not type or not issubclass(elemty, types.Type):
-                    raise InvalidUseOfConstruct(
-                                node,
-                                'Expecting a type for element type of vector.'
-                          )
-
-                if elemct <= 0:
-                    raise InvalidUseOfConstruct(
-                              node,
-                              'Vector type must have at least one element.'
-                          )
-
-
-                newclsname = '__CustomVector__%s%d'%(elemty.__name__, elemct)
-                newcls = type(newclsname, (types.GenericVector,), {
-                    # List all class members of the new vector type.
-                    'elemtype' : elemty,
-                    'elemcount': elemct,
-                })
-
-                return newcls # return the new vector type class object
-            elif fn is types.Array:
-                # Defining an Array type
-                if len(node.args) != 2:
-                    raise InvalidUseOfConstruct(
-                            node,
-                            ('Array constructor takes two arguments.\n'
-                             'Hint: Array(ElemType, ElemCount)')
-                          )
-
-                if node.keywords or node.starargs or node.kwargs:
-                    raise InvalidUseOfConstruct(
-                                node,
-                                'Cannot use keyword or star arguments.'
-                            )
-
-                elemty = self.visit(node.args[0])
-                elemct = self.visit(node.args[1]) # accept constants & variables
-
-                if type(elemty) is not type or not issubclass(elemty, types.Type):
-                    raise InvalidUseOfConstruct(
-                                node,
-                                'Expecting a type for element type of array.'
-                          )
-
-                if elemct <= 0:
-                    raise InvalidUseOfConstruct(
-                              node,
-                              'array type must have at least one element.'
-                          )
-
-                newclsname = '__CustomArray__%s%s'%(elemty.__name__, elemct)
-                newcls = type(newclsname, (types.GenericBoundedArray,), {
-                    # List all class members of the new array type.
-                    'elemtype' : elemty,
-                    'elemcount': elemct,
-                })
-
-                return newcls # return the new array type class object
-
-        raise InternalError(node, 'Cannot resolve type.')
-
-    def visit_Expr(self, node):
-        self.generic_visit(node)
-
     def visit_Attribute(self, node):
+        result = self.visit(node.value)
         if isinstance(node.ctx, ast.Load):
-            value = self.visit(node.value)
-            return getattr(value, node.attr)
+            return self.generate_load_attribute(node, result)
         else:
-            raise NotImplementedError('Storing into attribute is not supported.')
+            self.generate_store_attribute(node, result)
 
     def visit_Compare(self, node):
-        if len(node.ops)!=1:
+        if len(node.ops) != 1:
             raise NotImplementedError('Multiple operators in ast.Compare')
 
-        if len(node.comparators)!=1:
+        if len(node.comparators) != 1:
             raise NotImplementedError('Multiple comparators in ast.Compare')
 
         lhs = self.visit(node.left)
@@ -291,7 +105,7 @@ This error should have been caught by the Python parser.''')
             value = self.visit(node.value)
             self.generate_return(value)
         else:
-            self.generate_return()
+            self.generate_return(None)
 
     def generate_return(self, value):
         raise NotImplementedError
@@ -309,37 +123,21 @@ This error should have been caught by the Python parser.''')
         raise NotImplementedError
 
     def visit_Assign(self, node):
-        if len(node.targets)!=1:
-            raise NotImplementedError('Mutliple targets in assignment.')
         target = self.visit(node.targets[0])
         value = self.visit(node.value)
-
         return self.generate_assign(value, target)
 
     def generate_assign(self, from_value, to_target):
         raise NotImplementedError
 
-    def constant_number(self, node):
-        if isinstance(node, ast.Num):
-            retval = node.n
-        else:
-            if not isinstance(node, ast.Name):
-                raise NotImplementedError
-            if not isinstance(node.ctx, ast.Load):
-                raise NotImplementedError
-
-            retval = self.symbols[node.id]
-        if ( not isinstance(retval, int)
-             and not isinstance(retval, long)
-             and not isinstance(retval, float) ):
-            raise TypeError('Not a numeric constant.')
-        return retval
-
     def visit_Num(self, node):
-        if type(node.n) is int:
+        if node.variable.type.is_int:
             return self.generate_constant_int(node.n)
-        elif type(node.n) is float:
+        elif node.variable.type.is_float:
             return self.generate_constant_real(node.n)
+        else:
+            assert node.variable.type.is_complex
+            return self.generate_constant_complex(node.n)
 
     def generate_constant_int(self, val):
         raise NotImplementedError
@@ -347,8 +145,13 @@ This error should have been caught by the Python parser.''')
     def generate_constant_real(self, val):
         raise NotImplementedError
 
+    def generate_constant_complex(self, val):
+        raise NotImplementedError
+
     def visit_Subscript(self, node):
-        if isinstance(node.slice, ast.Slice):
+        if node.slice.variable.type.is_slice:
+            raise NotImplementedError("slicing")
+
             ptr = self.visit(node.value)
             idx = self.visit(node.slice.lower)
             if node.slice.upper or node.slice.step:
@@ -362,8 +165,8 @@ This error should have been caught by the Python parser.''')
             return self.generate_array_slice(ptr, idx, None, None)
 
         else:
-            if not isinstance(node.slice, ast.Index):
-                raise AssertionError(ast.dump(node.slice))
+            assert node.slice.variable.type.is_int
+
             ptr = self.visit(node.value)
             idx = self.visit(node.slice.value)
             if isinstance(ptr.type, types.GenericVector):
