@@ -19,7 +19,13 @@ class NumbaType(minitypes.Type):
     is_numba_type = True
 
 class TupleType(NumbaType, minitypes.ObjectType):
+    is_tuple = True
     name = "tuple"
+    size = 0
+
+class ListType(NumbaType, minitypes.ObjectType):
+    is_list = True
+    name = "list"
     size = 0
 
 class IteratorType(NumbaType, minitypes.ObjectType):
@@ -78,6 +84,33 @@ class NumpyDtypeType(NumbaType, minitypes.ObjectType):
 
     def resolve(self):
         return _map_dtype(self.dtype)
+
+class EllipsisType(NumbaType, minitypes.ObjectType):
+    is_ellipsis = True
+
+    def __eq__(self, other):
+        return other.is_ellipsis
+
+    def __repr__(self):
+        return "..."
+
+class SliceType(NumbaType, minitypes.ObjectType):
+    is_slice = True
+
+    def __eq__(self, other):
+        return other.is_slice
+
+    def __repr__(self):
+        return ":"
+
+class NewAxisType(NumbaType, minitypes.ObjectType):
+    is_newaxis = True
+
+    def __eq__(self, other):
+        return other.is_newaxis
+
+    def __repr__(self):
+        return "newaxis"
 
 class GlobalType(NumbaType):
     is_global = True

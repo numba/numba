@@ -14,10 +14,11 @@ class Variable(object):
     """
 
     def __init__(self, type, is_constant=False, is_local=True,
-                 name=None, lvalue=None):
+                 name=None, lvalue=None, constant_value=None):
         self.name = name
         self.type = type
         self.is_constant = is_constant
+        self.constant_value = constant_value
         self.lvalue = lvalue
 
     @classmethod

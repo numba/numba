@@ -1,5 +1,10 @@
 import ast
 import __builtin__ as builtins
+try:
+    import numbers
+except ImportError:
+    # pre-2.6
+    numbers = None
 
 class NumbaVisitorMixin(object):
     def __init__(self, context, func, ast):
@@ -32,6 +37,21 @@ class NumbaVisitorMixin(object):
 
         list[:] = newlist
         return list
+
+    def is_complex(self, n):
+        if numbers:
+            return isinstance(n, numbers.Complex)
+        return isinstance(n, complex)
+
+    def is_real(self, n):
+        if numbers:
+            return isinstance(n, numbers.Real)
+        return isinstance(n, float)
+
+    def is_int(self, n):
+        if numbers:
+            return isinstance(n, numbers.Int)
+        return isinstance(n, (int, long))
 
 class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
     "Non-mutating visitor"

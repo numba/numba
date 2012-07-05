@@ -45,6 +45,28 @@ def test_empty_like(a):
     c = numpy.zeros_like(a, dtype=numpy.int32)
     d = numpy.ones_like(a)
 
+def test_slicing(a):
+    n = numpy.newaxis
+
+    # 0D
+    b = a[0]
+    c = a[9]
+
+    # 1D
+    d = a[:]
+    e = a[...]
+
+    # 2D
+    f = a[n, ...]
+    g = a[numpy.newaxis, :]
+    h = a[..., numpy.newaxis]
+    i = a[:, n]
+
+    # 3D
+    j = a[n, numpy.newaxis, 0]
+    k = a[numpy.newaxis, 0, n]
+    l = a[0, n, n]
+
 # ______________________________________________________________________
 
 def infer(func, arg_types):
@@ -81,11 +103,27 @@ class TestTypeInference(unittest.TestCase):
         self.assertEqual(symtab['c'].type, int32[:])
         self.assertEqual(symtab['d'].type, double[:])
 
+    def test_slicing(self):
+        sig, symtab = infer(test_slicing, [double[:]])
+        self.assertEqual(symtab['n'].type, numba_types.NewAxisType())
+
+        self.assertEqual(symtab['b'].type, double)
+        self.assertEqual(symtab['c'].type, double)
+        self.assertEqual(symtab['d'].type, double[:])
+        self.assertEqual(symtab['e'].type, double[:])
+        self.assertEqual(symtab['f'].type, double[:, :])
+        self.assertEqual(symtab['g'].type, double[:, :])
+        self.assertEqual(symtab['h'].type, double[:, :])
+        self.assertEqual(symtab['i'].type, double[:, :])
+        self.assertEqual(symtab['j'].type, double[:, :, :])
+        self.assertEqual(symtab['k'].type, double[:, :, :])
+        self.assertEqual(symtab['k'].type, double[:, :, :])
+
 # ______________________________________________________________________
 
 if __name__ == "__main__":
     #import dis
     # dis.dis(_simple_func)
     #dis.dis(for_loop)
-    TestTypeInference('test_empty_like').debug()
-    #unittest.main()
+    # TestTypeInference('test_slicing').debug()
+    unittest.main()

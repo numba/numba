@@ -99,6 +99,11 @@ class TypeInferer(visitors.NumbaTransformer):
     def type_from_pyval(self, pyval):
         return self.context.typemapper.from_python(pyval)
 
+    def visit(self, node):
+        if node is Ellipsis:
+            node = ast.Ellipsis()
+        return super(TypeInferer, self).visit(node)
+
     def visit_AugAssign(self, node):
         "Inplace assignment"
         target = node.target
@@ -204,48 +209,202 @@ class TypeInferer(visitors.NumbaTransformer):
         node.variable = Variable(node.variable.type)
         return node
 
-    def _get_index_type(self, array_type, index_type):
-        if array_type.is_array:
+    def _get_index_type(self, type, index_type):
+        if type.is_pointer:
             assert index_type.is_int_like
-            return array_type.dtype
-        elif array_type.is_pointer:
-            assert index_type.is_int_like
-            return array_type.base_type
-        elif array_type.is_object:
+            return type.base_type
+        elif type.is_object:
             return minitypes.object_
         else:
             raise NotImplementedError
 
+    def _is_newaxis(self, node):
+        return node.variable.type.is_none or node.variable.type.is_newaxis
+
+    def _unellipsify(self, node, slices, subscript_node):
+        """
+        Given an array node `node`, process all AST slices and create the
+        final type:
+
+            - process newaxes (None or numpy.newaxis)
+            - replace Ellipsis with a bunch of ast.Slice objects
+            - process integer indices
+            - append any missing slices in trailing dimensions
+        """
+        type = node.variable.type
+
+        if not type.is_array:
+            assert type.is_object
+            return minitypes.object_, node
+
+        result = []
+        seen_ellipsis = False
+
+        # Filter out newaxes
+        newaxes = [newaxis for newaxis in slices if self._is_newaxis(newaxis)]
+        n_indices = len(slices) - len(newaxes)
+
+        full_slice = ast.Slice(lower=None, upper=None, step=None)
+        ast.copy_location(full_slice, slices[0])
+
+        # process ellipses and count integer indices
+        indices_seen = 0
+        for slice_node in slices[::-1]:
+            slice_type = slice_node.variable.type
+            if slice_type.is_ellipsis:
+                if seen_ellipsis:
+                    result.append(full_slice)
+                else:
+                    nslices = type.ndim - n_indices + 1
+                    result.extend([full_slice] * nslices)
+                    seen_ellipsis = True
+            elif (slice_type.is_slice or slice_type.is_int or
+                      self._is_newaxis(slice_node)):
+                indices_seen += slice_type.is_int
+                result.append(slice_node)
+            else:
+                # TODO: Coerce all object operands to integer indices?
+                # TODO: (This will break indexing with the Ellipsis object or
+                # TODO:  with slice objects that we couldn't infer)
+                return minitypes.object_, nodes.CoercionNode(node,
+                                                             minitypes.object_)
+
+        # append any missing slices (e.g. a2d[:]
+        result_length = len(result) - len(newaxes)
+        if result_length < type.ndim:
+            nslices = type.ndim - result_length
+            result.extend([full_slice] * nslices)
+
+        subscript_node.slice = ast.ExtSlice(result)
+        ast.copy_location(subscript_node.slice, slices[0])
+
+        # create the final array type and set it in value.variable
+        result_dtype = node.variable.type.dtype
+        result_ndim = node.variable.type.ndim + len(newaxes) - indices_seen
+        if result_ndim > 0:
+            result_type = result_dtype[(slice(None),) * result_ndim]
+        elif result_ndim == 0:
+            result_type = result_dtype
+        else:
+            result_type = minitypes.object_
+
+        return result_type, node
+
     def visit_Subscript(self, node):
         node.value = self.visit(node.value)
         node.slice = self.visit(node.slice)
-        result_type = self._get_index_type(node.value.variable.type,
-                                           node.slice.variable.type)
+        if not node.value.variable.type.is_array:
+            result_type = self._get_index_type(node.value.variable.type,
+                                               node.slice.variable.type)
+        else:
+            if (node.slice.variable.type.is_tuple and
+                    isinstance(node.slice, ast.Index)):
+                node.slice = node.slice.value
+
+            slices = None
+            if isinstance(node.slice, (ast.Slice, ast.Ellipsis, ast.Index)):
+                slices = [node.slice]
+            elif isinstance(node.slice, ast.ExtSlice):
+                slices = list(node.slice.dims)
+            elif isinstance(node.slice, ast.Tuple):
+                slices = list(node.slice.elts)
+
+            if slices is None:
+                result_type = minitypes.object_
+            else:
+                result_type, node.value = self._unellipsify(node.value, slices, node)
+
         node.variable = Variable(result_type)
         return node
 
     def visit_Index(self, node):
         "Normal index"
         node.value = self.visit(node.value)
-        node.variable = Variable(node.value.type)
+        variable = node.value.variable
+        type = variable.type
+        if (type.is_object and variable.is_constant and
+                variable.constant_value is None):
+            type = _types.NewAxisType()
+
+        node.variable = Variable(type)
         return node
 
-    # TODO: ellipsis and slices
+    def visit_Ellipsis(self, node):
+        node.variable = Variable(_types.EllipsisType(), is_constant=True,
+                                 constant_value=Ellipsis)
+        return node
+
+    def visit_Slice(self, node):
+        self.generic_visit(node)
+        variable = Variable(_types.SliceType())
+
+        values = [node.lower, node.upper, node.step]
+        constants = []
+        for value in values:
+            if value is None:
+                constants.append(None)
+            elif constant.variable.is_constant:
+                constants.append(value.variable.constant_value)
+            else:
+                break
+        else:
+            variable.is_constant = True
+            variable.constant_value = slice(*constants)
+
+        node.variable = variable
+        return node
+
+    def visit_ExtSlice(self, node):
+        self.generic_visit(node)
+        node.variable = Variable(minitypes.object_)
+        return node
 
     def visit_Num(self, node):
-        node.variable = Variable(self.type_from_pyval(node.n), is_constant=True)
+        node.variable = Variable(self.type_from_pyval(node.n), is_constant=True,
+                                 constant_value=node.n)
         return node
 
     def visit_Str(self, node):
-        node.variable = Variable(self.type_from_pyval(node.s), is_constant=True)
+        node.variable = Variable(self.type_from_pyval(node.s), is_constant=True,
+                                 constant_value=node.s)
         return node
+
+    def _get_constant_list(self, node):
+        if not isinstance(node.ctx, ast.Load):
+            return None
+
+        items = []
+        constant_value = None
+        for item_node in node.elts:
+            if item_node.variable.is_constant:
+                items.append(item_node.variable.constant_value)
+            else:
+                return None
+
+        return items
 
     def visit_Tuple(self, node):
         self.visitlist(node.elts)
-        node.variable = Variable(_types.TupleType(size=len(node.elts)))
+        constant_value = self._get_constant_list(node)
+        if constant_value is not None:
+            constant_value = tuple(constant_value)
+        type = _types.TupleType(size=len(node.elts),
+                                is_constant=constant_value is not None,
+                                constant_value=constant_value)
+        node.variable = Variable(type)
+        return node
+
+    def visit_List(self, node):
+        self.visitlist(node.elts)
+        constant_value = self._get_constant_list(node)
+        type = _types.ListType(size=len(node.elts),
+                               is_constant=constant_result is not None,
+                               constant_value=constant_value)
+        node.variable = Variable(type)
         return node
 
     def _resolve_attribute_dtype(self, dtype):
+        "Resolve the type for numpy dtype attributes"
         if dtype.is_numpy_attribute:
             numpy_attr = getattr(dtype.module, dtype.attr, None)
             if isinstance(numpy_attr, numpy.dtype):
@@ -341,6 +500,15 @@ class TypeInferer(visitors.NumbaTransformer):
         node.variable = result
         return node
 
+    def _resolve_numpy_attribute(self, node, type):
+        attribute = getattr(type.module, node.attr)
+        if attribute is numpy.newaxis:
+            result_type = _types.NewAxisType()
+        else:
+            result_type = _types.NumpyAttributeType(module=type.module,
+                                                    attr=node.attr)
+        return result_type
+
     def visit_Attribute(self, node):
         node.value = self.visit(node.value)
         type = node.value.variable.type
@@ -352,9 +520,8 @@ class TypeInferer(visitors.NumbaTransformer):
                 result_type = type.base_type
             else:
                 raise AttributeError("'%s' of complex type" % node.attr)
-        elif type.is_numpy_module and getattr(type.module, node.attr):
-            result_type = _types.NumpyAttributeType(module=type.module,
-                                                    attr=node.attr)
+        elif type.is_numpy_module and hasattr(type.module, node.attr):
+            result_type = self._resolve_numpy_attribute(node, type)
         elif type.is_object:
             result_type = type
         elif type.is_array:
