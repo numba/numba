@@ -29,9 +29,9 @@ setup(
         "Topic :: Utilities",
     ],
     description = "compiling Python code for NumPy",
-    packages = ["numba"],
+    packages = ["numba", "numba.pymothoa", "numba.minivect"],
     ext_modules = [Extension(name = "numba._ext",
                              sources = ["numba/_ext.c"],
                              include_dirs=[numpy.get_include()])],
-    version = '0.1' 
+    version = '0.1'
 )
