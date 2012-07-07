@@ -3,6 +3,8 @@ import sys
 import types
 import __builtin__
 import functools
+from contextlib import contextmanager
+import ast
 
 import numpy as np
 
@@ -26,6 +28,8 @@ from ._numba_types import Complex64, Complex128
 
 from . import visitors, nodes, codevisitor
 
+
+import logging
 logger = logging.getLogger(__name__)
 
 if __debug__:
@@ -1408,13 +1412,20 @@ class Translate(CodeIterator):
 
 class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
 
-    def __init__(self, context, func, ast, func_signature,
-                 optimize=True, **kwds):
+    def __init__(self, context, func, ast, func_signature, symtab,
+                 optimize=True, func_name=None, **kwds):
         super(LLVMCodeGenerator, self).__init__(context, func, ast)
 
+        self.func_name = func_name or func.__name__
         self.func_signature = func_signature
 
+        self.symtab = symtab
+
+        self.blocks = {} # stores id => basic-block
+
         # code generation attributes
+        # TODO: Should not use one module per function.
+        #       Also, not one ExecutionEngine per function.
         self.mod = lc.Module.new('%s_mod_%x' % (func.__name__, id(self)))
         self.ee = le.ExecutionEngine.new(self.mod)
         self.ma_obj = None
@@ -1424,43 +1435,210 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
     def setup_func(self):
         self.lfunc_type = self.to_llvm(self.func_signature)
         self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
-
         self.nlocals = len(self.fco.co_varnames)
         # Local variables with LLVM types
         self._locals = [None] * self.nlocals
+
+        # Add entry block for alloca.
+        entry = self.append_basic_block('entry')
+        self.builder = lc.Builder.new(entry)
 
         for i, (ltype, argname) in enumerate(zip(self.lfunc.args, self.argnames)):
             ltype.name = argname
             # Store away arguments in locals
 
             variable = self.symtab[argname]
-            variable.lvalue = self.lfunc.args[i]
+
+            stackspace = self.builder.alloca(ltype.type)    # allocate on stack
+            variable.lvalue = stackspace
+
+            self.builder.store(ltype, stackspace) # store arg value
+
             self._locals[i] = variable
 
-        entry = self.lfunc.append_basic_block('Entry')
+        for name, var in self.symtab.items():
+            if name not in self.argnames:
+                # Allocate storage for all variables
+                stackspace = self.builder.alloca(var.ltype)
+                var.lvalue = stackspace
+
+        # TODO: Put current function into symbol table for recursive call
+
 
         # Control FLow
-        self.blocks = {0:entry}
-        self.cfg = None
-        self.blocks_locals = {}
-        self.pending_phis = {}
-        self.pending_blocks = {}
-        self.stack = []
-        self.loop_stack = []
+        # Not needed for now.
+        #    self.cfg = None
+        #    self.blocks_locals = {}
+        #    self.pending_phis = {}
+        #    self.pending_blocks = {}
+        #    self.stack = []
+        #    self.loop_stack = []
 
     def to_llvm(self, type):
         return type.to_llvm(self.context)
 
     def translate(self):
         self.setup_func()
-        self.visit(self.ast)
+
+        assert isinstance(self.ast, ast.FunctionDef)
+
+        # Handle the doc string for the function
+        # FIXME: Ignoring it for now
+        if (isinstance(self.ast.body[0], ast.Expr) and
+            isinstance(self.ast.body[0].value, ast.Str)):
+            # Python doc string
+            logger.info('Ignoring python doc string.')
+            statements = self.ast.body[1:]
+        else:
+            statements = self.ast.body
+
+        for node in statements: # do codegen for each statement
+            logger.debug(ast.dump(node))
+            self.visit(node)
+
+        # Done code generation
+        del self.builder  # release the builder to make GC happy
+
+        # Verify code generation
+        self.lfunc.verify()
 
         if self.optimize:
+            # TODO: Should use PassManagerBuilder instead of manually
+            #       Populating the function pass manager.
+            #       PassManagerBuilder allows us to do O1, O2, O3
             fpm = lp.FunctionPassManager.new(self.mod)
             fpm.initialize()
             fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
             fpm.run(self.lfunc)
             fpm.finalize()
 
-    def visit_ConstantNode(self, node):
-        return node.value(self.builder)
+    def _get_ee(self):
+        if self.ee is None:
+            self.ee = le.ExecutionEngine.new(self.mod)
+        return self.ee
+
+    def get_ctypes_func(self, llvm=True):
+        ee = self._get_ee()
+        import ctypes
+        sig = self.func_signature
+        restype = _types.convert_to_ctypes(sig.return_type)
+
+        prototype = ctypes.CFUNCTYPE(restype,
+                                     *[_types.convert_to_ctypes(x)
+                                           for x in sig.args])
+        if hasattr(restype, 'make_ctypes_prototype_wrapper'):
+            # See numba.utils.ComplexMixin for an example of
+            # make_ctypes_prototype_wrapper().
+            prototype = restype.make_ctypes_prototype_wrapper(prototype)
+        if llvm:
+            PY_CALL_TO_LLVM_CALL_MAP[self.func] = \
+                self.build_call_to_translated_function
+            return prototype(ee.get_pointer_to_function(self.lfunc))
+        else:
+            return prototype(self.func)
+
+    def build_call_to_translated_function(self, target_translator, args):
+        # FIXME: At some point, I assume we'll actually want to index
+        # by argument types, so this will grab the best suited
+        # translation of a function based on the caller circumstance.
+        if len(args) != len(self.arg_types):
+            raise TypeError("Mismatched argument count in call to translated "
+                            "function (%r)." % (self.func))
+        ee = self._get_ee()
+        func_name = '%s_%d' % (self.func.__name__, id(self))
+        try:
+            lfunc_ptr_ptr = target_translator.mod.get_global_variable_named(
+                func_name)
+        except:
+            # FIXME: This is linkage at its grossest (and least
+            # dynamic - what if the called function is recompiled at
+            # some point?).  See if there is some way to link this up
+            # using symbols and module linkage settings.
+            lfunc_ptr_ty = self.lfunc.type
+            lfunc_ptr_ptr = target_translator.mod.add_global_variable(
+                lfunc_ptr_ty, func_name)
+            lfunc_ptr_ptr.initializer = lc.Constant.inttoptr(
+                lc.Constant.int(_intp, ee.get_pointer_to_function(self.lfunc)),
+                lfunc_ptr_ty)
+            lfunc_ptr_ptr.linkage = lc.LINKAGE_INTERNAL
+        lfunc = target_translator.builder.load(lfunc_ptr_ptr)
+        if __debug__:
+            print "build_call_to_translated_function():", str(lfunc)
+        largs = [arg.llvm(convert_to_strtype(param_typ),
+                          builder = target_translator.builder)
+                 for arg, param_typ in zip(args, self.arg_types)]
+        res = target_translator.builder.call(lfunc, largs)
+        res_typ = convert_to_strtype(self.ret_type)
+        return res, res_typ
+
+    # __________________________________________________________________________
+
+    def visit_ConstNode(self, node):
+        constval = node.value(self.builder)
+        return Variable(node.type, is_constant=True, lvalue=constval)
+
+    def generate_load_symbol(self, name):
+        var = self.symtab[name]
+        value = self.builder.load(var.lvalue)
+        # Create a temp variable
+        tmpvar = Variable.from_variable(var, lvalue=value)
+        return tmpvar
+
+    def generate_store_symbol(self, name):
+        return self.symtab[name]
+
+    def generate_compare(self, op_class, lhs, rhs):
+        if lhs.type.is_float:
+            op_map = {
+                ast.Gt : lc.FCMP_OGT,
+                # TODO: fill the rest
+            }
+            lop = op_map[op_class]
+            return self.builder.fcmp(lop, lhs.lvalue, rhs.lvalue)
+        else:
+            raise NotImplementedError(op_class, lhs, rhs)
+
+    def generate_if(self, test, iftrue_body, orelse_body):
+        bb_true = self.append_basic_block('if.true')
+        bb_false = self.append_basic_block('if.false')
+        bb_endif = self.append_basic_block('if.end')
+        self.builder.cbranch(test, bb_true, bb_false)
+
+        # if true then
+        self.builder.position_at_end(bb_true)
+        for stmt in iftrue_body:
+            self.visit(stmt)
+        else: # close the block
+            if not self.is_block_terminated():
+                self.builder.branch(bb_endif)
+
+        # else
+        self.builder.position_at_end(bb_false)
+        for stmt in orelse_body:
+            self.visit(stmt)
+        else: # close the block
+            if not self.is_block_terminated():
+                self.builder.branch(bb_endif)
+
+        # endif
+        self.builder.position_at_end(bb_endif)
+
+    def append_basic_block(self, name='unamed'):
+        idx = len(self.blocks)
+        bb = self.lfunc.append_basic_block('%s_%d'%(name, idx))
+        self.blocks[idx]=bb
+        return bb
+
+    def generate_assign(self, value, target):
+        self.builder.store(value.lvalue, target.lvalue)
+
+    def generate_return(self, value):
+        self.builder.ret(value.lvalue)
+
+    def is_block_terminated(self):
+        '''
+        Check if the current basicblock is properly terminated.
+        That means the basicblock is ended with a branch or return
+        '''
+        return self.builder.basic_block.instructions[-1].is_terminator
+

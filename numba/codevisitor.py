@@ -6,7 +6,7 @@
 import logging
 import ast
 
-import types, dialect
+from .pymothoa import types, dialect
 
 from .pymothoa.util.descriptor import Descriptor, instanceof
 from .pymothoa.compiler_errors import *
@@ -44,35 +44,35 @@ class CodeGenerationBase(visitors.NumbaVisitor):
             finally:
                 self._nodes.pop() # pop current node
 
-    def visit_FunctionDef(self, node):
-        with self.generate_function(node.name) as fndef:
-            # arguments
-            self.visit(node.args)
-            # function body
-            if (isinstance(node.body[0], ast.Expr) and
-                isinstance(node.body[0].value, ast.Str)):
-                # Python doc string
-                logger.info('Ignoring python doc string.')
-                statements = node.body[1:]
-            else:
-                statements = node.body
+    #    def visit_FunctionDef(self, node):
+    #        with self.generate_function(node.name) as fndef:
+    #            # arguments
+    #            self.visit(node.args)
+    #            # function body
+    #            if (isinstance(node.body[0], ast.Expr) and
+    #                isinstance(node.body[0].value, ast.Str)):
+    #                # Python doc string
+    #                logger.info('Ignoring python doc string.')
+    #                statements = node.body[1:]
+    #            else:
+    #                statements = node.body
 
-            for stmt in statements:
-                self.visit(stmt)
-        # close function
+    #            for stmt in statements:
+    #                self.visit(stmt)
+    #        # close function
 
-    def visit_arguments(self, node):
-        if node.vararg or node.kwarg or node.defaults:
-            raise FunctionDeclarationError(
-                'Does not support variable/keyword/default arguments.')
+    #    def visit_arguments(self, node):
+    #        if node.vararg or node.kwarg or node.defaults:
+    #            raise FunctionDeclarationError(
+    #                'Does not support variable/keyword/default arguments.')
 
-        self.generate_function_arguments([arg.id for arg in arguments])
+    #        self.generate_function_arguments([arg.id for arg in arguments])
 
-    def generate_function(self, name):
-        raise NotImplementedError
+    #    def generate_function(self, name):
+    #        raise NotImplementedError
 
-    def generate_function_arguments(self, arguments):
-        raise NotImplementedError
+    #    def generate_function_arguments(self, arguments):
+    #        raise NotImplementedError
 
     def visit_Call(self, node):
         func = self.visit(node.func)
@@ -201,24 +201,32 @@ class CodeGenerationBase(visitors.NumbaVisitor):
 
     def visit_Name(self, node):
         if isinstance(node.ctx, ast.Load): # load
-            try: # lookup in the symbol table
-                val = self.symbols[node.id]
-            except KeyError: # does not exist
-                raise UndefinedSymbolError(node)
-            else: # load from stack
-                if isinstance(val, int) or isinstance(val, long):
-                    return self.generate_constant_int(val)
-                elif isinstance(val, float):
-                    return self.generate_constant_real(val)
-                else:
-                    return val
+            return self.generate_load_symbol(node.id)
+            #    try: # lookup in the symbol table
+            #        val = self.symbols[node.id]
+            #    except KeyError: # does not exist
+            #        raise UndefinedSymbolError(node)
+            #    else: # load from stack
+            #        if isinstance(val, int) or isinstance(val, long):
+            #            return self.generate_constant_int(val)
+            #        elif isinstance(val, float):
+            #            return self.generate_constant_real(val)
+            #        else:
+            #            return val
         elif isinstance(node.ctx, ast.Store): # store
-            try:
-                return self.symbols[node.id]
-            except KeyError:
-                raise UndefinedSymbolError(node)
+            return self.generate_store_symbol(node.id)
+            #    try:
+            #        return self.symbols[node.id]
+            #    except KeyError:
+            #        raise UndefinedSymbolError(node)
         # unreachable
         raise AssertionError('unreachable')
+
+    def generate_load_symbol(self, name):
+        raise NotImplementedError
+
+    def generate_store_symbol(self, name):
+        raise NotImplementedError
 
     def visit_If(self, node):
         test = self.visit(node.test)

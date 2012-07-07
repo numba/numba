@@ -44,7 +44,8 @@ class CallSite(object):
 
 # A simple fast-vectorize example
 
-from translate import Translate
+#from translate import Translate
+from ast_translate import LLVMCodeGenerator as ASTTranslate
 
 # The __tr_map__ global maps from Python functions to a Translate
 # object.  This added reference prevents the translator and its
@@ -89,15 +90,15 @@ def _compile(func, ret_type=None, arg_types=None, **kwds):
 
     func_signature = minitypes.FunctionType(return_type=ret_type,
                                             args=arg_types)
-    func_signature, symtab = _infer_types(context, func, ast, func_signature)
+    func_signature, symtab = type_inference._infer_types(context, func, ast, func_signature)
+
     func_name = naming.specialized_mangle(func.__name__, func_signature.args)
 
     if func in __tr_map__:
         print("Warning: Previously compiled version of %r may be "
               "garbage collected!" % (func,))
-    t = Translate(context, func, func_signature=func_signature,
-                  func_name=func_name, symtab=type_inferer.symtab,
-                  variables=type_inferer.variables, **kwds)
+    t = ASTTranslate(context, func, ast, func_signature=func_signature,
+                  func_name=func_name, symtab=symtab, **kwds)
     t.translate()
     __tr_map__[func] = t
     return t.get_ctypes_func(kwds.get('llvm', True))

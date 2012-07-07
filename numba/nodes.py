@@ -50,6 +50,8 @@ class ConstNode(Node):
         type = self.type
         ltype = type.to_llvm(context)
 
+        constant = self.pyval
+
         if type.is_float:
             lvalue = llvm.core.Constant.real(ltype, constant)
         elif type.is_int:
@@ -67,3 +69,5 @@ class ConstNode(Node):
         else:
             raise NotImplementedError("Constant %s of type %s" %
                                                         (self.pyval, type))
+
+        return lvalue

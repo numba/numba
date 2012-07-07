@@ -16,6 +16,8 @@ import unittest
 
 import numpy
 
+import logging
+logging.basicConfig(level=logging.DEBUG)
 # ______________________________________________________________________
 
 def _simple_func(arg):
@@ -89,9 +91,9 @@ def infer(func, arg_types):
     return ast_type_inference._infer_types(decorators.context, func, ast, sig)
 
 class TestTypeInference(unittest.TestCase):
-    # def test_simple_func(self):
-    #     self.assertEqual(simple_func(-1.), 42.)
-    #     self.assertEqual(simple_func(1.), 22.)
+    def test_simple_func(self):
+         self.assertEqual(simple_func(-1.), 42.)
+         self.assertEqual(simple_func(1.), 22.)
 
     # def test_simple_for(self):
     #     self.assertEqual(for_loop(0, 10, 1), 45)
