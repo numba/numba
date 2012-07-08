@@ -1410,6 +1410,77 @@ class Translate(CodeIterator):
         pass
 
 
+class LLVMContextManager(object):
+    _ee = None          # execution engine
+    _mods = {}          # module's name => module instance
+    _fpass = {}         # module => function passes
+    _DEFAULT_MODULE = 'default'
+
+    def __init__(self):
+        self._initialize()
+
+    @classmethod
+    def _initialize(cls):
+        if not cls._mods: # no modules yet
+            # Create default module
+            default_mod = cls._init_module(cls._DEFAULT_MODULE)
+
+            # Create execution engine
+            # NOTE: EE owns all registered modules
+            cls._ee = le.ExecutionEngine.new(default_mod)
+
+    @classmethod
+    def _init_module(cls, name):
+        '''
+        Initialize a module with the given name;
+        Prepare pass managers for it.
+        '''
+        mod = lc.Module.new(name)
+        cls._mods[name] = mod
+
+        # TODO: We should use a PassManagerBuilder so that we can use O1, O2, O3
+
+        fpm = lp.FunctionPassManager.new(mod)
+        cls._fpass[mod] = fpm
+
+        # NOTE: initialize() link all passes into LLVM.
+        fpm.initialize()
+
+        fpm.add(lp.PASS_PROMOTE_MEMORY_TO_REGISTER)
+        fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
+
+        # NOTE: finalize() unlink all passes from LLVM. I don't see any reason
+        #       for a program to do so.
+        # fpm.finalize()
+
+        return mod
+
+    def create_module(self, name):
+        '''
+        Create a llvm Module and add it to the execution engine.
+
+        NOTE: Will we ever need this?
+        '''
+        mod = self._init_module(name)
+        self._ee.add_module(mod)
+        return mod
+
+    def get_default_module(self):
+        return self.get_module(self._DEFAULT_MODULE)
+
+    def get_function_pass_manager(self, name_or_mod):
+        if isinstance(name_or_mod, basestring):
+            mod = name_or_mod
+        else:
+            mod = name_or_mod
+        return self._fpass[mod]
+
+    def get_module(self, name):
+        return self._mods[name]
+
+    def get_execution_engine(self):
+        return self._ee
+
 class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
 
     def __init__(self, context, func, ast, func_signature, symtab,
@@ -1424,11 +1495,9 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         self.blocks = {} # stores id => basic-block
 
         # code generation attributes
-        # TODO: Should not use one module per function.
-        #       Also, not one ExecutionEngine per function.
-        self.mod = lc.Module.new('%s_mod_%x' % (func.__name__, id(self)))
-        self.ee = le.ExecutionEngine.new(self.mod)
-        self.ma_obj = None
+        self.mod = LLVMContextManager().get_default_module()
+
+        # self.ma_obj = None # What is this?
         self.optimize = optimize
         self.flags = kwds
 
@@ -1503,22 +1572,11 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         self.lfunc.verify()
 
         if self.optimize:
-            # TODO: Should use PassManagerBuilder instead of manually
-            #       Populating the function pass manager.
-            #       PassManagerBuilder allows us to do O1, O2, O3
-            fpm = lp.FunctionPassManager.new(self.mod)
-            fpm.initialize()
-            fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
-            fpm.run(self.lfunc)
-            fpm.finalize()
-
-    def _get_ee(self):
-        if self.ee is None:
-            self.ee = le.ExecutionEngine.new(self.mod)
-        return self.ee
+            fp = LLVMContextManager().get_function_pass_manager(self.mod)
+            fp.run(self.lfunc)
 
     def get_ctypes_func(self, llvm=True):
-        ee = self._get_ee()
+        ee = LLVMContextManager().get_execution_engine()
         import ctypes
         sig = self.func_signature
         restype = _types.convert_to_ctypes(sig.return_type)
@@ -1544,7 +1602,7 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         if len(args) != len(self.arg_types):
             raise TypeError("Mismatched argument count in call to translated "
                             "function (%r)." % (self.func))
-        ee = self._get_ee()
+        ee = LLVMContextManager().get_execution_engine()
         func_name = '%s_%d' % (self.func.__name__, id(self))
         try:
             lfunc_ptr_ptr = target_translator.mod.get_global_variable_named(
