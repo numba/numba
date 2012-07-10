@@ -27,7 +27,7 @@ from . import _numba_types as _types
 from ._numba_types import Complex64, Complex128
 
 from . import visitors, nodes, codevisitor
-
+from .minivect import minitypes
 
 import logging
 logger = logging.getLogger(__name__)
@@ -275,7 +275,6 @@ class _LLVMModuleUtils(object):
                                                           'PyObject_Length')
 
         largs = [arg.lvalue for arg in args]
-        print largs
         result = translator.builder.call(PyObject_Length, largs)
         return result, None
 
@@ -1502,6 +1501,12 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         self.flags = kwds
 
     def setup_func(self):
+        # convert (numpy) array arguments to a pointer to the dtype
+        self.func_signature = minitypes.FunctionType(
+            return_type=self.func_signature.return_type,
+            args=[arg_type.dtype.pointer() if arg_type.is_array else arg_type
+                      for arg_type in self.func_signature.args])
+
         self.lfunc_type = self.to_llvm(self.func_signature)
         self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
         self.nlocals = len(self.fco.co_varnames)
@@ -1519,7 +1524,7 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
             variable = self.symtab[argname]
 
             stackspace = self.builder.alloca(ltype.type)    # allocate on stack
-            stackspace.name = 'arg_%s'%argname
+            stackspace.name = 'arg_%s' % argname
             variable.lvalue = stackspace
 
             self.builder.store(ltype, stackspace) # store arg value
@@ -1532,7 +1537,7 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
                 # Not argument and not builtin type.
                 # Allocate storage for all variables.
                 stackspace = self.builder.alloca(var.ltype)
-                stackspace.name = 'var_%s'%var.name
+                stackspace.name = 'var_%s' % var.name
                 var.lvalue = stackspace
 
         # TODO: Put current function into symbol table for recursive call
@@ -1729,7 +1734,8 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         Check if the current basicblock is properly terminated.
         That means the basicblock is ended with a branch or return
         '''
-        return self.builder.basic_block.instructions[-1].is_terminator
+        instructions = self.builder.basic_block.instructions
+        return  instructions and instructions[-1].is_terminator
 
     def generate_for_range(self, ctnode, iternode, body):
         '''
@@ -1738,7 +1744,7 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         assert isinstance(ctnode.ctx, ast.Store)
         ctstore = self.generate_store_symbol(ctnode.id)
 
-        start, stop, step = self.resolve_simple_loop_iterator(iternode)
+        start, stop, step = self.resolve_range_iterator(iternode)
 
         bb_cond = self.append_basic_block('for.cond')
         bb_incr = self.append_basic_block('for.incr')
@@ -1767,43 +1773,30 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         self.builder.position_at_end(bb_body)
         for stmt in body:
             self.visit(stmt)
-        else: # close the block
-            if not self.is_block_terminated():
-                self.builder.branch(bb_incr)
+
+        if not self.is_block_terminated():
+            self.builder.branch(bb_incr)
 
         # move to exit block
         self.builder.position_at_end(bb_exit)
 
-
-    def resolve_simple_loop_iterator(self, iternode):
+    def resolve_range_iterator(self, iternode):
         '''
         Returns start, stop, step for range, xrange
         '''
-        assert isinstance(iternode, ast.Call)
-        itervar = self.symtab[iternode.func.id]
-
-        if itervar.type.is_builtin and itervar.name in ['range', 'xrange']:
-
-            args = [self.generate_load_symbol(x.id) for x in iternode.args]
-
-            counter_type = _types.Py_ssize_t
-
-            ensure_type = lambda x: self.ensure_value_is_type(x, counter_type)
-
-            if len(args) == 3:
-                start, stop, step = map(ensure_type, args)
-            elif len(args) == 2:
-                start, stop = map(ensure_type, args)
-                step = self.generate_constant_int(1, ty=counter_type)
-            else:
-                start = self.generate_constant_int(0, ty=counter_type)
-                stop = ensure_type(args[0])
-                step = self.generate_constant_int(1, ty=counter_type)
-
-            return start, stop, step
+        args = self.visitlist(iternode.args)
+        counter_type = minitypes.Py_ssize_t
+        if len(args) == 3:
+            start, stop, step = args
+        elif len(args) == 2:
+            start, stop = args
+            step = self.generate_constant_int(1, ty=counter_type)
         else:
-            raise NotImplementedError(
-                    '%s is not implemented for simple for loop'%(itervar.name))
+            start = self.generate_constant_int(0, ty=counter_type)
+            stop = args[0]
+            step = self.generate_constant_int(1, ty=counter_type)
+
+        return start, stop, step
 
     def generate_constant_int(self, val, ty=_types.int_):
         lconstant = lc.Constant.int(ty.to_llvm(self.context), val)
@@ -1811,10 +1804,11 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
                        constant_value=val)
         return var
 
-    def ensure_value_is_type(self, value, ty):
-        if value.type is not ty:
-            return self.generate_int_cast(value, ty)
-        return value
+# Do this at type analysis time!
+#    def ensure_value_is_type(self, value, ty):
+#        if value.type is not ty:
+#            return self.generate_int_cast(value, ty)
+#        return value
 
     def generate_int_cast(self, value, target_type):
         lvalue = value.type.to_llvm(self.context)
@@ -1832,14 +1826,25 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         return Variable.from_variable(value, type=target_type,
                                       lvalue=casted)
 
-    def generate_binop(self, op_class, lhs, rhs):
-        if op_class is ast.Add:
-            result = self.builder.add(lhs.lvalue, rhs.lvalue)
-            return Variable.from_variable(lhs, lvalue=result)
-        raise Exception(op_class, lhs, rhs)
+    _binops = {
+        ast.Add: ('fadd', 'add'),
+        ast.Sub: ('fsub', 'sub'),
+        ast.Mult: ('fsub', 'sub'),
+        ast.Div: ('fdiv', 'div'),
+    }
+
+    def generate_binop(self, op_class, type, lhs, rhs):
+        if (type.is_int or type.is_float) and op_class in self._binops:
+            llvm_method_name = self._binops[op_class][type.is_int]
+            meth = getattr(self.builder, llvm_method_name)
+            result = meth(lhs.lvalue, rhs.lvalue)
+        else:
+            raise Exception(op_class, type, lhs, rhs)
+
+        return Variable.from_variable(lhs, lvalue=result)
 
     def generate_coerce(self, val, dst_type, variable):
-        if val.type is dst_type:
+        if val.type == dst_type:
             return val
         elif val.type.is_int_like and dst_type.is_int_like:
             return self.generate_int_cast(val, dst_type)

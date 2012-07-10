@@ -140,9 +140,9 @@ class TypeInferer(visitors.NumbaTransformer):
     def _get_iterator_type(self, iterator_type):
         "Get the type of an iterator Variable"
         if iterator_type.is_iterator:
-            base_type = iterator.type.base_type
+            base_type = iterator_type.base_type
         elif iterator_type.is_array:
-            base_type = iterator.type.dtype
+            base_type = iterator_type.dtype
         elif iterator_type.is_range:
             base_type = _types.Py_ssize_t
         else:
@@ -494,8 +494,10 @@ class TypeInferer(visitors.NumbaTransformer):
         self.visitlist(node.keywords)
 
         func_type = node.func.variable.type
+        arg_type = None
         if func_type.is_builtin and func_type.name in ('range', 'xrange'):
             result = Variable(_types.RangeType())
+            arg_type = minitypes.Py_ssize_t
         elif func_type.is_builtin and func.name == 'len':
             result = Variable(_types.Py_ssize_t)
         elif func_type.is_function:
@@ -510,6 +512,10 @@ class TypeInferer(visitors.NumbaTransformer):
         else:
             # TODO: implement
             raise NotImplementedError(func.type)
+
+        if arg_type is not None:
+            node.args = [nodes.CoercionNode(arg, arg_type)
+                            for arg in node.args]
 
         node.variable = result
         return node

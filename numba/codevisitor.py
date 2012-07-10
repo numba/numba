@@ -40,7 +40,7 @@ class CodeGenerationBase(visitors.NumbaVisitor):
                 raise InternalError(node, str(e))
             except (NotImplementedError, AssertionError) as e:
                 logger.exception(e)
-                raise InternalError(node, str(e))
+                raise
             finally:
                 self._nodes.pop() # pop current node
 
@@ -117,9 +117,9 @@ class CodeGenerationBase(visitors.NumbaVisitor):
         lhs = self.visit(node.left)
         rhs = self.visit(node.right)
         op = type(node.op)
-        return self.generate_binop(op, lhs, rhs)
+        return self.generate_binop(op, node.type, lhs, rhs)
 
-    def generate_binop(self, op_class, lhs, rhs):
+    def generate_binop(self, op_class, type, lhs, rhs):
         raise NotImplementedError
 
     def visit_Assign(self, node):
@@ -240,7 +240,10 @@ class CodeGenerationBase(visitors.NumbaVisitor):
             # FIXME
             raise NotImplementedError('Else in for-loop is not implemented.')
 
-        self.generate_for_range(node.target, node.iter, node.body)
+        if node.iter.type.is_range:
+            self.generate_for_range(node.target, node.iter, node.body)
+        else:
+            raise NotImplementedError(node.iter, node.iter.type)
 
     def generate_for_range(self, ctnode, iternode, body):
         raise NotImplementedError
@@ -281,7 +284,7 @@ class CodeGenerationBase(visitors.NumbaVisitor):
         raise NotImplementedError
 
     def visit_CoercionNode(self, node):
-        logger.debug('coerce %s -> %s ; %s', node.node.id, node.dst_type,
+        logger.debug('coerce %s -> %s ; %s', node.node.type, node.dst_type,
                      node.variable)
         var = self.visit(node.node)
         return self.generate_coerce(var, node.dst_type, node.variable)
