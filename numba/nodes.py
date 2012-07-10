@@ -14,6 +14,9 @@ class Node(ast.AST):
     """
     _fields = []
 
+    def __init__(self, **kwargs):
+        vars(self).update(kwargs)
+
 class CoercionNode(Node):
     _fields = ['node']
     def __init__(self, node, dst_type):
