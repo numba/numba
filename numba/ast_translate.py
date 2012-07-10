@@ -1571,7 +1571,6 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
             statements = self.ast.body
 
         for node in statements: # do codegen for each statement
-            logger.debug(ast.dump(node))
             self.visit(node)
         else:
             if not self.is_block_terminated():
@@ -1829,7 +1828,7 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
     _binops = {
         ast.Add: ('fadd', 'add'),
         ast.Sub: ('fsub', 'sub'),
-        ast.Mult: ('fsub', 'sub'),
+        ast.Mult: ('fmul', 'mul'),
         ast.Div: ('fdiv', 'div'),
     }
 

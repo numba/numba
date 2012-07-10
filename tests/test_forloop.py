@@ -10,6 +10,9 @@ import numba
 from numba import *
 from numba.decorators import numba_compile
 
+from numba.minivect import minitypes
+hash(minitypes.double[:])
+
 import numpy
 
 import unittest
@@ -87,9 +90,7 @@ class TestForLoop(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    import dis; dis.dis(for_loop_fn_1)
     unittest.main()
-    #TestForLoop('test_compiled_for_loop_fn_2').debug()
 
 # ______________________________________________________________________
 # End of test_forloop.py

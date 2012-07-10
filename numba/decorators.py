@@ -9,7 +9,6 @@ from .minivect import minitypes
 import meta.decompiler
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 # Create a new callable object
 #  that creates a fast version of Python code using LLVM
@@ -105,7 +104,6 @@ def _compile(func, ret_type=None, arg_types=None, **kwds):
     t = ASTTranslate(context, func, ast, func_signature=func_signature,
                   func_name=func_name, symtab=symtab, **kwds)
     t.translate()
-    logger.debug("Compiled function: %s" % t.lfunc)
     __tr_map__[func] = t
     return t.get_ctypes_func(kwds.get('llvm', True))
 
