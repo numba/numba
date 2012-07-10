@@ -1519,6 +1519,7 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
             variable = self.symtab[argname]
 
             stackspace = self.builder.alloca(ltype.type)    # allocate on stack
+            stackspace.name = 'arg_%s'%argname
             variable.lvalue = stackspace
 
             self.builder.store(ltype, stackspace) # store arg value
@@ -1526,9 +1527,12 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
             self._locals[i] = variable
 
         for name, var in self.symtab.items():
-            if name not in self.argnames:
-                # Allocate storage for all variables
+            # FIXME: 'None' should be handled as a special case (probably).
+            if name not in self.argnames and not var.type.is_builtin:
+                # Not argument and not builtin type.
+                # Allocate storage for all variables.
                 stackspace = self.builder.alloca(var.ltype)
+                stackspace.name = 'var_%s'%var.name
                 var.lvalue = stackspace
 
         # TODO: Put current function into symbol table for recursive call
@@ -1564,13 +1568,16 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         for node in statements: # do codegen for each statement
             logger.debug(ast.dump(node))
             self.visit(node)
+        else:
+            if not self.is_block_terminated():
+                self.builder.ret_void()
 
         # Done code generation
         del self.builder  # release the builder to make GC happy
 
+        logger.debug(self.lfunc)
         # Verify code generation
         self.lfunc.verify()
-
         if self.optimize:
             fp = LLVMContextManager().get_function_pass_manager(self.mod)
             fp.run(self.lfunc)
@@ -1646,15 +1653,29 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         return self.symtab[name]
 
     def generate_compare(self, op_class, lhs, rhs):
-        if lhs.type.is_float:
-            op_map = {
-                ast.Gt : lc.FCMP_OGT,
-                # TODO: fill the rest
-            }
-            lop = op_map[op_class]
+        op_map = {
+            ast.Gt    : '>',
+            ast.Lt    : '<',
+            ast.GtE   : '>=',
+            ast.LtE   : '<=',
+            ast.Eq    : '==',
+            ast.NotEq : '!=',
+        }
+
+        op = op_map[op_class]
+        if lhs.type.is_float and rhs.type.is_float:
+            lfunc = self.builder.fcmp
+            lop = _compare_mapping_float[op]
             return self.builder.fcmp(lop, lhs.lvalue, rhs.lvalue)
+        elif lhs.type.is_int_like and rhs.type.is_int_like:
+            lfunc = self.builder.icmp
+            # FIXME
+            assert lhs.type.signed, 'Unsigned comparator has not been implemented'
+            lop = _compare_mapping_sint[op]
         else:
-            raise NotImplementedError(op_class, lhs, rhs)
+            raise TypeError(lhs.type)
+
+        return lfunc(lop, lhs.lvalue, rhs.lvalue)
 
     def generate_if(self, test, iftrue_body, orelse_body):
         bb_true = self.append_basic_block('if.true')
@@ -1688,7 +1709,17 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         return bb
 
     def generate_assign(self, value, target):
-        self.builder.store(value.lvalue, target.lvalue)
+        '''
+        Generate assignment operation and automatically cast value to
+        match the target type.
+        '''
+        if value.type is target.type:
+            self.builder.store(value.lvalue, target.lvalue)
+        elif value.type.is_int_like and target.type.is_int_like:
+            casted = self.generate_int_cast(value, target.type)
+            self.builder.store(casted.lvalue, target.lvalue)
+        else:
+            raise TypeError(value.type, target.type)
 
     def generate_return(self, value):
         self.builder.ret(value.lvalue)
@@ -1699,4 +1730,120 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         That means the basicblock is ended with a branch or return
         '''
         return self.builder.basic_block.instructions[-1].is_terminator
+
+    def generate_for_range(self, ctnode, iternode, body):
+        '''
+        Implements simple for loops with iternode as range, xrange
+        '''
+        assert isinstance(ctnode.ctx, ast.Store)
+        ctstore = self.generate_store_symbol(ctnode.id)
+
+        start, stop, step = self.resolve_simple_loop_iterator(iternode)
+
+        bb_cond = self.append_basic_block('for.cond')
+        bb_incr = self.append_basic_block('for.incr')
+        bb_body = self.append_basic_block('for.body')
+        bb_exit = self.append_basic_block('for.exit')
+
+        # generate initializer
+        self.generate_assign(start, ctstore)
+        self.builder.branch(bb_cond)
+
+        # generate condition
+        self.builder.position_at_end(bb_cond)
+        op = _compare_mapping_sint['<']
+        ctvalue = self.generate_load_symbol(ctnode.id)
+        cond = self.builder.icmp(op, ctvalue.lvalue, stop.lvalue)
+        self.builder.cbranch(cond, bb_body, bb_exit)
+
+        # generate increment
+        self.builder.position_at_end(bb_incr)
+        ctvalue = self.generate_load_symbol(ctnode.id)
+        ctvalue_plus_step = self.builder.add(ctvalue.lvalue, step.lvalue)
+        self.builder.store(ctvalue_plus_step, ctstore.lvalue)
+        self.builder.branch(bb_cond)
+
+        # generate body
+        self.builder.position_at_end(bb_body)
+        for stmt in body:
+            self.visit(stmt)
+        else: # close the block
+            if not self.is_block_terminated():
+                self.builder.branch(bb_incr)
+
+        # move to exit block
+        self.builder.position_at_end(bb_exit)
+
+
+    def resolve_simple_loop_iterator(self, iternode):
+        '''
+        Returns start, stop, step for range, xrange
+        '''
+        assert isinstance(iternode, ast.Call)
+        itervar = self.symtab[iternode.func.id]
+
+        if itervar.type.is_builtin and itervar.name in ['range', 'xrange']:
+
+            args = [self.generate_load_symbol(x.id) for x in iternode.args]
+
+            counter_type = _types.Py_ssize_t
+
+            ensure_type = lambda x: self.ensure_value_is_type(x, counter_type)
+
+            if len(args) == 3:
+                start, stop, step = map(ensure_type, args)
+            elif len(args) == 2:
+                start, stop = map(ensure_type, args)
+                step = self.generate_constant_int(1, ty=counter_type)
+            else:
+                start = self.generate_constant_int(0, ty=counter_type)
+                stop = ensure_type(args[0])
+                step = self.generate_constant_int(1, ty=counter_type)
+
+            return start, stop, step
+        else:
+            raise NotImplementedError(
+                    '%s is not implemented for simple for loop'%(itervar.name))
+
+    def generate_constant_int(self, val, ty=_types.int_):
+        lconstant = lc.Constant.int(ty.to_llvm(self.context), val)
+        var = Variable(type=ty, is_constant=True, lvalue=lconstant,
+                       constant_value=val)
+        return var
+
+    def ensure_value_is_type(self, value, ty):
+        if value.type is not ty:
+            return self.generate_int_cast(value, ty)
+        return value
+
+    def generate_int_cast(self, value, target_type):
+        lvalue = value.type.to_llvm(self.context)
+        ltarget = target_type.to_llvm(self.context)
+
+        if lvalue.width < ltarget.width: # promote to target type
+            if target_type.signed: # signed
+                casted = self.builder.sext(value.lvalue, ltarget)
+            else:                  # unsigned
+                casted = self.builder.zext(value.lvalue, ltarget)
+
+        else: # demote to target type
+            casted = self.builder.trunc(value.lvalue, ltarget)
+
+        return Variable.from_variable(value, type=target_type,
+                                      lvalue=casted)
+
+    def generate_binop(self, op_class, lhs, rhs):
+        if op_class is ast.Add:
+            result = self.builder.add(lhs.lvalue, rhs.lvalue)
+            return Variable.from_variable(lhs, lvalue=result)
+        raise Exception(op_class, lhs, rhs)
+
+    def generate_coerce(self, val, dst_type, variable):
+        if val.type is dst_type:
+            return val
+        elif val.type.is_int_like and dst_type.is_int_like:
+            return self.generate_int_cast(val, dst_type)
+
+        raise Exception(val, dst_type, variable)
+
 

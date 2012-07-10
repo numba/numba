@@ -111,8 +111,8 @@ class TypeInferer(visitors.NumbaTransformer):
         "Inplace assignment"
         target = node.target
         if isinstance(target, ast.Name):
-            target = ast.copy_location(ast.Name(target.id, ast.Load()), target)
-            rhs_target = ast.copy_location(ast.Name(target.id, ast.Store()), target)
+            target = ast.copy_location(ast.Name(target.id, ast.Store()), target)
+            rhs_target = ast.copy_location(ast.Name(target.id, ast.Load()), target)
         else:
             raise NotImplementedError("Inplace assignment on non-variable target not supported")
 

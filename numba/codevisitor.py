@@ -237,47 +237,12 @@ class CodeGenerationBase(visitors.NumbaVisitor):
 
     def visit_For(self, node):
         if node.orelse:
+            # FIXME
             raise NotImplementedError('Else in for-loop is not implemented.')
-        iternode = node.iter
 
-        str_only_support_forrange = 'Only for-range|for-xrange are supported.'
-        if not isinstance(iternode, ast.Call):
-            raise InvalidUseOfConstruct(str_only_support_forrange)
+        self.generate_for_range(node.target, node.iter, node.body)
 
-        looptype = iternode.func.id
-        if looptype not in ['range', 'xrange']:
-            raise InvalidUseOfConstruct(str_only_support_forrange)
-
-        # counter variable
-        counter_name = node.target.id
-        if counter_name in self.symbols:
-            raise VariableRedeclarationError(node.target)
-
-        counter_ptr = self.generate_declare(node.target.id, types.Int)
-        self.symbols[counter_name] = counter_ptr
-
-        # range information
-        iternode_arg_N = len(iternode.args)
-        if iternode_arg_N==1: # only END is given
-            zero = self.generate_constant_int(0)
-            initcount = zero # init count is implicitly zero
-            endcountpos = 0
-            step = self.generate_constant_int(1)
-        elif iternode_arg_N==2: # both BEGIN and END are given
-            initcount = self.visit(iternode.args[0]) # init count is given
-            endcountpos = 1
-            step = self.generate_constant_int(1)
-        else: # with BEGIN, END and STEP
-            initcount = self.visit(iternode.args[0]) # init count is given
-            endcountpos = 1
-            step = self.visit(iternode.args[2]) # step is given
-
-        endcount = self.visit(iternode.args[endcountpos]) # end count
-
-        loopbody = node.body
-        self.generate_for_range(counter_ptr, initcount, endcount, step, loopbody)
-
-    def generate_for_range(self, counter, init, end, step, body):
+    def generate_for_range(self, ctnode, iternode, body):
         raise NotImplementedError
 
     def visit_BoolOp(self, node):
@@ -296,14 +261,15 @@ class CodeGenerationBase(visitors.NumbaVisitor):
     def generate_not(self, operand):
         raise NotImplementedError
 
-    def visit_AugAssign(self, node):
-        target = self.visit(node.target)
-        node.target.ctx = ast.Load() # change context to load
-        target_val = self.visit(node.target)
-        value = self.visit(node.value)
-
-        result = self.generate_binop(type(node.op), target_val, value)
-        return self.generate_assign(result, target)
+## Type inference pass seems to have transformed all aug-assign to assign+binop
+#
+#    def visit_AugAssign(self, node):
+#        target = self.visit(node.target)
+#        node.target.ctx = ast.Load() # change context to load
+#        target_val = self.visit(node.target)
+#        value = self.visit(node.value)
+#        result = self.generate_binop(type(node.op), target_val, value)
+#        return self.generate_assign(result, target)
 
 
     def visit_While(self, node):
@@ -314,4 +280,9 @@ class CodeGenerationBase(visitors.NumbaVisitor):
     def generate_while(self, test, body):
         raise NotImplementedError
 
+    def visit_CoercionNode(self, node):
+        logger.debug('coerce %s -> %s ; %s', node.node.id, node.dst_type,
+                     node.variable)
+        var = self.visit(node.node)
+        return self.generate_coerce(var, node.dst_type, node.variable)
 

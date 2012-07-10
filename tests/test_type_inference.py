@@ -95,8 +95,8 @@ class TestTypeInference(unittest.TestCase):
          self.assertEqual(simple_func(-1.), 42.)
          self.assertEqual(simple_func(1.), 22.)
 
-    # def test_simple_for(self):
-    #     self.assertEqual(for_loop(0, 10, 1), 45)
+    def test_simple_for(self):
+         self.assertEqual(for_loop(0, 10, 1), 45)
 
     def test_type_infer_simple_func(self):
         sig, symtab = infer(_simple_func, [double])
