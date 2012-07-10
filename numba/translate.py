@@ -93,7 +93,12 @@ def map_to_strtype(type):
                 raise NotImplementedError
             #type = 'f%d' % (type.itemsize * 8,)
         elif type.is_int:
-            type = 'i%d' % (type.itemsize * 8,)
+            if type == minitypes.int_:
+                type = 'i'
+            elif type == minitypes.long_:
+                type = 'l'
+            else:
+                type = 'i%d' % (type.itemsize * 8,)
         elif type.is_function:
             type = ["func"]
         elif type.is_tuple:
