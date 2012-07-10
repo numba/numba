@@ -214,8 +214,13 @@ class printf(ExternalFunction):
     return_type = int32
     is_vararg = True
 
-class Py_Incref(OFunc):
+class Py_IncRef(OFunc):
+    # TODO: rewrite calls to Py_IncRef/Py_DecRef to direct integer
+    # TODO: increments/decrements
     return_type = void
+
+class Py_DecRef(Py_IncRef):
+    pass
 
 class PyObject_Length(OFunc):
     return_type = Py_ssize_t
