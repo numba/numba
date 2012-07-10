@@ -363,8 +363,10 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
             # make_ctypes_prototype_wrapper().
             prototype = restype.make_ctypes_prototype_wrapper(prototype)
         if llvm:
-            PY_CALL_TO_LLVM_CALL_MAP[self.func] = \
-                self.build_call_to_translated_function
+            # July 10, 2012: PY_CALL_TO_LLVM_CALL_MAP is removed recent commit.
+            #
+            #    PY_CALL_TO_LLVM_CALL_MAP[self.func] = \
+            #        self.build_call_to_translated_function
             return prototype(ee.get_pointer_to_function(self.lfunc))
         else:
             return prototype(self.func)
