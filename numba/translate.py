@@ -18,6 +18,8 @@ from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
     _numpy_array, _numpy_array_field_ofs
 from .multiarray_api import MultiarrayAPI
 
+from .minivect import minitypes
+
 if __debug__:
     import pprint
 
@@ -76,6 +78,36 @@ def pythontype_to_strtype(typ):
         return ["func"]
     elif issubclass(typ, tuple):
         return 'tuple'
+
+def map_to_strtype(type):
+    "Map a minitype or str type to a str type"
+    if isinstance(type, minitypes.Type):
+        print 'CONVERTING', type
+        if type.is_float:
+            if type.itemsize == 4:
+                return 'f'
+            elif type.itemsize == 8:
+                return 'd'
+            else:
+                # hurgh
+                raise NotImplementedError
+            #type = 'f%d' % (type.itemsize * 8,)
+        elif type.is_int:
+            type = 'i%d' % (type.itemsize * 8,)
+        elif type.is_function:
+            type = ["func"]
+        elif type.is_tuple:
+            type = 'tuple'
+        elif type.is_array:
+            type = [map_to_strtype(type.dtype)]
+        elif type.is_pointer:
+            type = "%s *" % (map_to_strtype(type.base_type))
+        else:
+            raise NotImplementedError
+
+        print type
+
+    return type
 
 def map_to_function(func, typs, mod):
     typs = [str_to_llvmtype(x) if isinstance(x, str) else x for x in typs]
@@ -711,6 +743,8 @@ class Translate(object):
                 # builtins is an attribtue.
                 self._myglobals[name] = getattr(__builtin__, name, None)
 
+        ret_type, arg_types = self.map_types(ret_type, arg_types)
+
         # NOTE: Was seeing weird corner case where
         # llvm.core.Module.new() was not returning a module object,
         # thinking this was caused by compiling the same function
@@ -737,6 +771,12 @@ class Translate(object):
         self.ma_obj = None
         self.optimize = kws.pop('optimize', True)
         self.flags = kws
+
+    def map_types(self, ret_type, arg_types):
+        return map_to_strtype(ret_type), [map_to_strtype(arg_type)
+                                              for arg_type in arg_types]
+
+
 
     def setup_func(self):
         # The return type will not be known until the return

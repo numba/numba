@@ -8,6 +8,7 @@ Test the filter2d() example from the PyCon'12 slide deck.
 
 import numpy
 
+from numba import *
 from numba.decorators import numba_compile
 
 import sys
@@ -34,8 +35,8 @@ def filter2d(image, filt):
 
 class TestFilter2d(unittest.TestCase):
     def test_vectorized_filter2d(self):
-        ufilter2d = numba_compile(arg_types = [[['d']], [['d']]],
-                                  ret_type = [['d']])(filter2d)
+        ufilter2d = numba_compile(arg_types=[d[:, :], d[:, :]],
+                                  ret_type=d[:, :])(filter2d)
         image = numpy.random.random((50, 50))
         filt = numpy.random.random((5, 5))
         filt /= filt.sum()
