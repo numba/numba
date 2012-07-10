@@ -1,0 +1,261 @@
+import llvm.core
+
+from numba import *
+from . import naming
+from .minivect import minitypes
+
+class FunctionCache(object):
+    """
+    Cache for compiler functions, declared external functions and constants.
+    """
+    def __init__(self, module, builder):
+        self.module = module
+        self.builder = builder
+
+        # All numba-compiled functions
+        # (py_func, arg_types) -> (return_type, llvm_func)
+        self.compiled_functions = {}
+        # All external functions: py_func -> (return_type, llvm_func)
+        self.external_functions = {}
+
+        self.string_constants = {}
+
+    def get_function(self, py_func, arg_types=None):
+        func = None
+        if signature is not None:
+            func = self.compiled_functions[py_func, tuple(arg_types)]
+
+        if func is None:
+            func = self.external_functions[py_func]
+
+    def build_function(self, external_function):
+        try:
+            lfunc = module.get_function_named(external_function.name)
+        except llvm.LLVMException:
+            lfunc_type = minitypes.FunctionType(
+                return_type=external_function.return_type,
+                args=external_function.arg_types,
+                is_vararg=external_function.varargs)
+            lfunc = module.add_function(lfunc_type, external_function.name)
+
+            if external_function.is_internal:
+                lfunc.linkage = external_function.linkage
+                external_function.implementation(self.module, self.builder,
+                                                 lfunc)
+
+        return lfunc
+
+    def get_string_constant(self, const_str):
+        if (module, const_str) in self.string_constants:
+            ret_val = self.string_constants[(module, const_str)]
+        else:
+            lconst_str = lc.Constant.stringz(const_str)
+            ret_val = module.add_global_variable(lconst_str.type, "__STR_%d" %
+                                                 (len(self.string_constants),))
+            ret_val.initializer = lconst_str
+            ret_val.linkage = lc.LINKAGE_INTERNAL
+            self.string_constants[(module, const_str)] = ret_val
+
+        return ret_val
+
+class _LLVMModuleUtils(object):
+    # TODO: rewrite print statements w/ native types to printf during type
+    # TODO: analysis to PrintfNode. Use PrintfNode for debugging
+
+    @classmethod
+    def build_print_string_constant(cls, translator, out_val):
+        # FIXME: This is just a hack to get things going.  There is a
+        # corner case where formatting markup in the string can cause
+        # undefined behavior, and for 100% correctness we'd have to
+        # escape string formatting sequences.
+        llvm_printf = cls.get_printf(translator.mod)
+        return translator.builder.call(llvm_printf, [
+            translator.builder.gep(cls.get_string_constant(translator.mod,
+                                                           out_val),
+                [_int32_zero, _int32_zero])])
+
+    @classmethod
+    def build_print_number(cls, translator, out_var):
+        llvm_printf = cls.get_printf(translator.mod)
+        if out_var.typ[0] == 'i':
+            if int(out_var.typ[1:]) < 64:
+                fmt = "%d"
+                typ = "i32"
+            else:
+                fmt = "%ld"
+                typ = "i64"
+        elif out_var.typ[0] == 'f':
+            if int(out_var.typ[1:]) < 64:
+                fmt = "%f"
+                typ = "f32"
+            else:
+                fmt = "%lf"
+                typ = "f64"
+        else:
+            raise NotImplementedError("FIXME (type %r not supported in "
+                                      "build_print_number())" % (out_var.typ,))
+        return translator.builder.call(llvm_printf, [
+            translator.builder.gep(
+                cls.get_string_constant(translator.mod, fmt),
+                [_int32_zero, _int32_zero]),
+            out_var.llvm(typ, builder = translator.builder)])
+
+    @classmethod
+    def build_debugout(cls, translator, args):
+        if translator.optimize:
+            print("Warning: Optimization turned on, debug output code may "
+                  "be optimized out.")
+        res = cls.build_print_string_constant(translator, "debugout: ")
+        for arg in args:
+            arg_type = arg.typ
+            if arg.typ is None:
+                arg_type = type(arg.val)
+            if isinstance(arg.val, str):
+                res = cls.build_print_string_constant(translator, arg.val)
+            elif typ_isa_number(arg_type):
+                res = cls.build_print_number(translator, arg)
+            else:
+                raise NotImplementedError("Don't know how to output stuff of "
+                                          "type %r at present." % arg_type)
+        res = cls.build_print_string_constant(translator, "\n")
+        return res, None
+
+    @classmethod
+    def build_len(cls, translator, args):
+        if (len(args) == 1 and
+            args[0].lvalue is not None and
+            args[0].lvalue.type == _numpy_array):
+            lfunc = None
+            shape_ofs = _numpy_array_field_ofs['shape']
+            res = translator.builder.load(
+                translator.builder.load(
+                    translator.builder.gep(args[0]._llvm, [
+                        _int32_zero, lc.Constant.int(_int32, shape_ofs)])))
+        else:
+            return cls.build_object_len(translator, args)
+
+        return res, None
+
+    @classmethod
+    def build_zeros_like(cls, translator, args):
+        assert (len(args) == 1 and
+                args[0]._llvm is not None and
+                args[0]._llvm.type == _numpy_array), (
+            "Expected Numpy array argument to numpy.zeros_like().")
+        translator.init_multiarray()
+        larr = args[0]._llvm
+        largs = [translator.builder.load(
+            translator.builder.gep(larr, [
+                _int32_zero,
+                lc.Constant.int(_int32,
+                                _numpy_array_field_ofs[field_name])]))
+                 for field_name in ('ndim', 'shape', 'descr')]
+        largs.append(_int32_zero)
+        lfunc = translator.ma_obj.load_PyArray_Zeros(translator.mod,
+                                                     translator.builder)
+        res = translator.builder.bitcast(
+            translator.builder.call(
+                cls.get_py_incref(translator.mod),
+                [translator.builder.call(lfunc, largs)]),
+            _numpy_array)
+        if __debug__:
+            print "build_zeros_like(): lfunc =", str(lfunc)
+            print "build_zeros_like(): largs =", [str(arg) for arg in largs]
+        return res, args[0].typ
+
+    @classmethod
+    def build_conj(cls, translator, args):
+        print args
+        assert ((len(args) == 1) and (args[0]._llvm is not None) and
+                (args[0]._llvm.type in (_complex64, _complex128)))
+        larg = args[0]._llvm
+        elem_ltyp = _float if larg.type == _complex64 else _double
+        new_imag_lval = translator.builder.fmul(
+            lc.Constant.real(elem_ltyp, -1.),
+            translator.builder.extract_value(larg, 1))
+        assert hasattr(translator.builder, 'insert_value'), (
+            "llvm-py support for LLVMBuildInsertValue() required to build "
+            "code for complex conjugates.")
+        res = translator.builder.insert_value(larg, new_imag_lval, 1)
+        return res, None
+
+#
+### Define external and internal functions
+#
+
+class ExternalFunction(object):
+    func_name = None
+    arg_types = None
+    return_type = None
+    linkage = None
+    is_vararg = False
+
+    def __init__(self, **kwargs):
+        vars(self).update(kwargs)
+
+    @property
+    def name(self):
+        if self.func_name is None:
+            return type(self).__name__
+        else:
+            return self.func_name
+
+    def implementation(self, module, builder, lfunc):
+        return None
+
+class InternalFunction(ExternalFunction):
+    linkage = lc.LINKAGE_INTERNAL
+
+class OFunc(ExternalFunction):
+    arg_types = [object_]
+
+class printf(ExternalFunction):
+    arg_types = [void.pointer()]
+    return_type = int32
+    is_vararg = True
+
+class Py_Incref(OFunc):
+    return_type = void
+
+class PyObject_Length(OFunc):
+    return_type = Py_ssize_t
+
+class PyModulo(InternalFunction):
+
+    @property
+    def name(self):
+        return naming.specialized_mangle('__py_modulo_%s', self.arg_types)
+
+    def implementation(self, module, builder, ret_val):
+        entry_block = ret_val.append_basic_block('entry')
+        different_sign_block = ret_val.append_basic_block('different_sign')
+        join_block = ret_val.append_basic_block('join')
+        builder = lc.Builder.new(entry_block)
+        arg2 = ret_val.args[1]
+        srem = builder.srem(ret_val.args[0], arg2)
+        width = int(typ[1:])
+        lbits_shifted = lc.Constant.int(str_to_llvmtype(typ), width - 1)
+        srem_sign = builder.lshr(srem, lbits_shifted)
+        arg2_sign = builder.lshr(arg2, lbits_shifted)
+        same_sign = builder.icmp(lc.ICMP_EQ, srem_sign, arg2_sign)
+        builder.cbranch(same_sign, join_block, different_sign_block)
+        builder.position_at_end(different_sign_block)
+        different_sign_res = builder.add(srem, arg2)
+        builder.branch(join_block)
+        builder.position_at_end(join_block)
+        res = builder.phi(ltyp)
+        res.add_incoming(srem, entry_block)
+        res.add_incoming(different_sign_res, different_sign_block)
+        builder.ret(res)
+        return ret_val
+
+
+PY_CALL_TO_LLVM_CALL_MAP = {
+    debugout : _LLVMModuleUtils.build_debugout,
+    len : _LLVMModuleUtils.build_len,
+    np.zeros_like : _LLVMModuleUtils.build_zeros_like,
+    np.complex64.conj : _LLVMModuleUtils.build_conj,
+    np.complex128.conj : _LLVMModuleUtils.build_conj,
+    np.complex64.conjugate : _LLVMModuleUtils.build_conj,
+    np.complex128.conjugate : _LLVMModuleUtils.build_conj,
+}
