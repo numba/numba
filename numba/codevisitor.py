@@ -35,10 +35,7 @@ class CodeGenerationBase(visitors.NumbaVisitor):
             try:
                 self._nodes.append(node) # push current node
                 return fn(node)
-            except TypeError as e:
-                logger.exception(e)
-                raise InternalError(node, str(e))
-            except (NotImplementedError, AssertionError) as e:
+            except Exception as e:
                 logger.exception(e)
                 raise
             finally:
@@ -241,7 +238,7 @@ class CodeGenerationBase(visitors.NumbaVisitor):
             raise NotImplementedError('Else in for-loop is not implemented.')
 
         if node.iter.type.is_range:
-            self.generate_for_range(node.target, node.iter, node.body)
+            self.generate_for_range(node, node.target, node.iter, node.body)
         else:
             raise NotImplementedError(node.iter, node.iter.type)
 
@@ -282,10 +279,4 @@ class CodeGenerationBase(visitors.NumbaVisitor):
 
     def generate_while(self, test, body):
         raise NotImplementedError
-
-    def visit_CoercionNode(self, node):
-        logger.debug('coerce %s -> %s ; %s', node.node.type, node.dst_type,
-                     node.variable)
-        var = self.visit(node.node)
-        return self.generate_coerce(var, node.dst_type, node.variable)
 

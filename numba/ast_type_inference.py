@@ -6,7 +6,7 @@ import __builtin__ as builtins
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
 from .symtab import Variable
-from . import visitors, nodes
+from . import visitors, nodes, error
 
 import numpy
 
@@ -488,6 +488,26 @@ class TypeInferer(visitors.NumbaTransformer):
 
         return result_type
 
+    def _resolve_range(self, node, arg_type):
+        result = Variable(_types.RangeType())
+        args = self.visitlist(node.args)
+
+        if not args:
+            raise error.NumbaError("No argument provided to %s" % node.id)
+
+        start = nodes.ConstNode(0, arg_type)
+        step = nodes.ConstNode(1, arg_type)
+
+        if len(args) == 3:
+            start, stop, step = args
+        elif len(args) == 2:
+            start, stop = args
+        else:
+            stop, = args
+
+        node.args = [start, stop, step]
+        return result
+
     def visit_Call(self, node):
         node.func = self.visit(node.func)
         self.visitlist(node.args)
@@ -496,8 +516,8 @@ class TypeInferer(visitors.NumbaTransformer):
         func_type = node.func.variable.type
         arg_type = None
         if func_type.is_builtin and func_type.name in ('range', 'xrange'):
-            result = Variable(_types.RangeType())
             arg_type = minitypes.Py_ssize_t
+            result = self._resolve_range(node, arg_type)
         elif func_type.is_builtin and func.name == 'len':
             result = Variable(_types.Py_ssize_t)
         elif func_type.is_function:
