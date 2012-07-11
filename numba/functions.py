@@ -1,36 +1,99 @@
-import llvm.core
+import ast
 
 from numba import *
 from . import naming
 from .minivect import minitypes
+import numba.ast_translate as translate
+import numba.ast_type_inference as type_inference
+
+import meta.decompiler
+import llvm.core
+
+def _get_ast(func):
+    return meta.decompiler.decompile_func(func)
+
+def _compile(context, func, ret_type=None, arg_types=None, **kwds):
+    """
+    Compile a numba annotated function.
+
+        - decompile function into a Python ast
+        - run type inference using the given input types
+        - compile the function to LLVM
+    """
+    ast = _get_ast(func)
+    func_signature = minitypes.FunctionType(return_type=ret_type,
+                                            args=arg_types)
+    func_signature, symtab = type_inference._infer_types(context, func, ast, func_signature)
+
+    func_name = naming.specialized_mangle(func.__name__, func_signature.args)
+
+    t = translate.LLVMCodeGenerator(
+        context, func, ast, func_signature=func_signature,
+        func_name=func_name, symtab=symtab, **kwds)
+    t.translate()
+
+    return func_signature, t.lfunc, t.get_ctypes_func(kwds.get('llvm', True))
 
 class FunctionCache(object):
     """
     Cache for compiler functions, declared external functions and constants.
     """
-    def __init__(self, module, builder):
-        self.module = module
-        self.builder = builder
+    def __init__(self, context):
+        self.context = context
+        self.module = context.llvm_context.get_default_module()
 
         # All numba-compiled functions
-        # (py_func, arg_types) -> (return_type, llvm_func)
+        # (py_func, arg_types) -> (signature, llvm_func, ctypes_func)
         self.compiled_functions = {}
-        # All external functions: py_func -> (return_type, llvm_func)
+
+        # All external functions: py_func -> (signature, llvm_func)
+        # Only callable from numba-compiled functions
         self.external_functions = {}
 
         self.string_constants = {}
 
     def get_function(self, py_func, arg_types=None):
-        func = None
-        if signature is not None:
-            func = self.compiled_functions[py_func, tuple(arg_types)]
+        result = None
 
-        if func is None:
-            func = self.external_functions[py_func]
+        if arg_types is not None:
+            result = self.compiled_functions.get((py_func, tuple(arg_types)))
+
+        if result is None and py_func in self.external_functions:
+            signature, lfunc = self.external_functions[py_func]
+            result = signature, lfunc, None
+
+        return result
+
+    def compile_function(self, func, arg_types, ret_type=None, **kwds):
+        """
+        Compile a python function given the argument types. Compile only
+        if not compiled already, and only if an annotated numba function
+        (in the future, use heuristics to determine whether a function
+        should be compiled or not).
+
+        Returns a triplet of (signature, llvm_func, python_callable)
+        `python_callable` may be the original function, or a ctypes callable
+        if the function was compiled.
+        """
+        result = self.get_function(func, arg_types)
+        if result is not None:
+            return result
+
+        if getattr(func, '_numba_func', False):
+            # numba function, compile
+            func_signature, lfunc, ctypes_func = _compile(
+                            self.context, func, ret_type, arg_types, **kwds)
+            self.compiled_functions[func, func_signature.args] = (
+                                func_signature, lfunc, ctypes_func)
+            return func_signature, lfunc, ctypes_func
+
+        # create a signature taking N objects and returning an object
+        signature = ofunc(arg_types=ofunc.arg_types * len(arg_types))
+        return signature, None, func
 
     def build_function(self, external_function):
         try:
-            lfunc = module.get_function_named(external_function.name)
+            lfunc = self.module.get_function_named(external_function.name)
         except llvm.LLVMException:
             lfunc_type = minitypes.FunctionType(
                 return_type=external_function.return_type,
@@ -39,9 +102,11 @@ class FunctionCache(object):
             lfunc = module.add_function(lfunc_type, external_function.name)
 
             if external_function.is_internal:
+                entry = lfunc.append_basic_block('entry')
+                builder = lc.Builder.new(entry)
                 lfunc.linkage = external_function.linkage
-                external_function.implementation(self.module, self.builder,
-                                                 lfunc)
+                external_function.implementation(
+                                        self.module, builder, lfunc)
 
         return lfunc
 
@@ -57,6 +122,7 @@ class FunctionCache(object):
             self.string_constants[(module, const_str)] = ret_val
 
         return ret_val
+
 
 class _LLVMModuleUtils(object):
     # TODO: rewrite print statements w/ native types to printf during type
@@ -194,6 +260,12 @@ class ExternalFunction(object):
         vars(self).update(kwargs)
 
     @property
+    def signature(self):
+        return minitypes.FunctionType(return_type=self.return_type,
+                                      args=self.arg_types,
+                                      is_vararg=self.is_vararg)
+
+    @property
     def name(self):
         if self.func_name is None:
             return type(self).__name__
@@ -204,17 +276,18 @@ class ExternalFunction(object):
         return None
 
 class InternalFunction(ExternalFunction):
-    linkage = lc.LINKAGE_INTERNAL
+    linkage = llvm.core.LINKAGE_INTERNAL
 
-class OFunc(ExternalFunction):
+class ofunc(ExternalFunction):
     arg_types = [object_]
+    return_type = object_
 
 class printf(ExternalFunction):
     arg_types = [void.pointer()]
     return_type = int32
     is_vararg = True
 
-class Py_IncRef(OFunc):
+class Py_IncRef(ofunc):
     # TODO: rewrite calls to Py_IncRef/Py_DecRef to direct integer
     # TODO: increments/decrements
     return_type = void
@@ -222,7 +295,7 @@ class Py_IncRef(OFunc):
 class Py_DecRef(Py_IncRef):
     pass
 
-class PyObject_Length(OFunc):
+class PyObject_Length(ofunc):
     return_type = Py_ssize_t
 
 class PyModulo(InternalFunction):
@@ -232,10 +305,8 @@ class PyModulo(InternalFunction):
         return naming.specialized_mangle('__py_modulo_%s', self.arg_types)
 
     def implementation(self, module, builder, ret_val):
-        entry_block = ret_val.append_basic_block('entry')
         different_sign_block = ret_val.append_basic_block('different_sign')
         join_block = ret_val.append_basic_block('join')
-        builder = lc.Builder.new(entry_block)
         arg2 = ret_val.args[1]
         srem = builder.srem(ret_val.args[0], arg2)
         width = int(typ[1:])
@@ -253,14 +324,3 @@ class PyModulo(InternalFunction):
         res.add_incoming(different_sign_res, different_sign_block)
         builder.ret(res)
         return ret_val
-
-
-PY_CALL_TO_LLVM_CALL_MAP = {
-    debugout : _LLVMModuleUtils.build_debugout,
-    len : _LLVMModuleUtils.build_len,
-    np.zeros_like : _LLVMModuleUtils.build_zeros_like,
-    np.complex64.conj : _LLVMModuleUtils.build_conj,
-    np.complex128.conj : _LLVMModuleUtils.build_conj,
-    np.complex64.conjugate : _LLVMModuleUtils.build_conj,
-    np.complex128.conjugate : _LLVMModuleUtils.build_conj,
-}

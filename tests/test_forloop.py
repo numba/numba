@@ -64,7 +64,7 @@ class TestForLoop(unittest.TestCase):
             ret_type=numba.float32, arg_types=[numba.int32[:]])(for_loop_fn_0)
         result = compiled_for_loop_fn(test_data)
         self.assertEqual(result, 6)
-        self.assertEqual(result, for_loop_fn_0(testdata))
+        self.assertEqual(result, for_loop_fn_0(test_data))
 
     def test_compiled_for_loop_fn_1(self):
         compiled_for_loop_fn = numba_compile(arg_types=[i4, i4, i4],

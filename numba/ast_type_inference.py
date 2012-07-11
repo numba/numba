@@ -20,6 +20,7 @@ def _infer_types(context, func, ast, func_signature):
     TypeSettingVisitor(context, func, ast).visit(ast)
     return type_inferer.func_signature, type_inferer.symtab
 
+
 class TypeInferer(visitors.NumbaTransformer):
     """
     Type inference. Initialize with a minivect context, a Python ast,

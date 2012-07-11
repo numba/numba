@@ -7,7 +7,7 @@ if-then-else statements.
 '''
 # ______________________________________________________________________
 
-import numba
+from numba import *
 from numba.decorators import numba_compile
 
 import unittest
@@ -25,7 +25,7 @@ def if_fn_1(arg):
 
 class TestIf(unittest.TestCase):
     def test_if_fn_1(self):
-        if_fn_1c = numba_compile()(if_fn_1)
+        if_fn_1c = numba_compile(d, [d])(if_fn_1)
         self.assertEqual(if_fn_1c(-1.), 42.)
         self.assertEqual(if_fn_1c(1.), 22.)
 

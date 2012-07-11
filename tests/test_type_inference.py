@@ -10,7 +10,7 @@ from numba.minivect import minitypes
 from numba import *
 from numba import _numba_types as numba_types
 from numba import ast_type_inference
-from numba import decorators
+from numba import decorators, functions
 
 import unittest
 
@@ -87,7 +87,7 @@ def test_none_newaxis(a):
 
 def infer(func, arg_types):
     sig = minitypes.FunctionType(return_type=None, args=arg_types)
-    ast = decorators._get_ast(func)
+    ast = functions._get_ast(func)
     return ast_type_inference._infer_types(decorators.context, func, ast, sig)
 
 class TestTypeInference(unittest.TestCase):
@@ -149,8 +149,5 @@ class TestTypeInference(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    #import dis
-    # dis.dis(_simple_func)
-    #dis.dis(for_loop)
     # TestTypeInference('test_none_newaxis').debug()
     unittest.main()

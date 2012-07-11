@@ -12,7 +12,7 @@ from numba.minivect import miniast, minitypes
 
 __all__ = minitypes.__all__ + [
     'O', 'b', 'i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8',
-    'f4', 'f8', 'f16', 'c8', 'c16', 'c32',
+    'f4', 'f8', 'f16', 'c8', 'c16', 'c32', 'f', 'd', 'i',
 ]
 
 class NumbaType(minitypes.Type):
@@ -155,15 +155,15 @@ O = object_
 b = bool_
 i1 = int8
 i2 = int16
-i4 = int32
+i = i4 = int32
 i8 = int64
 u1 = uint8
 u2 = uint16
 u4 = uint32
 u8 = uint64
 
-f4 = float_
-f8 = double
+f = f4 = float_
+d = f8 = double
 f16 = float128
 
 c8 = complex64

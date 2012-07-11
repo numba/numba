@@ -172,6 +172,7 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
 
 
 class LLVMContextManager(object):
+    # TODO: make these instance attributes and create a singleton global object
     _ee = None          # execution engine
     _mods = {}          # module's name => module instance
     _fpass = {}         # module => function passes

@@ -10,6 +10,7 @@ class NumbaVisitorMixin(object):
     def __init__(self, context, func, ast):
         self.context = context
         self.ast = ast
+        self.function_cache = context.function_cache
 
         self.func = func
         self.fco = func.func_code

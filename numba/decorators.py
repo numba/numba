@@ -2,11 +2,8 @@ import functools
 import logging
 
 import numba
-from . import naming, utils
-from . import ast_type_inference as type_inference
+from . import utils, functions, ast_translate as translate
 from .minivect import minitypes
-
-import meta.decompiler
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +44,6 @@ class CallSite(object):
 
 # A simple fast-vectorize example
 
-#from translate import Translate
-from ast_translate import LLVMCodeGenerator as ASTTranslate
-
 # The __tr_map__ global maps from Python functions to a Translate
 # object.  This added reference prevents the translator and its
 # generated LLVM code from being garbage collected when we leave the
@@ -75,66 +69,32 @@ def vectorize(func):
         return numpy.vectorize(func)
 
 context = utils.get_minivect_context()
-
-def _get_ast(func):
-    return meta.decompiler.decompile_func(func)
-
-def _compile(func, ret_type=None, arg_types=None, **kwds):
-    """
-    Compile a numba annotated function.
-
-        - decompile function into a Python ast
-        - run type inference using the given input types
-        - compile the function to LLVM
-    """
-    global __tr_map__
-
-    ast = _get_ast(func)
-
-    func_signature = minitypes.FunctionType(return_type=ret_type,
-                                            args=arg_types)
-    func_signature, symtab = type_inference._infer_types(context, func, ast, func_signature)
-
-    func_name = naming.specialized_mangle(func.__name__, func_signature.args)
-
-    if func in __tr_map__:
-        print("Warning: Previously compiled version of %r may be "
-              "garbage collected!" % (func,))
-
-    t = ASTTranslate(context, func, ast, func_signature=func_signature,
-                  func_name=func_name, symtab=symtab, **kwds)
-    t.translate()
-    __tr_map__[func] = t
-    return t.get_ctypes_func(kwds.get('llvm', True))
+context.llvm_context = translate.LLVMContextManager()
+function_cache = context.function_cache = functions.FunctionCache(context)
 
 def function(f):
     """
     Defines a numba function, that, when called, specializes on the input
     types.
     """
-    cache = {}
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
         types = tuple(context.typemapper.from_python(value)
                           for value in arguments)
-        if types in cache:
-            compiled_func = cache[types]
-        else:
+        result = function_cache.compile_function(f, types)
+        _, _, ctypes_func = result
+        return ctypes_func(*args, **kwargs)
 
-            compiled_func = _compile(f, ret_type=None, arg_types=types)
-            cache[types] = compiled_func
-
-        return compiled_func(*args, **kwargs)
+    f._numba_func = True
     return wrapper
 
-
 # XXX Proposed name; compile() would mask builtin of same name.
-def numba_compile(*args, **kws):
+def numba_compile(ret_type, arg_types, **kws):
     def _numba_compile(func):
-        kws.setdefault('ret_type', numba.float64)
-        kws.setdefault('arg_types', [numba.float64])
-        return _compile(func, *args, **kws)
+        _, _, ctypes_func = function_cache.compile_function(
+                        func, arg_types=arg_types, ret_type=ret_type, **kws)
+        return ctypes_func
     return _numba_compile
 
 from kerneltranslate import Translate as KernelTranslate

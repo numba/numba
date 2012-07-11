@@ -10,4 +10,6 @@ except ImportError:
     print logging.error("Run 'git submodule init' followed by 'git submodule update'")
     raise
 
+import _numba_types
 from ._numba_types import *
+__all__ = _numba_types.__all__
