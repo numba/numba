@@ -1,4 +1,10 @@
-Numba is written and maintained by
+Numba proof of concept was originally written by 
 Travis Oliphant <travis@continuum.io>
 
-and hopefully many others...
+Jon Riehl added Control Flow Graph and moved Numba forward significantly
+
+Mark Florisson added minivect and a type system
+
+Siu Kwan Lam merged ideas from pymothoa into Numba
+
+

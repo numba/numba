@@ -9,9 +9,10 @@ Dependencies:
   * llvm-py (from ContinuumIO/llvm-py fork)
   * numpy
 
-* Compile LLVM 3.1 (unreleased) --- get it from svn: 
+* Compile LLVM 3.1: 
 
-svn co http://llvm.org/svn/llvm-project/llvm/trunk llvm
+wget http://llvm.org/releases/3.1/llvm-3.1.src.tar.gz 
+tar zxvf llvm-3.1.src.tar.gz
 ./configure --enable-optimized
 # Be sure your compiler architecture is same as version of Python you will use
 #  e.g. -arch i386 or -arch x86_64.  It might be best to be explicit about this.
