@@ -85,8 +85,8 @@ class FunctionCache(object):
                 # numba function, compile
                 func_signature, lfunc, ctypes_func = _compile(
                                 self.context, func, ret_type, arg_types, **kwds)
-                self.compiled_functions[func, func_signature.args] = (
-                                    func_signature, lfunc, ctypes_func)
+                self.compiled_functions[func, tuple(func_signature.args)] = (
+                                            func_signature, lfunc, ctypes_func)
                 return func_signature, lfunc, ctypes_func
 
         # create a signature taking N objects and returning an object
