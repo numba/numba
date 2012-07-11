@@ -563,6 +563,7 @@ class TypeInferer(visitors.NumbaTransformer):
         else:
             arg_types = [a.variable.type for a in node.args]
             new_node = self._resolve_external_call(node, func, arg_types)
+            print new_node, func, arg_types
 
             if func_type.is_numpy_attribute:
                 result_type = self._resolve_numpy_call(func_type, node)

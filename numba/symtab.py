@@ -13,7 +13,7 @@ class Variable(object):
         state: state passed from one stage to the next
     """
 
-    def __init__(self, type, is_constant=False, is_local=True,
+    def __init__(self, type, is_constant=False, is_local=False,
                  name=None, lvalue=None, constant_value=None):
         self.name = name
         self.type = type

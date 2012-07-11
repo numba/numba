@@ -86,13 +86,15 @@ def function(f):
         _, _, ctypes_func = result
         return ctypes_func(*args, **kwargs)
 
-    f._numba_func = True
+    wrapper._is_numba_func = True
+    wrapper._numba_func = f
+    f._is_numba_func = True
     return wrapper
 
 # XXX Proposed name; compile() would mask builtin of same name.
 def numba_compile(ret_type, arg_types, **kws):
     def _numba_compile(func):
-        func._numba_func = True
+        func._is_numba_func = True
         _, _, ctypes_func = function_cache.compile_function(
                         func, arg_types=arg_types, ret_type=ret_type, **kws)
         return ctypes_func

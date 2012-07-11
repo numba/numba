@@ -9,7 +9,7 @@ Unit tests checking on Numba's code generation for Python/Numpy C-API calls.
 from numba import *
 
 import numpy
-from numba.decorators import numba_compile
+from numba.decorators import numba_compile, function
 
 import unittest
 
@@ -22,6 +22,14 @@ def call_zeros_like(arr):
 
 def call_len(arr):
     return len(arr)
+
+@function
+def func1(arg):
+    return arg * 2
+
+@function
+def func2(arg):
+    return func1(arg + 1)
 
 # ______________________________________________________________________
 
@@ -38,11 +46,14 @@ class TestExternCall(unittest.TestCase):
             call_len)
         self.assertEqual(testfn(testarr), 10)
 
+    def test_numba_calls_numba(self):
+        self.assertEqual(func2(3), 8)
+
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    TestExternCall('test_call_len').debug()
-#    unittest.main()
+#    TestExternCall('test_numba_calls_numba').debug()
+    unittest.main()
 
 # ______________________________________________________________________
 # End of test_extern_call.py

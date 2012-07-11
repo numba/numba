@@ -301,7 +301,7 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
 
         for name, var in self.symtab.items():
             # FIXME: 'None' should be handled as a special case (probably).
-            if name not in self.argnames and not var.type.is_builtin:
+            if name not in self.argnames and var.is_local:
                 # Not argument and not builtin type.
                 # Allocate storage for all variables.
                 stackspace = self.builder.alloca(var.ltype)

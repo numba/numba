@@ -81,7 +81,8 @@ class FunctionCache(object):
             if result is not None:
                 return result
 
-            if getattr(func, '_numba_func', False):
+            if getattr(func, '_is_numba_func', False):
+                func = getattr(func, '_numba_func', func)
                 # numba function, compile
                 func_signature, lfunc, ctypes_func = _compile(
                                 self.context, func, ret_type, arg_types, **kwds)
