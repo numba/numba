@@ -90,6 +90,7 @@ class TestForLoop(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+#    TestForLoop('test_compiled_for_loop_fn_1').debug()
     unittest.main()
 
 # ______________________________________________________________________
