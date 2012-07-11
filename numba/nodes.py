@@ -1,8 +1,10 @@
 import ast
 
+import numba
 from .symtab import Variable
 from . import _numba_types as numba_types
 from numba import utils
+from numba.minivect import minitypes
 
 import llvm.core
 
@@ -85,8 +87,8 @@ class FunctionCallNode(Node):
 class NativeCallNode(FunctionCallNode):
     _fields = ['args']
 
-    def __init__(self, signature, call_node, llvm_func, py_func=None):
-        super(NativeCallNode, self).__init__(signature, call_node.args)
+    def __init__(self, signature, args, llvm_func, py_func=None):
+        super(NativeCallNode, self).__init__(signature, args)
         self.llvm_func = llvm_func
         self.py_func = py_func
 
@@ -96,5 +98,22 @@ class ObjectCallNode(FunctionCallNode):
     def __init__(self, signature, call_node, py_func=None):
         super(ObjectCallNode, self).__init__(signature, call_node.args)
         self.function = call_node.func
-        self.kwargs = call_node.keywords
+        if call_node.keywords:
+            keywords = [(k.arg, k.value) for k in call_node.keywords]
+            keys, values = zip(*keywords)
+            self.kwargs = ast.Dict(keys, values)
+            self.kwargs.variable = Variable(minitypes.object_)
+        else:
+            self.kwargs = None
         self.py_func = py_func
+
+class TempNode(Node):
+    """
+    Coerce a node to a temporary which is reference counted.
+    """
+
+    _fields = ['node']
+
+    def __init__(self, node):
+        self.node = node
+        self.llvm_temp = None

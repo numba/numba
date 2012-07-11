@@ -71,10 +71,6 @@ class CodeGenerationBase(visitors.NumbaVisitor):
     #    def generate_function_arguments(self, arguments):
     #        raise NotImplementedError
 
-    def visit_Call(self, node):
-        func = self.visit(node.func)
-        return self.generate_call(func, self.visitlist(node.args))
-
     def generate_declare(self,  name, ty):
         raise NotImplementedError
 

@@ -23,7 +23,8 @@ def _compile(context, func, ret_type=None, arg_types=None, **kwds):
     ast = _get_ast(func)
     func_signature = minitypes.FunctionType(return_type=ret_type,
                                             args=arg_types)
-    func_signature, symtab = type_inference._infer_types(context, func, ast, func_signature)
+    func_signature, symtab, ast = type_inference._infer_types(
+                            context, func, ast, func_signature)
 
     func_name = naming.specialized_mangle(func.__name__, func_signature.args)
 
@@ -46,7 +47,7 @@ class FunctionCache(object):
         # (py_func, arg_types) -> (signature, llvm_func, ctypes_func)
         self.compiled_functions = {}
 
-        # All external functions: py_func -> (signature, llvm_func)
+        # All external functions: (py_func or name) -> (signature, llvm_func)
         # Only callable from numba-compiled functions
         self.external_functions = {}
 
@@ -92,17 +93,34 @@ class FunctionCache(object):
         signature = ofunc(arg_types=ofunc.arg_types * len(arg_types)).signature
         return signature, None, func
 
+    def function_by_name(self, name):
+        """
+        Return the signature and LLVM function given a name. The function must
+        either already be compiled, or it must be defined in this module.
+        """
+        if name in self.external_functions:
+            return self.external_functions[name]
+        else:
+            declared_func = globals()[name]()
+            lfunc = self.build_function(declared_func)
+            return declared_func.signature, lfunc
+
     def build_function(self, external_function):
+        """
+        Build a function given it's signature information. See the
+        `ExternalFunction` class.
+        """
         try:
             lfunc = self.module.get_function_named(external_function.name)
         except llvm.LLVMException:
-            lfunc_type = minitypes.FunctionType(
-                return_type=external_function.return_type,
-                args=external_function.arg_types,
-                is_vararg=external_function.varargs)
-            lfunc = module.add_function(lfunc_type, external_function.name)
+            func_type = minitypes.FunctionType(
+                    return_type=external_function.return_type,
+                    args=external_function.arg_types,
+                    is_vararg=external_function.is_vararg)
+            lfunc_type = func_type.to_llvm(self.context)
+            lfunc = self.module.add_function(lfunc_type, external_function.name)
 
-            if external_function.is_internal:
+            if external_function.linkage == llvm.core.LINKAGE_INTERNAL:
                 entry = lfunc.append_basic_block('entry')
                 builder = lc.Builder.new(entry)
                 lfunc.linkage = external_function.linkage
@@ -298,6 +316,14 @@ class Py_DecRef(Py_IncRef):
 
 class PyObject_Length(ofunc):
     return_type = Py_ssize_t
+
+class PyObject_Call(ExternalFunction):
+    arg_types = [object_, object_, object_]
+    return_type = object_
+
+class PyTuple_Pack(ExternalFunction):
+    arg_types = [Py_ssize_t]
+    return_type = object_
 
 class PyModulo(InternalFunction):
 

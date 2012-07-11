@@ -18,7 +18,8 @@ def _infer_types(context, func, ast, func_signature):
                                func_signature=func_signature)
     type_inferer.infer_types()
     TypeSettingVisitor(context, func, ast).visit(ast)
-    return type_inferer.func_signature, type_inferer.symtab
+    ast = ASTSpecializer(context, func, ast).visit(ast)
+    return type_inferer.func_signature, type_inferer.symtab, ast
 
 
 class TypeInferer(visitors.NumbaTransformer):
@@ -537,7 +538,7 @@ class TypeInferer(visitors.NumbaTransformer):
                 self.function_cache.compile_function(py_func, arg_types)
 
         if llvm_func is not None:
-            return nodes.NativeCallNode(signature, call_node,
+            return nodes.NativeCallNode(signature, call_node.args,
                                         llvm_func, py_func)
 
         return nodes.ObjectCallNode(signature, call_node, py_func)
@@ -557,7 +558,7 @@ class TypeInferer(visitors.NumbaTransformer):
             arg_type = minitypes.Py_ssize_t
             node.variable = self._resolve_range(node, arg_type)
         elif func_type.is_function:
-            new_node = nodes.NativeCallNode(func_variable.type,
+            new_node = nodes.NativeCallNode(func_variable.type, node.args,
                                             func_variable.value)
         else:
             arg_types = [a.variable.type for a in node.args]
@@ -635,3 +636,21 @@ class TypeSettingVisitor(visitors.NumbaVisitor):
         if isinstance(node, ast.expr):
             node.type = node.variable.type
         super(TypeSettingVisitor, self).visit(node)
+
+class ASTSpecializer(visitors.NumbaTransformer):
+    def visit_Tuple(self, node):
+        sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
+        objs = self.visitlist(node.elts)
+        n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
+        args = [n] + objs
+        return self.visit(nodes.NativeCallNode(sig, args, lfunc))
+
+    def visit_NativeCallNode(self, node):
+        self.generic_visit(node)
+        if node.signature.return_type.is_object:
+            node = nodes.TempNode(node)
+        return node
+
+    def visit_ObjectCallNode(self, node):
+        self.generic_visit(node)
+        return nodes.TempNode(node)

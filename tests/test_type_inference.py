@@ -88,7 +88,10 @@ def test_none_newaxis(a):
 def infer(func, arg_types):
     sig = minitypes.FunctionType(return_type=None, args=arg_types)
     ast = functions._get_ast(func)
-    return ast_type_inference._infer_types(decorators.context, func, ast, sig)
+
+    sig, symtab, ast = ast_type_inference._infer_types(
+                                decorators.context, func, ast, sig)
+    return sig, symtab
 
 class TestTypeInference(unittest.TestCase):
     def test_simple_func(self):

@@ -26,7 +26,7 @@ from .symtab import Variable
 from . import _numba_types as _types
 from ._numba_types import Complex64, Complex128
 
-from . import visitors, nodes, codevisitor
+from . import visitors, nodes, codevisitor, llvm_types
 from .minivect import minitypes
 
 import logging
@@ -578,6 +578,37 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
 
         return val
 
+    def visit_Call(self, node):
+        raise Exception("This node should have been replaced")
+
+    def visit_ObjectCallNode(self, node):
+        args_tuple = self.visitlist(node.args)
+        kwargs_dict = self.visit(node.kwargs)
+        function = self.visit(node.function)
+        largs = [function, args_tuple, kwargs_dict]
+        PyObject_Call = self.function_cache.function_by_name('PyObject_Call')
+        return self.builder.call(PyObject_Call, largs)
+
     def visit_NativeCallNode(self, node):
+        # TODO: Refcounts + error check
         largs = self.visitlist(node.args)
         return self.builder.call(node.llvm_func, largs)
+
+    def visit_TempNode(self, node):
+        rhs = self.visit(node.node)
+        lhs = self.builder.alloca(llvm_types._pyobject_head_struct_p)
+        self.generate_assign(rhs, lhs)
+        node.llvm_temp = lhs
+        return lhs
+
+class DisposalVisitor(visitors.NumbaVisitor):
+    # TODO: handle errors, check for NULL before calling DECREF
+
+    def __init__(self, context, func, ast, builder):
+        super(DisposalVisitor, self).__init__(context, func, ast)
+        self.builder = builder
+
+    def visit_TempNode(self, node):
+        self.visit(node.node)
+        lfunc = self.function_cache.function_by_name('Py_DecRef')
+        self.builder.call(lfunc, node.llvm_temp)
