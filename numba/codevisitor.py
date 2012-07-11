@@ -41,36 +41,6 @@ class CodeGenerationBase(visitors.NumbaVisitor):
             finally:
                 self._nodes.pop() # pop current node
 
-    #    def visit_FunctionDef(self, node):
-    #        with self.generate_function(node.name) as fndef:
-    #            # arguments
-    #            self.visit(node.args)
-    #            # function body
-    #            if (isinstance(node.body[0], ast.Expr) and
-    #                isinstance(node.body[0].value, ast.Str)):
-    #                # Python doc string
-    #                logger.info('Ignoring python doc string.')
-    #                statements = node.body[1:]
-    #            else:
-    #                statements = node.body
-
-    #            for stmt in statements:
-    #                self.visit(stmt)
-    #        # close function
-
-    #    def visit_arguments(self, node):
-    #        if node.vararg or node.kwarg or node.defaults:
-    #            raise FunctionDeclarationError(
-    #                'Does not support variable/keyword/default arguments.')
-
-    #        self.generate_function_arguments([arg.id for arg in arguments])
-
-    #    def generate_function(self, name):
-    #        raise NotImplementedError
-
-    #    def generate_function_arguments(self, arguments):
-    #        raise NotImplementedError
-
     def generate_declare(self,  name, ty):
         raise NotImplementedError
 
@@ -164,23 +134,8 @@ class CodeGenerationBase(visitors.NumbaVisitor):
     def visit_Name(self, node):
         if isinstance(node.ctx, ast.Load): # load
             return self.generate_load_symbol(node.id)
-            #    try: # lookup in the symbol table
-            #        val = self.symbols[node.id]
-            #    except KeyError: # does not exist
-            #        raise UndefinedSymbolError(node)
-            #    else: # load from stack
-            #        if isinstance(val, int) or isinstance(val, long):
-            #            return self.generate_constant_int(val)
-            #        elif isinstance(val, float):
-            #            return self.generate_constant_real(val)
-            #        else:
-            #            return val
         elif isinstance(node.ctx, ast.Store): # store
             return self.generate_store_symbol(node.id)
-            #    try:
-            #        return self.symbols[node.id]
-            #    except KeyError:
-            #        raise UndefinedSymbolError(node)
         # unreachable
         raise AssertionError('unreachable')
 
@@ -224,23 +179,3 @@ class CodeGenerationBase(visitors.NumbaVisitor):
 
     def generate_not(self, operand):
         raise NotImplementedError
-
-## Type inference pass seems to have transformed all aug-assign to assign+binop
-#
-#    def visit_AugAssign(self, node):
-#        target = self.visit(node.target)
-#        node.target.ctx = ast.Load() # change context to load
-#        target_val = self.visit(node.target)
-#        value = self.visit(node.value)
-#        result = self.generate_binop(type(node.op), target_val, value)
-#        return self.generate_assign(result, target)
-
-
-    def visit_While(self, node):
-        if node.orelse:
-            raise NotImplementedError('Else in for-loop is not implemented.')
-        self.generate_while(node.test, node.body)
-
-    def generate_while(self, test, body):
-        raise NotImplementedError
-

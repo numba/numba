@@ -41,8 +41,8 @@ class TestExternCall(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    # TestExternCall('test_call_len').debug()
-    unittest.main()
+    TestExternCall('test_call_len').debug()
+#    unittest.main()
 
 # ______________________________________________________________________
 # End of test_extern_call.py

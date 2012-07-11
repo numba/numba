@@ -417,7 +417,10 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
 
     def generate_load_symbol(self, name):
         var = self.symtab[name]
-        return self.builder.load(var.lvalue)
+        if var.type.is_local:
+            return self.builder.load(var.lvalue)
+        else:
+            raise NotImplementedError
 
     def generate_store_symbol(self, name):
         return self.symtab[name].lvalue

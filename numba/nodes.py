@@ -65,6 +65,8 @@ class ConstNode(Node):
             base_ltype = self.to_llvm(type.base_type)
             lvalue = llvm.core.Constant.struct([(base_ltype, constant.real),
                                                 (base_ltype, constant.imag)])
+        elif type.is_pointer and self.pyval == 0:
+            return llvm.core.ConstantPointerNull
         elif type.is_object:
             raise NotImplementedError
         elif type.is_function:
@@ -104,7 +106,7 @@ class ObjectCallNode(FunctionCallNode):
             self.kwargs = ast.Dict(keys, values)
             self.kwargs.variable = Variable(minitypes.object_)
         else:
-            self.kwargs = None
+            self.kwargs = ConstNode(0, minitypes.object_.pointer())
         self.py_func = py_func
 
 class TempNode(Node):
