@@ -75,20 +75,21 @@ class FunctionCache(object):
         `python_callable` may be the original function, or a ctypes callable
         if the function was compiled.
         """
-        result = self.get_function(func, arg_types)
-        if result is not None:
-            return result
+        if func is not None:
+            result = self.get_function(func, arg_types)
+            if result is not None:
+                return result
 
-        if getattr(func, '_numba_func', False):
-            # numba function, compile
-            func_signature, lfunc, ctypes_func = _compile(
-                            self.context, func, ret_type, arg_types, **kwds)
-            self.compiled_functions[func, func_signature.args] = (
-                                func_signature, lfunc, ctypes_func)
-            return func_signature, lfunc, ctypes_func
+            if getattr(func, '_numba_func', False):
+                # numba function, compile
+                func_signature, lfunc, ctypes_func = _compile(
+                                self.context, func, ret_type, arg_types, **kwds)
+                self.compiled_functions[func, func_signature.args] = (
+                                    func_signature, lfunc, ctypes_func)
+                return func_signature, lfunc, ctypes_func
 
         # create a signature taking N objects and returning an object
-        signature = ofunc(arg_types=ofunc.arg_types * len(arg_types))
+        signature = ofunc(arg_types=ofunc.arg_types * len(arg_types)).signature
         return signature, None, func
 
     def build_function(self, external_function):

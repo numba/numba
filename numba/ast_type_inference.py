@@ -512,8 +512,35 @@ class TypeInferer(visitors.NumbaTransformer):
         else:
             stop, = args
 
-        node.args = [start, stop, step]
+        node.args = nodes.CoercionNode.coerce([start, stop, step],
+                                              minitypes.Py_ssize_t)
         return result
+
+    def _resolve_function(self, func_type, func_name):
+        func = None
+
+        if func_type.is_builtin:
+            func = getattr(builtins, func_name)
+        elif func_type.is_global:
+            func = self.func.__globals__[func_name]
+        elif func_type.is_numpy_attribute:
+            func = getattr(func_type.module, func_type.attr)
+
+        return func
+
+    def _resolve_external_call(self, call_node, py_func, arg_types=None):
+        """
+        Resolve a call to a function. If we know about the function,
+        generate a native call, otherwise go through PyObject_Call().
+        """
+        signature, llvm_func, py_func = \
+                self.function_cache.compile_function(py_func, arg_types)
+
+        if llvm_func is not None:
+            return nodes.NativeCallNode(signature, call_node,
+                                        llvm_func, py_func)
+
+        return nodes.ObjectCallNode(signature, call_node, py_func)
 
     def visit_Call(self, node):
         node.func = self.visit(node.func)
@@ -522,32 +549,27 @@ class TypeInferer(visitors.NumbaTransformer):
 
         func_variable = node.func.variable
         func_type = func_variable.type
-        arg_type = None
 
-        if func_type.is_builtin and func_type.name in ('range', 'xrange'):
+        func = self._resolve_function(func_type, func_variable.name)
+        new_node = node
+
+        if func in (range, xrange):
             arg_type = minitypes.Py_ssize_t
-            result = self._resolve_range(node, arg_type)
-        elif func_type.is_builtin and node.func.id == 'len':
-            result = Variable(_types.Py_ssize_t)
+            node.variable = self._resolve_range(node, arg_type)
         elif func_type.is_function:
-            result = Variable(func.type.return_type)
-        elif func_type.is_numpy_attribute:
-            result_type = self._resolve_numpy_call(func_type, node)
-            if result_type is None:
-                result_type = minitypes.object_
-            result = Variable(result_type)
-        elif func_type.is_object:
-            result = Variable(minitypes.object_)
+            new_node = nodes.NativeCallNode(func_variable.type,
+                                            func_variable.value)
         else:
-            # TODO: implement
-            raise NotImplementedError(func.type)
+            arg_types = [a.variable.type for a in node.args]
+            new_node = self._resolve_external_call(node, func, arg_types)
 
-        if arg_type is not None:
-            node.args = [nodes.CoercionNode(arg, arg_type)
-                            for arg in node.args]
+            if func_type.is_numpy_attribute:
+                result_type = self._resolve_numpy_call(func_type, node)
+                if result_type is None:
+                    result_type = minitypes.object_
+                new_node.variable = Variable(result_type)
 
-        node.variable = result
-        return node
+        return new_node
 
     def _resolve_numpy_attribute(self, node, type):
         attribute = getattr(type.module, node.attr)

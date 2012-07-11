@@ -244,6 +244,10 @@ class LLVMContextManager(object):
         return self._ee
 
 class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
+    """
+    Translate a Python AST to LLVM. Each visit_* method should directly
+    return an LLVM value.
+    """
 
     def __init__(self, context, func, ast, func_signature, symtab,
                  optimize=True, func_name=None, **kwds):
@@ -409,20 +413,19 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
     # __________________________________________________________________________
 
     def visit_ConstNode(self, node):
-        constval = node.value(self.builder)
-        return Variable(node.type, is_constant=True, lvalue=constval)
+        return node.value(self.builder)
 
     def generate_load_symbol(self, name):
         var = self.symtab[name]
-        value = self.builder.load(var.lvalue)
-        # Create a temp variable
-        tmpvar = Variable.from_variable(var, lvalue=value)
-        return tmpvar
+        return self.builder.load(var.lvalue)
 
     def generate_store_symbol(self, name):
-        return self.symtab[name]
+        return self.symtab[name].lvalue
 
-    def generate_compare(self, op_class, lhs, rhs):
+    def visit_Compare(self, node):
+        lhs, rhs = node.left, node.comparators[0]
+        lhs_lvalue, rhs_lvalue = self.visitlist([lhs, rhs])
+
         op_map = {
             ast.Gt    : '>',
             ast.Lt    : '<',
@@ -432,11 +435,11 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
             ast.NotEq : '!=',
         }
 
-        op = op_map[op_class]
+        op = op_map[type(node.ops[0])]
         if lhs.type.is_float and rhs.type.is_float:
             lfunc = self.builder.fcmp
             lop = _compare_mapping_float[op]
-            return self.builder.fcmp(lop, lhs.lvalue, rhs.lvalue)
+            return self.builder.fcmp(lop, lhs_lvalue, rhs_lvalue)
         elif lhs.type.is_int_like and rhs.type.is_int_like:
             lfunc = self.builder.icmp
             # FIXME
@@ -445,7 +448,7 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         else:
             raise TypeError(lhs.type)
 
-        return lfunc(lop, lhs.lvalue, rhs.lvalue)
+        return lfunc(lop, lhs_lvalue, rhs_lvalue)
 
     def generate_if(self, test, iftrue_body, orelse_body):
         bb_true = self.append_basic_block('if.true')
@@ -478,21 +481,19 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         self.blocks[idx]=bb
         return bb
 
-    def generate_assign(self, value, target):
+    def generate_assign(self, lvalue, ltarget):
         '''
         Generate assignment operation and automatically cast value to
         match the target type.
         '''
-        ltarget = target.lvalue
-        lvalue = value.lvalue
-
-        if value.type != target.type:
+        if lvalue.type != ltarget.type:
             lvalue = self.caster.cast(lvalue, lvalue.type)
 
         self.builder.store(lvalue, ltarget)
 
-    def generate_return(self, value):
-        self.builder.ret(value.lvalue)
+    def visit_Return(self, node):
+        if node.value is not None:
+            self.builder.ret(self.visit(node.value))
 
     def is_block_terminated(self):
         '''
@@ -500,7 +501,7 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         That means the basicblock is ended with a branch or return
         '''
         instructions = self.builder.basic_block.instructions
-        return  instructions and instructions[-1].is_terminator
+        return instructions and instructions[-1].is_terminator
 
     def generate_for_range(self, for_node, target, iternode, body):
         '''
@@ -524,14 +525,14 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         self.builder.position_at_end(bb_cond)
         op = _compare_mapping_sint['<']
         ctvalue = self.generate_load_symbol(target.id)
-        cond = self.builder.icmp(op, ctvalue.lvalue, stop.lvalue)
+        cond = self.builder.icmp(op, ctvalue, stop)
         self.builder.cbranch(cond, bb_body, bb_exit)
 
         # generate increment
         self.builder.position_at_end(bb_incr)
         ctvalue = self.generate_load_symbol(target.id)
-        ctvalue_plus_step = self.builder.add(ctvalue.lvalue, step.lvalue)
-        self.builder.store(ctvalue_plus_step, ctstore.lvalue)
+        ctvalue_plus_step = self.builder.add(ctvalue, step)
+        self.builder.store(ctvalue_plus_step, ctstore)
         self.builder.branch(bb_cond)
 
         # generate body
@@ -547,9 +548,7 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
 
     def generate_constant_int(self, val, ty=_types.int_):
         lconstant = lc.Constant.int(ty.to_llvm(self.context), val)
-        var = Variable(type=ty, is_constant=True, lvalue=lconstant,
-                       constant_value=val)
-        return var
+        return lconstant
 
     _binops = {
         ast.Add: ('fadd', 'add'),
@@ -558,21 +557,27 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         ast.Div: ('fdiv', 'div'),
     }
 
-    def generate_binop(self, op_class, type, lhs, rhs):
-        if (type.is_int or type.is_float) and op_class in self._binops:
-            llvm_method_name = self._binops[op_class][type.is_int]
+    def visit_BinOp(self, node):
+        lhs = self.visit(node.left)
+        rhs = self.visit(node.right)
+        op = type(node.op)
+
+        if (node.type.is_int or node.type.is_float) and op in self._binops:
+            llvm_method_name = self._binops[op][node.type.is_int]
             meth = getattr(self.builder, llvm_method_name)
-            result = meth(lhs.lvalue, rhs.lvalue)
+            result = meth(lhs, rhs)
         else:
             raise Exception(op_class, type, lhs, rhs)
 
-        return Variable.from_variable(lhs, lvalue=result)
+        return result
 
     def visit_CoercionNode(self, node):
-        variable = self.visit(node.node)
-        val = variable.lvalue
-
-        if val.type != node.dst_type:
+        val = self.visit(node.node)
+        if node.node.type != node.dst_type:
             val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
 
-        return Variable.from_variable(variable, lvalue=val)
+        return val
+
+    def visit_NativeCallNode(self, node):
+        largs = self.visitlist(node.args)
+        return self.builder.call(node.llvm_func, largs)

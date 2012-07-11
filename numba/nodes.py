@@ -74,3 +74,27 @@ class ConstNode(Node):
                                                         (self.pyval, type))
 
         return lvalue
+
+class FunctionCallNode(Node):
+    def __init__(self, signature, args):
+        self.signature = signature
+        self.args = [CoercionNode(arg, arg_dst_type)
+                         for arg_dst_type, arg in zip(signature.args, args)]
+        self.variable = Variable(signature.return_type)
+
+class NativeCallNode(FunctionCallNode):
+    _fields = ['args']
+
+    def __init__(self, signature, call_node, llvm_func, py_func=None):
+        super(NativeCallNode, self).__init__(signature, call_node.args)
+        self.llvm_func = llvm_func
+        self.py_func = py_func
+
+class ObjectCallNode(FunctionCallNode):
+    _fields = ['function', 'args', 'kwargs']
+
+    def __init__(self, signature, call_node, py_func=None):
+        super(ObjectCallNode, self).__init__(signature, call_node.args)
+        self.function = call_node.func
+        self.kwargs = call_node.keywords
+        self.py_func = py_func

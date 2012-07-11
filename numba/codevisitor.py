@@ -85,37 +85,6 @@ class CodeGenerationBase(visitors.NumbaVisitor):
         else:
             self.generate_store_attribute(node, result)
 
-    def visit_Compare(self, node):
-        if len(node.ops) != 1:
-            raise NotImplementedError('Multiple operators in ast.Compare')
-
-        if len(node.comparators) != 1:
-            raise NotImplementedError('Multiple comparators in ast.Compare')
-
-        lhs = self.visit(node.left)
-        rhs = self.visit(node.comparators[0])
-        op  = type(node.ops[0])
-        return self.generate_compare(op, lhs, rhs)
-
-    def visit_Return(self, node):
-        if node.value is not None:
-            value = self.visit(node.value)
-            self.generate_return(value)
-        else:
-            self.generate_return(None)
-
-    def generate_return(self, value):
-        raise NotImplementedError
-
-    def generate_compare(self, op_class, lhs, rhs):
-        raise NotImplementedError
-
-    def visit_BinOp(self, node):
-        lhs = self.visit(node.left)
-        rhs = self.visit(node.right)
-        op = type(node.op)
-        return self.generate_binop(op, node.type, lhs, rhs)
-
     def generate_binop(self, op_class, type, lhs, rhs):
         raise NotImplementedError
 
@@ -229,7 +198,6 @@ class CodeGenerationBase(visitors.NumbaVisitor):
         test = self.visit(node.test)
         iftrue_body = node.body
         orelse_body = node.orelse
-        if len(orelse_body) not in [0,1]: raise AssertionError
         self.generate_if(test, iftrue_body, orelse_body)
 
     def visit_For(self, node):
