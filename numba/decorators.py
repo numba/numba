@@ -92,6 +92,7 @@ def function(f):
 # XXX Proposed name; compile() would mask builtin of same name.
 def numba_compile(ret_type, arg_types, **kws):
     def _numba_compile(func):
+        func._numba_func = True
         _, _, ctypes_func = function_cache.compile_function(
                         func, arg_types=arg_types, ret_type=ret_type, **kws)
         return ctypes_func
