@@ -24,9 +24,9 @@ from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
 from .multiarray_api import MultiarrayAPI
 from .symtab import Variable
 from . import _numba_types as _types
-from ._numba_types import Complex64, Complex128
+from ._numba_types import Complex64, Complex128, BuiltinType
 
-from . import visitors, nodes, codevisitor, llvm_types
+from . import visitors, nodes, llvm_types
 from .minivect import minitypes
 
 import logging
@@ -243,7 +243,7 @@ class LLVMContextManager(object):
     def get_execution_engine(self):
         return self._ee
 
-class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
+class LLVMCodeGenerator(visitors.NumbaVisitor):
     """
     Translate a Python AST to LLVM. Each visit_* method should directly
     return an LLVM value.
@@ -266,6 +266,128 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         # self.ma_obj = None # What is this?
         self.optimize = optimize
         self.flags = kwds
+
+        # internal states
+        self._nodes = []  # for tracking parent nodes
+
+    # ________________________ visitors __________________________
+
+    @property
+    def current_node(self):
+        return self._nodes[-1]
+
+    def visit(self, node):
+        try:
+            fn = getattr(self, 'visit_%s' % type(node).__name__)
+        except AttributeError as e:
+            logger.exception(e)
+            logger.error('Unhandled visit to %s', ast.dump(node))
+            raise InternalError(node, 'Not yet implemented.')
+        else:
+            try:
+                self._nodes.append(node) # push current node
+                return fn(node)
+            except Exception as e:
+                logger.exception(e)
+                raise
+            finally:
+                self._nodes.pop() # pop current node
+
+    def visit_Attribute(self, node):
+        result = self.visit(node.value)
+        if isinstance(node.ctx, ast.Load):
+            return self.generate_load_attribute(node, result)
+        else:
+            self.generate_store_attribute(node, result)
+
+    def visit_Assign(self, node):
+        target = self.visit(node.targets[0])
+        value = self.visit(node.value)
+        return self.generate_assign(value, target)
+
+    def visit_Num(self, node):
+        if node.type.is_int:
+            return self.generate_constant_int(node.n)
+        elif node.type.is_float:
+            return self.generate_constant_real(node.n)
+        else:
+            assert node.type.is_complex
+            return self.generate_constant_complex(node.n)
+
+    def visit_Subscript(self, node):
+        if node.slice.variable.type.is_slice:
+            raise NotImplementedError("slicing")
+
+            ptr = self.visit(node.value)
+            idx = self.visit(node.slice.lower)
+            if node.slice.upper or node.slice.step:
+                raise NotImplementedError
+
+            if not isinstance(ptr.type, types.GenericUnboundedArray): # only array
+                raise NotImplementedError
+            if not isinstance(node.ctx, ast.Load): # only at load context
+                raise NotImplementedError
+
+            return self.generate_array_slice(ptr, idx, None, None)
+
+        else:
+            assert node.slice.variable.type.is_int
+
+            ptr = self.visit(node.value)
+            idx = self.visit(node.slice.value)
+            if isinstance(ptr.type, types.GenericVector):
+                # Access vector element
+                if isinstance(node.ctx, ast.Load): # load
+                    return self.generate_vector_load_elem(ptr, idx)
+                elif isinstance(node.ctx, ast.Store): # store
+                    return self.generate_vector_store_elem(ptr, idx)
+            elif isinstance(ptr.type, types.GenericUnboundedArray):
+                # Access array element
+                if isinstance(node.ctx, ast.Load): # load
+                    return self.generate_array_load_elem(ptr, idx)
+                elif isinstance(node.ctx, ast.Store): # store
+                    return self.generate_array_store_elem(ptr, idx)
+            else: # Unsupported types
+                raise InvalidSubscriptError(node)
+
+    def visit_Name(self, node):
+        if isinstance(node.ctx, ast.Load): # load
+            return self.generate_load_symbol(node.id)
+        elif isinstance(node.ctx, ast.Store): # store
+            return self.generate_store_symbol(node.id)
+        # unreachable
+        raise AssertionError('unreachable')
+
+    def visit_If(self, node):
+        test = self.visit(node.test)
+        iftrue_body = node.body
+        orelse_body = node.orelse
+        self.generate_if(test, iftrue_body, orelse_body)
+
+    def visit_For(self, node):
+        if node.orelse:
+            # FIXME
+            raise NotImplementedError('Else in for-loop is not implemented.')
+
+        if node.iter.type.is_range:
+            self.generate_for_range(node, node.target, node.iter, node.body)
+        else:
+            raise NotImplementedError(node.iter, node.iter.type)
+
+    def visit_BoolOp(self, node):
+        if len(node.values)!=2: raise AssertionError
+        return self.generate_boolop(node.op, node.values[0], node.values[1])
+
+    def generate_boolop(self, op_class, lhs, rhs):
+        raise NotImplementedError
+
+    def visit_UnaryOp(self, node):
+        operand = self.visit(node.operand)
+        if isinstance(node.op, ast.Not):
+            return self.generate_not(operand)
+        raise NotImplementedError(ast.dump(node))
+
+    # __________________________________________________________________________
 
     def setup_func(self):
         # convert (numpy) array arguments to a pointer to the dtype
@@ -301,7 +423,9 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
 
         for name, var in self.symtab.items():
             # FIXME: 'None' should be handled as a special case (probably).
-            if name not in self.argnames and var.is_local:
+            if (name not in self.argnames and
+                not isinstance(var.type, BuiltinType) and
+                var.is_local):
                 # Not argument and not builtin type.
                 # Allocate storage for all variables.
                 stackspace = self.builder.alloca(var.ltype)
