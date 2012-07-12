@@ -420,7 +420,7 @@ class LLVMCodeGenerator(codevisitor.CodeGenerationBase):
         if var.is_local:
             return self.builder.load(var.lvalue)
         else:
-            raise NotImplementedError
+            raise NotImplementedError(var)
 
     def generate_store_symbol(self, name):
         return self.symtab[name].lvalue
