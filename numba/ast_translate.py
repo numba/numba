@@ -363,11 +363,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
     # __________________________________________________________________________
 
     def setup_func(self):
+        # Seems not necessary
         # convert (numpy) array arguments to a pointer to the dtype
-        self.func_signature = minitypes.FunctionType(
-            return_type=self.func_signature.return_type,
-            args=[arg_type.dtype.pointer() if arg_type.is_array else arg_type
-                      for arg_type in self.func_signature.args])
+        #        self.func_signature = minitypes.FunctionType(
+        #            return_type=self.func_signature.return_type,
+        #            args=[arg_type.dtype.pointer() if arg_type.is_array else arg_type
+        #                      for arg_type in self.func_signature.args])
 
         self.lfunc_type = self.to_llvm(self.func_signature)
         self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
