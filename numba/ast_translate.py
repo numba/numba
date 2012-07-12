@@ -332,8 +332,18 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         data_ptr_ty = lc.Type.pointer(data_ty)
 
         dptr_plus_offset = self.builder.gep(dptr, [offset])
+
+
         ptr = self.builder.bitcast(dptr_plus_offset, data_ptr_ty)
-        return self.builder.load(ptr)
+
+        if isinstance(node.ctx, ast.Load): # load the value
+            return self.builder.load(ptr)
+        elif isinstance(node.ctx, ast.Store): # return a pointer for storing
+            return ptr
+        else:
+            # unreachable
+            raise AssertionError("Unknown subscript context: %s" % node.ctx)
+
 
     def visit_DataPointerNode(self, node):
         dptr, strides = node.data_descriptors(self.builder)

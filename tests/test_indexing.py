@@ -45,12 +45,13 @@ class TestIndexing (unittest.TestCase):
                                     arg_types=[double[:, :, ::1]])(get_index_fn_0)
         self.assertEqual(compiled_fn(arr), 0.)
 
-    #    def test_set_index_fn_0 (self):
-    #        arr = numpy.ones((4,4,4))
-    #        compiled_fn = numba_compile(arg_types = [['d']])(set_index_fn_0)
-    #        self.assertEqual(arr[1,2,3], 1.)
-    #        compiled_fn(arr)
-    #        self.assertEqual(arr[1,2,3], 0.)
+    def test_set_index_fn_0 (self):
+        arr = numpy.ones((4,4,4))
+        compiled_fn = numba_compile(ret_type=None,
+                                    arg_types=[double[:,:,::1]])(set_index_fn_0)
+        self.assertEqual(arr[1,2,3], 1.)
+        compiled_fn(arr)
+        self.assertEqual(arr[1,2,3], 0.)
 
     #    def test_set_index_fn_1 (self):
     #        control_arr = numpy.zeros((50, 50, 2))
