@@ -315,40 +315,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             return self.generate_constant_complex(node.n)
 
     def visit_Subscript(self, node):
-        if node.slice.variable.type.is_slice:
-            raise NotImplementedError("slicing")
+        logger.debug(ast.dump(node))
 
-            ptr = self.visit(node.value)
-            idx = self.visit(node.slice.lower)
-            if node.slice.upper or node.slice.step:
-                raise NotImplementedError
+#        container = self.visit(node.value)
+#        logger.debug(container.type)
+        logger.debug(self.mod)
+        return lc.Constant.real(lc.Type.double(), 0.)
 
-            if not isinstance(ptr.type, types.GenericUnboundedArray): # only array
-                raise NotImplementedError
-            if not isinstance(node.ctx, ast.Load): # only at load context
-                raise NotImplementedError
-
-            return self.generate_array_slice(ptr, idx, None, None)
-
-        else:
-            assert node.slice.variable.type.is_int
-
-            ptr = self.visit(node.value)
-            idx = self.visit(node.slice.value)
-            if isinstance(ptr.type, types.GenericVector):
-                # Access vector element
-                if isinstance(node.ctx, ast.Load): # load
-                    return self.generate_vector_load_elem(ptr, idx)
-                elif isinstance(node.ctx, ast.Store): # store
-                    return self.generate_vector_store_elem(ptr, idx)
-            elif isinstance(ptr.type, types.GenericUnboundedArray):
-                # Access array element
-                if isinstance(node.ctx, ast.Load): # load
-                    return self.generate_array_load_elem(ptr, idx)
-                elif isinstance(node.ctx, ast.Store): # store
-                    return self.generate_array_store_elem(ptr, idx)
-            else: # Unsupported types
-                raise InvalidSubscriptError(node)
 
     def visit_Name(self, node):
         if isinstance(node.ctx, ast.Load): # load
@@ -527,6 +500,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         lfunc = target_translator.builder.load(lfunc_ptr_ptr)
         if __debug__:
             print "build_call_to_translated_function():", str(lfunc)
+        logger.debug('self.args %s', self.args)
+        logger.debug('self.arg_types %s', self.arg_types)
         largs = [arg.llvm(convert_to_strtype(param_typ),
                           builder = target_translator.builder)
                  for arg, param_typ in zip(args, self.arg_types)]
