@@ -315,13 +315,33 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             return self.generate_constant_complex(node.n)
 
     def visit_Subscript(self, node):
-        logger.debug(ast.dump(node))
+        dptr, strides, ndim = self.visit(node.value)
+        indices = self.visit(node.slice)
+        offset = self.generate_constant_int(0)
 
-#        container = self.visit(node.value)
-#        logger.debug(container.type)
-        logger.debug(self.mod)
-        return lc.Constant.real(lc.Type.double(), 0.)
+        for i, index in zip(range(ndim), reversed(indices)):
+            # why is the indices reversed?
+            stride_ptr = self.builder.gep(strides,
+                                          [self.generate_constant_int(i)])
+            stride = self.builder.load(stride_ptr)
+            index = self.caster.cast(index, stride.type)
+            offset = self.caster.cast(offset, stride.type)
+            offset = self.builder.add(offset, self.builder.mul(index, stride))
 
+        data_ty = node.value.variable.type.dtype.to_llvm(self.context)
+        data_ptr_ty = lc.Type.pointer(data_ty)
+
+        dptr_plus_offset = self.builder.gep(dptr, [offset])
+        ptr = self.builder.bitcast(dptr_plus_offset, data_ptr_ty)
+        return self.builder.load(ptr)
+
+    def visit_DataPointerNode(self, node):
+        dptr, strides = node.data_descriptors(self.builder)
+        ndim = node.ndim
+        return dptr, strides, ndim
+
+    def visit_ExtSlice(self, node):
+        return self.visitlist(node.dims)
 
     def visit_Name(self, node):
         if isinstance(node.ctx, ast.Load): # load
@@ -501,8 +521,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         lfunc = target_translator.builder.load(lfunc_ptr_ptr)
         if __debug__:
             print "build_call_to_translated_function():", str(lfunc)
-        logger.debug('self.args %s', self.args)
-        logger.debug('self.arg_types %s', self.arg_types)
+
         largs = [arg.llvm(convert_to_strtype(param_typ),
                           builder = target_translator.builder)
                  for arg, param_typ in zip(args, self.arg_types)]

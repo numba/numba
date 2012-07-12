@@ -655,3 +655,9 @@ class ASTSpecializer(visitors.NumbaTransformer):
     def visit_ObjectCallNode(self, node):
         self.generic_visit(node)
         return nodes.TempNode(node)
+
+    def visit_Subscript(self, node):
+        if node.value.type.is_array:
+            node.value = nodes.DataPointerNode(node.value)
+        return node
+

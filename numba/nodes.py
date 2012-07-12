@@ -8,6 +8,8 @@ from numba.minivect import minitypes
 
 import llvm.core
 
+from ndarray_helpers import PyArrayAccessor
+
 context = utils.get_minivect_context()
 
 class Node(ast.AST):
@@ -119,3 +121,26 @@ class TempNode(Node):
     def __init__(self, node):
         self.node = node
         self.llvm_temp = None
+
+class DataPointerNode(Node):
+    _fields = ['variable']
+
+    def __init__(self, node):
+        self.variable = node.variable
+
+    @property
+    def ndim(self):
+        return self.variable.type.ndim
+
+    def data_descriptors(self, builder):
+        '''
+        Returns a tuple of (dptr, strides)
+        - dptr:    a pointer of the data buffer
+        - strides: a pointer to an array of stride information;
+                   has `ndim` elements.
+        '''
+        pyarray_ptr = builder.load(self.variable.lvalue)
+        acc = PyArrayAccessor(builder, pyarray_ptr)
+        return acc.data, acc.strides
+
+

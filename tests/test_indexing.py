@@ -7,7 +7,7 @@ Unit tests for checking Numba's indexing into Numpy arrays.
 # ______________________________________________________________________
 
 from numba.decorators import numba_compile
-
+from numba import decorators
 import numpy, numba
 from numba import *
 import unittest
@@ -39,13 +39,10 @@ def set_index_fn_1 (min_x, max_x, min_y, out_arr):
 
 class TestIndexing (unittest.TestCase):
     def test_get_index_fn_0 (self):
-        arr = numpy.ones((4,4,4))
+        arr = numpy.ones((4,4,4), dtype=numpy.double)
         arr[1,2,3] = 0.
         compiled_fn = numba_compile(ret_type=double,
-                                    arg_types=[object_])(get_index_fn_0)
-        ## or this???
-        #    compiled_fn = numba_compile(ret_type=double,
-        #                                arg_types=[double[:, :, :]])(get_index_fn_0)
+                                    arg_types=[double[:, :, ::1]])(get_index_fn_0)
         self.assertEqual(compiled_fn(arr), 0.)
 
     #    def test_set_index_fn_0 (self):
