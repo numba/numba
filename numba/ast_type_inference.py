@@ -51,6 +51,7 @@ class TypeInferer(visitors.NumbaTransformer):
 
         self.return_type = self.return_variable.type
         ret_type = self.func_signature.return_type
+
         if ret_type and ret_type != self.return_type:
             self.assert_assignable(ret_type, self.return_type)
             self.return_type = self.promote_types(ret_type, self.return_type)
@@ -616,7 +617,12 @@ class TypeInferer(visitors.NumbaTransformer):
         value = self.visit(node.value)
         type = value.variable.type
 
-        if self.return_variable.type is None:
+        if value.variable.is_constant and value.variable.constant_value is None:
+            # When returning None, set the return type to void.
+            # That way, we don't have to due with the PyObject reference.
+            self.return_variable.type = minitypes.VoidType()
+            node.value = None
+        elif self.return_variable.type is None:
             self.return_variable.type = type
             node.value = value
         else:

@@ -267,6 +267,8 @@ def convert_to_ctypes(type):
         return ctypes.CFUNCTYPE(return_type, arg_types)
     elif type.is_py_ssize_t:
         return getattr(ctypes, 'c_uint%d' % (_ext.sizeof_py_ssize_t() * 8))
+    elif type.is_void:
+        return None
     else:
         raise NotImplementedError(type)
 

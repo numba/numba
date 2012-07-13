@@ -34,7 +34,6 @@ def set_index_fn_1 (min_x, max_x, min_y, out_arr):
             y_val = y * delta + min_y
             out_arr[x,y,0] = x_val
             out_arr[x,y,1] = y_val
-    return 0
 
 def set_index_fn_2(arr):
     width = arr.shape[0]
@@ -42,7 +41,6 @@ def set_index_fn_2(arr):
     for x in range(width):
         for y in range(height):
             arr[x, y] = x*width+y
-    return 0
 
 def get_shape_fn_0 (arr):
     width = arr.shape[0]
@@ -80,7 +78,7 @@ class TestIndexing (unittest.TestCase):
         set_index_fn_1(-1., 1., -1., control_arr)
 
         arg_types = double, double, double, double[:,:,:]
-        compiled_fn = numba_compile(ret_type=int_,
+        compiled_fn = numba_compile(ret_type=None,
                                     arg_types=arg_types)(set_index_fn_1)
         compiled_fn(-1., 1., -1., test_arr)
         self.assertTrue((numpy.abs(control_arr - test_arr) < 1e9).all())
@@ -110,8 +108,9 @@ class TestIndexing (unittest.TestCase):
         set_index_fn_2(control_arr)
 
         arg_types = [ double[:, :] ]
-        compiled_fn = numba_compile(ret_type=int_,
+        compiled_fn = numba_compile(ret_type=None,
                                     arg_types=arg_types)(set_index_fn_2)
+
         compiled_fn(test_arr)
 
         self.assertTrue((numpy.abs(control_arr - test_arr) < 1e9).all())

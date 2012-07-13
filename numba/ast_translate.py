@@ -606,6 +606,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
     def visit_Return(self, node):
         if node.value is not None:
             self.builder.ret(self.visit(node.value))
+        else:
+            self.builder.ret_void()
 
     def is_block_terminated(self):
         '''
