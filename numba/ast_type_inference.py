@@ -565,6 +565,16 @@ class TypeInferer(visitors.NumbaTransformer):
         if func in (range, xrange):
             arg_type = minitypes.Py_ssize_t
             node.variable = self._resolve_range(node, arg_type)
+
+        elif func is len and node.args[0].variable.type.is_array:
+            # Simplify to ndarray.shape[0]
+            assert len(node.args)==1
+            shape_attr = nodes.ShapeAttributeNode(node.args[0])
+            index = ast.Index(nodes.ConstNode(0, _types.int_))
+            new_node = ast.Subscript(value=shape_attr, slice=index,
+                                     ctx=ast.Load())
+            new_node.variable = Variable(shape_attr.element_type)
+
         elif func_type.is_function:
             new_node = nodes.NativeCallNode(func_variable.type, node.args,
                                             func_variable.value)
