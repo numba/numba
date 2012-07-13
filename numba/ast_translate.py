@@ -315,40 +315,20 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             return self.generate_constant_complex(node.n)
 
     def visit_Subscript(self, node):
-        dptr, strides, ndim = self.visit(node.value)
-        indices = self.visit(node.slice)
-        offset = self.generate_constant_int(0)
-
-        for i, index in zip(range(ndim), reversed(indices)):
-            # why is the indices reversed?
-            stride_ptr = self.builder.gep(strides,
-                                          [self.generate_constant_int(i)])
-            stride = self.builder.load(stride_ptr)
-            index = self.caster.cast(index, stride.type)
-            offset = self.caster.cast(offset, stride.type)
-            offset = self.builder.add(offset, self.builder.mul(index, stride))
-
-        data_ty = node.value.variable.type.dtype.to_llvm(self.context)
-        data_ptr_ty = lc.Type.pointer(data_ty)
-
-        dptr_plus_offset = self.builder.gep(dptr, [offset])
-
-
-        ptr = self.builder.bitcast(dptr_plus_offset, data_ptr_ty)
+        slicevalues = self.visit(node.slice)
+        lptr = node.value.subscript(slicevalues, self.builder, self.caster,
+                                    self.context)
 
         if isinstance(node.ctx, ast.Load): # load the value
-            return self.builder.load(ptr)
+            return self.builder.load(lptr)
         elif isinstance(node.ctx, ast.Store): # return a pointer for storing
-            return ptr
+            return lptr
         else:
             # unreachable
             raise AssertionError("Unknown subscript context: %s" % node.ctx)
 
-
-    def visit_DataPointerNode(self, node):
-        dptr, strides = node.data_descriptors(self.builder)
-        ndim = node.ndim
-        return dptr, strides, ndim
+    def visit_Index(self, node):
+        return self.visit(node.value)
 
     def visit_ExtSlice(self, node):
         return self.visitlist(node.dims)
@@ -618,8 +598,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         Generate assignment operation and automatically cast value to
         match the target type.
         '''
-        if lvalue.type != ltarget.type:
-            lvalue = self.caster.cast(lvalue, lvalue.type)
+        if lvalue.type != ltarget.type.pointee:
+            lvalue = self.caster.cast(lvalue, ltarget.type.pointee)
 
         self.builder.store(lvalue, ltarget)
 

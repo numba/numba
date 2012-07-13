@@ -34,6 +34,27 @@ def set_index_fn_1 (min_x, max_x, min_y, out_arr):
             y_val = y * delta + min_y
             out_arr[x,y,0] = x_val
             out_arr[x,y,1] = y_val
+    return 0
+
+def set_index_fn_2(arr):
+    width = arr.shape[0]
+    height = arr.shape[1]
+    for x in range(width):
+        for y in range(height):
+            arr[x, y] = x*width+y
+    return 0
+
+def get_shape_fn_0 (arr):
+    width = arr.shape[0]
+    return width
+
+def get_shape_fn_1 (arr):
+    height = arr.shape[1]
+    return height
+
+def get_shape_fn_2 (arr):
+    height = arr.shape[2]
+    return height
 
 # ______________________________________________________________________
 
@@ -53,14 +74,49 @@ class TestIndexing (unittest.TestCase):
         compiled_fn(arr)
         self.assertEqual(arr[1,2,3], 0.)
 
-    #    def test_set_index_fn_1 (self):
-    #        control_arr = numpy.zeros((50, 50, 2))
-    #        test_arr = numpy.zeros_like(control_arr)
-    #        set_index_fn_1(-1., 1., -1., control_arr)
-    #        compiled_fn = numba_compile(
-    #            arg_types = ['d', 'd', 'd', ['d']])(set_index_fn_1)
-    #        compiled_fn(-1., 1., -1., test_arr)
-    #        self.assertTrue((numpy.abs(control_arr - test_arr) < 1e9).all())
+    def test_set_index_fn_1 (self):
+        control_arr = numpy.zeros((50, 50, 2), dtype=numpy.double)
+        test_arr = numpy.zeros_like(control_arr)
+        set_index_fn_1(-1., 1., -1., control_arr)
+
+        arg_types = double, double, double, double[:,:,:]
+        compiled_fn = numba_compile(ret_type=int_,
+                                    arg_types=arg_types)(set_index_fn_1)
+        compiled_fn(-1., 1., -1., test_arr)
+        self.assertTrue((numpy.abs(control_arr - test_arr) < 1e9).all())
+
+    def test_get_shape_fn_0(self):
+        arr = numpy.zeros((5,6,7), dtype=numpy.double)
+        compiled_fn = numba_compile(ret_type=int_,
+                                    arg_types=[double[:, :, ::1]])(get_shape_fn_0)
+        self.assertEqual(compiled_fn(arr), 5)
+
+    def test_get_shape_fn_1(self):
+        arr = numpy.zeros((5,6,7), dtype=numpy.double)
+        compiled_fn = numba_compile(ret_type=int_,
+                                    arg_types=[double[:, :, ::1]])(get_shape_fn_1)
+        self.assertEqual(compiled_fn(arr), 6)
+
+    def test_get_shape_fn_2(self):
+        arr = numpy.zeros((5,6,7), dtype=numpy.double)
+        compiled_fn = numba_compile(ret_type=int_,
+                                    arg_types=[double[:, :, ::1]])(get_shape_fn_2)
+        self.assertEqual(compiled_fn(arr), 7)
+
+    def test_set_index_fn_2 (self):
+        control_arr = numpy.zeros((10, 10), dtype=numpy.double)
+        test_arr = numpy.zeros_like(control_arr)
+
+        set_index_fn_2(control_arr)
+
+        arg_types = [ double[:, :] ]
+        compiled_fn = numba_compile(ret_type=int_,
+                                    arg_types=arg_types)(set_index_fn_2)
+        compiled_fn(test_arr)
+
+        self.assertTrue((numpy.abs(control_arr - test_arr) < 1e9).all())
+
+
 
 # ______________________________________________________________________
 

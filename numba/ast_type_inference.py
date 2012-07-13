@@ -318,7 +318,10 @@ class TypeInferer(visitors.NumbaTransformer):
         node.value = self.visit(node.value)
         node.slice = self.visit(node.slice)
 
-        if not node.value.variable.type.is_array:
+        if isinstance(node.value, nodes.ArrayAttributeNode):
+            result_type = node.value.element_type
+
+        elif not node.value.variable.type.is_array:
             result_type = self._get_index_type(node.value.variable.type,
                                                node.slice.variable.type)
         else:
@@ -599,7 +602,10 @@ class TypeInferer(visitors.NumbaTransformer):
             result_type = type
         elif type.is_array:
             # handle shape/strides/suboffsets etc
-            raise NotImplementedError
+            if node.attr == 'shape':
+                return nodes.ShapeAttributeNode(node.value)
+            else:
+                raise NotImplementedError
         else:
             raise NotImplementedError((node.attr, node.value, type))
 
@@ -657,7 +663,12 @@ class ASTSpecializer(visitors.NumbaTransformer):
         return nodes.TempNode(node)
 
     def visit_Subscript(self, node):
-        if node.value.type.is_array:
+        if isinstance(node.value, nodes.ArrayAttributeNode):
+            if node.value.is_read_only and isinstance(node.ctx, ast.Store):
+                raise error.NumbaError("Attempt to load read-only attribute")
+            pass # intentional do nothing
+
+        elif node.value.type.is_array:
             node.value = nodes.DataPointerNode(node.value)
         return node
 

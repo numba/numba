@@ -12,6 +12,10 @@ from ndarray_helpers import PyArrayAccessor
 
 context = utils.get_minivect_context()
 
+
+def _const_int(X):
+    return llvm.core.Constant.int(llvm.core.Type.int(), X)
+
 class Node(ast.AST):
     """
     Superclass for Numba AST nodes
@@ -143,4 +147,44 @@ class DataPointerNode(Node):
         acc = PyArrayAccessor(builder, pyarray_ptr)
         return acc.data, acc.strides
 
+    def subscript(self, indices, builder, caster, context):
+        dptr, strides = self.data_descriptors(builder)
+        ndim = self.ndim
+
+        offset = _const_int(0)
+
+        for i, index in zip(range(ndim), reversed(indices)):
+            # why is the indices reversed?
+            stride_ptr = builder.gep(strides, [_const_int(i)])
+            stride = builder.load(stride_ptr)
+            index = caster.cast(index, stride.type)
+            offset = caster.cast(offset, stride.type)
+            offset = builder.add(offset, builder.mul(index, stride))
+
+        data_ty = self.variable.type.dtype.to_llvm(context)
+        data_ptr_ty = llvm.core.Type.pointer(data_ty)
+
+        dptr_plus_offset = builder.gep(dptr, [offset])
+
+        ptr = builder.bitcast(dptr_plus_offset, data_ptr_ty)
+        return ptr
+
+
+class ArrayAttributeNode(Node):
+    is_read_only = True
+
+class ShapeAttributeNode(ArrayAttributeNode):
+    _fields = ['array', 'element_type']
+
+    def __init__(self, array):
+        self.array = array
+        self.element_type = numba_types.intp
+
+    def subscript(self, index, builder, caster, context):
+        pyarray_ptr = builder.load(self.array.variable.lvalue)
+        acc = PyArrayAccessor(builder, pyarray_ptr)
+        shape = acc.dimensions
+        shape_plus_offset = builder.gep(shape, [index])
+
+        return shape_plus_offset
 
