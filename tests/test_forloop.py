@@ -56,12 +56,20 @@ def for_loop_fn_3 (stop):
 # ______________________________________________________________________
 
 class TestForLoop(unittest.TestCase):
-    @unittest.skipUnless(__debug__, "Requires implementation of iteration "
-                         "over arrays.")
+#    @unittest.skipUnless(__debug__, "Requires implementation of iteration "
+#                         "over arrays.")
     def test_compiled_for_loop_fn_0(self):
         test_data = numpy.array([1, 2, 3], dtype=numpy.int32)
         compiled_for_loop_fn = numba_compile(
             ret_type=numba.float32, arg_types=[numba.int32[:]])(for_loop_fn_0)
+        result = compiled_for_loop_fn(test_data)
+        self.assertEqual(result, 6)
+        self.assertEqual(result, for_loop_fn_0(test_data))
+
+    def test_compiled_for_loop_fn_0_float32(self):
+        test_data = numpy.array([1., 2., 3.], dtype=numpy.float32)
+        compiled_for_loop_fn = numba_compile(
+            ret_type=numba.float32, arg_types=[numba.float32[:]])(for_loop_fn_0)
         result = compiled_for_loop_fn(test_data)
         self.assertEqual(result, 6)
         self.assertEqual(result, for_loop_fn_0(test_data))

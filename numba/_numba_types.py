@@ -15,11 +15,6 @@ __all__ = minitypes.__all__ + [
     'f4', 'f8', 'f16', 'c8', 'c16', 'c32', 'f', 'd', 'i',
 ]
 
-if llvm_types._plat_bits==32:
-    intp = int32
-elif llvm_types._plat_bits==64:
-    intp = int64
-
 class NumbaType(minitypes.Type):
     is_numba_type = True
 

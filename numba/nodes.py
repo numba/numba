@@ -1,4 +1,5 @@
 import ast
+import collections
 
 import numba
 from .symtab import Variable
@@ -26,7 +27,7 @@ class Node(ast.AST):
         vars(self).update(kwargs)
 
 class CoercionNode(Node):
-    _fields = ['node']
+    _fields = ['node', 'dst_type']
     def __init__(self, node, dst_type):
         self.node = node
         self.dst_type = dst_type
@@ -153,6 +154,9 @@ class DataPointerNode(Node):
 
         offset = _const_int(0)
 
+        if not isinstance(indices, collections.Iterable):
+            indices = (indices,)
+
         for i, index in zip(range(ndim), reversed(indices)):
             # why is the indices reversed?
             stride_ptr = builder.gep(strides, [_const_int(i)])
@@ -178,7 +182,7 @@ class ShapeAttributeNode(ArrayAttributeNode):
 
     def __init__(self, array):
         self.array = array
-        self.element_type = numba_types.intp
+        self.element_type = numba_types.Py_ssize_t
 
     def subscript(self, index, builder, caster, context):
         pyarray_ptr = builder.load(self.array.variable.lvalue)

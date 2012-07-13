@@ -10,6 +10,9 @@ from . import visitors, nodes, error
 
 import numpy
 
+import logging
+logger = logging.getLogger(__name__)
+
 def _infer_types(context, func, ast, func_signature):
     """
     Run type inference on the given ast.
@@ -18,6 +21,7 @@ def _infer_types(context, func, ast, func_signature):
                                func_signature=func_signature)
     type_inferer.infer_types()
     TypeSettingVisitor(context, func, ast).visit(ast)
+    TransformForIterable(context, func, ast, type_inferer.symtab).visit(ast)
     ast = ASTSpecializer(context, func, ast).visit(ast)
     return type_inferer.func_signature, type_inferer.symtab, ast
 
@@ -677,4 +681,55 @@ class ASTSpecializer(visitors.NumbaTransformer):
         elif node.value.type.is_array:
             node.value = nodes.DataPointerNode(node.value)
         return node
+
+class TransformForIterable(visitors.NumbaTransformer):
+    def __init__(self, context, func, ast, symtab):
+        super(TransformForIterable, self).__init__(context, func, ast)
+        self.symtab = symtab
+
+    def visit_For(self, node):
+        if node.iter.type.is_range:
+            return node
+        elif node.iter.type.is_array and node.iter.type.ndim==1:
+            # Convert 1D array iteration to for-range and indexing
+            logger.debug(ast.dump(node))
+
+            orig_target = node.target
+            orig_iter = node.iter
+
+            # replace node.target
+            target_name = orig_target.id+'.idx'
+            target = node.target = ast.Name(id=target_name, ctx=ast.Store())
+            target.variable = Variable(_types.Py_ssize_t, name=target_name,
+                                       is_local=True)
+
+            assert target_name not in self.symtab
+            self.symtab[target_name] = target.variable
+
+            # replace node.iter
+            call_func = ast.Name(id='range', ctx=ast.Load())
+            call_func.variable = Variable(_types.RangeType())
+            shape_index = ast.Index(nodes.ConstNode(0, _types.Py_ssize_t))
+            stop = ast.Subscript(value=nodes.ShapeAttributeNode(orig_iter),
+                                 slice=shape_index,
+                                 ctx=ast.Load())
+            call_args = [nodes.ConstNode(0, _types.Py_ssize_t),
+                         stop,
+                         nodes.ConstNode(1, _types.Py_ssize_t),]
+
+            node.iter = ast.Call(func=call_func, args=call_args)
+            node.iter.type = call_func.variable.type
+
+            # add assignment to new target variable at the start of the body
+            index = ast.Index(value=ast.Name(id=target.id, ctx=ast.Load()))
+            index.variable = target.variable
+            subscript = ast.Subscript(value=orig_iter,
+                                      slice=index, ctx=ast.Load())
+            assign = ast.Assign(targets=[orig_target], value=subscript)
+
+            node.body = [assign]+node.body
+
+            return node
+        else:
+            raise error.NumbaError("Unsupported for loop pattern")
 

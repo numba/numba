@@ -102,7 +102,14 @@ class _LLVMCaster(object):
         return ret_val
 
     def build_float_cast(_, builder, lval1, lty2):
+        # FIXME: unused
         raise NotImplementedError("FIXME")
+
+    def build_float_ext(_, builder, lval1, lty2):
+        return builder.fpext(lval1, lty2)
+
+    def build_float_trunc(_, builder, lval1, lty2):
+        return builder.fptrunc(lval1, lty2)
 
     def build_int_to_float_cast(_, builder, lval1, lty2, unsigned = False):
         ret_val = None
@@ -122,12 +129,14 @@ class _LLVMCaster(object):
 
     CAST_MAP = {
         lc.TYPE_POINTER : build_pointer_cast,
-        lc.TYPE_INTEGER : build_int_cast,
-        lc.TYPE_FLOAT : build_float_cast,
+        lc.TYPE_INTEGER: build_int_cast,
+        (lc.TYPE_FLOAT, lc.TYPE_DOUBLE) : build_float_ext,
+        (lc.TYPE_DOUBLE, lc.TYPE_FLOAT) : build_float_trunc,
         (lc.TYPE_INTEGER, lc.TYPE_FLOAT) : build_int_to_float_cast,
         (lc.TYPE_INTEGER, lc.TYPE_DOUBLE) : build_int_to_float_cast,
         (lc.TYPE_FLOAT, lc.TYPE_INTEGER) : build_float_to_int_cast,
         (lc.TYPE_DOUBLE, lc.TYPE_INTEGER) : build_float_to_int_cast,
+
     }
 
     @classmethod
@@ -136,15 +145,21 @@ class _LLVMCaster(object):
         lty1 = lval1.type
         lkind1 = lty1.kind
         lkind2 = lty2.kind
+
         if lkind1 == lkind2:
+
             if lkind1 in cls.CAST_MAP:
                 ret_val = cls.CAST_MAP[lkind1](cls, builder, lval1, lty2,
                                                *args, **kws)
+            else:
+                raise NotImplementedError(lkind1)
         else:
             map_index = (lkind1, lkind2)
             if map_index in cls.CAST_MAP:
                 ret_val = cls.CAST_MAP[map_index](cls, builder, lval1, lty2,
                                                   *args, **kws)
+            else:
+                raise NotImplementedError(lkind1, lkind2)
         return ret_val
 
 
@@ -277,6 +292,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         return self._nodes[-1]
 
     def visit(self, node):
+        # logger.debug('visiting %s', ast.dump(node))
         try:
             fn = getattr(self, 'visit_%s' % type(node).__name__)
         except AttributeError as e:
@@ -355,7 +371,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         if node.iter.type.is_range:
             self.generate_for_range(node, node.target, node.iter, node.body)
         else:
-            raise NotImplementedError(node.iter, node.iter.type)
+            raise NotImplementedError(ast.dump(node))
 
     def visit_BoolOp(self, node):
         if len(node.values)!=2: raise AssertionError
@@ -688,6 +704,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
     def visit_CoercionNode(self, node):
         val = self.visit(node.node)
         if node.node.type != node.dst_type:
+            # logger.debug('Coerce %s --> %s', node.node.type, node.dst_type)
             val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
 
         return val
