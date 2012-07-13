@@ -21,7 +21,7 @@ def _infer_types(context, func, ast, func_signature):
                                func_signature=func_signature)
     type_inferer.infer_types()
     TypeSettingVisitor(context, func, ast).visit(ast)
-    TransformForIterable(context, func, ast, type_inferer.symtab).visit(ast)
+    ast = TransformForIterable(context, func, ast, type_inferer.symtab).visit(ast)
     ast = ASTSpecializer(context, func, ast).visit(ast)
     return type_inferer.func_signature, type_inferer.symtab, ast
 

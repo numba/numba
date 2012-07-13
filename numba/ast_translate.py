@@ -332,8 +332,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
     def visit_Subscript(self, node):
         slicevalues = self.visit(node.slice)
-        lptr = node.value.subscript(slicevalues, self.builder, self.caster,
-                                    self.context)
+        lptr = node.value.subscript(self, slicevalues)
 
         if isinstance(node.ctx, ast.Load): # load the value
             return self.builder.load(lptr)

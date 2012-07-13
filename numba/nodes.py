@@ -148,7 +148,11 @@ class DataPointerNode(Node):
         acc = PyArrayAccessor(builder, pyarray_ptr)
         return acc.data, acc.strides
 
-    def subscript(self, indices, builder, caster, context):
+    def subscript(self, translator, indices):
+        builder = translator.builder
+        caster = translator.caster
+        context = translator.context
+
         dptr, strides = self.data_descriptors(builder)
         ndim = self.ndim
 
@@ -184,7 +188,11 @@ class ShapeAttributeNode(ArrayAttributeNode):
         self.array = array
         self.element_type = numba_types.Py_ssize_t
 
-    def subscript(self, index, builder, caster, context):
+    def subscript(self, translator, index):
+        builder = translator.builder
+        caster = translator.caster
+        context = translator.context
+
         pyarray_ptr = builder.load(self.array.variable.lvalue)
         acc = PyArrayAccessor(builder, pyarray_ptr)
         shape = acc.dimensions
