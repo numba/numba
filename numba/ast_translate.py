@@ -21,7 +21,7 @@ from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
     _void_star, _float, _double, _complex64, _complex128, _pyobject_head, \
     _trace_refs_, _head_len, _numpy_struct,  _numpy_array, \
     _numpy_array_field_ofs
-from .multiarray_api import MultiarrayAPI
+#from .multiarray_api import MultiarrayAPI # not used
 from .symtab import Variable
 from . import _numba_types as _types
 from ._numba_types import Complex64, Complex128, BuiltinType
@@ -424,6 +424,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             # FIXME: 'None' should be handled as a special case (probably).
             if (name not in self.argnames and
                 not isinstance(var.type, BuiltinType) and
+                not var.type.is_object and
                 var.is_local):
                 # Not argument and not builtin type.
                 # Allocate storage for all variables.
@@ -483,9 +484,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         sig = self.func_signature
         restype = _types.convert_to_ctypes(sig.return_type)
 
-        prototype = ctypes.CFUNCTYPE(restype,
+        # FIXME: Switch to PYFUNCTYPE so it does not release the GIL.
+        #
+        #    prototype = ctypes.CFUNCTYPE(restype,
+        #                                 *[_types.convert_to_ctypes(x)
+        #                                       for x in sig.args])
+        prototype = ctypes.PYFUNCTYPE(restype,
                                      *[_types.convert_to_ctypes(x)
                                            for x in sig.args])
+
+
         if hasattr(restype, 'make_ctypes_prototype_wrapper'):
             # See numba.utils.ComplexMixin for an example of
             # make_ctypes_prototype_wrapper().
@@ -712,12 +720,35 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         raise Exception("This node should have been replaced")
 
     def visit_ObjectCallNode(self, node):
+        lty_obj = _types.object_.to_llvm(self.context)
+
         args_tuple = self.visitlist(node.args)
         kwargs_dict = self.visit(node.kwargs)
-        function = self.visit(node.function)
-        largs = [function, args_tuple, kwargs_dict]
-        PyObject_Call = self.function_cache.function_by_name('PyObject_Call')
-        return self.builder.call(PyObject_Call, largs)
+
+        # FIXME: Is this a good way?
+        if kwargs_dict is lc.ConstantPointerNull:
+            # ConstantPointerNull does not have .get defined! (llvm-py bug?)
+            kwargs_dict = kwargs_dict.null(lty_obj)
+        # function = self.visit(node.function)
+
+        # FIXME: Currently uses the runtime address of the python function.
+        #        Sounds like a hack.
+        func_addr = id(node.py_func)
+        lfunc_addr_int = self.generate_constant_int(func_addr, _types.Py_ssize_t)
+        lfunc_addr = self.builder.inttoptr(lfunc_addr_int, lty_obj)
+
+        # make tuple for args_tuple
+        _, pytuple_pack = self.function_cache.function_by_name('PyTuple_Pack')
+
+        n = self.generate_constant_int(len(args_tuple), _types.Py_ssize_t)
+        args_tuple = self.builder.call(pytuple_pack, [n] + args_tuple)
+
+        # call PyObject_Call
+        largs = [lfunc_addr, args_tuple, kwargs_dict]
+        _, pyobject_call = self.function_cache.function_by_name('PyObject_Call')
+
+        res = self.builder.call(pyobject_call, largs)
+        return self.caster.cast(res, node.variable.type.to_llvm(self.context))
 
     def visit_NativeCallNode(self, node):
         # TODO: Refcounts + error check
@@ -726,10 +757,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
     def visit_TempNode(self, node):
         rhs = self.visit(node.node)
-        lhs = self.builder.alloca(llvm_types._pyobject_head_struct_p)
-        self.generate_assign(rhs, lhs)
-        node.llvm_temp = lhs
-        return lhs
+        return rhs
+        # FIXME: don't understand the following
+        #    lhs = self.builder.alloca(llvm_types._pyobject_head_struct_p)
+        #    self.generate_assign(rhs, lhs)
+        #    node.llvm_temp = lhs
+        #    return lhs
 
 class DisposalVisitor(visitors.NumbaVisitor):
     # TODO: handle errors, check for NULL before calling DECREF

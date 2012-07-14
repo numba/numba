@@ -322,9 +322,17 @@ class PyObject_Call(ExternalFunction):
     arg_types = [object_, object_, object_]
     return_type = object_
 
+class PyObject_Type(ExternalFunction):
+    '''
+    Added to aid debugging
+    '''
+    arg_types = [object_]
+    return_type = object_
+
 class PyTuple_Pack(ExternalFunction):
     arg_types = [Py_ssize_t]
     return_type = object_
+    is_vararg = True
 
 class PyModulo(InternalFunction):
 
