@@ -1,4 +1,5 @@
-Numba is a NumPy aware optimizing compiler for Python.  It uses the
+Numba is an Open Source NumPy-aware optimizing compiler for Python 
+sponsored by Continuum Analytics, Inc.  It uses the
 remarkable LLVM compiler infrastructure to compile Python byte-code to
 machine code especially for use in the NumPy run-time and SciPy
 modules.
@@ -30,3 +31,7 @@ python setup.py install
 Join the numba mailinglist by sending any email to the address
 numba@librelist.org (your email will get discarded and you will get
 subscribed). Archives are at http://librelist.com/browser/numba/
+
+* See if our sponsor can help you (which can help this project) 
+http://www.continuum.io
+
