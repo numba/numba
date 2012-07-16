@@ -46,14 +46,14 @@ TY_MAP = {
     'char' : '_int8',
     'int' : '_int32', # This seems to hold true, even on 64-bit systems.
     'unsigned char' : '_int8', # XXX
-    'unsigned int' : '_int32', # XXX
+    'unsigned int' : 'u_int32', # XXX
     'void' : 'lc.Type.void()',
-    'npy_bool' : '_int1',
+    'npy_bool' : '_int8',
     'npy_intp' : '_intp',
-    'npy_uint32' : '_int32', # XXX/Note: Loses unsigned info in LLVM type.
+    'npy_uint32' : 'u_int32', # XXX/Note: Loses unsigned info in LLVM type.
     'PyArrayObject' : '_numpy_struct',
     'double' : 'lc.Type.double()',
-    'size_t' : '_intp', # XXX Loses unsigneded-ness
+    'size_t' : 'u_intp', # XXX Loses unsigneded-ness
     'npy_int64' : '_int64',
     'npy_datetime' : '_int64', # npy_common.h
     'npy_timedelta' : '_int64', # npy_common.h
