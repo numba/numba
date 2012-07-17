@@ -1,3 +1,3 @@
 [submodule "numba/minivect"]
 	path = numba/minivect
-	url = git://github.com/markflorisson88/minivect.git
+	url = git@github.com:numba/minivect.git
