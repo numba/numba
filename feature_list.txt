@@ -7,3 +7,8 @@
  * profiling tools (heat-map based on hot spots)
  * tools for writing extension modules (as .bc modules) and creating shared-libraries directly from Python
  * "freezing" Python applications (removing interpreter and leaving just libpython dependency)
+ * parsing C or C++headers to create LLVM-structures 
+ * Ship Cython as well along with improved version of Cwrap to auto-generate wrappers using LLVM for call-backs
+ * ??integration with Java through JNI
+ * ??integration with .NET (Python .NET)
+
