@@ -1,10 +1,14 @@
 Numba proof of concept was originally written by 
 Travis Oliphant <travis@continuum.io>
 
-Jon Riehl added Control Flow Graph and moved Numba forward significantly
+Jon Riehl of Resilient Science added a control-flow graph,
+   NumPy multiarray API access and moved Numba forward significantly
 
-Mark Florisson added minivect and a type system
+Mark Florisson added minivect, a type system
 
 Siu Kwan Lam merged ideas from pymothoa into Numba
+
+If you have contributed to Numba add your name to this file:
+
 
 
