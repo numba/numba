@@ -1,0 +1,9 @@
+ * Integration with strings of C/C++ and Fortran
+ * caching mechanism for compiled functions
+ * byte-code optimizations (i.e. local variable elimination, attribute lookup-lifting, constant expression, etc.)
+ * multi-core support
+ * simple GPU support
+ * array-expression optimizations and loop-analysis (e.g. polly)
+ * profiling tools (heat-map based on hot spots)
+ * tools for writing extension modules (as .bc modules) and creating shared-libraries directly from Python
+ * "freezing" Python applications (removing interpreter and leaving just libpython dependency)
