@@ -7,8 +7,9 @@ modules.
 Dependencies:
 
   * LLVM 3.1
-  * llvm-py (from ContinuumIO/llvm-py fork)
+  * llvm-py (from numba/llvm-py fork)
   * numpy
+  * Meta (from numba/Meta fork)
 
 * Compile LLVM 3.1: 
 
@@ -24,8 +25,13 @@ make install
 git clone git://github.com/ContinuumIO/llvm-py.git
 python setup.py install
 
+* Be sure to initialize the minivect submodule (in numba top-level dir)
+git submodule init
+git submodule update
+
 * Build Numba
 python setup.py install
+
 
 * Follow Numba
 Join the numba mailinglist by sending any email to the address
