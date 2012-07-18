@@ -342,6 +342,14 @@ def convert_to_llvmtype(typ):
         return _numpy_array
     return str_to_llvmtype(_dtypeish_to_str(typ))
 
+def _getdim_and_type(typ):
+    dim = 1
+    res = typ[0]
+    while isinstance(res, list):
+        res = res[0]
+        dim += 1
+    return np.dtype(res), dim
+
 def convert_to_ctypes(typ):
     import ctypes
     from numpy.ctypeslib import _typecodes
@@ -353,7 +361,8 @@ def convert_to_ctypes(typ):
         #                            ndim = dimcount,
         #                            flags = 'C_CONTIGUOUS')
         # For now, we'll just allow any Python objects, and hope for the best.
-        return ctypes.py_object
+        dtype, ndim = _getdim_and_type(typ)
+        return np.ctypeslib.ndpointer(dtype=dtype, ndim=ndim)
     n_pointer = 0
     if typ.endswith('*'):
         n_pointer = typ.count('*')
