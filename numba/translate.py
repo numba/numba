@@ -1077,7 +1077,7 @@ class Translate(object):
         if name is None:
             name = self.func.func_name
         return make_ufunc(self.ee.get_pointer_to_function(self.lfunc), 
-                                name)
+                               0, name)
 
     # This won't convert any llvm types.  It assumes 
     #  the llvm types in args are either fixed or not-yet specified.
