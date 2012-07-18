@@ -22,6 +22,10 @@ _intp = lc.Type.int(_plat_bits)
 _intp_star = lc.Type.pointer(_intp)
 _void_star = lc.Type.pointer(lc.Type.int(8))
 _void_star_star = lc.Type.pointer(_void_star)
+_float = lc.Type.float()
+_double = lc.Type.double()
+_complex64 = lc.Type.struct([_float, _float])
+_complex128 = lc.Type.struct([_double, _double])
 
 _pyobject_head = [_intp, lc.Type.pointer(_int32)]
 if hasattr(sys, 'getobjects'):
