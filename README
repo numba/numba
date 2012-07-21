@@ -20,17 +20,14 @@ tar zxvf llvm-3.1.src.tar.gz
 #  e.g. -arch i386 or -arch x86_64.  It might be best to be explicit about this.
 make install
 
-
-* Clone LLVM-py from github
-git clone git://github.com/ContinuumIO/llvm-py.git
-python setup.py install
-
 * Be sure to initialize the minivect submodule (in numba top-level dir)
 git submodule init
 git submodule update
 
 * Build Numba
 python setup.py install
+
+(cd extern/llvm-py && python setup.py install --user)
 
 
 * Follow Numba
