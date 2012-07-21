@@ -1,3 +1,7 @@
 [submodule "numba/minivect"]
 	path = numba/minivect
-	url = git@github.com:numba/minivect.git
+	#url = git@github.com:numba/minivect.git
+	url = https://github.com/numba/minivect.git
+[submodule "extern/llvm-py"]
+	path = extern/llvm-py
+	url = https://github.com/numba/llvm-py.git
