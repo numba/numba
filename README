@@ -22,7 +22,7 @@ make install
 
 
 * Clone LLVM-py from github
-git clone git://github.com/ContinuumIO/llvm-py.git
+git clone https://github.com/numba/llvm-py.git
 python setup.py install
 
 * Be sure to initialize the minivect submodule (in numba top-level dir)
