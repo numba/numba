@@ -5,14 +5,12 @@ Utility module containing common (to Numba) LLVM types.
 # ______________________________________________________________________
 
 import sys
+import platform
 import llvm.core as lc
 
 # ______________________________________________________________________
 
-if sys.maxint > 2**33:
-    _plat_bits = 64
-else:
-    _plat_bits = 32
+_plat_bits = int(platform.architecture()[0][:2])
 
 _int1 = lc.Type.int(1)
 _int8 = lc.Type.int(8)
