@@ -1,3 +1,8 @@
+"""
+Run type inference on Python bytecode. This is now deprecated, please
+see the ast_type_inference module.
+"""
+
 import opcode
 import __builtin__
 

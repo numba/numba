@@ -1,4 +1,5 @@
-Numba is a NumPy aware optimizing compiler for Python.  It uses the
+Numba is an Open Source NumPy-aware optimizing compiler for Python 
+sponsored by Continuum Analytics, Inc.  It uses the
 remarkable LLVM compiler infrastructure to compile Python byte-code to
 machine code especially for use in the NumPy run-time and SciPy
 modules.
@@ -6,12 +7,14 @@ modules.
 Dependencies:
 
   * LLVM 3.1
-  * llvm-py (from ContinuumIO/llvm-py fork)
+  * llvm-py (from numba/llvm-py fork)
   * numpy
+  * Meta (from numba/Meta fork)
 
-* Compile LLVM 3.1 (unreleased) --- get it from svn: 
+* Compile LLVM 3.1: 
 
-svn co http://llvm.org/svn/llvm-project/llvm/trunk llvm
+wget http://llvm.org/releases/3.1/llvm-3.1.src.tar.gz 
+tar zxvf llvm-3.1.src.tar.gz
 ./configure --enable-optimized
 # Be sure your compiler architecture is same as version of Python you will use
 #  e.g. -arch i386 or -arch x86_64.  It might be best to be explicit about this.
@@ -22,8 +25,20 @@ make install
 git clone git://github.com/ContinuumIO/llvm-py.git
 python setup.py install
 
+* Be sure to initialize the minivect submodule (in numba top-level dir)
+git submodule init
+git submodule update
+
 * Build Numba
 python setup.py install
 
+
 * Follow Numba
-Join numba@librelist.org
+Join the numba mailinglist numba-users@continuum.io
+https://groups.google.com/a/continuum.io/d/forum/numba-users
+
+Old archives are at http://librelist.com/browser/numba/
+
+* See if our sponsor can help you (which can help this project) 
+http://www.continuum.io
+

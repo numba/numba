@@ -63,8 +63,8 @@ def vectorize(func):
         else:
             t = __tr_map__[func]
         return t.make_ufunc()
-    except:
-        print "Warning: Could not create fast version..."
+    except Exception as msg:
+        print "Warning: Could not create fast version...", msg
         import numpy
         return numpy.vectorize(func)
 

@@ -7,15 +7,7 @@ def sinc(x):
         return 1.0
     else:
         return sin(x*pi)/(pi*x)
-
-from numba.translate import Translate
-t = Translate(sinc)
-t.translate()
-print t.mod
-sinc = t.make_ufunc()
-
-#sinc = vectorize(sinc)
-
+    
 from numpy import linspace
 x = linspace(-5,5,1001)
 y = sinc(x)

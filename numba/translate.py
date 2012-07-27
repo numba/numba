@@ -1,3 +1,8 @@
+"""
+Translate Python bytecode to LLVM IR. This deprecated now, please
+see the ast_translate module.
+"""
+
 import opcode
 import sys
 import types
@@ -24,16 +29,13 @@ from .symtab import Variable
 from . import _numba_types as _types
 from ._numba_types import Complex64, Complex128
 
+from .minivect import minitypes
+
 if __debug__:
     import pprint
 
 _int32_zero = lc.Constant.int(_int32, 0)
 
-# Translate Python bytecode to LLVM IR
-
-# For type-inference we need a mapping showing what the output type
-# is from any operation and the input types.  We can assume if it is
-# not in this table that the output type is the same as the input types
 
 typemaps = {
 }
@@ -45,6 +47,84 @@ typemaps = {
 #hascompare
 #hasfree
 
+
+# Convert llvm Type object to kind-bits string
+def llvmtype_to_strtype(typ):
+    if typ.kind == lc.TYPE_FLOAT:
+        return 'f32'
+    elif typ.kind == lc.TYPE_DOUBLE:
+        return 'f64'
+    elif typ.kind == lc.TYPE_INTEGER:
+        return 'i%d' % typ.width
+    elif typ == _numpy_array: # NOTE: Checks for Numpy arrays need to
+                              # happen before the more general
+                              # recognition of pointer types,
+                              # otherwise it won't ever be used.
+        # FIXME: Need to find a way to stash dtype somewhere in here.
+        return 'arr[]'
+    elif typ == _complex64:
+        return 'c64'
+    elif typ == _complex128:
+        return 'c128'
+    elif typ.kind == lc.TYPE_POINTER:
+        if typ.pointee.kind == lc.TYPE_FUNCTION:
+            return ['func'] + typ.pointee.args
+        else:
+            n_pointer = 1
+            typ = typ.pointee
+            while typ.kind == lc.TYPE_POINTER:
+                n_pointer += 1
+                typ = typ.pointee
+            return "%s%s" % (llvmtype_to_strtype(typ), "*" * n_pointer)
+    raise NotImplementedError("FIXME: LLVM type conversions for '%s'!" % (typ,))
+
+# We don't support all types....
+def pythontype_to_strtype(typ):
+    if issubclass(typ, float):
+        return 'f64'
+    elif issubclass(typ, int):
+        return 'i%d' % _plat_bits
+    elif issubclass(typ, complex):
+        return 'c128'
+    elif issubclass(typ, (types.BuiltinFunctionType, types.FunctionType)):
+        return ["func"]
+    elif issubclass(typ, tuple):
+        return 'tuple'
+
+def map_to_strtype(type):
+    "Map a minitype or str type to a str type"
+    if isinstance(type, minitypes.Type):
+        print 'CONVERTING', type
+        if type.is_float:
+            if type.itemsize == 4:
+                return 'f'
+            elif type.itemsize == 8:
+                return 'd'
+            else:
+                # hurgh
+                raise NotImplementedError
+            #type = 'f%d' % (type.itemsize * 8,)
+        elif type.is_int:
+            if type == minitypes.int_:
+                type = 'i'
+            elif type == minitypes.long_:
+                type = 'l'
+            else:
+                type = 'i%d' % (type.itemsize * 8,)
+        elif type.is_function:
+            type = ["func"]
+        elif type.is_tuple:
+            type = 'tuple'
+        elif type.is_array:
+            type = [map_to_strtype(type.dtype)]
+        elif type.is_pointer:
+            type = "%s *" % (map_to_strtype(type.base_type))
+        else:
+            raise NotImplementedError
+
+        print type
+
+    return type
 
 def map_to_function(func, typs, mod):
     typs = [str_to_llvmtype(x) if isinstance(x, str) else x for x in typs]
@@ -149,6 +229,280 @@ class _LLVMCaster(object):
                                                   *args, **kws)
         return ret_val
 
+# Variables placed on the stack.
+#  They allow an indirection
+#  So, that when used in an operation, the correct
+#  LLVM type can be inserted.  
+class Variable(object):
+    def __init__(self, val, argtyp = None, exact_typ = None):
+        if isinstance(val, Variable):
+            self.val = val.val
+            self._llvm = val._llvm
+            self.typ = val.typ
+            return 
+        self.val = val
+        if isinstance(val, lc.Value):
+            self._llvm = val
+            if argtyp is None:
+                if exact_typ is None:
+                    self.typ = llvmtype_to_strtype(val.type)
+                else:
+                    self.typ = exact_typ
+            else:
+                self.typ = convert_to_strtype(argtyp)
+        else:
+            self._llvm = None
+            self.typ = pythontype_to_strtype(type(val))
+
+    def __repr__(self):
+        return ('<Variable(val=%r, _llvm=%r, typ=%r)>' %
+                (self.val, self._llvm, self.typ))
+
+    def llvm(self, typ=None, mod=None, builder = None):
+        if self._llvm:
+            ret_val = self._llvm
+            if typ is not None and typ != self.typ:
+                ret_val = None
+                ltyp = str_to_llvmtype(typ)
+                if builder:
+                    ret_val = _LLVMCaster.build_cast(builder, self._llvm, ltyp)
+                if ret_val is None:
+                    raise ValueError("Unsupported cast (from %r.typ to %r)" %
+                                     (self, typ))
+            return ret_val
+        else:
+            if typ is None:
+                typ = 'f64' if self.typ is None else self.typ
+            if typ == 'f64':
+                res = lc.Constant.real(lc.Type.double(), float(self.val))
+            elif typ == 'f32':
+                res = lc.Constant.real(lc.Type.float(), float(self.val))
+            elif typ[0] == 'i':
+                res = lc.Constant.int(lc.Type.int(int(typ[1:])),
+                                      int(self.val))
+            elif typ[0] == 'c':
+                ltyp = _float if typ[1:] == '64' else _double
+                res = lc.Constant.struct([
+                        lc.Constant.real(ltyp, self.val.real),
+                        lc.Constant.real(ltyp, self.val.imag)])
+            elif typ[0] == 'func':
+                res = map_to_function(self.val, typ[1:], mod)
+            return res
+
+    def is_phi(self):
+        return isinstance(self._llvm, lc.PHINode)
+
+    def is_module(self):
+        return isinstance(self.val, types.ModuleType)
+
+# Add complex, unsigned, and bool 
+def str_to_llvmtype(str):
+    if __debug__:
+        print("str_to_llvmtype(): str = %r" % (str,))
+    n_pointer = 0
+    if str.endswith('*'):
+        n_pointer = str.count('*')
+        str = str[:-n_pointer]
+    if str[0] == 'f':
+        if str[1:] == '32':
+            ret_val = lc.Type.float()
+        elif str[1:] == '64':
+            ret_val = lc.Type.double()
+    elif str[0] == 'i':
+        num = int(str[1:])
+        ret_val = lc.Type.int(num)
+    elif str[0] == 'c':
+        if str[1:] == '64':
+            ret_val = _complex64
+        elif str[1:] == '128':
+            ret_val = _complex128
+    elif str.startswith('arr['):
+        ret_val = _numpy_array
+    else:
+        raise TypeError, "Invalid Type: %s" % str
+    for _ in xrange(n_pointer):
+        ret_val = lc.Type.pointer(ret_val)
+    return ret_val
+
+def _handle_list_conversion(typ):
+    assert isinstance(typ, list)
+    crnt_elem = typ[0]
+    dimcount = 1
+    while isinstance(crnt_elem, list):
+        crnt_elem = crnt_elem[0]
+        dimcount += 1
+    return dimcount, crnt_elem
+
+def _dtypeish_to_str(typ):
+    n_pointer = 0
+    if typ.endswith('*'):
+        n_pointer = typ.count('*')
+        typ = typ[:-n_pointer]
+    dt = np.dtype(typ)
+    return ("%s%s%s" % (dt.kind, 8*dt.itemsize, "*" * n_pointer))
+
+def convert_to_llvmtype(typ):
+    n_pointer = 0
+    if isinstance(typ, list):
+        return _numpy_array
+    return str_to_llvmtype(_dtypeish_to_str(typ))
+
+def _getdim_and_type(typ):
+    dim = 1
+    res = typ[0]
+    while isinstance(res, list):
+        res = res[0]
+        dim += 1
+    return np.dtype(res), dim
+
+def convert_to_ctypes(typ):
+    import ctypes
+    from numpy.ctypeslib import _typecodes
+    if isinstance(typ, list):
+        # FIXME: At some point we should add a type check to the
+        # wrapper code s.t. it ensures the given argument conforms to
+        # the following:
+        #     np.ctypeslib.ndpointer(dtype = np.dtype(crnt_elem),
+        #                            ndim = dimcount,
+        #                            flags = 'C_CONTIGUOUS')
+        # For now, we'll just allow any Python objects, and hope for the best.
+        dtype, ndim = _getdim_and_type(typ)
+        return np.ctypeslib.ndpointer(dtype=dtype, ndim=ndim)
+    n_pointer = 0
+    if typ.endswith('*'):
+        n_pointer = typ.count('*')
+        typ = typ[:-n_pointer]
+        if __debug__:
+            print("convert_to_ctypes(): n_pointer = %d, typ' = %r" %
+                  (n_pointer, typ))
+    dtype_str = np.dtype(typ).str
+    if dtype_str[1] == 'c':
+        if dtype_str[2:] == '8':
+            ret_val = Complex64
+        elif dtype_str[2:] == '16':
+            ret_val = Complex128
+        else:
+            raise NotImplementedError("Numba does not currently support "
+                                      "ctypes wrapping for type %r." % (typ,))
+    else:
+        ret_val = _typecodes[np.dtype(typ).str]
+    for _ in xrange(n_pointer):
+        ret_val = ctypes.POINTER(ret_val)
+    return ret_val
+
+def convert_to_strtype(typ):
+    # FIXME: This current mapping preserves dtype information, but
+    # loses ndims.
+    arr = 0
+    if isinstance(typ, list):
+        arr = 1
+        _, typ = _handle_list_conversion(typ)
+    return '%s%s%s' % ('arr[' * arr, _dtypeish_to_str(typ), ']' * arr)
+
+# Add complex, unsigned, and bool
+def typcmp(type1, type2):
+    if type1==type2:
+        return 0
+    kind1 = type1[0]
+    kind2 = type2[0]
+    if kind1 == kind2:
+        return cmp(int(type1[1:]),int(type2[1:]))
+    if kind1 == 'f':
+        return 1
+    else:
+        return -1
+
+def typ_isa_number(typ):
+    ret_val = ((not typ.endswith('*')) and
+               (typ.startswith(('i', 'f', 'c'))))
+    return ret_val
+
+# Both inputs are Variable objects
+#  Resolves types on one of them. 
+#  Won't work if both need resolving
+# Currently delegates casting to Variable.llvm(), but only in the
+# presence of a builder instance.
+def resolve_type(arg1, arg2, builder = None):
+    if __debug__:
+        print("resolve_type(): arg1 = %r, arg2 = %r" % (arg1, arg2))
+    typ = None
+    typ1 = None
+    typ2 = None
+    if arg1._llvm is not None:
+        typ1 = arg1.typ
+    else:
+        try:
+            str_to_llvmtype(arg1.typ)
+            typ1 = arg1.typ
+        except TypeError:
+            pass
+    if arg2._llvm is not None:
+        typ2 = arg2.typ
+    else:
+        try:
+            str_to_llvmtype(arg2.typ)
+            typ2 = arg2.typ
+        except TypeError:
+            pass
+    if typ1 is None and typ2 is None:
+        raise TypeError, "Both types not valid"
+    # The following is trying to enforce C-like upcasting rules where
+    # we try to do the following:
+    # * Use higher precision if the types are identical in kind.
+    # * Use floats instead of integers.
+    if typ1 is None:
+        typ = typ2
+    elif typ2 is None:
+        typ = typ1
+    else:
+        # FIXME: What about arithmetic operations on arrays?  (Though
+        # we'd need to support code generation for them first...)
+        if typ_isa_number(typ1) and typ_isa_number(typ2):
+            if typ1[0] == typ2[0]:
+                if int(typ1[1:]) > int(typ2[1:]):
+                    typ = typ1
+                else:
+                    typ = typ2
+            elif typ1[0] == 'c': # Complex values trump all...
+                typ = typ1
+            elif typ2[0] == 'c':
+                typ = typ2
+            elif typ1[0] == 'f': # Floating point values trump integers...
+                typ = typ1
+            elif typ2[0] == 'f':
+                typ = typ2
+        else:
+            # Fall-through case: just use the left hand operand's type...
+            typ = typ1
+    if __debug__:
+        print("resolve_type() ==> %r" % (typ,))
+    return (typ,
+            arg1.llvm(typ, builder = builder),
+            arg2.llvm(typ, builder = builder))
+
+# This won't convert any llvm types.  It assumes 
+#  the llvm types in args are either fixed or not-yet specified.
+def func_resolve_type(mod, func, args):
+    # already an llvm function
+    if func.val and func.val is func._llvm:
+        typs = [llvmtype_to_strtype(x) for x in func._llvm.type.pointee.args]
+        lfunc = func._llvm
+    else:
+        # we need to generate the function including the types
+        typs = [arg.typ if arg._llvm is not None else '' for arg in args]
+        # pick first one as choice
+        choicetype = None
+        for typ in typs:
+            if typ is not None:
+                choicetype = typ
+                break
+        if choicetype is None:
+            raise TypeError, "All types are unspecified"
+        typs = [choicetype if x is None else x for x in typs]
+        lfunc = map_to_function(func.val, typs, mod)
+
+    llvm_args = [arg.llvm(typ) for typ, arg in zip(typs, args)]
+    return lfunc, llvm_args
 
 _compare_mapping_float = {'>':lc.FCMP_OGT,
                            '<':lc.FCMP_OLT,
@@ -215,25 +569,33 @@ class _LLVMModuleUtils(object):
         if out_var.typ[0] == 'i':
             if int(out_var.typ[1:]) < 64:
                 fmt = "%d"
-                typ = "i32"
+                fmt_args = [out_var.llvm("i32", builder = translator.builder)]
             else:
                 fmt = "%ld"
-                typ = "i64"
+                fmt_args = [out_var.llvm("i64", builder = translator.builder)]
         elif out_var.typ[0] == 'f':
             if int(out_var.typ[1:]) < 64:
                 fmt = "%f"
-                typ = "f32"
+                fmt_args = [out_var.llvm("f32", builder = translator.builder)]
             else:
                 fmt = "%lf"
-                typ = "f64"
+                fmt_args = [out_var.llvm("f64", builder = translator.builder)]
+        elif out_var.typ[0] == 'c':
+            if int(out_var.typ[1:]) < 128:
+                fmt = "(%f%+fj)"
+                lvar = out_var.llvm(out_var.typ, builder = translator.builder)
+            else:
+                fmt = "(%lf%+lfj)"
+                lvar = out_var.llvm(out_var.typ, builder = translator.builder)
+            fmt_args = [translator.builder.extract_value(lvar, 0),
+                        translator.builder.extract_value(lvar, 1)]
         else:
             raise NotImplementedError("FIXME (type %r not supported in "
                                       "build_print_number())" % (out_var.typ,))
         return translator.builder.call(llvm_printf, [
                 translator.builder.gep(
                     cls.get_string_constant(translator.mod, fmt),
-                    [_int32_zero, _int32_zero]),
-                out_var.llvm(typ, builder = translator.builder)])
+                    [_int32_zero, _int32_zero])] + fmt_args)
 
     @classmethod
     def build_debugout(cls, translator, args):
@@ -524,6 +886,7 @@ class Translate(CodeIterator):
     def __init__(self, context, func, func_signature, symtab, variables,
                  optimize=True, func_name=None, **kwds):
         super(Translate, self).__init__(context, func)
+
         # NOTE: Was seeing weird corner case where
         # llvm.core.Module.new() was not returning a module object,
         # thinking this was caused by compiling the same function
@@ -562,6 +925,12 @@ class Translate(CodeIterator):
 
     def to_llvm(self, type):
         return type.to_llvm(self.context)
+
+    def map_types(self, ret_type, arg_types):
+        return map_to_strtype(ret_type), [map_to_strtype(arg_type)
+                                              for arg_type in arg_types]
+
+
 
     def setup_func(self):
         # The return type will not be known until the return
@@ -885,7 +1254,7 @@ class Translate(CodeIterator):
         if name is None:
             name = self.func.func_name
         return make_ufunc(self.ee.get_pointer_to_function(self.lfunc),
-                                name)
+                               0, name)
 
     def func_resolve_type(self, func, args):
         # This won't convert any llvm types.  It assumes
@@ -981,9 +1350,48 @@ class Translate(CodeIterator):
         self.op_COMPARE_OP(i, None, opcode.cmp_op.index(cmp_op_str), cmp_var)
         self.op_POP_JUMP_IF_FALSE(i, None, false_jump_target, cmp_var)
 
-    def op_LOAD_FAST(self, i, op, arg, variable):
-        variable.lvalue = self._locals[arg].lvalue
-        variable.lvalue.name = self.getlocal(arg).name
+    def _generate_complex_op(self, op, arg1, arg2):
+        rres, ires = op(self.builder.extract_value(arg1, 0),
+                        self.builder.extract_value(arg1, 1),
+                        self.builder.extract_value(arg2, 0),
+                        self.builder.extract_value(arg2, 1))
+        ret_val = self.builder.insert_value(
+            self.builder.insert_value(lc.Constant.undef(arg1.type), rres, 0),
+            ires, 1)
+        return ret_val
+
+    def _complex_add(self, arg1r, arg1i, arg2r, arg2i):
+        return (self.builder.fadd(arg1r, arg2r),
+                self.builder.fadd(arg1i, arg2i))
+
+    def _complex_sub(self, arg1r, arg1i, arg2r, arg2i):
+        return (self.builder.fsub(arg1r, arg2r),
+                self.builder.fsub(arg1i, arg2i))
+
+    def _complex_mul(self, arg1r, arg1i, arg2r, arg2i):
+        return (self.builder.fsub(self.builder.fmul(arg1r, arg2r),
+                                  self.builder.fmul(arg1i, arg2i)),
+                self.builder.fadd(self.builder.fmul(arg1i, arg2r),
+                                  self.builder.fmul(arg1r, arg2i)))
+
+    def _complex_div(self, arg1r, arg1i, arg2r, arg2i):
+        divisor = self.builder.fadd(self.builder.fmul(arg2r, arg2r),
+                                    self.builder.fmul(arg2i, arg2i))
+        return (self.builder.fdiv(
+                        self.builder.fadd(self.builder.fmul(arg1r, arg2r),
+                                          self.builder.fmul(arg1i, arg2i)),
+                        divisor),
+                self.builder.fdiv(
+                        self.builder.fsub(self.builder.fmul(arg1i, arg2r),
+                                          self.builder.fmul(arg1i, arg2r)),
+                        divisor))
+
+    def op_LOAD_FAST(self, i, op, arg):
+        self.stack.append(Variable(self._locals[arg]))
+
+#    def op_LOAD_FAST(self, i, op, arg, variable):
+#        variable.lvalue = self._locals[arg].lvalue
+#        variable.lvalue.name = self.getlocal(arg).name
 
     def op_STORE_FAST(self, i, op, arg, variable):
         oldval = self._locals[arg]
@@ -1021,11 +1429,16 @@ class Translate(CodeIterator):
 
         variable.lvalue = lvalue
 
-    op_BINARY_ADD = create_binop('fadd', 'add')
-    op_INPLACE_ADD = op_BINARY_ADD
-    op_BINARY_SUBTRACT = create_binop('fsub', 'sub')
-    op_BINARY_MULTIPLY = create_binop('fmul', 'mul')
-    op_BINARY_DIVIDE = create_binop('fdiv', 'sdiv')
+
+#    def op_LOAD_CONST(self, i, op, arg):
+#        const = Variable(self.constants[arg])
+#        self.stack.append(const)
+
+#    op_BINARY_ADD = create_binop('fadd', 'add')
+#    op_INPLACE_ADD = op_BINARY_ADD
+#    op_BINARY_SUBTRACT = create_binop('fsub', 'sub')
+#    op_BINARY_MULTIPLY = create_binop('fmul', 'mul')
+#    op_BINARY_DIVIDE = create_binop('fdiv', 'sdiv')
 
     def op_BINARY_FLOOR_DIVIDE(self, i, op, arg, result):
         arg1, arg2 = result.state
@@ -1034,11 +1447,99 @@ class Translate(CodeIterator):
         else:
             raise NotImplementedError('// for type %r' % typ)
 
-    def op_BINARY_MODULO(self, i, op, arg, result):
-        arg1, arg2 = result.state
-        if arg1.type.is_float and arg1.type == arg2.type:
-            result.lvalue = self.builder.frem(arg1.lvalue, arg2.lvalue)
-        elif arg1.type.is_int and arg1.type.is_signed and arg1.type == arg2.type:
+    def op_BINARY_ADD(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        if __debug__:
+            print("op_BINARY_ADD(): %r + %r" % (arg1, arg2))
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
+        if typ[0] == 'f':
+            res = self.builder.fadd(arg1, arg2)
+        elif typ[0] == 'i':
+            res = self.builder.add(arg1, arg2)
+        elif typ[0] == 'c':
+            res = self._generate_complex_op(self._complex_add, arg1, arg2)
+        else:
+            raise NotImplementedError("FIXME")
+        self.stack.append(Variable(res))
+
+    def op_INPLACE_ADD(self, i, op, arg):
+        # FIXME: Trivial inspection seems to illustrate a mostly
+        # identical semantics to BINARY_ADD for numerical inputs.
+        # Verify this, or figure out what the corner cases are that
+        # require a separate symbolic execution procedure.
+        return self.op_BINARY_ADD(i, op, arg)
+
+    def op_BINARY_SUBTRACT(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
+        if typ[0] == 'f':
+            res = self.builder.fsub(arg1, arg2)
+        elif typ[0] == 'i':
+            res = self.builder.sub(arg1, arg2)
+        elif typ[0] == 'c':
+            res = self._generate_complex_op(self._complex_sub, arg1, arg2)
+        else:
+            raise NotImplementedError("FIXME")
+        self.stack.append(Variable(res))
+
+    def op_INPLACE_SUBTRACT(self, i, op, arg):
+        return self.op_BINARY_SUBTRACT(i, op, arg)
+
+    def op_BINARY_MULTIPLY(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
+        if typ[0] == 'f':
+            res = self.builder.fmul(arg1, arg2)
+        elif typ[0] == 'i':
+            res = self.builder.mul(arg1, arg2)
+        elif typ[0] == 'c':
+            res = self._generate_complex_op(self._complex_mul, arg1, arg2)
+        else:
+            raise NotImplementedError("FIXME")
+        self.stack.append(Variable(res))
+
+    def op_INPLACE_MULTIPLY(self, i, op, arg):
+        # FIXME: See note for op_INPLACE_ADD
+        return self.op_BINARY_MULTIPLY(i, op, arg)
+
+    def op_BINARY_DIVIDE(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
+        if typ[0] == 'f':
+            res = self.builder.fdiv(arg1, arg2)
+        elif typ[0] == 'i':
+            res = self.builder.sdiv(arg1, arg2)
+            # XXX: FIXME-need udiv as well.
+        elif typ[0] == 'c':
+            res = self._generate_complex_op(self._complex_div, arg1, arg2)
+        else:
+            raise NotImplementedError("FIXME")
+        self.stack.append(Variable(res))
+
+    def op_INPLACE_DIVIDE(self, i, op, arg):
+        return self.op_BINARY_DIVIDE(i, op, arg)
+
+    def op_BINARY_FLOOR_DIVIDE(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
+        if typ[0] == 'i':
+            res = self.builder.sdiv(arg1, arg2)
+        else:
+            raise NotImplementedError('// for type %r' % typ)
+        self.stack.append(Variable(res))
+
+    def op_BINARY_MODULO(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
+        if typ[0] == 'f':
+            res = self.builder.frem(arg1, arg2)
+        elif typ[0] == 'i': # typ[0] == 'i'
             # NOTE: There is a discrepancy between LLVM remainders and
             # Python's modulo operator.  See:
             # http://llvm.org/docs/LangRef.html#i_srem
@@ -1049,6 +1550,22 @@ class Translate(CodeIterator):
             # same as urem).
         else:
             raise NotImplementedError
+
+#    def op_BINARY_MODULO(self, i, op, arg, result):
+#        arg1, arg2 = result.state
+#        if arg1.type.is_float and arg1.type == arg2.type:
+#            result.lvalue = self.builder.frem(arg1.lvalue, arg2.lvalue)
+#        elif arg1.type.is_int and arg1.type.is_signed and arg1.type == arg2.type:
+#            # NOTE: There is a discrepancy between LLVM remainders and
+#            # Python's modulo operator.  See:
+#            # http://llvm.org/docs/LangRef.html#i_srem
+#            # We handle this using a special function.
+#            mod_fn = _LLVMModuleUtils.get_py_modulo(self.mod, result.type)
+#            result.lvalue = self.builder.call(mod_fn, [arg1.lvalue, arg2.lvalue])
+#            # FIXME: Add unsigned integer modulo (which should be the
+#            # same as urem).
+#        else:
+#            raise NotImplementedError
 
     def op_BINARY_POWER(self, i, op, arg, result):
         arg1, arg2 = result.state
@@ -1070,6 +1587,29 @@ class Translate(CodeIterator):
         elif arg1.type.is_int and arg2.type.is_int:
             result.lvalue = self.builder.icmp(_compare_mapping_sint[cmpop],
                                               arg1.lvalue, arg2.lvalue)
+            raise NotImplementedError('% for type %r' % (typ,))
+        self.stack.append(Variable(res))
+
+    def op_BINARY_POWER(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        args = [arg1.llvm(arg1.typ), arg2.llvm(arg2.typ)]
+        if arg2.typ[0] == 'i':
+            INTR = getattr(lc, 'INTR_POWI')
+        elif arg2.typ[0] == 'f': # make sure it's float
+            INTR = getattr(lc, 'INTR_POW')
+        else:
+            raise NotImplementedError('** for type %r' % (typ,))
+        typs = [str_to_llvmtype(x.typ) for x in [arg1, arg2]]
+        func = lc.Function.intrinsic(self.mod, INTR, typs)
+        res = self.builder.call(func, args)
+        self.stack.append(Variable(res))
+        
+
+    def op_RETURN_VALUE(self, i, op, arg):
+        val = self.stack.pop(-1)
+        if val.val is None:
+            self.builder.ret(lc.Constant.real(self.ret_ltype, 0))
         else:
             raise NotImplementedError
 

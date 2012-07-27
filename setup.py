@@ -1,8 +1,11 @@
-import re
+import os
 import sys
-from os.path import join
+from fnmatch import fnmatchcase
+from distutils.util import convert_path
 from distutils.core import setup, Extension
+
 import numpy
+
 
 if sys.version_info[:2] < (2, 5):
     raise Exception('numba requires Python 2.5 or greater.')
@@ -11,6 +14,22 @@ kwds = {}
 
 kwds['long_description'] = open('README').read()
 
+
+def find_packages(where='.', exclude=()):
+    out = []
+    stack=[(convert_path(where), '')]
+    while stack:
+        where, prefix = stack.pop(0)
+        for name in os.listdir(where):
+            fn = os.path.join(where,name)
+            if ('.' not in name and os.path.isdir(fn) and
+                os.path.isfile(os.path.join(fn, '__init__.py'))
+            ):
+                out.append(prefix+name)
+                stack.append((fn, prefix+name+'.'))
+    for pat in list(exclude) + ['ez_setup', 'distribute_setup']:
+        out = [item for item in out if not fnmatchcase(item, pat)]
+    return out
 
 setup(
     name = "numba",
@@ -29,10 +48,7 @@ setup(
         "Topic :: Utilities",
     ],
     description = "compiling Python code for NumPy",
-    packages = ["numba",
-                "numba.pymothoa",
-                "numba.pymothoa.util",
-                "numba.minivect"],
+    packages = find_packages(),
     ext_modules = [Extension(name = "numba._ext",
                              sources = ["numba/_ext.c"],
                              include_dirs=[numpy.get_include()])],

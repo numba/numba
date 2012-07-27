@@ -13,4 +13,5 @@ except ImportError:
 
 import _numba_types
 from ._numba_types import *
+
 __all__ = _numba_types.__all__

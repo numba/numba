@@ -1,4 +1,14 @@
-Numba is written and maintained by
+Numba proof of concept was originally written by 
 Travis Oliphant <travis@continuum.io>
 
-and hopefully many others...
+Jon Riehl of Resilient Science added a control-flow graph,
+   NumPy multiarray API access and moved Numba forward significantly
+
+Mark Florisson added minivect, a type system
+
+Siu Kwan Lam merged ideas from pymothoa into Numba
+
+If you have contributed to Numba add your name to this file:
+
+
+
