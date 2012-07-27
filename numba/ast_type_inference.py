@@ -698,23 +698,30 @@ class TransformForIterable(visitors.NumbaTransformer):
         self.symtab = symtab
 
     def visit_For(self, node):
+        if not isinstance(node.target, ast.Name):
+            self.error(node.target,
+                       "Only assignment to target names is supported.")
+
+        # NOTE: this would be easier to do during type inference, since you
+        #       can rewrite the AST and run the type inferer on the rewrite.
+        #       This way, you won't have to create variables and types manually.
+        #       This will also take care of proper coercions.
         if node.iter.type.is_range:
+            # make sure to analyse children, in case of nested loops
+            self.generic_visit(node)
+            node.index = ast.Name(id=node.target.id, ctx=ast.Load())
             return node
-        elif node.iter.type.is_array and node.iter.type.ndim==1:
+        elif node.iter.type.is_array and node.iter.type.ndim == 1:
             # Convert 1D array iteration to for-range and indexing
             logger.debug(ast.dump(node))
 
             orig_target = node.target
             orig_iter = node.iter
 
-            # replace node.target
-            target_name = orig_target.id+'.idx'
-            target = node.target = ast.Name(id=target_name, ctx=ast.Store())
-            target.variable = Variable(_types.Py_ssize_t, name=target_name,
-                                       is_local=True)
-
-            assert target_name not in self.symtab
-            self.symtab[target_name] = target.variable
+            # replace node.target with a temporary
+            target_name = orig_target.id + '.idx'
+            target_temp = nodes.TempNode(minitypes.Py_ssize_t)
+            node.target = target_temp.store()
 
             # replace node.iter
             call_func = ast.Name(id='range', ctx=ast.Load())
@@ -723,21 +730,24 @@ class TransformForIterable(visitors.NumbaTransformer):
             stop = ast.Subscript(value=nodes.ShapeAttributeNode(orig_iter),
                                  slice=shape_index,
                                  ctx=ast.Load())
+            stop.type = _types.intp
             call_args = [nodes.ConstNode(0, _types.Py_ssize_t),
-                         stop,
+                         nodes.CoercionNode(stop, _types.Py_ssize_t),
                          nodes.ConstNode(1, _types.Py_ssize_t),]
 
             node.iter = ast.Call(func=call_func, args=call_args)
             node.iter.type = call_func.variable.type
 
+            node.index = target_temp.load()
             # add assignment to new target variable at the start of the body
-            index = ast.Index(value=ast.Name(id=target.id, ctx=ast.Load()))
-            index.variable = target.variable
+            index = ast.Index(value=node.index)
+            index.variable = target_temp.variable
             subscript = ast.Subscript(value=orig_iter,
                                       slice=index, ctx=ast.Load())
+            coercion = nodes.CoercionNode(subscript, orig_target.type)
             assign = ast.Assign(targets=[orig_target], value=subscript)
 
-            node.body = [assign]+node.body
+            node.body = [assign] + node.body
 
             return node
         else:

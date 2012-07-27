@@ -124,10 +124,15 @@ class ModuleAttributeType(NumbaType):
 class RangeType(NumbaType):
     is_range = True
 
+class IntPType(NumbaType, minitypes.IntType):
+    "numpy intp type"
+    name = "intp"
+
 tuple_ = TupleType()
 phi = PHIType()
 module_type = ModuleType()
 
+intp = IntPType()
 
 #
 ### Type shorthands

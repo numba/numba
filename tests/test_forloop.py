@@ -8,18 +8,19 @@ Test the Numba compiler on a simple for loop over an iterable object.
 
 import numba
 from numba import *
-from numba.decorators import numba_compile
+from numba.decorators import numba_compile, function
 
 from numba.minivect import minitypes
 hash(minitypes.double[:])
 
 import numpy
+import numpy as np
 
 import unittest
 
 # ______________________________________________________________________
 
-def for_loop_fn_0 (iterable):
+def _for_loop_fn_0 (iterable):
     acc = 0.
     for value in iterable:
         acc += value
@@ -27,7 +28,7 @@ def for_loop_fn_0 (iterable):
 
 # ______________________________________________________________________
 
-def for_loop_fn_1 (start, stop, inc):
+def _for_loop_fn_1 (start, stop, inc):
     acc = 0
     for value in range(start, stop, inc):
         acc += value
@@ -35,7 +36,7 @@ def for_loop_fn_1 (start, stop, inc):
 
 # ______________________________________________________________________
 
-def for_loop_fn_2 (stop):
+def _for_loop_fn_2 (stop):
     acc = 0
     for value_0 in range(stop):
         for value_1 in range(stop):
@@ -44,7 +45,7 @@ def for_loop_fn_2 (stop):
 
 # ______________________________________________________________________
 
-def for_loop_fn_3 (stop):
+def _for_loop_fn_3 (stop):
     acc = 0
     for i in range(stop):
         for j in range(stop):
@@ -53,18 +54,22 @@ def for_loop_fn_3 (stop):
                     acc += 1
     return acc
 
+for_loop_fn_0 = function(_for_loop_fn_0)
+for_loop_fn_1 = function(_for_loop_fn_1)
+for_loop_fn_2 = function(_for_loop_fn_2)
+for_loop_fn_3 = function(_for_loop_fn_3)
+
 # ______________________________________________________________________
 
 class TestForLoop(unittest.TestCase):
 #    @unittest.skipUnless(__debug__, "Requires implementation of iteration "
 #                         "over arrays.")
     def test_compiled_for_loop_fn_0(self):
-        test_data = numpy.array([1, 2, 3], dtype=numpy.int32)
-        compiled_for_loop_fn = numba_compile(
-            ret_type=numba.float32, arg_types=[numba.int32[:]])(for_loop_fn_0)
-        result = compiled_for_loop_fn(test_data)
-        self.assertEqual(result, 6)
-        self.assertEqual(result, for_loop_fn_0(test_data))
+        for dtype in (np.float32, np.float64, np.int32, np.int64):
+            test_data = np.arange(10, dtype=dtype)
+            result = for_loop_fn_0(test_data)
+            self.assertEqual(result, 45)
+            self.assertEqual(result, _for_loop_fn_0(test_data))
 
     def test_compiled_for_loop_fn_0_float32(self):
         test_data = numpy.array([1.2, 3.4, 5.6], dtype=numpy.float32)
@@ -99,7 +104,6 @@ class TestForLoop(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    TestForLoop('test_compiled_for_loop_fn_1').debug()
     unittest.main()
 
 # ______________________________________________________________________

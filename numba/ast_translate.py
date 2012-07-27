@@ -97,7 +97,7 @@ class _LLVMCaster(object):
             else:
                 ret_val = builder.sext(lval1, lty2)
         elif width2 < width1:
-            print("Warning: Perfoming downcast.  May lose information.")
+            logger.debug("Warning: Perfoming downcast.  May lose information.")
             ret_val = builder.trunc(lval1, lty2)
         return ret_val
 
@@ -644,8 +644,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         '''
         Implements simple for loops with iternode as range, xrange
         '''
-        assert isinstance(target.ctx, ast.Store)
-        ctstore = self.visit(target)
+        # assert isinstance(target.ctx, ast.Store)
+        target = self.visit(target)
 
         start, stop, step = self.visitlist(iternode.args)
 
@@ -655,21 +655,21 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         bb_exit = self.append_basic_block('for.exit')
 
         # generate initializer
-        self.generate_assign(start, ctstore)
+        self.generate_assign(start, target)
         self.builder.branch(bb_cond)
 
         # generate condition
         self.builder.position_at_end(bb_cond)
         op = _compare_mapping_sint['<']
-        ctvalue = self.generate_load_symbol(target.id)
-        cond = self.builder.icmp(op, ctvalue, stop)
+        # Please visit the children properly. Assuming ast.Name breaks the entire approach...
+        #ctvalue = self.generate_load_symbol(target.id)
+        index = self.visit(for_node.index)
+        cond = self.builder.icmp(op, index, stop)
         self.builder.cbranch(cond, bb_body, bb_exit)
 
         # generate increment
         self.builder.position_at_end(bb_incr)
-        ctvalue = self.generate_load_symbol(target.id)
-        ctvalue_plus_step = self.builder.add(ctvalue, step)
-        self.builder.store(ctvalue_plus_step, ctstore)
+        self.builder.store(self.builder.add(index, step), target)
         self.builder.branch(bb_cond)
 
         # generate body
@@ -756,6 +756,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         return self.builder.call(node.llvm_func, largs)
 
     def visit_TempNode(self, node):
+        if node.llvm_temp is None:
+            value = self.builder.alloca(self.to_llvm(node.type))
+            node.llvm_temp = value
+
+        return node.llvm_temp
+
+    def visit_TempLoadNode(self, node):
+        return self.builder.load(self.visit(node.temp))
+
+    def visit_TempStoreNode(self, node):
+        return self.visit(node.temp)
+
+    def visit_ObjectTempNode(self, node):
         rhs = self.visit(node.node)
         return rhs
         # FIXME: don't understand the following

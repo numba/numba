@@ -116,7 +116,7 @@ class ObjectCallNode(FunctionCallNode):
             self.kwargs = ConstNode(0, minitypes.object_.pointer())
         self.py_func = py_func
 
-class TempNode(Node):
+class ObjectTempNode(Node):
     """
     Coerce a node to a temporary which is reference counted.
     """
@@ -126,6 +126,32 @@ class TempNode(Node):
     def __init__(self, node):
         self.node = node
         self.llvm_temp = None
+
+class TempNode(Node): #, ast.Name):
+    """
+    Create a temporary to store values in. Does not perform reference counting.
+    """
+
+    temp_counter = 0
+
+    def __init__(self, type):
+        self.type = type
+        self.variable = Variable(type, name='___numba_%d' % self.temp_counter,
+                                 is_local=True)
+        TempNode.temp_counter += 1
+        self.llvm_temp = None
+
+    def load(self):
+        return TempLoadNode(temp=self)
+
+    def store(self):
+        return TempStoreNode(temp=self)
+
+class TempLoadNode(Node):
+    _fields = ['temp']
+
+class TempStoreNode(Node):
+    _fields = ['temp']
 
 class DataPointerNode(Node):
     _fields = ['variable']

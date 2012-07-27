@@ -1,3 +1,4 @@
+
 import ast
 import __builtin__ as builtins
 try:
@@ -5,6 +6,8 @@ try:
 except ImportError:
     # pre-2.6
     numbers = None
+
+from numba.pymothoa import compiler_errors
 
 class NumbaVisitorMixin(object):
     def __init__(self, context, func, ast):
@@ -29,6 +32,9 @@ class NumbaVisitorMixin(object):
                 # Assumption here is that any name not in globals or
                 # builtins is an attribtue.
                 self._myglobals[name] = getattr(builtins, name, None)
+
+    def error(self, node, msg):
+        raise compiler_errors.CompilerError(node, msg)
 
     def visitlist(self, list):
         newlist = []
