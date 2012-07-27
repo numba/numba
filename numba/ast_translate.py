@@ -28,6 +28,7 @@ from ._numba_types import Complex64, Complex128, BuiltinType
 
 from . import visitors, nodes, llvm_types
 from .minivect import minitypes
+from numba.pymothoa import compiler_errors
 
 import logging
 logger = logging.getLogger(__name__)
@@ -298,7 +299,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         except AttributeError as e:
             logger.exception(e)
             logger.error('Unhandled visit to %s', ast.dump(node))
-            raise InternalError(node, 'Not yet implemented.')
+            raise
+            #raise compiler_errors.InternalError(node, 'Not yet implemented.')
         else:
             try:
                 self._nodes.append(node) # push current node
@@ -558,7 +560,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         return self.symtab[name].lvalue
 
     def visit_Compare(self, node):
-        lhs, rhs = node.left, node.comparators[0]
+        lhs, rhs = node.left, node.right
         lhs_lvalue, rhs_lvalue = self.visitlist([lhs, rhs])
 
         op_map = {
@@ -681,6 +683,26 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             self.builder.branch(bb_incr)
 
         # move to exit block
+        self.builder.position_at_end(bb_exit)
+
+    def visit_While(self, node):
+        bb_cond = self.append_basic_block('while.cond')
+        bb_body = self.append_basic_block('while.body')
+        bb_exit = self.append_basic_block('while.exit')
+
+        self.builder.branch(bb_cond)
+
+        # condition
+        self.builder.position_at_end(bb_cond)
+        cond = self.visit(node.test)
+        self.builder.cbranch(cond, bb_body, bb_exit)
+
+        # body
+        self.builder.position_at_end(bb_body)
+        self.visitlist(node.body)
+
+        # loop or exit
+        self.builder.branch(bb_cond)
         self.builder.position_at_end(bb_exit)
 
     def generate_constant_int(self, val, ty=_types.int_):

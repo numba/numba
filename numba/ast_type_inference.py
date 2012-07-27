@@ -178,8 +178,8 @@ class TypeInferer(visitors.NumbaTransformer):
     def visit_While(self, node):
         if node.orelse:
             raise NotImplementedError('Else in for-loop is not implemented.')
-        node.test = CoercionNode(self.visit(node.test), minitypes.bool_)
-        node.body = self.visit(node.body)
+        node.test = nodes.CoercionNode(self.visit(node.test), minitypes.bool_)
+        node.body = self.visitlist(node.body)
         return node
 
     def visit_Name(self, node):
@@ -229,10 +229,20 @@ class TypeInferer(visitors.NumbaTransformer):
         if len(node.ops) != 1:
             raise NotImplementedError('Multiple operators not supported')
 
-        if len(node.comparators)!=1:
+        if len(node.comparators) != 1:
             raise NotImplementedError('Multiple comparators not supported')
 
         self.generic_visit(node)
+
+        lhs = node.left
+        rhs, = node.right, = node.comparators
+
+        if lhs.variable.type != rhs.variable.type:
+            type = self.context.promote_types(lhs.variable.type,
+                                              rhs.variable.type)
+            node.left = nodes.CoercionNode(lhs, type)
+            node.right = nodes.CoercionNode(rhs, type)
+
         node.variable = Variable(minitypes.bool_)
         return node
 

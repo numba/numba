@@ -32,6 +32,7 @@ class CoercionNode(Node):
         self.node = node
         self.dst_type = dst_type
         self.variable = Variable(dst_type)
+        self.type = dst_type
 
     @classmethod
     def coerce(cls, node_or_nodes, dst_type):
@@ -212,7 +213,7 @@ class ShapeAttributeNode(ArrayAttributeNode):
 
     def __init__(self, array):
         self.array = array
-        self.element_type = numba_types.Py_ssize_t
+        self.element_type = numba_types.intp
 
     def subscript(self, translator, index):
         builder = translator.builder

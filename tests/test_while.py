@@ -1,15 +1,16 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
 
-from numba.decorators import numba_compile
+from numba.decorators import numba_compile, function
 
 import numpy
+import numpy as np
 
 import unittest
 
 # ______________________________________________________________________
 
-def while_loop_fn_0(max_index, indexable):
+def _while_loop_fn_0(max_index, indexable):
     i = 0
     acc = 0.
     while i < max_index:
@@ -19,7 +20,7 @@ def while_loop_fn_0(max_index, indexable):
 
 # ______________________________________________________________________
 
-def while_loop_fn_1(indexable):
+def _while_loop_fn_1(indexable):
     i = 0
     acc = 0.
     while i < len(indexable):
@@ -29,7 +30,7 @@ def while_loop_fn_1(indexable):
 
 # ______________________________________________________________________
 
-def while_loop_fn_2(ndarr):
+def _while_loop_fn_2(ndarr):
     i = 0
     acc = 0.
     while i < ndarr.shape[0]:
@@ -39,7 +40,7 @@ def while_loop_fn_2(ndarr):
 
 # ______________________________________________________________________
 
-def while_loop_fn_3(count):
+def _while_loop_fn_3(count):
     i = 0
     acc = 1.
     while i < count:
@@ -49,7 +50,7 @@ def while_loop_fn_3(count):
 
 # ______________________________________________________________________
 
-def while_loop_fn_4(start, stop, inc):
+def _while_loop_fn_4(start, stop, inc):
     '''Intended to parallel desired translation target for
     test_forloop.for_loop_fn_1.'''
     acc = 0
@@ -61,7 +62,7 @@ def while_loop_fn_4(start, stop, inc):
 
 # ______________________________________________________________________
 
-def while_loop_fn_5(i_max, j_max):
+def _while_loop_fn_5(i_max, j_max):
     j = 1.
     acc = 0.
     while j < j_max:
@@ -74,41 +75,37 @@ def while_loop_fn_5(i_max, j_max):
 
 # ______________________________________________________________________
 
+while_loop_fn_0 = function(_while_loop_fn_0)
+while_loop_fn_1 = function(_while_loop_fn_1)
+while_loop_fn_2 = function(_while_loop_fn_2)
+while_loop_fn_3 = function(_while_loop_fn_3)
+while_loop_fn_4 = function(_while_loop_fn_4)
+while_loop_fn_5 = function(_while_loop_fn_5)
+
 class TestWhile(unittest.TestCase):
-    def _do_test(self, function, arg_types, *args, **kws):
-        _numba_compile = (numba_compile(arg_types = arg_types)
-                          if arg_types is not None else numba_compile())
-        compiled_fn = _numba_compile(function)
-        self.assertEqual(compiled_fn(*args, **kws), function(*args, **kws))
+    def _do_test(self, name, *args, **kws):
+        compiled = globals()[name]
+        uncompiled = globals()['_' + name]
+        self.assertEqual(compiled(*args, **kws), uncompiled(*args, **kws))
 
     def test_while_loop_fn_0(self):
         test_data = numpy.array([1., 2., 3.])
-        self._do_test(while_loop_fn_0, ['l', ['d']], len(test_data), test_data)
+        self._do_test('while_loop_fn_0', len(test_data), test_data)
 
     def test_while_loop_fn_1(self):
-        self._do_test(while_loop_fn_1, [['d']], numpy.array([1., 2., 3.]))
+        self._do_test('while_loop_fn_1', numpy.array([1., 2., 3.]))
 
     def test_while_loop_fn_2(self):
-        self._do_test(while_loop_fn_2, [['d']], numpy.array([1., 2., 3.]))
+        self._do_test('while_loop_fn_2', numpy.array([1., 2., 3.]))
 
     def test_while_loop_fn_3(self):
-        compiled_fn = numba_compile(arg_types = ['l'])(while_loop_fn_3)
-        compiled_result = compiled_fn(3)
-        self.assertEqual(compiled_result, while_loop_fn_3(3))
-        self.assertEqual(compiled_result, 8.)
+        self._do_test('while_loop_fn_3', 3)
 
     def test_while_loop_fn_4(self):
-        compiled_fn = numba_compile(arg_types = ['l', 'l', 'l'],
-                                    ret_type = 'l')(while_loop_fn_4)
-        compiled_result = compiled_fn(1, 4, 1)
-        self.assertEqual(compiled_result, while_loop_fn_4(1, 4, 1))
-        self.assertEqual(compiled_result, 6)
+        self._do_test('while_loop_fn_4', 1, 4, 1)
 
     def test_while_loop_fn_5(self):
-        compiled_fn = numba_compile(arg_types = ['d', 'd'])(while_loop_fn_5)
-        compiled_result = compiled_fn(3, 4)
-        self.assertEqual(compiled_result, while_loop_fn_5(3, 4))
-        self.assertEqual(compiled_result, 18.)
+        self._do_test('while_loop_fn_5', 3, 4)
 
 # ______________________________________________________________________
 
