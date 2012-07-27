@@ -29,6 +29,7 @@ from ._numba_types import Complex64, Complex128, BuiltinType
 from . import visitors, nodes, llvm_types
 from .minivect import minitypes
 from numba.pymothoa import compiler_errors
+from numba import ndarray_helpers
 
 import logging
 logger = logging.getLogger(__name__)
@@ -334,7 +335,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
     def visit_Subscript(self, node):
         slicevalues = self.visit(node.slice)
-        lptr = node.value.subscript(self, slicevalues)
+        if node.value.type.is_array:
+            lptr = node.value.subscript(self, slicevalues)
+        elif node.value.type.is_carray:
+            value = self.visit(node.value)
+            lptr = self.builder.gep(value, [slicevalues])
 
         if isinstance(node.ctx, ast.Load): # load the value
             return self.builder.load(lptr)
@@ -798,6 +803,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         #    self.generate_assign(rhs, lhs)
         #    node.llvm_temp = lhs
         #    return lhs
+
+    def visit_ArrayAttributeNode(self, node):
+        array = self.visit(node.array)
+        acc = ndarray_helpers.PyArrayAccessor(self.builder, array)
+
+        attr_name = node.attr_name
+        if attr_name == 'shape':
+            attr_name = 'dimensions'
+
+        return getattr(acc, attr_name)
+
 
 class DisposalVisitor(visitors.NumbaVisitor):
     # TODO: handle errors, check for NULL before calling DECREF

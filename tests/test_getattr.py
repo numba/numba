@@ -2,27 +2,33 @@
 # ______________________________________________________________________
 
 from numba.translate import _plat_bits
-from numba.decorators import numba_compile
+from numba.decorators import numba_compile, function
 
+import numpy as np
 import numpy
 
 import unittest
 
 # ______________________________________________________________________
 
+@function
 def get_ndarray_ndim(ndarr):
     return ndarr.ndim
 
+@function
 def get_ndarray_shape(ndarr):
     return ndarr.shape
 
+@function
 def get_ndarray_data(ndarr):
     return ndarr.data
 
+@function
 def get_ndarray_2_shape_unpack_0(ndarr):
     dim0, _ = ndarr.shape
     return dim0
 
+@function
 def get_ndarray_2_shape_unpack_1(ndarr):
     _, dim1 = ndarr.shape
     return dim1
@@ -30,57 +36,38 @@ def get_ndarray_2_shape_unpack_1(ndarr):
 # ______________________________________________________________________
 
 class TestGetattr(unittest.TestCase):
-    def test_getattr_ndim_1(self):
-        test_data1 = numpy.array([1., 2., 3.])
-        compiled_fn1 = numba_compile(ret_type = 'i',
-                                    arg_types = [['d']])(get_ndarray_ndim)
-        self.assertEqual(compiled_fn1(test_data1), 1)
+    def test_getattr_ndim(self):
+        result = get_ndarray_ndim(np.empty((2,)))
+        self.assertEqual(result, 1)
+        result = get_ndarray_ndim(np.empty((2, 2)))
+        self.assertEqual(result, 2)
 
-    def test_getattr_ndim_2(self):
-        test_data2 = numpy.array([[1., 2., 3.], [4., 5., 6.]])
-        compiled_fn2 = numba_compile(ret_type = 'i',
-                                     arg_types = [[['d']]])(get_ndarray_ndim)
-        self.assertEqual(compiled_fn2(test_data2), 2)
+    def test_getattr_shape(self):
+        # This is broken since the shape is a ctypes array, and the shape array
+        # doesn't hold a reference to the ndarray!
+        result = get_ndarray_shape(np.empty((10,)))
+        self.assertEqual(result[0], 10)
 
-    def test_getattr_shape_1(self):
-        test_data = numpy.array([1., 2., 3.])
-        compiled_fn = numba_compile(ret_type = 'i%d*' % (_plat_bits // 8),
-                                    arg_types = [['d']])(get_ndarray_shape)
-        result = compiled_fn(test_data)
-        self.assertEqual(result[0], 3)
+        result = get_ndarray_shape(np.empty((10, 20)))
+        self.assertEqual(result[0], 10)
+        self.assertEqual(result[1], 10)
 
-    def test_getattr_shape_2(self):
-        test_data2 = numpy.array([[1., 2., 3.], [4., 5., 6.]])
-        compiled_fn2 = numba_compile(ret_type = 'i%d*' % (_plat_bits // 8),
-                                     arg_types = [[['d']]])(get_ndarray_shape)
-        result = compiled_fn2(test_data2)
-        self.assertEqual(result[0], 2)
-        self.assertEqual(result[1], 3)
-
-    def test_getattr_shape_2_unpack(self):
-        compiler_fn = numba_compile(ret_type = 'i%d' % (_plat_bits // 8),
-                                    arg_types = [[['d']]])
-        dim0_fn, dim1_fn = (compiler_fn(fn) 
-                            for fn in (get_ndarray_2_shape_unpack_0,
-                                       get_ndarray_2_shape_unpack_1))
-        test_data2 = numpy.array([[1., 2., 3.], [4., 5., 6.]])
-        self.assertEqual(dim0_fn(test_data2), 2)
-        self.assertEqual(dim1_fn(test_data2), 3)
+    def test_getattr_shape_unpack(self):
+        array = np.empty((1, 2))
+        dim0 = get_ndarray_2_shape_unpack_0(array)
+        dim1 = get_ndarray_2_shape_unpack_1(array)
+        self.assertEqual((dim0, dim1), (1, 2))
 
     def test_getattr_data_1(self):
         test_data = numpy.array([1., 2., 3.])
-        compiled_fn = numba_compile(ret_type = 'd*',
-                                    arg_types = [['d']])(get_ndarray_data)
-        result = compiled_fn(test_data)
-        self.assertEqual(result[0], 1.)
-        self.assertEqual(result[1], 2.)
-        self.assertEqual(result[2], 3.)
+        data_pointer = get_ndarray_data(test_data)
+        self.assertEqual(data_pointer[0], 1.)
+        self.assertEqual(data_pointer[1], 2.)
+        self.assertEqual(data_pointer[2], 3.)
 
     def test_getattr_data_2(self):
         test_data = numpy.array([[1., 2., 3.], [4., 5., 6.]])
-        compiled_fn = numba_compile(ret_type = 'd*',
-                                    arg_types = [[['d']]])(get_ndarray_data)
-        result = compiled_fn(test_data)
+        result = get_ndarray_data(test_data)
         self.assertEqual(result[0], 1.)
         self.assertEqual(result[1], 2.)
         self.assertEqual(result[2], 3.)
@@ -91,6 +78,7 @@ class TestGetattr(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+#    TestGetattr('test_getattr_shape_1').debug()
     unittest.main()
 
 # ______________________________________________________________________

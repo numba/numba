@@ -128,13 +128,6 @@ class IntPType(NumbaType, minitypes.IntType):
     "numpy intp type"
     name = "intp"
 
-class CArrayType(NumbaType):
-    "1D C array"
-    is_carray = True
-    def __init__(self, element_type, size, **kwds):
-        super(CArrayType, self).__init__(**kwds)
-        self.element_type = element_type
-        self.size = size
 
 tuple_ = TupleType()
 phi = PHIType()
@@ -278,6 +271,8 @@ def convert_to_ctypes(type):
         return getattr(ctypes, 'c_uint%d' % (_ext.sizeof_py_ssize_t() * 8))
     elif type.is_void:
         return None
+    elif type.is_carray:
+        return convert_to_ctypes(type.base_type) * type.size
     else:
         raise NotImplementedError(type)
 

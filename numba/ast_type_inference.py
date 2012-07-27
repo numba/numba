@@ -306,7 +306,7 @@ class TypeInferer(visitors.NumbaTransformer):
         elif type.is_object:
             return minitypes.object_
         elif type.is_carray:
-            return type.element_type
+            return type.base_type
         else:
             raise NotImplementedError
 
@@ -388,13 +388,8 @@ class TypeInferer(visitors.NumbaTransformer):
         node.value = self.visit(node.value)
         node.slice = self.visit(node.slice)
 
-        if isinstance(node.value, nodes.ArrayAttributeNode):
-            result_type = node.value.element_type
-
-        elif not node.value.variable.type.is_array:
-            result_type = self._get_index_type(node.value.variable.type,
-                                               node.slice.variable.type)
-        else:
+        value_type = node.value.variable.type
+        if value_type.is_array:
             slice_variable = node.slice.variable
             slice_type = slice_variable.type
             if (slice_type.is_tuple and
@@ -414,6 +409,17 @@ class TypeInferer(visitors.NumbaTransformer):
                 result_type = minitypes.object_
             else:
                 result_type, node.value = self._unellipsify(node.value, slices, node)
+        elif value_type.is_carray:
+            if not node.slice.variable.type.is_int:
+                self.error(node.slice, "Can only index with an int")
+            if not isinstance(node.slice, ast.Index):
+                self.error(node.slice, "Expected index")
+
+            node.slice = node.slice.value
+            result_type = value_type.base_type
+        else:
+            result_type = self._get_index_type(node.value.variable.type,
+                                               node.slice.variable.type)
 
         node.variable = Variable(result_type)
         return node
@@ -633,8 +639,8 @@ class TypeInferer(visitors.NumbaTransformer):
 
         elif func is len and node.args[0].variable.type.is_array:
             # Simplify to ndarray.shape[0]
-            assert len(node.args)==1
-            shape_attr = nodes.ShapeAttributeNode(node.args[0])
+            assert len(node.args) == 1
+            shape_attr = nodes.ArrayAttributeNode(node.args[0], 'shape')
             index = ast.Index(nodes.ConstNode(0, _types.int_))
             new_node = ast.Subscript(value=shape_attr, slice=index,
                                      ctx=ast.Load())
@@ -657,6 +663,7 @@ class TypeInferer(visitors.NumbaTransformer):
         return new_node
 
     def _resolve_numpy_attribute(self, node, type):
+        "Resolve attributes of the numpy module or a submodule"
         attribute = getattr(type.module, node.attr)
         if attribute is numpy.newaxis:
             result_type = _types.NewAxisType()
@@ -664,6 +671,19 @@ class TypeInferer(visitors.NumbaTransformer):
             result_type = _types.NumpyAttributeType(module=type.module,
                                                     attr=node.attr)
         return result_type
+
+    def _resolve_ndarray_attribute(self, array_node, array_attr, array_type):
+        "Resolve attributes of numpy arrays"
+        if array_attr == 'ndim':
+            type = minitypes.int_
+        elif array_attr in ('shape', 'strides'):
+            type = minitypes.CArrayType(_types.intp, array_type.ndim)
+        elif array_attr == 'data':
+            type = array_type.dtype.pointer()
+        else:
+            raise NotImplementedError(node.attr)
+
+        return nodes.ArrayAttributeNode(array_attr, array_node, type)
 
     def visit_Attribute(self, node):
         node.value = self.visit(node.value)
@@ -681,11 +701,8 @@ class TypeInferer(visitors.NumbaTransformer):
         elif type.is_object:
             result_type = type
         elif type.is_array:
-            # handle shape/strides/suboffsets etc
-            if node.attr == 'shape':
-                return nodes.ShapeAttributeNode(node.value)
-            else:
-                raise NotImplementedError
+            # handle shape/strides/ndim etc. TODO: methods
+            return self._resolve_ndarray_attribute(node.value, node.attr, type)
         else:
             raise NotImplementedError((node.attr, node.value, type))
 

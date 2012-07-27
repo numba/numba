@@ -154,8 +154,12 @@ class TempLoadNode(Node):
 class TempStoreNode(Node):
     _fields = ['temp']
 
+# This appraoch is wrong. This way we cannot visit the original node, and the
+# numpy array must be a name. What if I have call function that returns a numpy
+# array and I index it? Separate the subscript logic below into the code
+# generator, and have DataPointerNode's only return the data pointer.
 class DataPointerNode(Node):
-    _fields = ['variable']
+    # _fields = ['variable'] # ??? Variables are not AST nodes.
 
     def __init__(self, node):
         self.variable = node.variable
@@ -208,25 +212,24 @@ class DataPointerNode(Node):
 class ArrayAttributeNode(Node):
     is_read_only = True
 
-class ShapeAttributeNode(ArrayAttributeNode):
-    _fields = ['array', 'element_type']
+    _fields = ['array']
 
-    def __init__(self, array):
+    def __init__(self, attribute_name, array, type):
+        self.array = array
+        self.attr_name = attribute_name
+        self.type = type
+        self.variable = Variable(type)
+
+class ShapeAttributeNode(ArrayAttributeNode):
+    # NOTE: better do this at code generation time, and not depend on
+    #       variable.lvalue
+    _fields = ['array']
+
+    def __init__(self, attr_name, array):
+        self.attr_name = attr_name
         self.array = array
         self.element_type = numba_types.intp
-        self.type = numba_types.CArrayType(self.element_type,
-                                           array.variable.type.ndim)
+        self.type = minitypes.CArrayType(self.element_type,
+                                         array.variable.type.ndim)
         self.variable = Variable(self.type)
-
-    def subscript(self, translator, index):
-        builder = translator.builder
-        caster = translator.caster
-        context = translator.context
-
-        pyarray_ptr = builder.load(self.array.variable.lvalue)
-        acc = PyArrayAccessor(builder, pyarray_ptr)
-        shape = acc.dimensions
-        shape_plus_offset = builder.gep(shape, [index])
-
-        return shape_plus_offset
 

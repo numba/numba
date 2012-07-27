@@ -12,7 +12,7 @@
 from numba.llvm_types import _head_len, _int32
 import llvm.core as lc
 
-_const_int = lambda X: lc.Constant.int(_int32, X)
+const_int = lambda X: lc.Constant.int(_int32, X)
 
 class PyArrayAccessor(object):
     def __init__(self, builder, pyarray_ptr):
@@ -20,7 +20,7 @@ class PyArrayAccessor(object):
         self.pyarray_ptr = pyarray_ptr
 
     def _get_element(self, idx):
-        indices = map(_const_int, [0, _head_len + idx])
+        indices = map(const_int, [0, _head_len + idx])
         ptr = self.builder.gep(self.pyarray_ptr, indices)
         return self.builder.load(ptr)
 
