@@ -27,7 +27,7 @@ class Node(ast.AST):
         vars(self).update(kwargs)
 
 class CoercionNode(Node):
-    _fields = ['node', 'dst_type']
+    _fields = ['node']
     def __init__(self, node, dst_type):
         self.node = node
         self.dst_type = dst_type
@@ -45,6 +45,8 @@ class DeferredCoercionNode(CoercionNode):
     Coerce to the type of the given variable. The type of the variable may
     change in the meantime (e.g. may be promoted or demoted).
     """
+
+    _fields = ['node']
 
     def __init__(self, node, variable):
         self.node = node
@@ -159,10 +161,12 @@ class TempStoreNode(Node):
 # array and I index it? Separate the subscript logic below into the code
 # generator, and have DataPointerNode's only return the data pointer.
 class DataPointerNode(Node):
-    # _fields = ['variable'] # ??? Variables are not AST nodes.
+
+    _fields = ['node']
 
     def __init__(self, node):
-        self.variable = node.variable
+        self.node = node
+        self.variable = Variable(node.type)
 
     @property
     def ndim(self):
@@ -214,9 +218,20 @@ class ArrayAttributeNode(Node):
 
     _fields = ['array']
 
-    def __init__(self, attribute_name, array, type):
+    def __init__(self, attribute_name, array):
         self.array = array
         self.attr_name = attribute_name
+
+        array_type = array.variable.type
+        if attribute_name == 'ndim':
+            type = minitypes.int_
+        elif attribute_name in ('shape', 'strides'):
+            type = minitypes.CArrayType(numba_types.intp, array_type.ndim)
+        elif attribute_name == 'data':
+            type = array_type.dtype.pointer()
+        else:
+            raise NotImplementedError(node.attr)
+
         self.type = type
         self.variable = Variable(type)
 

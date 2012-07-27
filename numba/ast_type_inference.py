@@ -640,11 +640,11 @@ class TypeInferer(visitors.NumbaTransformer):
         elif func is len and node.args[0].variable.type.is_array:
             # Simplify to ndarray.shape[0]
             assert len(node.args) == 1
-            shape_attr = nodes.ArrayAttributeNode(node.args[0], 'shape')
+            shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
             index = ast.Index(nodes.ConstNode(0, _types.int_))
             new_node = ast.Subscript(value=shape_attr, slice=index,
                                      ctx=ast.Load())
-            new_node.variable = Variable(shape_attr.element_type)
+            new_node.variable = Variable(shape_attr.type.base_type)
 
         elif func_type.is_function:
             new_node = nodes.NativeCallNode(func_variable.type, node.args,
@@ -672,18 +672,9 @@ class TypeInferer(visitors.NumbaTransformer):
                                                     attr=node.attr)
         return result_type
 
-    def _resolve_ndarray_attribute(self, array_node, array_attr, array_type):
+    def _resolve_ndarray_attribute(self, array_node, array_attr):
         "Resolve attributes of numpy arrays"
-        if array_attr == 'ndim':
-            type = minitypes.int_
-        elif array_attr in ('shape', 'strides'):
-            type = minitypes.CArrayType(_types.intp, array_type.ndim)
-        elif array_attr == 'data':
-            type = array_type.dtype.pointer()
-        else:
-            raise NotImplementedError(node.attr)
-
-        return nodes.ArrayAttributeNode(array_attr, array_node, type)
+        return
 
     def visit_Attribute(self, node):
         node.value = self.visit(node.value)
@@ -702,7 +693,7 @@ class TypeInferer(visitors.NumbaTransformer):
             result_type = type
         elif type.is_array:
             # handle shape/strides/ndim etc. TODO: methods
-            return self._resolve_ndarray_attribute(node.value, node.attr, type)
+            return nodes.ArrayAttributeNode(node.attr, node.value)
         else:
             raise NotImplementedError((node.attr, node.value, type))
 
@@ -712,6 +703,8 @@ class TypeInferer(visitors.NumbaTransformer):
     def visit_Return(self, node):
         value = self.visit(node.value)
         type = value.variable.type
+
+        assert type is not None
 
         if value.variable.is_constant and value.variable.constant_value is None:
             # When returning None, set the return type to void.
@@ -723,7 +716,8 @@ class TypeInferer(visitors.NumbaTransformer):
             node.value = value
         else:
             # todo: in case of unpromotable types, return object?
-            self.return_variable.type = self.promote_types(self.return_type, type)
+            self.return_variable.type = self.promote_types(
+                                    self.return_variable.type, type)
             node.value = nodes.DeferredCoercionNode(value, self.return_variable)
 
         return node
@@ -773,6 +767,12 @@ class ASTSpecializer(visitors.NumbaTransformer):
         elif node.value.type.is_array:
             node.value = nodes.DataPointerNode(node.value)
         return node
+
+    def visit_DeferredCoercionNode(self, node):
+        "Resolve deferred coercions"
+        self.generic_visit(node)
+        return nodes.CoercionNode(node.node, node.variable.type)
+
 
 class TransformForIterable(visitors.NumbaTransformer):
     def __init__(self, context, func, ast, symtab):

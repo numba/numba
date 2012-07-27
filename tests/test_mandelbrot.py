@@ -7,7 +7,7 @@ computations.
 '''
 # ______________________________________________________________________
 
-from numba.decorators import numba_compile
+from numba.decorators import numba_compile, function
 
 import unittest
 
@@ -36,14 +36,7 @@ def mandel_1(real_coord, imag_coord, max_iters):
         i += 1
     return -1
 
-try:
-    mandel_1c = numba_compile(arg_types = ['d', 'd', 'i'], ret_type = 'i')(
-        mandel_1)
-except:
-    if __debug__:
-        import traceback as tb
-        tb.print_exc()
-    mandel_1c = None
+mandel_1c = function(mandel_1)
 
 #@numba_compile(arg_types = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])
 def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
@@ -70,14 +63,7 @@ def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
             image[x, y, 1] = colors[col_index, 1]
             image[x, y, 2] = colors[col_index, 2]
 
-try:
-    mandel_driver_1c = numba_compile(
-        arg_types = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])(mandel_driver_1)
-except:
-    if __debug__:
-        import traceback as tb
-        tb.print_exc()
-    mandel_driver_1c = None
+mandel_driver_1c = function(mandel_driver_1)
 
 def make_palette():
     '''Shamefully stolen from
@@ -125,6 +111,7 @@ class TestMandelbrot(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+#    TestMandelbrot('test_mandel_1').debug()
     unittest.main()
 
 # ______________________________________________________________________

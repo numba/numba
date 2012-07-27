@@ -719,6 +719,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         ast.Sub: ('fsub', 'sub'),
         ast.Mult: ('fmul', 'mul'),
         ast.Div: ('fdiv', 'div'),
+        # TODO: reuse previously implemented modulo
     }
 
     def visit_BinOp(self, node):
@@ -731,7 +732,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             meth = getattr(self.builder, llvm_method_name)
             result = meth(lhs, rhs)
         else:
-            raise Exception(op_class, type, lhs, rhs)
+            raise Exception(op, node.type, lhs, rhs)
 
         return result
 
