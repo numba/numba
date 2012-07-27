@@ -25,6 +25,15 @@ def _infer_types(context, func, ast, func_signature):
     ast = ASTSpecializer(context, func, ast).visit(ast)
     return type_inferer.func_signature, type_inferer.symtab, ast
 
+class ASTBuilder(object):
+    def index(self, node, constant_index, load=True):
+        if load:
+            ctx = ast.Load()
+        else:
+            ctx = ast.Store()
+
+        index = ast.Index(nodes.ConstNode(constant_index, _types.int_))
+        return ast.Subscript(value=node, slice=index, ctx=ctx)
 
 class TypeInferer(visitors.NumbaTransformer):
     """
@@ -43,6 +52,8 @@ class TypeInferer(visitors.NumbaTransformer):
         self.given_return_type = func_signature.return_type
         self.return_variables = []
         self.return_type = None
+
+        self.astbuilder = ASTBuilder()
 
     def infer_types(self):
         """
@@ -126,13 +137,55 @@ class TypeInferer(visitors.NumbaTransformer):
         assignment = ast.Assign([target], ast.BinOp(rhs_target, node.op, node.value))
         return self.visit(assignment)
 
-    def visit_Assign(self, node):
-        if len(node.targets) != 1:
-            raise NotImplementedError('Mutliple targets in assignment.')
+    def _handle_unpacking(self, node):
+        """
+        Handle tuple unpacking. We only handle tuples, lists and numpy attributes
+        such as shape on the RHS.
+        """
+        value_type = node.value.variable.type
 
+        if len(node.targets) == 1:
+            # tuple or list constant
+            targets = node.targets[0].elts
+        else:
+            targets = node.targets
+
+        valid_type = (value_type.is_carray or value_type.is_list or
+                      value_type.is_tuple)
+
+        if not valid_type:
+            self.error(node.value,
+                       'Only NumPy attributes and list or tuple literals are '
+                       'supported')
+        elif value_type.size != len(targets):
+            self.error(node.value,
+                       "Too many/few arguments to unpack, got (%d, %d)" %
+                                            (value_type.size, len(targets)))
+
+        # Generate an assignment for each unpack
+        result = []
+        for i, target in enumerate(targets):
+            if value_type.is_carray:
+                # C array
+                value = self.astbuilder.index(node.value, i)
+            else:
+                # list or tuple literal
+                value = node.value.elts[i]
+
+            assmt = ast.Assign(targets=[target], value=value)
+            result.append(self.visit(assmt))
+
+        return result
+
+    def visit_Assign(self, node):
         node.value = self.visit(node.value)
+        if len(node.targets) != 1 or isinstance(node.targets[0], (ast.List,
+                                                                  ast.Tuple)):
+            return self._handle_unpacking(node)
+
         target = self.visit(node.targets[0])
-        node.targets[0] = self.assign(target.variable, node.value.variable, target)
+        node.targets[0] = self.assign(target.variable, node.value.variable,
+                                      target)
         return node
 
     def assign(self, lhs_var, rhs_var, rhs_node):
@@ -252,6 +305,8 @@ class TypeInferer(visitors.NumbaTransformer):
             return type.base_type
         elif type.is_object:
             return minitypes.object_
+        elif type.is_carray:
+            return type.element_type
         else:
             raise NotImplementedError
 

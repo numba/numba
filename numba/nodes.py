@@ -214,6 +214,9 @@ class ShapeAttributeNode(ArrayAttributeNode):
     def __init__(self, array):
         self.array = array
         self.element_type = numba_types.intp
+        self.type = numba_types.CArrayType(self.element_type,
+                                           array.variable.type.ndim)
+        self.variable = Variable(self.type)
 
     def subscript(self, translator, index):
         builder = translator.builder

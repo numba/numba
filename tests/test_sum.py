@@ -17,7 +17,7 @@ import unittest
 # ______________________________________________________________________
 
 def sum2d(arr):
-    M, N = image.shape
+    M, N = arr.shape
     result = 0.0
     for i in range(M):
         for j in range(N):
@@ -30,7 +30,7 @@ class TestFilter2d(unittest.TestCase):
     def test_vectorized_sum2d(self):
         usum2d = numba_compile(arg_types=[d[:, :]],
                                   ret_type=d)(sum2d)
-        image = numpy.random.random(10, 10)
+        image = numpy.random.random((10, 10))
         plain_old_result = sum2d(image)
         hot_new_result = usum2d(image)
         self.assertTrue((abs(plain_old_result - hot_new_result) < 1e-9).all())
