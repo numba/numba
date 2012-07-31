@@ -11,4 +11,5 @@
  * Ship Cython as well along with improved version of Cwrap to auto-generate wrappers using LLVM for call-backs
  * ??integration with Java through JNI
  * ??integration with .NET (Python .NET)
+ * FPGA interface --- integrating with Xilinx (we know some devs there...)
 
