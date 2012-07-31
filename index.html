@@ -33,12 +33,14 @@
 
 <p>Example: </p>
 
-<p>@numba.vectorize
+<pre>
+@numba.vectorize
 def sinc(x):
     if x == 0:
        return 0.0
     else:
        return sin(pi*x)/(pi*x)</p>
+</pre>
 
 <p>This will compile to machine code using LLVM and build a NumPy ufunc that uses the corresponding loop for it's code. </p>
 
@@ -50,7 +52,7 @@ def sinc(x):
 
 <h3>Support or Contact</h3>
 
-<p>Email <a href="mailto:numba@librelist.com">numba@librelist.com</a></p>
+<p>Sign up for mailing list: <a href="https://groups.google.com/a/continuum.io/forum/#!forum/numba-users">https://groups.google.com/a/continuum.io/forum/#!forum/numba-users</a></p>
       </section>
     </div>
     <footer>
