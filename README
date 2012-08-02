@@ -7,7 +7,7 @@ modules.
 Dependencies:
 
   * LLVM 3.1
-  * llvm-py (from numba/llvm-py fork)
+  * llvm-py (from llvmpy/llvmpy fork)
   * numpy
   * Meta (from numba/Meta fork)
 
@@ -22,7 +22,7 @@ make install
 
 
 * Clone LLVM-py from github
-git clone https://github.com/numba/llvm-py.git
+git clone https://github.com/llvmpy/llvmpy.git
 python setup.py install
 
 * Be sure to initialize the minivect submodule (in numba top-level dir)
