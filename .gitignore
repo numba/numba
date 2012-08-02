@@ -1,0 +1,5 @@
+*~
+*.pyc
+*.so
+llvm_cbuilder/tests/llvm_cbuilder
+parallel-vector-prototype/build
