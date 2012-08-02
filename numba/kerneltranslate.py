@@ -7,10 +7,7 @@ import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 
-if sys.maxint > 2**33:
-    _plat_bits = 64
-else:
-    _plat_bits = 32
+from .llvm_types import _plat_bits
 
 
 _pyobject_head = [lc.Type.int(_plat_bits), lc.Type.pointer(lc.Type.int(32))]
