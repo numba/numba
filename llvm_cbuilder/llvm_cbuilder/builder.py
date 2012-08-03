@@ -4,6 +4,7 @@
 
 import contextlib
 import llvm.core as lc
+import llvm.ee as le
 
 
 def _is_int(ty):
@@ -115,6 +116,7 @@ class CBuilder(object):
         self.declare_block = self.function.append_basic_block('decl')
         self.first_body_block = self.function.append_basic_block('body')
         self.builder = lc.Builder.new(self.first_body_block)
+        self.target_data = le.TargetData.new(self.function.module.data_layout)
 
         # prepare arguments
         self.args = []
@@ -210,6 +212,81 @@ class CBuilder(object):
         '''
         return _is_block_terminated(self.builder.basic_block)
 
+    def atomic_cmpxchg(self, ptr, old, val, ordering, crossthread=True):
+        res = self.builder.atomic_cmpxchg(ptr.value, old.value, val.value,
+                                          ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_xchg(self, ptr, val, ordering, crossthread=True):
+        res = self.builder.atomic_xchg(ptr.value, val.value,
+                                       ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_add(self, ptr, val, ordering, crossthread=True):
+        res = self.builder.atomic_add(ptr.value, val.value,
+                                      ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_sub(self, ptr, val, ordering, crossthread=True):
+        res = self.builder.atomic_sub(ptr.value, val.value,
+                                      ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_and(self, ptr, val, ordering, crossthread=True):
+        res = self.builder.atomic_and(ptr.value, val.value,
+                                      ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_nand(self, ptr, val, ordering, crossthread=True):
+        res = self.builder.atomic_nand(ptr.value, val.value,
+                                       ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_or(self, ptr, val, ordering, crossthread=True):
+        res = self.builder.atomic_or(ptr.value, val.value,
+                                     ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_xor(self, ptr, val, ordering, crossthread=True):
+        res = self.builder.atomic_xor(ptr.value, val.value,
+                                      ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_max(self, ptr, val, ordering, crossthread=True):
+        res = self.builder.atomic_max(ptr.value, val.value,
+                                      ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_min(self, ptr, val, ordering, crossthread=True):
+        res = self.builder.atomic_min(ptr.value, val.value,
+                                      ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_umax(self, ptr, val, ordering, crossthread=True):
+        res = self.builder.atomic_umax(ptr.value, val.value,
+                                       ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_umin(self, ptr, val, ordering, crossthread=True):
+        res = self.builder.atomic_umin(ptr.value, val.value,
+                                       ordering, crossthread)
+        return CTemp(self, res)
+
+    def atomic_load(self, ptr, ordering, align=1, crossthread=True):
+        res = self.builder.atomic_load(ptr.value, ordering, align, crossthread)
+        return CTemp(self, res)
+
+    def atomic_store(self, val, ptr, ordering, align=1, crossthread=True):
+        res = self.builder.atomic_store(val.value, ptr.value, ordering,
+                                        align, crossthread)
+        return CTemp(self, res)
+
+    def fence(self, ordering, crossthread=True):
+        res = self.builder.fence(ordering, crossthread)
+        return CTemp(self, res)
+
+    def alignment(self, ty):
+        return self.target_data.abi_alignment(ty)
 
 class CValue(object):
     '''
@@ -419,7 +496,7 @@ class CFunc(CValue):
         self.function = func
 
     def __call__(self, *args):
-        arg_value = map(lambda x: x.value, args)
+        arg_value = list(map(lambda x: x.value, args))
         res = self.parent.builder.call(self.function, arg_value)
         return CTemp(self.parent, res)
 
@@ -441,6 +518,7 @@ class CTemp(CValue):
         return self.value.type
 
 class CVar(CValue):
+
     def __init__(self, parent, ptr):
         super(CVar, self).__init__(parent)
         self.ptr = ptr
@@ -478,14 +556,38 @@ class CVar(CValue):
     def type(self):
         return self.ptr.type.pointee
 
-    def load(self):
+    def load(self, volatile=False):
         self._ensure_is_pointer()
-        loaded = self.parent.builder.load(self.value)
+        loaded = self.parent.builder.load(self.value, volatile=volatile)
         return CTemp(self.parent, loaded)
 
     def store(self, val):
         self._ensure_is_pointer()
         self.parent.builder.store(val.value, self.value)
+
+    def atomic_load(self, ordering, align=None, crossthread=True, volatile=False):
+        self._ensure_is_pointer()
+        if align is None:
+            align = self.parent.alignment(self.type.pointee)
+        inst = self.parent.builder.atomic_load(self.value, ordering, align,
+                                               crossthread=crossthread,
+                                               volatile=volatile)
+        return CTemp(self.parent, inst)
+
+    def atomic_store(self, value, ordering, align=None,  crossthread=True,
+                     volatile=False):
+        self._ensure_is_pointer()
+        if align is None:
+            align = self.parent.alignment(self.type.pointee)
+        self.parent.builder.atomic_store(value.value, self.value, ordering,
+                                         align=align, crossthread=crossthread)
+
+    def atomic_cmpxchg(self, old, new, ordering, crossthread=True, volatile=False):
+        self._ensure_is_pointer()
+        inst = self.parent.builder.atomic_cmpxchg(self.value, old.value,
+                                                  new.value, ordering,
+                                                  crossthread=crossthread)
+        return CTemp(self.parent, inst)
 
     def reference(self):
         return CTemp(self.parent, self.ptr)

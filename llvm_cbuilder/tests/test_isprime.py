@@ -73,8 +73,12 @@ def gen_is_prime_fast(mod):
             cb.ret(false)
 
     idx = cb.var(C.int, 3, name='idx')
+
     sqrt = cb.get_intrinsic(INTR_SQRT, [C.float])
+
     looplimit = one + sqrt(arg.cast(C.float)).cast(C.int)
+
+
     with cb.loop() as loop:
         with loop.condition() as setcond:
             setcond( idx < looplimit )
@@ -85,6 +89,7 @@ def gen_is_prime_fast(mod):
                     cb.ret(false)
             # increment
             idx += two
+
 
     cb.ret(true)
     cb.close()

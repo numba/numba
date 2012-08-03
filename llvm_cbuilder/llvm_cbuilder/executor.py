@@ -31,7 +31,7 @@ MAP_CTYPES = {
 class CExecutor(object):
     def __init__(self, mod_or_engine):
         if isinstance(mod_or_engine, Module):
-            self.engine = le.ExecutionEngine.new(mod_or_engine)
+            self.engine = le.EngineBuilder.new(mod_or_engine).create()
         else:
             self.engine = mod_or_engine
 

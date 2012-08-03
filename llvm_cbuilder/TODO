@@ -1,2 +1,0 @@
-* add atomic operation to llvm-py
-* add volatile load/store to llvm-py
