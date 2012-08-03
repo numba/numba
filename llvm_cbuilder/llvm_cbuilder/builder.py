@@ -561,28 +561,26 @@ class CVar(CValue):
         loaded = self.parent.builder.load(self.value, volatile=volatile)
         return CTemp(self.parent, loaded)
 
-    def store(self, val):
+    def store(self, val, volatile=False):
         self._ensure_is_pointer()
-        self.parent.builder.store(val.value, self.value)
+        self.parent.builder.store(val.value, self.value, volatile=volatile)
 
-    def atomic_load(self, ordering, align=None, crossthread=True, volatile=False):
+    def atomic_load(self, ordering, align=None, crossthread=True):
         self._ensure_is_pointer()
         if align is None:
             align = self.parent.alignment(self.type.pointee)
         inst = self.parent.builder.atomic_load(self.value, ordering, align,
-                                               crossthread=crossthread,
-                                               volatile=volatile)
+                                               crossthread=crossthread)
         return CTemp(self.parent, inst)
 
-    def atomic_store(self, value, ordering, align=None,  crossthread=True,
-                     volatile=False):
+    def atomic_store(self, value, ordering, align=None,  crossthread=True):
         self._ensure_is_pointer()
         if align is None:
             align = self.parent.alignment(self.type.pointee)
         self.parent.builder.atomic_store(value.value, self.value, ordering,
                                          align=align, crossthread=crossthread)
 
-    def atomic_cmpxchg(self, old, new, ordering, crossthread=True, volatile=False):
+    def atomic_cmpxchg(self, old, new, ordering, crossthread=True):
         self._ensure_is_pointer()
         inst = self.parent.builder.atomic_cmpxchg(self.value, old.value,
                                                   new.value, ordering,
