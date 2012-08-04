@@ -25,6 +25,12 @@ def _is_block_terminated(bb):
     instrs = bb.instructions
     return len(instrs) > 0 and instrs[-1].is_terminator
 
+def _is_cstruct(ty):
+    try:
+        return issubclass(ty, CStruct)
+    except TypeError:
+        return False
+
 @contextlib.contextmanager
 def _change_block_temporarily(builder, bb):
     origbb = builder.basic_block
@@ -135,11 +141,21 @@ class CBuilder(object):
         Only allocate in the first block
         '''
         with _change_block_temporarily(self.builder, self.declare_block):
+            is_cstruct = _is_cstruct(ty)
+            if is_cstruct:
+                cstruct = ty
+                ty = ty.llvm_type()
             ptr = self.builder.alloca(ty, name=name)
-            if value is not None:
-                if not isinstance(value, lc.Value):
-                    value = self.constant(ty, value).value
-                self.builder.store(value, ptr)
+        # back to the body
+        if value is not None:
+            if isinstance(value, CValue):
+                value = value.value
+            if not isinstance(value, lc.Value):
+                value = self.constant(ty, value).value
+            self.builder.store(value, ptr)
+        if is_cstruct:
+            return cstruct(self, ptr)
+        else:
             return CVar(self, ptr)
 
     def array(self, ty, count, name=''):
@@ -615,4 +631,16 @@ class CArray(CValue):
             idx = self.parent.constant(lc.Type.int(), idx).value
         ptr = builder.gep(self.value, [idx])
         return CVar(self.parent, ptr)
+
+class CStruct(CValue):
+    @classmethod
+    def llvm_type(cls):
+        return lc.Type.struct([v for k, v in cls._fields_])
+
+    def __init__(self, parent, ptr):
+        super(CStruct, self).__init__(parent)
+        makeind = lambda x: self.parent.constant(lc.Type.int(), x).value
+        for i, (fd, _) in enumerate(self._fields_):
+            gep = self.parent.builder.gep(ptr, [makeind(0), makeind(i)])
+            setattr(self, fd, CVar(self.parent, gep))
 

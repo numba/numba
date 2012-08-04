@@ -35,14 +35,18 @@ class CExecutor(object):
         else:
             self.engine = mod_or_engine
 
-    def get_ctype_function(self, fn, typeinfo):
-        types = [ MAP_CTYPES[s.strip()] for s in typeinfo.split(',') ]
-        if not types:
-            retty = None
-            argtys = []
+    def get_ctype_function(self, fn, *typeinfo):
+        if len(typeinfo)==1 and isinstance(typeinfo[0], str):
+            types = [ MAP_CTYPES[s.strip()] for s in typeinfo[0].split(',') ]
+            if not types:
+                retty = None
+                argtys = []
+            else:
+                retty = types[0]
+                argtys = types[1:]
         else:
-            retty = types[0]
-            argtys = types[1:]
+            retty = typeinfo[0]
+            argtys = typeinfo[1:]
 
         prototype = ct.CFUNCTYPE(retty, *argtys)
         fnptr = self.engine.get_pointer_to_function(fn)
