@@ -70,8 +70,8 @@ def gen_test_pthread(mod):
     cb.close()
     return cb.function
 
-class TestPThread(unittest.TestCase):
-    def test_pthread(self):
+class TestAtomicCmpXchg(unittest.TestCase):
+    def test_atomic_cmpxchg(self):
         mod = Module.new(__name__)
         # add pthread functions
 

@@ -379,6 +379,9 @@ class CValue(object):
     def __div__(self, rhs):
         return self._use_binop('div')(rhs)
 
+    def __truediv__(self, rhs):
+        return self.__div__(rhs)
+
     def __mod__(self, rhs):
         return self._use_binop('mod')(rhs)
 
