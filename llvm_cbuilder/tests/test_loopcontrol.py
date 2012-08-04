@@ -5,16 +5,19 @@ from llvm_cbuilder import *
 import llvm_cbuilder.shortnames as C
 import unittest, logging
 
-def nestedloop1(d):
+def loopbreak(d):
     z = 0
     for x in range(100):
         for y in range(100):
-            z += x * d + int(y / d)
+            z += x + y
+            if z > 50:
+                break
+        z -= d
     return z
 
-def gen_nestedloop1(mod):
+def gen_loopbreak(mod):
     functype = Type.function(C.int, [C.int])
-    func = mod.add_function(functype, 'nestedloop1')
+    func = mod.add_function(functype, 'loopbreak')
 
     cb = CBuilder(func)
 
@@ -26,6 +29,7 @@ def gen_nestedloop1(mod):
     one = cb.constant(C.int, 1)
     zero = cb.constant(C.int, 0)
     limit = cb.constant(C.int, 100)
+    fifty = cb.constant(C.int, 50)
 
     z.assign(zero)
     x.assign(zero)
@@ -40,28 +44,31 @@ def gen_nestedloop1(mod):
                     setcond( y < limit )
 
                 with inner.body():
-                    z += x * d + y / d
+                    z += x + y
+                    with cb.ifelse( z > fifty ) as ifelse:
+                        with ifelse.then():
+                            inner.break_loop()
                     y += one
+            z -= d
             x += one
 
     cb.ret(z)
     cb.close()
     return func
 
-
-def nestedloop2(d):
+def loopcontinue(d):
     z = 0
-    for x in range(1, 100):
-        for y in range(1, 100):
-            if x > y:
-                z += int(x / y) * d
-            else:
-                z += int(y / x) * d
+    for x in range(100):
+        for y in range(100):
+            z += x + y
+            if z > 50:
+                continue
+            z += d
     return z
 
-def gen_nestedloop2(mod):
+def gen_loopcontinue(mod):
     functype = Type.function(C.int, [C.int])
-    func = mod.add_function(functype, 'nestedloop2')
+    func = mod.add_function(functype, 'loopcontinue')
 
     cb = CBuilder(func)
 
@@ -73,55 +80,55 @@ def gen_nestedloop2(mod):
     one = cb.constant(C.int, 1)
     zero = cb.constant(C.int, 0)
     limit = cb.constant(C.int, 100)
+    fifty = cb.constant(C.int, 50)
 
     z.assign(zero)
-    x.assign(one)
+    x.assign(zero)
     with cb.loop() as outer:
         with outer.condition() as setcond:
             setcond( x < limit )
 
         with outer.body():
-            y.assign(one)
+            y.assign(zero)
             with cb.loop() as inner:
                 with inner.condition() as setcond:
                     setcond( y < limit )
 
                 with inner.body():
-                    with cb.ifelse(x > y) as ifelse:
-                        with ifelse.then():
-                            z += x / y * d
-                        with ifelse.otherwise():
-                            z += y / x * d
+                    z += x + y
                     y += one
+                    with cb.ifelse( z > fifty ) as ifelse:
+                        with ifelse.then():
+                            inner.continue_loop()
+                    z += d
             x += one
 
     cb.ret(z)
     cb.close()
     return func
 
-
-class TestNestedLoop(unittest.TestCase):
-    def test_nestedloop1(self):
+class TestLoopControl(unittest.TestCase):
+    def test_loopbreak(self):
         mod = Module.new(__name__)
-        lfunc = gen_nestedloop1(mod)
+        lfunc = gen_loopbreak(mod)
         logging.debug(mod)
         mod.verify()
 
         exe = CExecutor(mod)
         func = exe.get_ctype_function(lfunc, 'int, int')
-        for x in range(1, 100):
-            self.assertEqual(func(x), int(nestedloop1(x)))
+        for x in range(100):
+            self.assertEqual(func(x), loopbreak(x))
 
-    def test_nestedloop2(self):
+    def test_loopcontinue(self):
         mod = Module.new(__name__)
-        lfunc = gen_nestedloop2(mod)
+        lfunc = gen_loopcontinue(mod)
         logging.debug(mod)
         mod.verify()
 
         exe = CExecutor(mod)
         func = exe.get_ctype_function(lfunc, 'int, int')
-        for x in range(1, 100):
-            self.assertEqual(func(x), int(nestedloop2(x)))
+        for x in range(100):
+            self.assertEqual(func(x), loopcontinue(x))
 
 if __name__ == '__main__':
     unittest.main()

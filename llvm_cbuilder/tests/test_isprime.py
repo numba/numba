@@ -54,7 +54,7 @@ def gen_is_prime(mod):
 
 def gen_is_prime_fast(mod):
     functype = Type.function(C.int, [C.int])
-    func = mod.add_function(functype, 'isprime')
+    func = mod.add_function(functype, 'isprime_fast')
 
     cb = CBuilder(func)
 
