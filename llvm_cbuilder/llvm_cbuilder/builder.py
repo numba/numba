@@ -103,10 +103,10 @@ class _Loop(object):
             builder.branch(self._bbcond)
 
     def break_loop(self):
-        self.branch(self._bbend)
+        self.parent.builder.branch(self._bbend)
 
     def continue_loop(self):
-        self.branch(self._bbcond)
+        self.parent.builder.branch(self._bbcond)
 
     def close(self):
         self.parent.builder.position_at_end(self._bbend)
@@ -542,27 +542,50 @@ class CVar(CValue):
         super(CVar, self).__init__(parent)
         self.ptr = ptr
 
-    def _inplace_op(self, op):
+    def _inplace_binop(self, op):
         def wrapped(rhs):
-            res = self._use_binop('add')(rhs)
+            res = self._use_binop(op)(rhs)
             self.assign(res)
             return self
         return wrapped
 
     def __iadd__(self, rhs):
-        return self._inplace_op('add')(rhs)
+        return self._inplace_binop('add')(rhs)
 
     def __isub__(self, rhs):
-        return self._inplace_op('sub')(rhs)
+        return self._inplace_binop('sub')(rhs)
 
     def __imul__(self, rhs):
-        return self._inplace_op('mul')(rhs)
+        return self._inplace_binop('mul')(rhs)
 
     def __idiv__(self, rhs):
-        return self._inplace_op('div')(rhs)
+        return self._inplace_binop('div')(rhs)
 
     def __imod__(self, rhs):
-        return self._inplace_op('mod')(rhs)
+        return self._inplace_binop('mod')(rhs)
+
+
+    def _inplace_bitwise(self, op):
+        def wrapped(rhs):
+            res = self._use_bitwise(op)(rhs)
+            self.assign(res)
+            return self
+        return wrapped
+
+    def __ilshift__(self, rhs):
+        return self._inplace_bitwise('lshift')(rhs)
+
+    def __irshift__(self, rhs):
+        return self._inplace_bitwise('rshift')(rhs)
+
+    def __iand__(self, rhs):
+        return self._inplace_bitwise('and')(rhs)
+
+    def __ior__(self, rhs):
+        return self._inplace_bitwise('or')(rhs)
+
+    def __ixor__(self, rhs):
+        return self._inplace_bitwise('xor')(rhs)
 
     @property
     def value(self):
