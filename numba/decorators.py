@@ -3,6 +3,7 @@ import logging
 
 import numba
 from . import utils, functions, ast_translate as translate
+from numba import translate as bytecode_translate
 from .minivect import minitypes
 
 logger = logging.getLogger(__name__)
@@ -92,12 +93,26 @@ def function(f):
     return wrapper
 
 # XXX Proposed name; compile() would mask builtin of same name.
+# NOTE: overridden below to use the bytecode translator
 def numba_compile(ret_type, arg_types, **kws):
     def _numba_compile(func):
         func._is_numba_func = True
         _, _, ctypes_func = function_cache.compile_function(
                         func, arg_types=arg_types, ret_type=ret_type, **kws)
         return ctypes_func
+    return _numba_compile
+
+def numba_compile(*args, **kws):
+    def _numba_compile(func):
+        global __tr_map__
+        llvm = kws.pop('llvm', True)
+        if func in __tr_map__:
+            print("Warning: Previously compiled version of %r may be "
+                  "garbage collected!" % (func,))
+        t = bytecode_translate.Translate(func, *args, **kws)
+        t.translate()
+        __tr_map__[func] = t
+        return t.get_ctypes_func(llvm)
     return _numba_compile
 
 from kerneltranslate import Translate as KernelTranslate
