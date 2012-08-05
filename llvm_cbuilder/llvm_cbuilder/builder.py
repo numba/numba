@@ -6,7 +6,6 @@ import contextlib
 import llvm.core as lc
 import llvm.ee as le
 
-
 def _is_int(ty):
     return isinstance(ty, lc.IntegerType)
 
@@ -30,6 +29,9 @@ def _is_cstruct(ty):
         return issubclass(ty, CStruct)
     except TypeError:
         return False
+
+def _list_values(iterable):
+    return [i.value for i in iterable]
 
 @contextlib.contextmanager
 def _change_block_temporarily(builder, bb):
@@ -111,7 +113,6 @@ class _Loop(object):
     def close(self):
         self.parent.builder.position_at_end(self._bbend)
 
-
 class CBuilder(object):
     '''
     A wrapper class for features in llvm-py package
@@ -136,6 +137,32 @@ class CBuilder(object):
         func = mod.add_function(functype, name=name)
         return CBuilder(func)
 
+    def printf(self, fmt, *args):
+        mod = self.function.module
+        int_t = lc.Type.int()
+        char_ptr_t = lc.Type.pointer(lc.Type.int(8))
+        functype = lc.Type.function(int_t, [char_ptr_t], True)
+        printf = mod.get_or_insert_function(functype, name='printf')
+        ret = self.builder.call(printf, [fmt.value]+_list_values(args))
+        return CTemp(self, ret)
+
+    def debug(self, *args):
+        type_mapper = {
+            'i32': '%d',
+            'double': '%e',
+        }
+        itemsfmt = []
+        items = []
+        for i in args:
+            if isinstance(i, str):
+                itemsfmt.append(i.replace('%', '%%'))
+            else:
+                ty = type_mapper[str(i.type)]
+                itemsfmt.append(ty)
+                items.append(i)
+        fmt = ' '.join(itemsfmt) + '\n'
+        return self.printf(self.constant_string(fmt), *items)
+
     def var(self, ty, value=None, name=''):
         '''
         Only allocate in the first block
@@ -150,7 +177,7 @@ class CBuilder(object):
         if value is not None:
             if isinstance(value, CValue):
                 value = value.value
-            if not isinstance(value, lc.Value):
+            elif not isinstance(value, lc.Value):
                 value = self.constant(ty, value).value
             self.builder.store(value, ptr)
         if is_cstruct:
@@ -212,6 +239,16 @@ class CBuilder(object):
     def constant_null(self, ty):
         res = lc.Constant.null(ty)
         return CTemp(self, res)
+
+    def constant_string(self, string):
+        mod = self.function.module
+        name = '.conststr.%x' % hash(string)
+        content = lc.Constant.stringz(string)
+        globalstr = mod.add_global_variable(content.type, name=name)
+        globalstr.initializer = content
+        ptr = mod.add_global_variable(lc.Type.pointer(content.type.element),
+                                      name=name+".ptr")
+        return CTemp(self, globalstr.bitcast(lc.Type.pointer(content.type.element)))
 
     def get_intrinsic(self, intrinsic_id, tys):
         lfunc = lc.Function.intrinsic(self.function.module, intrinsic_id, tys)
@@ -515,7 +552,7 @@ class CFunc(CValue):
         self.function = func
 
     def __call__(self, *args):
-        arg_value = list(map(lambda x: x.value, args))
+        arg_value = _list_values(args)
         res = self.parent.builder.call(self.function, arg_value)
         return CTemp(self.parent, res)
 
@@ -666,4 +703,5 @@ class CStruct(CValue):
         for i, (fd, _) in enumerate(self._fields_):
             gep = self.parent.builder.gep(ptr, [makeind(0), makeind(i)])
             setattr(self, fd, CVar(self.parent, gep))
+
 

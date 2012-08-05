@@ -5,7 +5,7 @@ from llvm_cbuilder import *
 import llvm_cbuilder.shortnames as C
 import unittest, logging
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 NUM_OF_THREAD = 4
 
