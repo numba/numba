@@ -815,6 +815,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
         return getattr(acc, attr_name)
 
+    def visit_ShapeAttributeNode(self, node):
+        # hurgh, no dispatch on superclasses?
+        return self.visit_ArrayAttributeNode(node)
 
 class DisposalVisitor(visitors.NumbaVisitor):
     # TODO: handle errors, check for NULL before calling DECREF

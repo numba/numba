@@ -93,8 +93,8 @@ def function(f):
     return wrapper
 
 # XXX Proposed name; compile() would mask builtin of same name.
-# NOTE: overridden below to use the bytecode translator
-def numba_compile(ret_type, arg_types, **kws):
+# Note: uses the ast translator
+def _numba_compile(ret_type, arg_types, **kws):
     def _numba_compile(func):
         func._is_numba_func = True
         _, _, ctypes_func = function_cache.compile_function(
@@ -102,6 +102,7 @@ def numba_compile(ret_type, arg_types, **kws):
         return ctypes_func
     return _numba_compile
 
+# NOTE: uses the bytecode translator
 def numba_compile(*args, **kws):
     def _numba_compile(func):
         global __tr_map__

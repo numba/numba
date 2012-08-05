@@ -167,6 +167,7 @@ class DataPointerNode(Node):
     def __init__(self, node):
         self.node = node
         self.variable = Variable(node.type)
+        self.type = node.type
 
     @property
     def ndim(self):
@@ -240,8 +241,8 @@ class ShapeAttributeNode(ArrayAttributeNode):
     #       variable.lvalue
     _fields = ['array']
 
-    def __init__(self, attr_name, array):
-        self.attr_name = attr_name
+    def __init__(self, array):
+        super(ShapeAttributeNode, self).__init__('shape', array)
         self.array = array
         self.element_type = numba_types.intp
         self.type = minitypes.CArrayType(self.element_type,
