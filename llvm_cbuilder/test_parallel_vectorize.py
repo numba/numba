@@ -95,7 +95,6 @@ class Tester(CDefinition):
         self.ret()
 
 def main():
-    NUM_THREAD = 2
     module = Module.new(__name__)
 
     mpm = PassManager.new()

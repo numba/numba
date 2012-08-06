@@ -429,7 +429,7 @@ class CDefinition(CBuilder):
         functype = lc.Type.function(cls._retty_, [v for k, v in cls._argtys_])
         func = module.get_or_insert_function(functype, name=cls._name_)
         if not func.is_declaration: # already defined?
-            raise NameError('Function %s has already been defined' % cls.name)
+            raise NameError('Function %s has already been defined' % cls._name_)
 
         # Name all arguments
         for i, (name, _) in enumerate(cls._argtys_):
