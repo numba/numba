@@ -95,7 +95,7 @@ class ParallelUFunc(CDefinition):
 
     which should be implemented in subclass or mixin.
     '''
-    _name_   = 'parallel_ufunc'
+    _name_   = 'parallel_ufunc_%(ThreadCount)d'
     _argtys_ = [
         ('func',       C.void_p),
         ('worker',     C.void_p),
@@ -317,7 +317,9 @@ class UFuncCore(CDefinition):
         '''
         raise NotImplementedError
 
-class _SpecializedParallelUFunc(ParallelUFunc, ParallelUFuncPosixMixin):
+
+class SpecializedParallelUFunc(CDefinition):
+    _name_ = 'specialized_parallel_ufunc_%(ThreadCount)d_%(FuncName)s'
     _argtys_ = [
         ('args',       C.pointer(C.char_p)),
         ('dimensions', C.pointer(C.intp)),
@@ -325,8 +327,14 @@ class _SpecializedParallelUFunc(ParallelUFunc, ParallelUFuncPosixMixin):
         ('data',       C.void_p),
     ]
 
-    def body(self, args, dimensions, steps, data, ThreadCount=1):
-        pass
+    def body(self, args, dimensions, steps, data,
+             PUFuncDef, CoreDef, Func, FuncName, ThreadCount=1):
+        pufunc = self.depends(PUFuncDef, ThreadCount=ThreadCount)
+        core = self.depends(CoreDef)
+        func = self.depends(Func)
+        to_void_p = lambda x: x.cast(C.void_p)
+        pufunc(to_void_p(func), to_void_p(core), args, dimensions, steps, data)
+        self.ret()
 
 class PThreadAPI(CExternal):
     pthread_t = C.void_p

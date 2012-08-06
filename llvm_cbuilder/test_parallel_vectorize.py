@@ -47,10 +47,17 @@ class Tester(CDefinition):
         ArgCount = 2
         WorkCount = 10000
 
-        parallel_ufunc = self.depends(ParallelUFuncPosix,
-                                      ThreadCount=ThreadCount)
-        ufunc_core = self.depends(UFuncCore_D_D)
-        worker = self.depends(Work_D_D)
+#        parallel_ufunc = self.depends(ParallelUFuncPosix,
+#                                      ThreadCount=ThreadCount)
+#        ufunc_core = self.depends(UFuncCore_D_D)
+#        worker = self.depends(Work_D_D)
+
+        sppufunc = self.depends(SpecializedParallelUFunc,
+                                PUFuncDef = ParallelUFuncPosix,
+                                CoreDef = UFuncCore_D_D,
+                                Func = Work_D_D,
+                                FuncName = Work_D_D._name_,
+                                ThreadCount = 2)
 
         # real work
         NULL = self.constant_null(C.void_p)
@@ -83,8 +90,7 @@ class Tester(CDefinition):
                 i += self.constant(C.intp, 1)
 
         # call parallel ufunc
-        parallel_ufunc(worker.cast(C.void_p), ufunc_core.cast(C.void_p),  args,
-                       dims, steps, NULL)
+        sppufunc(args, dims, steps, NULL)
 
         # check error
         outbase = args_double[-1]

@@ -434,7 +434,8 @@ class CDefinition(CBuilder):
     @classmethod
     def define(cls, module, **kws):
         functype = lc.Type.function(cls._retty_, [v for k, v in cls._argtys_])
-        func = module.get_or_insert_function(functype, name=cls._name_)
+        name = cls._name_ % kws
+        func = module.get_or_insert_function(functype, name=name)
         if not func.is_declaration: # already defined?
             raise NameError(func)
 
