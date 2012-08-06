@@ -5,6 +5,7 @@
 import contextlib
 import llvm.core as lc
 import llvm.ee as le
+from llvm import LLVMException
 
 def _is_int(ty):
     return isinstance(ty, lc.IntegerType)
@@ -245,6 +246,44 @@ class CBuilder(object):
         yield cb
         cb.close()
 
+    @contextlib.contextmanager
+    def forever(self):
+        with self.loop() as loop:
+            with loop.condition() as setcond:
+                NULL = self.constant_null(lc.Type.int())
+                setcond( NULL == NULL )
+            with loop.body():
+                yield loop
+
+    @contextlib.contextmanager
+    def for_range(self, *args):
+        def check_arg(x):
+            if isinstance(x, int):
+                return self.constant(lc.Type.int(), x)
+            if not x.is_int:
+                raise TypeError(x, "All args must be of integer type.")
+            return x
+
+        if len(args) == 3:
+            start, stop, step = map(check_arg, args)
+        elif len(args) == 2:
+            start, stop = map(check_arg, args)
+            step = self.constant(start.type, 1)
+        elif len(args) == 1:
+            stop = check_arg(args[0])
+            start = self.constant(stop.type, 0)
+            step = self.constant(stop.type, 1)
+        else:
+            raise TypeError("Invalid # of arguments: 1, 2 or 3")
+
+        idx = self.var_copy(start)
+        with self.loop() as loop:
+            with loop.condition() as setcond:
+                setcond( idx < stop )
+            with loop.body():
+                yield loop, idx
+                idx += step
+
     def position_at_end(self, bb):
         self.basic_block = bb
         self.builder.position_at_end(bb)
@@ -270,13 +309,18 @@ class CBuilder(object):
 
     def constant_string(self, string):
         mod = self.function.module
-        name = '.conststr.%x' % hash(string)
+        name = '.conststr.%x_%x' % (hash(string), len(string))
         content = lc.Constant.stringz(string)
-        globalstr = mod.add_global_variable(content.type, name=name)
-        globalstr.initializer = content
-        ptr = mod.add_global_variable(lc.Type.pointer(content.type.element),
-                                      name=name+".ptr")
-        return CTemp(self, globalstr.bitcast(lc.Type.pointer(content.type.element)))
+        try:
+            globalstr = mod.get_global_variable_named(name)
+        except LLVMException:
+            globalstr = mod.add_global_variable(content.type, name=name)
+            globalstr.initializer = content
+#            ptr = mod.add_global_variable(lc.Type.pointer(content.type.element),
+#                                          name=name+".ptr")
+        return CTemp(self, globalstr.bitcast(
+                                    lc.Type.pointer(content.type.element)))
+
 
     def get_intrinsic(self, intrinsic_id, tys):
         lfunc = lc.Function.intrinsic(self.function.module, intrinsic_id, tys)
