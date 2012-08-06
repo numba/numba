@@ -87,8 +87,15 @@ class Context(CStruct):
     ]
 
 class ParallelUFunc(CDefinition):
+    '''
+    Platform dependent threading function is implemented in
+
+    def _dispatch_worker(self, worker, contexts, num_thread):
+        ...
+
+    which should be implemented in subclass or mixin.
+    '''
     _name_   = 'parallel_ufunc'
-    _retty_  = C.void
     _argtys_ = [
         ('func',       C.void_p),
         ('worker',     C.void_p),
@@ -182,13 +189,7 @@ class ParallelUFunc(CDefinition):
             cur_ctxt.completed.assign(
                                     self.constant_null(cur_ctxt.completed.type))
 
-    def _dispatch_worker(self, worker, contexts, num_thread):
-        '''
-        Dispatch worker threads.
-        '''
-        raise NotImplementedError
-
-class ParallelUFuncPosix(ParallelUFunc):
+class ParallelUFuncPosixMixin(object):
     '''
     Implements _dispatch_worker to use pthread.
     '''
@@ -316,6 +317,16 @@ class UFuncCore(CDefinition):
         '''
         raise NotImplementedError
 
+class _SpecializedParallelUFunc(ParallelUFunc, ParallelUFuncPosixMixin):
+    _argtys_ = [
+        ('args',       C.pointer(C.char_p)),
+        ('dimensions', C.pointer(C.intp)),
+        ('steps',      C.pointer(C.intp)),
+        ('data',       C.void_p),
+    ]
+
+    def body(self, args, dimensions, steps, data, ThreadCount=1):
+        pass
 
 class PThreadAPI(CExternal):
     pthread_t = C.void_p

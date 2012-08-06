@@ -149,6 +149,13 @@ class CBuilder(object):
         func = mod.add_function(functype, name=name)
         return CBuilder(func)
 
+    def depends(self, cdef, **kwargs):
+        try:
+            func = cdef.define(self.function.module, **kwargs)
+        except NameError as e:
+            (func,) = e
+        return CFunc(self, func)
+
     def printf(self, fmt, *args):
         mod = self.function.module
         int_t = lc.Type.int()
@@ -429,7 +436,7 @@ class CDefinition(CBuilder):
         functype = lc.Type.function(cls._retty_, [v for k, v in cls._argtys_])
         func = module.get_or_insert_function(functype, name=cls._name_)
         if not func.is_declaration: # already defined?
-            raise NameError('Function %s has already been defined' % cls._name_)
+            raise NameError(func)
 
         # Name all arguments
         for i, (name, _) in enumerate(cls._argtys_):

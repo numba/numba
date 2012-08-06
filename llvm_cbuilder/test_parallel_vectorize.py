@@ -30,6 +30,8 @@ class UFuncCore_D_D(UFuncCore):
         res = ufunc_ptr(indata.load())
         outdata.store(res)
 
+class ParallelUFuncPosix(ParallelUFunc, ParallelUFuncPosixMixin):
+    pass
 
 class Tester(CDefinition):
     '''
@@ -45,10 +47,10 @@ class Tester(CDefinition):
         ArgCount = 2
         WorkCount = 10000
 
-        parallel_ufunc = CFunc(self, ParallelUFuncPosix.define(module,
-                               ThreadCount=ThreadCount))
-        ufunc_core = CFunc(self, UFuncCore_D_D.define(module))
-        worker = CFunc(self, Work_D_D.define(module))
+        parallel_ufunc = self.depends(ParallelUFuncPosix,
+                                      ThreadCount=ThreadCount)
+        ufunc_core = self.depends(UFuncCore_D_D)
+        worker = self.depends(Work_D_D)
 
         # real work
         NULL = self.constant_null(C.void_p)
