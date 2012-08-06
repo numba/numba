@@ -47,7 +47,6 @@ void ufunc_worker_core_d_d(ParallelContextCommon * C, npy_intp i)
     char * const in_base = C->args[0], * const out_base = C->args[1];
     npy_intp in_step = C->steps[0], out_step = C->steps[1];
 
-
     // real work
     double * in = (double*)(in_base + (i * in_step));
     double * out = (double*)(out_base + (i * out_step));

@@ -16,6 +16,7 @@ double = Type.double()
 pointer = Type.pointer
 
 void_p = pointer(char)
+char_p = pointer(char)
 
 # platform dependent
 
