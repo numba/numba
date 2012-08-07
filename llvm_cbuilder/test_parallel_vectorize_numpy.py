@@ -4,12 +4,11 @@ import numpy as np
 
 def main():
     module = Module.new(__name__)
-    sppufunc = SpecializedParallelUFunc.define(module,
-                            PUFuncDef = ParallelUFuncPosix,
-                            CoreDef = UFuncCore_D_D,
-                            Func = Work_D_D,
-                            FuncName = Work_D_D._name_,
-                            ThreadCount = 2)
+    PUfuncDef = ParallelUFuncPosix.specialize(num_thread=2)
+    SPUF = SpecializedParallelUFunc.specialize(
+                                        PUfuncDef, UFuncCore_D_D, Work_D_D)
+    sppufunc = SPUF.define(module)
+
     module.verify()
 
     mpm = PassManager.new()

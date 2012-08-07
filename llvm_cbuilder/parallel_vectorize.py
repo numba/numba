@@ -95,7 +95,7 @@ class ParallelUFunc(CDefinition):
 
     which should be implemented in subclass or mixin.
     '''
-    _name_   = 'parallel_ufunc_%(ThreadCount)d'
+    #_name_   = 'parallel_ufunc_%(ThreadCount)d'
     _argtys_ = [
         ('func',       C.void_p),
         ('worker',     C.void_p),
@@ -105,8 +105,18 @@ class ParallelUFunc(CDefinition):
         ('data',       C.void_p),
     ]
 
-    def body(self, func, worker, args, dimensions, steps, data, ThreadCount=1):
+    @classmethod
+    def specialize(cls, num_thread):
+        name = 'parallel_ufunc_%d' % num_thread
+        newcls = type(name, (cls,), {
+            '_name_'     : name,
+            'ThreadCount': num_thread,
+        })
+        return newcls
+
+    def body(self, func, worker, args, dimensions, steps, data):
         # Setup variables
+        ThreadCount = self.ThreadCount
         common = self.var(ContextCommon, name='common')
         workqueues = self.array(WorkQueue, ThreadCount, name='workqueues')
         contexts = self.array(Context, ThreadCount, name='contexts')
@@ -318,9 +328,7 @@ class UFuncCore(CDefinition):
         '''
         raise NotImplementedError
 
-
 class SpecializedParallelUFunc(CDefinition):
-    _name_ = 'specialized_parallel_ufunc_%(ThreadCount)d_%(FuncName)s'
     _argtys_ = [
         ('args',       C.pointer(C.char_p)),
         ('dimensions', C.pointer(C.intp)),
@@ -328,14 +336,26 @@ class SpecializedParallelUFunc(CDefinition):
         ('data',       C.void_p),
     ]
 
-    def body(self, args, dimensions, steps, data,
-             PUFuncDef, CoreDef, Func, FuncName, ThreadCount=1):
-        pufunc = self.depends(PUFuncDef, ThreadCount=ThreadCount)
-        core = self.depends(CoreDef)
-        func = self.depends(Func)
+    def body(self, args, dimensions, steps, data,):
+        pufunc = self.depends(self.PUFuncDef)
+        core = self.depends(self.CoreDef)
+        func = self.depends(self.FuncDef)
         to_void_p = lambda x: x.cast(C.void_p)
         pufunc(to_void_p(func), to_void_p(core), args, dimensions, steps, data)
         self.ret()
+
+    @classmethod
+    def specialize(cls, pufunc_def, core_def, func_def):
+        name = 'specialized_%s_%s_%s'% (pufunc_def._name_,
+                                        core_def._name_,
+                                        func_def._name_)
+        newcls = type(name, (cls,), {
+            '_name_'   : name,
+            'PUFuncDef': pufunc_def,
+            'CoreDef'  : core_def,
+            'FuncDef'  : func_def,
+        })
+        return newcls
 
 class PThreadAPI(CExternal):
     pthread_t = C.void_p

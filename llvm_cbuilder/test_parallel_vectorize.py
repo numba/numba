@@ -14,6 +14,7 @@ class UFuncCore_D_D(UFuncCore):
     '''
     Specialize UFuncCore for double input, double output.
     '''
+    _name_ = UFuncCore._name_ + '_d_d'
     def _do_work(self, common, item, tid):
         ufunc_type = Type.function(C.double, [C.double])
         ufunc_ptr = CFunc(self, common.func.cast(C.pointer(ufunc_type)).value)
@@ -47,12 +48,10 @@ class Tester(CDefinition):
         ArgCount = 2
         WorkCount = 10000
 
-        sppufunc = self.depends(SpecializedParallelUFunc,
-                                PUFuncDef = ParallelUFuncPosix,
-                                CoreDef = UFuncCore_D_D,
-                                Func = Work_D_D,
-                                FuncName = Work_D_D._name_,
-                                ThreadCount = 2)
+        PUfuncDef = ParallelUFuncPosix.specialize(num_thread=2)
+        SPUF = SpecializedParallelUFunc.specialize(
+                                            PUfuncDef, UFuncCore_D_D, Work_D_D)
+        sppufunc = self.depends(SPUF)
 
         # real work
         NULL = self.constant_null(C.void_p)
