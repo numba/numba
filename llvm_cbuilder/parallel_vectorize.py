@@ -151,11 +151,12 @@ class ParallelUFunc(CDefinition):
             for t in range(ThreadCount):
                 cur_ctxt = contexts[t].as_struct(Context)
                 total_completed += cur_ctxt.completed
-                self.debug(cur_ctxt.id, 'completed', cur_ctxt.completed)
+                # self.debug(cur_ctxt.id, 'completed', cur_ctxt.completed)
 
             with self.ifelse( total_completed == N ) as ifelse:
                 with ifelse.then():
-                    self.debug("All is well!")
+                    # self.debug("All is well!")
+                    pass # keep quite if all is well
                 with ifelse.otherwise():
                     self.debug("ERROR: race occurred! Trigger segfault")
                     self.unreachable()

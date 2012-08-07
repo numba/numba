@@ -2,7 +2,7 @@ from parallel_vectorize import *
 
 
 class Work_D_D(CDefinition):
-    _name_ = 'copy_d_d'
+    _name_ = 'work_d_d'
     _retty_ = C.double
     _argtys_ = [
         ('inval', C.double),
@@ -46,11 +46,6 @@ class Tester(CDefinition):
         ThreadCount = 2
         ArgCount = 2
         WorkCount = 10000
-
-#        parallel_ufunc = self.depends(ParallelUFuncPosix,
-#                                      ThreadCount=ThreadCount)
-#        ufunc_core = self.depends(UFuncCore_D_D)
-#        worker = self.depends(Work_D_D)
 
         sppufunc = self.depends(SpecializedParallelUFunc,
                                 PUFuncDef = ParallelUFuncPosix,
@@ -123,11 +118,11 @@ def main():
     # run
     print('run')
     exe = CExecutor(module)
-    exe.engine.get_pointer_to_function(fntester)
     func = exe.get_ctype_function(fntester, 'void')
 
     func()
-
+    # Will not reach here is race condition occurred
+    print('Good')
 
 if __name__ == '__main__':
     main()
