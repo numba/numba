@@ -95,7 +95,7 @@ class ParallelUFunc(CDefinition):
 
     which should be implemented in subclass or mixin.
     '''
-    #_name_   = 'parallel_ufunc_%(ThreadCount)d'
+
     _argtys_ = [
         ('func',       C.void_p),
         ('worker',     C.void_p),
@@ -107,12 +107,9 @@ class ParallelUFunc(CDefinition):
 
     @classmethod
     def specialize(cls, num_thread):
-        name = 'parallel_ufunc_%d' % num_thread
-        newcls = type(name, (cls,), {
-            '_name_'     : name,
-            'ThreadCount': num_thread,
-        })
-        return newcls
+        print num_thread
+        cls._name_ = 'parallel_ufunc_%d' % num_thread
+        cls.ThreadCount = num_thread
 
     def body(self, func, worker, args, dimensions, steps, data):
         # Setup variables
@@ -346,16 +343,10 @@ class SpecializedParallelUFunc(CDefinition):
 
     @classmethod
     def specialize(cls, pufunc_def, core_def, func_def):
-        name = 'specialized_%s_%s_%s'% (pufunc_def._name_,
-                                        core_def._name_,
-                                        func_def._name_)
-        newcls = type(name, (cls,), {
-            '_name_'   : name,
-            'PUFuncDef': pufunc_def,
-            'CoreDef'  : core_def,
-            'FuncDef'  : func_def,
-        })
-        return newcls
+        cls._name_ = 'specialized_%s_%s_%s'% (pufunc_def, core_def, func_def)
+        cls.PUFuncDef = pufunc_def
+        cls.CoreDef = core_def
+        cls.FuncDef = func_def
 
 class PThreadAPI(CExternal):
     pthread_t = C.void_p

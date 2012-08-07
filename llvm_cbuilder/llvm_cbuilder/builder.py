@@ -6,6 +6,7 @@ import contextlib
 import llvm.core as lc
 import llvm.ee as le
 from llvm import LLVMException
+from . import shortnames as types
 
 def _is_int(ty):
     return isinstance(ty, lc.IntegerType)
@@ -149,18 +150,12 @@ class CBuilder(object):
         func = mod.add_function(functype, name=name)
         return CBuilder(func)
 
-    def depends(self, cdef, **kwargs):
-        try:
-            func = cdef.define(self.function.module, **kwargs)
-        except NameError as e:
-            (func,) = e
-        return CFunc(self, func)
+    def depends(self, fndecl):
+        return CFunc(self, fndecl(self.function.module))
 
     def printf(self, fmt, *args):
         mod = self.function.module
-        int_t = lc.Type.int()
-        char_ptr_t = lc.Type.pointer(lc.Type.int(8))
-        functype = lc.Type.function(int_t, [char_ptr_t], True)
+        functype = lc.Type.function(types.int, [types.char_p], True)
         printf = mod.get_or_insert_function(functype, name='printf')
         ret = self.builder.call(printf, [fmt.value]+_list_values(args))
         return CTemp(self, ret)
@@ -224,7 +219,7 @@ class CBuilder(object):
             if isinstance(count, CValue):
                 count = count.value
             elif not isinstance(count, lc.Value):
-                count = self.constant(lc.Type.int(), count).value
+                count = self.constant(types.int, count).value
             ptr = self.builder.alloca_array(ty, count, name=name)
             return CArray(self, ptr)
 
@@ -236,7 +231,7 @@ class CBuilder(object):
                 raise TypeError(errmsg)
             self.builder.ret(val.value)
         else:
-            if retty != lc.Type.void():
+            if retty != types.void:
                 errmsg = "Cannot return void"
                 raise TypeError(errmsg)
             self.builder.ret_void()
@@ -257,7 +252,7 @@ class CBuilder(object):
     def forever(self):
         with self.loop() as loop:
             with loop.condition() as setcond:
-                NULL = self.constant_null(lc.Type.int())
+                NULL = self.constant_null(types.int)
                 setcond( NULL == NULL )
             with loop.body():
                 yield loop
@@ -266,7 +261,7 @@ class CBuilder(object):
     def for_range(self, *args):
         def check_arg(x):
             if isinstance(x, int):
-                return self.constant(lc.Type.int(), x)
+                return self.constant(types.int, x)
             if not x.is_int:
                 raise TypeError(x, "All args must be of integer type.")
             return x
@@ -303,7 +298,7 @@ class CBuilder(object):
     def constant(self, ty, val):
         if isinstance(ty, lc.IntegerType):
             res = lc.Constant.int(ty, val)
-        elif ty==lc.Type.float() or ty==lc.Type.double():
+        elif ty == types.float or ty == types.double:
             res = lc.Constant.real(ty, val)
         else:
             raise TypeError("Cannot auto build constant "
@@ -316,6 +311,8 @@ class CBuilder(object):
 
     def constant_string(self, string):
         mod = self.function.module
+        # TODO
+        # Is this a safe way for uniquing identifying string
         name = '.conststr.%x_%x' % (hash(string), len(string))
         content = lc.Constant.stringz(string)
         try:
@@ -323,10 +320,8 @@ class CBuilder(object):
         except LLVMException:
             globalstr = mod.add_global_variable(content.type, name=name)
             globalstr.initializer = content
-#            ptr = mod.add_global_variable(lc.Type.pointer(content.type.element),
-#                                          name=name+".ptr")
         return CTemp(self, globalstr.bitcast(
-                                    lc.Type.pointer(content.type.element)))
+                                        types.pointer(content.type.element)))
 
 
     def get_intrinsic(self, intrinsic_id, tys):
@@ -423,18 +418,62 @@ class CBuilder(object):
     def unreachable(self):
         self.builder.unreachable()
 
+class _DeclareCDef(object):
+    def __init__(self, cdef):
+        self.cdef = cdef
+
+    def __str__(self):
+        return self.cdef._name_
+
+    def __call__(self, module):
+        try:
+            func = self.cdef.define(module)
+        except NameError as e:
+            (func,) = e
+        return func
+
+class CDeclare(object):
+    def __init__(self, name, ty, ptr):
+        self._name = name
+        self._type = ty
+        self._ptr = ptr
+
+    def __call__(self, module):
+        fnptr = types.pointer(self._type)
+        ptr = lc.Constant.int(types.intp, self._ptr)
+        ptr = ptr.inttoptr(fnptr)
+        return ptr
+
+    def __str__(self):
+        return self._name
+
 class CDefinition(CBuilder):
     '''
     Inherit this class to for defining functions
     '''
-    _name_ = 'unamed'         # name of the function; should overide in subclass
-    _retty_  = lc.Type.void() # return type; can overide in subclass
+    _name_ = ''             # name of the function; should overide in subclass
+    _retty_  = types.void # return type; can overide in subclass
     _argtys_ = []       # a list of tuple(name, type); can overide in subclass
 
+    def __new__(cls, *args, **kws):
+        try:
+            fnsp = getattr(cls, 'specialize')
+        except AttributeError:
+            pass
+        else:
+            cls = type('%s_Specialized' % cls.__name__, (cls,), {})
+            fnsp(*args, **kws)
+
+        obj = object.__new__(_DeclareCDef)
+        obj.__init__(cls)
+        return obj
+
     @classmethod
-    def define(cls, module, **kws):
+    def define(cls, module):
         functype = lc.Type.function(cls._retty_, [v for k, v in cls._argtys_])
-        name = cls._name_ % kws
+        name = cls._name_
+        if not name:
+            raise NameError("Function name cannot be empty.")
         func = module.get_or_insert_function(functype, name=name)
         if not func.is_declaration: # already defined?
             raise NameError(func)
@@ -444,8 +483,9 @@ class CDefinition(CBuilder):
             func.args[i].name = name
 
         # Create builder and populate body
-        cbuilder = cls(func)
-        cbuilder.body(*cbuilder.args, **kws)
+        cbuilder = object.__new__(cls)
+        cbuilder.__init__(func)
+        cbuilder.body(*cbuilder.args)
         cbuilder.close()
         return func
 
@@ -662,7 +702,7 @@ class CValue(object):
     def __getitem__(self, idx):
         self._ensure_is_pointer()
         if not isinstance(idx, CValue):
-            idx = self.parent.constant(lc.Type.int(), idx)
+            idx = self.parent.constant(types.int, idx)
         bldr = self.parent.builder
         ptr = bldr.gep(self.value, [idx.value])
         return CVar(self.parent, ptr)
@@ -827,7 +867,7 @@ class CArray(CValue):
 #        if isinstance(idx, CValue):
 #            idx = idx.value
 #        elif not isinstance(idx, lc.Value):
-#            idx = self.parent.constant(lc.Type.int(), idx).value
+#            idx = self.parent.constant(types.int, idx).value
 #        ptr = builder.gep(self.value, [idx])
 #        return CVar(self.parent, ptr)
 
@@ -838,7 +878,7 @@ class CStruct(CValue):
 
     def __init__(self, parent, ptr):
         super(CStruct, self).__init__(parent)
-        makeind = lambda x: self.parent.constant(lc.Type.int(), x).value
+        makeind = lambda x: self.parent.constant(types.int, x).value
         self.ptr = ptr
         for i, (fd, _) in enumerate(self._fields_):
             gep = self.parent.builder.gep(ptr, [makeind(0), makeind(i)])

@@ -48,10 +48,12 @@ class Tester(CDefinition):
         ArgCount = 2
         WorkCount = 10000
 
-        PUfuncDef = ParallelUFuncPosix.specialize(num_thread=2)
-        SPUF = SpecializedParallelUFunc.specialize(
-                                            PUfuncDef, UFuncCore_D_D, Work_D_D)
-        sppufunc = self.depends(SPUF)
+
+        spufdef = SpecializedParallelUFunc(ParallelUFuncPosix(num_thread=2),
+                                           UFuncCore_D_D(),
+                                           Work_D_D())
+
+        sppufunc = self.depends(spufdef)
 
         # real work
         NULL = self.constant_null(C.void_p)
