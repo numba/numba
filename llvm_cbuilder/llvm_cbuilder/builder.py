@@ -655,16 +655,36 @@ class _DeclareCDef(object):
             (func,) = e
         return func
 
-class CDeclare(object):
-    '''create a function from name, type and pointer to use with
-    `CBuilder.depends`
+class CFuncRef(object):
+    '''create a function reference to use with `CBuilder.depends`
+
+    Either from name, type and pointer,
+    Or from  a llvm.core.FunctionType instance
     '''
-    def __init__(self, name, ty, ptr):
-        self._name = name
-        self._type = ty
-        self._ptr = ptr
+    def __init__(self, *args, **kwargs):
+        def one_arg(fn):
+            self._fn = fn
+            self._name = fn.name
+
+        def three_arg(name, ty, ptr):
+            self._name = name
+            self._type = ty
+            self._ptr = ptr
+
+        try:
+            three_arg(*args, **kwargs)
+            self._meth = self._from_pointer
+        except TypeError:
+            one_arg(*args, **kwargs)
+            self._meth = self._from_func
 
     def __call__(self, module):
+        return self._meth()
+
+    def _from_func(self):
+        return self._fn
+
+    def _from_pointer(self):
         fnptr = types.pointer(self._type)
         ptr = lc.Constant.int(types.intp, self._ptr)
         ptr = ptr.inttoptr(fnptr)
