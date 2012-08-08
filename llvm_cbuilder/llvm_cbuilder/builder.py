@@ -8,6 +8,10 @@ import llvm.ee as le
 from llvm import LLVMException
 from . import shortnames as types
 
+###
+#  Utilities
+###
+
 def _is_int(ty):
     return isinstance(ty, lc.IntegerType)
 
@@ -47,6 +51,19 @@ def _change_block_temporarily_dummy(*args):
     yield
 
 class _IfElse(object):
+    '''if-else construct.
+
+    Example
+    -------
+    with cbuilder.ifelse(cond) as ifelse:
+        with ifelse.then():
+            # code when cond is true
+            # this block is mandatory
+        with ifelse.otherwise():
+            # code when cond is false
+            # this block is optional
+    '''
+
     def __init__(self, parent, cond):
         self.parent = parent
         self.cond = cond
@@ -84,6 +101,22 @@ class _IfElse(object):
         builder.position_at_end(bbend)
 
 class _Loop(object):
+    '''while...do loop.
+
+    Example
+    -------
+    with cbuilder.loop() as loop:
+        with loop.condition() as setcond:
+            # Put the condition evaluation here
+            setcond( cond )         # set loop condition
+            # Do not put code after setcond(...)
+        with loop.body():
+            # Put the code of the loop body here
+
+    Use loop.break_loop() to break out of the loop.
+    Use loop.continue_loop() to jump the condition evaulation.
+    '''
+
     def __init__(self, parent):
         self.parent = parent
 
@@ -107,9 +140,8 @@ class _Loop(object):
     def body(self):
         builder = self.parent.builder
         builder.position_at_end(self._bbbody)
-
         yield self
-
+        # close last block
         if not _is_block_terminated(builder.basic_block):
             builder.branch(self._bbcond)
 
@@ -121,9 +153,6 @@ class _Loop(object):
 
     def close(self):
         builder = self.parent.builder
-#        if not _is_block_terminated(builder.basic_block):
-#            with _change_block_temporarily(builder, builder.basic_block):
-#                builder.branch(self._bbend)
         builder.position_at_end(self._bbend)
 
 class CBuilder(object):
@@ -131,14 +160,18 @@ class CBuilder(object):
     A wrapper class for features in llvm-py package
     to allow user to use C-like high-level language contruct easily.
     '''
+
     def __init__(self, function):
+        '''constructor
+
+        function : is an empty function to be populating.
+        '''
         self.function = function
         self.declare_block = self.function.append_basic_block('decl')
         self.first_body_block = self.function.append_basic_block('body')
         self.builder = lc.Builder.new(self.first_body_block)
         self.target_data = le.TargetData.new(self.function.module.data_layout)
-
-        # prepare arguments
+        # Prepare arguments. Make all function arguments behave like variables.
         self.args = []
         for arg in function.args:
             var = self.var(arg.type, arg, name=arg.name)
@@ -146,21 +179,40 @@ class CBuilder(object):
 
     @staticmethod
     def new_function(mod, name, ret, args):
+        '''factory method
+
+        Create a new function in the module and return a CBuilder instance.
+        '''
         functype = lc.Type.function(ret, args)
         func = mod.add_function(functype, name=name)
         return CBuilder(func)
 
     def depends(self, fndecl):
+        '''add function dependency
+
+        Returns a CFunc instance and define the function if it is not defined.
+
+        fndecl : is a callable that takes a `llvm.core.Module` and returns
+                 a function pointer.
+        '''
         return CFunc(self, fndecl(self.function.module))
 
     def printf(self, fmt, *args):
-        mod = self.function.module
-        functype = lc.Type.function(types.int, [types.char_p], True)
-        printf = mod.get_or_insert_function(functype, name='printf')
-        ret = self.builder.call(printf, [fmt.value]+_list_values(args))
+        '''printf() from libc
+
+        fmt : a character string holding printf format string.
+        *args : additional variable arguments.
+        '''
+        from .libc import LibC
+        libc = LibC(self)
+        ret = libc.printf(fmt, *args)
         return CTemp(self, ret)
 
     def debug(self, *args):
+        '''debug print
+
+        Use printf to dump the values of all arguments.
+        '''
         type_mapper = {
             'i8' : '%c',
             'i16': '%hd',
@@ -174,17 +226,27 @@ class CBuilder(object):
             if isinstance(i, str):
                 itemsfmt.append(i.replace('%', '%%'))
             else:
-                ty = type_mapper[str(i.type)]
+                tyname = str(i.type)
+                if tyname == 'float':
+                    # auto convert float to double
+                    ty = '%e'
+                    i = i.cast(types.double)
+                else:
+                    ty = type_mapper[tyname]
                 itemsfmt.append(ty)
                 items.append(i)
         fmt = ' '.join(itemsfmt) + '\n'
         return self.printf(self.constant_string(fmt), *items)
 
     def var(self, ty, value=None, name=''):
-        '''
-        Only allocate in the first block
+        '''allocate variable on the stack
+
+        ty : variable type
+        value : [optional] initializer value
+        name : [optional] name used in LLVM IR
         '''
         with _change_block_temporarily(self.builder, self.declare_block):
+            # goto the first block
             is_cstruct = _is_cstruct(ty)
             if is_cstruct:
                 cstruct = ty
@@ -203,27 +265,45 @@ class CBuilder(object):
             return CVar(self, ptr)
 
     def var_copy(self, val, name=''):
+        '''allocate a new variable by copying another value
+
+        The new variable has the same type and value of `val`.
+        '''
         return self.var(val.type, val, name=name)
 
     def array(self, ty, count, name=''):
+        '''allocate an array on the stack
+
+        ty : array element type
+        count : array size; can be python int, llvm.core.Constant, or CValue
+        name : [optional] name used in LLVM IR
+        '''
         if isinstance(count, int) or isinstance(count, lc.Constant):
+            # Only go to the first block if array size is fixed.
             contexthelper = _change_block_temporarily
         else:
+            # Do not go to the first block if the array size is dynamic.
             contexthelper = _change_block_temporarily_dummy
 
         with contexthelper(self.builder, self.declare_block):
-            is_cstruct = _is_cstruct(ty)
-            if is_cstruct:
+            if _is_cstruct(ty): # array of struct?
                 cstruct = ty
                 ty = ty.llvm_type()
+
             if isinstance(count, CValue):
                 count = count.value
             elif not isinstance(count, lc.Value):
                 count = self.constant(types.int, count).value
+
             ptr = self.builder.alloca_array(ty, count, name=name)
             return CArray(self, ptr)
 
     def ret(self, val=None):
+        '''insert return statement
+
+        val : if is `None`, insert return-void
+              else, return `val`
+        '''
         retty = self.function.type.pointee.return_type
         if val is not None:
             if val.type != retty:
@@ -238,18 +318,26 @@ class CBuilder(object):
 
     @contextlib.contextmanager
     def ifelse(self, cond):
+        '''start a if-else block
+
+        cond : branch condition
+        '''
         cb = _IfElse(self, cond)
         yield cb
         cb.close()
 
     @contextlib.contextmanager
     def loop(self):
+        '''start a loop block
+        '''
         cb = _Loop(self)
         yield cb
         cb.close()
 
     @contextlib.contextmanager
     def forever(self):
+        '''start a forever loop block
+        '''
         with self.loop() as loop:
             with loop.condition() as setcond:
                 NULL = self.constant_null(types.int)
@@ -259,6 +347,10 @@ class CBuilder(object):
 
     @contextlib.contextmanager
     def for_range(self, *args):
+        '''start a for-range block.
+
+        *args : same as arguments of builtin `range()`
+        '''
         def check_arg(x):
             if isinstance(x, int):
                 return self.constant(types.int, x)
@@ -287,15 +379,26 @@ class CBuilder(object):
                 idx += step
 
     def position_at_end(self, bb):
+        '''reposition inserter to the end of basic-block
+
+        bb : a basic block
+        '''
         self.basic_block = bb
         self.builder.position_at_end(bb)
 
     def close(self):
+        '''end code generation
+        '''
         # Close declaration block
         with _change_block_temporarily(self.builder, self.declare_block):
             self.builder.branch(self.first_body_block)
 
     def constant(self, ty, val):
+        '''create a constant
+
+        ty : data type
+        val : initializer
+        '''
         if isinstance(ty, lc.IntegerType):
             res = lc.Constant.int(ty, val)
         elif ty == types.float or ty == types.double:
@@ -306,119 +409,239 @@ class CBuilder(object):
         return CTemp(self, res)
 
     def constant_null(self, ty):
+        '''create a zero filled constant
+
+        ty : data type
+        '''
         res = lc.Constant.null(ty)
         return CTemp(self, res)
 
     def constant_string(self, string):
+        '''create a constant string
+
+        This will de-duplication string of same content to minimize memory use.
+        '''
         mod = self.function.module
-        # TODO
-        # Is this a safe way for uniquing identifying string
-        name = '.conststr.%x_%x' % (hash(string), len(string))
+        collision = 0
+        name_fmt = '.conststr.%x.%x'
         content = lc.Constant.stringz(string)
-        try:
-            globalstr = mod.get_global_variable_named(name)
-        except LLVMException:
-            globalstr = mod.add_global_variable(content.type, name=name)
-            globalstr.initializer = content
-        return CTemp(self, globalstr.bitcast(
-                                        types.pointer(content.type.element)))
+        while True:
+            name = name_fmt % (hash(string), collision)
+            try:
+                # check if the name already exists
+                globalstr = mod.get_global_variable_named(name)
+            except LLVMException:
+                # new constant string
+                globalstr = mod.add_global_variable(content.type, name=name)
+                globalstr.initializer = content
+                globalstr.global_constant = True
+            else:
+                # compare existing content
+                existed = str(globalstr.initializer)
+                if existed != str(content):
+                    collision += 1
+                    continue # loop until we resolve the name collision
+
+            return CTemp(self, globalstr.bitcast(
+                                           types.pointer(content.type.element)))
 
 
     def get_intrinsic(self, intrinsic_id, tys):
+        '''get intrinsic function
+
+        intrinsic_id : numerical ID of target intrinsic
+        tys : type argument for the intrinsic
+        '''
         lfunc = lc.Function.intrinsic(self.function.module, intrinsic_id, tys)
         return CFunc(self, lfunc)
 
     def get_function_named(self, name):
+        '''get function by name
+        '''
         m = self.function.module
         func = m.get_function_named(name)
         return CFunc(self, func)
 
     def is_terminated(self):
-        '''
-        Is the current basic-block terminated?
+        '''is the current basic-block terminated?
         '''
         return _is_block_terminated(self.builder.basic_block)
 
     def atomic_cmpxchg(self, ptr, old, val, ordering, crossthread=True):
+        '''atomic compare-exchange
+
+        ptr : pointer to data
+        old : old value to compare to
+        val : new value
+        ordering : memory ordering as a string
+        crossthread : set to `False` for single-thread code
+
+        Returns the old value on success.
+        '''
         res = self.builder.atomic_cmpxchg(ptr.value, old.value, val.value,
                                           ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_xchg(self, ptr, val, ordering, crossthread=True):
+        '''atomic exchange
+
+        ptr : pointer to data
+        val : new value
+        ordering : memory ordering as a string
+        crossthread : set to `False` for single-thread code
+
+        Returns the old value
+        '''
+
         res = self.builder.atomic_xchg(ptr.value, val.value,
                                        ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_add(self, ptr, val, ordering, crossthread=True):
+        '''atomic add
+
+        ptr : pointer to data
+        val : new value
+        ordering : memory ordering as a string
+        crossthread : set to `False` for single-thread code
+
+        Returns the computation result of the operation
+        '''
+
         res = self.builder.atomic_add(ptr.value, val.value,
                                       ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_sub(self, ptr, val, ordering, crossthread=True):
+        '''atomic sub
+
+        See `atomic_add` for parameters documentation
+        '''
         res = self.builder.atomic_sub(ptr.value, val.value,
                                       ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_and(self, ptr, val, ordering, crossthread=True):
+        '''atomic bitwise and
+
+        See `atomic_add` for parameters documentation
+        '''
         res = self.builder.atomic_and(ptr.value, val.value,
                                       ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_nand(self, ptr, val, ordering, crossthread=True):
+        '''atomic bitwise nand
+
+        See `atomic_add` for parameters documentation
+        '''
         res = self.builder.atomic_nand(ptr.value, val.value,
                                        ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_or(self, ptr, val, ordering, crossthread=True):
+        '''atomic bitwise or
+
+        See `atomic_add` for parameters documentation
+        '''
         res = self.builder.atomic_or(ptr.value, val.value,
                                      ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_xor(self, ptr, val, ordering, crossthread=True):
+        '''atomic bitwise xor
+
+        See `atomic_add` for parameters documentation
+        '''
+
         res = self.builder.atomic_xor(ptr.value, val.value,
                                       ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_max(self, ptr, val, ordering, crossthread=True):
+        '''atomic signed maximum between value at `ptr` and `val`
+
+        See `atomic_add` for parameters documentation
+        '''
         res = self.builder.atomic_max(ptr.value, val.value,
                                       ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_min(self, ptr, val, ordering, crossthread=True):
+        '''atomic signed minimum between value at `ptr` and `val`
+
+        See `atomic_add` for parameters documentation
+        '''
         res = self.builder.atomic_min(ptr.value, val.value,
                                       ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_umax(self, ptr, val, ordering, crossthread=True):
+        '''atomic unsigned maximum between value at `ptr` and `val`
+
+        See `atomic_add` for parameters documentation
+        '''
         res = self.builder.atomic_umax(ptr.value, val.value,
                                        ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_umin(self, ptr, val, ordering, crossthread=True):
+        '''atomic unsigned minimum between value at `ptr` and `val`
+
+        See `atomic_add` for parameters documentation
+        '''
         res = self.builder.atomic_umin(ptr.value, val.value,
                                        ordering, crossthread)
         return CTemp(self, res)
 
     def atomic_load(self, ptr, ordering, align=1, crossthread=True):
+        '''atomic load
+
+        ptr : pointer to the value to load
+        align : memory alignment in bytes
+        See `atomic_add` for other documentation of other parameters
+        '''
         res = self.builder.atomic_load(ptr.value, ordering, align, crossthread)
         return CTemp(self, res)
 
     def atomic_store(self, val, ptr, ordering, align=1, crossthread=True):
+        '''atomic store
+
+        ptr : pointer to where to store
+        val : value to store
+        align : memory alignment in bytes
+        See `atomic_add` for other documentation of other parameters
+        '''
+
         res = self.builder.atomic_store(val.value, ptr.value, ordering,
                                         align, crossthread)
         return CTemp(self, res)
 
     def fence(self, ordering, crossthread=True):
+        '''insert memory fence
+        '''
         res = self.builder.fence(ordering, crossthread)
         return CTemp(self, res)
 
     def alignment(self, ty):
+        '''get minimum alignment of `ty`
+        '''
         return self.target_data.abi_alignment(ty)
 
     def unreachable(self):
+        '''insert instruction that causes segfault some platform (Intel),
+        or no-op on others.
+
+        It has no defined semantic.
+        '''
         self.builder.unreachable()
 
 class _DeclareCDef(object):
+    '''create a function a CDefinition to use with `CBuilder.depends`
+
+    An instance of this class is created by the constructor of CDefinition.
+    Do not use directly.
+    '''
     def __init__(self, cdef):
         self.cdef = cdef
 
@@ -433,6 +656,9 @@ class _DeclareCDef(object):
         return func
 
 class CDeclare(object):
+    '''create a function from name, type and pointer to use with
+    `CBuilder.depends`
+    '''
     def __init__(self, name, ty, ptr):
         self._name = name
         self._type = ty
@@ -448,33 +674,51 @@ class CDeclare(object):
         return self._name
 
 class CDefinition(CBuilder):
-    '''
-    Inherit this class to for defining functions
+    '''represents function definition
+
+    Inherit from this class to create a new function definition.
+
+    Class Members
+    -------------
+    _name_ : name of the function
+    _retty_ : return type
+    _argtys_ : argument names and types as list of tuples;
+               e.g. [ ( 'myarg', lc.Type.int() ), ... ]
     '''
     _name_ = ''             # name of the function; should overide in subclass
     _retty_  = types.void # return type; can overide in subclass
     _argtys_ = []       # a list of tuple(name, type); can overide in subclass
 
     def __new__(cls, *args, **kws):
-        try:
-            fnsp = getattr(cls, 'specialize')
-        except AttributeError:
-            pass
-        else:
+        if cls.is_generic():
+            # Call specialize if it is defined.
             cls = type('%s_Specialized' % cls.__name__, (cls,), {})
-            fnsp(*args, **kws)
+            cls.specialize(*args, **kws)
 
         obj = object.__new__(_DeclareCDef)
         obj.__init__(cls)
         return obj
 
     @classmethod
+    def is_generic(cls):
+        '''Is this a generic definition?
+        '''
+        return hasattr(cls, 'specialize')
+
+    @classmethod
     def define(cls, module):
+        '''define the function in the module.
+
+        Raises NameError if a function of the same name has already been
+        defined.
+        '''
         functype = lc.Type.function(cls._retty_, [v for k, v in cls._argtys_])
         name = cls._name_
         if not name:
-            raise NameError("Function name cannot be empty.")
+            raise AttributeError("Function name cannot be empty.")
+
         func = module.get_or_insert_function(functype, name=name)
+
         if not func.is_declaration: # already defined?
             raise NameError(func)
 
@@ -490,25 +734,24 @@ class CDefinition(CBuilder):
         return func
 
     def body(self):
-        '''
-        Overide this function to define the body.
+        '''overide this function to define the body.
         '''
         raise NotImplementedError
 
 class CValue(object):
     '''
-    = Signess =
-    Since LLVM type does not provide signess attribute.  This information
+    Signedness
+    ----------
+    Since LLVM type does not provide signedness attribute.  This information
     is provided in the CValue.unsigned attribute.  The default value is
     `None`, meaning that this attribute is not set.
 
-    In casting operation, signess information is passed as an optional arg.
+    In casting operation, signednss information is passed as an optional arg.
 
-    In binary operation, signess of the left operand is used.
+    In binary operation, signedness of the left operand is used.
     '''
 
-    # Attribute for for integer values.
-    unsigned = None
+    unsigned = None  # attribute for for integer values.
 
     _BINOP_MAP = {
         # op-name : (signed int, unsigned int, real)
@@ -542,6 +785,8 @@ class CValue(object):
         self.parent = parent
 
     def _use_binop(self, op):
+        '''implements binary operations
+        '''
         def wrapped(rhs):
             self._ensure_same_type(rhs)
             binop = self._BINOP_MAP[op]
@@ -560,6 +805,8 @@ class CValue(object):
         return wrapped
 
     def _use_bitwise(self, op):
+        '''implements bitwise operations
+        '''
         def wrapped(rhs):
             self._ensure_same_type(rhs)
             if not self.is_int:
@@ -608,6 +855,10 @@ class CValue(object):
         return self._use_bitwise('xor')(rhs)
 
     def _ensure_same_type(self, val):
+        '''ensure that this instance has the same type as `val`
+
+        Raises TypeError if `self.type != val.type`
+        '''
         if self.type != val.type:
             errmsg = "Type mismatch: %s != %s"
             raise TypeError(errmsg % (self.type, val.type))
@@ -621,6 +872,10 @@ class CValue(object):
         return _is_real(self.type)
 
     def cast(self, ty, unsigned=False):
+        '''cast to another type
+
+        If `ty == self.type`, then pass thru
+        '''
         make = lambda X: CTemp(self.parent, X)
         if self.type == ty:
             return self # pass thru
@@ -651,6 +906,8 @@ class CValue(object):
         raise TypeError(errmsg % (self.type, ty))
 
     def _cmp_op(self, name):
+        '''implements comparison operations
+        '''
         def wrapped(rhs):
             make = lambda X: CTemp(self.parent, X)
             self._ensure_same_type(rhs)
@@ -700,6 +957,10 @@ class CValue(object):
             raise TypeError("Must be a pointer; got %s" % self.type)
 
     def __getitem__(self, idx):
+        '''implement access indexing
+
+        Uses GEP.
+        '''
         self._ensure_is_pointer()
         if not isinstance(idx, CValue):
             idx = self.parent.constant(types.int, idx)
@@ -708,15 +969,26 @@ class CValue(object):
         return CVar(self.parent, ptr)
 
     def load(self, volatile=False):
+        '''memory load for pointer types
+        '''
         self._ensure_is_pointer()
         loaded = self.parent.builder.load(self.value, volatile=volatile)
         return CTemp(self.parent, loaded)
 
     def store(self, val, volatile=False):
+        '''memory store for pointer types
+        '''
         self._ensure_is_pointer()
         self.parent.builder.store(val.value, self.value, volatile=volatile)
 
     def atomic_load(self, ordering, align=None, crossthread=True):
+        '''atomic load memory for pointer types
+
+        align : overide to control memory alignment; otherwise the default
+                alignment of the type is used.
+
+        Other parameters are the same as `CBuilder.atomic_load`
+        '''
         self._ensure_is_pointer()
         if align is None:
             align = self.parent.alignment(self.type.pointee)
@@ -725,6 +997,13 @@ class CValue(object):
         return CTemp(self.parent, inst)
 
     def atomic_store(self, value, ordering, align=None,  crossthread=True):
+        '''atomic memory store for pointer types
+
+        align : overide to control memory alignment; otherwise the default
+                alignment of the type is used.
+
+        Other parameters are the same as `CBuilder.atomic_store`
+        '''
         self._ensure_is_pointer()
         if align is None:
             align = self.parent.alignment(self.type.pointee)
@@ -732,6 +1011,10 @@ class CValue(object):
                                          align=align, crossthread=crossthread)
 
     def atomic_cmpxchg(self, old, new, ordering, crossthread=True):
+        '''atomic compare-exchange for pointer types
+
+        Other parameters are the same as `CBuilder.atomic_cmpxchg`
+        '''
         self._ensure_is_pointer()
         inst = self.parent.builder.atomic_cmpxchg(self.value, old.value,
                                                   new.value, ordering,
@@ -740,11 +1023,17 @@ class CValue(object):
 
 
 class CFunc(CValue):
+    '''Wraps function pointer
+    '''
     def __init__(self, parent, func):
         super(CFunc, self).__init__(parent)
         self.function = func
 
     def __call__(self, *args):
+        '''Call the function with the given arguments
+
+        *args : variable arguments of CValue instances
+        '''
         arg_values = _list_values(args)
         ftype = self.function.type.pointee
         for i, (exp, got) in enumerate(zip(ftype.args, arg_values)):
@@ -764,6 +1053,8 @@ class CFunc(CValue):
         return self.function.type
 
 class CTemp(CValue):
+    '''Wraps temporary values
+    '''
     def __init__(self, parent, value):
         super(CTemp, self).__init__(parent)
         self.value = value
@@ -773,6 +1064,10 @@ class CTemp(CValue):
         return self.value.type
 
 class CVar(CValue):
+    '''Wraps variables
+
+    Similar to C variables.
+    '''
 
     def __init__(self, parent, ptr):
         super(CVar, self).__init__(parent)
@@ -827,6 +1122,8 @@ class CVar(CValue):
         return self.parent.builder.load(self.ptr)
 
     def assign(self, val):
+        '''assign new value to the variable
+        '''
         self._ensure_same_type(val)
         self.parent.builder.store(val.value, self.ptr)
 
@@ -835,9 +1132,13 @@ class CVar(CValue):
         return self.ptr.type.pointee
 
     def reference(self):
+        '''get a pointer reference of the variable
+        '''
         return CTemp(self.parent, self.ptr)
 
     def as_struct(self, cstruct_class, volatile=False):
+        '''load a pointer to a structure and assume a structure interface
+        '''
         if _is_pointer(self.type):
             ptr = self.parent.builder.load(self.ptr, volatile=volatile)
             return cstruct_class(self.parent, ptr)
@@ -845,6 +1146,10 @@ class CVar(CValue):
             return cstruct_class(self.parent, self.ptr)
 
 class CArray(CValue):
+    '''wraps a array
+
+    Similar to C arrays
+    '''
     def __init__(self, parent, base):
         super(CArray, self).__init__(parent)
         self.base_ptr = base
@@ -860,18 +1165,17 @@ class CArray(CValue):
     def type(self):
         return self.base_ptr.type
 
-## Moved to CValue
-#    def __getitem__(self, idx):
-#        self._ensure_is_pointer()
-#        builder = self.parent.builder
-#        if isinstance(idx, CValue):
-#            idx = idx.value
-#        elif not isinstance(idx, lc.Value):
-#            idx = self.parent.constant(types.int, idx).value
-#        ptr = builder.gep(self.value, [idx])
-#        return CVar(self.parent, ptr)
-
 class CStruct(CValue):
+    '''Wraps a structure
+
+    Structure in LLVM can be identified by name of layout.
+
+    Subclass to define a new structure. All fields are defined in the
+    `_fields_` class attribute as a list of tuple (name, type).
+
+    Can define new methods which gets inlined to the parent CBuilder.
+    '''
+
     @classmethod
     def llvm_type(cls):
         return lc.Type.struct([v for k, v in cls._fields_])
@@ -883,12 +1187,19 @@ class CStruct(CValue):
         for i, (fd, _) in enumerate(self._fields_):
             gep = self.parent.builder.gep(ptr, [makeind(0), makeind(i)])
             gep.name = "%s.%s" % (type(self).__name__, fd)
+            if hasattr(self, fd):
+                raise AttributeError("Field name shadows another attribute")
             setattr(self, fd, CVar(self.parent, gep))
 
     def reference(self):
         return CTemp(self.parent, self.ptr)
 
 class CExternal(object):
+    '''subclass to define external interface
+
+    All class attributes that are `llvm.core.FunctionType` are converted
+    to `CFunc` instance during instantiation.
+    '''
     def __init__(self, cbuilder):
         is_func = lambda x: isinstance(x, lc.FunctionType)
         non_magic = lambda s: not ( s.startswith('__') and s.endswith('__') )

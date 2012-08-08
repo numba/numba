@@ -1,3 +1,7 @@
+'''
+This is mostly a convenience module for testing with ctypes.
+'''
+
 from llvm.core import Type, Module
 import llvm.ee as le
 import ctypes as ct
@@ -29,6 +33,8 @@ MAP_CTYPES = {
 }
 
 class CExecutor(object):
+    '''a convenient class for creating ctype functions from LLVM modules
+    '''
     def __init__(self, mod_or_engine):
         if isinstance(mod_or_engine, Module):
             self.engine = le.EngineBuilder.new(mod_or_engine).opt(3).create()
@@ -36,6 +42,14 @@ class CExecutor(object):
             self.engine = mod_or_engine
 
     def get_ctype_function(self, fn, *typeinfo):
+        '''create a ctype function from a LLVM function
+
+        typeinfo : string of types (see `MAP_CTYPES`) or
+                   list of ctypes datatype.
+                   First value is the return type.
+                   A function that takes no argument and return nothing
+                   should use `"void"` or `None`.
+        '''
         if len(typeinfo)==1 and isinstance(typeinfo[0], str):
             types = [ MAP_CTYPES[s.strip()] for s in typeinfo[0].split(',') ]
             if not types:
