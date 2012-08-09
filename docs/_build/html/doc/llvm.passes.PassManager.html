@@ -1,0 +1,138 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>llvm.passes.PassManager &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: PassManager (llvm.passes)</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="llvm-passes-passmanager">
+<h1>llvm.passes.PassManager<a class="headerlink" href="#llvm-passes-passmanager" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="methods">
+<h2>Methods<a class="headerlink" href="#methods" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="add-self-tgt-data-or-pass-id">
+<h3><tt class="docutils literal"><span class="pre">add(self,</span> <span class="pre">tgt_data_or_pass_id)</span></tt><a class="headerlink" href="#add-self-tgt-data-or-pass-id" title="Permalink to this headline">¶</a></h3>
+<p>Add a pass by its ID. A pass IDs are defined as <tt class="docutils literal"><span class="pre">PASS_*</span></tt>.</p>
+</div>
+<div class="section" id="run-self-module">
+<h3><tt class="docutils literal"><span class="pre">run(self,</span> <span class="pre">module)</span></tt><a class="headerlink" href="#run-self-module" title="Permalink to this headline">¶</a></h3>
+<p>Run all passes on the given <tt class="docutils literal"><span class="pre">module</span></tt>.</p>
+</div>
+</div>
+<div class="section" id="static-factory-methods">
+<h2>Static Factory Methods<a class="headerlink" href="#static-factory-methods" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="new">
+<h3><tt class="docutils literal"><span class="pre">new()</span></tt><a class="headerlink" href="#new" title="Permalink to this headline">¶</a></h3>
+<p>Creates a new <tt class="docutils literal"><span class="pre">PassManager</span></tt> instance.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">llvm.passes.PassManager</a><ul>
+<li><a class="reference internal" href="#methods">Methods</a><ul>
+<li><a class="reference internal" href="#add-self-tgt-data-or-pass-id"><tt class="docutils literal"><span class="pre">add(self,</span> <span class="pre">tgt_data_or_pass_id)</span></tt></a></li>
+<li><a class="reference internal" href="#run-self-module"><tt class="docutils literal"><span class="pre">run(self,</span> <span class="pre">module)</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#static-factory-methods">Static Factory Methods</a><ul>
+<li><a class="reference internal" href="#new"><tt class="docutils literal"><span class="pre">new()</span></tt></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/llvm.passes.PassManager.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,919 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>3. Chapter 3: Code generation to LLVM IR &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../../index.html" />
+    <link rel="up" title="Kaleidoscope" href="index.html" />
+    <link rel="next" title="4. Chapter 4: Adding JIT and Optimizer Support" href="PythonLangImpl4.html" />
+    <link rel="prev" title="2. Chapter 2: Implementing a Parser and AST" href="PythonLangImpl2.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="PythonLangImpl4.html" title="4. Chapter 4: Adding JIT and Optimizer Support"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="PythonLangImpl2.html" title="2. Chapter 2: Implementing a Parser and AST"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="../examples.html" >Examples and LLVM Tutorials</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Kaleidoscope</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="chapter-3-code-generation-to-llvm-ir">
+<h1>3. Chapter 3: Code generation to LLVM IR<a class="headerlink" href="#chapter-3-code-generation-to-llvm-ir" title="Permalink to this headline">¶</a></h1>
+<p>Written by <a class="reference external" href="mailto:sabre&#37;&#52;&#48;nondot&#46;org">Chris Lattner</a> and <a class="reference external" href="http://max99x.com">Max
+Shawabkeh</a></p>
+<div class="section" id="introduction-intro">
+<h2>3.1. Introduction # {#intro}<a class="headerlink" href="#introduction-intro" title="Permalink to this headline">¶</a></h2>
+<p>Welcome to Chapter 3 of the <a class="reference external" href="http://www.llvm.org/docs/tutorial/index.html">Implementing a language with
+LLVM</a> tutorial. This
+chapter shows you how to transform the <a class="reference external" href="PythonLangImpl2.html">Abstract Syntax
+Tree</a>, built in Chapter 2, into LLVM IR. This
+will teach you a little bit about how LLVM does things, as well as
+demonstrate how easy it is to use. It&#8217;s much more work to build a lexer
+and parser than it is to generate LLVM IR code. :)</p>
+<p><strong>Please note</strong>: the code in this chapter and later requires llvmpy 0.6
+and LLVM 2.7. Earlier versions will most likely not work with it. Also
+note that you need to use a version of this tutorial that matches your
+llvmpy release: If you are using an official llvmpy release, use the
+version of the documentation on the <a class="reference external" href="http://www.mdevan.org/llvmpy/examples.html">llvmpy examples
+page</a></p>
+</div>
+<hr class="docutils" />
+<div class="section" id="code-generation-setup-basics">
+<h2>3.2. Code Generation Setup # {#basics}<a class="headerlink" href="#code-generation-setup-basics" title="Permalink to this headline">¶</a></h2>
+<p>In order to generate LLVM IR, we want some simple setup to get started.
+First we define code generation methods in each AST node class:</p>
+<p>{% highlight python %} # Expression class for numeric literals like
+&#8220;1.0&#8221;. class NumberExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, value): self.value = value</p>
+<p>def CodeGen(self): ...</p>
+</div>
+<div class="section" id="expression-class-for-referencing-a-variable-like-a">
+<h2>3.3. Expression class for referencing a variable, like &#8220;a&#8221;.<a class="headerlink" href="#expression-class-for-referencing-a-variable-like-a" title="Permalink to this headline">¶</a></h2>
+<p>class VariableExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, name): self.name = name</p>
+<p>def CodeGen(self): ...</p>
+<p>... {% endhighlight %}</p>
+<p>The <tt class="docutils literal"><span class="pre">CodeGen</span></tt> method says to emit IR for that AST node along with all
+the things it depends on, and they all return an LLVM Value object.
+&#8220;Value&#8221; is the class used to represent a &#8220;<a class="reference external" href="http://en.wikipedia.org/wiki/Static_single_assignment_form">Static Single Assignment
+(SSA)</a>
+register&#8221; or &#8220;SSA value&#8221; in LLVM. The most distinct aspect of SSA values
+is that their value is computed as the related instruction executes, and
+it does not get a new value until (and if) the instruction re-executes.
+In other words, there is no way to &#8220;change&#8221; an SSA value. For more
+information, please read up on <a class="reference external" href="http://en.wikipedia.org/wiki/Static_single_assignment_form">Static Single
+Assignment</a>
+- the concepts are really quite natural once you grok them.</p>
+<p>We will also need to define some global variables which we will be used
+during code generation:</p>
+<p>{% highlight python %} # The LLVM module, which holds all the IR code.
+g_llvm_module = Module.new(&#8216;my cool jit&#8217;)</p>
+</div>
+<div class="section" id="the-llvm-instruction-builder-created-whenever-a-new-function-is-entered">
+<h2>3.4. The LLVM instruction builder. Created whenever a new function is entered.<a class="headerlink" href="#the-llvm-instruction-builder-created-whenever-a-new-function-is-entered" title="Permalink to this headline">¶</a></h2>
+<p>g_llvm_builder = None</p>
+</div>
+<div class="section" id="a-dictionary-that-keeps-track-of-which-values-are-defined-in-the-current-scope">
+<h2>3.5. A dictionary that keeps track of which values are defined in the current scope<a class="headerlink" href="#a-dictionary-that-keeps-track-of-which-values-are-defined-in-the-current-scope" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="and-what-their-llvm-representation-is">
+<h2>3.6. and what their LLVM representation is.<a class="headerlink" href="#and-what-their-llvm-representation-is" title="Permalink to this headline">¶</a></h2>
+<p>g_named_values = {} {% endhighlight %}</p>
+<p><tt class="docutils literal"><span class="pre">g_llvm_module</span></tt> is the LLVM construct that contains all of the
+functions and global variables in a chunk of code. In many ways, it is
+the top-level structure that the LLVM IR uses to contain code.</p>
+<p><tt class="docutils literal"><span class="pre">g_llvm_builder</span></tt> is a helper object that makes it easy to generate
+LLVM instructions. Instances of the
+<a class="reference external" href="llvm.core.Builder.html">llvm.core.Builder</a> class keep track of the
+current place to insert instructions and have methods to create new
+instructions. Note that we do not initialize this variable; instead, it
+will be initialized whenever we start generating code for a function.</p>
+<p>Finally, <tt class="docutils literal"><span class="pre">g_named_values</span></tt> is a dictionary that keeps track of which
+values are defined in the current scope and what their LLVM
+representation is. In other words, it is a symbol table for the code. In
+this form of Kaleidoscope, the only things that can be referenced are
+function parameters. As such, function parameters will be in this map
+when generating code for their function body.</p>
+<p>With these basics in place, we can start talking about how to generate
+code for each expression. Note that this assumes that <tt class="docutils literal"><span class="pre">g_llvm_builder</span></tt>
+has been set up to generate code <em>into</em> something. For now, we&#8217;ll assume
+that this has already been done, and we&#8217;ll just use it to emit code.</p>
+</div>
+<hr class="docutils" />
+<div class="section" id="expression-code-generation-exprs">
+<h2>3.7. Expression Code Generation # {#exprs}<a class="headerlink" href="#expression-code-generation-exprs" title="Permalink to this headline">¶</a></h2>
+<p>Generating LLVM code for expression nodes is very straightforward: less
+than 35 lines of commented code for all four of our expression nodes.
+First we&#8217;ll do numeric literals:</p>
+<p>{% highlight python %} def CodeGen(self): return
+Constant.real(Type.double(), self.value) {% endhighlight %}</p>
+<p>In llvmpy, floating point numeric constants are represented with the
+<tt class="docutils literal"><span class="pre">llvm.core.ConstantFP</span></tt> class. To create one, we can use the static
+<tt class="docutils literal"><span class="pre">real()</span></tt> method in the <tt class="docutils literal"><span class="pre">llvm.core.Constant</span></tt> class. This code
+basically just creates and returns a <tt class="docutils literal"><span class="pre">ConstantFP</span></tt>. Note that in the
+LLVM IR constants are all uniqued together and shared. For this reason,
+we create the constant through a factory method instead of instantiating
+one directly.</p>
+<p>{% highlight python %} def CodeGen(self): if self.name in
+g_named_values: return g_named_values[self.name] else: raise
+RuntimeError(&#8216;Unknown variable name: &#8216; + self.name) {% endhighlight %}</p>
+<p>References to variables are also quite simple using LLVM. In the simple
+version of Kaleidoscope, we assume that the variable has already been
+emitted somewhere and its value is available. In practice, the only
+values that can be in the <tt class="docutils literal"><span class="pre">g_named_values</span></tt> dictionary are function
+arguments. This code simply checks to see that the specified name is in
+the map (if not, an unknown variable is being referenced) and returns
+the value for it. In future chapters, we&#8217;ll add support for <a class="reference external" href="PythonLangImpl5.html#for">loop
+induction variables</a> in the symbol table,
+and for <a class="reference external" href="PythonLangImpl7.html#localvars">local variables</a>.</p>
+<p>{% highlight python %} def CodeGen(self): left = self.left.CodeGen()
+right = self.right.CodeGen()</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;+&#39;</span><span class="p">:</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fadd</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;addtmp&#39;</span><span class="p">)</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;-&#39;</span><span class="p">:</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fsub</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;subtmp&#39;</span><span class="p">)</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;*&#39;</span><span class="p">:</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fmul</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;multmp&#39;</span><span class="p">)</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;&lt;&#39;</span><span class="p">:</span>
+  <span class="n">result</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fcmp</span><span class="p">(</span><span class="n">FCMP_ULT</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;cmptmp&#39;</span><span class="p">)</span>
+  <span class="c"># Convert bool 0 or 1 to double 0.0 or 1.0.</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">uitofp</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="s">&#39;booltmp&#39;</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Unknown binary operator.&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>Binary operators start to get more interesting. The basic idea here is
+that we recursively emit code for the left-hand side of the expression,
+then the right-hand side, then we compute the result of the binary
+expression depending on which operator is being used.</p>
+<p>In the example above, the LLVM builder class is starting to show its
+value. <tt class="docutils literal"><span class="pre">g_llvm_builder</span></tt> knows where to insert the newly created
+instruction, all you have to do is specify what instruction to create
+(e.g. with <tt class="docutils literal"><span class="pre">add</span></tt>), which operands to use (<tt class="docutils literal"><span class="pre">left</span></tt> and <tt class="docutils literal"><span class="pre">right</span></tt> here)
+and optionally provide a name for the generated instruction.</p>
+<p>One nice thing about LLVM is that the name is just a hint. For instance,
+if the code above emits multiple &#8220;addtmp&#8221; variables, LLVM will
+automatically provide each one with an increasing, unique numeric
+suffix. Local value names for instructions are purely optional, but it
+makes it much easier to read the IR dumps.</p>
+<p><a class="reference external" href="http://www.llvm.org/docs/LangRef.html#instref">LLVM instructions</a> are
+constrained by strict rules: for example, the Left and Right operators
+of an <a class="reference external" href="http://www.llvm.org/docs/LangRef.html#i_add">add instruction</a>
+must have the same type, and the result type of the add must match the
+operand types. Because all values in Kaleidoscope are doubles, this
+makes for very simple code for add, sub and mul.</p>
+<p>On the other hand, LLVM specifies that the <a class="reference external" href="http://www.llvm.org/docs/LangRef.html#i_fcmp">fcmp
+instruction</a> always
+returns an &#8216;i1&#8217; value (a one bit integer). The problem with this is that
+Kaleidoscope wants the value to be a 0.0 or 1.0 value. In order to get
+these semantics, we combine the fcmp instruction with a <a class="reference external" href="http://www.llvm.org/docs/LangRef.html#i_uitofp">uitofp
+instruction</a>. This
+instruction converts its input integer into a floating point value by
+treating the input as an unsigned value. In contrast, if we used the
+<a class="reference external" href="http://www.llvm.org/docs/LangRef.html#i_sitofp">sitofp instruction</a>,
+the Kaleidoscope <tt class="docutils literal"><span class="pre">&lt;</span></tt> operator would return 0.0 and -1.0, depending on
+the input value.</p>
+<p>{% highlight python %} def CodeGen(self): # Look up the name in the
+global module table. callee =
+g_llvm_module.get_function_named(self.callee)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Check for argument mismatch error.</span>
+<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">callee</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Incorrect number of arguments passed.&#39;</span><span class="p">)</span>
+
+<span class="n">arg_values</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">]</span>
+
+<span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">callee</span><span class="p">,</span> <span class="n">arg_values</span><span class="p">,</span> <span class="s">&#39;calltmp&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>Code generation for function calls is quite straightforward with LLVM.
+The code above initially does a function name lookup in the LLVM
+Module&#8217;s symbol table. Recall that the LLVM Module is the container that
+holds all of the functions we are JIT&#8217;ing. By giving each function the
+same name as what the user specifies, we can use the LLVM symbol table
+to resolve function names for us.</p>
+<p>Once we have the function to call, we codegen each argument that is to
+be passed in, and create an LLVM <a class="reference external" href="http://www.llvm.org/docs/LangRef.html#i_call">call
+instruction</a>. Note that
+LLVM uses the native C calling conventions by default, allowing these
+calls to also call into standard library functions like &#8220;sin&#8221; and &#8220;cos&#8221;,
+with no additional effort.</p>
+<p>This wraps up our handling of the four basic expressions that we have so
+far in Kaleidoscope. Feel free to go in and add some more. For example,
+by browsing the <a class="reference external" href="http://www.llvm.org/docs/LangRef.html">LLVM language
+reference</a> you&#8217;ll find several
+other interesting instructions that are really easy to plug into our
+basic framework.</p>
+</div>
+<hr class="docutils" />
+<div class="section" id="function-code-generation-funcs">
+<h2>3.8. Function Code Generation # {#funcs}<a class="headerlink" href="#function-code-generation-funcs" title="Permalink to this headline">¶</a></h2>
+<p>Code generation for prototypes and functions must handle a number of
+details, which make their code less beautiful than expression code
+generation, but allows us to illustrate some important points. First,
+let&#8217;s talk about code generation for prototypes: they are used both for
+function bodies and external function declarations. The code starts
+with:</p>
+<p>{% highlight python %} def CodeGen(self): # Make the function type, eg.
+double(double,double). funct_type = Type.function( Type.double(),
+[Type.double()] * len(self.args), False)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">function</span> <span class="o">=</span> <span class="n">Function</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">g_llvm_module</span><span class="p">,</span> <span class="n">funct_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>The call to <tt class="docutils literal"><span class="pre">Type.function</span></tt> creates the <tt class="docutils literal"><span class="pre">FunctionType</span></tt> that should
+be used for a given Prototype. Since all function arguments in
+Kaleidoscope are of type double, the first line creates a list of &#8220;N&#8221;
+LLVM double types. It then uses the <tt class="docutils literal"><span class="pre">Type.function</span></tt> method to create a
+function type that takes &#8220;N&#8221; doubles as arguments, returns one double as
+a result, and that is not vararg (the False parameter indicates this).
+Note that Types in LLVM are uniqued just like Constants are, so you
+don&#8217;t instantiate them directly.</p>
+<p>The final line above actually creates the function that the prototype
+will correspond to. This indicates the type and name to use, as well as
+which module to insert into. Note that by default, the function will
+have <a href="#id5"><span class="problematic" id="id6">`external
+linkage &lt;&lt;http://www.llvm.org/docs/LangRef.html#linkage&gt;`_</span></a>, which means
+that the function may be defined outside the current module and/or that
+it is callable by functions outside the module. The name passed in is
+the name the user specified: since <tt class="docutils literal"><span class="pre">g_llvm_module</span></tt> is specified, this
+name is registered in <tt class="docutils literal"><span class="pre">g_llvm_module</span></tt>&#8216;s symbol table, which is used by
+the function call code above.</p>
+<p>{% highlight python %} # If the name conflicted, there was already
+something with the same name. # If it has a body, don&#8217;t allow
+redefinition or reextern. if function.name != self.name:
+function.delete() function =
+g_llvm_module.get_function_named(self.name) {% endhighlight %}</p>
+<p>The Module symbol table works just like the Function symbol table when
+it comes to name conflicts: if a new function is created with a name was
+previously added to the symbol table, it will get implicitly renamed
+when added to the Module. The code above exploits this fact to determine
+if there was a previous definition of this function.</p>
+<p>In Kaleidoscope, we choose to allow redefinitions of functions in two
+cases: first, we want to allow &#8216;extern&#8217;ing a function more than once, as
+long as the prototypes for the externs match (since all arguments have
+the same type, we just have to check that the number of arguments
+match). Second, we want to allow &#8216;extern&#8217;ing a function and then
+defining a body for it. This is useful when defining mutually recursive
+functions.</p>
+<p>In order to implement this, the code above first checks to see if there
+is a collision on the name of the function. If so, it deletes the
+function we just created (by calling <tt class="docutils literal"><span class="pre">delete</span></tt>) and then calling
+<tt class="docutils literal"><span class="pre">get_function_named</span></tt> to get the existing function with the specified
+name.</p>
+<p>{% highlight python %} # If the function already has a body, reject
+this. if not function.is_declaration: raise RuntimeError(&#8216;Redefinition
+of function.&#8217;)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># If F took a different number of args, reject.</span>
+<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">callee</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Redeclaration of a function with different number &#39;</span>
+                     <span class="s">&#39;of args.&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>In order to verify the logic above, we first check to see if the
+pre-existing function is a forward declaration. Since we don&#8217;t allow
+anything after a full definition of the function, the code rejects this
+case. If the previous reference to a function was an &#8216;extern&#8217;, we simply
+verify that the number of arguments for that definition and this one
+match up. If not, we emit an error.</p>
+<p>{% highlight python %} # Set names for all arguments and add them to the
+variables symbol table. for arg, arg_name in zip(function.args,
+self.args): arg.name = arg_name # Add arguments to variable symbol
+table. g_named_values[arg_name] = arg</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">return</span> <span class="n">function</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>The last bit of code for prototypes loops over all of the arguments in
+the function, setting the name of the LLVM Argument objects to match,
+and registering the arguments in the <tt class="docutils literal"><span class="pre">g_named_values</span></tt> map for future
+use by the <tt class="docutils literal"><span class="pre">VariableExpressionNode</span></tt>. Note that we don&#8217;t check for
+conflicting argument names here (e.g. &#8220;extern foo(a b a)&#8221;). Doing so
+would be very straight-forward with the mechanics we have already used
+above. Once this is all set up, it returns the Function object to the
+caller.</p>
+<p>{% highlight python %} def CodeGen(self): # Clear scope.
+g_named_values.clear()</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Create a function object.</span>
+<span class="n">function</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prototype</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>Code generation for function definitions starts out simply enough: we
+just clear out the <tt class="docutils literal"><span class="pre">g_named_values</span></tt> dictionary to make sure that there
+isn&#8217;t anything in it from the last function we compiled and codegen the
+prototype. Code generation of the prototype ensures that there is an
+LLVM Function object that is ready to go for us.</p>
+<p>{% highlight python %} # Create a new basic block to start insertion
+into. block = function.append_basic_block(&#8216;entry&#8217;) global
+g_llvm_builder g_llvm_builder = Builder.new(block) {% endhighlight
+%}</p>
+<p>Now we get to the point where <tt class="docutils literal"><span class="pre">g_llvm_builder</span></tt> is set up. The first
+line creates a new <a class="reference external" href="http://en.wikipedia.org/wiki/Basic_block">basic
+block</a> (named &#8220;entry&#8221;),
+which is inserted into the function. The second line declares that the
+global <tt class="docutils literal"><span class="pre">g_llvm_builder</span></tt> object is to be changed. The last line creates
+a new builder that is set up to insert new instructions into the basic
+block we just created. Basic blocks in LLVM are an important part of
+functions that define the <a class="reference external" href="http://en.wikipedia.org/wiki/Control_flow_graph">Control Flow
+Graph</a>. Since we
+don&#8217;t have any control flow, our functions will only contain one block
+at this point. We&#8217;ll fix this in <a class="reference external" href="PythonLangImpl5.html">Chapter 5</a> :).</p>
+<p>{% highlight python %} # Finish off the function. try: return_value =
+self.body.CodeGen() g_llvm_builder.ret(return_value)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Validate the generated code, checking for consistency.</span>
+<span class="n">function</span><span class="o">.</span><span class="n">verify</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>Once the insertion point is set up, we call the <tt class="docutils literal"><span class="pre">CodeGen</span></tt> method for
+the root expression of the function. If no error happens, this emits
+code to compute the expression into the entry block and returns the
+value that was computed. Assuming no error, we then create an LLVM <a class="reference external" href="http://www.llvm.org/docs/LangRef.html#i_ret">ret
+instruction</a>, which
+completes the function. Once the function is built, we call <tt class="docutils literal"><span class="pre">verify</span></tt>,
+which is provided by LLVM. This function does a variety of consistency
+checks on the generated code, to determine if our compiler is doing
+everything right. Using this is important: it can catch a lot of bugs.
+Once the function is finished and validated, we return it.</p>
+<p>{% highlight python %} except: function.delete() raise</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">return</span> <span class="n">function</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>The only piece left here is handling of the error case. For simplicity,
+we handle this by merely deleting the function we produced with the
+<tt class="docutils literal"><span class="pre">delete</span></tt> method. This allows the user to redefine a function that they
+incorrectly typed in before: if we didn&#8217;t delete it, it would live in
+the symbol table, with a body, preventing future redefinition.</p>
+<p>This code does have a bug, though. Since the <tt class="docutils literal"><span class="pre">PrototypeNode::CodeGen</span></tt>
+can return a previously defined forward declaration, our code can
+actually delete a forward declaration. There are a number of ways to fix
+this bug; see what you can come up with! Here is a testcase:</p>
+<p>{% highlight python %} extern foo(a b) # ok, defines foo. def foo(a b) c
+# error, &#8216;c&#8217; is invalid. def bar() foo(1, 2) # error, unknown function
+&#8220;foo&#8221; {% endhighlight %}</p>
+</div>
+<hr class="docutils" />
+<div class="section" id="driver-changes-and-closing-thoughts-driver">
+<h2>3.9. Driver Changes and Closing Thoughts # {#driver}<a class="headerlink" href="#driver-changes-and-closing-thoughts-driver" title="Permalink to this headline">¶</a></h2>
+<p>For now, code generation to LLVM doesn&#8217;t really get us much, except that
+we can look at the pretty IR calls. The sample code inserts calls to
+CodeGen into the <tt class="docutils literal"><span class="pre">Handle*</span></tt> functions, and then dumps out the LLVM IR.
+This gives a nice way to look at the LLVM IR for simple functions. For
+example:</p>
+<p>{% highlight bash %} ready&gt; 4+5 Read a top-level expression: define
+double &#64;0() { entry: ret double 9.000000e+00 } {% endhighlight %}</p>
+<p>Note how the parser turns the top-level expression into anonymous
+functions for us. This will be handy when we add JIT support in the next
+chapter. Also note that the code is very literally transcribed, no
+optimizations are being performed except simple constant folding done by
+the Builder. We will add optimizations explicitly in the next chapter.</p>
+<p>{% highlight bash %} ready&gt; def foo(a b) a<em>a + 2</em>a<em>b + b</em>b Read
+a function definition: define double &#64;foo(double %a, double %b) { entry:
+%multmp = fmul double %a, %a ; [#uses=1] %multmp1 = fmul double
+2.000000e+00, %a ; [#uses=1] %multmp2 = fmul double %multmp1, %b ;
+[#uses=1] %addtmp = fadd double %multmp, %multmp2 ; [#uses=1] %multmp3 =
+fmul double %b, %b ; [#uses=1] %addtmp4 = fadd double %addtmp, %multmp3
+; [#uses=1] ret double %addtmp4 } {% endhighlight %}</p>
+<p>This shows some simple arithmetic. Notice the striking similarity to the
+LLVM builder calls that we use to create the instructions.</p>
+<p>{% highlight bash %} ready&gt; def bar(a) foo(a, 4.0) + bar(31337) Read a
+function definition: define double &#64;bar(double %a) { entry: %calltmp =
+call double &#64;foo(double %a, double 4.000000e+00) ; [#uses=1] %calltmp1 =
+call double &#64;bar(double 3.133700e+04) ; [#uses=1] %addtmp = fadd double
+%calltmp, %calltmp1 ; [#uses=1] ret double %addtmp } {% endhighlight %}</p>
+<p>This shows some function calls. Note that this function will take a long
+time to execute if you call it. In the future we&#8217;ll add conditional
+control flow to actually make recursion useful :).</p>
+<p>{% highlight bash %} ready&gt; extern cos(x) Read extern: declare double
+&#64;cos(double)</p>
+<p>ready&gt; cos(1.234) Read a top-level expression: define double &#64;1() {
+entry: %calltmp = call double &#64;cos(double 1.234000e+00) ; [#uses=1] ret
+double %calltmp } {% endhighlight %}</p>
+<p>This shows an extern for the libm &#8220;cos&#8221; function, and a call to it.</p>
+<p>{% highlight bash %} ready&gt; ^C ; ModuleID = &#8216;my cool jit&#8217;</p>
+<p>define double &#64;0() { entry: ret double 9.000000e+00 }</p>
+<p>define double &#64;foo(double %a, double %b) { entry: %multmp = fmul double
+%a, %a ; [#uses=1] %multmp1 = fmul double 2.000000e+00, %a ; [#uses=1]
+%multmp2 = fmul double %multmp1, %b ; [#uses=1] %addtmp = fadd double
+%multmp, %multmp2 ; [#uses=1] %multmp3 = fmul double %b, %b ; [#uses=1]
+%addtmp4 = fadd double %addtmp, %multmp3 ; [#uses=1] ret double %addtmp4
+}</p>
+<p>define double &#64;bar(double %a) { entry: %calltmp = call double
+&#64;foo(double %a, double 4.000000e+00) ; [#uses=1] %calltmp1 = call double
+&#64;bar(double 3.133700e+04) ; [#uses=1] %addtmp = fadd double %calltmp,
+%calltmp1 ; [#uses=1] ret double %addtmp }</p>
+<p>declare double &#64;cos(double)</p>
+<p>define double &#64;1() { entry: %calltmp = call double &#64;cos(double
+1.234000e+00) ; [#uses=1] ret double %calltmp } {% endhighlight %}</p>
+<p>When you quit the current demo, it dumps out the IR for the entire
+module generated. Here you can see the big picture with all the
+functions referencing each other.</p>
+<p>This wraps up the third chapter of the Kaleidoscope tutorial. Up next,
+we&#8217;ll describe how to <a class="reference external" href="PythonLangImpl4.html">add JIT codegen and optimizer
+support</a> to this so we can actually start
+running code!</p>
+</div>
+<hr class="docutils" />
+<div class="section" id="full-code-listing-code">
+<h2>3.10. Full Code Listing # {#code}<a class="headerlink" href="#full-code-listing-code" title="Permalink to this headline">¶</a></h2>
+<p>Here is the complete code listing for our running example, enhanced with
+the LLVM code generator. Because this uses the llvmpy libraries, you
+need to <a class="reference external" href="../download.html">download</a> and
+<a class="reference external" href="../userguide.html#install">install</a> them.</p>
+<p>{% highlight python %} #!/usr/bin/env python</p>
+<p>import re from llvm.core import Module, Constant, Type, Function,
+Builder, FCMP_ULT</p>
+<div class="section" id="globals">
+<h3>3.10.1. Globals<a class="headerlink" href="#globals" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+<div class="section" id="the-llvm-module-which-holds-all-the-ir-code">
+<h2>3.11. The LLVM module, which holds all the IR code.<a class="headerlink" href="#the-llvm-module-which-holds-all-the-ir-code" title="Permalink to this headline">¶</a></h2>
+<p>g_llvm_module = Module.new(&#8216;my cool jit&#8217;)</p>
+</div>
+<div class="section" id="id1">
+<h2>3.12. The LLVM instruction builder. Created whenever a new function is entered.<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<p>g_llvm_builder = None</p>
+</div>
+<div class="section" id="id2">
+<h2>3.13. A dictionary that keeps track of which values are defined in the current scope<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="id3">
+<h2>3.14. and what their LLVM representation is.<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h2>
+<p>g_named_values = {}</p>
+<div class="section" id="lexer">
+<h3>3.14.1. Lexer<a class="headerlink" href="#lexer" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+<div class="section" id="the-lexer-yields-one-of-these-types-for-each-token">
+<h2>3.15. The lexer yields one of these types for each token.<a class="headerlink" href="#the-lexer-yields-one-of-these-types-for-each-token" title="Permalink to this headline">¶</a></h2>
+<p>class EOFToken(object): pass</p>
+<p>class DefToken(object): pass</p>
+<p>class ExternToken(object): pass</p>
+<p>class IdentifierToken(object): def <strong>init</strong>(self, name): self.name =
+name</p>
+<p>class NumberToken(object): def <strong>init</strong>(self, value): self.value =
+value</p>
+<p>class CharacterToken(object): def <strong>init</strong>(self, char): self.char =
+char def <strong>eq</strong>(self, other): return isinstance(other, CharacterToken)
+and self.char == other.char def <strong>ne</strong>(self, other): return not self
+== other</p>
+</div>
+<div class="section" id="regular-expressions-that-tokens-and-comments-of-our-language">
+<h2>3.16. Regular expressions that tokens and comments of our language.<a class="headerlink" href="#regular-expressions-that-tokens-and-comments-of-our-language" title="Permalink to this headline">¶</a></h2>
+<p>REGEX_NUMBER = re.compile(&#8216;[0-9]+(?:.[0-9]+)?&#8217;) REGEX_IDENTIFIER =
+re.compile(&#8216;[a-zA-Z][a-zA-Z0-9]<em>&#8216;) REGEX_COMMENT = re.compile(&#8216;#.</em>&#8216;)</p>
+<p>def Tokenize(string): while string: # Skip whitespace. if
+string[0].isspace(): string = string[1:] continue</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Run regexes.</span>
+<span class="n">comment_match</span> <span class="o">=</span> <span class="n">REGEX_COMMENT</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+<span class="n">number_match</span> <span class="o">=</span> <span class="n">REGEX_NUMBER</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+<span class="n">identifier_match</span> <span class="o">=</span> <span class="n">REGEX_IDENTIFIER</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+
+<span class="c"># Check if any of the regexes matched and yield the appropriate result.</span>
+<span class="k">if</span> <span class="n">comment_match</span><span class="p">:</span>
+  <span class="n">comment</span> <span class="o">=</span> <span class="n">comment_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+  <span class="n">string</span> <span class="o">=</span> <span class="n">string</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">comment</span><span class="p">):]</span>
+<span class="k">elif</span> <span class="n">number_match</span><span class="p">:</span>
+  <span class="n">number</span> <span class="o">=</span> <span class="n">number_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+  <span class="k">yield</span> <span class="n">NumberToken</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">number</span><span class="p">))</span>
+  <span class="n">string</span> <span class="o">=</span> <span class="n">string</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">number</span><span class="p">):]</span>
+<span class="k">elif</span> <span class="n">identifier_match</span><span class="p">:</span>
+  <span class="n">identifier</span> <span class="o">=</span> <span class="n">identifier_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+  <span class="c"># Check if we matched a keyword.</span>
+  <span class="k">if</span> <span class="n">identifier</span> <span class="o">==</span> <span class="s">&#39;def&#39;</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">DefToken</span><span class="p">()</span>
+  <span class="k">elif</span> <span class="n">identifier</span> <span class="o">==</span> <span class="s">&#39;extern&#39;</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">ExternToken</span><span class="p">()</span>
+  <span class="k">else</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">IdentifierToken</span><span class="p">(</span><span class="n">identifier</span><span class="p">)</span>
+  <span class="n">string</span> <span class="o">=</span> <span class="n">string</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">identifier</span><span class="p">):]</span>
+<span class="k">else</span><span class="p">:</span>
+  <span class="c"># Yield the ASCII value of the unknown character.</span>
+  <span class="k">yield</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="n">string</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+  <span class="n">string</span> <span class="o">=</span> <span class="n">string</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+</pre></div>
+</div>
+<p>yield EOFToken()</p>
+<div class="section" id="abstract-syntax-tree-aka-parse-tree">
+<h3>3.16.1. Abstract Syntax Tree (aka Parse Tree)<a class="headerlink" href="#abstract-syntax-tree-aka-parse-tree" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+<div class="section" id="base-class-for-all-expression-nodes">
+<h2>3.17. Base class for all expression nodes.<a class="headerlink" href="#base-class-for-all-expression-nodes" title="Permalink to this headline">¶</a></h2>
+<p>class ExpressionNode(object): pass</p>
+</div>
+<div class="section" id="expression-class-for-numeric-literals-like-1-0">
+<h2>3.18. Expression class for numeric literals like &#8220;1.0&#8221;.<a class="headerlink" href="#expression-class-for-numeric-literals-like-1-0" title="Permalink to this headline">¶</a></h2>
+<p>class NumberExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, value): self.value = value</p>
+<p>def CodeGen(self): return Constant.real(Type.double(), self.value)</p>
+</div>
+<div class="section" id="id4">
+<h2>3.19. Expression class for referencing a variable, like &#8220;a&#8221;.<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h2>
+<p>class VariableExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, name): self.name = name</p>
+<p>def CodeGen(self): if self.name in g_named_values: return
+g_named_values[self.name] else: raise RuntimeError(&#8216;Unknown variable
+name: &#8216; + self.name)</p>
+</div>
+<div class="section" id="expression-class-for-a-binary-operator">
+<h2>3.20. Expression class for a binary operator.<a class="headerlink" href="#expression-class-for-a-binary-operator" title="Permalink to this headline">¶</a></h2>
+<p>class BinaryOperatorExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, operator, left, right): self.operator = operator
+self.left = left self.right = right</p>
+<p>def CodeGen(self): left = self.left.CodeGen() right =
+self.right.CodeGen()</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;+&#39;</span><span class="p">:</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fadd</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;addtmp&#39;</span><span class="p">)</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;-&#39;</span><span class="p">:</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fsub</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;subtmp&#39;</span><span class="p">)</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;*&#39;</span><span class="p">:</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fmul</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;multmp&#39;</span><span class="p">)</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;&lt;&#39;</span><span class="p">:</span>
+  <span class="n">result</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fcmp</span><span class="p">(</span><span class="n">FCMP_ULT</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;cmptmp&#39;</span><span class="p">)</span>
+  <span class="c"># Convert bool 0 or 1 to double 0.0 or 1.0.</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">uitofp</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="s">&#39;booltmp&#39;</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Unknown binary operator.&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="expression-class-for-function-calls">
+<h2>3.21. Expression class for function calls.<a class="headerlink" href="#expression-class-for-function-calls" title="Permalink to this headline">¶</a></h2>
+<p>class CallExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, callee, args): self.callee = callee self.args =
+args</p>
+<p>def CodeGen(self): # Look up the name in the global module table. callee
+= g_llvm_module.get_function_named(self.callee)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Check for argument mismatch error.</span>
+<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">callee</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Incorrect number of arguments passed.&#39;</span><span class="p">)</span>
+
+<span class="n">arg_values</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">]</span>
+
+<span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">callee</span><span class="p">,</span> <span class="n">arg_values</span><span class="p">,</span> <span class="s">&#39;calltmp&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="this-class-represents-the-prototype-for-a-function-which-captures-its-name">
+<h2>3.22. This class represents the &#8220;prototype&#8221; for a function, which captures its name,<a class="headerlink" href="#this-class-represents-the-prototype-for-a-function-which-captures-its-name" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="and-its-argument-names-thus-implicitly-the-number-of-arguments-the-function">
+<h2>3.23. and its argument names (thus implicitly the number of arguments the function<a class="headerlink" href="#and-its-argument-names-thus-implicitly-the-number-of-arguments-the-function" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="takes">
+<h2>3.24. takes).<a class="headerlink" href="#takes" title="Permalink to this headline">¶</a></h2>
+<p>class PrototypeNode(object):</p>
+<p>def <strong>init</strong>(self, name, args): self.name = name self.args = args</p>
+<p>def CodeGen(self): # Make the function type, eg. double(double,double).
+funct_type = Type.function( Type.double(), [Type.double()] *
+len(self.args), False)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">function</span> <span class="o">=</span> <span class="n">Function</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">g_llvm_module</span><span class="p">,</span> <span class="n">funct_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+<span class="c"># If the name conflicted, there was already something with the same name.</span>
+<span class="c"># If it has a body, don&#39;t allow redefinition or reextern.</span>
+<span class="k">if</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+  <span class="n">function</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+  <span class="n">function</span> <span class="o">=</span> <span class="n">g_llvm_module</span><span class="o">.</span><span class="n">get_function_named</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+  <span class="c"># If the function already has a body, reject this.</span>
+  <span class="k">if</span> <span class="ow">not</span> <span class="n">function</span><span class="o">.</span><span class="n">is_declaration</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Redefinition of function.&#39;</span><span class="p">)</span>
+
+  <span class="c"># If F took a different number of args, reject.</span>
+  <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">callee</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">):</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Redeclaration of a function with different number &#39;</span>
+                       <span class="s">&#39;of args.&#39;</span><span class="p">)</span>
+
+<span class="c"># Set names for all arguments and add them to the variables symbol table.</span>
+<span class="k">for</span> <span class="n">arg</span><span class="p">,</span> <span class="n">arg_name</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">function</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">):</span>
+  <span class="n">arg</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">arg_name</span>
+  <span class="c"># Add arguments to variable symbol table.</span>
+  <span class="n">g_named_values</span><span class="p">[</span><span class="n">arg_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
+
+<span class="k">return</span> <span class="n">function</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="this-class-represents-a-function-definition-itself">
+<h2>3.25. This class represents a function definition itself.<a class="headerlink" href="#this-class-represents-a-function-definition-itself" title="Permalink to this headline">¶</a></h2>
+<p>class FunctionNode(object):</p>
+<p>def <strong>init</strong>(self, prototype, body): self.prototype = prototype
+self.body = body</p>
+<p>def CodeGen(self): # Clear scope. g_named_values.clear()</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Create a function object.</span>
+<span class="n">function</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prototype</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+
+<span class="c"># Create a new basic block to start insertion into.</span>
+<span class="n">block</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&#39;entry&#39;</span><span class="p">)</span>
+<span class="k">global</span> <span class="n">g_llvm_builder</span>
+<span class="n">g_llvm_builder</span> <span class="o">=</span> <span class="n">Builder</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">block</span><span class="p">)</span>
+
+<span class="c"># Finish off the function.</span>
+<span class="k">try</span><span class="p">:</span>
+  <span class="n">return_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">body</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+  <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">ret</span><span class="p">(</span><span class="n">return_value</span><span class="p">)</span>
+
+  <span class="c"># Validate the generated code, checking for consistency.</span>
+  <span class="n">function</span><span class="o">.</span><span class="n">verify</span><span class="p">()</span>
+<span class="k">except</span><span class="p">:</span>
+  <span class="n">function</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+  <span class="k">raise</span>
+
+<span class="k">return</span> <span class="n">function</span>
+</pre></div>
+</div>
+<div class="section" id="parser">
+<h3>3.25.1. Parser<a class="headerlink" href="#parser" title="Permalink to this headline">¶</a></h3>
+<p>class Parser(object):</p>
+<p>def <strong>init</strong>(self, tokens, binop_precedence): self.tokens = tokens
+self.binop_precedence = binop_precedence self.Next()</p>
+<p># Provide a simple token buffer. Parser.current is the current token the
+# parser is looking at. Parser.Next() reads another token from the lexer
+and # updates Parser.current with its results. def Next(self):
+self.current = self.tokens.next()</p>
+<p># Gets the precedence of the current token, or -1 if the token is not a
+binary # operator. def GetCurrentTokenPrecedence(self): if
+isinstance(self.current, CharacterToken): return
+self.binop_precedence.get(self.current.char, -1) else: return -1</p>
+<p># identifierexpr ::= identifier | identifier &#8216;(&#8216; expression* &#8216;)&#8217; def
+ParseIdentifierExpr(self): identifier_name = self.current.name
+self.Next() # eat identifier.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;(&#39;</span><span class="p">):</span>  <span class="c"># Simple variable reference.</span>
+  <span class="k">return</span> <span class="n">VariableExpressionNode</span><span class="p">(</span><span class="n">identifier_name</span><span class="p">)</span>
+
+<span class="c"># Call.</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;(&#39;.</span>
+<span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;)&#39;</span><span class="p">):</span>
+  <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+    <span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">())</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">==</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;)&#39;</span><span class="p">):</span>
+      <span class="k">break</span>
+    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">):</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;)&quot; or &quot;,&quot; in argument list.&#39;</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>
+
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;)&#39;.</span>
+<span class="k">return</span> <span class="n">CallExpressionNode</span><span class="p">(</span><span class="n">identifier_name</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+</pre></div>
+</div>
+<p># numberexpr ::= number def ParseNumberExpr(self): result =
+NumberExpressionNode(self.current.value) self.Next() # consume the
+number. return result</p>
+<p># parenexpr ::= &#8216;(&#8216; expression &#8216;)&#8217; def ParseParenExpr(self): self.Next()
+# eat &#8216;(&#8216;.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">contents</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;)&#39;</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;)&quot;.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;)&#39;.</span>
+
+<span class="k">return</span> <span class="n">contents</span>
+</pre></div>
+</div>
+<p># primary ::= identifierexpr | numberexpr | parenexpr def
+ParsePrimary(self): if isinstance(self.current, IdentifierToken): return
+self.ParseIdentifierExpr() elif isinstance(self.current, NumberToken):
+return self.ParseNumberExpr() elif self.current == CharacterToken(&#8216;(&#8216;):
+return self.ParseParenExpr() else: raise RuntimeError(&#8216;Unknown token
+when expecting an expression.&#8217;)</p>
+<p># binoprhs ::= (operator primary)* def ParseBinOpRHS(self, left,
+left_precedence): # If this is a binary operator, find its precedence.
+while True: precedence = self.GetCurrentTokenPrecedence()</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># If this is a binary operator that binds at least as tightly as the</span>
+<span class="c"># current one, consume it; otherwise we are done.</span>
+<span class="k">if</span> <span class="n">precedence</span> <span class="o">&lt;</span> <span class="n">left_precedence</span><span class="p">:</span>
+  <span class="k">return</span> <span class="n">left</span>
+
+<span class="n">binary_operator</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="o">.</span><span class="n">char</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the operator.</span>
+
+<span class="c"># Parse the primary expression after the binary operator.</span>
+<span class="n">right</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParsePrimary</span><span class="p">()</span>
+
+<span class="c"># If binary_operator binds less tightly with right than the operator after</span>
+<span class="c"># right, let the pending operator take right as its left.</span>
+<span class="n">next_precedence</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetCurrentTokenPrecedence</span><span class="p">()</span>
+<span class="k">if</span> <span class="n">precedence</span> <span class="o">&lt;</span> <span class="n">next_precedence</span><span class="p">:</span>
+  <span class="n">right</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseBinOpRHS</span><span class="p">(</span><span class="n">right</span><span class="p">,</span> <span class="n">precedence</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="c"># Merge left/right.</span>
+<span class="n">left</span> <span class="o">=</span> <span class="n">BinaryOperatorExpressionNode</span><span class="p">(</span><span class="n">binary_operator</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">)</span>
+</pre></div>
+</div>
+<p># expression ::= primary binoprhs def ParseExpression(self): left =
+self.ParsePrimary() return self.ParseBinOpRHS(left, 0)</p>
+<p># prototype ::= id &#8216;(&#8216; id* &#8216;)&#8217; def ParsePrototype(self): if not
+isinstance(self.current, IdentifierToken): raise RuntimeError(&#8216;Expected
+function name in prototype.&#8217;)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">function_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="o">.</span><span class="n">name</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat function name.</span>
+
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;(&#39;</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;(&quot; in prototype.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;(&#39;.</span>
+
+<span class="n">arg_names</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">while</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">IdentifierToken</span><span class="p">):</span>
+  <span class="n">arg_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+  <span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;)&#39;</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;)&quot; in prototype.&#39;</span><span class="p">)</span>
+
+<span class="c"># Success.</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;)&#39;.</span>
+
+<span class="k">return</span> <span class="n">PrototypeNode</span><span class="p">(</span><span class="n">function_name</span><span class="p">,</span> <span class="n">arg_names</span><span class="p">)</span>
+</pre></div>
+</div>
+<p># definition ::= &#8216;def&#8217; prototype expression def ParseDefinition(self):
+self.Next() # eat def. proto = self.ParsePrototype() body =
+self.ParseExpression() return FunctionNode(proto, body)</p>
+<p># toplevelexpr ::= expression def ParseTopLevelExpr(self): proto =
+PrototypeNode(&#8216;&#8217;, []) return FunctionNode(proto, self.ParseExpression())</p>
+<p># external ::= &#8216;extern&#8217; prototype def ParseExtern(self): self.Next() #
+eat extern. return self.ParsePrototype()</p>
+<p># Top-Level parsing def HandleDefinition(self):
+self.Handle(self.ParseDefinition, &#8216;Read a function definition:&#8217;)</p>
+<p>def HandleExtern(self): self.Handle(self.ParseExtern, &#8216;Read an extern:&#8217;)</p>
+<p>def HandleTopLevelExpression(self): self.Handle(self.ParseTopLevelExpr,
+&#8216;Read a top-level expression:&#8217;)</p>
+<p>def Handle(self, function, message): try: print message,
+function().CodeGen() except Exception, e: print &#8216;Error:&#8217;, e try:
+self.Next() # Skip for error recovery. except: pass</p>
+</div>
+<div class="section" id="main-driver-code">
+<h3>3.25.2. Main driver code.<a class="headerlink" href="#main-driver-code" title="Permalink to this headline">¶</a></h3>
+<p>def main(): # Install standard binary operators. # 1 is lowest possible
+precedence. 40 is the highest. operator_precedence = { &#8216;&lt;&#8217;: 10, &#8216;+&#8217;:
+20, &#8216;-&#8216;: 20, &#8216;*&#8217;: 40 }</p>
+<p># Run the main &#8220;interpreter loop&#8221;. while True: print &#8216;ready&gt;&#8217;, try: raw
+= raw_input() except KeyboardInterrupt: break</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">parser</span> <span class="o">=</span> <span class="n">Parser</span><span class="p">(</span><span class="n">Tokenize</span><span class="p">(</span><span class="n">raw</span><span class="p">),</span> <span class="n">operator_precedence</span><span class="p">)</span>
+<span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+  <span class="c"># top ::= definition | external | expression | EOF</span>
+  <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parser</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">EOFToken</span><span class="p">):</span>
+    <span class="k">break</span>
+  <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parser</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">DefToken</span><span class="p">):</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">HandleDefinition</span><span class="p">()</span>
+  <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parser</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">ExternToken</span><span class="p">):</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">HandleExtern</span><span class="p">()</span>
+  <span class="k">else</span><span class="p">:</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">HandleTopLevelExpression</span><span class="p">()</span>
+</pre></div>
+</div>
+<p># Print out all of the generated code. print &#8216;&#8217;, g_llvm_module</p>
+<p>if <strong>name</strong> == &#8216;<strong>main</strong>&#8216;: main() {% endhighlight %}</p>
+<hr class="docutils" />
+<p><strong>`Next: Adding JIT and Optimizer Support &lt;PythonLangImpl4.html&gt;`_</strong></p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">3. Chapter 3: Code generation to LLVM IR</a><ul>
+<li><a class="reference internal" href="#introduction-intro">3.1. Introduction # {#intro}</a></li>
+<li><a class="reference internal" href="#code-generation-setup-basics">3.2. Code Generation Setup # {#basics}</a></li>
+<li><a class="reference internal" href="#expression-class-for-referencing-a-variable-like-a">3.3. Expression class for referencing a variable, like &#8220;a&#8221;.</a></li>
+<li><a class="reference internal" href="#the-llvm-instruction-builder-created-whenever-a-new-function-is-entered">3.4. The LLVM instruction builder. Created whenever a new function is entered.</a></li>
+<li><a class="reference internal" href="#a-dictionary-that-keeps-track-of-which-values-are-defined-in-the-current-scope">3.5. A dictionary that keeps track of which values are defined in the current scope</a></li>
+<li><a class="reference internal" href="#and-what-their-llvm-representation-is">3.6. and what their LLVM representation is.</a></li>
+<li><a class="reference internal" href="#expression-code-generation-exprs">3.7. Expression Code Generation # {#exprs}</a></li>
+<li><a class="reference internal" href="#function-code-generation-funcs">3.8. Function Code Generation # {#funcs}</a></li>
+<li><a class="reference internal" href="#driver-changes-and-closing-thoughts-driver">3.9. Driver Changes and Closing Thoughts # {#driver}</a></li>
+<li><a class="reference internal" href="#full-code-listing-code">3.10. Full Code Listing # {#code}</a><ul>
+<li><a class="reference internal" href="#globals">3.10.1. Globals</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#the-llvm-module-which-holds-all-the-ir-code">3.11. The LLVM module, which holds all the IR code.</a></li>
+<li><a class="reference internal" href="#id1">3.12. The LLVM instruction builder. Created whenever a new function is entered.</a></li>
+<li><a class="reference internal" href="#id2">3.13. A dictionary that keeps track of which values are defined in the current scope</a></li>
+<li><a class="reference internal" href="#id3">3.14. and what their LLVM representation is.</a><ul>
+<li><a class="reference internal" href="#lexer">3.14.1. Lexer</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#the-lexer-yields-one-of-these-types-for-each-token">3.15. The lexer yields one of these types for each token.</a></li>
+<li><a class="reference internal" href="#regular-expressions-that-tokens-and-comments-of-our-language">3.16. Regular expressions that tokens and comments of our language.</a><ul>
+<li><a class="reference internal" href="#abstract-syntax-tree-aka-parse-tree">3.16.1. Abstract Syntax Tree (aka Parse Tree)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#base-class-for-all-expression-nodes">3.17. Base class for all expression nodes.</a></li>
+<li><a class="reference internal" href="#expression-class-for-numeric-literals-like-1-0">3.18. Expression class for numeric literals like &#8220;1.0&#8221;.</a></li>
+<li><a class="reference internal" href="#id4">3.19. Expression class for referencing a variable, like &#8220;a&#8221;.</a></li>
+<li><a class="reference internal" href="#expression-class-for-a-binary-operator">3.20. Expression class for a binary operator.</a></li>
+<li><a class="reference internal" href="#expression-class-for-function-calls">3.21. Expression class for function calls.</a></li>
+<li><a class="reference internal" href="#this-class-represents-the-prototype-for-a-function-which-captures-its-name">3.22. This class represents the &#8220;prototype&#8221; for a function, which captures its name,</a></li>
+<li><a class="reference internal" href="#and-its-argument-names-thus-implicitly-the-number-of-arguments-the-function">3.23. and its argument names (thus implicitly the number of arguments the function</a></li>
+<li><a class="reference internal" href="#takes">3.24. takes).</a></li>
+<li><a class="reference internal" href="#this-class-represents-a-function-definition-itself">3.25. This class represents a function definition itself.</a><ul>
+<li><a class="reference internal" href="#parser">3.25.1. Parser</a></li>
+<li><a class="reference internal" href="#main-driver-code">3.25.2. Main driver code.</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="PythonLangImpl2.html"
+                        title="previous chapter">2. Chapter 2: Implementing a Parser and AST</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="PythonLangImpl4.html"
+                        title="next chapter">4. Chapter 4: Adding JIT and Optimizer Support</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../../_sources/doc/kaleidoscope/PythonLangImpl3.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="PythonLangImpl4.html" title="4. Chapter 4: Adding JIT and Optimizer Support"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="PythonLangImpl2.html" title="2. Chapter 2: Implementing a Parser and AST"
+             >previous</a> |</li>
+        <li><a href="../../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="../examples.html" >Examples and LLVM Tutorials</a> &raquo;</li>
+          <li><a href="index.html" >Kaleidoscope</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

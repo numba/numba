@@ -1,0 +1,187 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>llvm.core.StructType &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: StructType (llvm.core)</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="llvm-core-structtype">
+<h1>llvm.core.StructType<a class="headerlink" href="#llvm-core-structtype" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="base-class">
+<h2>Base Class<a class="headerlink" href="#base-class" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference external" href="llvm.core.Type.html">llvm.core.Type</a></li>
+</ul>
+</div>
+<div class="section" id="methods">
+<h2>Methods<a class="headerlink" href="#methods" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="set-body-self-elems-packed-false">
+<h3><tt class="docutils literal"><span class="pre">set_body(self,</span> <span class="pre">elems,</span> <span class="pre">packed=False)</span></tt><a class="headerlink" href="#set-body-self-elems-packed-false" title="Permalink to this headline">¶</a></h3>
+<p>Define the body for opaque identified structure.</p>
+<p><tt class="docutils literal"><span class="pre">elems</span></tt> is an iterable of <a class="reference external" href="llvm.core.Type.html">llvm.core.Type</a> If
+<tt class="docutils literal"><span class="pre">packed</span></tt> is <tt class="docutils literal"><span class="pre">True</span></tt>, creates a packed structure.</p>
+</div>
+</div>
+<div class="section" id="properties">
+<h2>Properties<a class="headerlink" href="#properties" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="is-identified">
+<h3><tt class="docutils literal"><span class="pre">is_identified</span></tt><a class="headerlink" href="#is-identified" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p><tt class="docutils literal"><span class="pre">True</span></tt> if this is an identified structure.</p>
+</div>
+<div class="section" id="is-literal">
+<h3><tt class="docutils literal"><span class="pre">is_literal</span></tt><a class="headerlink" href="#is-literal" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p><tt class="docutils literal"><span class="pre">True</span></tt> if this is a literal structure.</p>
+</div>
+<div class="section" id="is-opaque">
+<h3><tt class="docutils literal"><span class="pre">is_opaque</span></tt><a class="headerlink" href="#is-opaque" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p><tt class="docutils literal"><span class="pre">True</span></tt> if this is an opaque structure. Only identified structure can
+be opaque.</p>
+</div>
+<div class="section" id="packed">
+<h3><tt class="docutils literal"><span class="pre">packed</span></tt><a class="headerlink" href="#packed" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p><tt class="docutils literal"><span class="pre">True</span></tt> if the structure is packed (no padding between elements).</p>
+</div>
+<div class="section" id="name">
+<h3><tt class="docutils literal"><span class="pre">name</span></tt><a class="headerlink" href="#name" title="Permalink to this headline">¶</a></h3>
+<p>Use in identified structure. If set to empty, the identified structure
+is removed from the global context.</p>
+</div>
+<div class="section" id="elements">
+<h3><tt class="docutils literal"><span class="pre">elements</span></tt><a class="headerlink" href="#elements" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p>Returns an iterable object that yields <a class="reference external" href="llvm.core.Type.html">Type</a>
+objects that represent, in order, the types of the elements of the
+structure. Used like this:</p>
+<p>{% highlight python %} struct_type = Type.struct( [ Type.int(),
+Type.int() ] ) for elem in struct_type.elements: assert elem.kind ==
+TYPE_INTEGER assert elem == Type.int() assert
+struct_type.element_count == len(struct_type.elements) {%
+endhighlight %}</p>
+</div>
+<div class="section" id="element-count">
+<h3><tt class="docutils literal"><span class="pre">element_count</span></tt><a class="headerlink" href="#element-count" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p>The number of elements. Same as <tt class="docutils literal"><span class="pre">len(obj.elements)</span></tt>, but faster.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">llvm.core.StructType</a><ul>
+<li><a class="reference internal" href="#base-class">Base Class</a></li>
+<li><a class="reference internal" href="#methods">Methods</a><ul>
+<li><a class="reference internal" href="#set-body-self-elems-packed-false"><tt class="docutils literal"><span class="pre">set_body(self,</span> <span class="pre">elems,</span> <span class="pre">packed=False)</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#properties">Properties</a><ul>
+<li><a class="reference internal" href="#is-identified"><tt class="docutils literal"><span class="pre">is_identified</span></tt></a></li>
+<li><a class="reference internal" href="#is-literal"><tt class="docutils literal"><span class="pre">is_literal</span></tt></a></li>
+<li><a class="reference internal" href="#is-opaque"><tt class="docutils literal"><span class="pre">is_opaque</span></tt></a></li>
+<li><a class="reference internal" href="#packed"><tt class="docutils literal"><span class="pre">packed</span></tt></a></li>
+<li><a class="reference internal" href="#name"><tt class="docutils literal"><span class="pre">name</span></tt></a></li>
+<li><a class="reference internal" href="#elements"><tt class="docutils literal"><span class="pre">elements</span></tt></a></li>
+<li><a class="reference internal" href="#element-count"><tt class="docutils literal"><span class="pre">element_count</span></tt></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/llvm.core.StructType.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,345 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>1. Chapter 1: Tutorial Introduction and the Lexer &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../../index.html" />
+    <link rel="up" title="Kaleidoscope" href="index.html" />
+    <link rel="next" title="2. Chapter 2: Implementing a Parser and AST" href="PythonLangImpl2.html" />
+    <link rel="prev" title="Kaleidoscope" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="PythonLangImpl2.html" title="2. Chapter 2: Implementing a Parser and AST"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Kaleidoscope"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="../examples.html" >Examples and LLVM Tutorials</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Kaleidoscope</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="chapter-1-tutorial-introduction-and-the-lexer">
+<h1>1. Chapter 1: Tutorial Introduction and the Lexer<a class="headerlink" href="#chapter-1-tutorial-introduction-and-the-lexer" title="Permalink to this headline">¶</a></h1>
+<p>Written by <a class="reference external" href="mailto:sabre&#37;&#52;&#48;nondot&#46;org">Chris Lattner</a> and <a class="reference external" href="http://max99x.com">Max
+Shawabkeh</a></p>
+<div class="section" id="introduction">
+<h2>1.1. Introduction<a class="headerlink" href="#introduction" title="Permalink to this headline">¶</a></h2>
+<p>Welcome to the &#8220;Implementing a language with LLVM&#8221; tutorial. This
+tutorial runs through the implementation of a simple language, showing
+how fun and easy it can be. This tutorial will get you up and started as
+well as help to build a framework you can extend to other languages. The
+code in this tutorial can also be used as a playground to hack on other
+LLVM specific things.</p>
+<p>It is useful to point out ahead of time that this tutorial is really
+about teaching compiler techniques and LLVM specifically, <em>not</em> about
+teaching modern and sane software engineering principles. In practice,
+this means that we&#8217;ll take a number of shortcuts to simplify the
+exposition. If you dig in and use the code as a basis for future
+projects, fixing its deficiencies shouldn&#8217;t be hard.</p>
+<p>We&#8217;ve tried to put this tutorial together in a way that makes chapters
+easy to skip over if you are already familiar with or are uninterested
+in the various pieces. The structure of the tutorial is:</p>
+<ul class="simple">
+<li><strong>`Chapter 1 &lt;#language&gt;`_: Introduction to the Kaleidoscope
+language, and the definition of its Lexer</strong> &#8211; This shows where we
+are going and the basic functionality that we want it to do. In order
+to make this tutorial maximally understandable and hackable, we
+choose to implement everything in Python instead of using lexer and
+parser generators. LLVM obviously works just fine with such tools,
+feel free to use one if you prefer.</li>
+<li><strong>`Chapter 2 &lt;PythonLangImpl2.html&gt;`_: Implementing a Parser and
+AST</strong> &#8211; With the lexer in place, we can talk about parsing
+techniques and basic AST construction. This tutorial describes
+recursive descent parsing and operator precedence parsing. Nothing in
+Chapters 1 or 2 is LLVM-specific, the code doesn&#8217;t even import the
+LLVM modules at this point. :)</li>
+<li><strong>`Chapter 3 &lt;PythonLangImpl3.html&gt;`_: Code generation to LLVM IR</strong>
+&#8211; With the AST ready, we can show off how easy generation of LLVM IR
+really is.</li>
+<li><strong>`Chapter 4 &lt;PythonLangImpl4.html&gt;`_: Adding JIT and Optimizer
+support</strong> &#8211; Because a lot of people are interested in using LLVM as
+a JIT, we&#8217;ll dive right into it and show you the 3 lines it takes to
+add JIT support. LLVM is also useful in many other ways, but this is
+one simple and &#8220;sexy&#8221; way to shows off its power. :)</li>
+<li><strong>`Chapter 5 &lt;PythonLangImpl5.html&gt;`_: Extending the Language:
+Control Flow</strong> &#8211; With the language up and running, we show how to
+extend it with control flow operations (if/then/else and a &#8216;for&#8217;
+loop). This gives us a chance to talk about simple SSA construction
+and control flow.</li>
+<li><strong>`Chapter 6 &lt;PythonLangImpl6.html&gt;`_: Extending the Language:
+User-defined Operators</strong> &#8211; This is a silly but fun chapter that
+talks about extending the language to let the user program define
+their own arbitrary unary and binary operators (with assignable
+precedence!). This lets us build a significant piece of the
+&#8220;language&#8221; as library routines.</li>
+<li><strong>`Chapter 7 &lt;PythonLangImpl7.html&gt;`_: Extending the Language:
+Mutable Variables</strong> &#8211; This chapter talks about adding user-defined
+local variables along with an assignment operator. The interesting
+part about this is how easy and trivial it is to construct SSA form
+in LLVM: no, LLVM does <em>not</em> require your front-end to construct SSA
+form!</li>
+<li><strong>`Chapter 8 &lt;PythonLangImpl8.html&gt;`_: Conclusion and other useful
+LLVM tidbits</strong> &#8211; This chapter wraps up the series by talking about
+potential ways to extend the language, but also includes a bunch of
+pointers to info about &#8220;special topics&#8221; like adding garbage
+collection support, exceptions, debugging, support for &#8220;spaghetti
+stacks&#8221;, and a bunch of other tips and tricks.</li>
+</ul>
+<p>By the end of the tutorial, we&#8217;ll have written a bit less than 540 lines
+of non-comment, non-blank, lines of code. With this small amount of
+code, we&#8217;ll have built up a very reasonable compiler for a non-trivial
+language including a hand-written lexer, parser, AST, as well as code
+generation support with a JIT compiler. While other systems may have
+interesting &#8220;hello world&#8221; tutorials, I think the breadth of this
+tutorial is a great testament to the strengths of LLVM and why you
+should consider it if you&#8217;re interested in language or compiler design.</p>
+<p>A note about this tutorial: we expect you to extend the language and
+play with it on your own. Take the code and go crazy hacking away at it,
+compilers don&#8217;t need to be scary creatures - it can be a lot of fun to
+play with languages!</p>
+</div>
+<hr class="docutils" />
+<div class="section" id="the-basic-language-language">
+<h2>1.2. The Basic Language # {#language}<a class="headerlink" href="#the-basic-language-language" title="Permalink to this headline">¶</a></h2>
+<p>This tutorial will be illustrated with a toy language that we&#8217;ll call
+&#8220;<a class="reference external" href="http://en.wikipedia.org/wiki/Kaleidoscope">Kaleidoscope</a>&#8221; (derived
+from &#8220;meaning beautiful, form, and view&#8221;). Kaleidoscope is a procedural
+language that allows you to define functions, use conditionals, math,
+etc. Over the course of the tutorial, we&#8217;ll extend Kaleidoscope to
+support the if/then/else construct, a for loop, user defined operators,
+JIT compilation with a simple command line interface, etc.</p>
+<p>Because we want to keep things simple, the only datatype in Kaleidoscope
+is a 64-bit floating point type. As such, all values are implicitly
+double precision and the language doesn&#8217;t require type declarations.
+This gives the language a very nice and simple syntax. For example, the
+following simple example computes <a class="reference external" href="http://en.wikipedia.org/wiki/Fibonacci_number">Fibonacci
+numbers</a>:</p>
+<p>{% highlight python %} # Compute the x&#8217;th fibonacci number. def fib(x)
+if x &lt; 3 then 1 else fib(x-1)+fib(x-2)</p>
+</div>
+<div class="section" id="this-expression-will-compute-the-40th-number">
+<h2>1.3. This expression will compute the 40th number.<a class="headerlink" href="#this-expression-will-compute-the-40th-number" title="Permalink to this headline">¶</a></h2>
+<p>fib(40) {% endhighlight %}</p>
+<p>We also allow Kaleidoscope to call into standard library functions (the
+LLVM JIT makes this completely trivial). This means that you can use the
+&#8216;extern&#8217; keyword to define a function before you use it (this is also
+useful for mutually recursive functions). For example:</p>
+<p>{% highlight python %} extern sin(arg); extern cos(arg); extern
+atan2(arg1 arg2);</p>
+<p>atan2(sin(0.4), cos(42)) {% endhighlight %}</p>
+<p>A more interesting example is included in Chapter 6 where we write a
+little Kaleidoscope application that
+<a class="reference external" href="PythonLangImpl6.html#example">displays</a> a Mandelbrot Set at various
+levels of magnification.</p>
+<p>Lets dive into the implementation of this language!</p>
+</div>
+<hr class="docutils" />
+<div class="section" id="the-lexer-lexer">
+<h2>1.4. The Lexer # {#lexer}<a class="headerlink" href="#the-lexer-lexer" title="Permalink to this headline">¶</a></h2>
+<p>When it comes to implementing a language, the first thing needed is the
+ability to process a text file and recognize what it says. The
+traditional way to do this is to use a
+<a class="reference external" href="http://en.wikipedia.org/wiki/Lexical_analysis">lexer</a>&#8221; (aka
+&#8216;scanner&#8217;) to break the input up into &#8220;tokens&#8221;. Each token returned by
+the lexer includes a token type and potentially some metadata (e.g. the
+numeric value of a number). First, we define the possibilities:</p>
+<p>{% highlight python %} # The lexer yields one of these types for each
+token. class EOFToken(object): pass</p>
+<p>class DefToken(object): pass</p>
+<p>class ExternToken(object): pass</p>
+<p>class IdentifierToken(object): def <strong>init</strong>(self, name): self.name =
+name</p>
+<p>class NumberToken(object): def <strong>init</strong>(self, value): self.value =
+value</p>
+<p>class CharacterToken(object): def <strong>init</strong>(self, char): self.char =
+char def <strong>eq</strong>(self, other): return isinstance(other, CharacterToken)
+and self.char == other.char def <strong>ne</strong>(self, other): return not self
+== other {% endhighlight %}</p>
+<p>Each token yielded by our lexer will be of one of the above types. For
+simple tokens that are always the same, like the &#8220;def&#8221; keyword, the
+lexer will yield <tt class="docutils literal"><span class="pre">DefToken()</span></tt>&gt;. Identifiers, numbers and characters,
+on the other hand, have extra data, so when the lexer encounteres the
+number 123.45, it will emit it as <tt class="docutils literal"><span class="pre">NumberToken(123.45)</span></tt>. An identifier
+<tt class="docutils literal"><span class="pre">foo</span></tt> will be emitted as <tt class="docutils literal"><span class="pre">IdentifierToken('foo')</span></tt>. And finally, an
+unknown character like &#8216;+&#8217; will be returned as <tt class="docutils literal"><span class="pre">CharacterToken('+')</span></tt>.
+You may notice that we overload the equality and inequality operators
+for the characters; this will later simplify character comparisons in
+the parser code.</p>
+<p>The actual implementation of the lexer is a single function called
+<tt class="docutils literal"><span class="pre">Tokenize</span></tt>, which takes a string and
+<a class="reference external" href="http://docs.python.org/reference/simple_stmts.html#the-yield-statement">yields</a>
+tokens. For simplicity, we will use <a class="reference external" href="http://docs.python.org/library/re.html">regular
+expressions</a> to parse out the
+tokens. This is terribly inefficient, but perfectly sufficient for our
+needs.</p>
+<p>First, we define the regular expressions for our tokens. Numbers and
+strings of digits, optionally followed by a period and another string of
+digits. Identifiers (and keywords) are alphanumeric string starting with
+a letter and comments are anything between a hash (<tt class="docutils literal"><span class="pre">#</span></tt>) and the end of
+the line.</p>
+<p>{% highlight python %} import re</p>
+<p>...</p>
+</div>
+<div class="section" id="regular-expressions-that-tokens-and-comments-of-our-language">
+<h2>1.5. Regular expressions that tokens and comments of our language.<a class="headerlink" href="#regular-expressions-that-tokens-and-comments-of-our-language" title="Permalink to this headline">¶</a></h2>
+<p>REGEX_NUMBER = re.compile(&#8216;[0-9]+(?:.[0-9]+)?&#8217;) REGEX_IDENTIFIER =
+re.compile(&#8216;[a-zA-Z][a-zA-Z0-9]<em>&#8216;) REGEX_COMMENT = re.compile(&#8216;#.</em>&#8216;)</p>
+<p>{% endhighlight %}</p>
+<p>Next, let&#8217;s start defining the <tt class="docutils literal"><span class="pre">Tokenize</span></tt> function itself. The first
+thing we need to do is set up a loop that scans the string, while
+ignoring whitespace between tokens:</p>
+<p>{% highlight python %} def Tokenize(string): while string: # Skip
+whitespace. if string[0].isspace(): string = string[1:] continue</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="o">...</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>Next we want to find out what the next token is. For this we run the
+regexes we defined above on the remainder of the string. To simplify the
+rest of the code, we run all three regexes each time. As mentioned
+above, inefficiencies are ignored for the purpose of this tutorial:</p>
+<p>{% highlight python %} # Run regexes. comment_match =
+REGEX_COMMENT.match(string) number_match = REGEX_NUMBER.match(string)
+identifier_match = REGEX_IDENTIFIER.match(string) {% endhighlight %}</p>
+<p>Now se check if any of the regexes matched. For comments, we simply
+ignore the captured match:</p>
+<p>{% highlight python %} # Check if any of the regexes matched and yield
+the appropriate result. if comment_match: comment =
+comment_match.group(0) string = string[len(comment):] {% endhighlight
+python %}</p>
+<p>For numbers, we yield the captured match, converted to a float and
+tagged with the appropriate token type:</p>
+<p>{% highlight python %} elif number_match: number =
+number_match.group(0) yield NumberToken(float(number)) string =
+string[len(number):] {% endhighlight %}</p>
+<p>The identifier case is a little more complex. We have to check for
+keywords to decide whether we have captured an identifier or a keyword:</p>
+<p>{% highlight python %} elif identifier_match: identifier =
+identifier_match.group(0) # Check if we matched a keyword. if
+identifier == &#8216;def&#8217;: yield DefToken() elif identifier == &#8216;extern&#8217;: yield
+ExternToken() else: yield IdentifierToken(identifier) string =
+string[len(identifier):] {% endhighlight %}</p>
+<p>Finally, if we haven&#8217;t recognized a comment, a number of an identifier,
+we yield the current character as an &#8220;unknown character&#8221; token. This is
+used, for example, for operators like <tt class="docutils literal"><span class="pre">+</span></tt> or <tt class="docutils literal"><span class="pre">*</span></tt>:</p>
+<p>{% highlight python %} else: # Yield the unknown character. yield
+CharacterToken(string[0]) string = string[1:] {% endhighlight %}</p>
+<p>Once we&#8217;re done with the loop, we return a final end-of-file token:</p>
+<p>{% highlight python %} yield EOFToken() {% endhighlight %}</p>
+<p>With this, we have the complete lexer for the basic Kaleidoscope
+language (the <a class="reference external" href="PythonLangImpl2.html#code">full code listing</a> for the
+Lexer is available in the <a class="reference external" href="PythonLangImpl2.html">next chapter</a> of the
+tutorial). Next we&#8217;ll <a class="reference external" href="PythonLangImpl2.html">build a simple parser that uses this to build an
+Abstract Syntax Tree</a>. When we have that, we&#8217;ll
+include a driver so that you can use the lexer and parser together.</p>
+<hr class="docutils" />
+<p><strong>`Next: Implementing a Parser and AST &lt;PythonLangImpl2.html&gt;`_</strong></p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">1. Chapter 1: Tutorial Introduction and the Lexer</a><ul>
+<li><a class="reference internal" href="#introduction">1.1. Introduction</a></li>
+<li><a class="reference internal" href="#the-basic-language-language">1.2. The Basic Language # {#language}</a></li>
+<li><a class="reference internal" href="#this-expression-will-compute-the-40th-number">1.3. This expression will compute the 40th number.</a></li>
+<li><a class="reference internal" href="#the-lexer-lexer">1.4. The Lexer # {#lexer}</a></li>
+<li><a class="reference internal" href="#regular-expressions-that-tokens-and-comments-of-our-language">1.5. Regular expressions that tokens and comments of our language.</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="index.html"
+                        title="previous chapter">Kaleidoscope</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="PythonLangImpl2.html"
+                        title="next chapter">2. Chapter 2: Implementing a Parser and AST</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../../_sources/doc/kaleidoscope/PythonLangImpl1.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="PythonLangImpl2.html" title="2. Chapter 2: Implementing a Parser and AST"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Kaleidoscope"
+             >previous</a> |</li>
+        <li><a href="../../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="../examples.html" >Examples and LLVM Tutorials</a> &raquo;</li>
+          <li><a href="index.html" >Kaleidoscope</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

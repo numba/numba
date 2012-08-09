@@ -1,0 +1,237 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Examples &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" />
+    <link rel="up" title="Examples and LLVM Tutorials" href="examples.html" />
+    <link rel="next" title="LLVM Tutorials" href="examples/index.html" />
+    <link rel="prev" title="Examples and LLVM Tutorials" href="examples.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="examples/index.html" title="LLVM Tutorials"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="examples.html" title="Examples and LLVM Tutorials"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="examples.html" accesskey="U">Examples and LLVM Tutorials</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="examples">
+<h1>Examples<a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="a-simple-function">
+<h2>A Simple Function<a class="headerlink" href="#a-simple-function" title="Permalink to this headline">¶</a></h2>
+<p>Let&#8217;s create a (LLVM) module containing a single function, corresponding
+to the <tt class="docutils literal"><span class="pre">C</span></tt> function:</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="kt">int</span> <span class="nf">sum</span><span class="p">(</span><span class="kt">int</span> <span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="n">b</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Here&#8217;s how it looks in llvmpy:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c">#!/usr/bin/env python</span>
+
+<span class="c"># Import the llvmpy modules.</span>
+<span class="kn">from</span> <span class="nn">llvm</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">llvm.core</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="c"># Create an (empty) module.</span>
+<span class="n">my_module</span> <span class="o">=</span> <span class="n">Module</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s">&#39;my_module&#39;</span><span class="p">)</span>
+
+<span class="c"># All the types involved here are &quot;int&quot;s. This type is represented</span>
+<span class="c"># by an object of the llvm.core.Type class:</span>
+<span class="n">ty_int</span> <span class="o">=</span> <span class="n">Type</span><span class="o">.</span><span class="n">int</span><span class="p">()</span>     <span class="c"># by default 32 bits</span>
+
+<span class="c"># We need to represent the class of functions that accept two integers</span>
+<span class="c"># and return an integer. This is represented by an object of the</span>
+<span class="c"># function type (llvm.core.FunctionType):</span>
+<span class="n">ty_func</span> <span class="o">=</span> <span class="n">Type</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">ty_int</span><span class="p">,</span> <span class="p">[</span><span class="n">ty_int</span><span class="p">,</span> <span class="n">ty_int</span><span class="p">])</span>
+
+<span class="c"># Now we need a function named &#39;sum&#39; of this type. Functions are not</span>
+<span class="c"># free-standing (in llvmpy); it needs to be contained in a module.</span>
+
+<span class="n">f_sum</span> <span class="o">=</span> <span class="n">my_module</span><span class="o">.</span><span class="n">add_function</span><span class="p">(</span><span class="n">ty_func</span><span class="p">,</span> <span class="s">&quot;sum&quot;</span><span class="p">)</span>
+
+<span class="c"># Let&#39;s name the function arguments as &#39;a&#39; and &#39;b&#39;.</span>
+<span class="n">f_sum</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s">&quot;a&quot;</span>
+<span class="n">f_sum</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s">&quot;b&quot;</span>
+
+<span class="c"># Our function needs a &quot;basic block&quot; -- a set of instructions that</span>
+<span class="c"># end with a terminator (like return, branch etc.). By convention</span>
+<span class="c"># the first block is called &quot;entry&quot;.</span>
+<span class="n">bb</span> <span class="o">=</span> <span class="n">f_sum</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&quot;entry&quot;</span><span class="p">)</span>
+
+<span class="c"># Let&#39;s add instructions into the block. For this, we need an</span>
+<span class="c"># instruction builder:</span>
+<span class="n">builder</span> <span class="o">=</span> <span class="n">Builder</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">bb</span><span class="p">)</span>
+
+<span class="c"># OK, now for the instructions themselves. We&#39;ll create an add</span>
+<span class="c"># instruction that returns the sum as a value, which we&#39;ll use</span>
+<span class="c"># a ret instruction to return.</span>
+<span class="n">tmp</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">f_sum</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">f_sum</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s">&quot;tmp&quot;</span><span class="p">)</span>
+<span class="n">builder</span><span class="o">.</span><span class="n">ret</span><span class="p">(</span><span class="n">tmp</span><span class="p">)</span>
+
+<span class="c"># We&#39;ve completed the definition now! Let&#39;s see the LLVM assembly</span>
+<span class="c"># language representation of what we&#39;ve created:</span>
+
+<span class="k">print</span> <span class="n">my_module</span>
+</pre></div>
+</div>
+<p>Here is the output:</p>
+<div class="highlight-llvm"><div class="highlight"><pre><span class="c">; ModuleID = &#39;my_module&#39;</span>
+
+<span class="k">define</span> <span class="k">i32</span> <span class="vg">@sum</span><span class="p">(</span><span class="k">i32</span> <span class="nv">%a</span><span class="p">,</span> <span class="k">i32</span> <span class="nv">%b</span><span class="p">)</span> <span class="p">{</span>
+<span class="nl">entry:</span>
+        <span class="nv">%tmp</span> <span class="p">=</span> <span class="k">add</span> <span class="k">i32</span> <span class="nv">%a</span><span class="p">,</span> <span class="nv">%b</span>      <span class="c">; &lt;i32&gt; [#uses=1]</span>
+        <span class="k">ret</span> <span class="k">i32</span> <span class="nv">%tmp</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="adding-jit-compilation">
+<h2>Adding JIT Compilation<a class="headerlink" href="#adding-jit-compilation" title="Permalink to this headline">¶</a></h2>
+<p>Let&#8217;s compile this function in-memory and run it.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c">#!/usr/bin/env python</span>
+
+<span class="c"># Import the llvmpy modules.</span>
+
+<span class="kn">from</span> <span class="nn">llvm</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">llvm.core</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">llvm.ee</span> <span class="kn">import</span> <span class="o">*</span>                     <span class="c"># new import: ee = Execution Engine</span>
+
+<span class="c">#Create a module, as in the previous example.</span>
+<span class="n">my_module</span> <span class="o">=</span> <span class="n">Module</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s">&#39;my_module&#39;</span><span class="p">)</span>
+<span class="n">ty_int</span> <span class="o">=</span> <span class="n">Type</span><span class="o">.</span><span class="n">int</span><span class="p">()</span>     <span class="c"># by default 32 bits</span>
+<span class="n">ty_func</span> <span class="o">=</span> <span class="n">Type</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">ty_int</span><span class="p">,</span> <span class="p">[</span><span class="n">ty_int</span><span class="p">,</span> <span class="n">ty_int</span><span class="p">])</span>
+<span class="n">f_sum</span> <span class="o">=</span> <span class="n">my_module</span><span class="o">.</span><span class="n">add_function</span><span class="p">(</span><span class="n">ty_func</span><span class="p">,</span> <span class="s">&quot;sum&quot;</span><span class="p">)</span>
+<span class="n">f_sum</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s">&quot;a&quot;</span>
+<span class="n">f_sum</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s">&quot;b&quot;</span>
+<span class="n">bb</span> <span class="o">=</span> <span class="n">f_sum</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&quot;entry&quot;</span><span class="p">)</span>
+<span class="n">builder</span> <span class="o">=</span> <span class="n">Builder</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">bb</span><span class="p">)</span>
+<span class="n">tmp</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">f_sum</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">f_sum</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s">&quot;tmp&quot;</span><span class="p">)</span>
+<span class="n">builder</span><span class="o">.</span><span class="n">ret</span><span class="p">(</span><span class="n">tmp</span><span class="p">)</span>
+
+<span class="c"># Create an execution engine object. This will create a JIT compiler</span>
+<span class="c"># on platforms that support it, or an interpreter otherwise.</span>
+<span class="n">ee</span> <span class="o">=</span> <span class="n">ExecutionEngine</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">my_module</span><span class="p">)</span>
+
+<span class="c"># The arguments needs to be passed as &quot;GenericValue&quot; objects.</span>
+<span class="n">arg1</span> <span class="o">=</span> <span class="n">GenericValue</span><span class="o">.</span><span class="n">int</span><span class="p">(</span><span class="n">ty_int</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+<span class="n">arg2</span> <span class="o">=</span> <span class="n">GenericValue</span><span class="o">.</span><span class="n">int</span><span class="p">(</span><span class="n">ty_int</span><span class="p">,</span> <span class="mi">42</span><span class="p">)</span>
+
+<span class="c"># Now let&#39;s compile and run!</span>
+<span class="n">retval</span> <span class="o">=</span> <span class="n">ee</span><span class="o">.</span><span class="n">run_function</span><span class="p">(</span><span class="n">f_sum</span><span class="p">,</span> <span class="p">[</span><span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="p">])</span>
+
+<span class="c"># The return value is also GenericValue. Let&#39;s print it.</span>
+<span class="k">print</span> <span class="s">&quot;returned&quot;</span><span class="p">,</span> <span class="n">retval</span><span class="o">.</span><span class="n">as_int</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>And here&#8217;s the output:</p>
+<div class="highlight-python"><pre>returned 142</pre>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Examples</a><ul>
+<li><a class="reference internal" href="#a-simple-function">A Simple Function</a></li>
+<li><a class="reference internal" href="#adding-jit-compilation">Adding JIT Compilation</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="examples.html"
+                        title="previous chapter">Examples and LLVM Tutorials</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="examples/index.html"
+                        title="next chapter">LLVM Tutorials</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/firstexample.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="examples/index.html" title="LLVM Tutorials"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="examples.html" title="Examples and LLVM Tutorials"
+             >previous</a> |</li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="examples.html" >Examples and LLVM Tutorials</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

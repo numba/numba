@@ -1,0 +1,210 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>or equivalently, using a static constructor method &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: GlobalVariable (llvm.core)</td>
+</tr>
+</tbody>
+</table>
+<p>Global variables (<tt class="docutils literal"><span class="pre">llvm.core.GlobalVariable</span></tt>) are subclasses of
+<a class="reference external" href="llvm.core.GlobalValue.html">llvm.core.GlobalValue</a> and represent
+module-level variables. These can have optional initializers and can be
+marked as constants. Global variables can be created either by using the
+<tt class="docutils literal"><span class="pre">add_global_variable</span></tt> method of the <a class="reference external" href="llvm.core.Module.html">Module</a>
+class, or by using the static method <tt class="docutils literal"><span class="pre">GlobalVariable.new</span></tt>.</p>
+<p>{% highlight python %} # create a global variable using
+add_global_variable method gv1 =
+module_obj.add_global_variable(Type.int(), &#8220;gv1&#8221;)</p>
+<div class="section" id="or-equivalently-using-a-static-constructor-method">
+<h1>or equivalently, using a static constructor method<a class="headerlink" href="#or-equivalently-using-a-static-constructor-method" title="Permalink to this headline">¶</a></h1>
+<p>gv2 = GlobalVariable.new(module_obj, Type.int(), &#8220;gv2&#8221;) {% endhighlight
+%}</p>
+<p>Existing global variables of a module can be accessed by name using
+<tt class="docutils literal"><span class="pre">module_obj.get_global_variable_named(name)</span></tt> or
+<tt class="docutils literal"><span class="pre">GlobalVariable.get</span></tt>. All existing global variables can be enumerated
+via iterating over the property <tt class="docutils literal"><span class="pre">module_obj.global_variables</span></tt>.</p>
+<p>{% highlight python %} # retrieve a reference to the global variable
+gv1, # using the get_global_variable_named method gv1 =
+module_obj.get_global_variable_named(&#8220;gv1&#8221;)</p>
+</div>
+<div class="section" id="or-equivalently-using-the-static-get-method">
+<h1>or equivalently, using the static <tt class="docutils literal"><span class="pre">get</span></tt> method:<a class="headerlink" href="#or-equivalently-using-the-static-get-method" title="Permalink to this headline">¶</a></h1>
+<p>gv2 = GlobalVariable.get(module_obj, &#8220;gv2&#8221;)</p>
+</div>
+<div class="section" id="list-all-global-variables-in-a-module">
+<h1>list all global variables in a module<a class="headerlink" href="#list-all-global-variables-in-a-module" title="Permalink to this headline">¶</a></h1>
+<p>for gv in module_obj.global_variables: print gv.name, &#8220;of type&#8221;,
+gv.type {% endhighlight %}</p>
+<p>The initializer for a global variable can be set by assigning to the
+<tt class="docutils literal"><span class="pre">initializer</span></tt> property of the object. The <tt class="docutils literal"><span class="pre">is_global_constant</span></tt>
+property can be used to indicate that the variable is a global constant.</p>
+<p>Global variables can be delete using the <tt class="docutils literal"><span class="pre">delete</span></tt> method. Do not use
+the object after calling <tt class="docutils literal"><span class="pre">delete</span></tt> on it.</p>
+<p>{% highlight python %} # add an initializer 10 (32-bit integer)
+gv.initializer = Constant.int( Type.int(), 10 )</p>
+</div>
+<div class="section" id="delete-the-global">
+<h1>delete the global<a class="headerlink" href="#delete-the-global" title="Permalink to this headline">¶</a></h1>
+<p>gv.delete() # DO NOT dereference `gv&#8217; beyond this point! gv = None {%
+endhighlight %}</p>
+</div>
+<div class="section" id="llvm-core-globalvariable">
+<h1>llvm.core.GlobalVariable<a class="headerlink" href="#llvm-core-globalvariable" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="base-class">
+<h2>Base Class<a class="headerlink" href="#base-class" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference external" href="llvm.core.GlobalValue.html">llvm.core.GlobalValue</a></li>
+</ul>
+</div>
+<div class="section" id="static-constructors">
+<h2>Static Constructors<a class="headerlink" href="#static-constructors" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="new-module-obj-ty-name">
+<h3><tt class="docutils literal"><span class="pre">new(module_obj,</span> <span class="pre">ty,</span> <span class="pre">name)</span></tt><a class="headerlink" href="#new-module-obj-ty-name" title="Permalink to this headline">¶</a></h3>
+<p>Create a global variable named <tt class="docutils literal"><span class="pre">name</span></tt> of type <tt class="docutils literal"><span class="pre">ty</span></tt> in the module
+<tt class="docutils literal"><span class="pre">module_obj</span></tt> and return a <tt class="docutils literal"><span class="pre">GlobalVariable</span></tt> object that represents
+it.</p>
+</div>
+<div class="section" id="get-module-obj-name">
+<h3><tt class="docutils literal"><span class="pre">get(module_obj,</span> <span class="pre">name)</span></tt><a class="headerlink" href="#get-module-obj-name" title="Permalink to this headline">¶</a></h3>
+<p>Return a <tt class="docutils literal"><span class="pre">GlobalVariable</span></tt> object to represent the global variable
+named <tt class="docutils literal"><span class="pre">name</span></tt> in the module <tt class="docutils literal"><span class="pre">module_obj</span></tt> or raise <tt class="docutils literal"><span class="pre">LLVMException</span></tt>
+if such a variable does not exist.</p>
+</div>
+</div>
+<div class="section" id="properties">
+<h2>Properties<a class="headerlink" href="#properties" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="initializer">
+<h3><tt class="docutils literal"><span class="pre">initializer</span></tt><a class="headerlink" href="#initializer" title="Permalink to this headline">¶</a></h3>
+<p>The intializer of the variable. Set to
+<a class="reference external" href="llvm.core.Constant.html">llvm.core.Constant</a> (or derived). Gets the
+initializer constant, or <tt class="docutils literal"><span class="pre">None</span></tt> if none exists. <tt class="docutils literal"><span class="pre">global_constant</span></tt>
+<tt class="docutils literal"><span class="pre">True</span></tt> if the variable is a global constant, <tt class="docutils literal"><span class="pre">False</span></tt> otherwise.</p>
+</div>
+</div>
+<div class="section" id="methods">
+<h2>Methods<a class="headerlink" href="#methods" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="delete">
+<h3><tt class="docutils literal"><span class="pre">delete()</span></tt><a class="headerlink" href="#delete" title="Permalink to this headline">¶</a></h3>
+<p>Deletes the global variable from it&#8217;s module. <strong>Do not hold any
+references to this object after calling ``delete`` on it.</strong></p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">or equivalently, using a static constructor method</a></li>
+<li><a class="reference internal" href="#or-equivalently-using-the-static-get-method">or equivalently, using the static <tt class="docutils literal"><span class="pre">get</span></tt> method:</a></li>
+<li><a class="reference internal" href="#list-all-global-variables-in-a-module">list all global variables in a module</a></li>
+<li><a class="reference internal" href="#delete-the-global">delete the global</a></li>
+<li><a class="reference internal" href="#llvm-core-globalvariable">llvm.core.GlobalVariable</a><ul>
+<li><a class="reference internal" href="#base-class">Base Class</a></li>
+<li><a class="reference internal" href="#static-constructors">Static Constructors</a><ul>
+<li><a class="reference internal" href="#new-module-obj-ty-name"><tt class="docutils literal"><span class="pre">new(module_obj,</span> <span class="pre">ty,</span> <span class="pre">name)</span></tt></a></li>
+<li><a class="reference internal" href="#get-module-obj-name"><tt class="docutils literal"><span class="pre">get(module_obj,</span> <span class="pre">name)</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#properties">Properties</a><ul>
+<li><a class="reference internal" href="#initializer"><tt class="docutils literal"><span class="pre">initializer</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#methods">Methods</a><ul>
+<li><a class="reference internal" href="#delete"><tt class="docutils literal"><span class="pre">delete()</span></tt></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/llvm.core.GlobalVariable.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

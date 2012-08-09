@@ -1,0 +1,1295 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>5. Chapter 5: Extending the Language: Control Flow &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../../index.html" />
+    <link rel="up" title="Kaleidoscope" href="index.html" />
+    <link rel="next" title="6. Chapter 6: Extending the Language: User-defined Operators" href="PythonLangImpl6.html" />
+    <link rel="prev" title="4. Chapter 4: Adding JIT and Optimizer Support" href="PythonLangImpl4.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="PythonLangImpl6.html" title="6. Chapter 6: Extending the Language: User-defined Operators"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="PythonLangImpl4.html" title="4. Chapter 4: Adding JIT and Optimizer Support"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="../examples.html" >Examples and LLVM Tutorials</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Kaleidoscope</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="chapter-5-extending-the-language-control-flow">
+<h1>5. Chapter 5: Extending the Language: Control Flow<a class="headerlink" href="#chapter-5-extending-the-language-control-flow" title="Permalink to this headline">¶</a></h1>
+<p>Written by <a class="reference external" href="mailto:sabre&#37;&#52;&#48;nondot&#46;org">Chris Lattner</a> and <a class="reference external" href="http://max99x.com">Max
+Shawabkeh</a></p>
+<div class="section" id="introduction-intro">
+<h2>5.1. Introduction # {#intro}<a class="headerlink" href="#introduction-intro" title="Permalink to this headline">¶</a></h2>
+<p>Welcome to Chapter 5 of the <a class="reference external" href="http://www.llvm.org/docs/tutorial/index.html">Implementing a language with
+LLVM</a> tutorial. Parts
+1-4 described the implementation of the simple Kaleidoscope language and
+included support for generating LLVM IR, followed by optimizations and a
+JIT compiler. Unfortunately, as presented, Kaleidoscope is mostly
+useless: it has no control flow other than call and return. This means
+that you can&#8217;t have conditional branches in the code, significantly
+limiting its power. In this episode of &#8220;build that compiler&#8221;, we&#8217;ll
+extend Kaleidoscope to have an if/then/else expression plus a simple
+&#8216;for&#8217; loop.</p>
+</div>
+<hr class="docutils" />
+<div class="section" id="if-then-else-ifthen">
+<h2>5.2. If/Then/Else # {#ifthen}<a class="headerlink" href="#if-then-else-ifthen" title="Permalink to this headline">¶</a></h2>
+<p>Extending Kaleidoscope to support if/then/else is quite straightforward.
+It basically requires adding lexer support for this &#8220;new&#8221; concept to the
+lexer, parser, AST, and LLVM code emitter. This example is nice, because
+it shows how easy it is to &#8220;grow&#8221; a language over time, incrementally
+extending it as new ideas are discovered.</p>
+<p>Before we get going on &#8220;how&#8221; we add this extension, lets talk about
+&#8220;what&#8221; we want. The basic idea is that we want to be able to write this
+sort of thing:</p>
+<p>{% highlight python %} def fib(x) if x &lt; 3 then 1 else fib(x-1) +
+fib(x-2) {% endhighlight %}</p>
+<p>In Kaleidoscope, every construct is an expression: there are no
+statements. As such, the if/then/else expression needs to return a value
+like any other. Since we&#8217;re using a mostly functional form, we&#8217;ll have
+it evaluate its conditional, then return the &#8216;then&#8217; or &#8216;else&#8217; value
+based on how the condition was resolved. This is very similar to the C
+&#8221;?:&#8221; expression.</p>
+<p>The semantics of the if/then/else expression is that it evaluates the
+condition to a boolean equality value: 0.0 is considered to be false and
+everything else is considered to be true. If the condition is true, the
+first subexpression is evaluated and returned, if the condition is
+false, the second subexpression is evaluated and returned. Since
+Kaleidoscope allows side-effects, this behavior is important to nail
+down.</p>
+<p>Now that we know what we &#8220;want&#8221;, let&#8217;s break this down into its
+constituent pieces.</p>
+<div class="section" id="lexer-extensions-for-if-then-else-iflexer">
+<h3>5.2.1. Lexer Extensions for If/Then/Else ## {#iflexer}<a class="headerlink" href="#lexer-extensions-for-if-then-else-iflexer" title="Permalink to this headline">¶</a></h3>
+<p>The lexer extensions are straightforward. First we add new token classes
+for the relevant tokens:</p>
+<p>{% highlight python %} class IfToken(object): pass class
+ThenToken(object): pass class ElseToken(object): pass {% endhighlight %}</p>
+<p>Once we have that, we recognize the new keywords in the lexer. This is
+pretty simple stuff:</p>
+<p>{% highlight python %} ... if identifier == &#8216;def&#8217;: yield DefToken() elif
+identifier == &#8216;extern&#8217;: yield ExternToken() elif identifier == &#8216;if&#8217;:
+yield IfToken() elif identifier == &#8216;then&#8217;: yield ThenToken() elif
+identifier == &#8216;else&#8217;: yield ElseToken() else: yield
+IdentifierToken(identifier) {% endhighlight %}</p>
+</div>
+<div class="section" id="ast-extensions-for-if-then-else-ifast">
+<h3>5.2.2. AST Extensions for If/Then/Else ## {#ifast}<a class="headerlink" href="#ast-extensions-for-if-then-else-ifast" title="Permalink to this headline">¶</a></h3>
+<p>To represent the new expression we add a new AST node for it:</p>
+<p>{% highlight python %} # Expression class for if/then/else. class
+IfExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, condition, then_branch, else_branch):
+self.condition = condition self.then_branch = then_branch
+self.else_branch = else_branch</p>
+<p>def CodeGen(self): ... {% endhighlight %}</p>
+<p>The AST node just has pointers to the various subexpressions.</p>
+</div>
+<div class="section" id="parser-extensions-for-if-then-else-ifparser">
+<h3>5.2.3. Parser Extensions for If/Then/Else ## {#ifparser}<a class="headerlink" href="#parser-extensions-for-if-then-else-ifparser" title="Permalink to this headline">¶</a></h3>
+<p>Now that we have the relevant tokens coming from the lexer and we have
+the AST node to build, our parsing logic is relatively straightforward.
+First we define a new parsing function:</p>
+<p>{% highlight python %} # ifexpr ::= &#8216;if&#8217; expression &#8216;then&#8217; expression
+&#8216;else&#8217; expression def ParseIfExpr(self): self.Next() # eat the if.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># condition.</span>
+<span class="n">condition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">ThenToken</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;then&quot;.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the then.</span>
+
+<span class="n">then_branch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">ElseToken</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;else&quot;.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the else.</span>
+
+<span class="n">else_branch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">return</span> <span class="n">IfExpressionNode</span><span class="p">(</span><span class="n">condition</span><span class="p">,</span> <span class="n">then_branch</span><span class="p">,</span> <span class="n">else_branch</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>Next we hook it up as a primary expression:</p>
+<p>{% highlight python %} def ParsePrimary(self): if
+isinstance(self.current, IdentifierToken): return
+self.ParseIdentifierExpr() elif isinstance(self.current, NumberToken):
+return self.ParseNumberExpr(); elif isinstance(self.current, IfToken):
+return self.ParseIfExpr() elif self.current == CharacterToken(&#8216;(&#8216;):
+return self.ParseParenExpr() else: raise RuntimeError(&#8216;Unknown token
+when expecting an expression.&#8217;) {% endhighlight %}</p>
+</div>
+<div class="section" id="llvm-ir-for-if-then-else-ifir">
+<h3>5.2.4. LLVM IR for If/Then/Else ## {#ifir}<a class="headerlink" href="#llvm-ir-for-if-then-else-ifir" title="Permalink to this headline">¶</a></h3>
+<p>Now that we have it parsing and building the AST, the final piece is
+adding LLVM code generation support. This is the most interesting part
+of the if/then/else example, because this is where it starts to
+introduce new concepts. All of the code above has been thoroughly
+described in previous chapters.</p>
+<p>To motivate the code we want to produce, lets take a look at a simple
+example. Consider:</p>
+<p>{% highlight python %} extern foo(); extern bar(); def baz(x) if x then
+foo() else bar(); {% endhighlight %}</p>
+<p>If you disable optimizations, the code you&#8217;ll (soon) get from
+Kaleidoscope looks something like this:</p>
+<p>{% highlight llvm %} declare double &#64;foo() declare double &#64;bar() define
+double &#64;baz(double %x) { entry: %ifcond = fcmp one double %x,
+0.000000e+00 br i1 %ifcond, label %then, label %else then: ; preds =
+%entry %calltmp1 = call double &#64;bar() else: ; preds = %entry %calltmp1 =
+call double &#64;bar() br label %ifcont ifcont: ; preds = %else, %then
+%iftmp = phi double [ %calltmp, %then ], [ %calltmp1, %else ] ret double
+%iftmp } {% endhighlight %}</p>
+<p>To visualize the control flow graph, you can use a nifty feature of the
+LLVM <a class="reference external" href="http://llvm.org/cmds/opt.html">opt</a> tool. If you put this LLVM
+IR into &#8220;t.ll&#8221; and run <tt class="docutils literal"><span class="pre">llvm-as</span> <span class="pre">&lt;</span> <span class="pre">t.ll</span> <span class="pre">|</span> <span class="pre">opt</span> <span class="pre">-analyze</span> <span class="pre">-view-cfg</span></tt>, a
+<a class="reference external" href="http://www.llvm.org/docs/ProgrammersManual.html#ViewGraph">window will pop
+up</a> and
+you&#8217;ll see this graph:</p>
+<p>Another way to get this is to call &#8220;<tt class="docutils literal"><span class="pre">function.viewCFG()</span></tt>&#8221; or
+&#8220;<tt class="docutils literal"><span class="pre">function.viewCFGOnly()</span></tt>&#8221; (where F is a &#8220;<tt class="docutils literal"><span class="pre">llvm.core.Function</span></tt>&#8221;)
+either by inserting actual calls into the code and recompiling or by
+calling these in the debugger. LLVM has many nice features for
+visualizing various graphs, but note that these are available only if
+your LLVM was built with Graphviz support (accomplished by having
+Graphviz and Ghostview installed when building LLVM).</p>
+<p>Getting back to the generated code, it is fairly simple: the entry block
+evaluates the conditional expression (&#8220;x&#8221; in our case here) and compares
+the result to 0.0 with the
+<a class="reference external" href="http://www.llvm.org/docs/LangRef.html#i_fcmp">fcmp</a> one instruction
+(&#8216;one&#8217; is &#8220;Ordered and Not Equal&#8221;). Based on the result of this
+expression, the code jumps to either the &#8220;then&#8221; or &#8220;else&#8221; blocks, which
+contain the expressions for the true/false cases.</p>
+<p>Once the then/else blocks are finished executing, they both branch back
+to the &#8216;ifcont&#8217; block to execute the code that happens after the
+if/then/else. In this case the only thing left to do is to return to the
+caller of the function. The question then becomes: how does the code
+know which expression to return?</p>
+<p>The answer to this question involves an important SSA operation: the
+<a class="reference external" href="http://en.wikipedia.org/wiki/Static_single_assignment_form">Phi
+operation</a>.
+If you&#8217;re not familiar with SSA, <a class="reference external" href="http://en.wikipedia.org/wiki/Static_single_assignment_form">the wikipedia
+article</a>
+is a good introduction and there are various other introductions to it
+available on your favorite search engine. The short version is that
+&#8220;execution&#8221; of the Phi operation requires &#8220;remembering&#8221; which block
+control came from. The Phi operation takes on the value corresponding to
+the input control block. In this case, if control comes in from the
+&#8220;then&#8221; block, it gets the value of &#8220;calltmp&#8221;. If control comes from the
+&#8220;else&#8221; block, it gets the value of &#8220;calltmp1&#8221;.</p>
+<p>At this point, you are probably starting to think &#8220;Oh no! This means my
+simple and elegant front-end will have to start generating SSA form in
+order to use LLVM!&#8221;. Fortunately, this is not the case, and we strongly
+advise <em>not</em> implementing an SSA construction algorithm in your
+front-end unless there is an amazingly good reason to do so. In
+practice, there are two sorts of values that float around in code
+written for your average imperative programming language that might need
+Phi nodes:</p>
+<ol class="arabic simple">
+<li>Code that involves user variables: <tt class="docutils literal"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">1;</span> <span class="pre">x</span> <span class="pre">=</span> <span class="pre">x</span> <span class="pre">+</span> <span class="pre">1;</span></tt></li>
+<li>Values that are implicit in the structure of your AST, such as the
+Phi node in this case.</li>
+</ol>
+<p>In <a class="reference external" href="PythonLangImpl7.html">Chapter 7</a> of this tutorial (&#8220;mutable
+variables&#8221;), we&#8217;ll talk about #1 in depth. For now, just believe me that
+you don&#8217;t need SSA construction to handle this case. For #2, you have
+the choice of using the techniques that we will describe for #1, or you
+can insert Phi nodes directly, if convenient. In this case, it is really
+really easy to generate the Phi node, so we choose to do it directly.</p>
+<p>Okay, enough of the motivation and overview, lets generate code!</p>
+</div>
+<div class="section" id="code-generation-for-if-then-else-ifcodegen">
+<h3>5.2.5. Code Generation for If/Then/Else ## {#ifcodegen}<a class="headerlink" href="#code-generation-for-if-then-else-ifcodegen" title="Permalink to this headline">¶</a></h3>
+<p>In order to generate code for this, we implement the <tt class="docutils literal"><span class="pre">Codegen</span></tt> method
+for <tt class="docutils literal"><span class="pre">IfExpressionNode</span></tt>:</p>
+<p>{% highlight python %} def CodeGen(self): condition =
+self.condition.CodeGen()</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Convert condition to a bool by comparing equal to 0.0.</span>
+<span class="n">condition_bool</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fcmp</span><span class="p">(</span>
+    <span class="n">FCMP_ONE</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="n">Constant</span><span class="o">.</span><span class="n">real</span><span class="p">(</span><span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="mi">0</span><span class="p">),</span> <span class="s">&#39;ifcond&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>This code is straightforward and similar to what we saw before. We emit
+the expression for the condition, then compare that value to zero to get
+a truth value as a 1-bit (bool) value.</p>
+<p>{% highlight python %} function = g_llvm_builder.basic_block.function</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Create blocks for the then and else cases. Insert the &#39;then&#39; block at the</span>
+<span class="c"># end of the function.</span>
+<span class="n">then_block</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&#39;then&#39;</span><span class="p">)</span>
+<span class="n">else_block</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&#39;else&#39;</span><span class="p">)</span>
+<span class="n">merge_block</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&#39;ifcond&#39;</span><span class="p">)</span>
+
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">cbranch</span><span class="p">(</span><span class="n">condition_bool</span><span class="p">,</span> <span class="n">then_block</span><span class="p">,</span> <span class="n">else_block</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>This code creates the basic blocks that are related to the if/then/else
+statement, and correspond directly to the blocks in the example above.
+The first line gets the current Function object that is being built. It
+gets this by asking the builder for the current BasicBlock, and asking
+that block for its &#8220;parent&#8221; (the function it is currently embedded
+into).</p>
+<p>Once it has that, it creates three block which are automatically
+inserted into the end of the function. Once the blocks are created, we
+can emit the conditional branch that chooses between them. Note that
+creating new blocks does not implicitly affect the Builder, so it is
+still inserting into the block that the condition went into.</p>
+<p>{% highlight python %} # Emit then value.
+g_llvm_builder.position_at_end(then_block) then_value =
+self.then_branch.CodeGen() g_llvm_builder.branch(merge_block)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Codegen of &#39;Then&#39; can change the current block; update then_block for the</span>
+<span class="c"># PHI node.</span>
+<span class="n">then_block</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">basic_block</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>After the conditional branch is inserted, we move the builder to start
+inserting into the &#8220;then&#8221; block. Strictly speaking, this call moves the
+insertion point to be at the end of the specified block. However, since
+the &#8220;then&#8221; block is empty, it also starts out by inserting at the
+beginning of the block. :)</p>
+<p>Once the insertion point is set, we recursively codegen the &#8220;then&#8221;
+expression from the AST. To finish off the &#8220;then&#8221; block, we create an
+unconditional branch to the merge block. One interesting (and very
+important) aspect of the LLVM IR is that it <a class="reference external" href="http://www.llvm.org/docs/LangRef.html#functionstructure">requires all basic blocks
+to be
+&#8220;terminated&#8221;</a>
+with a <a class="reference external" href="http://www.llvm.org/docs/LangRef.html#terminators">control flow
+instruction</a> such
+as return or branch. This means that all control flow, <em>including
+fallthroughs</em> must be made explicit in the LLVM IR. If you violate this
+rule, the verifier will emit an error.</p>
+<p>The final line here is quite subtle, but is very important. The basic
+issue is that when we create the Phi node in the merge block, we need to
+set up the block/value pairs that indicate how the Phi will work.
+Importantly, the Phi node expects to have an entry for each predecessor
+of the block in the CFG. Why then, are we getting the current block when
+we just set it to then_block 5 lines above? The problem is that the
+&#8220;Then&#8221; expression may actually itself change the block that the Builder
+is emitting into if, for example, it contains a nested &#8220;if/then/else&#8221;
+expression. Because calling Codegen recursively could arbitrarily change
+the notion of the current block, we are required to get an up-to-date
+value for code that will set up the Phi node.</p>
+<p>{% highlight python %} # Emit else block.
+g_llvm_builder.position_at_end(else_block) else_value =
+self.else_branch.CodeGen() g_llvm_builder.branch(merge_block)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Codegen of &#39;Else&#39; can change the current block, update else_block for the</span>
+<span class="c"># PHI node.</span>
+<span class="n">else_block</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">basic_block</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>Code generation for the &#8216;else&#8217; block is basically identical to codegen
+for the &#8216;then&#8217; block. The only significant difference is the first line,
+which adds the &#8216;else&#8217; block to the function. Recall previously that the
+&#8216;else&#8217; block was created, but not added to the function. Now that the
+&#8216;then&#8217; and &#8216;else&#8217; blocks are emitted, we can finish up with the merge
+code:</p>
+<p>{% highlight python %} # Emit merge block.
+g_llvm_builder.position_at_end(merge_block) phi =
+g_llvm_builder.phi(Type.double(), &#8216;iftmp&#8217;)
+phi.add_incoming(then_value, then_block)
+phi.add_incoming(else_value, else_block)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">return</span> <span class="n">phi</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>The first line changes the insertion point so that newly created code
+will go into the &#8220;merge&#8221; block. Once that is done, we need to create the
+PHI node and set up the block/value pairs for the PHI.</p>
+<p>Finally, the CodeGen function returns the phi node as the value computed
+by the if/then/else expression. In our example above, this returned
+value will feed into the code for the top-level function, which will
+create the return instruction.</p>
+<p>Overall, we now have the ability to execute conditional code in
+Kaleidoscope. With this extension, Kaleidoscope is a fairly complete
+language that can calculate a wide variety of numeric functions. Next up
+we&#8217;ll add another useful expression that is familiar from non-functional
+languages...</p>
+</div>
+</div>
+<hr class="docutils" />
+<div class="section" id="for-loop-expression-for">
+<h2>5.3. &#8216;for&#8217; Loop Expression # {#for}<a class="headerlink" href="#for-loop-expression-for" title="Permalink to this headline">¶</a></h2>
+<p>Now that we know how to add basic control flow constructs to the
+language, we have the tools to add more powerful things. Lets add
+something more aggressive, a &#8216;for&#8217; expression:</p>
+<p>{% highlight python %} extern putchard(char) def printstar(n) for i = 1,
+i &lt; n, 1.0 in putchard(42) # ascii 42 = &#8216;*&#8217;</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># print 100 &#39;*&#39; characters</span>
+<span class="n">printstar</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>This expression defines a new variable (<tt class="docutils literal"><span class="pre">i</span></tt> in this case) which
+iterates from a starting value, while the condition (<tt class="docutils literal"><span class="pre">i</span> <span class="pre">&lt;</span> <span class="pre">n</span></tt> in this
+case) is true, incrementing by an optional step value (&#8220;1.0&#8221; in this
+case). If the step value is omitted, it defaults to 1.0. While the loop
+is true, it executes its body expression. Because we don&#8217;t have anything
+better to return, we&#8217;ll just define the loop as always returning 0.0. In
+the future when we have mutable variables, it will get more useful.</p>
+<p>As before, lets talk about the changes that we need to Kaleidoscope to
+support this.</p>
+<div class="section" id="lexer-extensions-for-the-for-loop-forlexer">
+<h3>5.3.1. Lexer Extensions for the &#8216;for&#8217; Loop ## {#forlexer}<a class="headerlink" href="#lexer-extensions-for-the-for-loop-forlexer" title="Permalink to this headline">¶</a></h3>
+<p>The lexer extensions are the same sort of thing as for if/then/else:</p>
+<p>{% highlight python %} ...</p>
+<p>class ThenToken(object): pass class ElseToken(object): pass class
+ForToken(object): pass class InToken(object): pass</p>
+<p>...</p>
+<p>def Tokenize(string):</p>
+<div class="highlight-python"><pre>...
+
+elif identifier == 'else':
+  yield ElseToken()
+elif identifier == 'for':
+  yield ForToken()
+elif identifier == 'in':
+  yield InToken()&lt;/b&gt;
+else:
+  yield IdentifierToken(identifier)</pre>
+</div>
+<p>{% endhighlight %}</p>
+</div>
+<div class="section" id="ast-extensions-for-the-for-loop-forast">
+<h3>5.3.2. AST Extensions for the &#8216;for&#8217; Loop ## {#forast}<a class="headerlink" href="#ast-extensions-for-the-for-loop-forast" title="Permalink to this headline">¶</a></h3>
+<p>The AST node is just as simple. It basically boils down to capturing the
+variable name and the constituent expressions in the node.</p>
+<p>{% highlight python %} # Expression class for for/in. class
+ForExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, loop_variable, start, end, step, body):
+self.loop_variable = loop_variable self.start = start self.end = end
+self.step = step self.body = body</p>
+<p>def CodeGen(self): ... {% endhighlight %}</p>
+</div>
+<div class="section" id="parser-extensions-for-the-for-loop-forparser">
+<h3>5.3.3. Parser Extensions for the &#8216;for&#8217; Loop ## {#forparser}<a class="headerlink" href="#parser-extensions-for-the-for-loop-forparser" title="Permalink to this headline">¶</a></h3>
+<p>The parser code is also fairly standard. The only interesting thing here
+is handling of the optional step value. The parser code handles it by
+checking to see if the second comma is present. If not, it sets the step
+value to null in the AST node:</p>
+<p>{% highlight python %} # forexpr ::= &#8216;for&#8217; identifier &#8216;=&#8217; expr &#8216;,&#8217; expr
+(&#8216;,&#8217; expr)? &#8216;in&#8217; expression def ParseForExpr(self): self.Next() # eat
+the for.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">IdentifierToken</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected identifier after for.&#39;</span><span class="p">)</span>
+
+<span class="n">loop_variable</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="o">.</span><span class="n">name</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the identifier.</span>
+
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;=&#39;</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;=&quot; after for variable.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the &#39;=&#39;.</span>
+
+<span class="n">start</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;,&quot; after for start value.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the &#39;,&#39;.</span>
+
+<span class="n">end</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="c"># The step value is optional.</span>
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">==</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">):</span>
+  <span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the &#39;,&#39;.</span>
+  <span class="n">step</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+<span class="k">else</span><span class="p">:</span>
+  <span class="n">step</span> <span class="o">=</span> <span class="bp">None</span>
+
+<span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">InToken</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;in&quot; after for variable specification.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;in&#39;.</span>
+
+<span class="n">body</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">return</span> <span class="n">ForExpressionNode</span><span class="p">(</span><span class="n">loop_variable</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+</div>
+<div class="section" id="llvm-ir-for-the-for-loop-forir">
+<h3>5.3.4. LLVM IR for the &#8216;for&#8217; Loop ## {#forir}<a class="headerlink" href="#llvm-ir-for-the-for-loop-forir" title="Permalink to this headline">¶</a></h3>
+<p>Now we get to the good part: the LLVM IR we want to generate for this
+thing. With the simple example above, we get this LLVM IR (note that
+this dump is generated with optimizations disabled for clarity):</p>
+<p>{% highlight llvm %} declare double &#64;putchard(double) define double
+&#64;printstar(double %n) { entry: ; initial value = 1.0 (inlined into phi)
+br label %loop loop: ; preds = %loop, %entry %i = phi double [
+1.000000e+00, %entry ], [ %nextvar, %loop ] ; body %calltmp = call
+double &#64;putchard(double 4.200000e+01) ; increment %nextvar = fadd double
+%i, 1.000000e+00 ; termination test %cmptmp = fcmp ult double %i, %n
+%booltmp = uitofp i1 %cmptmp to double %loopcond = fcmp one double
+%booltmp, 0.000000e+00 br i1 %loopcond, label %loop, label %afterloop
+afterloop: ; preds = %loop ; loop always returns 0.0 ret double
+0.000000e+00 } {% endhighlight %}</p>
+<p>This loop contains all the same constructs we saw before: a phi node,
+several expressions, and some basic blocks. Lets see how this fits
+together.</p>
+</div>
+<div class="section" id="code-generation-for-the-for-loop-forcodegen">
+<h3>5.3.5. Code Generation for the &#8216;for&#8217; Loop ## {#forcodegen}<a class="headerlink" href="#code-generation-for-the-for-loop-forcodegen" title="Permalink to this headline">¶</a></h3>
+<p>The first part of Codegen is very simple: we just output the start
+expression for the loop value:</p>
+<p>{% highlight python %} def CodeGen(self): # Emit the start code first,
+without &#8216;variable&#8217; in scope. start_value = self.start.CodeGen() {%
+endhighlight %}</p>
+<p>With this out of the way, the next step is to set up the LLVM basic
+block for the start of the loop body. In the case above, the whole loop
+body is one block, but remember that the body code itself could consist
+of multiple blocks (e.g. if it contains an if/then/else or a for/in
+expression).</p>
+<p>{% highlight python %} # Make the new basic block for the loop header,
+inserting after current # block. function =
+g_llvm_builder.basic_block.function pre_header_block =
+g_llvm_builder.basic_block loop_block =
+function.append_basic_block(&#8216;loop&#8217;)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Insert an explicit fallthrough from the current block to the loop_block.</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">branch</span><span class="p">(</span><span class="n">loop_block</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>This code is similar to what we saw for if/then/else. Because we will
+need it to create the Phi node, we remember the block that falls through
+into the loop. Once we have that, we create the actual block that starts
+the loop and create an unconditional branch for the fall-through between
+the two blocks.</p>
+<p>{% highlight python %} # Start insertion in loop_block.
+g_llvm_builder.position_at_end(loop_block);</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Start the PHI node with an entry for start.</span>
+<span class="n">variable_phi</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">phi</span><span class="p">(</span><span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_variable</span><span class="p">)</span>
+<span class="n">variable_phi</span><span class="o">.</span><span class="n">add_incoming</span><span class="p">(</span><span class="n">start_value</span><span class="p">,</span> <span class="n">pre_header_block</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>Now that the &#8220;pre_header_block&#8221; for the loop is set up, we switch to
+emitting code for the loop body. To begin with, we move the insertion
+point and create the PHI node for the loop induction variable. Since we
+already know the incoming value for the starting value, we add it to the
+Phi node. Note that the Phi will eventually get a second value for the
+backedge, but we can&#8217;t set it up yet (because it doesn&#8217;t exist!).</p>
+<p>{% highlight python %} # Within the loop, the variable is defined equal
+to the PHI node. If it # shadows an existing variable, we have to
+restore it, so save it now. old_value =
+g_named_values.get(self.loop_variable, None)
+g_named_values[self.loop_variable] = variable_phi</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Emit the body of the loop.  This, like any other expr, can change the</span>
+<span class="c"># current BB.  Note that we ignore the value computed by the body.</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">body</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>Now the code starts to get more interesting. Our &#8216;for&#8217; loop introduces a
+new variable to the symbol table. This means that our symbol table can
+now contain either function arguments or loop variables. To handle this,
+before we codegen the body of the loop, we add the loop variable as the
+current value for its name. Note that it is possible that there is a
+variable of the same name in the outer scope. It would be easy to make
+this an error (emit an error and return null if there is already an
+entry for VarName) but we choose to allow shadowing of variables. In
+order to handle this correctly, we remember the Value that we are
+potentially shadowing in <tt class="docutils literal"><span class="pre">old_value</span></tt> (which will be None if there is
+no shadowed variable).</p>
+<p>Once the loop variable is set into the symbol table, the code
+recursively codegen&#8217;s the body. This allows the body to use the loop
+variable: any references to it will naturally find it in the symbol
+table.</p>
+<p>{% highlight python %} # Emit the step value. if self.step: step_value
+= self.step.CodeGen() else: # If not specified, use 1.0. step_value =
+Constant.real(Type.double(), 1)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">next_value</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fadd</span><span class="p">(</span><span class="n">variable_phi</span><span class="p">,</span> <span class="n">step_value</span><span class="p">,</span> <span class="s">&#39;next&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>Now that the body is emitted, we compute the next value of the iteration
+variable by adding the step value, or 1.0 if it isn&#8217;t present.
+<tt class="docutils literal"><span class="pre">next_value</span></tt> will be the value of the loop variable on the next
+iteration of the loop.</p>
+<p>{% highlight python %} # Compute the end condition and convert it to a
+bool by comparing to 0.0. end_condition = self.end.CodeGen()
+end_condition_bool = g_llvm_builder.fcmp( FCMP_ONE, end_condition,
+Constant.real(Type.double(), 0), &#8216;loopcond&#8217;) {% endhighlight %}</p>
+<p>Finally, we evaluate the exit value of the loop, to determine whether
+the loop should exit. This mirrors the condition evaluation for the
+if/then/else statement.</p>
+<p>{% highlight python %} # Create the &#8220;after loop&#8221; block and insert it.
+loop_end_block = g_llvm_builder.basic_block after_block =
+function.append_basic_block(&#8216;afterloop&#8217;)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Insert the conditional branch into the end of loop_end_block.</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">cbranch</span><span class="p">(</span><span class="n">end_condition_bool</span><span class="p">,</span> <span class="n">loop_block</span><span class="p">,</span> <span class="n">after_block</span><span class="p">)</span>
+
+<span class="c"># Any new code will be inserted in after_block.</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">position_at_end</span><span class="p">(</span><span class="n">after_block</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>With the code for the body of the loop complete, we just need to finish
+up the control flow for it. This code remembers the end block (for the
+phi node), then creates the block for the loop exit (&#8220;afterloop&#8221;). Based
+on the value of the exit condition, it creates a conditional branch that
+chooses between executing the loop again and exiting the loop. Any
+future code is emitted in the &#8220;afterloop&#8221; block, so it sets the
+insertion position to it.</p>
+<p>{% highlight python %} # Add a new entry to the PHI node for the
+backedge. variable_phi.add_incoming(next_value, loop_end_block)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Restore the unshadowed variable.</span>
+<span class="k">if</span> <span class="n">old_value</span><span class="p">:</span>
+  <span class="n">g_named_values</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">loop_variable</span><span class="p">]</span> <span class="o">=</span> <span class="n">old_value</span>
+<span class="k">else</span><span class="p">:</span>
+  <span class="k">del</span> <span class="n">g_named_values</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">loop_variable</span><span class="p">]</span>
+
+<span class="c"># for expr always returns 0.0.</span>
+<span class="k">return</span> <span class="n">Constant</span><span class="o">.</span><span class="n">real</span><span class="p">(</span><span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>{% endhighlight %}</p>
+<p>The final code handles various cleanups: now that we have the
+&#8220;next_value&#8221;, we can add the incoming value to the loop PHI node. After
+that, we remove the loop variable from the symbol table, so that it
+isn&#8217;t in scope after the for loop. Finally, code generation of the for
+loop always returns 0.0, so that is what we return from
+<tt class="docutils literal"><span class="pre">ForExpressionNode::CodeGen</span></tt>.</p>
+<p>With this, we conclude the &#8220;adding control flow to Kaleidoscope&#8221; chapter
+of the tutorial. In this chapter we added two control flow constructs,
+and used them to motivate a couple of aspects of the LLVM IR that are
+important for front-end implementors to know. In the next chapter of our
+saga, we will get a bit crazier and add <a class="reference external" href="PythonLangImpl6.html">user-defined
+operators</a> to our poor innocent language.</p>
+</div>
+</div>
+<hr class="docutils" />
+<div class="section" id="full-code-listing-code">
+<h2>5.4. Full Code Listing # {#code}<a class="headerlink" href="#full-code-listing-code" title="Permalink to this headline">¶</a></h2>
+<p>Here is the complete code listing for our running example, enhanced with
+the if/then/else and for expressions:</p>
+<p>{% highlight python %} #!/usr/bin/env python</p>
+<p>import re from llvm.core import Module, Constant, Type, Function,
+Builder from llvm.ee import ExecutionEngine, TargetData from llvm.passes
+import FunctionPassManager</p>
+<p>from llvm.core import FCMP_ULT, FCMP_ONE from llvm.passes import
+(PASS_INSTRUCTION_COMBINING, PASS_REASSOCIATE, PASS_GVN,
+PASS_CFG_SIMPLIFICATION)</p>
+<div class="section" id="globals">
+<h3>5.4.1. Globals<a class="headerlink" href="#globals" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+<div class="section" id="the-llvm-module-which-holds-all-the-ir-code">
+<h2>5.5. The LLVM module, which holds all the IR code.<a class="headerlink" href="#the-llvm-module-which-holds-all-the-ir-code" title="Permalink to this headline">¶</a></h2>
+<p>g_llvm_module = Module.new(&#8216;my cool jit&#8217;)</p>
+</div>
+<div class="section" id="the-llvm-instruction-builder-created-whenever-a-new-function-is-entered">
+<h2>5.6. The LLVM instruction builder. Created whenever a new function is entered.<a class="headerlink" href="#the-llvm-instruction-builder-created-whenever-a-new-function-is-entered" title="Permalink to this headline">¶</a></h2>
+<p>g_llvm_builder = None</p>
+</div>
+<div class="section" id="a-dictionary-that-keeps-track-of-which-values-are-defined-in-the-current-scope">
+<h2>5.7. A dictionary that keeps track of which values are defined in the current scope<a class="headerlink" href="#a-dictionary-that-keeps-track-of-which-values-are-defined-in-the-current-scope" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="and-what-their-llvm-representation-is">
+<h2>5.8. and what their LLVM representation is.<a class="headerlink" href="#and-what-their-llvm-representation-is" title="Permalink to this headline">¶</a></h2>
+<p>g_named_values = {}</p>
+</div>
+<div class="section" id="the-function-optimization-passes-manager">
+<h2>5.9. The function optimization passes manager.<a class="headerlink" href="#the-function-optimization-passes-manager" title="Permalink to this headline">¶</a></h2>
+<p>g_llvm_pass_manager = FunctionPassManager.new(g_llvm_module)</p>
+</div>
+<div class="section" id="the-llvm-execution-engine">
+<h2>5.10. The LLVM execution engine.<a class="headerlink" href="#the-llvm-execution-engine" title="Permalink to this headline">¶</a></h2>
+<p>g_llvm_executor = ExecutionEngine.new(g_llvm_module)</p>
+<div class="section" id="lexer">
+<h3>5.10.1. Lexer<a class="headerlink" href="#lexer" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+<div class="section" id="the-lexer-yields-one-of-these-types-for-each-token">
+<h2>5.11. The lexer yields one of these types for each token.<a class="headerlink" href="#the-lexer-yields-one-of-these-types-for-each-token" title="Permalink to this headline">¶</a></h2>
+<p>class EOFToken(object): pass class DefToken(object): pass class
+ExternToken(object): pass class IfToken(object): pass class
+ThenToken(object): pass class ElseToken(object): pass class
+ForToken(object): pass class InToken(object): pass</p>
+<p>class IdentifierToken(object): def <strong>init</strong>(self, name): self.name =
+name</p>
+<p>class NumberToken(object): def <strong>init</strong>(self, value): self.value =
+value</p>
+<p>class CharacterToken(object): def <strong>init</strong>(self, char): self.char =
+char def <strong>eq</strong>(self, other): return isinstance(other, CharacterToken)
+and self.char == other.char def <strong>ne</strong>(self, other): return not self
+== other</p>
+</div>
+<div class="section" id="regular-expressions-that-tokens-and-comments-of-our-language">
+<h2>5.12. Regular expressions that tokens and comments of our language.<a class="headerlink" href="#regular-expressions-that-tokens-and-comments-of-our-language" title="Permalink to this headline">¶</a></h2>
+<p>REGEX_NUMBER = re.compile(&#8216;[0-9]+(?:.[0-9]+)?&#8217;) REGEX_IDENTIFIER =
+re.compile(&#8216;[a-zA-Z][a-zA-Z0-9]<em>&#8216;) REGEX_COMMENT = re.compile(&#8216;#.</em>&#8216;)</p>
+<p>def Tokenize(string): while string: # Skip whitespace. if
+string[0].isspace(): string = string[1:] continue</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Run regexes.</span>
+<span class="n">comment_match</span> <span class="o">=</span> <span class="n">REGEX_COMMENT</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+<span class="n">number_match</span> <span class="o">=</span> <span class="n">REGEX_NUMBER</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+<span class="n">identifier_match</span> <span class="o">=</span> <span class="n">REGEX_IDENTIFIER</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+
+<span class="c"># Check if any of the regexes matched and yield the appropriate result.</span>
+<span class="k">if</span> <span class="n">comment_match</span><span class="p">:</span>
+  <span class="n">comment</span> <span class="o">=</span> <span class="n">comment_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+  <span class="n">string</span> <span class="o">=</span> <span class="n">string</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">comment</span><span class="p">):]</span>
+<span class="k">elif</span> <span class="n">number_match</span><span class="p">:</span>
+  <span class="n">number</span> <span class="o">=</span> <span class="n">number_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+  <span class="k">yield</span> <span class="n">NumberToken</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">number</span><span class="p">))</span>
+  <span class="n">string</span> <span class="o">=</span> <span class="n">string</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">number</span><span class="p">):]</span>
+<span class="k">elif</span> <span class="n">identifier_match</span><span class="p">:</span>
+  <span class="n">identifier</span> <span class="o">=</span> <span class="n">identifier_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+  <span class="c"># Check if we matched a keyword.</span>
+  <span class="k">if</span> <span class="n">identifier</span> <span class="o">==</span> <span class="s">&#39;def&#39;</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">DefToken</span><span class="p">()</span>
+  <span class="k">elif</span> <span class="n">identifier</span> <span class="o">==</span> <span class="s">&#39;extern&#39;</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">ExternToken</span><span class="p">()</span>
+  <span class="k">elif</span> <span class="n">identifier</span> <span class="o">==</span> <span class="s">&#39;if&#39;</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">IfToken</span><span class="p">()</span>
+  <span class="k">elif</span> <span class="n">identifier</span> <span class="o">==</span> <span class="s">&#39;then&#39;</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">ThenToken</span><span class="p">()</span>
+  <span class="k">elif</span> <span class="n">identifier</span> <span class="o">==</span> <span class="s">&#39;else&#39;</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">ElseToken</span><span class="p">()</span>
+  <span class="k">elif</span> <span class="n">identifier</span> <span class="o">==</span> <span class="s">&#39;for&#39;</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">ForToken</span><span class="p">()</span>
+  <span class="k">elif</span> <span class="n">identifier</span> <span class="o">==</span> <span class="s">&#39;in&#39;</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">InToken</span><span class="p">()</span>
+  <span class="k">else</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">IdentifierToken</span><span class="p">(</span><span class="n">identifier</span><span class="p">)</span>
+  <span class="n">string</span> <span class="o">=</span> <span class="n">string</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">identifier</span><span class="p">):]</span>
+<span class="k">else</span><span class="p">:</span>
+  <span class="c"># Yield the ASCII value of the unknown character.</span>
+  <span class="k">yield</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="n">string</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+  <span class="n">string</span> <span class="o">=</span> <span class="n">string</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+</pre></div>
+</div>
+<p>yield EOFToken()</p>
+<div class="section" id="abstract-syntax-tree-aka-parse-tree">
+<h3>5.12.1. Abstract Syntax Tree (aka Parse Tree)<a class="headerlink" href="#abstract-syntax-tree-aka-parse-tree" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+<div class="section" id="base-class-for-all-expression-nodes">
+<h2>5.13. Base class for all expression nodes.<a class="headerlink" href="#base-class-for-all-expression-nodes" title="Permalink to this headline">¶</a></h2>
+<p>class ExpressionNode(object): pass</p>
+</div>
+<div class="section" id="expression-class-for-numeric-literals-like-1-0">
+<h2>5.14. Expression class for numeric literals like &#8220;1.0&#8221;.<a class="headerlink" href="#expression-class-for-numeric-literals-like-1-0" title="Permalink to this headline">¶</a></h2>
+<p>class NumberExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, value): self.value = value</p>
+<p>def CodeGen(self): return Constant.real(Type.double(), self.value)</p>
+</div>
+<div class="section" id="expression-class-for-referencing-a-variable-like-a">
+<h2>5.15. Expression class for referencing a variable, like &#8220;a&#8221;.<a class="headerlink" href="#expression-class-for-referencing-a-variable-like-a" title="Permalink to this headline">¶</a></h2>
+<p>class VariableExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, name): self.name = name</p>
+<p>def CodeGen(self): if self.name in g_named_values: return
+g_named_values[self.name] else: raise RuntimeError(&#8216;Unknown variable
+name: &#8216; + self.name)</p>
+</div>
+<div class="section" id="expression-class-for-a-binary-operator">
+<h2>5.16. Expression class for a binary operator.<a class="headerlink" href="#expression-class-for-a-binary-operator" title="Permalink to this headline">¶</a></h2>
+<p>class BinaryOperatorExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, operator, left, right): self.operator = operator
+self.left = left self.right = right</p>
+<p>def CodeGen(self): left = self.left.CodeGen() right =
+self.right.CodeGen()</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;+&#39;</span><span class="p">:</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fadd</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;addtmp&#39;</span><span class="p">)</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;-&#39;</span><span class="p">:</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fsub</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;subtmp&#39;</span><span class="p">)</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;*&#39;</span><span class="p">:</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fmul</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;multmp&#39;</span><span class="p">)</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">==</span> <span class="s">&#39;&lt;&#39;</span><span class="p">:</span>
+  <span class="n">result</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fcmp</span><span class="p">(</span><span class="n">FCMP_ULT</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="s">&#39;cmptmp&#39;</span><span class="p">)</span>
+  <span class="c"># Convert bool 0 or 1 to double 0.0 or 1.0.</span>
+  <span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">uitofp</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="s">&#39;booltmp&#39;</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Unknown binary operator.&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="expression-class-for-function-calls">
+<h2>5.17. Expression class for function calls.<a class="headerlink" href="#expression-class-for-function-calls" title="Permalink to this headline">¶</a></h2>
+<p>class CallExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, callee, args): self.callee = callee self.args =
+args</p>
+<p>def CodeGen(self): # Look up the name in the global module table. callee
+= g_llvm_module.get_function_named(self.callee)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Check for argument mismatch error.</span>
+<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">callee</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Incorrect number of arguments passed.&#39;</span><span class="p">)</span>
+
+<span class="n">arg_values</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">]</span>
+
+<span class="k">return</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">callee</span><span class="p">,</span> <span class="n">arg_values</span><span class="p">,</span> <span class="s">&#39;calltmp&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="expression-class-for-if-then-else">
+<h2>5.18. Expression class for if/then/else.<a class="headerlink" href="#expression-class-for-if-then-else" title="Permalink to this headline">¶</a></h2>
+<p>class IfExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, condition, then_branch, else_branch):
+self.condition = condition self.then_branch = then_branch
+self.else_branch = else_branch</p>
+<p>def CodeGen(self): condition = self.condition.CodeGen()</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Convert condition to a bool by comparing equal to 0.0.</span>
+<span class="n">condition_bool</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fcmp</span><span class="p">(</span>
+    <span class="n">FCMP_ONE</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="n">Constant</span><span class="o">.</span><span class="n">real</span><span class="p">(</span><span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="mi">0</span><span class="p">),</span> <span class="s">&#39;ifcond&#39;</span><span class="p">)</span>
+
+<span class="n">function</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">basic_block</span><span class="o">.</span><span class="n">function</span>
+
+<span class="c"># Create blocks for the then and else cases. Insert the &#39;then&#39; block at the</span>
+<span class="c"># end of the function.</span>
+<span class="n">then_block</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&#39;then&#39;</span><span class="p">)</span>
+<span class="n">else_block</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&#39;else&#39;</span><span class="p">)</span>
+<span class="n">merge_block</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&#39;ifcond&#39;</span><span class="p">)</span>
+
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">cbranch</span><span class="p">(</span><span class="n">condition_bool</span><span class="p">,</span> <span class="n">then_block</span><span class="p">,</span> <span class="n">else_block</span><span class="p">)</span>
+
+<span class="c"># Emit then value.</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">position_at_end</span><span class="p">(</span><span class="n">then_block</span><span class="p">)</span>
+<span class="n">then_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">then_branch</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">branch</span><span class="p">(</span><span class="n">merge_block</span><span class="p">)</span>
+
+<span class="c"># Codegen of &#39;Then&#39; can change the current block; update then_block for the</span>
+<span class="c"># PHI node.</span>
+<span class="n">then_block</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">basic_block</span>
+
+<span class="c"># Emit else block.</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">position_at_end</span><span class="p">(</span><span class="n">else_block</span><span class="p">)</span>
+<span class="n">else_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">else_branch</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">branch</span><span class="p">(</span><span class="n">merge_block</span><span class="p">)</span>
+
+<span class="c"># Codegen of &#39;Else&#39; can change the current block, update else_block for the</span>
+<span class="c"># PHI node.</span>
+<span class="n">else_block</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">basic_block</span>
+
+<span class="c"># Emit merge block.</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">position_at_end</span><span class="p">(</span><span class="n">merge_block</span><span class="p">)</span>
+<span class="n">phi</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">phi</span><span class="p">(</span><span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="s">&#39;iftmp&#39;</span><span class="p">)</span>
+<span class="n">phi</span><span class="o">.</span><span class="n">add_incoming</span><span class="p">(</span><span class="n">then_value</span><span class="p">,</span> <span class="n">then_block</span><span class="p">)</span>
+<span class="n">phi</span><span class="o">.</span><span class="n">add_incoming</span><span class="p">(</span><span class="n">else_value</span><span class="p">,</span> <span class="n">else_block</span><span class="p">)</span>
+
+<span class="k">return</span> <span class="n">phi</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="expression-class-for-for-in">
+<h2>5.19. Expression class for for/in.<a class="headerlink" href="#expression-class-for-for-in" title="Permalink to this headline">¶</a></h2>
+<p>class ForExpressionNode(ExpressionNode):</p>
+<p>def <strong>init</strong>(self, loop_variable, start, end, step, body):
+self.loop_variable = loop_variable self.start = start self.end = end
+self.step = step self.body = body</p>
+<p>def CodeGen(self): # Output this as: # ... # start = startexpr # goto
+loop # loop: # variable = phi [start, loopheader], [nextvariable,
+loopend] # ... # bodyexpr # ... # loopend: # step = stepexpr #
+nextvariable = variable + step # endcond = endexpr # br endcond, loop,
+endloop # outloop:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Emit the start code first, without &#39;variable&#39; in scope.</span>
+<span class="n">start_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+
+<span class="c"># Make the new basic block for the loop header, inserting after current</span>
+<span class="c"># block.</span>
+<span class="n">function</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">basic_block</span><span class="o">.</span><span class="n">function</span>
+<span class="n">pre_header_block</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">basic_block</span>
+<span class="n">loop_block</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&#39;loop&#39;</span><span class="p">)</span>
+
+<span class="c"># Insert an explicit fallthrough from the current block to the loop_block.</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">branch</span><span class="p">(</span><span class="n">loop_block</span><span class="p">)</span>
+
+<span class="c"># Start insertion in loop_block.</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">position_at_end</span><span class="p">(</span><span class="n">loop_block</span><span class="p">)</span>
+
+<span class="c"># Start the PHI node with an entry for start.</span>
+<span class="n">variable_phi</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">phi</span><span class="p">(</span><span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">loop_variable</span><span class="p">)</span>
+<span class="n">variable_phi</span><span class="o">.</span><span class="n">add_incoming</span><span class="p">(</span><span class="n">start_value</span><span class="p">,</span> <span class="n">pre_header_block</span><span class="p">)</span>
+
+<span class="c"># Within the loop, the variable is defined equal to the PHI node.  If it</span>
+<span class="c"># shadows an existing variable, we have to restore it, so save it now.</span>
+<span class="n">old_value</span> <span class="o">=</span> <span class="n">g_named_values</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">loop_variable</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+<span class="n">g_named_values</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">loop_variable</span><span class="p">]</span> <span class="o">=</span> <span class="n">variable_phi</span>
+
+<span class="c"># Emit the body of the loop.  This, like any other expr, can change the</span>
+<span class="c"># current BB.  Note that we ignore the value computed by the body.</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">body</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+
+<span class="c"># Emit the step value.</span>
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">step</span><span class="p">:</span>
+  <span class="n">step_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">step</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+<span class="k">else</span><span class="p">:</span>
+  <span class="c"># If not specified, use 1.0.</span>
+  <span class="n">step_value</span> <span class="o">=</span> <span class="n">Constant</span><span class="o">.</span><span class="n">real</span><span class="p">(</span><span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="n">next_value</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fadd</span><span class="p">(</span><span class="n">variable_phi</span><span class="p">,</span> <span class="n">step_value</span><span class="p">,</span> <span class="s">&#39;next&#39;</span><span class="p">)</span>
+
+<span class="c"># Compute the end condition and convert it to a bool by comparing to 0.0.</span>
+<span class="n">end_condition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+<span class="n">end_condition_bool</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">fcmp</span><span class="p">(</span>
+    <span class="n">FCMP_ONE</span><span class="p">,</span> <span class="n">end_condition</span><span class="p">,</span> <span class="n">Constant</span><span class="o">.</span><span class="n">real</span><span class="p">(</span><span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="mi">0</span><span class="p">),</span> <span class="s">&#39;loopcond&#39;</span><span class="p">)</span>
+
+<span class="c"># Create the &quot;after loop&quot; block and insert it.</span>
+<span class="n">loop_end_block</span> <span class="o">=</span> <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">basic_block</span>
+<span class="n">after_block</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&#39;afterloop&#39;</span><span class="p">)</span>
+
+<span class="c"># Insert the conditional branch into the end of loop_end_block.</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">cbranch</span><span class="p">(</span><span class="n">end_condition_bool</span><span class="p">,</span> <span class="n">loop_block</span><span class="p">,</span> <span class="n">after_block</span><span class="p">)</span>
+
+<span class="c"># Any new code will be inserted in after_block.</span>
+<span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">position_at_end</span><span class="p">(</span><span class="n">after_block</span><span class="p">)</span>
+
+<span class="c"># Add a new entry to the PHI node for the backedge.</span>
+<span class="n">variable_phi</span><span class="o">.</span><span class="n">add_incoming</span><span class="p">(</span><span class="n">next_value</span><span class="p">,</span> <span class="n">loop_end_block</span><span class="p">)</span>
+
+<span class="c"># Restore the unshadowed variable.</span>
+<span class="k">if</span> <span class="n">old_value</span><span class="p">:</span>
+  <span class="n">g_named_values</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">loop_variable</span><span class="p">]</span> <span class="o">=</span> <span class="n">old_value</span>
+<span class="k">else</span><span class="p">:</span>
+  <span class="k">del</span> <span class="n">g_named_values</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">loop_variable</span><span class="p">]</span>
+
+<span class="c"># for expr always returns 0.0.</span>
+<span class="k">return</span> <span class="n">Constant</span><span class="o">.</span><span class="n">real</span><span class="p">(</span><span class="n">Type</span><span class="o">.</span><span class="n">double</span><span class="p">(),</span> <span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="this-class-represents-the-prototype-for-a-function-which-captures-its-name">
+<h2>5.20. This class represents the &#8220;prototype&#8221; for a function, which captures its name,<a class="headerlink" href="#this-class-represents-the-prototype-for-a-function-which-captures-its-name" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="and-its-argument-names-thus-implicitly-the-number-of-arguments-the-function">
+<h2>5.21. and its argument names (thus implicitly the number of arguments the function<a class="headerlink" href="#and-its-argument-names-thus-implicitly-the-number-of-arguments-the-function" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="takes">
+<h2>5.22. takes).<a class="headerlink" href="#takes" title="Permalink to this headline">¶</a></h2>
+<p>class PrototypeNode(object):</p>
+<p>def <strong>init</strong>(self, name, args): self.name = name self.args = args</p>
+<p>def CodeGen(self): # Make the function type, eg. double(double,double).
+funct_type = Type.function( Type.double(), [Type.double()] *
+len(self.args), False)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">function</span> <span class="o">=</span> <span class="n">Function</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">g_llvm_module</span><span class="p">,</span> <span class="n">funct_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+<span class="c"># If the name conflicted, there was already something with the same name.</span>
+<span class="c"># If it has a body, don&#39;t allow redefinition or reextern.</span>
+<span class="k">if</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+  <span class="n">function</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+  <span class="n">function</span> <span class="o">=</span> <span class="n">g_llvm_module</span><span class="o">.</span><span class="n">get_function_named</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+  <span class="c"># If the function already has a body, reject this.</span>
+  <span class="k">if</span> <span class="ow">not</span> <span class="n">function</span><span class="o">.</span><span class="n">is_declaration</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Redefinition of function.&#39;</span><span class="p">)</span>
+
+  <span class="c"># If the function took a different number of args, reject.</span>
+  <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">function</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">):</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Redeclaration of a function with different number &#39;</span>
+                       <span class="s">&#39;of args.&#39;</span><span class="p">)</span>
+
+<span class="c"># Set names for all arguments and add them to the variables symbol table.</span>
+<span class="k">for</span> <span class="n">arg</span><span class="p">,</span> <span class="n">arg_name</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">function</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">):</span>
+  <span class="n">arg</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">arg_name</span>
+  <span class="c"># Add arguments to variable symbol table.</span>
+  <span class="n">g_named_values</span><span class="p">[</span><span class="n">arg_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg</span>
+
+<span class="k">return</span> <span class="n">function</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="this-class-represents-a-function-definition-itself">
+<h2>5.23. This class represents a function definition itself.<a class="headerlink" href="#this-class-represents-a-function-definition-itself" title="Permalink to this headline">¶</a></h2>
+<p>class FunctionNode(object):</p>
+<p>def <strong>init</strong>(self, prototype, body): self.prototype = prototype
+self.body = body</p>
+<p>def CodeGen(self): # Clear scope. g_named_values.clear()</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Create a function object.</span>
+<span class="n">function</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prototype</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+
+<span class="c"># Create a new basic block to start insertion into.</span>
+<span class="n">block</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">append_basic_block</span><span class="p">(</span><span class="s">&#39;entry&#39;</span><span class="p">)</span>
+<span class="k">global</span> <span class="n">g_llvm_builder</span>
+<span class="n">g_llvm_builder</span> <span class="o">=</span> <span class="n">Builder</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">block</span><span class="p">)</span>
+
+<span class="c"># Finish off the function.</span>
+<span class="k">try</span><span class="p">:</span>
+  <span class="n">return_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">body</span><span class="o">.</span><span class="n">CodeGen</span><span class="p">()</span>
+  <span class="n">g_llvm_builder</span><span class="o">.</span><span class="n">ret</span><span class="p">(</span><span class="n">return_value</span><span class="p">)</span>
+
+  <span class="c"># Validate the generated code, checking for consistency.</span>
+  <span class="n">function</span><span class="o">.</span><span class="n">verify</span><span class="p">()</span>
+
+  <span class="c"># Optimize the function.</span>
+  <span class="n">g_llvm_pass_manager</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
+<span class="k">except</span><span class="p">:</span>
+  <span class="n">function</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+  <span class="k">raise</span>
+
+<span class="k">return</span> <span class="n">function</span>
+</pre></div>
+</div>
+<div class="section" id="parser">
+<h3>5.23.1. Parser<a class="headerlink" href="#parser" title="Permalink to this headline">¶</a></h3>
+<p>class Parser(object):</p>
+<p>def <strong>init</strong>(self, tokens, binop_precedence): self.tokens = tokens
+self.binop_precedence = binop_precedence self.Next()</p>
+<p># Provide a simple token buffer. Parser.current is the current token the
+# parser is looking at. Parser.Next() reads another token from the lexer
+and # updates Parser.current with its results. def Next(self):
+self.current = self.tokens.next()</p>
+<p># Gets the precedence of the current token, or -1 if the token is not a
+binary # operator. def GetCurrentTokenPrecedence(self): if
+isinstance(self.current, CharacterToken): return
+self.binop_precedence.get(self.current.char, -1) else: return -1</p>
+<p># identifierexpr ::= identifier | identifier &#8216;(&#8216; expression* &#8216;)&#8217; def
+ParseIdentifierExpr(self): identifier_name = self.current.name
+self.Next() # eat identifier.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;(&#39;</span><span class="p">):</span>  <span class="c"># Simple variable reference.</span>
+  <span class="k">return</span> <span class="n">VariableExpressionNode</span><span class="p">(</span><span class="n">identifier_name</span><span class="p">)</span>
+
+<span class="c"># Call.</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;(&#39;.</span>
+<span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;)&#39;</span><span class="p">):</span>
+  <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+    <span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">())</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">==</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;)&#39;</span><span class="p">):</span>
+      <span class="k">break</span>
+    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">):</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;)&quot; or &quot;,&quot; in argument list.&#39;</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>
+
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;)&#39;.</span>
+<span class="k">return</span> <span class="n">CallExpressionNode</span><span class="p">(</span><span class="n">identifier_name</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+</pre></div>
+</div>
+<p># numberexpr ::= number def ParseNumberExpr(self): result =
+NumberExpressionNode(self.current.value) self.Next() # consume the
+number. return result</p>
+<p># parenexpr ::= &#8216;(&#8216; expression &#8216;)&#8217; def ParseParenExpr(self): self.Next()
+# eat &#8216;(&#8216;.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">contents</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;)&#39;</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;)&quot;.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;)&#39;.</span>
+
+<span class="k">return</span> <span class="n">contents</span>
+</pre></div>
+</div>
+<p># ifexpr ::= &#8216;if&#8217; expression &#8216;then&#8217; expression &#8216;else&#8217; expression def
+ParseIfExpr(self): self.Next() # eat the if.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># condition.</span>
+<span class="n">condition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">ThenToken</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;then&quot;.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the then.</span>
+
+<span class="n">then_branch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">ElseToken</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;else&quot;.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the else.</span>
+
+<span class="n">else_branch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">return</span> <span class="n">IfExpressionNode</span><span class="p">(</span><span class="n">condition</span><span class="p">,</span> <span class="n">then_branch</span><span class="p">,</span> <span class="n">else_branch</span><span class="p">)</span>
+</pre></div>
+</div>
+<p># forexpr ::= &#8216;for&#8217; identifier &#8216;=&#8217; expr &#8216;,&#8217; expr (&#8216;,&#8217; expr)? &#8216;in&#8217;
+expression def ParseForExpr(self): self.Next() # eat the for.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">IdentifierToken</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected identifier after for.&#39;</span><span class="p">)</span>
+
+<span class="n">loop_variable</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="o">.</span><span class="n">name</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the identifier.</span>
+
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;=&#39;</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;=&quot; after for variable.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the &#39;=&#39;.</span>
+
+<span class="n">start</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;,&quot; after for start value.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the &#39;,&#39;.</span>
+
+<span class="n">end</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="c"># The step value is optional.</span>
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">==</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">):</span>
+  <span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the &#39;,&#39;.</span>
+  <span class="n">step</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+<span class="k">else</span><span class="p">:</span>
+  <span class="n">step</span> <span class="o">=</span> <span class="bp">None</span>
+
+<span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">InToken</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;in&quot; after for variable specification.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;in&#39;.</span>
+
+<span class="n">body</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseExpression</span><span class="p">()</span>
+
+<span class="k">return</span> <span class="n">ForExpressionNode</span><span class="p">(</span><span class="n">loop_variable</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span>
+</pre></div>
+</div>
+<p># primary ::= identifierexpr | numberexpr | parenexpr | ifexpr |
+forexpr def ParsePrimary(self): if isinstance(self.current,
+IdentifierToken): return self.ParseIdentifierExpr() elif
+isinstance(self.current, NumberToken): return self.ParseNumberExpr()
+elif isinstance(self.current, IfToken): return self.ParseIfExpr() elif
+isinstance(self.current, ForToken): return self.ParseForExpr() elif
+self.current == CharacterToken(&#8216;(&#8216;): return self.ParseParenExpr() else:
+raise RuntimeError(&#8216;Unknown token when expecting an expression.&#8217;)</p>
+<p># binoprhs ::= (operator primary)* def ParseBinOpRHS(self, left,
+left_precedence): # If this is a binary operator, find its precedence.
+while True: precedence = self.GetCurrentTokenPrecedence()</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># If this is a binary operator that binds at least as tightly as the</span>
+<span class="c"># current one, consume it; otherwise we are done.</span>
+<span class="k">if</span> <span class="n">precedence</span> <span class="o">&lt;</span> <span class="n">left_precedence</span><span class="p">:</span>
+  <span class="k">return</span> <span class="n">left</span>
+
+<span class="n">binary_operator</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="o">.</span><span class="n">char</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat the operator.</span>
+
+<span class="c"># Parse the primary expression after the binary operator.</span>
+<span class="n">right</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParsePrimary</span><span class="p">()</span>
+
+<span class="c"># If binary_operator binds less tightly with right than the operator after</span>
+<span class="c"># right, let the pending operator take right as its left.</span>
+<span class="n">next_precedence</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetCurrentTokenPrecedence</span><span class="p">()</span>
+<span class="k">if</span> <span class="n">precedence</span> <span class="o">&lt;</span> <span class="n">next_precedence</span><span class="p">:</span>
+  <span class="n">right</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ParseBinOpRHS</span><span class="p">(</span><span class="n">right</span><span class="p">,</span> <span class="n">precedence</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="c"># Merge left/right.</span>
+<span class="n">left</span> <span class="o">=</span> <span class="n">BinaryOperatorExpressionNode</span><span class="p">(</span><span class="n">binary_operator</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">)</span>
+</pre></div>
+</div>
+<p># expression ::= primary binoprhs def ParseExpression(self): left =
+self.ParsePrimary() return self.ParseBinOpRHS(left, 0)</p>
+<p># prototype ::= id &#8216;(&#8216; id* &#8216;)&#8217; def ParsePrototype(self): if not
+isinstance(self.current, IdentifierToken): raise RuntimeError(&#8216;Expected
+function name in prototype.&#8217;)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">function_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="o">.</span><span class="n">name</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat function name.</span>
+
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;(&#39;</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;(&quot; in prototype.&#39;</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;(&#39;.</span>
+
+<span class="n">arg_names</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">while</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">IdentifierToken</span><span class="p">):</span>
+  <span class="n">arg_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+  <span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current</span> <span class="o">!=</span> <span class="n">CharacterToken</span><span class="p">(</span><span class="s">&#39;)&#39;</span><span class="p">):</span>
+  <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Expected &quot;)&quot; in prototype.&#39;</span><span class="p">)</span>
+
+<span class="c"># Success.</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">Next</span><span class="p">()</span>  <span class="c"># eat &#39;)&#39;.</span>
+
+<span class="k">return</span> <span class="n">PrototypeNode</span><span class="p">(</span><span class="n">function_name</span><span class="p">,</span> <span class="n">arg_names</span><span class="p">)</span>
+</pre></div>
+</div>
+<p># definition ::= &#8216;def&#8217; prototype expression def ParseDefinition(self):
+self.Next() # eat def. proto = self.ParsePrototype() body =
+self.ParseExpression() return FunctionNode(proto, body)</p>
+<p># toplevelexpr ::= expression def ParseTopLevelExpr(self): proto =
+PrototypeNode(&#8216;&#8217;, []) return FunctionNode(proto, self.ParseExpression())</p>
+<p># external ::= &#8216;extern&#8217; prototype def ParseExtern(self): self.Next() #
+eat extern. return self.ParsePrototype()</p>
+<p># Top-Level parsing def HandleDefinition(self):
+self.Handle(self.ParseDefinition, &#8216;Read a function definition:&#8217;)</p>
+<p>def HandleExtern(self): self.Handle(self.ParseExtern, &#8216;Read an extern:&#8217;)</p>
+<p>def HandleTopLevelExpression(self): try: function =
+self.ParseTopLevelExpr().CodeGen() result =
+g_llvm_executor.run_function(function, []) print &#8216;Evaluated to:&#8217;,
+result.as_real(Type.double()) except Exception, e: print &#8216;Error:&#8217;, e
+try: self.Next() # Skip for error recovery. except: pass</p>
+<p>def Handle(self, function, message): try: print message,
+function().CodeGen() except Exception, e: print &#8216;Error:&#8217;, e try:
+self.Next() # Skip for error recovery. except: pass</p>
+</div>
+<div class="section" id="main-driver-code">
+<h3>5.23.2. Main driver code.<a class="headerlink" href="#main-driver-code" title="Permalink to this headline">¶</a></h3>
+<p>def main(): # Set up the optimizer pipeline. Start with registering info
+about how the # target lays out data structures.
+g_llvm_pass_manager.add(g_llvm_executor.target_data) # Do simple
+&#8220;peephole&#8221; optimizations and bit-twiddling optzns.
+g_llvm_pass_manager.add(PASS_INSTRUCTION_COMBINING) # Reassociate
+expressions. g_llvm_pass_manager.add(PASS_REASSOCIATE) # Eliminate
+Common SubExpressions. g_llvm_pass_manager.add(PASS_GVN) # Simplify
+the control flow graph (deleting unreachable blocks, etc).
+g_llvm_pass_manager.add(PASS_CFG_SIMPLIFICATION)</p>
+<p>g_llvm_pass_manager.initialize()</p>
+<p># Install standard binary operators. # 1 is lowest possible precedence.
+40 is the highest. operator_precedence = { &#8216;&lt;&#8217;: 10, &#8216;+&#8217;: 20, &#8216;-&#8216;: 20,
+&#8216;*&#8217;: 40 }</p>
+<p># Run the main &#8220;interpreter loop&#8221;. while True: print &#8216;ready&gt;&#8217;, try: raw
+= raw_input() except KeyboardInterrupt: break</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">parser</span> <span class="o">=</span> <span class="n">Parser</span><span class="p">(</span><span class="n">Tokenize</span><span class="p">(</span><span class="n">raw</span><span class="p">),</span> <span class="n">operator_precedence</span><span class="p">)</span>
+<span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+  <span class="c"># top ::= definition | external | expression | EOF</span>
+  <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parser</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">EOFToken</span><span class="p">):</span>
+    <span class="k">break</span>
+  <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parser</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">DefToken</span><span class="p">):</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">HandleDefinition</span><span class="p">()</span>
+  <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parser</span><span class="o">.</span><span class="n">current</span><span class="p">,</span> <span class="n">ExternToken</span><span class="p">):</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">HandleExtern</span><span class="p">()</span>
+  <span class="k">else</span><span class="p">:</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">HandleTopLevelExpression</span><span class="p">()</span>
+</pre></div>
+</div>
+<p># Print out all of the generated code. print &#8216;&#8217;, g_llvm_module</p>
+<p>if <strong>name</strong> == &#8216;<strong>main</strong>&#8216;: main() {% endhighlight %}</p>
+<hr class="docutils" />
+<p><strong>`Next: Extending the language: user-defined
+operators &lt;PythonLangImpl6.html&gt;`_</strong></p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">5. Chapter 5: Extending the Language: Control Flow</a><ul>
+<li><a class="reference internal" href="#introduction-intro">5.1. Introduction # {#intro}</a></li>
+<li><a class="reference internal" href="#if-then-else-ifthen">5.2. If/Then/Else # {#ifthen}</a><ul>
+<li><a class="reference internal" href="#lexer-extensions-for-if-then-else-iflexer">5.2.1. Lexer Extensions for If/Then/Else ## {#iflexer}</a></li>
+<li><a class="reference internal" href="#ast-extensions-for-if-then-else-ifast">5.2.2. AST Extensions for If/Then/Else ## {#ifast}</a></li>
+<li><a class="reference internal" href="#parser-extensions-for-if-then-else-ifparser">5.2.3. Parser Extensions for If/Then/Else ## {#ifparser}</a></li>
+<li><a class="reference internal" href="#llvm-ir-for-if-then-else-ifir">5.2.4. LLVM IR for If/Then/Else ## {#ifir}</a></li>
+<li><a class="reference internal" href="#code-generation-for-if-then-else-ifcodegen">5.2.5. Code Generation for If/Then/Else ## {#ifcodegen}</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#for-loop-expression-for">5.3. &#8216;for&#8217; Loop Expression # {#for}</a><ul>
+<li><a class="reference internal" href="#lexer-extensions-for-the-for-loop-forlexer">5.3.1. Lexer Extensions for the &#8216;for&#8217; Loop ## {#forlexer}</a></li>
+<li><a class="reference internal" href="#ast-extensions-for-the-for-loop-forast">5.3.2. AST Extensions for the &#8216;for&#8217; Loop ## {#forast}</a></li>
+<li><a class="reference internal" href="#parser-extensions-for-the-for-loop-forparser">5.3.3. Parser Extensions for the &#8216;for&#8217; Loop ## {#forparser}</a></li>
+<li><a class="reference internal" href="#llvm-ir-for-the-for-loop-forir">5.3.4. LLVM IR for the &#8216;for&#8217; Loop ## {#forir}</a></li>
+<li><a class="reference internal" href="#code-generation-for-the-for-loop-forcodegen">5.3.5. Code Generation for the &#8216;for&#8217; Loop ## {#forcodegen}</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#full-code-listing-code">5.4. Full Code Listing # {#code}</a><ul>
+<li><a class="reference internal" href="#globals">5.4.1. Globals</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#the-llvm-module-which-holds-all-the-ir-code">5.5. The LLVM module, which holds all the IR code.</a></li>
+<li><a class="reference internal" href="#the-llvm-instruction-builder-created-whenever-a-new-function-is-entered">5.6. The LLVM instruction builder. Created whenever a new function is entered.</a></li>
+<li><a class="reference internal" href="#a-dictionary-that-keeps-track-of-which-values-are-defined-in-the-current-scope">5.7. A dictionary that keeps track of which values are defined in the current scope</a></li>
+<li><a class="reference internal" href="#and-what-their-llvm-representation-is">5.8. and what their LLVM representation is.</a></li>
+<li><a class="reference internal" href="#the-function-optimization-passes-manager">5.9. The function optimization passes manager.</a></li>
+<li><a class="reference internal" href="#the-llvm-execution-engine">5.10. The LLVM execution engine.</a><ul>
+<li><a class="reference internal" href="#lexer">5.10.1. Lexer</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#the-lexer-yields-one-of-these-types-for-each-token">5.11. The lexer yields one of these types for each token.</a></li>
+<li><a class="reference internal" href="#regular-expressions-that-tokens-and-comments-of-our-language">5.12. Regular expressions that tokens and comments of our language.</a><ul>
+<li><a class="reference internal" href="#abstract-syntax-tree-aka-parse-tree">5.12.1. Abstract Syntax Tree (aka Parse Tree)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#base-class-for-all-expression-nodes">5.13. Base class for all expression nodes.</a></li>
+<li><a class="reference internal" href="#expression-class-for-numeric-literals-like-1-0">5.14. Expression class for numeric literals like &#8220;1.0&#8221;.</a></li>
+<li><a class="reference internal" href="#expression-class-for-referencing-a-variable-like-a">5.15. Expression class for referencing a variable, like &#8220;a&#8221;.</a></li>
+<li><a class="reference internal" href="#expression-class-for-a-binary-operator">5.16. Expression class for a binary operator.</a></li>
+<li><a class="reference internal" href="#expression-class-for-function-calls">5.17. Expression class for function calls.</a></li>
+<li><a class="reference internal" href="#expression-class-for-if-then-else">5.18. Expression class for if/then/else.</a></li>
+<li><a class="reference internal" href="#expression-class-for-for-in">5.19. Expression class for for/in.</a></li>
+<li><a class="reference internal" href="#this-class-represents-the-prototype-for-a-function-which-captures-its-name">5.20. This class represents the &#8220;prototype&#8221; for a function, which captures its name,</a></li>
+<li><a class="reference internal" href="#and-its-argument-names-thus-implicitly-the-number-of-arguments-the-function">5.21. and its argument names (thus implicitly the number of arguments the function</a></li>
+<li><a class="reference internal" href="#takes">5.22. takes).</a></li>
+<li><a class="reference internal" href="#this-class-represents-a-function-definition-itself">5.23. This class represents a function definition itself.</a><ul>
+<li><a class="reference internal" href="#parser">5.23.1. Parser</a></li>
+<li><a class="reference internal" href="#main-driver-code">5.23.2. Main driver code.</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="PythonLangImpl4.html"
+                        title="previous chapter">4. Chapter 4: Adding JIT and Optimizer Support</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="PythonLangImpl6.html"
+                        title="next chapter">6. Chapter 6: Extending the Language: User-defined Operators</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../../_sources/doc/kaleidoscope/PythonLangImpl5.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="PythonLangImpl6.html" title="6. Chapter 6: Extending the Language: User-defined Operators"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="PythonLangImpl4.html" title="4. Chapter 4: Adding JIT and Optimizer Support"
+             >previous</a> |</li>
+        <li><a href="../../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="../examples.html" >Examples and LLVM Tutorials</a> &raquo;</li>
+          <li><a href="index.html" >Kaleidoscope</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

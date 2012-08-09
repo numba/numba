@@ -1,0 +1,325 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>LLVM Concepts &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" />
+    <link rel="up" title="User Guide" href="userguide.html" />
+    <link rel="next" title="The llvmpy Package" href="llvmpy_package.html" />
+    <link rel="prev" title="Introduction" href="getting_started.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="llvmpy_package.html" title="The llvmpy Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="getting_started.html" title="Introduction"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="userguide.html" accesskey="U">User Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="llvm-concepts">
+<h1>LLVM Concepts<a class="headerlink" href="#llvm-concepts" title="Permalink to this headline">¶</a></h1>
+<p>This section explains a few concepts related to LLVM, not specific to
+llvmpy.</p>
+<div class="toctree-wrapper compound">
+</div>
+<div class="section" id="intermediate-representation">
+<h2>Intermediate Representation<a class="headerlink" href="#intermediate-representation" title="Permalink to this headline">¶</a></h2>
+<p>The intermediate representation, or IR for short, is an in-memory data
+structure that represents executable code. The IR data structures allow
+for creation of types, constants, functions, function arguments,
+instructions, global variables and so on. For example, to create a
+function <em>sum</em> that takes two integers and returns their sum, we need to
+follow these steps:</p>
+<ul class="simple">
+<li>create an integer type <em>ti</em> of required bitwidth</li>
+<li>create a function type <em>tf</em> which takes two <em>ti</em> -s and returns
+another <em>ti</em></li>
+<li>create a function of type <em>tf</em> named <em>sum</em></li>
+<li>add a <em>basic block</em> to the function</li>
+<li>using a helper object called an <em>instruction builder</em>, add two
+instructions into the basic block: . an instruction to add the two
+arguments and store the result into a temporary variable . a return
+instruction to return the value of the temporary variable</li>
+</ul>
+<p>(A basic block is a block of instructions.)</p>
+<p>LLVM has it&#8217;s own instruction set; the instructions used above (<em>add</em>
+and <em>ret</em>) are from this set. The LLVM instructions are at a higher
+level than the usual assembly language; for example there are
+instructions related to variable argument handling, exception handling,
+and garbage collection. These allow high-level languages to be
+represented cleanly in the IR.</p>
+</div>
+<div class="section" id="ssa-form-and-phi-nodes">
+<h2>SSA Form and PHI Nodes<a class="headerlink" href="#ssa-form-and-phi-nodes" title="Permalink to this headline">¶</a></h2>
+<p>All LLVM instructions are represented in the <em>Static Single Assignment</em>
+(SSA) form. Essentially, this means that any variable can be assigned to
+only once. Such a representation facilitates better optimization, among
+other benefits.</p>
+<p>A consequence of single assignment are PHI (Φ) nodes. These are required
+when a variable can be assigned a different value based on the path of
+control flow. For example, the value of <em>b</em> at the end of execution of
+the snippet below:</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">a</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+<span class="k">if</span> <span class="p">(</span><span class="n">v</span> <span class="o">&lt;</span> <span class="mi">10</span><span class="p">)</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">a</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>cannot be determined statically. The value of &#8216;2&#8217; cannot be assigned to
+the &#8216;original&#8217; <em>a</em>, since <em>a</em> can be assigned to only once. There are
+two <em>a</em> &#8216;s in there, and the last assignment has to choose between which
+version to pick. This is accomplished by adding a PHI node:</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">a1</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+<span class="k">if</span> <span class="p">(</span><span class="n">v</span> <span class="o">&lt;</span> <span class="mi">10</span><span class="p">)</span>
+    <span class="n">a2</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">PHI</span><span class="p">(</span><span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>The PHI node selects <em>a1</em> or <em>a2</em>, depending on where the control
+reached the PHI node. The argument <em>a1</em> of the PHI node is associated
+with the block <em>&#8220;a1 = 1;&#8221;</em> and <em>a2</em> with the block <em>&#8220;a2 = 2;&#8221;</em>.</p>
+<p>PHI nodes have to be explicitly created in the LLVM IR. Accordingly the
+LLVM instruction set has an instruction called <em>phi</em>.</p>
+</div>
+<div class="section" id="llvm-assembly-language">
+<h2>LLVM Assembly Language<a class="headerlink" href="#llvm-assembly-language" title="Permalink to this headline">¶</a></h2>
+<p>The LLVM IR can be represented offline in two formats</p>
+<ul class="simple">
+<li>a textual, human-readable form, similar to assembly language, called
+the LLVM assembly language (files with .ll extension)</li>
+<li>a binary form, called the LLVM bitcode (files with .bc extension)</li>
+</ul>
+<p>All three formats (the in-memory IR, the LLVM assembly language and the
+LLVM bitcode) represent the <em>same</em> information. Each format can be
+converted into the other two formats (using LLVM APIs).</p>
+<p>The <a class="reference external" href="http://www.llvm.org/demo/">LLVM demo page</a> lets you type in C or
+C++ code, converts it into LLVM IR and outputs the IR as LLVM assembly
+language code.</p>
+<p>Just to get a feel of the LLVM assembly language, here&#8217;s a function in
+C, and the corresponding LLVM assembly (as generated by the demo page):</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="cm">/* compute sum of 1..n */</span>
+<span class="kt">unsigned</span> <span class="nf">sum</span><span class="p">(</span><span class="kt">unsigned</span> <span class="n">n</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">n</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="k">else</span>
+        <span class="k">return</span> <span class="n">n</span> <span class="o">+</span> <span class="n">sum</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The corresponding LLVM assembly:</p>
+<div class="highlight-llvm"><div class="highlight"><pre><span class="c">; ModuleID = &#39;/tmp/webcompile/_7149_0.bc&#39;</span>
+ <span class="k">target</span> <span class="k">datalayout</span> <span class="p">=</span> <span class="s">&quot;e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64&quot;</span>
+<span class="k">target</span> <span class="k">triple</span> <span class="p">=</span> <span class="s">&quot;x86_64-linux-gnu&quot;</span>
+
+<span class="k">define</span> <span class="k">i32</span> <span class="vg">@sum</span><span class="p">(</span><span class="k">i32</span> <span class="nv">%n</span><span class="p">)</span> <span class="k">nounwind</span> <span class="k">readnone</span> <span class="p">{</span>
+<span class="nl">entry:</span>
+<span class="nv-Anonymous">%0</span> <span class="p">=</span> <span class="k">icmp</span> <span class="k">eq</span> <span class="k">i32</span> <span class="nv">%n</span><span class="p">,</span> <span class="m">0</span>          <span class="c">; [#uses=1]</span>
+<span class="k">br</span> <span class="k">i1</span> <span class="nv-Anonymous">%0</span><span class="p">,</span> <span class="kt">label</span> <span class="nv">%bb2</span><span class="p">,</span> <span class="kt">label</span> <span class="nv">%bb1</span>
+
+<span class="nl">bb1:</span>     <span class="c">; preds = %entry</span>
+<span class="nv-Anonymous">%1</span> <span class="p">=</span> <span class="k">add</span> <span class="k">i32</span> <span class="nv">%n</span><span class="p">,</span> <span class="m">-1</span>          <span class="c">; [#uses=2]</span>
+<span class="nv-Anonymous">%2</span> <span class="p">=</span> <span class="k">icmp</span> <span class="k">eq</span> <span class="k">i32</span> <span class="nv-Anonymous">%1</span><span class="p">,</span> <span class="m">0</span>     <span class="c">; [#uses=1]</span>
+<span class="k">br</span> <span class="k">i1</span> <span class="nv-Anonymous">%2</span><span class="p">,</span> <span class="kt">label</span> <span class="nv">%sum.exit</span><span class="p">,</span> <span class="kt">label</span> <span class="nv">%bb1.i</span>
+
+<span class="nl">bb1.i:</span>     <span class="c">; preds = %bb1</span>
+<span class="nv-Anonymous">%3</span> <span class="p">=</span> <span class="k">add</span> <span class="k">i32</span> <span class="nv">%n</span><span class="p">,</span> <span class="m">-2</span>          <span class="c">; [#uses=1]</span>
+<span class="nv-Anonymous">%4</span> <span class="p">=</span> <span class="k">tail</span> <span class="k">call</span> <span class="k">i32</span> <span class="vg">@sum</span><span class="p">(</span><span class="k">i32</span> <span class="nv-Anonymous">%3</span><span class="p">)</span> <span class="k">nounwind</span>   <span class="c">; [#uses=1]</span>
+<span class="nv-Anonymous">%5</span> <span class="p">=</span> <span class="k">add</span> <span class="k">i32</span> <span class="nv-Anonymous">%4</span><span class="p">,</span> <span class="nv-Anonymous">%1</span>          <span class="c">; [#uses=1]</span>
+<span class="k">br</span> <span class="kt">label</span> <span class="nv">%sum.exit</span>
+
+<span class="nl">sum.exit:</span>     <span class="c">; preds = %bb1.i, %bb1</span>
+<span class="nv-Anonymous">%6</span> <span class="p">=</span> <span class="k">phi</span> <span class="k">i32</span> <span class="p">[</span> <span class="nv-Anonymous">%5</span><span class="p">,</span> <span class="nv">%bb1.i</span> <span class="p">],</span> <span class="p">[</span> <span class="m">0</span><span class="p">,</span> <span class="nv">%bb1</span> <span class="p">]</span>         <span class="c">; [#uses=1]</span>
+<span class="nv-Anonymous">%7</span> <span class="p">=</span> <span class="k">add</span> <span class="k">i32</span> <span class="nv-Anonymous">%6</span><span class="p">,</span> <span class="nv">%n</span>                                    <span class="c">; [#uses=1]</span>
+<span class="k">ret</span> <span class="k">i32</span> <span class="nv-Anonymous">%7</span>
+
+<span class="nl">bb2:</span>       <span class="c">; preds = %entry</span>
+<span class="k">ret</span> <span class="k">i32</span> <span class="m">0</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Note the usage of SSA form. The long string called <tt class="docutils literal"><span class="pre">target</span> <span class="pre">datalayout</span></tt>
+is a specification of the platform ABI (like endianness, sizes of types,
+alignment etc.).</p>
+<p>The <a class="reference external" href="http://www.llvm.org/docs/LangRef.html">LLVM Language Reference</a>
+defines the LLVM assembly language including the entire instruction set.</p>
+</div>
+<div class="section" id="modules">
+<h2>Modules<a class="headerlink" href="#modules" title="Permalink to this headline">¶</a></h2>
+<p><a class="reference external" href="./llvm.core.Module.html">Modules</a>, in the LLVM IR, are similar to a
+single <em>C</em> language source file (.c file). A module contains:</p>
+<ul class="simple">
+<li>functions (declarations and definitions)</li>
+<li>global variables and constants</li>
+<li>global type aliases for structures</li>
+</ul>
+<p>Modules are top-level containers; all executable code representation is
+contained within modules. Modules may be combined (linked) together to
+give a bigger resultant module. During this process LLVM attempts to
+reconcile the references between the combined modules.</p>
+</div>
+<div class="section" id="optimization-and-passes">
+<h2>Optimization and Passes<a class="headerlink" href="#optimization-and-passes" title="Permalink to this headline">¶</a></h2>
+<p>LLVM provides quite a few optimization algorithms that work on the IR.
+These algorithms are organized as <em>passes</em>. Each pass does something
+specific, like combining redundant instructions. Passes need not always
+optimize the IR, it can also do other operations like inserting
+instrumentation code, or analyzing the IR (the result of which can be
+used by passes that do optimizations) or even printing call graphs.</p>
+<p>This LLVM <a class="reference external" href="http://www.llvm.org/docs/Passes.html">documentation page</a>
+describes all the available passes, and what they do.</p>
+<p>LLVM does not automatically choose to run any passes, anytime. Passes
+have to be explicitly selected and run on each module. This gives you
+the flexibility to choose transformations and optimizations that are
+most suitable for the code in the module.</p>
+<p>There is an LLVM binary called
+<a class="reference external" href="http://www.llvm.org/cmds/opt.html">opt</a>, which lets you run passes on
+bitcode files from the command line. You can write your own passes (in
+C/C++, as a shared library). This can be loaded and executed by +opt+.
+(Although llvmpy does not allow you to write your own passes, it does
+allow you to navigate the entire IR at any stage, and perform any
+transforms on it as you like.)</p>
+<p>A &#8220;pass manager&#8221; is responsible for loading passes, selecting the
+correct objects to run them on (for example, a pass may work only on
+functions, individually) and actually runs them. <tt class="docutils literal"><span class="pre">opt</span></tt> is a
+command-line wrapper for the pass manager.</p>
+<p>LLVM defines two kinds of pass managers:</p>
+<ul class="simple">
+<li>The
+<a class="reference external" href="http://llvm.org/docs/doxygen/html/classllvm_1_1FunctionPassManager.html">FunctionPassManager</a>
+manages function or basic-block passes. These lighter weight passes
+can be used immediately after each generated function to reduce
+memory footprint.</li>
+<li>The
+<a class="reference external" href="http://llvm.org/docs/doxygen/html/classllvm_1_1PassManager.html">PassManager</a>
+manages module passes for optimizing the entire module.</li>
+</ul>
+</div>
+<div class="section" id="bitcode">
+<h2>Bitcode<a class="headerlink" href="#bitcode" title="Permalink to this headline">¶</a></h2>
+<p>LLVM IR can be represented as a bitcode format for disk storage. It is
+<a class="reference external" href="http://llvm.org/docs/LangRef.html#introduction">suitable for fast loading by JIT
+compiler</a>. See <a class="reference external" href="http://llvm.org/docs/BitCodeFormat.html">LLVM
+documentation</a> for detail
+about the bitcode format.</p>
+</div>
+<div class="section" id="execution-engine-jit-and-interpreter">
+<h2>Execution Engine, JIT and Interpreter<a class="headerlink" href="#execution-engine-jit-and-interpreter" title="Permalink to this headline">¶</a></h2>
+<p>The <em>execution engine</em> implements execution of LLVM IR through an
+interpreter or a JIT dynamic compiler. An <em>execution engine</em> can contain
+multiple modules.</p>
+<blockquote>
+<div><p><strong>Note</strong></p>
+<p>Inter-module reference is not possible. That is module <tt class="docutils literal"><span class="pre">A</span></tt> cannot
+call a function in module <tt class="docutils literal"><span class="pre">B</span></tt>, directly.</p>
+</div></blockquote>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">LLVM Concepts</a><ul>
+<li><a class="reference internal" href="#intermediate-representation">Intermediate Representation</a></li>
+<li><a class="reference internal" href="#ssa-form-and-phi-nodes">SSA Form and PHI Nodes</a></li>
+<li><a class="reference internal" href="#llvm-assembly-language">LLVM Assembly Language</a></li>
+<li><a class="reference internal" href="#modules">Modules</a></li>
+<li><a class="reference internal" href="#optimization-and-passes">Optimization and Passes</a></li>
+<li><a class="reference internal" href="#bitcode">Bitcode</a></li>
+<li><a class="reference internal" href="#execution-engine-jit-and-interpreter">Execution Engine, JIT and Interpreter</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="getting_started.html"
+                        title="previous chapter">Introduction</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="llvmpy_package.html"
+                        title="next chapter">The llvmpy Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/llvm_concepts.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="llvmpy_package.html" title="The llvmpy Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="getting_started.html" title="Introduction"
+             >previous</a> |</li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="userguide.html" >User Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

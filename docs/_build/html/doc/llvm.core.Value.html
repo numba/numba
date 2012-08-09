@@ -1,0 +1,171 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>llvm.core.Value &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: Value (llvm.core)</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="llvm-core-value">
+<h1>llvm.core.Value<a class="headerlink" href="#llvm-core-value" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li>This will become a table of contents (this text will be scraped).
+{:toc}</li>
+</ul>
+<div class="section" id="properties">
+<h2>Properties<a class="headerlink" href="#properties" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="name">
+<h3><tt class="docutils literal"><span class="pre">name</span></tt><a class="headerlink" href="#name" title="Permalink to this headline">¶</a></h3>
+<p>The name of the value.</p>
+</div>
+<div class="section" id="type">
+<h3><tt class="docutils literal"><span class="pre">type</span></tt><a class="headerlink" href="#type" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p>An <tt class="docutils literal"><span class="pre">llvm.core.Type</span></tt> object representing the type of the value.</p>
+</div>
+<div class="section" id="uses">
+<h3><tt class="docutils literal"><span class="pre">uses</span></tt><a class="headerlink" href="#uses" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p>The list of values (<tt class="docutils literal"><span class="pre">llvm.core.Value</span></tt>) that use this value.</p>
+</div>
+<div class="section" id="use-count">
+<h3><tt class="docutils literal"><span class="pre">use_count</span></tt><a class="headerlink" href="#use-count" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p>The number of values that use (refer) this value. Same as
+<tt class="docutils literal"><span class="pre">len(val.uses)</span></tt> but faster if you just want the count.</p>
+</div>
+<div class="section" id="value-id">
+<h3><tt class="docutils literal"><span class="pre">value_id</span></tt><a class="headerlink" href="#value-id" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p>Returns <tt class="docutils literal"><span class="pre">llvmValuegetValueID()</span></tt>. Refer LLVM documentation for more
+info.</p>
+</div>
+</div>
+<div class="section" id="special-methods">
+<h2>Special Methods<a class="headerlink" href="#special-methods" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="str">
+<h3><tt class="docutils literal"><span class="pre">__str__</span></tt><a class="headerlink" href="#str" title="Permalink to this headline">¶</a></h3>
+<p><tt class="docutils literal"><span class="pre">Value</span></tt> objects can be stringified into it&#8217;s LLVM assembly language
+representation.</p>
+</div>
+<div class="section" id="eq">
+<h3><tt class="docutils literal"><span class="pre">__eq__</span></tt><a class="headerlink" href="#eq" title="Permalink to this headline">¶</a></h3>
+<p><tt class="docutils literal"><span class="pre">Value</span></tt> objects can be compared for equality. Internally, this
+converts both arguments into their LLVM assembly representations and
+compares the resultant strings.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">llvm.core.Value</a><ul>
+<li><a class="reference internal" href="#properties">Properties</a><ul>
+<li><a class="reference internal" href="#name"><tt class="docutils literal"><span class="pre">name</span></tt></a></li>
+<li><a class="reference internal" href="#type"><tt class="docutils literal"><span class="pre">type</span></tt></a></li>
+<li><a class="reference internal" href="#uses"><tt class="docutils literal"><span class="pre">uses</span></tt></a></li>
+<li><a class="reference internal" href="#use-count"><tt class="docutils literal"><span class="pre">use_count</span></tt></a></li>
+<li><a class="reference internal" href="#value-id"><tt class="docutils literal"><span class="pre">value_id</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#special-methods">Special Methods</a><ul>
+<li><a class="reference internal" href="#str"><tt class="docutils literal"><span class="pre">__str__</span></tt></a></li>
+<li><a class="reference internal" href="#eq"><tt class="docutils literal"><span class="pre">__eq__</span></tt></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/llvm.core.Value.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

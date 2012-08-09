@@ -1,0 +1,223 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>An Example &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: Types</td>
+</tr>
+</tbody>
+</table>
+<p>Types are what you think they are. A instance of
+<a class="reference external" href="llvm.core.Type.html">llvm.core.Type</a>, or one of its derived classes,
+represent a type. llvmpy does not use as many classes to represent
+types as does LLVM itself. Some types are represented using
+<a class="reference external" href="llvm.core.Type.html">llvm.core.Type</a> itself and the rest are
+represented using derived classes of
+<a class="reference external" href="llvm.core.Type.html">llvm.core.Type</a>. As usual, an instance is
+created via one of the static methods of <a class="reference external" href="llvm.core.Type.html">Type</a>.
+These methods return an instance of either
+<a class="reference external" href="llvm.core.Type.html">llvm.core.Type</a> itself or one of its derived
+classes.</p>
+<p>The following table lists all the available types along with the static
+method which has to be used to construct it and the name of the class
+whose object is actually returned by the static method.</p>
+<p>Name | Constructor Method | Class |
+&#8212;&#8211;|:&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;:|:&#8212;&#8211;:| integer of bitwidth <em>n</em> |
+Type.int(n) | <a class="reference external" href="llvm.core.IntegerType.html">IntegerType</a> | 32-bit
+float | Type.float() | <a class="reference external" href="llvm.core.Type.html">Type</a> | 64-bit double
+| Type.double() | <a class="reference external" href="llvm.core.Type.html">Type</a> | 80-bit float |
+Type.x86_fp80() | <a class="reference external" href="llvm.core.Type.html">Type</a> | 128-bit float
+(112-bit mantissa) | Type.fp128() | <a class="reference external" href="llvm.core.Type.html">Type</a> |
+128-bit float (two 64-bits) | Type.ppc_fp128() |
+<a class="reference external" href="llvm.core.Type.html">Type</a> | function | Type.function(r, p, v) |
+<a class="reference external" href="llvm.core.FunctionType.html">FunctionType</a> | unpacked struct |
+Type.struct(eltys, name) | <a class="reference external" href="llvm.core.StructType.html">StructType</a> |
+packed struct | Type.packed_struct(eltys, name) |
+<a class="reference external" href="llvm.core.StructType.html">StructType</a> | opaque struct |
+Type.opaque(name) | <a class="reference external" href="llvm.core.StructType.html">StructType</a> | array
+| Type.array(elty, count) | <a class="reference external" href="llvm.core.ArrayType.html">ArrayType</a> |
+pointer to value of type <em>pty</em> | Type.pointer(pty, addrspc) |
+<a class="reference external" href="llvm.core.PointerType.html">PointerType</a> | vector |
+Type.vector(elty, count) | <a class="reference external" href="llvm.core.VectorType.html">VectorType</a> |
+void | Type.void() | <a class="reference external" href="llvm.core.Type.html">Type</a> | label |
+Type.label() | <a class="reference external" href="llvm.core.Type.html">Type</a> |</p>
+<p>The class hierarchy is:</p>
+<div class="highlight-python"><pre>Type
+    IntegerType
+    FunctionType
+    StructType
+    ArrayType
+    PointerType
+    VectorType</pre>
+</div>
+<hr class="docutils" />
+<div class="section" id="an-example">
+<h1>An Example<a class="headerlink" href="#an-example" title="Permalink to this headline">¶</a></h1>
+<p>Here is an example that demonstrates the creation of types:</p>
+<p>{% highlight python %} #!/usr/bin/env python</p>
+<div class="section" id="integers">
+<h2>integers<a class="headerlink" href="#integers" title="Permalink to this headline">¶</a></h2>
+<p>int_ty = Type.int() bool_ty = Type.int(1) int_64bit = Type.int(64)</p>
+</div>
+<div class="section" id="floats">
+<h2>floats<a class="headerlink" href="#floats" title="Permalink to this headline">¶</a></h2>
+<p>sprec_real = Type.float() dprec_real = Type.double()</p>
+</div>
+<div class="section" id="arrays-and-vectors">
+<h2>arrays and vectors<a class="headerlink" href="#arrays-and-vectors" title="Permalink to this headline">¶</a></h2>
+<p>intar_ty = Type.array( int_ty, 10 ) # &#8220;typedef int intar_ty[10];&#8221;
+twodim = Type.array( intar_ty , 10 ) # &#8220;typedef int twodim[10][10];&#8221;
+vec = Type.array( int_ty, 10 )</p>
+</div>
+<div class="section" id="structures">
+<h2>structures<a class="headerlink" href="#structures" title="Permalink to this headline">¶</a></h2>
+<p>s1_ty = Type.struct( [ int_ty, sprec_real ] ) # &#8220;struct s1_ty { int
+v1; float v2; };&#8221;</p>
+</div>
+<div class="section" id="pointers">
+<h2>pointers<a class="headerlink" href="#pointers" title="Permalink to this headline">¶</a></h2>
+<p>intptr_ty = Type.pointer(int_ty) # &#8220;typedef int *intptr_ty;&#8221;</p>
+</div>
+<div class="section" id="functions">
+<h2>functions<a class="headerlink" href="#functions" title="Permalink to this headline">¶</a></h2>
+<p>f1 = Type.function( int_ty, [ int_ty ] ) # functions that take 1
+int_ty and return 1 int_ty</p>
+<p>f2 = Type.function( Type.void(), [ int_ty, int_ty ] ) # functions that
+take 2 int_tys and return nothing</p>
+<p>f3 = Type.function( Type.void(), ( int_ty, int_ty ) ) # same as f2;
+any iterable can be used</p>
+<p>fnargs = [ Type.pointer( Type.int(8) ) ] printf = Type.function(
+Type.int(), fnargs, True ) # variadic function {% endhighlight %}</p>
+</div>
+</div>
+<hr class="docutils" />
+<div class="section" id="another-example-recursive-type">
+<h1>Another Example: Recursive Type<a class="headerlink" href="#another-example-recursive-type" title="Permalink to this headline">¶</a></h1>
+<p>The type system was rewritten in LLVM 3.0. The old opaque type was
+removed. Instead, identified <tt class="docutils literal"><span class="pre">StructType</span></tt> can now be defined without a
+body. Doing so creates a opaque structure. One can then set the body
+after the construction of a structure.</p>
+<p>(See <a class="reference external" href="http://blog.llvm.org/2011/11/llvm-30-type-system-rewrite.html">LLVM
+Blog</a>
+for detail about the new type system.)</p>
+<p>The following code defines a opaque structure, named &#8220;mystruct&#8221;. The
+body is defined after the construction using <tt class="docutils literal"><span class="pre">StructType.set_body</span></tt>.
+The second subtype is a pointer to a &#8220;mystruct&#8221; type.</p>
+<p>{% highlight python %} ts = Type.opaque(&#8216;mystruct&#8217;)
+ts.set_body([Type.int(), Type.pointer(ts)]) {% endhighlight %}</p>
+<hr class="docutils" />
+<p><strong>Related Links</strong> <a class="reference external" href="llvm.core.Type.html">llvm.core.Type</a>,
+<a class="reference external" href="llvm.core.IntegerType.html">llvm.core.IntegerType</a>,
+<a class="reference external" href="llvm.core.FunctionType.html">llvm.core.FunctionType</a>,
+<a class="reference external" href="llvm.core.StructType.html">llvm.core.StructType</a>,
+<a class="reference external" href="llvm.core.ArrayType.html">llvm.core.ArrayType</a>,
+<a class="reference external" href="llvm.core.PointerType.html">llvm.core.PointerType</a>,
+<a class="reference external" href="llvm.core.VectorType.html">llvm.core.VectorType</a>,
+<a class="reference external" href="llvm.core.TypeHandle.html">llvm.core.TypeHandle</a></p>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">An Example</a><ul>
+<li><a class="reference internal" href="#integers">integers</a></li>
+<li><a class="reference internal" href="#floats">floats</a></li>
+<li><a class="reference internal" href="#arrays-and-vectors">arrays and vectors</a></li>
+<li><a class="reference internal" href="#structures">structures</a></li>
+<li><a class="reference internal" href="#pointers">pointers</a></li>
+<li><a class="reference internal" href="#functions">functions</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#another-example-recursive-type">Another Example: Recursive Type</a></li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/types.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

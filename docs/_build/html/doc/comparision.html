@@ -1,0 +1,251 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Integer Comparision # {#icmp} &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: Comparison Operations</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="integer-comparision-icmp">
+<h1>Integer Comparision # {#icmp}<a class="headerlink" href="#integer-comparision-icmp" title="Permalink to this headline">¶</a></h1>
+<p>Predicates for use with <tt class="docutils literal"><span class="pre">icmp</span></tt> instruction are listed below. All of
+these are integer constants defined in the <tt class="docutils literal"><span class="pre">llvm.core</span></tt> module.</p>
+<div class="section" id="icmp-eq">
+<h2><tt class="docutils literal"><span class="pre">ICMP_EQ</span></tt><a class="headerlink" href="#icmp-eq" title="Permalink to this headline">¶</a></h2>
+<p>Equality</p>
+</div>
+<div class="section" id="icmp-ne">
+<h2><tt class="docutils literal"><span class="pre">ICMP_NE</span></tt><a class="headerlink" href="#icmp-ne" title="Permalink to this headline">¶</a></h2>
+<p>Inequality</p>
+</div>
+<div class="section" id="icmp-ugt">
+<h2><tt class="docutils literal"><span class="pre">ICMP_UGT</span></tt><a class="headerlink" href="#icmp-ugt" title="Permalink to this headline">¶</a></h2>
+<p>Unsigned greater than</p>
+</div>
+<div class="section" id="icmp-uge">
+<h2><tt class="docutils literal"><span class="pre">ICMP_UGE</span></tt><a class="headerlink" href="#icmp-uge" title="Permalink to this headline">¶</a></h2>
+<p>Unsigned greater than or equal</p>
+</div>
+<div class="section" id="icmp-ult">
+<h2><tt class="docutils literal"><span class="pre">ICMP_ULT</span></tt><a class="headerlink" href="#icmp-ult" title="Permalink to this headline">¶</a></h2>
+<p>Unsigned less than</p>
+</div>
+<div class="section" id="icmp-ule">
+<h2><tt class="docutils literal"><span class="pre">ICMP_ULE</span></tt><a class="headerlink" href="#icmp-ule" title="Permalink to this headline">¶</a></h2>
+<p>Unsigned less than or equal</p>
+</div>
+<div class="section" id="icmp-sgt">
+<h2><tt class="docutils literal"><span class="pre">ICMP_SGT</span></tt><a class="headerlink" href="#icmp-sgt" title="Permalink to this headline">¶</a></h2>
+<p>Signed greater than</p>
+</div>
+<div class="section" id="icmp-sge">
+<h2><tt class="docutils literal"><span class="pre">ICMP_SGE</span></tt><a class="headerlink" href="#icmp-sge" title="Permalink to this headline">¶</a></h2>
+<p>Signed greater than or equal</p>
+</div>
+<div class="section" id="icmp-slt">
+<h2><tt class="docutils literal"><span class="pre">ICMP_SLT</span></tt><a class="headerlink" href="#icmp-slt" title="Permalink to this headline">¶</a></h2>
+<p>Signed less than</p>
+</div>
+<div class="section" id="icmp-sle">
+<h2><tt class="docutils literal"><span class="pre">ICMP_SLE</span></tt><a class="headerlink" href="#icmp-sle" title="Permalink to this headline">¶</a></h2>
+<p>Signed less than or equal</p>
+</div>
+</div>
+<div class="section" id="float-comparision-fcmp">
+<h1>Float Comparision # {#fcmp}<a class="headerlink" href="#float-comparision-fcmp" title="Permalink to this headline">¶</a></h1>
+<p>Predicates for use with <tt class="docutils literal"><span class="pre">fcmp</span></tt> instruction are listed below. All of
+these are integer constants defined in the <tt class="docutils literal"><span class="pre">llvm.core</span></tt> module.</p>
+<div class="section" id="fcmp-false">
+<h2><tt class="docutils literal"><span class="pre">FCMP_FALSE</span></tt><a class="headerlink" href="#fcmp-false" title="Permalink to this headline">¶</a></h2>
+<p>Always false</p>
+</div>
+<div class="section" id="fcmp-oeq">
+<h2><tt class="docutils literal"><span class="pre">FCMP_OEQ</span></tt><a class="headerlink" href="#fcmp-oeq" title="Permalink to this headline">¶</a></h2>
+<p>True if ordered and equal</p>
+</div>
+<div class="section" id="fcmp-ogt">
+<h2><tt class="docutils literal"><span class="pre">FCMP_OGT</span></tt><a class="headerlink" href="#fcmp-ogt" title="Permalink to this headline">¶</a></h2>
+<p>True if ordered and greater than</p>
+</div>
+<div class="section" id="fcmp-oge">
+<h2><tt class="docutils literal"><span class="pre">FCMP_OGE</span></tt><a class="headerlink" href="#fcmp-oge" title="Permalink to this headline">¶</a></h2>
+<p>True if ordered and greater than or equal</p>
+</div>
+<div class="section" id="fcmp-olt">
+<h2><tt class="docutils literal"><span class="pre">FCMP_OLT</span></tt><a class="headerlink" href="#fcmp-olt" title="Permalink to this headline">¶</a></h2>
+<p>True if ordered and less than</p>
+</div>
+<div class="section" id="fcmp-ole">
+<h2><tt class="docutils literal"><span class="pre">FCMP_OLE</span></tt><a class="headerlink" href="#fcmp-ole" title="Permalink to this headline">¶</a></h2>
+<p>True if ordered and less than or equal</p>
+</div>
+<div class="section" id="fcmp-one">
+<h2><tt class="docutils literal"><span class="pre">FCMP_ONE</span></tt><a class="headerlink" href="#fcmp-one" title="Permalink to this headline">¶</a></h2>
+<p>True if ordered and operands are unequal</p>
+</div>
+<div class="section" id="fcmp-ord">
+<h2><tt class="docutils literal"><span class="pre">FCMP_ORD</span></tt><a class="headerlink" href="#fcmp-ord" title="Permalink to this headline">¶</a></h2>
+<p>True if ordered (no NaNs)</p>
+</div>
+<div class="section" id="fcmp-uno">
+<h2><tt class="docutils literal"><span class="pre">FCMP_UNO</span></tt><a class="headerlink" href="#fcmp-uno" title="Permalink to this headline">¶</a></h2>
+<p>True if unordered: <tt class="docutils literal"><span class="pre">isnan(X)</span> <span class="pre">|</span> <span class="pre">isnan(Y)</span></tt></p>
+</div>
+<div class="section" id="fcmp-ueq">
+<h2><tt class="docutils literal"><span class="pre">FCMP_UEQ</span></tt><a class="headerlink" href="#fcmp-ueq" title="Permalink to this headline">¶</a></h2>
+<p>True if unordered or equal</p>
+</div>
+<div class="section" id="fcmp-ugt">
+<h2><tt class="docutils literal"><span class="pre">FCMP_UGT</span></tt><a class="headerlink" href="#fcmp-ugt" title="Permalink to this headline">¶</a></h2>
+<p>True if unordered or greater than</p>
+</div>
+<div class="section" id="fcmp-uge">
+<h2><tt class="docutils literal"><span class="pre">FCMP_UGE</span></tt><a class="headerlink" href="#fcmp-uge" title="Permalink to this headline">¶</a></h2>
+<p>True if unordered, greater than or equal</p>
+</div>
+<div class="section" id="fcmp-ult">
+<h2><tt class="docutils literal"><span class="pre">FCMP_ULT</span></tt><a class="headerlink" href="#fcmp-ult" title="Permalink to this headline">¶</a></h2>
+<p>True if unordered, or less than</p>
+</div>
+<div class="section" id="fcmp-ule">
+<h2><tt class="docutils literal"><span class="pre">FCMP_ULE</span></tt><a class="headerlink" href="#fcmp-ule" title="Permalink to this headline">¶</a></h2>
+<p>True if unordered, less than or equal</p>
+</div>
+<div class="section" id="fcmp-une">
+<h2><tt class="docutils literal"><span class="pre">FCMP_UNE</span></tt><a class="headerlink" href="#fcmp-une" title="Permalink to this headline">¶</a></h2>
+<p>True if unordered or not equal</p>
+</div>
+<div class="section" id="fcmp-true">
+<h2><tt class="docutils literal"><span class="pre">FCMP_TRUE</span></tt><a class="headerlink" href="#fcmp-true" title="Permalink to this headline">¶</a></h2>
+<p>Always true</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Integer Comparision # {#icmp}</a><ul>
+<li><a class="reference internal" href="#icmp-eq"><tt class="docutils literal"><span class="pre">ICMP_EQ</span></tt></a></li>
+<li><a class="reference internal" href="#icmp-ne"><tt class="docutils literal"><span class="pre">ICMP_NE</span></tt></a></li>
+<li><a class="reference internal" href="#icmp-ugt"><tt class="docutils literal"><span class="pre">ICMP_UGT</span></tt></a></li>
+<li><a class="reference internal" href="#icmp-uge"><tt class="docutils literal"><span class="pre">ICMP_UGE</span></tt></a></li>
+<li><a class="reference internal" href="#icmp-ult"><tt class="docutils literal"><span class="pre">ICMP_ULT</span></tt></a></li>
+<li><a class="reference internal" href="#icmp-ule"><tt class="docutils literal"><span class="pre">ICMP_ULE</span></tt></a></li>
+<li><a class="reference internal" href="#icmp-sgt"><tt class="docutils literal"><span class="pre">ICMP_SGT</span></tt></a></li>
+<li><a class="reference internal" href="#icmp-sge"><tt class="docutils literal"><span class="pre">ICMP_SGE</span></tt></a></li>
+<li><a class="reference internal" href="#icmp-slt"><tt class="docutils literal"><span class="pre">ICMP_SLT</span></tt></a></li>
+<li><a class="reference internal" href="#icmp-sle"><tt class="docutils literal"><span class="pre">ICMP_SLE</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#float-comparision-fcmp">Float Comparision # {#fcmp}</a><ul>
+<li><a class="reference internal" href="#fcmp-false"><tt class="docutils literal"><span class="pre">FCMP_FALSE</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-oeq"><tt class="docutils literal"><span class="pre">FCMP_OEQ</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-ogt"><tt class="docutils literal"><span class="pre">FCMP_OGT</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-oge"><tt class="docutils literal"><span class="pre">FCMP_OGE</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-olt"><tt class="docutils literal"><span class="pre">FCMP_OLT</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-ole"><tt class="docutils literal"><span class="pre">FCMP_OLE</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-one"><tt class="docutils literal"><span class="pre">FCMP_ONE</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-ord"><tt class="docutils literal"><span class="pre">FCMP_ORD</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-uno"><tt class="docutils literal"><span class="pre">FCMP_UNO</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-ueq"><tt class="docutils literal"><span class="pre">FCMP_UEQ</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-ugt"><tt class="docutils literal"><span class="pre">FCMP_UGT</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-uge"><tt class="docutils literal"><span class="pre">FCMP_UGE</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-ult"><tt class="docutils literal"><span class="pre">FCMP_ULT</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-ule"><tt class="docutils literal"><span class="pre">FCMP_ULE</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-une"><tt class="docutils literal"><span class="pre">FCMP_UNE</span></tt></a></li>
+<li><a class="reference internal" href="#fcmp-true"><tt class="docutils literal"><span class="pre">FCMP_TRUE</span></tt></a></li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/comparision.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

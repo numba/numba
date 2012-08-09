@@ -1,0 +1,217 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>The llvmpy Package &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" />
+    <link rel="up" title="User Guide" href="userguide.html" />
+    <link rel="next" title="Examples and LLVM Tutorials" href="examples.html" />
+    <link rel="prev" title="LLVM Concepts" href="llvm_concepts.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="examples.html" title="Examples and LLVM Tutorials"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="llvm_concepts.html" title="LLVM Concepts"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="userguide.html" accesskey="U">User Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="the-llvmpy-package">
+<h1>The llvmpy Package<a class="headerlink" href="#the-llvmpy-package" title="Permalink to this headline">¶</a></h1>
+<p>The llvmpy is a Python package, consisting of 6 modules, that wrap over
+enough LLVM APIs to allow the implementation of your own compiler/VM
+backend in pure Python. If you&#8217;re come this far, you probably know why
+this is a good idea.</p>
+<p>Out of the 6 modules, one is an &#8220;extension&#8221; module (i.e., it is written
+in C), and another one is a small private utility module, which leaves 4
+public modules. These are:</p>
+<ul class="simple">
+<li><em>llvm</em> &#8211; top-level package, common classes (like exceptions)</li>
+<li><em>llvm.core</em> &#8211; IR-related APIs</li>
+<li><em>llvm.ee</em> &#8211; execution engine related APIs</li>
+<li><em>llvm.passes</em> &#8211; pass manager and passes related APIs</li>
+</ul>
+<p>The modules contain only classes and (integer) constants. Mostly simple
+Python constructs are used (deliberately) &#8211;
+<a class="reference external" href="http://docs.python.org/lib/built-in-funcs.html">property()</a> and
+<a class="reference external" href="http://wiki.python.org/moin/PythonDecoratorLibrary">property
+decorators</a> are
+probably the most exotic animals around. All classes are &#8220;new style&#8221;
+classes. The APIs are designed to be navigable (and guessable!) once you
+know a few conventions. These conventions are highlighted in the
+sections below.</p>
+<p>Here is a quick overview of the contents of each package:</p>
+<div class="section" id="llvm">
+<h2>llvm<a class="headerlink" href="#llvm" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>LLVMException &#8211; exception class (currently the only one)</li>
+</ul>
+</div>
+<div class="section" id="llvm-core">
+<h2>llvm.core<a class="headerlink" href="#llvm-core" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference external" href="llvm.core.Module.html">Module</a> &#8211; represents an LLVM Module</li>
+<li><a class="reference external" href="types.html">Type</a> &#8211; represents an LLVM Type</li>
+<li><a class="reference external" href="values.html">Value</a> &#8211; represents an LLVM Value, including:
+globals, constants, variables, arguments, functions, instructions,
+etc..</li>
+<li><a class="reference external" href="llvm.core.BasicBlock.html">BasicBlock</a> &#8211; another derived of
+Value, represents an LLVM basic block</li>
+<li><a class="reference external" href="llvm.core.Builder.html">Builder</a> &#8211; used for creating
+instructions, wraps LLVM IRBuilder helper class</li>
+<li>constants <em>TYPE_*</em> that represents various types</li>
+<li>constants <em>CC_*</em> that represent calling conventions</li>
+<li>constants <em>ICMP_*</em> and <em>FCMP_*</em> that represent integer and real
+comparison predicates (like less than, greater than etc.)</li>
+<li>constants <em>LINKAGE_*</em> that represent linkage of symbols (external,
+internal etc.)</li>
+<li>constants <em>VISIBILITY_*</em> that represents visibility of symbols
+(default, hidden, protected)</li>
+<li>constants <em>ATTR_*</em> that represent function parameter attributes</li>
+</ul>
+</div>
+<div class="section" id="llvm-ee">
+<h2>llvm.ee<a class="headerlink" href="#llvm-ee" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference external" href="llvm.ee.ExecutionEngine.html">ExecutionEngine</a> &#8211; represents an
+execution engine (which can be an either an interpreter or a JIT)</li>
+<li><a class="reference external" href="llvm.ee.TargetData.html">TargetData</a> &#8211; represents the ABI of the
+target platform (details like sizes and alignment of primitive types,
+endinanness etc)</li>
+</ul>
+</div>
+<div class="section" id="llvm-passes">
+<h2>llvm.passes<a class="headerlink" href="#llvm-passes" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference external" href="llvm.passes.PassManager.html">PassManager</a> &#8211; represents an LLVM
+pass manager</li>
+<li><a class="reference external" href="llvm.passes.FunctionPassManager.html">FunctionPassManager</a> &#8211;
+represents an LLVM function pass manager</li>
+<li>constants <em>PASS_*</em> that represent various passes</li>
+</ul>
+</div>
+<div class="section" id="a-note-on-the-importing-of-these-modules">
+<h2>A note on the importing of these modules<a class="headerlink" href="#a-note-on-the-importing-of-these-modules" title="Permalink to this headline">¶</a></h2>
+<p>Pythonically, modules are imported with the statement
+<tt class="docutils literal"><span class="pre">import</span> <span class="pre">llvm.core</span></tt>. However, you might find it more convenient to
+import llvmpy modules thus:</p>
+<p>{% highlight python %} from llvm import * from llvm.core import * from
+llvm.ee import * from llvm.passes import * {% endhighlight %}</p>
+<p>This avoids quite some typing. Both conventions work, however.</p>
+<blockquote>
+<div><p><strong>Tip</strong></p>
+<p>Python-style documentation strings (<tt class="docutils literal"><span class="pre">__doc__</span></tt>) are present in
+llvmpy. You can use the <tt class="docutils literal"><span class="pre">help()</span></tt> of the interactive Python
+interpreter or the <tt class="docutils literal"><span class="pre">object?</span></tt> of
+<a class="reference external" href="http://ipython.scipy.org/moin/">IPython</a> to get online help.
+(Note: not complete yet!)</p>
+</div></blockquote>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">The llvmpy Package</a><ul>
+<li><a class="reference internal" href="#llvm">llvm</a></li>
+<li><a class="reference internal" href="#llvm-core">llvm.core</a></li>
+<li><a class="reference internal" href="#llvm-ee">llvm.ee</a></li>
+<li><a class="reference internal" href="#llvm-passes">llvm.passes</a></li>
+<li><a class="reference internal" href="#a-note-on-the-importing-of-these-modules">A note on the importing of these modules</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="llvm_concepts.html"
+                        title="previous chapter">LLVM Concepts</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="examples.html"
+                        title="next chapter">Examples and LLVM Tutorials</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/llvmpy_package.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="examples.html" title="Examples and LLVM Tutorials"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="llvm_concepts.html" title="LLVM Concepts"
+             >previous</a> |</li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li>
+          <li><a href="userguide.html" >User Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

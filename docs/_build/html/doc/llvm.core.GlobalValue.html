@@ -1,0 +1,196 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>llvm.core.GlobalValue &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: GlobalValue (llvm.core)</td>
+</tr>
+</tbody>
+</table>
+<p>The class <tt class="docutils literal"><span class="pre">llvm.core.GlobalValue</span></tt> represents module-scope aliases,
+variables and functions. Global variables are represented by the
+sub-class <a class="reference external" href="llvm.core.GlobalVariable.html">llvm.core.GlobalVariable</a>
+and functions by <a class="reference external" href="llvm.core.Function.html">llvm.core.Function</a>.</p>
+<p>Global values have the read-write properties <tt class="docutils literal"><span class="pre">linkage</span></tt>, <tt class="docutils literal"><span class="pre">section</span></tt>,
+<tt class="docutils literal"><span class="pre">visibility</span></tt> and <tt class="docutils literal"><span class="pre">alignment</span></tt>. Use one of the following constants
+(from llvm.core) as values for <tt class="docutils literal"><span class="pre">linkage</span></tt> (see <a class="reference external" href="http://www.llvm.org/docs/LangRef.html#linkage">LLVM
+documentaion</a> for
+details on each):</p>
+<p>Value | Equivalent LLVM Assembly Keyword |
+&#8212;&#8212;|&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;-| <tt class="docutils literal"><span class="pre">LINKAGE_EXTERNAL</span></tt> |
+<tt class="docutils literal"><span class="pre">externally_visible</span></tt> | <tt class="docutils literal"><span class="pre">LINKAGE_AVAILABLE_EXTERNALLY</span></tt> |
+<tt class="docutils literal"><span class="pre">available_externally</span></tt> | <tt class="docutils literal"><span class="pre">LINKAGE_LINKONCE_ANY</span></tt> | <tt class="docutils literal"><span class="pre">linkonce</span></tt> |
+<tt class="docutils literal"><span class="pre">LINKAGE_LINKONCE_ODR</span></tt> | <tt class="docutils literal"><span class="pre">linkonce_odr</span></tt> | <tt class="docutils literal"><span class="pre">LINKAGE_WEAK_ANY</span></tt> |
+<tt class="docutils literal"><span class="pre">weak</span></tt> | <tt class="docutils literal"><span class="pre">LINKAGE_WEAK_ODR</span></tt> | <tt class="docutils literal"><span class="pre">weak_odr</span></tt> |
+<tt class="docutils literal"><span class="pre">LINKAGE_APPENDING</span></tt> | <tt class="docutils literal"><span class="pre">appending</span></tt> | <tt class="docutils literal"><span class="pre">LINKAGE_INTERNAL</span></tt> |
+<tt class="docutils literal"><span class="pre">internal</span></tt> | <tt class="docutils literal"><span class="pre">LINKAGE_PRIVATE</span></tt> | <tt class="docutils literal"><span class="pre">private</span></tt> |
+<tt class="docutils literal"><span class="pre">LINKAGE_DLLIMPORT</span></tt> | <tt class="docutils literal"><span class="pre">dllimport</span></tt> | <tt class="docutils literal"><span class="pre">LINKAGE_DLLEXPORT</span></tt> |
+<tt class="docutils literal"><span class="pre">dllexport</span></tt> | <tt class="docutils literal"><span class="pre">LINKAGE_EXTERNAL_WEAK</span></tt> | <tt class="docutils literal"><span class="pre">extern_weak</span></tt> |
+<tt class="docutils literal"><span class="pre">LINKAGE_GHOST</span></tt> | deprecated &#8211; do not use | <tt class="docutils literal"><span class="pre">LINKAGE_COMMON</span></tt> |
+<tt class="docutils literal"><span class="pre">common</span></tt> | <tt class="docutils literal"><span class="pre">LINKAGE_LINKER_PRIVATE</span></tt> | <tt class="docutils literal"><span class="pre">linker_private</span></tt> |</p>
+<p>The <tt class="docutils literal"><span class="pre">section</span></tt> property can be assigned strings (like &#8221;.rodata&#8221;), which
+will be used if the target supports it. Visibility property can be set
+to one of thse constants (from llvm.core, see also <a class="reference external" href="http://www.llvm.org/docs/LangRef.html#visibility">LLVM
+docs</a>):</p>
+<p>Value | Equivalent LLVM Assembly Keyword |
+&#8212;&#8212;|&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;-| <tt class="docutils literal"><span class="pre">VISIBILITY_DEFAULT</span></tt> |
+<tt class="docutils literal"><span class="pre">default</span></tt> | <tt class="docutils literal"><span class="pre">VISIBILITY_HIDDEN</span></tt> | <tt class="docutils literal"><span class="pre">hidden</span></tt> |
+<tt class="docutils literal"><span class="pre">VISIBILITY_PROTECTED</span></tt> | <tt class="docutils literal"><span class="pre">protected</span></tt> |</p>
+<p>The <tt class="docutils literal"><span class="pre">alignment</span></tt> property can be 0 (default), or can be set to a power
+of 2. The read-only property <tt class="docutils literal"><span class="pre">is_declaration</span></tt> can be used to check if
+the global is a declaration or not. The module to which the global
+belongs to can be retrieved using the <tt class="docutils literal"><span class="pre">module</span></tt> property (read-only).</p>
+<div class="section" id="llvm-core-globalvalue">
+<h1>llvm.core.GlobalValue<a class="headerlink" href="#llvm-core-globalvalue" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li>This will become a table of contents (this text will be scraped).
+{:toc}</li>
+</ul>
+<div class="section" id="base-class">
+<h2>Base Class<a class="headerlink" href="#base-class" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference external" href="llvm.core.Constant.html">llvm.core.Constant</a></li>
+</ul>
+</div>
+<div class="section" id="properties">
+<h2>Properties<a class="headerlink" href="#properties" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="linkage">
+<h3><tt class="docutils literal"><span class="pre">linkage</span></tt><a class="headerlink" href="#linkage" title="Permalink to this headline">¶</a></h3>
+<p>The linkage type, takes one of the constants listed above (LINKAGE_*).</p>
+</div>
+<div class="section" id="section">
+<h3><tt class="docutils literal"><span class="pre">section</span></tt><a class="headerlink" href="#section" title="Permalink to this headline">¶</a></h3>
+<p>A string like &#8221;.rodata&#8221;, indicating the section into which the global is
+placed into.</p>
+</div>
+<div class="section" id="visibility">
+<h3><tt class="docutils literal"><span class="pre">visibility</span></tt><a class="headerlink" href="#visibility" title="Permalink to this headline">¶</a></h3>
+<p>The visibility type, takes one of the constants listed above
+(VISIBILITY_*).</p>
+</div>
+<div class="section" id="alignment">
+<h3><tt class="docutils literal"><span class="pre">alignment</span></tt><a class="headerlink" href="#alignment" title="Permalink to this headline">¶</a></h3>
+<p>A power-of-2 integer indicating the boundary to align to.</p>
+</div>
+<div class="section" id="is-declaration">
+<h3><tt class="docutils literal"><span class="pre">is_declaration</span></tt><a class="headerlink" href="#is-declaration" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p><tt class="docutils literal"><span class="pre">True</span></tt> if the global is a declaration, <tt class="docutils literal"><span class="pre">False</span></tt> otherwise.</p>
+</div>
+<div class="section" id="module">
+<h3><tt class="docutils literal"><span class="pre">module</span></tt><a class="headerlink" href="#module" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<div class="highlight-python"><pre>The module object to which this global belongs to.</pre>
+</div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">llvm.core.GlobalValue</a><ul>
+<li><a class="reference internal" href="#base-class">Base Class</a></li>
+<li><a class="reference internal" href="#properties">Properties</a><ul>
+<li><a class="reference internal" href="#linkage"><tt class="docutils literal"><span class="pre">linkage</span></tt></a></li>
+<li><a class="reference internal" href="#section"><tt class="docutils literal"><span class="pre">section</span></tt></a></li>
+<li><a class="reference internal" href="#visibility"><tt class="docutils literal"><span class="pre">visibility</span></tt></a></li>
+<li><a class="reference internal" href="#alignment"><tt class="docutils literal"><span class="pre">alignment</span></tt></a></li>
+<li><a class="reference internal" href="#is-declaration"><tt class="docutils literal"><span class="pre">is_declaration</span></tt></a></li>
+<li><a class="reference internal" href="#module"><tt class="docutils literal"><span class="pre">module</span></tt></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/llvm.core.GlobalValue.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

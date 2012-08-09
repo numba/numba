@@ -1,0 +1,261 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>llvm.core.Function &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: Function (llvm.core)</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="llvm-core-function">
+<h1>llvm.core.Function<a class="headerlink" href="#llvm-core-function" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li>This will become a table of contents (this text will be scraped).
+{:toc}</li>
+</ul>
+<div class="section" id="base-class">
+<h2>Base Class<a class="headerlink" href="#base-class" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference external" href="llvm.core.GlobalValue.html">llvm.core.GlobalValue</a></li>
+</ul>
+</div>
+<div class="section" id="static-constructors">
+<h2>Static Constructors<a class="headerlink" href="#static-constructors" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="new-module-obj-func-ty-name">
+<h3><tt class="docutils literal"><span class="pre">new(module_obj,</span> <span class="pre">func_ty,</span> <span class="pre">name)</span></tt><a class="headerlink" href="#new-module-obj-func-ty-name" title="Permalink to this headline">¶</a></h3>
+<p>Create a function named <tt class="docutils literal"><span class="pre">name</span></tt> of type <tt class="docutils literal"><span class="pre">func_ty</span></tt> in the module
+<tt class="docutils literal"><span class="pre">module_obj</span></tt> and return a <tt class="docutils literal"><span class="pre">Function</span></tt> object that represents it.</p>
+</div>
+<div class="section" id="get-module-obj-name">
+<h3><tt class="docutils literal"><span class="pre">get(module_obj,</span> <span class="pre">name)</span></tt><a class="headerlink" href="#get-module-obj-name" title="Permalink to this headline">¶</a></h3>
+<p>Return a <tt class="docutils literal"><span class="pre">Function</span></tt> object to represent the function named <tt class="docutils literal"><span class="pre">name</span></tt> in
+the module <tt class="docutils literal"><span class="pre">module_obj</span></tt> or raise <tt class="docutils literal"><span class="pre">LLVMException</span></tt> if such a function
+does not exist.</p>
+</div>
+<div class="section" id="get-or-insert-module-obj-func-ty-name">
+<h3><tt class="docutils literal"><span class="pre">get_or_insert(module_obj,</span> <span class="pre">func_ty,</span> <span class="pre">name)</span></tt><a class="headerlink" href="#get-or-insert-module-obj-func-ty-name" title="Permalink to this headline">¶</a></h3>
+<p>Similar to <tt class="docutils literal"><span class="pre">get</span></tt>, except that if the function does not exist it is
+added first, as though with <tt class="docutils literal"><span class="pre">new</span></tt>.</p>
+</div>
+<div class="section" id="intrinsic-module-obj-intrinsic-id-types">
+<h3><tt class="docutils literal"><span class="pre">intrinsic(module_obj,</span> <span class="pre">intrinsic_id,</span> <span class="pre">types)</span></tt><a class="headerlink" href="#intrinsic-module-obj-intrinsic-id-types" title="Permalink to this headline">¶</a></h3>
+<p>Create and return a <tt class="docutils literal"><span class="pre">Function</span></tt> object that refers to an intrinsic
+function, as described <a class="reference external" href="functions.html#intrinsic">here</a>.</p>
+</div>
+</div>
+<div class="section" id="properties">
+<h2>Properties<a class="headerlink" href="#properties" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="calling-convention">
+<h3><tt class="docutils literal"><span class="pre">calling_convention</span></tt><a class="headerlink" href="#calling-convention" title="Permalink to this headline">¶</a></h3>
+<p>The calling convention for the function, as listed
+<a class="reference external" href="functions.html#callconv">here</a>.</p>
+</div>
+<div class="section" id="collector">
+<h3><tt class="docutils literal"><span class="pre">collector</span></tt><a class="headerlink" href="#collector" title="Permalink to this headline">¶</a></h3>
+<p>A string holding the name of the garbage collection algorithm. See <a class="reference external" href="http://www.llvm.org/docs/LangRef.html#gc">LLVM
+docs</a>.</p>
+</div>
+<div class="section" id="does-not-throw">
+<h3><tt class="docutils literal"><span class="pre">does_not_throw</span></tt><a class="headerlink" href="#does-not-throw" title="Permalink to this headline">¶</a></h3>
+<p>Setting to True sets the <tt class="docutils literal"><span class="pre">ATTR_NO_UNWIND</span></tt> attribute, False removes it.
+Shortcut to using <tt class="docutils literal"><span class="pre">f.add_attribute(ATTR_NO_UNWIND)</span></tt> and
+<tt class="docutils literal"><span class="pre">f.remove_attribute(ATTR_NO_UNWIND)</span></tt>.</p>
+</div>
+<div class="section" id="args">
+<h3><tt class="docutils literal"><span class="pre">args</span></tt><a class="headerlink" href="#args" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p>List of <a class="reference external" href="llvm.core.Argument.html">llvm.core.Argument</a> objects
+representing the formal arguments of the function.</p>
+</div>
+<div class="section" id="basic-block-count">
+<h3><tt class="docutils literal"><span class="pre">basic_block_count</span></tt><a class="headerlink" href="#basic-block-count" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p>Number of basic blocks belonging to this function. Same as
+<tt class="docutils literal"><span class="pre">len(f.basic_blocks)</span></tt> but faster if you just want the count.</p>
+</div>
+<div class="section" id="entry-basic-block">
+<h3><tt class="docutils literal"><span class="pre">entry_basic_block</span></tt><a class="headerlink" href="#entry-basic-block" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p>The <a class="reference external" href="llvm.core.BasicBlock.html">llvm.core.BasicBlock</a> object
+representing the entry basic block for this function, or <tt class="docutils literal"><span class="pre">None</span></tt> if
+there are no basic blocks.</p>
+</div>
+<div class="section" id="basic-blocks">
+<h3><tt class="docutils literal"><span class="pre">basic_blocks</span></tt><a class="headerlink" href="#basic-blocks" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p>List of <a class="reference external" href="llvm.core.BasicBlock.html">llvm.core.BasicBlock</a> objects
+representing the basic blocks belonging to this function.</p>
+</div>
+<div class="section" id="intrinsic-id">
+<h3><tt class="docutils literal"><span class="pre">intrinsic_id</span></tt><a class="headerlink" href="#intrinsic-id" title="Permalink to this headline">¶</a></h3>
+<p>[read-only]</p>
+<p>Returns the ID of the intrinsic if this object represents an intrinsic
+instruction. Otherwise 0.</p>
+</div>
+</div>
+<div class="section" id="methods">
+<h2>Methods<a class="headerlink" href="#methods" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="delete">
+<h3><tt class="docutils literal"><span class="pre">delete()</span></tt><a class="headerlink" href="#delete" title="Permalink to this headline">¶</a></h3>
+<p>Deletes the function from it&#8217;s module. Do not hold any references to
+this object after calling <tt class="docutils literal"><span class="pre">delete</span></tt> on it.</p>
+</div>
+<div class="section" id="append-basic-block-name">
+<h3><tt class="docutils literal"><span class="pre">append_basic_block(name)</span></tt><a class="headerlink" href="#append-basic-block-name" title="Permalink to this headline">¶</a></h3>
+<p>Add a new basic block named <tt class="docutils literal"><span class="pre">name</span></tt>, and return a corresponding
+<a class="reference external" href="llvm.core.BasicBlock.html">llvm.core.BasicBlock</a> object. Note that if
+this is not the entry basic block, you&#8217;ll have to add appropriate branch
+instructions from other basic blocks yourself.</p>
+</div>
+<div class="section" id="add-attribute-attr">
+<h3><tt class="docutils literal"><span class="pre">add_attribute(attr)</span></tt><a class="headerlink" href="#add-attribute-attr" title="Permalink to this headline">¶</a></h3>
+<p>Add an attribute <tt class="docutils literal"><span class="pre">attr</span></tt> to the function, from the set listed above.</p>
+</div>
+<div class="section" id="remove-attribute-attr">
+<h3><tt class="docutils literal"><span class="pre">remove_attribute(attr)</span></tt><a class="headerlink" href="#remove-attribute-attr" title="Permalink to this headline">¶</a></h3>
+<p>Remove the attribute <tt class="docutils literal"><span class="pre">attr</span></tt> of the function.</p>
+</div>
+<div class="section" id="viewcfg">
+<h3><tt class="docutils literal"><span class="pre">viewCFG()</span></tt><a class="headerlink" href="#viewcfg" title="Permalink to this headline">¶</a></h3>
+<p>Displays the control flow graph using the GraphViz tool.</p>
+</div>
+<div class="section" id="viewcfgonly">
+<h3><tt class="docutils literal"><span class="pre">viewCFGOnly()</span></tt><a class="headerlink" href="#viewcfgonly" title="Permalink to this headline">¶</a></h3>
+<p>Displays the control flow graph using the GraphViz tool, but omitting
+function bodies.</p>
+</div>
+<div class="section" id="verify">
+<h3><tt class="docutils literal"><span class="pre">verify()</span></tt><a class="headerlink" href="#verify" title="Permalink to this headline">¶</a></h3>
+<p>Verifies the function. See <a class="reference external" href="http://llvm.org/docs/Passes.html#verify">LLVM
+docs</a>.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">llvm.core.Function</a><ul>
+<li><a class="reference internal" href="#base-class">Base Class</a></li>
+<li><a class="reference internal" href="#static-constructors">Static Constructors</a><ul>
+<li><a class="reference internal" href="#new-module-obj-func-ty-name"><tt class="docutils literal"><span class="pre">new(module_obj,</span> <span class="pre">func_ty,</span> <span class="pre">name)</span></tt></a></li>
+<li><a class="reference internal" href="#get-module-obj-name"><tt class="docutils literal"><span class="pre">get(module_obj,</span> <span class="pre">name)</span></tt></a></li>
+<li><a class="reference internal" href="#get-or-insert-module-obj-func-ty-name"><tt class="docutils literal"><span class="pre">get_or_insert(module_obj,</span> <span class="pre">func_ty,</span> <span class="pre">name)</span></tt></a></li>
+<li><a class="reference internal" href="#intrinsic-module-obj-intrinsic-id-types"><tt class="docutils literal"><span class="pre">intrinsic(module_obj,</span> <span class="pre">intrinsic_id,</span> <span class="pre">types)</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#properties">Properties</a><ul>
+<li><a class="reference internal" href="#calling-convention"><tt class="docutils literal"><span class="pre">calling_convention</span></tt></a></li>
+<li><a class="reference internal" href="#collector"><tt class="docutils literal"><span class="pre">collector</span></tt></a></li>
+<li><a class="reference internal" href="#does-not-throw"><tt class="docutils literal"><span class="pre">does_not_throw</span></tt></a></li>
+<li><a class="reference internal" href="#args"><tt class="docutils literal"><span class="pre">args</span></tt></a></li>
+<li><a class="reference internal" href="#basic-block-count"><tt class="docutils literal"><span class="pre">basic_block_count</span></tt></a></li>
+<li><a class="reference internal" href="#entry-basic-block"><tt class="docutils literal"><span class="pre">entry_basic_block</span></tt></a></li>
+<li><a class="reference internal" href="#basic-blocks"><tt class="docutils literal"><span class="pre">basic_blocks</span></tt></a></li>
+<li><a class="reference internal" href="#intrinsic-id"><tt class="docutils literal"><span class="pre">intrinsic_id</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#methods">Methods</a><ul>
+<li><a class="reference internal" href="#delete"><tt class="docutils literal"><span class="pre">delete()</span></tt></a></li>
+<li><a class="reference internal" href="#append-basic-block-name"><tt class="docutils literal"><span class="pre">append_basic_block(name)</span></tt></a></li>
+<li><a class="reference internal" href="#add-attribute-attr"><tt class="docutils literal"><span class="pre">add_attribute(attr)</span></tt></a></li>
+<li><a class="reference internal" href="#remove-attribute-attr"><tt class="docutils literal"><span class="pre">remove_attribute(attr)</span></tt></a></li>
+<li><a class="reference internal" href="#viewcfg"><tt class="docutils literal"><span class="pre">viewCFG()</span></tt></a></li>
+<li><a class="reference internal" href="#viewcfgonly"><tt class="docutils literal"><span class="pre">viewCFGOnly()</span></tt></a></li>
+<li><a class="reference internal" href="#verify"><tt class="docutils literal"><span class="pre">verify()</span></tt></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/llvm.core.Function.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

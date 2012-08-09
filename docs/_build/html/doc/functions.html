@@ -1,0 +1,280 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>create a function of this type &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: Functions</td>
+</tr>
+</tbody>
+</table>
+<p>Functions are represented by
+<a class="reference external" href="llvm.core.Function.html">llvm.core.Function</a> objects. They are
+contained within modules, and can be created either with the method
+<tt class="docutils literal"><span class="pre">module_obj.add_function</span></tt> or the static constructor <tt class="docutils literal"><span class="pre">Function.new</span></tt>.
+References to functions already present in a module can be retrieved via
+<tt class="docutils literal"><span class="pre">module.get_function_named</span></tt> or by the static constructor method
+<tt class="docutils literal"><span class="pre">Function.get</span></tt>. All functions in a module can be enumerated by
+iterating over <tt class="docutils literal"><span class="pre">module_obj.functions</span></tt>.</p>
+<p>{% highlight python %} # create a type, representing functions that take
+an integer and return # a floating point value. ft = Type.function(
+Type.float(), [ Type.int() ] )</p>
+<div class="section" id="create-a-function-of-this-type">
+<h1>create a function of this type<a class="headerlink" href="#create-a-function-of-this-type" title="Permalink to this headline">¶</a></h1>
+<p>f1 = module_obj.add_function(ft, &#8220;func1&#8221;)</p>
+</div>
+<div class="section" id="or-equivalently-like-this">
+<h1>or equivalently, like this:<a class="headerlink" href="#or-equivalently-like-this" title="Permalink to this headline">¶</a></h1>
+<p>f2 = Function.new(module_obj, ft, &#8220;func2&#8221;)</p>
+</div>
+<div class="section" id="get-a-reference-to-an-existing-function">
+<h1>get a reference to an existing function<a class="headerlink" href="#get-a-reference-to-an-existing-function" title="Permalink to this headline">¶</a></h1>
+<p>f3 = module_obj.get_function_named(&#8220;func3&#8221;)</p>
+</div>
+<div class="section" id="or-like-this">
+<h1>or like this:<a class="headerlink" href="#or-like-this" title="Permalink to this headline">¶</a></h1>
+<p>f4 = Function.get(module_obj, &#8220;func4&#8221;)</p>
+</div>
+<div class="section" id="list-all-function-names-in-a-module">
+<h1>list all function names in a module<a class="headerlink" href="#list-all-function-names-in-a-module" title="Permalink to this headline">¶</a></h1>
+<p>for f in module_obj.functions: print f.name {% endhighlight %}</p>
+</div>
+<div class="section" id="intrinsic">
+<h1>Intrinsic<a class="headerlink" href="#intrinsic" title="Permalink to this headline">¶</a></h1>
+<p>References to intrinsic functions can be got via the static constructor
+<tt class="docutils literal"><span class="pre">intrinsic</span></tt>. This returns a <tt class="docutils literal"><span class="pre">Function</span></tt> object, calling which is
+equivalent to invoking the intrinsic. The <tt class="docutils literal"><span class="pre">intrinsic</span></tt> method has to be
+called with a module object, an intrinsic ID (which is a numeric
+constant) and a list of the types of arguments (which LLVM uses to
+resolve overloaded intrinsic functions).</p>
+<p>{% highlight python %} # get a reference to the llvm.bswap intrinsic
+bswap = Function.intrinsic(mod, INTR_BSWAP, [Type.int()])</p>
+</div>
+<div class="section" id="call-it">
+<h1>call it<a class="headerlink" href="#call-it" title="Permalink to this headline">¶</a></h1>
+<p>builder.call(bswap, [value]) {% endhighlight %}</p>
+<p>Here, the constant <tt class="docutils literal"><span class="pre">INTR_BSWAP</span></tt>, available from <tt class="docutils literal"><span class="pre">llvm.core</span></tt>,
+represents the LLVM intrinsic
+<a class="reference external" href="http://www.llvm.org/docs/LangRef.html#int_bswap">llvm.bswap</a>. The
+<tt class="docutils literal"><span class="pre">[Type.int()]</span></tt> selects the version of <tt class="docutils literal"><span class="pre">llvm.bswap</span></tt> that has a single
+32-bit integer argument. The list of intrinsic IDs defined as integer
+constants in <tt class="docutils literal"><span class="pre">llvm.core</span></tt>. These are:</p>
+<p>{% include intrinsics.csv %}</p>
+<p>There are also target-specific intrinsics (which correspond to that
+target&#8217;s CPU instructions) available, but are omitted here for brevity.
+Full list can be seen from
+[<em>intrinsic_ids.py](https://github.com/numba/llvmpy/blob/master/llvm/</em>intrinsic_ids.py).
+See the <a class="reference external" href="http://www.llvm.org/docs/LangRef.html">LLVM Language
+Reference</a> for more information
+on the intrinsics, and the
+<a class="reference external" href="https://github.com/numba/llvmpy/blob/master/test/intrinsic.py">test</a>
+directory in the source distribution for more examples. The intrinsic ID
+can be retrieved from a function object with the read-only property
+<tt class="docutils literal"><span class="pre">intrinsic_id</span></tt>.</p>
+<blockquote>
+<div><p><strong>Auto-generation of Intrinsic IDs</strong></p>
+<p>A script (tool/intrgen.py in source tree) generates the intrinsic
+IDs automatically. This is necessary when compiling llvmpy with a
+different version of LLVM.</p>
+</div></blockquote>
+</div>
+<div class="section" id="calling-convention-callconv">
+<h1>Calling Convention # {#callconv}<a class="headerlink" href="#calling-convention-callconv" title="Permalink to this headline">¶</a></h1>
+<p>The function&#8217;s calling convention can be set using the
+<tt class="docutils literal"><span class="pre">calling_convention</span></tt> property. The following (integer) constants
+defined in <tt class="docutils literal"><span class="pre">llvm.core</span></tt> can be used as values:</p>
+<p>Value | Equivalent LLVM Assembly Keyword |
+&#8212;&#8212;|&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;-| <tt class="docutils literal"><span class="pre">CC_C</span></tt> | <tt class="docutils literal"><span class="pre">ccc</span></tt> |
+<tt class="docutils literal"><span class="pre">CC_FASTCALL</span></tt> | <tt class="docutils literal"><span class="pre">fastcc</span></tt> | <tt class="docutils literal"><span class="pre">CC_COLDCALL</span></tt> | <tt class="docutils literal"><span class="pre">coldcc</span></tt> |
+<tt class="docutils literal"><span class="pre">CC_X86_STDCALL</span></tt> | <tt class="docutils literal"><span class="pre">x86_stdcallcc</span></tt> | <tt class="docutils literal"><span class="pre">CC_X86_FASTCALL</span></tt> |
+<tt class="docutils literal"><span class="pre">x86_fastcallcc</span></tt> |</p>
+<p>See the <a class="reference external" href="http://www.llvm.org/docs/LangRef.html#callingconv">LLVM docs</a>
+for more information on each. Backend-specific numbered conventions can
+be directly passed as integers.</p>
+<p>An arbitrary string identifying which garbage collector to use can be
+set or got with the property <tt class="docutils literal"><span class="pre">collector</span></tt>.</p>
+<p>The value objects corresponding to the arguments of a function can be
+got using the read-only property <tt class="docutils literal"><span class="pre">args</span></tt>. These can be iterated over,
+and also be indexed via integers. An example:</p>
+<p>{% highlight python %} # list all argument names and types for arg in
+fn.args: print arg.name, &#8220;of type&#8221;, arg.type</p>
+</div>
+<div class="section" id="change-the-name-of-the-first-argument">
+<h1>change the name of the first argument<a class="headerlink" href="#change-the-name-of-the-first-argument" title="Permalink to this headline">¶</a></h1>
+<p>fn.args[0].name = &#8220;objptr&#8221; {% endhighlight %}</p>
+<p>Basic blocks (see later) are contained within functions. When newly
+created, a function has no basic blocks. They have to be added
+explicitly, using the <tt class="docutils literal"><span class="pre">append_basic_block</span></tt> method, which adds a new,
+empty basic block as the last one in the function. The first basic block
+of the function can be retrieved using the <tt class="docutils literal"><span class="pre">get_entry_basic_block</span></tt>
+method. The existing basic blocks can be enumerated by iterating over
+using the read-only property <tt class="docutils literal"><span class="pre">basic_blocks</span></tt>. The number of basic
+blocks can be got via <tt class="docutils literal"><span class="pre">basic_block_count</span></tt> method. Note that
+<tt class="docutils literal"><span class="pre">get_entry_basic_block</span></tt> is slightly faster than <tt class="docutils literal"><span class="pre">basic_blocks[0]</span></tt>
+and so is <tt class="docutils literal"><span class="pre">basic_block_count</span></tt>, over <tt class="docutils literal"><span class="pre">len(f.basic_blocks)</span></tt>.</p>
+<p>{% highlight python %} # add a basic block b1 =
+fn.append_basic_block(&#8220;entry&#8221;)</p>
+</div>
+<div class="section" id="get-the-first-one">
+<h1>get the first one<a class="headerlink" href="#get-the-first-one" title="Permalink to this headline">¶</a></h1>
+<p>b2 = fn.get_entry_basic_block() b2 = fn.basic_mdblocks[0] # slower
+than previous method</p>
+</div>
+<div class="section" id="print-names-of-all-basic-blocks">
+<h1>print names of all basic blocks<a class="headerlink" href="#print-names-of-all-basic-blocks" title="Permalink to this headline">¶</a></h1>
+<p>for b in fn.basic_blocks: print b.name</p>
+</div>
+<div class="section" id="get-number-of-basic-blocks">
+<h1>get number of basic blocks<a class="headerlink" href="#get-number-of-basic-blocks" title="Permalink to this headline">¶</a></h1>
+<p>n = fn.basic_block_count n = len(fn.basic_blocks) # slower than
+previous method {% endhighlight %}</p>
+<p>Functions can be deleted using the method <tt class="docutils literal"><span class="pre">delete</span></tt>. This deletes them
+from their containing module. All references to the function object
+should be dropped after <tt class="docutils literal"><span class="pre">delete</span></tt> has been called.</p>
+<p>Functions can be verified with the <tt class="docutils literal"><span class="pre">verify</span></tt> method. Note that this may
+not work properly (aborts on errors).</p>
+</div>
+<div class="section" id="function-attributes-fnattr">
+<h1>Function Attributes # {#fnattr}<a class="headerlink" href="#function-attributes-fnattr" title="Permalink to this headline">¶</a></h1>
+<p>Function attributes, as documented
+<a class="reference external" href="http://www.llvm.org/docs/LangRef.html#fnattrs">here</a>, can be set on
+functions using the methods <tt class="docutils literal"><span class="pre">add_attribute</span></tt> and <tt class="docutils literal"><span class="pre">remove_attribute</span></tt>.
+The following values may be used to refer to the LLVM attributes:</p>
+<p>Value | Equivalent LLVM Assembly Keyword |
+&#8212;&#8212;|&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;-|
+<tt class="docutils literal"><span class="pre">ATTR_ALWAYS_INLINE</span></tt>|<tt class="docutils literal"><span class="pre">alwaysinline</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_INLINE_HINT</span></tt>|<tt class="docutils literal"><span class="pre">inlinehint</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_NO_INLINE</span></tt>|<tt class="docutils literal"><span class="pre">noinline</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_OPTIMIZE_FOR_SIZE</span></tt>|<tt class="docutils literal"><span class="pre">optsize</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_NO_RETURN</span></tt>|<tt class="docutils literal"><span class="pre">noreturn</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_NO_UNWIND</span></tt>|<tt class="docutils literal"><span class="pre">nounwind</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_READ_NONE</span></tt>|<tt class="docutils literal"><span class="pre">readnone</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_READONLY</span></tt>|<tt class="docutils literal"><span class="pre">readonly</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_STACK_PROTECT</span></tt>|<tt class="docutils literal"><span class="pre">ssp</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_STACK_PROTECT_REQ</span></tt>|<tt class="docutils literal"><span class="pre">sspreq</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_NO_REDZONE</span></tt>|<tt class="docutils literal"><span class="pre">noredzone</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_NO_IMPLICIT_FLOAT</span></tt>|<tt class="docutils literal"><span class="pre">noimplicitfloat</span></tt> |
+<tt class="docutils literal"><span class="pre">ATTR_NAKED</span></tt>|<tt class="docutils literal"><span class="pre">naked</span></tt> |</p>
+<p>Here is how attributes can be set and removed:</p>
+<p>{% highlight python %} # create a function ti = Type.int(32) tf =
+Type.function(ti, [ti, ti]) m = Module.new(&#8216;mod&#8217;) f =
+m.add_function(tf, &#8216;sum&#8217;) print f # declare i32 &#64;sum(i32, i32)</p>
+</div>
+<div class="section" id="add-a-couple-of-attributes">
+<h1>add a couple of attributes<a class="headerlink" href="#add-a-couple-of-attributes" title="Permalink to this headline">¶</a></h1>
+<p>f.add_attribute(ATTR_NO_UNWIND) f.add_attribute(ATTR_READONLY)
+print f # declare i32 &#64;sum(i32, i32) nounwind readonly {% endhighlight
+%}</p>
+<p><strong>Related Links</strong></p>
+<p><a class="reference external" href="llvm.core.Function.html">llvm.core.Function</a>,
+<a class="reference external" href="llvm.core.Argument.html">llvm.core.Argument</a></p>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">create a function of this type</a></li>
+<li><a class="reference internal" href="#or-equivalently-like-this">or equivalently, like this:</a></li>
+<li><a class="reference internal" href="#get-a-reference-to-an-existing-function">get a reference to an existing function</a></li>
+<li><a class="reference internal" href="#or-like-this">or like this:</a></li>
+<li><a class="reference internal" href="#list-all-function-names-in-a-module">list all function names in a module</a></li>
+<li><a class="reference internal" href="#intrinsic">Intrinsic</a></li>
+<li><a class="reference internal" href="#call-it">call it</a></li>
+<li><a class="reference internal" href="#calling-convention-callconv">Calling Convention # {#callconv}</a></li>
+<li><a class="reference internal" href="#change-the-name-of-the-first-argument">change the name of the first argument</a></li>
+<li><a class="reference internal" href="#get-the-first-one">get the first one</a></li>
+<li><a class="reference internal" href="#print-names-of-all-basic-blocks">print names of all basic blocks</a></li>
+<li><a class="reference internal" href="#get-number-of-basic-blocks">get number of basic blocks</a></li>
+<li><a class="reference internal" href="#function-attributes-fnattr">Function Attributes # {#fnattr}</a></li>
+<li><a class="reference internal" href="#add-a-couple-of-attributes">add a couple of attributes</a></li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/functions.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

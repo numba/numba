@@ -1,0 +1,163 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>llvm.ee.EngineBuilder &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: EngineBuilder (llvm.ee)</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="llvm-ee-enginebuilder">
+<h1>llvm.ee.EngineBuilder<a class="headerlink" href="#llvm-ee-enginebuilder" title="Permalink to this headline">¶</a></h1>
+<p>A convenient class for building
+<a class="reference external" href="llvm.ee.ExecutionEngine.html">llvm.ee.ExecutionEngine</a>. Each
+<tt class="docutils literal"><span class="pre">EngineBuilder</span></tt> instance can only create one <tt class="docutils literal"><span class="pre">ExecutionEngine</span></tt>.</p>
+<div class="section" id="methods">
+<h2>Methods<a class="headerlink" href="#methods" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="create-self">
+<h3><tt class="docutils literal"><span class="pre">create(self)</span></tt><a class="headerlink" href="#create-self" title="Permalink to this headline">¶</a></h3>
+<p>Create and return a new
+<a class="reference external" href="llvm.ee.ExecutionEngine.html">ExecutionEngine</a> instance.</p>
+<p>Raise <tt class="docutils literal"><span class="pre">llvm.LLVMException</span></tt> if the builder cannot create an
+<tt class="docutils literal"><span class="pre">ExecutionEngine</span></tt> base on the given configuration.</p>
+</div>
+<div class="section" id="force-interpreter-self">
+<h3><tt class="docutils literal"><span class="pre">force_interpreter(self)</span></tt><a class="headerlink" href="#force-interpreter-self" title="Permalink to this headline">¶</a></h3>
+<p>Force the output the output <tt class="docutils literal"><span class="pre">ExecutionEngine</span></tt> to be an LLVM IR
+interpreter.</p>
+</div>
+<div class="section" id="force-jit-self">
+<h3><tt class="docutils literal"><span class="pre">force_jit(self)</span></tt><a class="headerlink" href="#force-jit-self" title="Permalink to this headline">¶</a></h3>
+<p>Force the output the output <tt class="docutils literal"><span class="pre">ExecutionEngine</span></tt> to be a JIT engine.</p>
+</div>
+<div class="section" id="opt-self-level">
+<h3><tt class="docutils literal"><span class="pre">opt(self,</span> <span class="pre">level)</span></tt><a class="headerlink" href="#opt-self-level" title="Permalink to this headline">¶</a></h3>
+<p>Set the code generation optimization level for a JIT engine. Valid value
+of <tt class="docutils literal"><span class="pre">level</span></tt> is 0-3, inclusive. The default setting is 2. To use vector
+instructions, such as SSE on Intel processors, <tt class="docutils literal"><span class="pre">level</span></tt> must be 3
+(aggressive).</p>
+</div>
+</div>
+<div class="section" id="static-factory-methods">
+<h2>Static Factory Methods<a class="headerlink" href="#static-factory-methods" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="new-module">
+<h3><tt class="docutils literal"><span class="pre">new(module)</span></tt><a class="headerlink" href="#new-module" title="Permalink to this headline">¶</a></h3>
+<p>Create a new EngineBuilder. <tt class="docutils literal"><span class="pre">module</span></tt> must be a
+<a class="reference external" href="llvm.core.Module.html">llvm.core.Module</a> instance. Its ownership is
+transferred to the resulting
+<a class="reference external" href="llvm.ee.ExecutionEngine.html">ExecutionEngine</a>. Therefore, it is
+impossible to create more than one <tt class="docutils literal"><span class="pre">ExecutionEngine</span></tt> with a single
+<tt class="docutils literal"><span class="pre">EngineBuilder</span></tt></p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">llvm.ee.EngineBuilder</a><ul>
+<li><a class="reference internal" href="#methods">Methods</a><ul>
+<li><a class="reference internal" href="#create-self"><tt class="docutils literal"><span class="pre">create(self)</span></tt></a></li>
+<li><a class="reference internal" href="#force-interpreter-self"><tt class="docutils literal"><span class="pre">force_interpreter(self)</span></tt></a></li>
+<li><a class="reference internal" href="#force-jit-self"><tt class="docutils literal"><span class="pre">force_jit(self)</span></tt></a></li>
+<li><a class="reference internal" href="#opt-self-level"><tt class="docutils literal"><span class="pre">opt(self,</span> <span class="pre">level)</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#static-factory-methods">Static Factory Methods</a><ul>
+<li><a class="reference internal" href="#new-module"><tt class="docutils literal"><span class="pre">new(module)</span></tt></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/llvm.ee.EngineBuilder.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,191 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>llvm.ee.TargetData &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: TargetData (llvm.ee)</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="llvm-ee-targetdata">
+<h1>llvm.ee.TargetData<a class="headerlink" href="#llvm-ee-targetdata" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li>This will become a table of contents (this text will be scraped).
+{:toc}</li>
+</ul>
+<div class="section" id="methods">
+<h2>Methods<a class="headerlink" href="#methods" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="abi-alignment-self-ty">
+<h3><tt class="docutils literal"><span class="pre">abi_alignment(self,</span> <span class="pre">ty)</span></tt><a class="headerlink" href="#abi-alignment-self-ty" title="Permalink to this headline">¶</a></h3>
+<p>Returns the minimum ABI-required alignment for the specified type
+<tt class="docutils literal"><span class="pre">ty</span></tt>.</p>
+</div>
+<div class="section" id="abi-size-self-ty">
+<h3><tt class="docutils literal"><span class="pre">abi_size(self,</span> <span class="pre">ty)</span></tt><a class="headerlink" href="#abi-size-self-ty" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="callframe-alignment-self-ty">
+<h3><tt class="docutils literal"><span class="pre">callframe_alignment(self,</span> <span class="pre">ty)</span></tt><a class="headerlink" href="#callframe-alignment-self-ty" title="Permalink to this headline">¶</a></h3>
+<p>Returns the minimum ABI-required alignment for the specified type <tt class="docutils literal"><span class="pre">ty</span></tt>
+when it is part of a call frame.</p>
+</div>
+<div class="section" id="element-at-offset-self-ty-ofs">
+<h3><tt class="docutils literal"><span class="pre">element_at_offset(self,</span> <span class="pre">ty,</span> <span class="pre">ofs)</span></tt><a class="headerlink" href="#element-at-offset-self-ty-ofs" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="offset-of-element-self-ty-el">
+<h3><tt class="docutils literal"><span class="pre">offset_of_element(self,</span> <span class="pre">ty,</span> <span class="pre">el)</span></tt><a class="headerlink" href="#offset-of-element-self-ty-el" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="preferred-alignment-self-ty-or-gv">
+<h3><tt class="docutils literal"><span class="pre">preferred_alignment(self,</span> <span class="pre">ty_or_gv)</span></tt><a class="headerlink" href="#preferred-alignment-self-ty-or-gv" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="size-self-ty">
+<h3><tt class="docutils literal"><span class="pre">size(self,</span> <span class="pre">ty)</span></tt><a class="headerlink" href="#size-self-ty" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="store-size-self-ty">
+<h3><tt class="docutils literal"><span class="pre">store_size(self,</span> <span class="pre">ty)</span></tt><a class="headerlink" href="#store-size-self-ty" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="str-self">
+<h3><tt class="docutils literal"><span class="pre">__str__(self)</span></tt><a class="headerlink" href="#str-self" title="Permalink to this headline">¶</a></h3>
+<p>Returns the string representation.</p>
+</div>
+</div>
+<div class="section" id="static-factory-methods">
+<h2>Static Factory Methods<a class="headerlink" href="#static-factory-methods" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="new-strrep">
+<h3><tt class="docutils literal"><span class="pre">new(strrep)</span></tt><a class="headerlink" href="#new-strrep" title="Permalink to this headline">¶</a></h3>
+<p>Construct a new <tt class="docutils literal"><span class="pre">TargetData</span></tt> instance from the string representation</p>
+</div>
+</div>
+<div class="section" id="properties">
+<h2>Properties<a class="headerlink" href="#properties" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="byte-order">
+<h3><tt class="docutils literal"><span class="pre">byte_order</span></tt><a class="headerlink" href="#byte-order" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="pointer-size">
+<h3><tt class="docutils literal"><span class="pre">pointer_size</span></tt><a class="headerlink" href="#pointer-size" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="target-integer-type">
+<h3><tt class="docutils literal"><span class="pre">target_integer_type</span></tt><a class="headerlink" href="#target-integer-type" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">llvm.ee.TargetData</a><ul>
+<li><a class="reference internal" href="#methods">Methods</a><ul>
+<li><a class="reference internal" href="#abi-alignment-self-ty"><tt class="docutils literal"><span class="pre">abi_alignment(self,</span> <span class="pre">ty)</span></tt></a></li>
+<li><a class="reference internal" href="#abi-size-self-ty"><tt class="docutils literal"><span class="pre">abi_size(self,</span> <span class="pre">ty)</span></tt></a></li>
+<li><a class="reference internal" href="#callframe-alignment-self-ty"><tt class="docutils literal"><span class="pre">callframe_alignment(self,</span> <span class="pre">ty)</span></tt></a></li>
+<li><a class="reference internal" href="#element-at-offset-self-ty-ofs"><tt class="docutils literal"><span class="pre">element_at_offset(self,</span> <span class="pre">ty,</span> <span class="pre">ofs)</span></tt></a></li>
+<li><a class="reference internal" href="#offset-of-element-self-ty-el"><tt class="docutils literal"><span class="pre">offset_of_element(self,</span> <span class="pre">ty,</span> <span class="pre">el)</span></tt></a></li>
+<li><a class="reference internal" href="#preferred-alignment-self-ty-or-gv"><tt class="docutils literal"><span class="pre">preferred_alignment(self,</span> <span class="pre">ty_or_gv)</span></tt></a></li>
+<li><a class="reference internal" href="#size-self-ty"><tt class="docutils literal"><span class="pre">size(self,</span> <span class="pre">ty)</span></tt></a></li>
+<li><a class="reference internal" href="#store-size-self-ty"><tt class="docutils literal"><span class="pre">store_size(self,</span> <span class="pre">ty)</span></tt></a></li>
+<li><a class="reference internal" href="#str-self"><tt class="docutils literal"><span class="pre">__str__(self)</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#static-factory-methods">Static Factory Methods</a><ul>
+<li><a class="reference internal" href="#new-strrep"><tt class="docutils literal"><span class="pre">new(strrep)</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#properties">Properties</a><ul>
+<li><a class="reference internal" href="#byte-order"><tt class="docutils literal"><span class="pre">byte_order</span></tt></a></li>
+<li><a class="reference internal" href="#pointer-size"><tt class="docutils literal"><span class="pre">pointer_size</span></tt></a></li>
+<li><a class="reference internal" href="#target-integer-type"><tt class="docutils literal"><span class="pre">target_integer_type</span></tt></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/llvm.ee.TargetData.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>

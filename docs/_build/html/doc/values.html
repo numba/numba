@@ -1,0 +1,164 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>&lt;no title&gt; &mdash; llvmpy 0.8.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.8.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="llvmpy 0.8.2 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>layout: page</td>
+</tr>
+<tr class="row-even"><td>title: Values</td>
+</tr>
+</tbody>
+</table>
+<p><a class="reference external" href="llvm.core.Value.html">llvm.core.Value</a> is the base class of all
+values computed by a program that may be used as operands to other
+values. A value has a type associated with it (an object of
+<a class="reference external" href="types.html">llvm.core.Type</a>).</p>
+<p>The class hierarchy is:</p>
+<div class="highlight-python"><pre>Value
+  User
+    Constant
+      ConstantExpr
+      ConstantAggregateZero
+      ConstantInt
+      ConstantFP
+      ConstantArray
+      ConstantStruct
+      ConstantVector
+      ConstantPointerNull
+      UndefValue
+      GlobalValue
+        GlobalVariable
+        Function
+    Instruction
+      CallOrInvokeInstruction
+      PHINode
+      SwitchInstruction
+      CompareInstruction
+  Argument
+  BasicBlock</pre>
+</div>
+<p>The <a class="reference external" href="llvm.core.Value.html">Value</a> class is abstract, it&#8217;s not meant to
+be instantiated. <a class="reference external" href="llvm.core.User.html">User</a> is a
+<a class="reference external" href="llvm.core.Value.html">Value</a> that in turn uses (i.e., can refer to)
+other values (for e.g., a constant expression 1+2 refers to two constant
+values 1 and 2).</p>
+<p><a class="reference external" href="llvm.core.Constant.html">Constant</a>-s represent constants that appear
+within code or as initializers of globals. They are constructed using
+static methods of <a class="reference external" href="llvm.core.Constant.html">Constant</a>. Various types
+of constants are represented by various subclasses of
+<a class="reference external" href="llvm.core.Constant.html">Constant</a>. However, most of them are empty
+and do not provide any additional attributes or methods over
+<a class="reference external" href="llvm.core.Constant.html">Constant</a>.</p>
+<p>The <a class="reference external" href="functions.html">Function</a> object represents an instance of a
+function type. Such objects contain
+<a class="reference external" href="llvm.core.Argument.html">Argument</a> objects, which represent the
+actual, local-variable-like arguments of the function (not to be
+confused with the arguments returned by a function <em>type</em> object &#8211;
+these represent the <em>type</em> of the arguments).</p>
+<p>The various <a class="reference external" href="llvm.core.Instruction.html">Instruction</a>-s are created by
+the <a class="reference external" href="llvm.core.Builder.html">Builder</a> class. Most instructions are
+represented by <a class="reference external" href="llvm.core.Instruction.html">Instruction</a> itself, but
+there are a few subclasses that represent interesting instructions.</p>
+<p><a class="reference external" href="llvm.core.Value.html">Value</a> objects have a type (read-only), and a
+name (read-write).</p>
+<p><strong>Related Links</strong> <a class="reference external" href="functions.html">functions</a>,
+<a class="reference external" href="comparision.html">comparision</a>,
+<a class="reference external" href="llvm.core.Value.html">llvm.core.Value</a>,
+<a class="reference external" href="llvm.core.User.html">llvm.core.User</a>,
+<a class="reference external" href="llvm.core.Constant.html">llvm.core.Constant</a>,
+<a class="reference external" href="llvm.core.GlobalValue.html">llvm.core.GlobalValue</a>,
+<a class="reference external" href="llvm.core.GlobalVariable.html">llvm.core.GlobalVariable</a>,
+<a class="reference external" href="llvm.core.Argument.html">llvm.core.Argument</a>,
+<a class="reference external" href="llvm.core.Instruction.html">llvm.core.Instruction</a>,
+<a class="reference external" href="llvm.core.Builder.html">llvm.core.Builder</a>,
+<a class="reference external" href="llvm.core.BasicBlock.html">llvm.core.BasicBlock</a></p>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/doc/values.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../index.html">llvmpy 0.8.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Mahadevan R (2008-2010), Continuum Analytics (2012).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.2.
+    </div>
+  </body>
+</html>
