@@ -917,10 +917,19 @@ class CValue(object):
                 else:
                     return make(self.parent.builder.uitofp(self.value, ty))
         elif self.is_real:
-            if not unsigned:
-                return make(self.parent.builder.fptosi(self.value, ty))
+            if _is_int(ty):
+                if not unsigned:
+                    return make(self.parent.builder.fptosi(self.value, ty))
+                else:
+                    return make(self.parent.builder.fptoui(self.value, ty))
             else:
-                return make(self.parent.builder.fptoui(self.value, ty))
+                if ty == types.double:
+                    assert self.type == types.float
+                    return make(self.parent.builder.fpext(self.value, ty))
+                else:
+                    assert ty == types.float
+                    assert self.type == types.double
+                    return make(self.parent.builder.fptrunc(self.value, ty))
 
         errmsg = "Cast from %s to %s is not possible."
         raise TypeError(errmsg % (self.type, ty))
