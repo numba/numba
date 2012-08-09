@@ -18,7 +18,7 @@ def main():
     # get pointer to workfunc
     workfunc_ptr = exe.engine.get_pointer_to_function(workfunc)
 
-    workdecl = CDeclare(workfunc.name, workfunc.type.pointee, workfunc_ptr)
+    workdecl = CFuncRef(workfunc.name, workfunc.type.pointee, workfunc_ptr)
 
     spufdef = SpecializedParallelUFunc(ParallelUFuncPosix(num_thread=2),
                                        UFuncCore_D_D(),

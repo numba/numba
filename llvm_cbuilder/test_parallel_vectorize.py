@@ -23,7 +23,7 @@ class UFuncCore_D_D(UFuncCore):
         outbase = common.args[1]
 
         instep = common.steps[0]
-        outstep = common.steps[0]
+        outstep = common.steps[1]
 
         indata = inbase[item * instep].reference().cast(C.pointer(C.double))
         outdata = outbase[item * outstep].reference().cast(C.pointer(C.double))
