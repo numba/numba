@@ -12,6 +12,9 @@ from . import shortnames as types
 #  Utilities
 ###
 
+class FunctionAlreadyExists(NameError):
+    pass
+
 def _is_int(ty):
     return isinstance(ty, lc.IntegerType)
 
@@ -651,7 +654,7 @@ class _DeclareCDef(object):
     def __call__(self, module):
         try:
             func = self.cdef.define(module)
-        except NameError as e:
+        except FunctionAlreadyExists as e:
             (func,) = e
         return func
 
@@ -740,7 +743,7 @@ class CDefinition(CBuilder):
         func = module.get_or_insert_function(functype, name=name)
 
         if not func.is_declaration: # already defined?
-            raise NameError(func)
+            raise FunctionAlreadyExists(func)
 
         # Name all arguments
         for i, (name, _) in enumerate(cls._argtys_):

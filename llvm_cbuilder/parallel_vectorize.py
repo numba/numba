@@ -410,6 +410,12 @@ else:
 
 
 def parallel_vectorize_from_func(lfunc, engine=None):
+    '''create ufunc from a llvm.core.Function
+
+    If engine is given, return a function object which can be called
+    from python. (This needs Jay's numpy.fromfunc).
+    Otherwise, return the specialized ufunc as a llvm.core.Function
+    '''
     fntype = lfunc.type.pointee
     def_spuf = SpecializedParallelUFunc(ParallelUFuncPlatform(num_thread=2),
                                         UFuncCoreGeneric(fntype),
