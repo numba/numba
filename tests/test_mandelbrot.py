@@ -7,7 +7,7 @@ computations.
 '''
 # ______________________________________________________________________
 
-from numba.decorators import numba_compile
+from numba.decorators import jit
 
 import unittest
 
@@ -15,7 +15,7 @@ import numpy as np
 
 # ______________________________________________________________________
 
-#@numba_compile(arg_types = ['d','d','i'], ret_type = 'i')
+#@jit(arg_types = ['d','d','i'], ret_type = 'i')
 def mandel_1(real_coord, imag_coord, max_iters):
     '''Given a the real and imaginary parts of a complex number,
     determine if it is a candidate for membership in the Mandelbrot
@@ -37,7 +37,7 @@ def mandel_1(real_coord, imag_coord, max_iters):
     return -1
 
 try:
-    mandel_1c = numba_compile(arg_types = ['d', 'd', 'i'], ret_type = 'i')(
+    mandel_1c = jit(arg_types = ['d', 'd', 'i'], ret_type = 'i')(
         mandel_1)
 except:
     if __debug__:
@@ -45,7 +45,7 @@ except:
         tb.print_exc()
     mandel_1c = None
 
-#@numba_compile(arg_types = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])
+#@jit(arg_types = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])
 def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
     nb_colors = len(colors)
     width = image.shape[0]
@@ -71,7 +71,7 @@ def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
             image[x, y, 2] = colors[col_index, 2]
 
 try:
-    mandel_driver_1c = numba_compile(
+    mandel_driver_1c = jit(
         arg_types = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])(mandel_driver_1)
 except:
     if __debug__:

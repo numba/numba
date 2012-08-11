@@ -8,7 +8,7 @@ Unit test aimed at testing symbolic execution of the BUILD_TUPLE opcode.
 
 import numpy
 
-from numba.decorators import numba_compile
+from numba.decorators import jit
 
 import unittest
 
@@ -26,7 +26,7 @@ def tuple_fn_0 (inarr):
 class TestTuple (unittest.TestCase):
     def test_tuple_fn_0 (self):
         test_arr = numpy.zeros((4,4,4))
-        compiled_fn = numba_compile(arg_types = [['d']])(tuple_fn_0)
+        compiled_fn = jit(arg_types = [['d']])(tuple_fn_0)
         self.assertEqual(compiled_fn(test_arr), 0.)
 
 # ______________________________________________________________________

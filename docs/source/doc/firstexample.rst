@@ -28,9 +28,9 @@ This kind of quadruply-nested for-loop is going to be quite slow.  Using Numba w
 .. code-block:: python
 
    from numba import double
-   from numba.decorators import numba_compile
+   from numba.decorators import jit
 
-   fastfilter_2d = numba_compile(arg_types = [double[:,:], double[:,:]], res_type=double[:,:])
+   fastfilter_2d = jit(arg_types = [double[:,:], double[:,:]], res_type=double[:,:])
 
    # Now fastfilter_2d runs at speeds as if you had translated it to C
    res = fastfilter_2d(image, filt)

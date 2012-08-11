@@ -6,7 +6,7 @@ Unit tests for checking Numba's indexing into Numpy arrays.
 '''
 # ______________________________________________________________________
 
-from numba.decorators import numba_compile
+from numba.decorators import jit
 
 import numpy
 
@@ -41,12 +41,12 @@ class TestIndexing (unittest.TestCase):
     def test_get_index_fn_0 (self):
         arr = numpy.ones((4,4,4))
         arr[1,2,3] = 0.
-        compiled_fn = numba_compile(arg_types = [['d']])(get_index_fn_0)
+        compiled_fn = jit(arg_types = [['d']])(get_index_fn_0)
         self.assertEqual(compiled_fn(arr), 0.)
 
     def test_set_index_fn_0 (self):
         arr = numpy.ones((4,4,4))
-        compiled_fn = numba_compile(arg_types = [['d']])(set_index_fn_0)
+        compiled_fn = jit(arg_types = [['d']])(set_index_fn_0)
         self.assertEqual(arr[1,2,3], 1.)
         compiled_fn(arr)
         self.assertEqual(arr[1,2,3], 0.)
@@ -55,7 +55,7 @@ class TestIndexing (unittest.TestCase):
         control_arr = numpy.zeros((50, 50, 2))
         test_arr = numpy.zeros_like(control_arr)
         set_index_fn_1(-1., 1., -1., control_arr)
-        compiled_fn = numba_compile(
+        compiled_fn = jit(
             arg_types = ['d', 'd', 'd', ['d']])(set_index_fn_1)
         compiled_fn(-1., 1., -1., test_arr)
         self.assertTrue((numpy.abs(control_arr - test_arr) < 1e9).all())

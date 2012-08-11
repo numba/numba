@@ -1,5 +1,5 @@
 from numba import d
-from numba.decorators import numba_compile as jit
+from numba.decorators import jit as jit
 
 def sum(arr):
     M, N = arr.shape

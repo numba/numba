@@ -9,7 +9,7 @@ Test the filter2d() example from the PyCon'12 slide deck.
 import numpy
 
 from numba import *
-from numba.decorators import numba_compile
+from numba.decorators import jit
 
 import sys
 import unittest
@@ -28,7 +28,7 @@ def sum2d(arr):
 
 class TestFilter2d(unittest.TestCase):
     def test_vectorized_sum2d(self):
-        usum2d = numba_compile(arg_types=[double[:,:]],
+        usum2d = jit(arg_types=[double[:,:]],
                                   ret_type=double)(sum2d)
         image = numpy.random.random(10, 10)
         plain_old_result = sum2d(image)

@@ -47,26 +47,8 @@ from translate import Translate
 
 __tr_map__ = {}
 
-def vectorize(func):
-    global __tr_map__
-    try:
-        if func not in __tr_map__:
-            t = Translate(func)
-            t.translate()
-            __tr_map__[func] = t
-        else:
-            t = __tr_map__[func]
-        return t.make_ufunc()
-    except Exception as msg:
-        print "Warning: Could not create fast version...", msg
-        import traceback
-        traceback.print_exc()
-	import numpy
-	return numpy.vectorize(func)
-
-# XXX Proposed name; compile() would mask builtin of same name.
-def numba_compile(*args, **kws):
-    def _numba_compile(func):
+def jit(*args, **kws):
+    def _jit(func):
         global __tr_map__
         llvm = kws.pop('llvm', True)
         if func in __tr_map__:
@@ -76,19 +58,5 @@ def numba_compile(*args, **kws):
         t.translate()
         __tr_map__[func] = t
         return t.get_ctypes_func(llvm)
-    return _numba_compile
+    return _jit
 
-from kerneltranslate import Translate as KernelTranslate
-
-def numba_kompile(*args, **kws):
-    def _numba_kompile(func):
-        global __tr_map__
-        llvm = kws.pop('llvm', True)
-        if func not in __tr_map__:
-            t = KernelTranslate(func)
-            t.translate()
-            __tr_map__[func] = t
-        else:
-            t = __tr_map__[func]
-        return t.get_ctypes_func(llvm)
-    return _numba_kompile

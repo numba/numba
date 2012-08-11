@@ -2,7 +2,7 @@
 # ______________________________________________________________________
 
 from numba.translate import _plat_bits
-from numba.decorators import numba_compile
+from numba.decorators import jit
 
 import numpy
 
@@ -32,33 +32,33 @@ def get_ndarray_2_shape_unpack_1(ndarr):
 class TestGetattr(unittest.TestCase):
     def test_getattr_ndim_1(self):
         test_data1 = numpy.array([1., 2., 3.])
-        compiled_fn1 = numba_compile(ret_type = 'i',
+        compiled_fn1 = jit(ret_type = 'i',
                                     arg_types = [['d']])(get_ndarray_ndim)
         self.assertEqual(compiled_fn1(test_data1), 1)
 
     def test_getattr_ndim_2(self):
         test_data2 = numpy.array([[1., 2., 3.], [4., 5., 6.]])
-        compiled_fn2 = numba_compile(ret_type = 'i',
+        compiled_fn2 = jit(ret_type = 'i',
                                      arg_types = [[['d']]])(get_ndarray_ndim)
         self.assertEqual(compiled_fn2(test_data2), 2)
 
     def test_getattr_shape_1(self):
         test_data = numpy.array([1., 2., 3.])
-        compiled_fn = numba_compile(ret_type = 'i%d*' % (_plat_bits // 8),
+        compiled_fn = jit(ret_type = 'i%d*' % (_plat_bits // 8),
                                     arg_types = [['d']])(get_ndarray_shape)
         result = compiled_fn(test_data)
         self.assertEqual(result[0], 3)
 
     def test_getattr_shape_2(self):
         test_data2 = numpy.array([[1., 2., 3.], [4., 5., 6.]])
-        compiled_fn2 = numba_compile(ret_type = 'i%d*' % (_plat_bits // 8),
+        compiled_fn2 = jit(ret_type = 'i%d*' % (_plat_bits // 8),
                                      arg_types = [[['d']]])(get_ndarray_shape)
         result = compiled_fn2(test_data2)
         self.assertEqual(result[0], 2)
         self.assertEqual(result[1], 3)
 
     def test_getattr_shape_2_unpack(self):
-        compiler_fn = numba_compile(ret_type = 'i%d' % (_plat_bits // 8),
+        compiler_fn = jit(ret_type = 'i%d' % (_plat_bits // 8),
                                     arg_types = [[['d']]])
         dim0_fn, dim1_fn = (compiler_fn(fn) 
                             for fn in (get_ndarray_2_shape_unpack_0,
@@ -69,7 +69,7 @@ class TestGetattr(unittest.TestCase):
 
     def test_getattr_data_1(self):
         test_data = numpy.array([1., 2., 3.])
-        compiled_fn = numba_compile(ret_type = 'd*',
+        compiled_fn = jit(ret_type = 'd*',
                                     arg_types = [['d']])(get_ndarray_data)
         result = compiled_fn(test_data)
         self.assertEqual(result[0], 1.)
@@ -78,7 +78,7 @@ class TestGetattr(unittest.TestCase):
 
     def test_getattr_data_2(self):
         test_data = numpy.array([[1., 2., 3.], [4., 5., 6.]])
-        compiled_fn = numba_compile(ret_type = 'd*',
+        compiled_fn = jit(ret_type = 'd*',
                                     arg_types = [[['d']]])(get_ndarray_data)
         result = compiled_fn(test_data)
         self.assertEqual(result[0], 1.)

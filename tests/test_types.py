@@ -7,7 +7,7 @@ Test type mapping.
 
 import numba
 from numba import *
-from numba.decorators import numba_compile
+from numba.decorators import jit
 
 import unittest
 
@@ -31,13 +31,13 @@ def test_long(arg):
 
 class TestIf(unittest.TestCase):
     def test_int(self):
-        func = numba_compile(ret_type=numba.int_,
+        func = jit(ret_type=numba.int_,
                                  arg_types=[numba.int_])(test_int)
         self.assertEqual(func(-1), 42)
         self.assertEqual(func(1), 22)
 
     def test_long(self):
-        func = numba_compile(ret_type=numba.long_,
+        func = jit(ret_type=numba.long_,
                                  arg_types=[numba.long_])(test_long)
         self.assertEqual(func(-1), 42)
         self.assertEqual(func(1), 22)

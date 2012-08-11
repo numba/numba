@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
 
-from numba.decorators import numba_compile
+from numba.decorators import jit
 
 import numpy
 
@@ -76,9 +76,9 @@ def while_loop_fn_5(i_max, j_max):
 
 class TestWhile(unittest.TestCase):
     def _do_test(self, function, arg_types, *args, **kws):
-        _numba_compile = (numba_compile(arg_types = arg_types)
-                          if arg_types is not None else numba_compile())
-        compiled_fn = _numba_compile(function)
+        _jit = (jit(arg_types = arg_types)
+                   if arg_types is not None else jit())
+        compiled_fn = _jit(function)
         self.assertEqual(compiled_fn(*args, **kws), function(*args, **kws))
 
     def test_while_loop_fn_0(self):
@@ -92,20 +92,20 @@ class TestWhile(unittest.TestCase):
         self._do_test(while_loop_fn_2, [['d']], numpy.array([1., 2., 3.]))
 
     def test_while_loop_fn_3(self):
-        compiled_fn = numba_compile(arg_types = ['l'])(while_loop_fn_3)
+        compiled_fn = jit(arg_types = ['l'])(while_loop_fn_3)
         compiled_result = compiled_fn(3)
         self.assertEqual(compiled_result, while_loop_fn_3(3))
         self.assertEqual(compiled_result, 8.)
 
     def test_while_loop_fn_4(self):
-        compiled_fn = numba_compile(arg_types = ['l', 'l', 'l'],
+        compiled_fn = jit(arg_types = ['l', 'l', 'l'],
                                     ret_type = 'l')(while_loop_fn_4)
         compiled_result = compiled_fn(1, 4, 1)
         self.assertEqual(compiled_result, while_loop_fn_4(1, 4, 1))
         self.assertEqual(compiled_result, 6)
 
     def test_while_loop_fn_5(self):
-        compiled_fn = numba_compile(arg_types = ['d', 'd'])(while_loop_fn_5)
+        compiled_fn = jit(arg_types = ['d', 'd'])(while_loop_fn_5)
         compiled_result = compiled_fn(3, 4)
         self.assertEqual(compiled_result, while_loop_fn_5(3, 4))
         self.assertEqual(compiled_result, 18.)
