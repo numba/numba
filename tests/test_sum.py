@@ -28,8 +28,8 @@ def sum2d(arr):
 
 class TestFilter2d(unittest.TestCase):
     def test_vectorized_sum2d(self):
-        usum2d = numba_compile(arg_types=[d[:, :]],
-                                  ret_type=d)(sum2d)
+        usum2d = numba_compile(arg_types=[double[:,:]],
+                                  ret_type=double)(sum2d)
         image = numpy.random.random(10, 10)
         plain_old_result = sum2d(image)
         hot_new_result = usum2d(image)

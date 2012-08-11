@@ -362,6 +362,7 @@ def convert_to_ctypes(typ):
         #                            flags = 'C_CONTIGUOUS')
         # For now, we'll just allow any Python objects, and hope for the best.
         dtype, ndim = _getdim_and_type(typ)
+        print "*** ", dtype, ndim, typ
         return np.ctypeslib.ndpointer(dtype=dtype, ndim=ndim)
     n_pointer = 0
     if typ.endswith('*'):
@@ -932,9 +933,9 @@ class Translate(object):
         if self.optimize:
             fpm = lp.FunctionPassManager.new(self.mod)
             fpm.initialize()
-            fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
-            fpm.run(self.lfunc)
-            fpm.finalize()
+            #fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
+            #fpm.run(self.lfunc)
+            #fpm.finalize()
 
         if __debug__:
             print self.mod

@@ -274,11 +274,11 @@ class Translate(object):
             getattr(self, 'op_'+name)(i, op, arg)
     
         # Perform code optimization
-        fpm = lp.FunctionPassManager.new(self.mod)
-        fpm.initialize()
-        fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
-        fpm.run(self.lfunc)
-        fpm.finalize()
+        #fpm = lp.FunctionPassManager.new(self.mod)
+        #fpm.initialize()
+        #fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
+        #fpm.run(self.lfunc)
+        #fpm.finalize()
 
     def make_ufunc(self, name=None):
         import llvm._core as core

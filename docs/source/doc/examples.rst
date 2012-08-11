@@ -1,12 +1,9 @@
 ********************************
-Examples and LLVM Tutorials 
+Examples 
 ********************************
 
 .. toctree::
    :maxdepth: 1
 
    firstexample.rst
-   examples/index.rst
-   kaleidoscope/index.rst
-
 
