@@ -6,7 +6,7 @@ import numpy as np
 from numpy import ctypeslib
 # from numpy.ctypeslib import _typecodes
 
-from numba import llvm_types, _ext
+from numba import llvm_types
 from numba.minivect.minitypes import *
 from numba.minivect import miniast, minitypes
 
