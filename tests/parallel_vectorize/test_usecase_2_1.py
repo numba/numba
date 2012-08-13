@@ -1,4 +1,4 @@
-from parallel_vectorize import *
+from numbapro.parallel_vectorize import *
 from llvm_cbuilder import shortnames as C
 from llvm.core import *
 import numpy as np

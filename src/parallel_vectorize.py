@@ -429,6 +429,7 @@ def parallel_vectorize_from_func(lfunc, engine=None):
         return spuf
     else:
         import numpy as np
+        from numbapro._internal import fromfunc
 
         fptr = engine.get_pointer_to_function(spuf)
         inct = len(fntype.args)
@@ -447,7 +448,7 @@ def parallel_vectorize_from_func(lfunc, engine=None):
             ptr_t = long
         except:
             ptr_t = int
-            assert False, "Having check this yet"
+            assert False, "Have not check this yet" # Py3.0?
 
         get_typenum = lambda T:np.dtype(typemap[str(T)]).num
         assert fntype.return_type != C.void
@@ -457,5 +458,5 @@ def parallel_vectorize_from_func(lfunc, engine=None):
         # For instance, -1 for typenum will cause segfault.
         # If elements of type-list (2nd arg) is tuple instead,
         # there will also memory corruption. (Seems like code rewrite.)
-        return np.fromfunc([ptr_t(fptr)], [tys], inct, outct, [None])
+        return fromfunc([ptr_t(fptr)], [tys], inct, outct, [None])
 

@@ -2,7 +2,4 @@
 *.pyc
 *.so
 *.o
-llvm_cbuilder/tests/llvm_cbuilder
-parallel-vector-prototype/build
-/llvm_cbuilder/notebook/llvm_cbuilder
-/llvm_cbuilder/notebook/parallel_vectorize.py
+build

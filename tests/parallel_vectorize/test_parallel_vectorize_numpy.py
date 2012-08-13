@@ -4,7 +4,7 @@ Uses the work load from test_parallel_vectorize.
 '''
 
 from test_parallel_vectorize import *
-
+from numbapro._internal import fromfunc
 import numpy as np
 
 def main():
@@ -40,7 +40,8 @@ def main():
     # If elements of type-list (2nd arg) is tuple instead,
     # there will also memory corruption. (Seems like code rewrite.)
     typenum = np.dtype(np.double).num
-    ufunc = np.fromfunc([ptr_t(funcptr)], [[typenum, typenum]], 1, 1, [None])
+
+    ufunc = fromfunc([ptr_t(funcptr)], [[typenum, typenum]], 1, 1, [None])
 
     x = np.linspace(0., 10., 1000)
     x.dtype=np.double

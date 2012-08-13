@@ -1,5 +1,4 @@
-from parallel_vectorize import *
-
+from numbapro.parallel_vectorize import *
 
 class Work_D_D(CDefinition):
     _name_ = 'work_d_d'
