@@ -416,10 +416,14 @@ def parallel_vectorize_from_func(lfunc, engine=None):
     from python. (This needs Jay's numpy.fromfunc).
     Otherwise, return the specialized ufunc as a llvm.core.Function
     '''
+    import multiprocessing
+    NUM_CPU = multiprocessing.cpu_count()
+
     fntype = lfunc.type.pointee
-    def_spuf = SpecializedParallelUFunc(ParallelUFuncPlatform(num_thread=2),
-                                        UFuncCoreGeneric(fntype),
-                                        CFuncRef(lfunc))
+    def_spuf = SpecializedParallelUFunc(
+                                ParallelUFuncPlatform(num_thread=NUM_CPU),
+                                UFuncCoreGeneric(fntype),
+                                CFuncRef(lfunc))
     spuf = def_spuf(lfunc.module)
     if engine is None:
         return spuf
@@ -432,10 +436,10 @@ def parallel_vectorize_from_func(lfunc, engine=None):
 
         # TODO refactor
         typemap = {
-            'i8'     : np.uint8,
-            'i16'    : np.uint16,
-            'i32'    : np.uint32,
-            'i64'    : np.uint64,
+            'i8'     : np.int8,
+            'i16'    : np.int16,
+            'i32'    : np.int32,
+            'i64'    : np.int64,
             'float'  : np.float32,
             'double' : np.float64,
         }
