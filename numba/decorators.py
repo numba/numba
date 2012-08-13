@@ -34,7 +34,28 @@ class CallSite(object):
                 self._isfunc = True
                 return self
 
-# A simple fast-vectorize example
+# A simple fast-vectorize example was removed because it only supports one
+#  use-case --- slower NumPy vectorize is included here instead.
+#  The required code is still in _ext.c which is not compiled by default
+#   and here is the decorator:
+#def vectorize(func):
+#    global __tr_map__
+#    try:
+#        if func not in __tr_map__:
+#            t = Translate(func)
+#            t.translate()
+#            __tr_map__[func] = t
+#        else:
+#            t = __tr_map__[func]
+#        return t.make_ufunc()
+#    except Exception as msg:
+#        print "Warning: Could not create fast version...", msg
+#        import traceback
+#        traceback.print_exc()
+#        import numpy
+#        return numpy.vectorize(func)
+
+from numpy import vectorize
 
 from translate import Translate
 

@@ -49,8 +49,8 @@ setup(
     ],
     description = "compiling Python code for NumPy",
     packages = find_packages(),
-    ext_modules = [Extension(name = "numba._ext",
-                             sources = ["numba/_ext.c"],
-                             include_dirs=[numpy.get_include()])],
+    #ext_modules = [Extension(name = "numba._ext",
+    #                         sources = ["numba/_ext.c"],
+    #                         include_dirs=[numpy.get_include()])],
     version = '0.1'
 )

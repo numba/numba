@@ -11,7 +11,7 @@ import llvm.passes as lp
 import llvm.ee as le
 
 from utils import itercode, debugout, Complex64, Complex128
-from ._ext import make_ufunc
+#from ._ext import make_ufunc
 from .cfg import ControlFlowGraph
 from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
     _void_star, _float, _double, _complex64, _complex128, _pyobject_head, \
@@ -1152,12 +1152,13 @@ class Translate(object):
             return prototype(self.func)
 
     def make_ufunc(self, name=None):
-        if self.ee is None:
-            self.ee = le.ExecutionEngine.new(self.mod)
-        if name is None:
-            name = self.func.func_name
-        return make_ufunc(self.ee.get_pointer_to_function(self.lfunc), 
-                               0, name)
+        return NotImplemented
+        #if self.ee is None:
+        #    self.ee = le.ExecutionEngine.new(self.mod)
+        #if name is None:
+        #    name = self.func.func_name
+        #return make_ufunc(self.ee.get_pointer_to_function(self.lfunc), 
+        #                       0, name)
 
     # This won't convert any llvm types.  It assumes 
     #  the llvm types in args are either fixed or not-yet specified.
