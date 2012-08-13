@@ -1501,6 +1501,13 @@ class Translate(object):
                 "Numba can not currently handle iteration over anything other "
                 "than range, xrange, or arange (got %r)." % (iterable,))
 
+    def op_DUP_TOPX(self, i, op, arg):
+        self.stack.extend(self.stack[-arg:])
+
+    def op_ROT_THREE(self, i, op, arg):
+        A, B, C = self.stack[-3:]
+        self.stack.extend([C, A, B])
+
     def op_FOR_ITER(self, i, op, arg):
         iterable = self.stack[-1].val
         # Note that we don't actually generate any code here when
