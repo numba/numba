@@ -3,15 +3,14 @@ This file demonstrates a filterbank correlation loop.
 """
 import numpy as np
 
-from numba.decorators import numba_compile
+from numba.decorators import jit
 nd4type = [[[['d']]]]
 
-@numba_compile(ret_type=nd4type, arg_types=(nd4type, nd4type, nd4type))
+@jit(ret_type=nd4type, arg_types=(nd4type, nd4type, nd4type))
 def fbcorr(imgs, filters, output):
     n_imgs, n_rows, n_cols, n_channels = imgs.shape
     n_filters, height, width, n_ch2 = filters.shape
 
-    #output = np.zeros((n_imgs, n_rows - height + 1, n_cols - width + 1, n_filters))
     for ii in range(n_imgs):
         for rr in range(n_rows - height + 1):
             for cc in range(n_cols - width + 1):
@@ -25,11 +24,15 @@ def fbcorr(imgs, filters, output):
 
     return output
 
-imgs = np.random.randn(10, 64, 64, 3)
-filt = np.random.randn(6, 5, 5, 3)
-output = np.zeros((10, 60, 60, 6))
+def main ():
+    imgs = np.random.randn(10, 64, 64, 3)
+    filt = np.random.randn(6, 5, 5, 3)
+    output = np.zeros((10, 60, 60, 6))
 
-import time
-t0 = time.time()
-fbcorr(imgs, filt, output)
-print time.time() - t0
+    import time
+    t0 = time.time()
+    fbcorr(imgs, filt, output)
+    print time.time() - t0
+
+if __name__ == "__main__":
+    main()
