@@ -88,18 +88,23 @@ NPY_NO_EXPORT PyTypeObject PyDynUFunc_Type = {
 #endif
 };
 
-PyObject *
+static PyObject *
 PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
                            char *types, int ntypes,
                            int nin, int nout, int identity,
-                           char *name, char *doc, int check_return)
+                           char *name, char *doc, PyObject *object)
 {
     PyObject *ufunc;
     ufunc = PyUFunc_FromFuncAndData(func, data, types, ntypes, nin, nout,
-                                    identity, name, doc, check_return);
+                                    identity, name, doc, 0);
     
     /* Kind of a gross-hack  */
     Py_TYPE(ufunc) = &PyDynUFunc_Type;
+    
+    /* Hold on to whatever object is passed in */
+    Py_XINCREF(object);
+    ((PyUFuncObject *)ufunc)->obj = object;
+
     return ufunc;
 }
 
@@ -212,18 +217,14 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
             }
         }
         PyArray_free(types);
-        ufunc = PyDynUFunc_FromFuncAndData((PyUFuncGenericFunction*)funcs,data,(char*)char_types,nfuncs,nin,nout,PyUFunc_None,"test",(char*)"test",0);
-        Py_XINCREF(object);
-        ((PyUFuncObject *)ufunc)->obj = object;
+        ufunc = PyDynUFunc_FromFuncAndData((PyUFuncGenericFunction*)funcs,data,(char*)char_types,nfuncs,nin,nout,PyUFunc_None,"test",(char*)"test",object);
     }
     else {
-        ufunc = PyDynUFunc_FromFuncAndData(0,0,0,0,nin,nout,PyUFunc_None,"test",(char*)"test",0);
+        ufunc = PyDynUFunc_FromFuncAndData(0,0,0,0,nin,nout,PyUFunc_None,"test",(char*)"test",object);
         PyUFunc_RegisterLoopForType((PyUFuncObject*)ufunc,custom_dtype,funcs[0],types,0);
         PyArray_free(funcs);
         PyArray_free(types);
         PyArray_free(data);
-        Py_XINCREF(object);
-        ((PyUFuncObject *)ufunc)->obj = object;
     }
 
     return ufunc;
