@@ -22,7 +22,7 @@ dyn_dealloc(PyUFuncObject *self)
         PyArray_free(self->types);
     if (self->data)
         PyArray_free(self->data);
-    Py_TYPE(self)->tp_dealloc((PyObject *)self);    
+    Py_TYPE(self)->tp_base->tp_dealloc((PyObject *)self);    
 }
 
 
