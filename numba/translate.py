@@ -89,7 +89,8 @@ def pythontype_to_strtype(typ):
 def map_to_strtype(type):
     "Map a minitype or str type to a str type"
     if isinstance(type, minitypes.Type):
-        print 'CONVERTING', type
+        if __debug__:
+            print 'CONVERTING', type
         if type.is_float:
             if type.itemsize == 4:
                 return 'f'
@@ -116,8 +117,8 @@ def map_to_strtype(type):
             type = "%s *" % (map_to_strtype(type.base_type))
         else:
             raise NotImplementedError
-
-        print type
+        if __debug__:
+            print type
 
     return type
 
@@ -361,9 +362,7 @@ def convert_to_ctypes(typ):
         #                            ndim = dimcount,
         #                            flags = 'C_CONTIGUOUS')
         # For now, we'll just allow any Python objects, and hope for the best.
-        dtype, ndim = _getdim_and_type(typ)
-        print "*** ", dtype, ndim, typ
-        return np.ctypeslib.ndpointer(dtype=dtype, ndim=ndim)
+        return ctypes.py_object
     n_pointer = 0
     if typ.endswith('*'):
         n_pointer = typ.count('*')
@@ -1152,7 +1151,8 @@ class Translate(object):
             return prototype(self.func)
 
     def make_ufunc(self, name=None):
-        return NotImplemented
+        raise NotImplementedError('Extension module for make_ufunc() is '
+                                  'currently disabled.')
         #if self.ee is None:
         #    self.ee = le.ExecutionEngine.new(self.mod)
         #if name is None:

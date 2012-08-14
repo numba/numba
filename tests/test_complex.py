@@ -10,6 +10,7 @@ import unittest
 
 from numba.decorators import jit
 from numba.utils import debugout
+from numba.llvm_types import _plat_bits
 
 import numpy
 import itertools
@@ -57,6 +58,8 @@ class TestComplex (unittest.TestCase):
         self.assertEqual(compiled_get_imag_fn(num1), -2.)
         self.assertEqual(get_imag_fn(num1), compiled_get_imag_fn(num1))
 
+    @unittest.skipUnless(_plat_bits == 64, 'Complex return values not '
+                         'supported on 32-bit systems.')
     def test_get_conj_fn (self):
         num0 = 4 - 1.5j
         num1 = numpy.complex128(num0)
@@ -67,12 +70,16 @@ class TestComplex (unittest.TestCase):
         self.assertEqual(compiled_get_conj_fn(num1), 4 + 1.5j)
         self.assertEqual(get_conj_fn(num1), compiled_get_conj_fn(num1))
 
+    @unittest.skipUnless(_plat_bits == 64, 'Complex return values not '
+                         'supported on 32-bit systems.')
     def test_get_complex_constant_fn (self):
         compiled_get_complex_constant_fn = jit(
             arg_types = [], ret_type = 'D')(get_complex_constant_fn)
         self.assertEqual(get_complex_constant_fn(),
                          compiled_get_complex_constant_fn())
 
+    @unittest.skipUnless(_plat_bits == 64, 'Complex return values not '
+                         'supported on 32-bit systems.')
     def test_prod_sum_fn (self):
         compiled_prod_sum_fn = jit(arg_types = ['D', 'D', 'D'],
                                              ret_type = 'D')(prod_sum_fn)
