@@ -1,5 +1,5 @@
-Examples
-========
+First Example
+==============
 
 A Simple Function
 -----------------
