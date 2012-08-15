@@ -11,3 +11,18 @@ def sum(arr):
 
 csum = jit(ret_type=d, arg_types=[d[:,:]])(sum)
 
+from numpy import random
+arr = random.randn(100,100)
+
+import time
+start = time.time()
+res = sum(arr)
+duration = time.time() - start
+print "Result from python is %s in %s (msec)" % (res, duration*1000)
+
+start = time.time()
+res = csum(arr)
+duration2 = time.time() - start
+print "Result from compiled is %s in %s (msec)" % (res, duration2*1000)
+
+print "Speed up is %s" % (duration / duration2)

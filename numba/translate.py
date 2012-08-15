@@ -334,8 +334,12 @@ def _dtypeish_to_str(typ):
     if typ.endswith('*'):
         n_pointer = typ.count('*')
         typ = typ[:-n_pointer]
-    dt = np.dtype(typ)
-    return ("%s%s%s" % (dt.kind, 8*dt.itemsize, "*" * n_pointer))
+    try:
+        dt = np.dtype(typ)
+        return ("%s%s%s" % (dt.kind, 8*dt.itemsize, "*" * n_pointer))
+    except TypeError:  # already the right form
+        return ("%s%s" % (typ, '*' * n_pointer))
+    
 
 def convert_to_llvmtype(typ):
     n_pointer = 0
