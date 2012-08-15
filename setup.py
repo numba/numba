@@ -33,9 +33,9 @@ def find_packages(where='.', exclude=()):
 
 setup(
     name = "numba",
-    author = "Travis Oliphant",
-    author_email = "travis@continuum.io",
-    url = "https://github.com/ContinuumIO/numba",
+    author = "Continuum Analytics, Inc.",
+    author_email = "numba-users@continuum.io",
+    url = "https://numba.github.com",
     license = "BSD",
     classifiers = [
         "Development Status :: 2 - Pre-Alpha",
@@ -47,7 +47,7 @@ setup(
         "Programming Language :: Python :: 3.2",
         "Topic :: Utilities",
     ],
-    description = "compiling Python code for NumPy",
+    description = "compiling Python code using LLVM",
     packages = find_packages(),
     #ext_modules = [Extension(name = "numba._ext",
     #                         sources = ["numba/_ext.c"],
