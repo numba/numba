@@ -24,7 +24,18 @@ def filter2d(image, filt):
 
 image = lena()
 filter = ones((7,7), dtype='int32')
+
+import time
+start = time.time()
 result = filter2d(image, filter)
+duration = time.time() - start
+
+from scipy.ndimage import convolve
+start = time.time()
+result = convolve(image, filter)
+duration2 = time.time() - start
+
+print "Time for LLVM code = %f\nTime for convolve = %f" % (duration, duration2)
 
 from pylab import subplot, imshow, show, title, gray
 subplot(1,2,1)
