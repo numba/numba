@@ -1,7 +1,7 @@
 from numba import d
 from numba.decorators import jit as jit
 
-def sum(arr):
+def sum2d(arr):
     M, N = arr.shape
     result = 0.0
     for i in range(M):
@@ -9,19 +9,19 @@ def sum(arr):
             result += arr[i,j]
     return result
 
-csum = jit(ret_type=d, arg_types=[d[:,:]])(sum)
+csum2d = jit(ret_type=d, arg_types=[d[:,:]])(sum2d)
 
 from numpy import random
 arr = random.randn(100,100)
 
 import time
 start = time.time()
-res = sum(arr)
+res = sum2d(arr)
 duration = time.time() - start
 print "Result from python is %s in %s (msec)" % (res, duration*1000)
 
 start = time.time()
-res = csum(arr)
+res = csum2d(arr)
 duration2 = time.time() - start
 print "Result from compiled is %s in %s (msec)" % (res, duration2*1000)
 
