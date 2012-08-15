@@ -17,7 +17,7 @@ import unittest
 # ______________________________________________________________________
 
 def sum2d(arr):
-    M, N = image.shape
+    M, N = arr.shape
     result = 0.0
     for i in range(M):
         for j in range(N):
@@ -26,14 +26,14 @@ def sum2d(arr):
 
 # ______________________________________________________________________
 
-class TestFilter2d(unittest.TestCase):
+class TestSum2d(unittest.TestCase):
     def test_vectorized_sum2d(self):
         usum2d = jit(arg_types=[double[:,:]],
-                                  ret_type=double)(sum2d)
-        image = numpy.random.random(10, 10)
+                     ret_type=double)(sum2d)
+        image = numpy.random.rand(10, 10)
         plain_old_result = sum2d(image)
         hot_new_result = usum2d(image)
-        self.assertTrue((abs(plain_old_result - hot_new_result) < 1e-9).all())
+        self.assertTrue((abs(plain_old_result - hot_new_result) < 1e-9))
 
 # ______________________________________________________________________
 

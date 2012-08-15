@@ -19,12 +19,14 @@ from test_indexing import TestIndexing
 from test_mandelbrot import TestMandelbrot
 from test_multiarray_api import TestMultiarrayAPI
 from test_tuple import TestTuple
-from test_vectorize import TestVectorize
+#from test_vectorize import TestVectorize
 from test_while import TestWhile
+from test_sum import TestSum2d
 
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+    print type(__builtins__)
     unittest.main()
 
 # ______________________________________________________________________

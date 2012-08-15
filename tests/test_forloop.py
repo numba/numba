@@ -11,6 +11,7 @@ from numba.decorators import jit
 import numpy
 
 import unittest
+import __builtin__
 
 # ______________________________________________________________________
 
@@ -51,7 +52,8 @@ def for_loop_fn_3 (stop):
 # ______________________________________________________________________
 
 class TestForLoop(unittest.TestCase):
-    @unittest.skipUnless(__debug__, "Requires implementation of iteration "
+    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'), 
+                         "Requires implementation of iteration " 
                          "over arrays.")
     def test_compiled_for_loop_fn_0(self):
         test_data = numpy.array([1, 2, 3], dtype = 'l')
