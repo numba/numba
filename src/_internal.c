@@ -12,6 +12,14 @@
 #define IS_PY3K
 #endif
 
+#define APPEND_(X, Y) X #Y
+#define APPEND(X, Y) APPEND_(X, Y)
+#define SENTRY_VALID_LONG(X) if( (X) == -1 ){                        \
+    PyErr_SetString(PyExc_RuntimeError,                              \
+                    APPEND("PyLong_AsLong overflow at ", __LINE__)); \
+    return NULL;                                                     \
+}
+
 /* Deallocate the PyArray_malloc calls */
 static void
 dyn_dealloc(PyUFuncObject *self)
@@ -111,7 +119,7 @@ PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
 static PyObject *
 ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
 
-    unsigned long func_address;
+    // unsigned long func_address; // unused
     int nin, nout;
     int nfuncs, ntypes, ndata;
     PyObject *func_list;
@@ -153,7 +161,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         /* Function pointers are passed in as long objects.
            Is there a better way to do this? */
         if (PyLong_Check(func_obj)) {
-            funcs[i] = (PyUFuncGenericFunction)PyLong_AsLong(func_obj);
+            funcs[i] = (PyUFuncGenericFunction)PyLong_AsUnsignedLong(func_obj);
         }
         else {
             PyErr_SetString(PyExc_TypeError, "function pointer must be long object, or None");
@@ -171,8 +179,14 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         type_obj = PyList_GetItem(type_list, i);
         
         for (j = 0; j < (nin+nout); j++) {
-            types[i*(nin+nout) + j] = PyLong_AsLong(PyList_GetItem(type_obj, j));
+            SENTRY_VALID_LONG(
+                types[i*(nin+nout) + j] = PyLong_AsLong(PyList_GetItem(type_obj, j))
+            );
+            
             int dtype_num = PyLong_AsLong(PyList_GetItem(type_obj, j));
+
+            SENTRY_VALID_LONG(dtype_num);
+            
             if (dtype_num >= NPY_USERDEF) {
                 custom_dtype = dtype_num;
             }
@@ -189,7 +203,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         if (PyList_Check(data_list)) {
             data_obj = PyList_GetItem(data_list, i);
             if (PyLong_Check(data_obj)) {
-                data[i] = (void*)PyLong_AsLong(data_obj);
+                data[i] = (void*)PyLong_AsUnsignedLong(data_obj);
             }
             else if (data_obj == Py_None) {
                 data[i] = NULL;
@@ -265,7 +279,7 @@ PyMODINIT_FUNC
 init_internal(void)
 #endif
 {
-    PyObject *m, *d;
+    PyObject *m;    //, *d; // unused
 
     import_array();
     import_umath();
