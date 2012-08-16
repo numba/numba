@@ -8,17 +8,17 @@ int main(void) {
     const int threadsPerBlock = 32;
     const int blocksPerGrid = 10;
     const unsigned N = blocksPerGrid * threadsPerBlock;
-	const unsigned size = sizeof(int)*N;
-	
-	int A[N];
-	int B[N];
-	int S[N];
-	
-	for (int i=0; i<N; ++i){
-		A[i] = rand();
+    const unsigned size = sizeof(int)*N;
+
+    int A[N];
+    int B[N];
+    int S[N];
+
+    for (int i=0; i<N; ++i){
+        A[i] = rand();
         B[i] = rand();
-	}
-	
+    }
+
     // Initialize
     cuInit(0);
     // Get number of devices supporting CUDA
@@ -69,10 +69,10 @@ int main(void) {
 
     // Retrieve result
     cuMemcpyDtoH(S, d_S, size);
-    
+
     cuMemFree(d_S);
-	cuMemFree(d_A);
-	cuMemFree(d_B);
+    cuMemFree(d_A);
+    cuMemFree(d_B);
     cuCtxDestroy(cuContext);
 
     // Check
