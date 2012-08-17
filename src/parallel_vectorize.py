@@ -518,8 +518,8 @@ class ParallelVectorize(object):
 class _CudaStagingCaller(CDefinition):
     def body(self, *args, **kwargs):
         worker = self.depends(self.WorkerDef)
-        inputs = args[:-1]
-        output = args[-1]
+        inputs = args[:-2]
+        output, ct = args[-2:]
 
         # get current thread index
         tid_x = self.get_intrinsic(INTR_PTX_READ_TID_X, [])
@@ -531,6 +531,9 @@ class _CudaStagingCaller(CDefinition):
         blkid = self.var_copy(ctaid_x())
 
         i = tid + blkdim * blkid
+        with self.ifelse( i >= ct ) as ifelse: # stop condition
+            with ifelse.then():
+                self.ret()
 
         res = worker(*map(lambda x: x[i], inputs))
         res.value.calling_convention = CC_PTX_DEVICE
@@ -545,14 +548,19 @@ class _CudaStagingCaller(CDefinition):
         args = cls._argtys_ = []
         inargs = cls.InArgs = []
 
+        # input arguments
         for i, ty in enumerate(fntype.args):
             cur = ('in%d' % i, cls._pointer(ty))
             args.append(cur)
             inargs.append(cur)
 
+        # output arguments
         cur = ('out', cls._pointer(fntype.return_type))
         args.append(cur)
         cls.OutArg = cur
+
+        # extra arguments
+        args.append(('ct', C.int))
 
         cls.WorkerDef = worker
 
@@ -576,6 +584,7 @@ class CudaVectorize(ParallelVectorize):
         # PyCuda should be optional
         from pycuda import driver as cudriver
         from pycuda.autoinit import device, context # use default
+        from math import ceil
 
         lfunclist = self._get_lfunc_list()
 
@@ -608,7 +617,10 @@ class CudaVectorize(ParallelVectorize):
         pm.run(self.module)
 
         # generate ptx asm
-        ptxtm = TargetMachine.lookup('ptx32', opt=3) # TODO: ptx64 option
+        cc = 'compute_%d%d' % device.compute_capability() # select device cc
+        arch = 'ptx%d' % C.intp.width # select by host pointer size
+        assert C.intp.width in [32, 64]
+        ptxtm = TargetMachine.lookup(arch, cpu=cc, opt=3) # TODO: ptx64 option
         ptxasm = ptxtm.emit_assembly(self.module)
         print(ptxasm)
 
@@ -619,12 +631,14 @@ class CudaVectorize(ParallelVectorize):
         MAX_THREAD = devattr[cudriver.device_attribute.MAX_THREADS_PER_BLOCK]
         MAX_BLOCK = devattr[cudriver.device_attribute.MAX_BLOCK_DIM_X]
 
+
         # get function
         kernel_list = [(ptxmodule.get_function(name), retty, argty)
                          for name, retty, argty in functype_list]
 
         def _ufunc_hack(*args):
             # determine type & kernel
+            # FIXME: this is just a hack currently
             tys = tuple(map(lambda x: x.dtype, args))
             for kernel, retty, argtys in kernel_list:
                 if argtys == tys:
@@ -639,14 +653,15 @@ class CudaVectorize(ParallelVectorize):
             # device compute
             if N > MAX_THREAD:
                 threadct =  MAX_THREAD, 1, 1
-                blockct = (N / MAX_THREAD), 1
+                blockct = int(ceil(float(N) / MAX_THREAD)), 1
             else:
                 threadct =  N, 1, 1
                 blockct  =  1, 1
 
-            kernalargs = list(map(cudriver.In, bcargs)) + [cudriver.Out(retary)]
+            kernelargs = list(map(cudriver.In, bcargs))
+            kernelargs += [cudriver.Out(retary), np.int32(N)]
 
-            time = kernel(*kernalargs,
+            time = kernel(*kernelargs,
                           block=threadct, grid=blockct,
                           time_kernel=True)
             print 'kernel time = %s' % time

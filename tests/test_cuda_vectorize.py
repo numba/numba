@@ -20,7 +20,7 @@ def main():
     # test it out
     def test(ty):
         print("Test %s" % ty)
-        data = np.linspace(0., 10000., 512*512).astype(ty)
+        data = np.linspace(0., 10000., 500*501).astype(ty)
 
         ts = time()
         result = para_ufunc(data, data)
