@@ -7,7 +7,7 @@ from numba.translate import *
 import __builtin__
 from numba.translate import Translate as _OldTranslate
 class Translate(_OldTranslate):
-    def __init__(self, func, ret_type='d', arg_types=['d'], **kws):
+    def __init__(self, func, ret_type='d', arg_types=['d'], module=None, **kws):
         self.func = func
         self.fco = func.func_code
         self.names = self.fco.co_names
@@ -44,7 +44,9 @@ class Translate(_OldTranslate):
         # global _ObjectCache
         # setattr(_ObjectCache, '_ObjectCache__instances', WeakValueDictionary())
 
-        if not hasattr(type(self), 'mod'):
+        if module is not None:
+            self.mod = module
+        elif not hasattr(type(self), 'mod'):
             type(self).mod = lc.Module.new('default')
 
         ######## END CHANGE
