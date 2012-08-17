@@ -2,11 +2,11 @@
 This file demonstrates a filterbank correlation loop.
 """
 import numpy as np
-
+import numba
 from numba.decorators import jit
-nd4type = [[[['d']]]]
+nd4type = numba.double[:,:,:,:]
 
-@jit(ret_type=nd4type, arg_types=(nd4type, nd4type, nd4type))
+@jit(arg_types=(nd4type, nd4type, nd4type))
 def fbcorr(imgs, filters, output):
     n_imgs, n_rows, n_cols, n_channels = imgs.shape
     n_filters, height, width, n_ch2 = filters.shape
@@ -21,8 +21,6 @@ def fbcorr(imgs, filters, output):
                                 imgval = imgs[ii, rr + hh, cc + ww, jj]
                                 filterval = filters[ff, hh, ww, jj]
                                 output[ii, ff, rr, cc] += imgval * filterval
-
-    return output
 
 def main ():
     imgs = np.random.randn(10, 64, 64, 3)
