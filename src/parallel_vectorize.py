@@ -586,7 +586,7 @@ class CudaVectorize(ParallelVectorize):
         pmbldr.populate(fpm)
 
 
-        typemap = {}
+        functype_list = []
         for lfunc in lfunclist: # generate caller for all function
             lfty = lfunc.type.pointee
             nptys = tuple(map(np.dtype, map(_llvm_ty_to_numpy, lfty.args)))
@@ -594,7 +594,13 @@ class CudaVectorize(ParallelVectorize):
             lcaller = self._build_caller(lfunc)
             fpm.run(lcaller)    # run the optimizer
 
-            typemap[nptys] = lcaller.name, _llvm_ty_to_numpy(lfty.return_type)
+            # unicode problem?
+            fname = lcaller.name
+            if type(fname) is unicode:
+                fname = fname.encode('utf-8')
+            functype_list.append([fname,
+                                 _llvm_ty_to_numpy(lfty.return_type),
+                                 nptys])
 
         # force inlining & trim internal function
         pm = PassManager.new()
@@ -613,30 +619,22 @@ class CudaVectorize(ParallelVectorize):
         MAX_THREAD = devattr[cudriver.device_attribute.MAX_THREADS_PER_BLOCK]
         MAX_BLOCK = devattr[cudriver.device_attribute.MAX_BLOCK_DIM_X]
 
-        def _ufunc_hack(*args):
-            # determine type
-            tys = tuple(map(lambda x: x.dtype, args))
-            fname, retty = typemap[tys]
-            # get function
-            # unicode problem?
-            if type(fname) is unicode:
-                fname = fname.encode('utf-8')
-            kernel = ptxmodule.get_function(fname)
-            # prepare broadcasted arrays
-            broadcast = np.broadcast(*args)
-            N = broadcast.shape[0]
-            bcargs = []
-            for i in range(len(args)):
-                bcargs.append(np.empty(N, dtype=tys[i]))
+        # get function
+        kernel_list = [(ptxmodule.get_function(name), retty, argty)
+                         for name, retty, argty in functype_list]
 
-            for i, packed in enumerate(broadcast):
-                for j, v in enumerate(packed):
-                    bcargs[j][i] = v
-            del args
-            # prepare device memory
-            devargs = list(map(lambda x: cudriver.to_device(x), bcargs))
+        def _ufunc_hack(*args):
+            # determine type & kernel
+            tys = tuple(map(lambda x: x.dtype, args))
+            for kernel, retty, argtys in kernel_list:
+                if argtys == tys:
+                    break
+
+            # prepare broadcasted arrays
+            bcargs = np.broadcast_arrays(*args)
+            N = bcargs[0].shape[0]
+
             retary = np.empty(N, dtype=retty)
-            devret = cudriver.to_device(retary)
 
             # device compute
             if N > MAX_THREAD:
@@ -646,14 +644,14 @@ class CudaVectorize(ParallelVectorize):
                 threadct =  N, 1, 1
                 blockct  =  1, 1
 
-            time = kernel(*(devargs+[devret]),
+            kernalargs = list(map(cudriver.In, bcargs)) + [cudriver.Out(retary)]
+
+            time = kernel(*kernalargs,
                           block=threadct, grid=blockct,
                           time_kernel=True)
             print 'kernel time = %s' % time
-            # retrieve device memory
-            res = cudriver.from_device_like(devret, retary)
 
-            return res
+            return retary
 
         return _ufunc_hack
 
