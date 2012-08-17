@@ -16,6 +16,8 @@ from llvm.passes import *
 from llvm_cbuilder import *
 import llvm_cbuilder.shortnames as C
 
+import numpy as np
+
 import sys
 
 class WorkQueue(CStruct):
@@ -407,36 +409,7 @@ if sys.platform not in ['win32']:
 else:
     raise NotImplementedError("Threading for %s" % sys.platform)
 
-
-
-def parallel_vectorize_from_func(lfunc, engine=None):
-    '''create ufunc from a llvm.core.Function
-
-    If engine is given, return a function object which can be called
-    from python. (This needs Jay's numpy.fromfunc).
-    Otherwise, return the specialized ufunc as a llvm.core.Function
-    '''
-    import multiprocessing
-    NUM_CPU = multiprocessing.cpu_count()
-
-    fntype = lfunc.type.pointee
-    def_spuf = SpecializedParallelUFunc(
-                                ParallelUFuncPlatform(num_thread=NUM_CPU),
-                                UFuncCoreGeneric(fntype),
-                                CFuncRef(lfunc))
-    spuf = def_spuf(lfunc.module)
-    if engine is None:
-        return spuf
-    else:
-        import numpy as np
-        from numbapro._internal import fromfunc
-
-        fptr = engine.get_pointer_to_function(spuf)
-        inct = len(fntype.args)
-        outct = 1
-
-        # TODO refactor
-        typemap = {
+_llvm_ty_str_to_numpy = {
             'i8'     : np.int8,
             'i16'    : np.int16,
             'i32'    : np.int32,
@@ -444,19 +417,77 @@ def parallel_vectorize_from_func(lfunc, engine=None):
             'float'  : np.float32,
             'double' : np.float64,
         }
-        try:
-            ptr_t = long
-        except:
-            ptr_t = int
-            assert False, "Have not check this yet" # Py3.0?
+def _llvm_ty_to_numpy(ty):
+    return _llvm_ty_str_to_numpy[str(ty)]
 
-        get_typenum = lambda T:np.dtype(typemap[str(T)]).num
+def parallel_vectorize_from_func(lfunclist, engine=None):
+    '''create ufunc from a llvm.core.Function
+
+    lfunclist : a single or iterable of llvm.core.Function instance
+    engine : [optional] a llvm.ee.ExecutionEngine instance
+
+    If engine is given, return a function object which can be called
+    from python.
+    Otherwise, return the specialized ufunc(s) as a llvm.core.Function(s).
+    '''
+    import multiprocessing
+    NUM_CPU = multiprocessing.cpu_count()
+
+    try:
+        iter(lfunclist)
+    except TypeError:
+        lfunclist = [lfunclist]
+
+    spuflist = []
+    for lfunc in lfunclist:
+        def_spuf = SpecializedParallelUFunc(
+                                    ParallelUFuncPlatform(num_thread=NUM_CPU),
+                                    UFuncCoreGeneric(lfunc.type.pointee),
+                                    CFuncRef(lfunc))
+        spuf = def_spuf(lfunc.module)
+        spuflist.append(spuf)
+
+    if engine is None:
+        # No engine given, just return the llvm definitions
+        if len(spuflist)==1:
+            return spuflist[0]
+        else:
+            return spuflist
+
+    # We have an engine, build ufunc
+    from numbapro._internal import fromfunc
+
+    try:
+        ptr_t = long
+    except:
+        ptr_t = int
+        assert False, "Have not check this yet" # Py3.0?
+
+    ptrlist = []
+    tyslist = []
+    datlist = []
+    for i, spuf in enumerate(spuflist):
+        fntype = lfunclist[i].type.pointee
+        fptr = engine.get_pointer_to_function(spuf)
+        argct = len(fntype.args)
+        if i == 0: # for the first
+            inct = argct
+            outct = 1
+        elif argct != inct:
+            raise TypeError("All functions must have equal number of arguments")
+
+        get_typenum = lambda T:np.dtype(_llvm_ty_to_numpy(T)).num
         assert fntype.return_type != C.void
         tys = list(map(get_typenum, list(fntype.args) + [fntype.return_type]))
-        # Becareful that fromfunc does not provide full error checking yet.
-        # If typenum is out-of-bound, we have nasty memory corruptions.
-        # For instance, -1 for typenum will cause segfault.
-        # If elements of type-list (2nd arg) is tuple instead,
-        # there will also memory corruption. (Seems like code rewrite.)
-        return fromfunc([ptr_t(fptr)], [tys], inct, outct, [None])
 
+        ptrlist.append(ptr_t(fptr))
+        tyslist.append(tys)
+        datlist.append(None)
+
+    # Becareful that fromfunc does not provide full error checking yet.
+    # If typenum is out-of-bound, we have nasty memory corruptions.
+    # For instance, -1 for typenum will cause segfault.
+    # If elements of type-list (2nd arg) is tuple instead,
+    # there will also memory corruption. (Seems like code rewrite.)
+    ufunc = fromfunc(ptrlist, tyslist, inct, outct, datlist)
+    return ufunc
