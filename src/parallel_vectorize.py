@@ -491,3 +491,23 @@ def parallel_vectorize_from_func(lfunclist, engine=None):
     # there will also memory corruption. (Seems like code rewrite.)
     ufunc = fromfunc(ptrlist, tyslist, inct, outct, datlist)
     return ufunc
+
+from numbapro.translate import Translate
+
+class ParallelVectorize(object):
+    def __init__(self, func):
+        self.pyfunc = func
+        self.translates = []
+
+    def add(self, *args, **kwargs):
+        t = Translate(self.pyfunc, *args, **kwargs)
+        t.translate()
+        self.translates.append(t)
+
+    def build_ufunc(self):
+        assert self.translates, "No translation"
+        lfunclist = [t.lfunc for t in self.translates]
+        engine = self.translates[0]._get_ee()
+        return parallel_vectorize_from_func(lfunclist, engine=engine)
+
+
