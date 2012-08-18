@@ -15,7 +15,7 @@ def main():
     para_ufunc = pv.build_ufunc()
 
     # build python ufunc
-    np_ufunc = np.vectorize(vector_add)
+    np_ufunc = np.add
 
     # test it out
     def test(ty):

@@ -7,7 +7,7 @@ def vector_add(a, b):
     return a + b
 
 def main():
-    # build parallel native code ufunc
+    # build cuda code ufunc
     pv = CudaVectorize(vector_add)
     pv.add(ret_type=int32, arg_types=[int32, int32])
     pv.add(ret_type=f, arg_types=[f, f])
@@ -15,7 +15,7 @@ def main():
     para_ufunc = pv.build_ufunc()
 
     # build python ufunc
-    np_ufunc = np.vectorize(vector_add)
+    np_ufunc = np.add
 
     # test it out
     def test(ty):
