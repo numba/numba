@@ -48,7 +48,11 @@ def main():
     pm.run(module)
 
     print('Write PTX')
-    ptxtm = TargetMachine.lookup('ptx32', opt=3)
+    if HAS_PTX:
+        arch = 'ptx32'
+    else:
+        arch = 'nvptx'
+    ptxtm = TargetMachine.lookup(arch, opt=3)
 
     with open('add.ptx', 'wb') as fout:
         fout.write(ptxtm.emit_assembly(module))

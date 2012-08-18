@@ -618,7 +618,12 @@ class CudaVectorize(ParallelVectorize):
 
         # generate ptx asm
         cc = 'compute_%d%d' % device.compute_capability() # select device cc
-        arch = 'ptx%d' % C.intp.width # select by host pointer size
+        if HAS_PTX:
+            arch = 'ptx%d' % C.intp.width # select by host pointer size
+        elif HAS_NVPTX:
+            arch = {32: 'nvptx', 64: 'nvptx64'}[C.intp.width]
+        else:
+            raise Exception("llvmpy does not have PTX/NVPTX support")
         assert C.intp.width in [32, 64]
         ptxtm = TargetMachine.lookup(arch, cpu=cc, opt=3) # TODO: ptx64 option
         ptxasm = ptxtm.emit_assembly(self.module)
