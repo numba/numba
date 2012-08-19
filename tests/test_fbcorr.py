@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
-'''test_filter2d
+'''test_fbcorr
 
-Test the filter2d() example from the PyCon'12 slide deck.
+Test the fbcorr() example .... 
 '''
 # ______________________________________________________________________
 
