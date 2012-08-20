@@ -21,7 +21,7 @@ def do_test(func):
     end = time.time()
     return end - start
 
-tests = [ 'scalar_add', 'simd_add', 'rsimd_add', 'faith_add' ]
+tests = [ 'scalar_add', 'vvm_add', 'simd_add', 'rsimd_add', 'faith_add' ]
 
 for i in tests:
     results = [ do_test(i) for x in range(0, 100) ]

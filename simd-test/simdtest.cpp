@@ -3,9 +3,11 @@
 
 #include "Python.h"
 
+#include "vector-machine.h"
 #include "numpy/ndarraytypes.h"
 #include "numpy/ufuncobject.h"
 #include "numpy/npy_3kcompat.h"
+
 
 #include <inttypes.h>
 #include <stddef.h>
@@ -20,7 +22,7 @@
 #   define VERBOSE_LOG(X) do {} while(0)
 #endif // SIMDTEST_VERBOSE
 
-
+#define RESTRICT __restrict
 
 /*
  * Some simple test on kernels written using simd intrinsics for the intel
@@ -59,48 +61,62 @@ static void double_logit(char **args, npy_intp *dimensions,
 
 
 /* returns new position in the stream */
-static inline const float* 
-linearize_floats(const float* src,
+#if 1
+static const float* 
+linearize_floats(const float* RESTRICT src,
 				 ptrdiff_t stride,
 				 size_t count,
-				 float* dst)
+				 float* RESTRICT dst)
 {
-	__builtin_memcpy(dst, src, count * sizeof(float));
-	return src+count;
-	/*
-	for (size_t i = 0; i < count; ++i)
+
+	do
 	{
-		dst[i] = *src;
-		src = (const float*)(((const char*) src) + stride);
-	}
+		dst[0] = *(const float*)(( (const char*) src ) + stride*0);
+		dst[1] = *(const float*)(( (const char*) src ) + stride*1);
+		dst[2] = *(const float*)(( (const char*) src ) + stride*2);
+		dst[3] = *(const float*)(( (const char*) src ) + stride*3);
+		dst[4] = *(const float*)(( (const char*) src ) + stride*4);
+		dst[5] = *(const float*)(( (const char*) src ) + stride*5);
+		dst[6] = *(const float*)(( (const char*) src ) + stride*6);
+		dst[7] = *(const float*)(( (const char*) src ) + stride*7);
+
+		src    =  (const float*)(( (const char*) src) + stride*8);
+		dst   += 8;
+		count -= 8;
+	} while (count);
 
 	return src;
-	*/
 }
-
+#endif
 static inline float* 
-delinearize_floats(const float* src,
+delinearize_floats(const float* RESTRICT src,
 				   size_t count,
-				   float* dst,
+				   float* RESTRICT dst,
 				   ptrdiff_t stride)
 {
-	__builtin_memcpy(dst, src, count * sizeof(float));
-	return dst + count;
-	/*
-	for (size_t i = 0; i < count; ++i)
+	do
 	{
-		*dst = src[i];
-		dst = (float*)(((char*) dst) + stride);
-	}
+		*(float*) ((char*)dst + stride * 0) = src[0];
+		*(float*) ((char*)dst + stride * 1) = src[1];
+		*(float*) ((char*)dst + stride * 2) = src[2];
+		*(float*) ((char*)dst + stride * 3) = src[3];
+		*(float*) ((char*)dst + stride * 4) = src[4];
+		*(float*) ((char*)dst + stride * 5) = src[5];
+		*(float*) ((char*)dst + stride * 6) = src[6];
+		*(float*) ((char*)dst + stride * 7) = src[7];
+
+		dst = (float*) ((char*)dst + stride * 8);
+		src += 8;
+		count -= 8;
+	} while (count);
 
 	return dst;
-	*/
 }
 
 static inline void 
-simd_add_floats(const float* restrict src0,
-				const float* restrict src1,
-		    	float* restrict dst,
+simd_add_floats(const float* RESTRICT src0,
+				const float* RESTRICT src1,
+		    	float* RESTRICT dst,
 				size_t count) 
 {
 	size_t simd_count = (count + 31) / 32; // round up the number of iterations... will just make some extra ops for free
@@ -146,9 +162,9 @@ simd_add_floats(const float* restrict src0,
     DST += 8; \
 	}
 static inline void 
-simd_add_floats_u(const float* restrict src0,
-				const float* restrict src1,
-		    	float* restrict dst,
+simd_add_floats_u(const float* RESTRICT src0,
+				const float* RESTRICT src1,
+		    	float* RESTRICT dst,
 				size_t count) 
 {
 	size_t simd_count = (count + 63) / 64; // round up the number of iterations... will just make some extra ops for free
@@ -164,30 +180,7 @@ simd_add_floats_u(const float* restrict src0,
 		KERNEL(src0, src1, dst);
 		KERNEL(src0, src1, dst);
 		KERNEL(src0, src1, dst);
-		/*		__m256 arg0_0   = _mm256_loadu_ps (src0);
-		__m256 arg0_1   = _mm256_loadu_ps (src0 + 8);
-		__m256 arg0_2   = _mm256_loadu_ps (src0 + 16);
-		__m256 arg0_3   = _mm256_loadu_ps (src0 + 24);
 
-		__m256 arg1_0   = _mm256_loadu_ps (src1);
-		__m256 arg1_1   = _mm256_loadu_ps (src1 + 8);
-		__m256 arg1_2   = _mm256_loadu_ps (src1 + 16);
-		__m256 arg1_3   = _mm256_loadu_ps (src1 + 32);
-
-		__m256 result_0 = _mm256_add_ps   (arg0_0, arg1_0);
-		__m256 result_1 = _mm256_add_ps   (arg0_1, arg1_1);
-		__m256 result_2 = _mm256_add_ps   (arg0_2, arg1_2);
-		__m256 result_3 = _mm256_add_ps   (arg0_3, arg1_3);
-
-		                  _mm256_storeu_ps(dst, result_0);
-		                  _mm256_storeu_ps(dst+8, result_1);
-		                  _mm256_storeu_ps(dst+16, result_2);
-		                  _mm256_storeu_ps(dst+24, result_3);
-
-		src0 += 32;
-		src1 += 32;
-	    dst  += 32;
-		*/
 		simd_count --;
 	} while (simd_count);
 }
@@ -199,7 +192,7 @@ simd_add_f__f_f (char**    args,
 				 npy_intp* strides,
 				 void*     data) __attribute__((flatten));
 
-#define CHUNK_SIZE_IN_BYTES (1024)
+#define CHUNK_SIZE_IN_BYTES (1024u)
 #define FLOATS_PER_CHUNK    (CHUNK_SIZE_IN_BYTES / sizeof(float))
 
 static void simd_add_f__f_f (char**    args, 
@@ -207,13 +200,13 @@ static void simd_add_f__f_f (char**    args,
 							npy_intp* strides,
 							void*     data)
 {
-    npy_intp count = dimensions[0];
+    size_t count = static_cast<size_t>(dimensions[0]);
 	if (0 == count)
 		return;
 
-	const float* restrict arg0_pivot = (const float*) args[0];
-	const float* restrict arg1_pivot = (const float*) args[1];
-	float* restrict result_pivot = (float*) args[2];
+	const float* RESTRICT arg0_pivot = (const float*) args[0];
+	const float* RESTRICT arg1_pivot = (const float*) args[1];
+	float* RESTRICT result_pivot = (float*) args[2];
 	ptrdiff_t arg0_stride = strides[0];
 	ptrdiff_t arg1_stride = strides[1];
 	ptrdiff_t result_stride = strides[2];
@@ -244,13 +237,13 @@ static void rsimd_add_f__f_f (char**    args,
 							  npy_intp* strides,
 							  void*     data)
 {
-    npy_intp count = dimensions[0];
+    size_t count = static_cast<size_t>(dimensions[0]);
 	if (0 == count)
 		return;
 
-	const float* restrict arg0_pivot = (const float*) args[0];
-	const float* restrict arg1_pivot = (const float*) args[1];
-	float* restrict result_pivot = (float*) args[2];
+	const float* RESTRICT arg0_pivot = (const float*) args[0];
+	const float* RESTRICT arg1_pivot = (const float*) args[1];
+	float* RESTRICT result_pivot = (float*) args[2];
 	ptrdiff_t arg0_stride = strides[0];
 	ptrdiff_t arg1_stride = strides[1];
 	ptrdiff_t result_stride = strides[2];
@@ -278,6 +271,33 @@ static void rsimd_add_f__f_f (char**    args,
 	} while (count);
 }
 
+static void vvm_add_f__f_f (char**    args, 
+							npy_intp* dimensions,
+							npy_intp* strides,
+							void*     data)
+{
+    size_t count = static_cast<size_t>(dimensions[0]);
+	if (0 == count)
+		return;
+
+	const void* arg0_stream = (const void*) args[0];
+	const void* arg1_stream = (const void*) args[1];
+	void* dst_stream     = (void*) args[2];
+	static const size_t max_count_iter = VVM_REGISTER_SIZE / sizeof(float);
+
+	// in this example, assume contiguous
+
+	vvm_register reg0, reg1, reg_dst;
+	do
+	{
+		size_t chunk_count = count < max_count_iter? count : max_count_iter;
+		arg0_stream = vvm_load(&reg0, arg0_stream, sizeof(float), chunk_count);
+		arg1_stream = vvm_load(&reg1, arg1_stream, sizeof(float), chunk_count);
+		              vvm_add_float_single(&reg0, &reg1, &reg_dst, chunk_count);
+		dst_stream  = vvm_store(&reg_dst, dst_stream, sizeof(float), chunk_count);
+		count -= chunk_count;
+	} while (count);
+}
 
 static void faith_add_f__f_f (char**    args, 
 				    		   npy_intp* dimensions,
@@ -286,7 +306,6 @@ static void faith_add_f__f_f (char**    args,
 {
 	simd_add_floats_u((const float*)(args[0]), (const float*)(args[1]), (float*)(args[2]), dimensions[0]);
 }
-
 
 
 static void scalar_add_f__f_f (char**    args, 
@@ -314,6 +333,7 @@ static void scalar_add_f__f_f (char**    args,
 
 /* These are the input and return dtypes of logit.*/
 
+PyUFuncGenericFunction test_vmmadd[]    = { &vvm_add_f__f_f };
 PyUFuncGenericFunction test_simdadd[]   = { &simd_add_f__f_f };
 PyUFuncGenericFunction test_rsimdadd[]  = { &rsimd_add_f__f_f };
 PyUFuncGenericFunction test_scalaradd[] = { &scalar_add_f__f_f };
@@ -324,10 +344,11 @@ static void *test_data[] = { NULL };
 
 struct {
 	PyUFuncGenericFunction* func_impl;
-	char* name;
+	const char* name;
 } funcs_to_register[] =
 {
 	{ test_scalaradd, "scalar_add" },
+	{ test_vmmadd,    "vvm_add" },
 	{ test_simdadd,   "simd_add" },
 	{ test_rsimdadd,  "rsimd_add" },
 	{ test_faithadd,  "faith_add" },
@@ -340,13 +361,14 @@ void register_functions(PyObject* m)
 
 	for (size_t i = 0; i < sizeof(funcs_to_register)/sizeof(funcs_to_register[0]); ++i)
 	{
+		// note: const_cast needed due to the numpy API
 		PyObject* f = PyUFunc_FromFuncAndData(funcs_to_register[i].func_impl,
 											  test_data,
 											  test_binaryop_signature,
 											  1, 2, 1,
 											  PyUFunc_None, 
-											  funcs_to_register[i].name,
-											  "docstring placeholder",
+											  const_cast<char*>(funcs_to_register[i].name),
+											  const_cast<char*>("docstring placeholder"),
 											  0);
 		PyDict_SetItemString(d, funcs_to_register[i].name, f);
 		Py_DECREF(f);
