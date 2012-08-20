@@ -97,11 +97,15 @@ class _IfElse(object):
         self._to_close.append(self.parent.builder.basic_block)
         bbend = self.parent.function.append_basic_block('if.end')
         builder = self.parent.builder
+        closed_count = 0
         for bb in self._to_close:
             if not _is_block_terminated(bb):
                 with _change_block_temporarily(builder, bb):
                     builder.branch(bbend)
+                    closed_count += 1
         builder.position_at_end(bbend)
+        if not closed_count:
+            self.parent.unreachable()
 
 class _Loop(object):
     '''while...do loop.

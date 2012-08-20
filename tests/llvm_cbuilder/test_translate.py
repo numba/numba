@@ -17,7 +17,7 @@ class Foo(CDefinition):
                 return x - y
             else:
                 return y - x
-        self.unreachable()
+
 
 class TestTranslate(unittest.TestCase):
     def test_loopbreak(self):
