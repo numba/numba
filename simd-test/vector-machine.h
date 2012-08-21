@@ -39,5 +39,10 @@ void* vvm_store             (const vvm_register* source, void* base, size_t elem
  */
 void vvm_add_float_single   (const vvm_register* srcA, const vvm_register* srcB, vvm_register* target, size_t count);
 
+/*
+ * A sample transcendental
+ */
+void vvm_sin_float_single (const vvm_register* src, vvm_register* target, size_t count);
+
 #endif // __VECTOR_MACHINE_H__
 

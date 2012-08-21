@@ -1,23 +1,29 @@
 = Short Description =
 
-This is a prototype that bases on
-[the ufunc example](http://docs.scipy.org/doc/numpy/user/c-info.ufunc-tutorial.html).
-The ufunc calls `parallel_ufunc` to compute using multiple threads.
-...
+This is a sample that tests simd options to implement ufuncs.
 
+Test the performance of ufuncs that perform a gather in order to
+use simd instructions and compare it with a simple kernel written
+in plain C that performs the same operations. There are also tests
+to figure out what is the overhead of splitting the operation and
+its memory access. There are extra memory copies that are performed
+so there is an overhead there.
 
-Work items are equally splitted among all worker threads, initially.
-Once a thread completes, it tries to steal work items from other threads.
-The workqueue is locked using atomic compare-and-swap.
-...
+The point is figuring out the size of that overhead and at what point
+it is worth it. After the memory gathering operations are to be
+performed on aligned packed data, so SIMD can be used to full effect.
 
+As the data is split in chunks that fit the L1 cache, there will be
+some extra loops and that may imply some overhead as well.
 
 
 = Build and run instruction =
+There is a Makefile that supports the following:
 
-python setup.py build_ext -i
+make install - to install the python extension
+make clean   - to clean local files
+make         - just builds the .so
+make test    - runs the test that times the execution
 
-# all test has a "test_" prefix
-./test_race.sh               # try to discover race condition
-python test_*.py
-
+You can take a look inside the make file to figure out how everything
+is actually done.
