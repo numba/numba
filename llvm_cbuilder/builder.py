@@ -26,6 +26,14 @@ def _is_real(ty):
             lc.Type.ppc_fp128() ]
     return any(ty == x for x in tys)
 
+def _is_vector(ty, of=None):
+    if isinstance(ty, lc.VectorType):
+        if of is not None:
+            return of(ty.element)
+        return True
+    else:
+        return False
+
 def _is_pointer(ty):
     return isinstance(ty, lc.PointerType)
 
@@ -41,6 +49,11 @@ def _is_cstruct(ty):
 
 def _list_values(iterable):
     return [i.value for i in iterable]
+
+def _auto_coerce_index(cbldr, idx):
+    if not isinstance(idx, CValue):
+        idx = cbldr.constant(types.int, idx)
+    return idx
 
 @contextlib.contextmanager
 def _change_block_temporarily(builder, bb):
@@ -892,11 +905,11 @@ class CValue(object):
 
     @property
     def is_int(self):
-        return _is_int(self.type)
+        return _is_int(self.type) or _is_vector(self.type, _is_int)
 
     @property
     def is_real(self):
-        return _is_real(self.type)
+        return _is_real(self.type) or _is_vector(self.type, _is_real)
 
     def cast(self, ty, unsigned=False):
         '''cast to another type
@@ -985,6 +998,10 @@ class CValue(object):
 
 
     @property
+    def is_vector(self):
+        return _is_vector(self.type)
+
+    @property
     def is_pointer(self):
         return _is_pointer(self.type)
 
@@ -992,17 +1009,41 @@ class CValue(object):
         if not self.is_pointer:
             raise TypeError("Must be a pointer; got %s" % self.type)
 
+    def _ensure_is_vector(self):
+        if not self.is_vector:
+            raise TypeError("Must be a vector; got %s" % self.type)
+
     def __getitem__(self, idx):
         '''implement access indexing
 
         Uses GEP.
         '''
-        self._ensure_is_pointer()
-        if not isinstance(idx, CValue):
-            idx = self.parent.constant(types.int, idx)
         bldr = self.parent.builder
-        ptr = bldr.gep(self.value, [idx.value])
-        return CVar(self.parent, ptr)
+        if self.is_pointer:
+            if type(idx) is slice:
+                # just handle case by case
+                # Case #1: A[idx:] get poointer offset by idx
+                if not idx.step and not idx.stop:
+                    idx = _auto_coerce_index(self.parent, idx.start)
+                    ptr = bldr.gep(self.value, [idx.value])
+                    return CArray(self.parent, ptr)
+            else: # return an variable at idx
+                idx = _auto_coerce_index(self.parent, idx)
+                ptr = bldr.gep(self.value, [idx.value])
+                return CVar(self.parent, ptr)
+        elif self.is_vector:
+            idx = _auto_coerce_index(self.parent, idx)
+            val = bldr.extract_element(self.value, idx.value)
+            return CTemp(self.parent, val)
+        else:
+            raise TypeError("Must be a pointer or vector; got %s" % self.type)
+
+    def __setitem__(self, idx, val):
+        self._ensure_is_vector()
+        idx = _auto_coerce_index(self.parent, idx)
+        bldr = self.parent.builder
+        vec = bldr.insert_element(self.value, val.value, idx.value)
+        bldr.store(vec, self.ptr)
 
     def load(self, volatile=False):
         '''memory load for pointer types
@@ -1181,6 +1222,7 @@ class CVar(CValue):
         else:
             return cstruct_class(self.parent, self.ptr)
 
+
 class CArray(CValue):
     '''wraps a array
 
@@ -1200,6 +1242,26 @@ class CArray(CValue):
     @property
     def type(self):
         return self.base_ptr.type
+
+    def vector_load(self, count):
+        parent = self.parent
+        values = [self[i] for i in range(count)]
+        vec = parent.constant_null(types.vector(self.type.pointee, count)).value
+        for i, v in enumerate(values):
+            i = parent.constant(types.int, i)
+            vec = parent.builder.insert_element(vec, v.value, i.value)
+        return CTemp(parent, vec)
+
+    def vector_store(self, vec):
+        if vec.type.element != self.type.pointee:
+            raise TypeError("Type mismatch; expect %s but got %s" % \
+                            (vec.type.element, self.type.pointee))
+        parent = self.parent
+        for i in range(vec.type.count):
+            i = parent.constant(types.int, i)
+            val = parent.builder.extract_element(vec.value, i.value)
+            self[i].assign(CTemp(parent, val))
+        return self
 
 class CStruct(CValue):
     '''Wraps a structure

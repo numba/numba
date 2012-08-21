@@ -28,3 +28,8 @@ pointer_size = _determine_pointer_size()
 
 intp = {32: int32, 64: int64}[pointer_size]
 
+
+# vector
+def vector(ty, ct):
+    return Type.vector(ty, 4)
+

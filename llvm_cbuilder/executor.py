@@ -61,7 +61,6 @@ class CExecutor(object):
         else:
             retty = typeinfo[0]
             argtys = typeinfo[1:]
-
         prototype = ct.CFUNCTYPE(retty, *argtys)
         fnptr = self.engine.get_pointer_to_function(fn)
         return prototype(fnptr)
