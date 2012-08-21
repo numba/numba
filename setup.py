@@ -11,7 +11,7 @@ setup(
     ext_modules = [Extension(name = "numbapro._internal",
                              sources = ["src/_internal.c"],
                              include_dirs = [numpy.get_include()])],
-    packages = ['numbapro', 'llvm_cbuilder'],
+    packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize'],
     package_dir = {'numbapro': 'src'},
 
     version = "0.5"

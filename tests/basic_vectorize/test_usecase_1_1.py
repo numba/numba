@@ -1,4 +1,5 @@
-from numbapro.vectorize.parallel import *
+from numbapro.vectorize.basic import basic_vectorize_from_func
+from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm.core import *
 import numpy as np
@@ -20,14 +21,14 @@ class OneOne(CDefinition):
         cls.OUT_TYPE = otype
 
 
-class TestParallelVectorize(unittest.TestCase):
-    def test_parallelvectorize_d_d(self):
+class TestBasicVectorize(unittest.TestCase):
+    def test_basicvectorize_d_d(self):
         self.template(C.double, C.double)
 
-    def test_parallelvectorize_d_f(self):
+    def test_basicvectorize_d_f(self):
         self.template(C.double, C.float)
 
-    def test_parallelvectorize_generic(self):
+    def test_basicvectorize_generic(self):
         module = Module.new(__name__)
         exe = CExecutor(module)
 
@@ -40,8 +41,8 @@ class TestParallelVectorize(unittest.TestCase):
 
         oneone_defs = [OneOne(*tys)(module) for tys in tyslist]
 
-        ufunc = parallel_vectorize_from_func(oneone_defs, exe.engine)
-        #print(module)
+        ufunc = basic_vectorize_from_func(oneone_defs, exe.engine)
+        # print(module)
         module.verify()
 
         self.check(ufunc, np.double)
@@ -69,8 +70,10 @@ class TestParallelVectorize(unittest.TestCase):
 
         def_oneone = OneOne(itype, otype)
         oneone = def_oneone(module)
-        ufunc = parallel_vectorize_from_func(oneone, exe.engine)
-        # print(module)
+
+        ufunc = basic_vectorize_from_func(oneone, exe.engine)
+
+        print(module)
         module.verify()
 
         self.check(ufunc, np.double)

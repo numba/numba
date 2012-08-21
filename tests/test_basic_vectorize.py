@@ -1,17 +1,17 @@
 import numpy as np
 from numba import *
-from numbapro.vectorize.cuda import CudaVectorize
+from numbapro.vectorize.basic import BasicVectorize
 from time import time
 
 def vector_add(a, b):
     return a + b
 
 def main():
-    # build cuda code ufunc
-    pv = CudaVectorize(vector_add)
+    # build parallel native code ufunc
+    pv = BasicVectorize(vector_add)
     pv.add(ret_type=int32, arg_types=[int32, int32])
     pv.add(ret_type=f, arg_types=[f, f])
-    #pv.add(ret_type=d, arg_types=[d, d])
+    pv.add(ret_type=d, arg_types=[d, d])
     para_ufunc = pv.build_ufunc()
 
     # build python ufunc
@@ -20,7 +20,7 @@ def main():
     # test it out
     def test(ty):
         print("Test %s" % ty)
-        data = np.linspace(0., 10000., 500*501).astype(ty)
+        data = np.linspace(0., 10000., 100000).astype(ty)
 
         ts = time()
         result = para_ufunc(data, data)
@@ -40,14 +40,9 @@ def main():
 
 
         for expect, got in zip(gold, result):
-            if got == 0:
-                err = abs(expect - got)
-            else:
-                err = abs(expect - got)/float(got)
-            if err > 1e-5:
-                raise ValueError(expect, got, err)
+            assert expect == got
 
-    #test(np.double)
+    test(np.double)
     test(np.float32)
     test(np.int32)
 
@@ -56,3 +51,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

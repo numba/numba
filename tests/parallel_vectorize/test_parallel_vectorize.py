@@ -1,4 +1,5 @@
-from numbapro.parallel_vectorize import *
+from numbapro.vectorize.parallel import *
+import unittest
 
 class Work_D_D(CDefinition):
     _name_ = 'work_d_d'
@@ -30,9 +31,6 @@ class UFuncCore_D_D(UFuncCore):
         res = ufunc_ptr(indata.load())
         outdata.store(res)
 
-class ParallelUFuncPosix(ParallelUFunc, ParallelUFuncPosixMixin):
-    pass
-
 class Tester(CDefinition):
     '''
     Generate test.
@@ -48,7 +46,7 @@ class Tester(CDefinition):
         WorkCount = 10000
 
 
-        spufdef = SpecializedParallelUFunc(ParallelUFuncPosix(num_thread=2),
+        spufdef = SpecializedParallelUFunc(ParallelUFuncPlatform(num_thread=2),
                                            UFuncCore_D_D(),
                                            Work_D_D())
 
@@ -97,33 +95,34 @@ class Tester(CDefinition):
 
         self.ret()
 
-def main():
-    module = Module.new(__name__)
+class TestInner_RaceCondition(unittest.TestCase):
+    def test_racecondition(self):
+        module = Module.new(__name__)
 
-    mpm = PassManager.new()
-    pmbuilder = PassManagerBuilder.new()
-    pmbuilder.opt_level = 3
-    pmbuilder.populate(mpm)
+        mpm = PassManager.new()
+        pmbuilder = PassManagerBuilder.new()
+        pmbuilder.opt_level = 3
+        pmbuilder.populate(mpm)
 
-    fntester = Tester.define(module)
+        fntester = Tester.define(module)
 
-#    print(module)
-    module.verify()
+        #    print(module)
+        module.verify()
 
-    mpm.run(module)
+        mpm.run(module)
 
-    print('optimized'.center(80,'-'))
-    print(module)
+        #   print('optimized'.center(80,'-'))
+        #   print(module)
 
-    # run
-    print('run')
-    exe = CExecutor(module)
-    func = exe.get_ctype_function(fntester, 'void')
+        # run
+        #   print('run')
+        exe = CExecutor(module)
+        func = exe.get_ctype_function(fntester, 'void')
 
-    func()
-    # Will not reach here is race condition occurred
-    print('Good')
+        func()
+        # Will not reach here if race condition occurred
+        #   print('Good')
 
 if __name__ == '__main__':
-    main()
+    unittest.main()
 

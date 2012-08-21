@@ -1,6 +1,6 @@
 import numpy as np
 from numba import *
-from numbapro.parallel_vectorize import ParallelVectorize
+from numbapro.vectorize.parallel import ParallelVectorize
 from time import time
 
 def vector_add(a, b):
@@ -9,9 +9,9 @@ def vector_add(a, b):
 def main():
     # build parallel native code ufunc
     pv = ParallelVectorize(vector_add)
-    pv.add(ret_type=d, arg_types=[d, d])
-    pv.add(ret_type=f, arg_types=[f, f])
     pv.add(ret_type=int32, arg_types=[int32, int32])
+    pv.add(ret_type=f, arg_types=[f, f])
+    pv.add(ret_type=d, arg_types=[d, d])
     para_ufunc = pv.build_ufunc()
 
     # build python ufunc
