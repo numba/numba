@@ -43,8 +43,7 @@ def main():
 
     ufunc = fromfunc([ptr_t(funcptr)], [[typenum, typenum]], 1, 1, [None])
 
-    x = np.linspace(0., 10., 1000)
-    x.dtype=np.double
+    x = np.linspace(0., 10., 1000).astype(np.double)
 #    print x
     ans = ufunc(x)
 #    print ans

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Continuum Analytics, Inc. 
+ * Copyright (c) 2012 Continuum Analytics, Inc.
  * All Rights reserved.
  */
 
@@ -12,6 +12,14 @@
 #define IS_PY3K
 #endif
 
+#define APPEND_(X, Y) X #Y
+#define APPEND(X, Y) APPEND_(X, Y)
+#define SENTRY_VALID_LONG(X) if( (X) == -1 ){                        \
+    PyErr_SetString(PyExc_RuntimeError,                              \
+                    APPEND("PyLong_AsLong overflow at ", __LINE__)); \
+    return NULL;                                                     \
+}
+
 /* Deallocate the PyArray_malloc calls */
 static void
 dyn_dealloc(PyUFuncObject *self)
@@ -22,7 +30,7 @@ dyn_dealloc(PyUFuncObject *self)
         PyArray_free(self->types);
     if (self->data)
         PyArray_free(self->data);
-    Py_TYPE(self)->tp_base->tp_dealloc((PyObject *)self);    
+    Py_TYPE(self)->tp_base->tp_dealloc((PyObject *)self);
 }
 
 
@@ -97,10 +105,10 @@ PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
     PyObject *ufunc;
     ufunc = PyUFunc_FromFuncAndData(func, data, types, ntypes, nin, nout,
                                     identity, name, doc, 0);
-    
+
     /* Kind of a gross-hack  */
     Py_TYPE(ufunc) = &PyDynUFunc_Type;
-    
+
     /* Hold on to whatever object is passed in */
     Py_XINCREF(object);
     ((PyUFuncObject *)ufunc)->obj = object;
@@ -111,7 +119,7 @@ PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
 static PyObject *
 ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
 
-    unsigned long func_address;
+    // unsigned long func_address; // unused
     int nin, nout;
     int nfuncs, ntypes, ndata;
     PyObject *func_list;
@@ -121,7 +129,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     PyObject *type_obj;
     PyObject *data_obj;
     PyObject *object=NULL; /* object to hold on to while ufunc is alive */
-    int i, j; 
+    int i, j;
     int custom_dtype = 0;
 
     if (!PyArg_ParseTuple(args, "O!O!iiO|O", &PyList_Type, &func_list, &PyList_Type, &type_list, &nin, &nout, &data_list, &object)) {
@@ -153,7 +161,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         /* Function pointers are passed in as long objects.
            Is there a better way to do this? */
         if (PyLong_Check(func_obj)) {
-            funcs[i] = (PyUFuncGenericFunction)PyLong_AsLong(func_obj);
+            funcs[i] = (PyUFuncGenericFunction)PyLong_AsVoidPtr(func_obj);
         }
         else {
             PyErr_SetString(PyExc_TypeError, "function pointer must be long object, or None");
@@ -169,10 +177,16 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     /* build function signatures array */
     for (i = 0; i < nfuncs; i++) {
         type_obj = PyList_GetItem(type_list, i);
-        
+
         for (j = 0; j < (nin+nout); j++) {
-            types[i*(nin+nout) + j] = PyLong_AsLong(PyList_GetItem(type_obj, j));
+            SENTRY_VALID_LONG(
+                types[i*(nin+nout) + j] = PyLong_AsLong(PyList_GetItem(type_obj, j))
+            );
+
             int dtype_num = PyLong_AsLong(PyList_GetItem(type_obj, j));
+
+            SENTRY_VALID_LONG(dtype_num);
+
             if (dtype_num >= NPY_USERDEF) {
                 custom_dtype = dtype_num;
             }
@@ -189,7 +203,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         if (PyList_Check(data_list)) {
             data_obj = PyList_GetItem(data_list, i);
             if (PyLong_Check(data_obj)) {
-                data[i] = (void*)PyLong_AsLong(data_obj);
+                data[i] = PyLong_AsVoidPtr(data_obj);
             }
             else if (data_obj == Py_None) {
                 data[i] = NULL;
@@ -265,7 +279,7 @@ PyMODINIT_FUNC
 init_internal(void)
 #endif
 {
-    PyObject *m, *d;
+    PyObject *m;    //, *d; // unused
 
     import_array();
     import_umath();

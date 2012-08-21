@@ -1,0 +1,31 @@
+	.version 2.0
+	.target compute_10, map_f64_to_f32
+
+
+
+
+
+
+
+.entry ptx_add (.param .b32 __param_1, .param .b32 __param_2, .param .b32 __param_3)
+{
+	.reg .b32 %r<15>;
+	mov.u32	%r0, %ntid.x;
+	mov.u32	%r1, %ctaid.x;
+	mul.lo.u32	%r2, %r1, %r0;
+	mov.u32	%r3, %tid.x;
+	add.u32	%r4, %r2, %r3;
+	shl.b32	%r5, %r4, 2;
+	ld.param.u32	%r6, [__param_2];
+	add.u32	%r7, %r6, %r5;
+	ld.global.u32	%r8, [%r7];
+	ld.param.u32	%r9, [__param_3];
+	add.u32	%r10, %r9, %r5;
+	ld.global.u32	%r11, [%r10];
+	add.u32	%r12, %r11, %r8;
+	ld.param.u32	%r13, [__param_1];
+	add.u32	%r14, %r13, %r5;
+	st.global.u32	[%r14], %r12;
+	exit;
+}
+

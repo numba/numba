@@ -38,10 +38,8 @@ class TestParallelVectorize(unittest.TestCase):
         # print(module)
         module.verify()
 
-        A = np.linspace(.0, 10., 1000)
-        A.dtype = np.double
-        B = np.linspace(-10., 0., 1000)
-        B.dtype = np.double
+        A = np.linspace(.0, 10., 1000).astype(np.double)
+        B = np.linspace(-10., 0., 1000).astype(np.double)
 
         ans = ufunc(A, B)
         gold = A * B
