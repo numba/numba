@@ -43,11 +43,11 @@ class VectorArithDriver1(CDefinition):
         elem_per_vec = self.constant(C.int, floatv4.count)
         with self.for_range(0, n, elem_per_vec) as (loop, i):
             # Aary[i:] offset the array at i
-            a = Aary[i:].vector_load(4)
-            b = Bary[i:].vector_load(4)
-            c = Cary[i:].vector_load(4)
+            a = Aary[i:].vector_load(4, align=1)  # unaligned vector load
+            b = Bary[i:].vector_load(4, align=1)
+            c = Cary[i:].vector_load(4, align=1)
             r = vecarith(a, b, c)
-            Dary[i:].vector_store(r)
+            Dary[i:].vector_store(r, align=1)
             #    self.debug(r[0], r[1], r[2], r[3])
         self.ret()
 
@@ -76,32 +76,34 @@ class VectorArithDriver2(CDefinition):
                 b[j] = Bary[i + j]
                 c[j] = Cary[i + j]
             r = vecarith(a, b, c)
-            Dary[i:].vector_store(r)
+            Dary[i:].vector_store(r, align=1)
             #    self.debug(r[0], r[1], r[2], r[3])
         self.ret()
 
 
 
-#def aligned_zeros(shape, boundary=16, dtype=float, order='C'):
-#    '''
-#    Is there a better way to allocate aligned memory?
-#    '''
-#    N = np.prod(shape)
-#    d = np.dtype(dtype)
-#    tmp = np.zeros(N * d.itemsize + boundary, dtype=np.uint8)
-#    address = tmp.__array_interface__['data'][0]
-#    offset = (boundary - address % boundary) % boundary
-#    viewed = tmp[offset:offset + N * d.itemsize].view(dtype=d)
-#    return viewed.reshape(shape, order=order)
+def aligned_zeros(shape, boundary=16, dtype=float, order='C'):
+    '''
+    Is there a better way to allocate aligned memory?
+    '''
+    N = np.prod(shape)
+    d = np.dtype(dtype)
+    tmp = np.zeros(N * d.itemsize + boundary, dtype=np.uint8)
+    address = tmp.__array_interface__['data'][0]
+    offset = (boundary - address % boundary) % boundary
+    viewed = tmp[offset:offset + N * d.itemsize].view(dtype=d)
+    return viewed.reshape(shape, order=order)
 
 class TestVectorArith(unittest.TestCase):
     def test_vector_arith_1(self):
-        self.run_and_test_udt(VectorArithDriver1())
+        self.run_and_test_udt(VectorArithDriver1(), 16) # aligned for SSE
+        self.run_and_test_udt(VectorArithDriver1(), 20) # misaligned for SSE
 
     def test_vector_arith_2(self):
-        self.run_and_test_udt(VectorArithDriver2())
+        self.run_and_test_udt(VectorArithDriver2(), 16) # aligned for SSE
+        self.run_and_test_udt(VectorArithDriver2(), 20) # misaligned for SSE
 
-    def run_and_test_udt(self, udt):
+    def run_and_test_udt(self, udt, align):
         module = Module.new('mod.test.vectoriarith')
 
         ldriver = udt(module)
@@ -129,10 +131,10 @@ class TestVectorArith(unittest.TestCase):
 
         n = 4*10
 
-        Aary = np.zeros(n, dtype=np.float32)
-        Bary = np.zeros(n, dtype=np.float32)
-        Cary = np.zeros(n, dtype=np.float32)
-        Dary = np.zeros(n, dtype=np.float32)
+        Aary = aligned_zeros(n, boundary=align, dtype=np.float32)
+        Bary = aligned_zeros(n, boundary=align, dtype=np.float32)
+        Cary = aligned_zeros(n, boundary=align, dtype=np.float32)
+        Dary = aligned_zeros(n, boundary=align, dtype=np.float32)
 
         Aary[:] = range(n)
         Bary[:] = range(n, 2 * n)
