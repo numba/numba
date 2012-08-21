@@ -63,6 +63,7 @@ class VectorArithDriver2(CDefinition):
     def body(self, Aary, Bary, Cary, Dary, n):
         '''
         This version loads element of vector individually.
+        This style generates scalar ld/st instead of vector ld/st.
         '''
         vecarith = self.depends(VectorArith())
         a = self.var(floatv4)
@@ -81,17 +82,17 @@ class VectorArithDriver2(CDefinition):
 
 
 
-def aligned_zeros(shape, boundary=16, dtype=float, order='C'):
-    '''
-    Is there a better way to allocate aligned memory?
-    '''
-    N = np.prod(shape)
-    d = np.dtype(dtype)
-    tmp = np.zeros(N * d.itemsize + boundary, dtype=np.uint8)
-    address = tmp.__array_interface__['data'][0]
-    offset = (boundary - address % boundary) % boundary
-    viewed = tmp[offset:offset + N * d.itemsize].view(dtype=d)
-    return viewed.reshape(shape, order=order)
+#def aligned_zeros(shape, boundary=16, dtype=float, order='C'):
+#    '''
+#    Is there a better way to allocate aligned memory?
+#    '''
+#    N = np.prod(shape)
+#    d = np.dtype(dtype)
+#    tmp = np.zeros(N * d.itemsize + boundary, dtype=np.uint8)
+#    address = tmp.__array_interface__['data'][0]
+#    offset = (boundary - address % boundary) % boundary
+#    viewed = tmp[offset:offset + N * d.itemsize].view(dtype=d)
+#    return viewed.reshape(shape, order=order)
 
 class TestVectorArith(unittest.TestCase):
     def test_vector_arith_1(self):
@@ -112,6 +113,8 @@ class TestVectorArith(unittest.TestCase):
         pmb.populate(pm)
         pm.run(module)
 
+        print(module.to_native_assembly())
+
         exe = CExecutor(module)
 
         float_p = POINTER(c_float)
@@ -124,12 +127,12 @@ class TestVectorArith(unittest.TestCase):
 
         # prepare for execution
 
-        n = 8
+        n = 4*10
 
-        Aary = aligned_zeros(n, dtype=np.float32)
-        Bary = aligned_zeros(n, dtype=np.float32)
-        Cary = aligned_zeros(n, dtype=np.float32)
-        Dary = aligned_zeros(n, dtype=np.float32)
+        Aary = np.zeros(n, dtype=np.float32)
+        Bary = np.zeros(n, dtype=np.float32)
+        Cary = np.zeros(n, dtype=np.float32)
+        Dary = np.zeros(n, dtype=np.float32)
 
         Aary[:] = range(n)
         Bary[:] = range(n, 2 * n)

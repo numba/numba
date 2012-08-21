@@ -1245,11 +1245,11 @@ class CArray(CValue):
 
     def vector_load(self, count):
         parent = self.parent
+        builder = parent.builder
         values = [self[i] for i in range(count)]
-        vec = parent.constant_null(types.vector(self.type.pointee, count)).value
-        for i, v in enumerate(values):
-            i = parent.constant(types.int, i)
-            vec = parent.builder.insert_element(vec, v.value, i.value)
+
+        vecty = types.vector(self.type.pointee, count)
+        vec = builder.load(builder.bitcast(self.base_ptr, types.pointer(vecty)))
         return CTemp(parent, vec)
 
     def vector_store(self, vec):
@@ -1257,10 +1257,9 @@ class CArray(CValue):
             raise TypeError("Type mismatch; expect %s but got %s" % \
                             (vec.type.element, self.type.pointee))
         parent = self.parent
-        for i in range(vec.type.count):
-            i = parent.constant(types.int, i)
-            val = parent.builder.extract_element(vec.value, i.value)
-            self[i].assign(CTemp(parent, val))
+        builder = parent.builder
+        builder.store(vec.value, builder.bitcast(self.base_ptr,
+                                                 types.pointer(vec.type)))
         return self
 
 class CStruct(CValue):
