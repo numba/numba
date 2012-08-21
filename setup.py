@@ -35,7 +35,7 @@ setup(
     name = "numba",
     author = "Continuum Analytics, Inc.",
     author_email = "numba-users@continuum.io",
-    url = "https://numba.github.com",
+    url = "http://numba.github.com",
     license = "BSD",
     classifiers = [
         "Development Status :: 2 - Pre-Alpha",
