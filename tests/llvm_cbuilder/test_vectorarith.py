@@ -35,9 +35,14 @@ class VectorArithDriver1(CDefinition):
                 ('n', C.int),]
 
     def body(self, Aary, Bary, Cary, Dary, n):
+        '''
+        This version uses vector load to fetch array elements as vectors.
+
+        '''
         vecarith = self.depends(VectorArith())
         elem_per_vec = self.constant(C.int, floatv4.count)
-        with self.for_range(0, n, elem_per_vec) as (outer, i):
+        with self.for_range(0, n, elem_per_vec) as (loop, i):
+            # Aary[i:] offset the array at i
             a = Aary[i:].vector_load(4)
             b = Bary[i:].vector_load(4)
             c = Cary[i:].vector_load(4)
@@ -56,6 +61,9 @@ class VectorArithDriver2(CDefinition):
                 ('n', C.int),]
 
     def body(self, Aary, Bary, Cary, Dary, n):
+        '''
+        This version loads element of vector individually.
+        '''
         vecarith = self.depends(VectorArith())
         a = self.var(floatv4)
         b = self.var(floatv4)
