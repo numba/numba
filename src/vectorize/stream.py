@@ -1,5 +1,11 @@
 '''
-Implements stream vectorize is a cache enhanced version of basic vectorize
+Implements stream vectorize is a cache enhanced version of basic vectorize.
+
+NOTE
+----
+
+Caching does not show any benefit. In fact, the code is running a lot slower.
+
 '''
 
 from llvm_cbuilder import *
@@ -38,16 +44,18 @@ class StreamUFunc(BasicUFunc):
             cache[i] = ptr.cast(C.void_p)
 
 
+        get_offset = lambda B, I, S, T: B[I * S].reference().cast(C.pointer(T))
         with self.for_range(ZERO, dimensions[0], GRANUL) as (outer, base):
-            get_offset = lambda B, I, S, T: B[I * S].reference().cast(C.pointer(T))
 
             remain = self.min(dimensions[0] - base, GRANUL)
             with self.for_range(remain) as (inner, offset): # do cache
                 for i, arg in enumerate(fnty.args):
-                    cache_ptr[i][offset] = get_offset(args[i], base+offset, steps[i], arg).load()
+                    cache_ptr[i][offset] = get_offset(args[i], base+offset,
+                                                      steps[i], arg).load()
 
             with self.for_range(remain) as (inner, offset): # do work
-                _common.ufunc_core_impl(fnty, ufunc_ptr, cache, cache_steps, offset)
+                _common.ufunc_core_impl(fnty, ufunc_ptr, cache, cache_steps,
+                                        offset)
 
             with self.for_range(remain) as (inner, offset): # extract result
                 outptr = get_offset(args[len(fnty.args)], base+offset,
