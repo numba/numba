@@ -30,7 +30,7 @@ CHECK_RACE_CONDITION = True
 # Granularity controls how many works are removed by the workqueue each time.
 # Applies to normal and stealing mode.
 # Too small and there will be too many cache synchronization.
-GRANULARITY = 2
+GRANULARITY = 20
 
 class WorkQueue(CStruct):
     '''structure for workqueue for parallel-ufunc.
@@ -269,7 +269,8 @@ class UFuncCore(CDefinition):
             workqueue.Lock()
             # Critical section
             item = self.var_copy(workqueue.next, name='item')
-            AMT = self.constant(item.type, GRANULARITY)
+            AMT = self.min(self.constant(item.type, GRANULARITY),
+                           workqueue.last - workqueue.next)
             workqueue.next += AMT
             last = self.var_copy(workqueue.last, name='last')
             # Release

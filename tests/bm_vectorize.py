@@ -7,7 +7,7 @@ from numbapro.vectorize.parallel import ParallelVectorize
 from time import time
 from math import sin
 
-REPEAT = 50
+REPEAT = 60
 CHECK_ERROR = False
 
 def polynomial(a, b):
@@ -23,8 +23,8 @@ class Benchmark:
         # build python ufunc for golden reference
         self.np_ufunc = np.vectorize(polynomial)
 
-        self.dataA = np.linspace(1., 10000., 2**16)
-        self.dataB = np.linspace(1., 10000., 2**16)
+        self.dataA = np.linspace(1., 10000., 2**20)
+        self.dataB = np.linspace(1., 10000., 2**20)
 
         self.golden = self.np_ufunc(self.dataA, self.dataB)
 
@@ -98,7 +98,7 @@ class Benchmark:
         return ufunc
 
     def build_numexpr(self):
-        # ne.set_num_threads(2)
+        #ne.set_num_threads(2)
         def func(a, b):
             # return ne.evaluate("a**2 + b**2 + 2*a*b + a**3 + b**3 + 5*a**2*b * 10*a*b**2")
             return ne.evaluate("a*a + b*b + 2*a*b + a*a*a + b*b*b + 5*a*a*b * 10*sin(a*b/(a*b))")
