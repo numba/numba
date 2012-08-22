@@ -13,6 +13,8 @@
 #include <stddef.h>
 #include <immintrin.h>
 
+#include <math.h> //sinf
+
 //#define SIMDTEST_VERBOSE
 
 #if defined(SIMDTEST_VERBOSE)
@@ -23,6 +25,26 @@
 #endif // SIMDTEST_VERBOSE
 
 #define RESTRICT __restrict
+
+namespace // unnamed
+{
+	template <typename T>
+	inline T* ptr_align_up(T* original, size_t alignment)
+	{
+		// alignment must be power of 2
+		uintptr_t base = reinterpret_cast<uintptr_t>(original);
+		size_t mask = alignment - 1;
+		return reinterpret_cast<T*>((base + mask) & ~mask);
+	}
+
+	template <typename T>
+	inline T* ptr_offset_bytes(T* original, ptrdiff_t offset)
+	{
+		uint8_t* base = reinterpret_cast<uint8_t*>(original);
+		return reinterpret_cast<T*>(base + offset);
+	}
+}
+
 
 /*
  * Some simple test on kernels written using simd intrinsics for the intel
@@ -190,7 +212,7 @@ static void
 simd_add_f__f_f (char**    args, 
 				 npy_intp* dimensions,
 				 npy_intp* strides,
-				 void*     data) __attribute__((flatten));
+				 void*     data);
 
 #define CHUNK_SIZE_IN_BYTES (1024u)
 #define FLOATS_PER_CHUNK    (CHUNK_SIZE_IN_BYTES / sizeof(float))
@@ -286,15 +308,53 @@ static void vvm_add_f__f_f (char**    args,
 	static const size_t max_count_iter = VVM_REGISTER_SIZE / sizeof(float);
 
 	// in this example, assume contiguous
-
-	vvm_register reg0, reg1, reg_dst;
+	vvm_register* registers = reinterpret_cast<vvm_register*>(alloca(VVM_REGISTER_SIZE * 3 + VVM_ALIGNMENT));
+	registers = ptr_align_up(registers, VVM_ALIGNMENT);
+	vvm_register* reg0 = ptr_offset_bytes(registers, 0);
+	vvm_register* reg1 = ptr_offset_bytes(reg0, VVM_REGISTER_SIZE);
+	vvm_register* reg_dst = ptr_offset_bytes(reg1, VVM_REGISTER_SIZE);
 	do
 	{
 		size_t chunk_count = count < max_count_iter? count : max_count_iter;
-		arg0_stream = vvm_load(&reg0, arg0_stream, sizeof(float), chunk_count);
-		arg1_stream = vvm_load(&reg1, arg1_stream, sizeof(float), chunk_count);
-		              vvm_add_float_single(&reg0, &reg1, &reg_dst, chunk_count);
-		dst_stream  = vvm_store(&reg_dst, dst_stream, sizeof(float), chunk_count);
+		arg0_stream = vvm_load(reg0, arg0_stream, sizeof(float), chunk_count);
+		arg1_stream = vvm_load(reg1, arg1_stream, sizeof(float), chunk_count);
+		              vvm_add_float_single(reg0, reg1, reg_dst, chunk_count);
+		dst_stream  = vvm_store(reg_dst, dst_stream, sizeof(float), chunk_count);
+		count -= chunk_count;
+	} while (count);
+}
+
+static void rvvm_add_f__f_f (char**    args, 
+							npy_intp* dimensions,
+							npy_intp* strides,
+							void*     data)
+{
+	static const size_t times = 11u;
+    size_t count = static_cast<size_t>(dimensions[0]);
+	if (0 == count)
+		return;
+
+	const void* arg0_stream = (const void*) args[0];
+	const void* arg1_stream = (const void*) args[1];
+	void* dst_stream     = (void*) args[2];
+	static const size_t max_count_iter = VVM_REGISTER_SIZE / sizeof(float);
+
+	// in this example, assume contiguous
+	vvm_register* registers = reinterpret_cast<vvm_register*>(alloca(VVM_REGISTER_SIZE * 3 + VVM_ALIGNMENT));
+	registers = ptr_align_up(registers, VVM_ALIGNMENT);
+	vvm_register* reg0 = ptr_offset_bytes(registers, 0);
+	vvm_register* reg1 = ptr_offset_bytes(reg0, VVM_REGISTER_SIZE);
+	vvm_register* reg_dst = ptr_offset_bytes(reg1, VVM_REGISTER_SIZE);
+	do
+	{
+		size_t chunk_count = count < max_count_iter? count : max_count_iter;
+		arg0_stream = vvm_load(reg0, arg0_stream, sizeof(float), chunk_count);
+		arg1_stream = vvm_load(reg1, arg1_stream, sizeof(float), chunk_count);
+
+		for (size_t i = 0; i < times; --i) 
+			vvm_add_float_single(reg0, reg1, reg_dst, chunk_count);
+
+		dst_stream  = vvm_store(reg_dst, dst_stream, sizeof(float), chunk_count);
 		count -= chunk_count;
 	} while (count);
 }
@@ -331,27 +391,99 @@ static void scalar_add_f__f_f (char**    args,
     }
 }
 
+/*
+ * sin kernel versions...
+ */
+static void scalar_sin_f__f(char**    args, 
+							npy_intp* dimensions,
+							npy_intp* steps,
+							void*     data)
+{
+    npy_intp i;
+    npy_intp n = dimensions[0];
+    char *in0 = args[0];
+	char *out = args[1];
+    npy_intp in0_step = steps[0];
+	npy_intp out_step = steps[1];
+
+    for (i = 0; i < n; i++) {
+        *((float *)out) = sinf(*(float*)in0);
+
+        in0 += in0_step;
+        out += out_step;
+    }
+}
+
+template <size_t TIMES>
+static void vvm_sin_f__f (char**    args, 
+						  npy_intp* dimensions,
+						  npy_intp* strides,
+						  void*     data)
+{
+    size_t count = static_cast<size_t>(dimensions[0]);
+	if (0 == count)
+		return;
+
+	const void* arg0_stream = (const void*) args[0];
+	void* dst_stream     = (void*) args[1];
+	static const size_t max_count_iter = VVM_REGISTER_SIZE / sizeof(float);
+
+	// in this example, assume contiguous
+	vvm_register* registers = reinterpret_cast<vvm_register*>(alloca(VVM_REGISTER_SIZE * 2 + VVM_ALIGNMENT));
+	registers = ptr_align_up(registers, VVM_ALIGNMENT);
+	vvm_register* reg0 = ptr_offset_bytes(registers, 0);
+	vvm_register* reg_dst = ptr_offset_bytes(reg0, VVM_REGISTER_SIZE);
+	do
+	{
+		size_t chunk_count = count < max_count_iter? count : max_count_iter;
+		arg0_stream = vvm_load(reg0, arg0_stream, sizeof(float), chunk_count);
+		for (size_t i = 0; i < TIMES; i++)
+		{
+			vvm_sin_float_single(reg0, reg_dst, chunk_count);
+		}
+		dst_stream  = vvm_store(reg_dst, dst_stream, sizeof(float), chunk_count);
+		count -= chunk_count;
+	} while (count);
+}
+
+
+
 /* These are the input and return dtypes of logit.*/
 
-PyUFuncGenericFunction test_vmmadd[]    = { &vvm_add_f__f_f };
+PyUFuncGenericFunction test_scalaradd[] = { &scalar_add_f__f_f };
+PyUFuncGenericFunction test_vvmadd[]    = { &vvm_add_f__f_f };
+PyUFuncGenericFunction test_rvvmadd[]   = { &rvvm_add_f__f_f };
 PyUFuncGenericFunction test_simdadd[]   = { &simd_add_f__f_f };
 PyUFuncGenericFunction test_rsimdadd[]  = { &rsimd_add_f__f_f };
-PyUFuncGenericFunction test_scalaradd[] = { &scalar_add_f__f_f };
 PyUFuncGenericFunction test_faithadd[]  = { &faith_add_f__f_f };
-static char test_binaryop_signature[]   = { NPY_FLOAT, NPY_FLOAT, NPY_FLOAT };
-static void *test_data[] = { NULL };
 
+PyUFuncGenericFunction test_scalarsin[] = { &scalar_sin_f__f   };
+PyUFuncGenericFunction test_vvmsin[]    = { &vvm_sin_f__f<1>   };
+PyUFuncGenericFunction test_rvvmsin[]   = { &vvm_sin_f__f<11> };
+
+static char test_binaryop_signature[]   = { NPY_FLOAT, NPY_FLOAT, NPY_FLOAT };
+static char test_unaryop_signature[]    = { NPY_FLOAT, NPY_FLOAT };
+
+static void* test_data[] = { NULL };
 
 struct {
 	PyUFuncGenericFunction* func_impl;
 	const char* name;
+	const char* signature;
+	int nin;
+	int nout;
 } funcs_to_register[] =
 {
-	{ test_scalaradd, "scalar_add" },
-	{ test_vmmadd,    "vvm_add" },
-	{ test_simdadd,   "simd_add" },
-	{ test_rsimdadd,  "rsimd_add" },
-	{ test_faithadd,  "faith_add" },
+	{ test_scalaradd, "scalar_add", test_binaryop_signature, 2, 1 },
+	{ test_vvmadd,    "vvm_add"   , test_binaryop_signature, 2, 1 },
+	{ test_rvvmadd,   "rvvm_add"  , test_binaryop_signature, 2, 1 },
+	{ test_simdadd,   "simd_add"  , test_binaryop_signature, 2, 1 },
+	{ test_rsimdadd,  "rsimd_add" , test_binaryop_signature, 2, 1 },
+	{ test_faithadd,  "faith_add" , test_binaryop_signature, 2, 1 },
+
+	{ test_scalarsin, "scalar_sin", test_unaryop_signature, 1, 1 },
+	{ test_vvmsin,    "vvm_sin"   , test_unaryop_signature, 1, 1 },
+	{ test_rvvmsin,   "rvvm_sin"  , test_unaryop_signature, 1, 1 },
 };
 
 
@@ -364,8 +496,8 @@ void register_functions(PyObject* m)
 		// note: const_cast needed due to the numpy API
 		PyObject* f = PyUFunc_FromFuncAndData(funcs_to_register[i].func_impl,
 											  test_data,
-											  test_binaryop_signature,
-											  1, 2, 1,
+											  const_cast<char*>(funcs_to_register[i].signature),
+											  1, funcs_to_register[i].nin, funcs_to_register[i].nout,
 											  PyUFunc_None, 
 											  const_cast<char*>(funcs_to_register[i].name),
 											  const_cast<char*>("docstring placeholder"),

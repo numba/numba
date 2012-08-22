@@ -3,6 +3,7 @@
 #include "vector-machine.h"
 
 #include <immintrin.h>
+#include <stdio.h>
 
 namespace // nameless
 {
@@ -57,22 +58,16 @@ void vvm_add_float_single(const vvm_register* srcA_in, const vvm_register* srcB_
     } while (--loop_iterations);
 }
 
+
+#if defined(__APPLE__) && defined(__MACH__)
+
+#include <Accelerate/Accelerate.h>
+
 void vvm_sin_float_single(const vvm_register* src_in, vvm_register* dst_out, size_t count)
 {
-	static const size_t simd_iter = 4;
-	static const size_t per_iter_count = simd_iter * sizeof(__m256) / sizeof(float);
-	const __m256* src = reinterpret_cast<const __m256*>(src_in);
-	__m256* __restrict dst = reinterpret_cast<__m256* __restrict>(dst_out);
-	
-	size_t loop_iterations = compute_loop_iters(count, per_iter_count);
-	do
-    {
-		for (size_t i = 0; i < simd_iter; i++)
-		{
-			//dst[i] = _mm256_sin_ps(src[i]);
-		} 
-      
-		dst += simd_iter;
-		src += simd_iter;
-    } while (--loop_iterations);
+	const int icount = static_cast<int>(count);
+	vvsinf((float*)dst_out, (const float*) src_in, &icount);
 }
+
+#else
+#endif

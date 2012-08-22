@@ -11,5 +11,6 @@ test:
 	python test_simd.py
 
 clean:
+	rm -R build
 	rm -f simdtest.so
 

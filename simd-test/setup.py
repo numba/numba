@@ -1,12 +1,21 @@
 from distutils.core import setup, Extension
 
 import numpy
+import platform
+import os
+
+cc_args = ['-std=c++11', '-O3', '-fstrict-aliasing', '-fomit-frame-pointer', '-mavx']
+ld_args = []
+if platform.system() == 'Darwin':
+    ld_args += ['-framework', 'Accelerate']
+    os.putenv('CC', 'clang')
+
 
 module1 = Extension(name = 'simdtest',
                     sources=['simdtest.cpp', 'vector-machine.cpp'],
-
                     include_dirs = [numpy.get_include()],
-                    extra_compile_args = ['-std=c++11', '-march=core-avx-i', '-O3'])
+                    extra_compile_args = cc_args,
+                    extra_link_args = ld_args)
 
 setup(name = 'simdtest',
       author = 'Continuum Analytics, Inc.',
