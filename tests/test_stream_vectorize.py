@@ -12,7 +12,7 @@ def main():
     pv.add(ret_type=int32, arg_types=[int32, int32])
     pv.add(ret_type=f, arg_types=[f, f])
     pv.add(ret_type=d, arg_types=[d, d])
-    para_ufunc = pv.build_ufunc()
+    para_ufunc = pv.build_ufunc(granularity=32)
 
     # build python ufunc
     np_ufunc = np.add

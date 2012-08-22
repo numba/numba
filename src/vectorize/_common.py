@@ -17,7 +17,7 @@ class CommonVectorizeFromFrunc(object):
     def build(self, lfunc):
         raise NotImplementedError
 
-    def __call__(self, lfunclist, engine=None):
+    def __call__(self, lfunclist, engine=None, **kws):
         '''create ufunc from a llvm.core.Function
 
         lfunclist : a single or iterable of llvm.core.Function instance
@@ -35,7 +35,7 @@ class CommonVectorizeFromFrunc(object):
         self.lfunclist = lfunclist
 
         # build all functions
-        spuflist = [self.build(lfunc) for lfunc in lfunclist]
+        spuflist = [self.build(lfunc, **kws) for lfunc in lfunclist]
 
         if engine is None:
             # No engine given, just return the llvm definitions

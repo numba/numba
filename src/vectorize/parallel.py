@@ -24,6 +24,9 @@ import sys
 
 from . import _common
 
+ENABLE_WORK_STEALING = True
+CHECK_RACE_CONDITION = True
+
 class WorkQueue(CStruct):
     '''structure for workqueue for parallel-ufunc.
     '''
@@ -38,31 +41,33 @@ class WorkQueue(CStruct):
     def Lock(self):
         '''inline the lock procedure.
         '''
-        with self.parent.loop() as loop:
-            with loop.condition() as setcond:
-                unlocked = self.parent.constant(self.lock.type, 0)
-                locked = self.parent.constant(self.lock.type, 1)
+        if ENABLE_WORK_STEALING:
+            with self.parent.loop() as loop:
+                with loop.condition() as setcond:
+                    unlocked = self.parent.constant(self.lock.type, 0)
+                    locked = self.parent.constant(self.lock.type, 1)
 
-                res = self.lock.reference().atomic_cmpxchg(unlocked, locked,
-                                               ordering='acquire')
-                setcond( res != unlocked )
+                    res = self.lock.reference().atomic_cmpxchg(unlocked, locked,
+                                                   ordering='acquire')  #acquire
+                    setcond( res != unlocked )
 
-            with loop.body():
-                pass
+                with loop.body():
+                    pass
 
     def Unlock(self):
         '''inline the unlock procedure.
         '''
-        unlocked = self.parent.constant(self.lock.type, 0)
-        locked = self.parent.constant(self.lock.type, 1)
+        if ENABLE_WORK_STEALING:
+            unlocked = self.parent.constant(self.lock.type, 0)
+            locked = self.parent.constant(self.lock.type, 1)
 
-        res = self.lock.reference().atomic_cmpxchg(locked, unlocked,
-                                                   ordering='release')
+            res = self.lock.reference().atomic_cmpxchg(locked, unlocked,
+                                                       ordering='release')
 
-        with self.parent.ifelse( res != locked ) as ifelse:
-            with ifelse.then():
-                # This shall kill the program
-                self.parent.unreachable()
+            with self.parent.ifelse( res != locked ) as ifelse:
+                with ifelse.then():
+                    # This shall kill the program
+                    self.parent.unreachable()
 
 
 class ContextCommon(CStruct):
@@ -161,7 +166,7 @@ class ParallelUFunc(CDefinition):
 
         ## DEBUG ONLY ##
         # Check for race condition
-        if True:
+        if CHECK_RACE_CONDITION:
             total_completed = self.var(C.intp, 0, name='total_completed')
             for t in range(ThreadCount):
                 cur_ctxt = contexts[t].as_struct(Context)
@@ -215,7 +220,6 @@ class ParallelUFuncPosixMixin(object):
         # self.debug("launch threads")
         # TODO error handling
 
-        ONE = self.constant(num_thread.type, 1)
         with self.for_range(num_thread) as (loop, i):
             api.pthread_create(threads[i].reference(), NULL, worker,
                                contexts[i].reference().cast(C.void_p))
@@ -245,7 +249,8 @@ class UFuncCore(CDefinition):
         workqueue = common.workqueues[tid].as_struct(WorkQueue)
 
         self._do_workqueue(common, workqueue, tid, context.completed)
-        self._do_work_stealing(common, tid, context.completed) # optional
+        if ENABLE_WORK_STEALING:
+            self._do_work_stealing(common, tid, context.completed) # optional
 
         self.ret()
 

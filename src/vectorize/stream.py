@@ -17,7 +17,7 @@ class StreamUFunc(BasicUFunc):
         fnty = ufunc_ptr.type.pointee
 
         ZERO = self.constant(C.intp, 0)
-        GRANUL = self.constant(C.intp, 32)
+        GRANUL = self.constant(C.intp, self.Granularity)
 
         # populate steps for cache
         cache_steps = self.array(C.intp, len(fnty.args) + 1)
@@ -56,24 +56,27 @@ class StreamUFunc(BasicUFunc):
         self.ret()
 
     @classmethod
-    def specialize(cls, func_def):
+    def specialize(cls, func_def, granularity):
         '''specialize to a workload
         '''
         cls._name_ = 'streamufunc_%s'% (func_def)
+        cls.Granularity = granularity
         cls.FuncDef = func_def
 
 class _StreamVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
-    def build(self, lfunc):
-        def_buf = StreamUFunc(CFuncRef(lfunc))
-        return def_buf(lfunc.module)
+    def build(self, lfunc, granularity):
+        def_buf = StreamUFunc(CFuncRef(lfunc), granularity)
+        func = def_buf(lfunc.module)
+        return func
 
 stream_vectorize_from_func = _StreamVectorizeFromFunc()
 
 class StreamVectorize(_common.GenericVectorize):
-    def build_ufunc(self):
+    def build_ufunc(self, granularity=32):
         assert self.translates, "No translation"
         lfunclist = self._get_lfunc_list()
         engine = self.translates[0]._get_ee()
-        return stream_vectorize_from_func(lfunclist, engine=engine)
+        return stream_vectorize_from_func(lfunclist, engine=engine,
+                                          granularity=granularity)
 
 

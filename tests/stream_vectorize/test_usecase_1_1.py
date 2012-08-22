@@ -41,7 +41,7 @@ class TestStreamVectorize(unittest.TestCase):
 
         oneone_defs = [OneOne(*tys)(module) for tys in tyslist]
 
-        ufunc = stream_vectorize_from_func(oneone_defs, exe.engine)
+        ufunc = stream_vectorize_from_func(oneone_defs, exe.engine, granularity=32)
         # print(module)
         module.verify()
 
@@ -71,7 +71,7 @@ class TestStreamVectorize(unittest.TestCase):
         def_oneone = OneOne(itype, otype)
         oneone = def_oneone(module)
 
-        ufunc = stream_vectorize_from_func(oneone, exe.engine)
+        ufunc = stream_vectorize_from_func(oneone, exe.engine, granularity=32)
 
 
         print(module)
