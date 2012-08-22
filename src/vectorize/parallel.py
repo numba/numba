@@ -27,6 +27,11 @@ from . import _common
 ENABLE_WORK_STEALING = True
 CHECK_RACE_CONDITION = True
 
+# Granularity controls how many works are removed by the workqueue each time.
+# Applies to normal and stealing mode.
+# Too small and there will be too many cache synchronization.
+GRANULARITY = 2
+
 class WorkQueue(CStruct):
     '''structure for workqueue for parallel-ufunc.
     '''
@@ -259,11 +264,13 @@ class UFuncCore(CDefinition):
         '''
         ZERO = self.constant_null(C.int)
 
+
         with self.forever() as loop:
             workqueue.Lock()
             # Critical section
             item = self.var_copy(workqueue.next, name='item')
-            workqueue.next += self.constant(item.type, 1)
+            AMT = self.constant(item.type, GRANULARITY)
+            workqueue.next += AMT
             last = self.var_copy(workqueue.last, name='last')
             # Release
             workqueue.Unlock()
@@ -272,8 +279,10 @@ class UFuncCore(CDefinition):
                 with ifelse.then():
                     loop.break_loop()
 
-            self._do_work(common, item, tid)
-            completed += self.constant(completed.type, 1)
+
+            with self.for_range(AMT) as (loop, offset):
+                self._do_work(common, item + offset, tid)
+                completed += self.constant(completed.type, 1)
 
     def _do_work_stealing(self, common, tid, completed):
         '''steal work from other workqueues.
@@ -310,18 +319,19 @@ class UFuncCore(CDefinition):
         '''
         otherqueue.Lock()
         # Acquired
-        ONE = self.constant(otherqueue.last.type, 1)
+        STEAL_AMT = self.constant(otherqueue.last.type, GRANULARITY)
         STEAL_CONTINUE = self.constant(steal_continue.type, 1)
-        with self.ifelse(otherqueue.next < otherqueue.last) as ifelse:
+        with self.ifelse(otherqueue.next <= otherqueue.last - STEAL_AMT) as ifelse:
             with ifelse.then():
-                otherqueue.last -= ONE
+                otherqueue.last -= STEAL_AMT
                 item = self.var_copy(otherqueue.last)
 
                 otherqueue.Unlock()
                 # Released
 
-                self._do_work(common, item, tid)
-                completed += self.constant(completed.type, 1)
+                with self.for_range(STEAL_AMT) as (loop, offset):
+                    self._do_work(common, item + offset, tid)
+                    completed += self.constant(completed.type, 1)
 
                 # Mark incomplete thread
                 steal_continue.assign(STEAL_CONTINUE)

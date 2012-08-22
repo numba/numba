@@ -5,12 +5,15 @@ from numbapro.vectorize.basic import BasicVectorize
 from numbapro.vectorize.stream import StreamVectorize
 from numbapro.vectorize.parallel import ParallelVectorize
 from time import time
+from math import sin
 
 REPEAT = 50
 CHECK_ERROR = False
 
 def polynomial(a, b):
-    return a * a + b * b + 2 * a * b
+    # return a*a + b*b + 2*a*b + a*a*a + b*b*b + 5*a*a*b * 10*a*b*b
+    # return a * a + b * b + 2 * a * b
+    return a*a + b*b + 2*a*b + a*a*a + b*b*b + 5*a*a*b * 10*sin(a*b/(a*b))
 
 def fix_time_unit(t):
     return '%.2f %s' % (t * 1e3, 'ms')
@@ -20,8 +23,8 @@ class Benchmark:
         # build python ufunc for golden reference
         self.np_ufunc = np.vectorize(polynomial)
 
-        self.dataA = np.linspace(0., 10000., 2**20)
-        self.dataB = np.linspace(0., 10000., 2**20)
+        self.dataA = np.linspace(1., 10000., 2**16)
+        self.dataB = np.linspace(1., 10000., 2**16)
 
         self.golden = self.np_ufunc(self.dataA, self.dataB)
 
@@ -91,12 +94,15 @@ class Benchmark:
         # pv.add(ret_type=int32, arg_types=[int32, int32])
         pv.add(ret_type=f, arg_types=[f, f])
         pv.add(ret_type=d, arg_types=[d, d])
-        ufunc = pv.build_ufunc()
+        ufunc = pv.build_ufunc(granularity=32)
         return ufunc
 
     def build_numexpr(self):
+        # ne.set_num_threads(2)
         def func(a, b):
-            return ne.evaluate("a**2 + b**2 + 2*a*b")
+            # return ne.evaluate("a**2 + b**2 + 2*a*b + a**3 + b**3 + 5*a**2*b * 10*a*b**2")
+            return ne.evaluate("a*a + b*b + 2*a*b + a*a*a + b*b*b + 5*a*a*b * 10*sin(a*b/(a*b))")
+
         return func
 
 
