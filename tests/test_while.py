@@ -74,6 +74,21 @@ def while_loop_fn_5(i_max, j_max):
 
 # ______________________________________________________________________
 
+def while_loop_fn_6(test_input):
+    '''While-loop version of for-loop tests for issue #25.
+    https://github.com/numba/numba/issues/25'''
+    acc = 0.0
+    i = 0.0
+    while i < 5.0:
+        if i == test_input:
+            acc += 100.0
+        else:
+            acc += i
+        i += 1.0
+    return acc
+
+# ______________________________________________________________________
+
 class TestWhile(unittest.TestCase):
     def _do_test(self, function, arg_types, *args, **kws):
         _jit = (jit(arg_types = arg_types)
@@ -109,6 +124,11 @@ class TestWhile(unittest.TestCase):
         compiled_result = compiled_fn(3, 4)
         self.assertEqual(compiled_result, while_loop_fn_5(3, 4))
         self.assertEqual(compiled_result, 18.)
+
+    def test_while_loop_fn_6(self):
+        compiled_fn = jit()(while_loop_fn_6)
+        self.assertEqual(while_loop_fn_6(4.), compiled_fn(4.))
+        self.assertEqual(while_loop_fn_6(5.), compiled_fn(5.))
 
 # ______________________________________________________________________
 

@@ -51,6 +51,30 @@ def for_loop_fn_3 (stop):
 
 # ______________________________________________________________________
 
+def for_loop_w_guard_0 (test_input):
+    '''Test case based on issue #25.  See:
+    https://github.com/numba/numba/issues/25'''
+    acc = 0.0
+    for i in range(5):
+        if i == test_input:
+            acc += 100.0
+    return acc
+
+# ______________________________________________________________________
+
+def for_loop_w_guard_1 (test_input):
+    '''Test case based on issue #25.  See:
+    https://github.com/numba/numba/issues/25'''
+    acc = 0.0
+    for i in range(5):
+        if i == test_input:
+            acc += 100.0
+        else:
+            acc += i
+    return acc
+
+# ______________________________________________________________________
+
 class TestForLoop(unittest.TestCase):
     @unittest.skipUnless(hasattr(__builtin__, '__noskip__'), 
                          "Requires implementation of iteration " 
@@ -83,6 +107,24 @@ class TestForLoop(unittest.TestCase):
         result = compiled_for_loop_fn(3)
         self.assertEqual(result, for_loop_fn_3(3))
         self.assertEqual(result, 81)
+
+    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'), 
+                         "Requires fix for issue #25.")
+    def test_compiled_for_loop_w_guard_0(self):
+        compiled_for_loop_w_guard = jit()(for_loop_w_guard_0)
+        self.assertEqual(compiled_for_loop_w_guard_0(5.),
+                         for_loop_w_guard_0(5.))
+        self.assertEqual(compiled_for_loop_w_guard_0(4.),
+                         for_loop_w_guard_0(4.))
+
+    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'), 
+                         "Requires fix for issue #25.")
+    def test_compiled_for_loop_w_guard_1(self):
+        compiled_for_loop_w_guard = jit()(for_loop_w_guard_1)
+        self.assertEqual(compiled_for_loop_w_guard_1(5.),
+                         for_loop_w_guard_1(5.))
+        self.assertEqual(compiled_for_loop_w_guard_1(4.),
+                         for_loop_w_guard_1(4.))
 
 # ______________________________________________________________________
 
