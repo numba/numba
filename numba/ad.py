@@ -79,7 +79,7 @@ class FrameVM(object):
         arg1 = self.stack.pop(-1)
         r = arg1 + arg2
         self.stack.append(r)
-        if (id(arg1) in self.watcher.svars 
+        if (id(arg1) in self.watcher.svars
                 or id(arg2) in self.watcher.svars):
             s1 = self.watcher.svars.get(id(arg1), arg1)
             s2 = self.watcher.svars.get(id(arg2), arg2)
@@ -91,7 +91,7 @@ class FrameVM(object):
         arg1 = self.stack.pop(-1)
         r = arg1 - arg2
         self.stack.append(r)
-        if (id(arg1) in self.watcher.svars 
+        if (id(arg1) in self.watcher.svars
                 or id(arg2) in self.watcher.svars):
             s1 = self.watcher.svars.get(id(arg1), arg1)
             s2 = self.watcher.svars.get(id(arg2), arg2)
@@ -102,7 +102,7 @@ class FrameVM(object):
         arg1 = self.stack.pop(-1)
         r = arg1 * arg2
         self.stack.append(r)
-        if (id(arg1) in self.watcher.svars 
+        if (id(arg1) in self.watcher.svars
                 or id(arg2) in self.watcher.svars):
             s1 = self.watcher.svars.get(id(arg1), arg1)
             s2 = self.watcher.svars.get(id(arg2), arg2)

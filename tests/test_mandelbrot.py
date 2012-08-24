@@ -7,7 +7,7 @@ computations.
 '''
 # ______________________________________________________________________
 
-from numba.decorators import jit
+from numba.decorators import jit, function
 
 import unittest
 
@@ -45,6 +45,8 @@ except:
         tb.print_exc()
     mandel_1c = None
 
+mandel_1c_ast = function(mandel_1)
+
 #@jit(arg_types = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])
 def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
     nb_colors = len(colors)
@@ -79,6 +81,8 @@ except:
         tb.print_exc()
     mandel_driver_1c = None
 
+mandel_driver_1c_ast = function(mandel_driver_1)
+
 def make_palette():
     '''Shamefully stolen from
     http://wiki.cython.org/examples/mandelbrot, though we did correct
@@ -100,7 +104,7 @@ class TestMandelbrot(unittest.TestCase):
                             "Traceback should be output if __debug__ is set.")
         self.assertEqual(mandel_1c(0., 0., 20), -1)
 
-    def test_mandel_1(self):
+    def _test_mandel_1(self, mandel_1c):
         self.assertNotEqual(mandel_1c, None, "Failed to compile mandel_1().  "
                             "Traceback should be output if __debug__ is set.")
         vals = np.arange(-1., 1.000001, 0.1)
@@ -109,7 +113,15 @@ class TestMandelbrot(unittest.TestCase):
                 self.assertEqual(mandel_1c(real, imag, 20),
                                  mandel_1(real, imag, 20))
 
-    def test_mandel_driver_1(self):
+    def test_mandel_1(self):
+        global mandel_1c
+        self._test_mandel_1(mandel_1c)
+
+    def test_mandel_1_ast(self):
+        global mandel_1c_ast
+        self._test_mandel_1(mandel_1c_ast)
+
+    def _test_mandel_driver_1(self, mandel_driver_1c):
         self.assertNotEqual(mandel_driver_1c, None, "Failed to compile "
                             "mandel_driver_1().  Traceback should be output if "
                             "__debug__ is set.")
@@ -121,6 +133,14 @@ class TestMandelbrot(unittest.TestCase):
         mandel_driver_1c(-1., 1., -1., len(palette), palette, test_image)
         image_diff = control_image - test_image
         self.assertTrue((image_diff == 0).all())
+
+    def test_mandel_driver_1(self):
+        global mandel_driver_1c
+        self._test_mandel_driver_1(mandel_driver_1c)
+
+    def test_mandel_driver_1_ast(self):
+        global mandel_driver_1c_ast
+        self._test_mandel_driver_1(mandel_driver_1c_ast)
 
 # ______________________________________________________________________
 

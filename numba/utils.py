@@ -3,7 +3,7 @@ import ctypes
 from numpy import complex64, complex128
 
 def itercode(code):
-    """Return a generator of byte-offset, opcode, and argument 
+    """Return a generator of byte-offset, opcode, and argument
     from a byte-code-string
     """
     i = 0
@@ -34,6 +34,16 @@ def debugout(*args):
     if __debug__:
         print("debugout (non-translated): %s" % (''.join((str(arg)
                                                           for arg in args)),))
+
+def get_minivect_context():
+    from .minivect import miniast
+    from . import _numba_types
+
+    context = miniast.Context()
+    context.typemapper = _numba_types.NumbaTypeMapper(context)
+    return context
+
+context = get_minivect_context()
 
 # NOTE: The following ctypes structures were inspired by Joseph
 # Heller's response to python-list question about ctypes complex

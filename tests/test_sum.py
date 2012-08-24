@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
-'''test_filter2d
+'''test_sum
 
-Test the filter2d() example from the PyCon'12 slide deck.
+Test the sum2d() example.
 '''
 # ______________________________________________________________________
 
@@ -33,7 +33,7 @@ class TestSum2d(unittest.TestCase):
         image = numpy.random.rand(10, 10)
         plain_old_result = sum2d(image)
         hot_new_result = usum2d(image)
-        self.assertTrue((abs(plain_old_result - hot_new_result) < 1e-9))
+        self.assertTrue((abs(plain_old_result - hot_new_result) < 1e-9).all())
 
 # ______________________________________________________________________
 
@@ -41,4 +41,4 @@ if __name__ == "__main__":
     unittest.main(*sys.argv[1:])
 
 # ______________________________________________________________________
-# End of test_filter2d.py
+# End of test_sum.py

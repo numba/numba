@@ -12,7 +12,7 @@ from numba.minivect import miniast, minitypes
 
 __all__ = minitypes.__all__ + [
     'O', 'b', 'i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8',
-    'f4', 'f8', 'f16', 'c8', 'c16', 'c32', 'd', 'f', 'i',
+    'f4', 'f8', 'f16', 'c8', 'c16', 'c32', 'f', 'd', 'i',
 ]
 
 class NumbaType(minitypes.Type):
@@ -124,10 +124,15 @@ class ModuleAttributeType(NumbaType):
 class RangeType(NumbaType):
     is_range = True
 
+class IntPType(NumbaType, minitypes.IntType):
+    "numpy intp type"
+    name = "intp"
+
 tuple_ = TupleType()
 phi = PHIType()
 module_type = ModuleType()
 
+intp = IntPType()
 
 #
 ### Type shorthands
@@ -155,7 +160,7 @@ c32 = complex256
 class NumbaTypeMapper(minitypes.TypeMapper):
     def to_llvm(self, type):
         if type.is_array:
-            return _numpy_array
+            return llvm_types._numpy_array
         elif type.is_complex:
             return lc.Type.struct([type.base_type, type.base_type])
         elif type.is_py_ssize_t:
@@ -219,6 +224,108 @@ def _map_dtype(dtype):
 
     raise NotImplementedError("dtype %s not supported" % (dtype,))
 
+def convert_to_ctypes(type):
+    # FIXME: At some point we should add a type check to the
+    # wrapper code s.t. it ensures the given argument conforms to
+    # the following:
+    #     np.ctypeslib.ndpointer(dtype = np.dtype(crnt_elem),
+    #                            ndim = dimcount,
+    #                            flags = 'C_CONTIGUOUS')
+    # For now, we'll just allow any Python objects, and hope for the best.
+
+    if type.is_pointer:
+        return ctypes.POINTER(convert_to_ctypes(type.base_type))
+    elif type.is_object or type.is_array:
+        return ctypes.py_object
+    elif type.is_float:
+        if type.itemsize == 4:
+            return ctypes.c_float
+        elif type.itemsize == 8:
+            return ctypes.c_double
+        else:
+            return ctypes.c_longdouble
+    elif type.is_int:
+        item_idx = int(math.log(type.itemsize))
+        if type.is_signed:
+            values = [ctypes.c_int8, ctypes.c_int16, ctypes.c_int32,
+                      ctypes.c_int64]
+        else:
+            values = [ctypes.c_uint8, ctypes.c_uint16, ctypes.c_uint32,
+                      ctypes.c_uint64]
+        return values[item_idx]
+    elif type.is_complex:
+        if type.itemsize == 8:
+            return Complex64
+        elif type.itemsize == 16:
+            return Complex128
+        else:
+            return Complex256
+    elif type.is_c_string:
+        return ctypes.c_char_p
+    elif type.is_function:
+        return_type = convert_to_ctypes(type.return_type)
+        arg_types = [covert_to_ctypes(arg_type) for arg_type in type.args]
+        return ctypes.CFUNCTYPE(return_type, arg_types)
+    elif type.is_py_ssize_t:
+        return getattr(ctypes, 'c_uint%d' % (llvm_types._sizeof_py_ssize_t * 8))
+    elif type.is_void:
+        return None
+    elif type.is_carray:
+        return convert_to_ctypes(type.base_type) * type.size
+    else:
+        raise NotImplementedError(type)
+
+# NOTE: The following ctypes structures were inspired by Joseph
+# Heller's response to python-list question about ctypes complex
+# support.  In that response, he said these were only suitable for
+# Linux.  Might our milage vary?
+
+class ComplexMixin (object):
+    def _get (self):
+        # FIXME: Ensure there will not be a loss of precision here!
+        return self._numpy_ty_(self.real + (self.imag * 1j))
+
+    def _set (self, value):
+        self.real = value.real
+        self.imag = value.imag
+
+    value = property(_get, _set)
+
+    @classmethod
+    def from_param(cls, param):
+        ret_val = cls()
+        ret_val.value = param
+        return ret_val
+
+    @classmethod
+    def make_ctypes_prototype_wrapper(cls, ctypes_prototype):
+        '''This is a hack so that functions that return a complex type
+        will construct a new Python value from the result, making the
+        Numba compiled function a drop-in replacement for a Python
+        function.'''
+        # FIXME: See if there is some way of avoiding this additional
+        # wrapper layer.
+        def _make_complex_result_wrapper(in_func):
+            ctypes_function = ctypes_prototype(in_func)
+            def _complex_result_wrapper(*args, **kws):
+                # Return the value property, not the ComplexMixin
+                # instance built by ctypes.
+                return ctypes_function(*args, **kws).value
+            return _complex_result_wrapper
+        return _make_complex_result_wrapper
+
+class Complex64 (ctypes.Structure, ComplexMixin):
+    _fields_ = [('real', ctypes.c_float), ('imag', ctypes.c_float)]
+    _numpy_ty_ = complex64
+
+class Complex128 (ctypes.Structure, ComplexMixin):
+    _fields_ = [('real', ctypes.c_double), ('imag', ctypes.c_double)]
+    _numpy_ty_ = complex128
+
+# TODO: What if sizeof(long double) != 16?
+class Complex256 (ctypes.Structure, ComplexMixin):
+    _fields_ = [('real', ctypes.c_longdouble), ('imag', ctypes.c_longdouble)]
+    _numpy_ty_ = complex128
 
 if __name__ == '__main__':
     import doctest

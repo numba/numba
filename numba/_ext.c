@@ -113,13 +113,20 @@ ufunc_from_ptr(PyObject *self, PyObject *args)
     return ret;
 }
 
+static PyObject *
+sizeof_py_ssize_t(PyObject *self, PyObject *args)
+{
+    return PyInt_FromSize_t(sizeof(Py_ssize_t));
+}
 
 static PyMethodDef ext_methods[] = {
 
 #ifdef IS_PY3K
     {"make_ufunc", (PyCFunction) ufunc_from_ptr, METH_VARARGS, NULL},
+    {"sizeof_py_ssize_t", (PyCFunction) sizeof_py_ssize_t, METH_NOARGS, NULL},
 #else
     {"make_ufunc", ufunc_from_ptr, METH_VARARGS},
+    {"sizeof_py_ssize_t", sizeof_py_ssize_t, METH_NOARGS},
 #endif
     { NULL }
 };
