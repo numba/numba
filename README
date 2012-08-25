@@ -4,6 +4,17 @@ remarkable LLVM compiler infrastructure to compile Python byte-code to
 machine code especially for use in the NumPy run-time and SciPy
 modules.
 
+Not all Python syntax is supported, currently.  And long-term,
+the best that will be done with some Python constructs is to 
+eliminate the "interpreter".  Numba is going to work well first with 
+NumPy arrays that are large arrays of typed information.
+
+If you are looking for a full Python compiler to handle all Python syntax,
+look at PyPy, ShedSkin, Nutika, or other projects.
+
+Numba is also not a tracing jit.  It *compiles* your code before it gets
+run using type information you provide in the decorator.
+
 Dependencies:
 
   * LLVM 3.1
