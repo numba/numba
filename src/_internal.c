@@ -289,9 +289,13 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     PyObject *type_obj;
     PyObject *data_obj;
     PyObject *object=NULL; /* object to hold on to while ufunc is alive */
-    char * signature;
     int i, j;
     int custom_dtype = 0;
+    PyUFuncGenericFunction *funcs;
+    int *types;
+    void **data;
+    PyObject *ufunc;
+    char * signature;
 
     if (!PyArg_ParseTuple(args, "O!O!iiOs|O", &PyList_Type, &func_list, &PyList_Type, &type_list, &nin, &nout, &data_list, &signature, &object)) {
         return NULL;
@@ -311,7 +315,7 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         return NULL;
     }
 
-    PyUFuncGenericFunction *funcs = PyArray_malloc(nfuncs * sizeof(PyUFuncGenericFunction));
+    funcs = PyArray_malloc(nfuncs * sizeof(PyUFuncGenericFunction));
     if (funcs == NULL) {
         return NULL;
     }
@@ -330,7 +334,7 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         }
     }
 
-    int *types = PyArray_malloc(nfuncs * (nin+nout) * sizeof(int));
+    types = PyArray_malloc(nfuncs * (nin+nout) * sizeof(int));
     if (types == NULL) {
         return NULL;
     }
@@ -340,11 +344,13 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         type_obj = PyList_GetItem(type_list, i);
 
         for (j = 0; j < (nin+nout); j++) {
+            int dtype_num;
+
             SENTRY_VALID_LONG(
                 types[i*(nin+nout) + j] = PyLong_AsLong(PyList_GetItem(type_obj, j))
             );
 
-            int dtype_num = PyLong_AsLong(PyList_GetItem(type_obj, j));
+            dtype_num = PyLong_AsLong(PyList_GetItem(type_obj, j));
 
             SENTRY_VALID_LONG(dtype_num);
 
@@ -354,7 +360,7 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         }
     }
 
-    void **data = PyArray_malloc(nfuncs * sizeof(void *));
+    data = PyArray_malloc(nfuncs * sizeof(void *));
     if (data == NULL) {
         return NULL;
     }
@@ -383,7 +389,6 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         }
     }
 
-    PyObject *ufunc;
     if (!custom_dtype) {
         char *char_types = PyArray_malloc(nfuncs * (nin+nout) * sizeof(char));
         for (i = 0; i < nfuncs; i++) {

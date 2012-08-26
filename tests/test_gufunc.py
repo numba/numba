@@ -53,7 +53,7 @@ def test_gufunc():
 def main():
     test_numba()
     test_gufunc()
-
+    print 'All good!'
 
 if __name__ == '__main__':
     main()

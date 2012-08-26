@@ -31,3 +31,5 @@ run_test test_basic_vectorize.py
 run_test test_parallel_vectorize.py
 run_test test_stream_vectorize.py
 
+run_test test_gufunc.py
+
