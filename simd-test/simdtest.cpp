@@ -414,6 +414,7 @@ static void scalar_sin_f__f(char**    args,
     }
 }
 
+// sin with contiguous memory
 template <size_t TIMES>
 static void vvm_sin_f__f (char**    args, 
 						  npy_intp* dimensions,
@@ -446,6 +447,98 @@ static void vvm_sin_f__f (char**    args,
 	} while (count);
 }
 
+// sin with strided streams code
+template <size_t TIMES>
+static void vvm2_sin_f__f (char**    args, 
+						  npy_intp* dimensions,
+						  npy_intp* strides,
+						  void*     data)
+{
+    size_t count = static_cast<size_t>(dimensions[0]);
+	if (0 == count)
+		return;
+
+	const void* arg0_stream = (const void*) args[0];
+	ptrdiff_t arg0_stride = (ptrdiff_t) strides[0];
+	void* dst_stream     = (void*) args[1];
+	ptrdiff_t dst_stride = (ptrdiff_t) strides[1];
+	static const size_t max_count_iter = VVM_REGISTER_SIZE / sizeof(float);
+
+	// in this example, assume contiguous
+	vvm_register* registers = reinterpret_cast<vvm_register*>(alloca(VVM_REGISTER_SIZE * 2 + VVM_ALIGNMENT));
+	registers = ptr_align_up(registers, VVM_ALIGNMENT);
+	vvm_register* reg0 = ptr_offset_bytes(registers, 0);
+	vvm_register* reg_dst = ptr_offset_bytes(reg0, VVM_REGISTER_SIZE);
+	do
+	{
+		size_t chunk_count = count < max_count_iter? count : max_count_iter;
+		arg0_stream = vvm_load_stream(reg0, arg0_stream, sizeof(float), arg0_stride, chunk_count);
+		for (size_t i = 0; i < TIMES; i++)
+		{
+			vvm_sin_float_single(reg0, reg_dst, chunk_count);
+		}
+		dst_stream  = vvm_store_stream(reg_dst, dst_stream, sizeof(float), dst_stride,  chunk_count);
+		count -= chunk_count;
+	} while (count);
+}
+
+// sin with strided stream code and naive prefetching
+template <size_t TIMES>
+static void vvm3_sin_f__f (char**    args, 
+						  npy_intp* dimensions,
+						  npy_intp* strides,
+						  void*     data)
+{
+    size_t count = static_cast<size_t>(dimensions[0]);
+	if (0 == count)
+		return;
+
+	const void* arg0_stream = (const void*) args[0];
+	ptrdiff_t arg0_stride = (ptrdiff_t) strides[0];
+	void* dst_stream     = (void*) args[1];
+	ptrdiff_t dst_stride = (ptrdiff_t) strides[1];
+	static const size_t max_count_iter = VVM_REGISTER_SIZE / sizeof(float);
+
+	// in this example, assume contiguous
+	vvm_register* registers = reinterpret_cast<vvm_register*>(alloca(VVM_REGISTER_SIZE * 2 + VVM_ALIGNMENT));
+	registers = ptr_align_up(registers, VVM_ALIGNMENT);
+	vvm_register* reg0 = ptr_offset_bytes(registers, 0);
+	vvm_register* reg_dst = ptr_offset_bytes(reg0, VVM_REGISTER_SIZE);
+
+	size_t next_chunk_count = count < max_count_iter? count : max_count_iter;
+	vvm_prefetch_stream (arg0_stream, arg0_stride, next_chunk_count);
+
+	do
+	{
+		size_t chunk_count = next_chunk_count;
+		count -= chunk_count;
+		next_chunk_count = count < max_count_iter? count : max_count_iter;
+
+		vvm_prefetch_stream(dst_stream, dst_stride, chunk_count);
+		arg0_stream = vvm_load_stream(reg0, arg0_stream, sizeof(float), arg0_stride, chunk_count);
+
+		if (next_chunk_count)
+		{
+			vvm_prefetch_stream(arg0_stream, arg0_stride, next_chunk_count);
+		}
+
+		for (size_t i = 0; i < TIMES; i++) // in practical cases this loop will not exist
+		{
+			vvm_sin_float_single(reg0, reg_dst, chunk_count);
+		}
+
+		dst_stream  = vvm_store_stream(reg_dst, dst_stream, sizeof(float), dst_stride,  chunk_count);
+	} while (count);
+}
+
+static void faith_sin_f__f (char**    args, 
+							npy_intp* dimensions,
+							npy_intp* steps,
+							void*     data)
+{
+	size_t count = static_cast<size_t>(dimensions[0]);
+	vvm_sin_float_single((const vvm_register*)(args[0]), (vvm_register*)(args[1]), count);
+}
 
 
 /* These are the input and return dtypes of logit.*/
@@ -457,9 +550,14 @@ PyUFuncGenericFunction test_simdadd[]   = { &simd_add_f__f_f };
 PyUFuncGenericFunction test_rsimdadd[]  = { &rsimd_add_f__f_f };
 PyUFuncGenericFunction test_faithadd[]  = { &faith_add_f__f_f };
 
-PyUFuncGenericFunction test_scalarsin[] = { &scalar_sin_f__f   };
-PyUFuncGenericFunction test_vvmsin[]    = { &vvm_sin_f__f<1>   };
+PyUFuncGenericFunction test_scalarsin[] = { &scalar_sin_f__f  };
+PyUFuncGenericFunction test_vvmsin[]    = { &vvm_sin_f__f<1>  };
 PyUFuncGenericFunction test_rvvmsin[]   = { &vvm_sin_f__f<11> };
+PyUFuncGenericFunction test_vvm2sin[]   = { &vvm2_sin_f__f<1> };
+PyUFuncGenericFunction test_rvvm2sin[]  = { &vvm2_sin_f__f<11>};
+PyUFuncGenericFunction test_vvm3sin[]   = { &vvm3_sin_f__f<1> };
+PyUFuncGenericFunction test_rvvm3sin[]  = { &vvm3_sin_f__f<11>};
+PyUFuncGenericFunction test_faithsin[]  = { &faith_sin_f__f   };
 
 static char test_binaryop_signature[]   = { NPY_FLOAT, NPY_FLOAT, NPY_FLOAT };
 static char test_unaryop_signature[]    = { NPY_FLOAT, NPY_FLOAT };
@@ -484,6 +582,11 @@ struct {
 	{ test_scalarsin, "scalar_sin", test_unaryop_signature, 1, 1 },
 	{ test_vvmsin,    "vvm_sin"   , test_unaryop_signature, 1, 1 },
 	{ test_rvvmsin,   "rvvm_sin"  , test_unaryop_signature, 1, 1 },
+	{ test_vvm2sin,   "vvm2_sin"  , test_unaryop_signature, 1, 1 },
+	{ test_rvvm2sin,  "rvvm2_sin" , test_unaryop_signature, 1, 1 },
+	{ test_vvm3sin,   "vvm3_sin"  , test_unaryop_signature, 1, 1 },
+	{ test_rvvm3sin,  "rvvm3_sin" , test_unaryop_signature, 1, 1 },
+	{ test_faithsin,  "faith_sin" , test_unaryop_signature, 1, 1 },
 };
 
 

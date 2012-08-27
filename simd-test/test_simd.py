@@ -37,7 +37,7 @@ def test_sins(element_count, repeat = 100):
         end = time.time()
         return end - start
 
-    tests = [ 'scalar_sin', 'vvm_sin', 'rvvm_sin' ]
+    tests = [ 'scalar_sin', 'vvm_sin', 'rvvm_sin', 'vvm2_sin', 'rvvm2_sin', 'vvm3_sin', 'rvvm3_sin', 'faith_sin' ]
     print '\n====== test sins for %d elements (%d times) ======' % (element_count, repeat)
     for i in tests:
         f = simdtest.__dict__[i]
