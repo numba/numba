@@ -5,6 +5,7 @@
 import contextlib
 import llvm.core as lc
 import llvm.ee as le
+import llvm.passes as lp
 from llvm import LLVMException
 from . import shortnames as types
 
@@ -245,6 +246,9 @@ class CBuilder(object):
         for i in args:
             if isinstance(i, str):
                 itemsfmt.append(i.replace('%', '%%'))
+            elif isinstance(i.type, lc.PointerType):
+                itemsfmt.append("%p")
+                items.append(i)
             else:
                 tyname = str(i.type)
                 if tyname == 'float':
@@ -257,6 +261,26 @@ class CBuilder(object):
                 items.append(i)
         fmt = ' '.join(itemsfmt) + '\n'
         return self.printf(self.constant_string(fmt), *items)
+
+    def sizeof(self, ty):
+        bldr = self.builder
+        ptrty = types.pointer(ty)
+        first = lc.Constant.null(ptrty)
+        second = bldr.gep(first, [lc.Constant.int(types.intp, 1)])
+
+        firstint = bldr.ptrtoint(first, types.intp)
+        secondint = bldr.ptrtoint(second, types.intp)
+        diff = bldr.sub(secondint, firstint)
+        return CTemp(self, diff)
+
+    def min(self, x, y):
+        z = self.var(x.type)
+        with self.ifelse( x < y ) as ifelse:
+            with ifelse.then():
+                z.assign(x)
+            with ifelse.otherwise():
+                z.assign(y)
+        return z
 
     def var(self, ty, value=None, name=''):
         '''allocate variable on the stack
@@ -771,6 +795,14 @@ class CDefinition(CBuilder):
         cbuilder.__init__(func)
         cbuilder.body(*cbuilder.args)
         cbuilder.close()
+
+        # optimize
+        fpm = lp.FunctionPassManager.new(module)
+        pmb = lp.PassManagerBuilder.new()
+        pmb.opt_level = 3
+        pmb.vectorize = True
+        pmb.populate(fpm)
+        fpm.run(func)
         return func
 
     def body(self):
@@ -1039,11 +1071,15 @@ class CValue(object):
             raise TypeError("Must be a pointer or vector; got %s" % self.type)
 
     def __setitem__(self, idx, val):
-        self._ensure_is_vector()
         idx = _auto_coerce_index(self.parent, idx)
         bldr = self.parent.builder
-        vec = bldr.insert_element(self.value, val.value, idx.value)
-        bldr.store(vec, self.ptr)
+        if self.is_vector:
+            vec = bldr.insert_element(self.value, val.value, idx.value)
+            bldr.store(vec, self.ptr)
+        elif self.is_pointer:
+            self[idx].assign(val)
+        else:
+            raise TypeError("Must be a pointer or vector; got %s" % self.type)
 
     def load(self, volatile=False):
         '''memory load for pointer types

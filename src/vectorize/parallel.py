@@ -24,6 +24,14 @@ import sys
 
 from . import _common
 
+ENABLE_WORK_STEALING = True
+CHECK_RACE_CONDITION = True
+
+# Granularity controls how many works are removed by the workqueue each time.
+# Applies to normal and stealing mode.
+# Too small and there will be too many cache synchronization.
+GRANULARITY = 20
+
 class WorkQueue(CStruct):
     '''structure for workqueue for parallel-ufunc.
     '''
@@ -38,31 +46,33 @@ class WorkQueue(CStruct):
     def Lock(self):
         '''inline the lock procedure.
         '''
-        with self.parent.loop() as loop:
-            with loop.condition() as setcond:
-                unlocked = self.parent.constant(self.lock.type, 0)
-                locked = self.parent.constant(self.lock.type, 1)
+        if ENABLE_WORK_STEALING:
+            with self.parent.loop() as loop:
+                with loop.condition() as setcond:
+                    unlocked = self.parent.constant(self.lock.type, 0)
+                    locked = self.parent.constant(self.lock.type, 1)
 
-                res = self.lock.reference().atomic_cmpxchg(unlocked, locked,
-                                               ordering='acquire')
-                setcond( res != unlocked )
+                    res = self.lock.reference().atomic_cmpxchg(unlocked, locked,
+                                                   ordering='acquire')  #acquire
+                    setcond( res != unlocked )
 
-            with loop.body():
-                pass
+                with loop.body():
+                    pass
 
     def Unlock(self):
         '''inline the unlock procedure.
         '''
-        unlocked = self.parent.constant(self.lock.type, 0)
-        locked = self.parent.constant(self.lock.type, 1)
+        if ENABLE_WORK_STEALING:
+            unlocked = self.parent.constant(self.lock.type, 0)
+            locked = self.parent.constant(self.lock.type, 1)
 
-        res = self.lock.reference().atomic_cmpxchg(locked, unlocked,
-                                                   ordering='release')
+            res = self.lock.reference().atomic_cmpxchg(locked, unlocked,
+                                                       ordering='release')
 
-        with self.parent.ifelse( res != locked ) as ifelse:
-            with ifelse.then():
-                # This shall kill the program
-                self.parent.unreachable()
+            with self.parent.ifelse( res != locked ) as ifelse:
+                with ifelse.then():
+                    # This shall kill the program
+                    self.parent.unreachable()
 
 
 class ContextCommon(CStruct):
@@ -161,7 +171,7 @@ class ParallelUFunc(CDefinition):
 
         ## DEBUG ONLY ##
         # Check for race condition
-        if True:
+        if CHECK_RACE_CONDITION:
             total_completed = self.var(C.intp, 0, name='total_completed')
             for t in range(ThreadCount):
                 cur_ctxt = contexts[t].as_struct(Context)
@@ -215,13 +225,37 @@ class ParallelUFuncPosixMixin(object):
         # self.debug("launch threads")
         # TODO error handling
 
-        ONE = self.constant(num_thread.type, 1)
         with self.for_range(num_thread) as (loop, i):
             api.pthread_create(threads[i].reference(), NULL, worker,
                                contexts[i].reference().cast(C.void_p))
 
         with self.for_range(num_thread) as (loop, i):
             api.pthread_join(threads[i], NULL)
+
+class ParallelUFuncWindowsMixin(object):
+    '''ParallelUFunc mixin that implements _dispatch_worker to use Windows threading.
+    '''
+    def _dispatch_worker(self, worker, contexts, num_thread):
+        api = WinThreadAPI(self)
+        NULL = self.constant_null(C.void_p)
+        lpdword_NULL = self.constant_null(C.pointer(C.int32))
+        zero = self.constant(C.int32, 0)
+        intp_zero = self.constant(C.intp, 0)
+        INFINITE = self.constant(C.int32, 0xFFFFFFFF)
+
+        threads = self.array(api.handle_t, num_thread, name='threads')
+
+        # self.debug("launch threads")
+        # TODO error handling
+
+        with self.for_range(num_thread) as (loop, i):
+            threads[i] = api.CreateThread(NULL, intp_zero, worker,
+                               contexts[i].reference().cast(C.void_p),
+                               zero, lpdword_NULL)
+
+        with self.for_range(num_thread) as (loop, i):
+            api.WaitForSingleObject(threads[i], INFINITE)
+            api.CloseHandle(threads[i])
 
 class UFuncCore(CDefinition):
     '''core work of a ufunc worker thread
@@ -245,7 +279,8 @@ class UFuncCore(CDefinition):
         workqueue = common.workqueues[tid].as_struct(WorkQueue)
 
         self._do_workqueue(common, workqueue, tid, context.completed)
-        self._do_work_stealing(common, tid, context.completed) # optional
+        if ENABLE_WORK_STEALING:
+            self._do_work_stealing(common, tid, context.completed) # optional
 
         self.ret()
 
@@ -254,11 +289,14 @@ class UFuncCore(CDefinition):
         '''
         ZERO = self.constant_null(C.int)
 
+
         with self.forever() as loop:
             workqueue.Lock()
             # Critical section
             item = self.var_copy(workqueue.next, name='item')
-            workqueue.next += self.constant(item.type, 1)
+            AMT = self.min(self.constant(item.type, GRANULARITY),
+                           workqueue.last - workqueue.next)
+            workqueue.next += AMT
             last = self.var_copy(workqueue.last, name='last')
             # Release
             workqueue.Unlock()
@@ -267,8 +305,10 @@ class UFuncCore(CDefinition):
                 with ifelse.then():
                     loop.break_loop()
 
-            self._do_work(common, item, tid)
-            completed += self.constant(completed.type, 1)
+
+            with self.for_range(AMT) as (loop, offset):
+                self._do_work(common, item + offset, tid)
+                completed += self.constant(completed.type, 1)
 
     def _do_work_stealing(self, common, tid, completed):
         '''steal work from other workqueues.
@@ -305,18 +345,19 @@ class UFuncCore(CDefinition):
         '''
         otherqueue.Lock()
         # Acquired
-        ONE = self.constant(otherqueue.last.type, 1)
+        STEAL_AMT = self.constant(otherqueue.last.type, GRANULARITY)
         STEAL_CONTINUE = self.constant(steal_continue.type, 1)
-        with self.ifelse(otherqueue.next < otherqueue.last) as ifelse:
+        with self.ifelse(otherqueue.next <= otherqueue.last - STEAL_AMT) as ifelse:
             with ifelse.then():
-                otherqueue.last -= ONE
+                otherqueue.last -= STEAL_AMT
                 item = self.var_copy(otherqueue.last)
 
                 otherqueue.Unlock()
                 # Released
 
-                self._do_work(common, item, tid)
-                completed += self.constant(completed.type, 1)
+                with self.for_range(STEAL_AMT) as (loop, offset):
+                    self._do_work(common, item + offset, tid)
+                    completed += self.constant(completed.type, 1)
 
                 # Mark incomplete thread
                 steal_continue.assign(STEAL_CONTINUE)
@@ -372,6 +413,29 @@ class PThreadAPI(CExternal):
 
     pthread_join = Type.function(C.int, [C.void_p, C.void_p])
 
+class WinThreadAPI(CExternal):
+    '''external declaration of pthread API
+    '''
+    handle_t = C.void_p
+
+    # lpStartAddress is an LPTHREAD_START_ROUTINE, with the form
+    # DWORD ThreadProc (LPVOID lpdwThreadParam )
+    CreateThread = Type.function(handle_t,
+                                   [C.void_p,            # lpThreadAttributes (NULL for default)
+                                    C.intp,              # dwStackSize (0 for default)
+                                    C.void_p,            # lpStartAddress
+                                    C.void_p,            # lpParameter
+                                    C.int32,             # dwCreationFlags (0 for default)
+                                    C.pointer(C.int32)]) # lpThreadId (NULL if not required)
+
+    # Return is WAIT_OBJECT_0 (0x00000000) to indicate the thread exited,
+    # or WAIT_ABANDONED, WAIT_TIMEOUT, WAIT_FAILED for other conditions.
+    WaitForSingleObject = Type.function(C.int32,
+                                    [handle_t, # hHandle
+                                     C.int32])   # dwMilliseconds (INFINITE == 0xFFFFFFFF means wait forever)
+
+    CloseHandle = Type.function(C.int32, [handle_t])
+
 
 class UFuncCoreGeneric(UFuncCore):
     '''A generic ufunc core worker from LLVM function type
@@ -401,11 +465,12 @@ class UFuncCoreGeneric(UFuncCore):
         cls.ARGTYS = tuple(fntype.args)
 
 
-if sys.platform not in ['win32']:
-    class ParallelUFuncPlatform(ParallelUFunc, ParallelUFuncPosixMixin):
+if sys.platform == 'win32':
+    class ParallelUFuncPlatform(ParallelUFunc, ParallelUFuncWindowsMixin):
         pass
 else:
-    raise NotImplementedError("Threading for %s" % sys.platform)
+    class ParallelUFuncPlatform(ParallelUFunc, ParallelUFuncPosixMixin):
+        pass
 
 class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
     def build(self, lfunc):

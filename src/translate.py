@@ -6,6 +6,7 @@ from numba v0.1
 from numba.translate import *
 import __builtin__
 from numba.translate import Translate as _OldTranslate
+
 class Translate(_OldTranslate):
     def __init__(self, func, ret_type='d', arg_types=['d'], module=None, **kws):
         self.func = func
@@ -48,6 +49,7 @@ class Translate(_OldTranslate):
             self.mod = module
         elif not hasattr(type(self), 'mod'):
             type(self).mod = lc.Module.new('default')
+            type(self).ee = self._get_ee()
 
         ######## END CHANGE
         assert isinstance(self.mod, lc.Module), (
@@ -57,7 +59,7 @@ class Translate(_OldTranslate):
         self.ret_type = ret_type
         self.arg_types = arg_types
         self.setup_func()
-        self.ee = None
+        # self.ee = None
         self.ma_obj = None
         self.optimize = kws.pop('optimize', True)
         self.flags = kws
@@ -105,7 +107,10 @@ class Translate(_OldTranslate):
         self.loop_stack = []
 
     def _get_ee(self):
-        return le.EngineBuilder.new(self.mod).opt(3).create()
+        try:
+            return self.ee
+        except AttributeError:
+            return le.EngineBuilder.new(self.mod).opt(3).create()
 
     def translate(self):
         """Translate the function

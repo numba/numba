@@ -1,4 +1,4 @@
-from numbapro.vectorize.basic import basic_vectorize_from_func
+from numbapro.vectorize.stream import stream_vectorize_from_func
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm.core import *
@@ -21,14 +21,14 @@ class OneOne(CDefinition):
         cls.OUT_TYPE = otype
 
 
-class TestBasicVectorize(unittest.TestCase):
-    def test_basicvectorize_d_d(self):
+class TestStreamVectorize(unittest.TestCase):
+    def test_streamvectorize_d_d(self):
         self.template(C.double, C.double)
 
-    def test_basicvectorize_d_f(self):
+    def test_streamvectorize_d_f(self):
         self.template(C.double, C.float)
 
-    def test_basicvectorize_generic(self):
+    def test_streamvectorize_generic(self):
         module = Module.new(__name__)
         exe = CExecutor(module)
 
@@ -41,11 +41,11 @@ class TestBasicVectorize(unittest.TestCase):
 
         oneone_defs = [OneOne(*tys)(module) for tys in tyslist]
 
-        ufunc = basic_vectorize_from_func(oneone_defs, exe.engine)
+        ufunc = stream_vectorize_from_func(oneone_defs, exe.engine, granularity=32)
         # print(module)
         module.verify()
 
-        self.check(ufunc, np.double)
+        self.check(ufunc, np.float64)
         self.check(ufunc, np.float32)
         self.check(ufunc, np.int64)
         self.check(ufunc, np.int32)
@@ -71,7 +71,8 @@ class TestBasicVectorize(unittest.TestCase):
         def_oneone = OneOne(itype, otype)
         oneone = def_oneone(module)
 
-        ufunc = basic_vectorize_from_func(oneone, exe.engine)
+        ufunc = stream_vectorize_from_func(oneone, exe.engine, granularity=32)
+
 
         print(module)
         module.verify()

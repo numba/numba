@@ -1,5 +1,8 @@
 import numpy as np
 from llvm_cbuilder import shortnames as _C
+from numbapro import _internal
+from numbapro.translate import Translate
+
 
 _llvm_ty_str_to_numpy = {
             'i8'     : np.int8,
@@ -17,35 +20,54 @@ class CommonVectorizeFromFrunc(object):
     def build(self, lfunc):
         raise NotImplementedError
 
-    def __call__(self, lfunclist, engine=None):
+    def __call__(self, lfunclist, engine, **kws):
         '''create ufunc from a llvm.core.Function
 
         lfunclist : a single or iterable of llvm.core.Function instance
-        engine : [optional] a llvm.ee.ExecutionEngine instance
+        engine : a llvm.ee.ExecutionEngine instance
 
-        If engine is given, return a function object which can be called
-        from python.
-        Otherwise, return the specialized ufunc(s) as a llvm.core.Function(s).
+        return a function object which can be called from python.
         '''
         try:
             iter(lfunclist)
         except TypeError:
             lfunclist = [lfunclist]
 
-        self.lfunclist = lfunclist
 
+        ptrlist = self._prepare_pointers(lfunclist, engine, **kws)
+
+        fntype = lfunclist[0].type.pointee
+        inct = len(fntype.args)
+        outct = 1
+
+        tyslist = []
+
+        get_typenum = lambda T:np.dtype(_llvm_ty_to_numpy(T)).num
+        for lfunc in lfunclist:
+            fntype = lfunc.type.pointee
+            if len(fntype.args) != inct: # check argument counts
+                raise TypeError("All functions must have equal number of arguments")
+
+            assert fntype.return_type != _C.void
+
+            tys = list(map(get_typenum, list(fntype.args) + [fntype.return_type]))
+            tyslist.append(tys)
+
+        datlist = [None] * len(lfunclist)
+
+        # Becareful that fromfunc does not provide full error checking yet.
+        # If typenum is out-of-bound, we have nasty memory corruptions.
+        # For instance, -1 for typenum will cause segfault.
+        # If elements of type-list (2nd arg) is tuple instead,
+        # there will also memory corruption. (Seems like code rewrite.)
+        ufunc = _internal.fromfunc(ptrlist, tyslist, inct, outct, datlist)
+        return ufunc
+
+    def _prepare_pointers(self, lfunclist, engine, **kws):
         # build all functions
-        spuflist = [self.build(lfunc) for lfunc in lfunclist]
-
-        if engine is None:
-            # No engine given, just return the llvm definitions
-            if len(spuflist)==1:
-                return spuflist[0]
-            else:
-                return spuflist
+        spuflist = [self.build(lfunc, **kws) for lfunc in lfunclist]
 
         # We have an engine, build ufunc
-        from numbapro._internal import fromfunc
 
         try:
             ptr_t = long
@@ -57,33 +79,10 @@ class CommonVectorizeFromFrunc(object):
         tyslist = []
         datlist = []
         for i, spuf in enumerate(spuflist):
-            fntype = lfunclist[i].type.pointee
             fptr = engine.get_pointer_to_function(spuf)
-            argct = len(fntype.args)
-            if i == 0: # for the first
-                inct = argct
-                outct = 1
-            elif argct != inct:
-                raise TypeError("All functions must have equal number of arguments")
-
-            get_typenum = lambda T:np.dtype(_llvm_ty_to_numpy(T)).num
-            assert fntype.return_type != _C.void
-            tys = list(map(get_typenum, list(fntype.args) + [fntype.return_type]))
-
             ptrlist.append(ptr_t(fptr))
-            tyslist.append(tys)
-            datlist.append(None)
 
-        # Becareful that fromfunc does not provide full error checking yet.
-        # If typenum is out-of-bound, we have nasty memory corruptions.
-        # For instance, -1 for typenum will cause segfault.
-        # If elements of type-list (2nd arg) is tuple instead,
-        # there will also memory corruption. (Seems like code rewrite.)
-        ufunc = fromfunc(ptrlist, tyslist, inct, outct, datlist)
-        return ufunc
-
-
-from numbapro.translate import Translate
+        return ptrlist
 
 class GenericVectorize(object):
     def __init__(self, func):
