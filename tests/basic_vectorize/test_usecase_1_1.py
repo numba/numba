@@ -1,10 +1,12 @@
 from numbapro.vectorize.basic import basic_vectorize_from_func
+from numbapro.vectorize._common import _llvm_ty_to_dtype_num
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm.core import *
 import numpy as np
 import unittest
 from random import random
+
 
 class OneOne(CDefinition):
 
@@ -19,7 +21,6 @@ class OneOne(CDefinition):
             ('inval', itype),
         ]
         cls.OUT_TYPE = otype
-
 
 class TestBasicVectorize(unittest.TestCase):
     def test_basicvectorize_d_d(self):
@@ -39,9 +40,13 @@ class TestBasicVectorize(unittest.TestCase):
             (C.int32,  C.int32),
         ]
 
+        tynumslist = []
+        for tys in tyslist:
+            tynumslist.append(list(map(_llvm_ty_to_dtype_num, tys)))
+
         oneone_defs = [OneOne(*tys)(module) for tys in tyslist]
 
-        ufunc = basic_vectorize_from_func(oneone_defs, exe.engine)
+        ufunc = basic_vectorize_from_func(oneone_defs, tynumslist, exe.engine)
         # print(module)
         module.verify()
 
@@ -71,7 +76,8 @@ class TestBasicVectorize(unittest.TestCase):
         def_oneone = OneOne(itype, otype)
         oneone = def_oneone(module)
 
-        ufunc = basic_vectorize_from_func(oneone, exe.engine)
+        tyslist = [list(map(_llvm_ty_to_dtype_num, [itype, otype]))]
+        ufunc = basic_vectorize_from_func(oneone, tyslist, exe.engine)
 
         print(module)
         module.verify()

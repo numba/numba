@@ -7,12 +7,13 @@ def vector_add(a, b):
     return a + b
 
 def main():
-    # build parallel native code ufunc
-    pv = StreamVectorize(vector_add)
-    pv.add(ret_type=int32, arg_types=[int32, int32])
-    pv.add(ret_type=f, arg_types=[f, f])
-    pv.add(ret_type=d, arg_types=[d, d])
-    para_ufunc = pv.build_ufunc(granularity=32)
+    # build stream native code ufunc
+    sv = StreamVectorize(vector_add)
+    sv.add(ret_type=int32, arg_types=[int32, int32])
+    sv.add(ret_type=uint32, arg_types=[uint32, uint32])
+    sv.add(ret_type=f, arg_types=[f, f])
+    sv.add(ret_type=d, arg_types=[d, d])
+    stream_ufunc = sv.build_ufunc(granularity=32)
 
     # build python ufunc
     np_ufunc = np.add
@@ -23,7 +24,7 @@ def main():
         data = np.linspace(0., 10000., 100000).astype(ty)
 
         ts = time()
-        result = para_ufunc(data, data)
+        result = stream_ufunc(data, data)
         tnumba = time() - ts
 
         ts = time()
@@ -45,6 +46,7 @@ def main():
     test(np.double)
     test(np.float32)
     test(np.int32)
+    test(np.uint32)
 
 
     print('All good')
