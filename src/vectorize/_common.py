@@ -16,11 +16,33 @@ _llvm_ty_str_to_numpy = {
 def _llvm_ty_to_numpy(ty):
     return _llvm_ty_str_to_numpy[str(ty)]
 
+def _llvm_ty_to_dtype_num(ty):
+    return np.dtype(_llvm_ty_to_numpy(ty)).num
+
+_numbatypes_str_to_numpy = {
+            'int8'     : np.int8,
+            'int16'    : np.int16,
+            'int32'    : np.int32,
+            'int64'    : np.int64,
+            'uint8'    : np.uint8,
+            'uint16'   : np.uint16,
+            'uint32'   : np.uint32,
+            'uint64'   : np.uint64,
+#            'f'        : np.float32,
+#            'd'        : np.float64,
+            'float'    : np.float32,
+            'double'   : np.float64,
+        }
+
+def _numbatypes_to_numpy(ty):
+    ret = _numbatypes_str_to_numpy[str(ty)]
+    return ret
+
 class CommonVectorizeFromFrunc(object):
     def build(self, lfunc):
         raise NotImplementedError
 
-    def __call__(self, lfunclist, engine, **kws):
+    def __call__(self, lfunclist, tyslist, engine, **kws):
         '''create ufunc from a llvm.core.Function
 
         lfunclist : a single or iterable of llvm.core.Function instance
@@ -39,19 +61,6 @@ class CommonVectorizeFromFrunc(object):
         fntype = lfunclist[0].type.pointee
         inct = len(fntype.args)
         outct = 1
-
-        tyslist = []
-
-        get_typenum = lambda T:np.dtype(_llvm_ty_to_numpy(T)).num
-        for lfunc in lfunclist:
-            fntype = lfunc.type.pointee
-            if len(fntype.args) != inct: # check argument counts
-                raise TypeError("All functions must have equal number of arguments")
-
-            assert fntype.return_type != _C.void
-
-            tys = list(map(get_typenum, list(fntype.args) + [fntype.return_type]))
-            tyslist.append(tys)
 
         datlist = [None] * len(lfunclist)
 
@@ -88,11 +97,25 @@ class GenericVectorize(object):
     def __init__(self, func):
         self.pyfunc = func
         self.translates = []
+        self.args_ret_types = []
 
     def add(self, *args, **kwargs):
         t = Translate(self.pyfunc, *args, **kwargs)
         t.translate()
         self.translates.append(t)
+
+        argtys = kwargs['arg_types']
+        retty = kwargs['ret_type']
+        self.args_ret_types.append(argtys + [retty])
+
+    def _get_tys_list(self):
+        tyslist = []
+        for args_ret in self.args_ret_types:
+            tys = []
+            for ty in args_ret:
+                tys.append(np.dtype(_numbatypes_to_numpy(ty)).num)
+            tyslist.append(tys)
+        return tyslist
 
     def _get_lfunc_list(self):
         return [t.lfunc for t in self.translates]

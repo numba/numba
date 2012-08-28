@@ -10,6 +10,7 @@ def main():
     # build parallel native code ufunc
     pv = ParallelVectorize(vector_add)
     pv.add(ret_type=int32, arg_types=[int32, int32])
+    pv.add(ret_type=uint32, arg_types=[uint32, uint32])
     pv.add(ret_type=f, arg_types=[f, f])
     pv.add(ret_type=d, arg_types=[d, d])
     para_ufunc = pv.build_ufunc()
@@ -45,6 +46,7 @@ def main():
     test(np.double)
     test(np.float32)
     test(np.int32)
+    test(np.uint32)
 
 
     print('All good')

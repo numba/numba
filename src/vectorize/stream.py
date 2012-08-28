@@ -83,8 +83,8 @@ class StreamVectorize(_common.GenericVectorize):
     def build_ufunc(self, granularity=32):
         assert self.translates, "No translation"
         lfunclist = self._get_lfunc_list()
+        tyslist = self._get_tys_list()
         engine = self.translates[0]._get_ee()
-        return stream_vectorize_from_func(lfunclist, engine=engine,
+        return stream_vectorize_from_func(lfunclist, tyslist, engine=engine,
                                           granularity=granularity)
-
 

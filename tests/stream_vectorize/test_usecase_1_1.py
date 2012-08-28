@@ -1,4 +1,5 @@
 from numbapro.vectorize.stream import stream_vectorize_from_func
+from numbapro.vectorize._common import _llvm_ty_to_dtype_num
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm.core import *
@@ -39,9 +40,15 @@ class TestStreamVectorize(unittest.TestCase):
             (C.int32,  C.int32),
         ]
 
+        tynumslist = []
+        for tys in tyslist:
+            tynumslist.append(list(map(_llvm_ty_to_dtype_num, tys)))
+
+
         oneone_defs = [OneOne(*tys)(module) for tys in tyslist]
 
-        ufunc = stream_vectorize_from_func(oneone_defs, exe.engine, granularity=32)
+        ufunc = stream_vectorize_from_func(oneone_defs, tynumslist, exe.engine,
+                                           granularity=32)
         # print(module)
         module.verify()
 
@@ -71,7 +78,9 @@ class TestStreamVectorize(unittest.TestCase):
         def_oneone = OneOne(itype, otype)
         oneone = def_oneone(module)
 
-        ufunc = stream_vectorize_from_func(oneone, exe.engine, granularity=32)
+        tyslist = [list(map(_llvm_ty_to_dtype_num, [itype, otype]))]
+        ufunc = stream_vectorize_from_func(oneone, tyslist, exe.engine,
+                                           granularity=32)
 
 
         print(module)

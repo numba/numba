@@ -1,4 +1,5 @@
 from numbapro.vectorize.parallel import *
+from numbapro.vectorize._common import _llvm_ty_to_dtype_num
 from llvm_cbuilder import shortnames as C
 from llvm.core import *
 import numpy as np
@@ -39,9 +40,15 @@ class TestParallelVectorize(unittest.TestCase):
             (C.int32,  C.int32,  C.int32),
         ]
 
+
+        tynumslist = []
+        for tys in tyslist:
+            tynumslist.append(list(map(_llvm_ty_to_dtype_num, tys)))
+
+
         twoone_defs = [TwoOne(*tys)(module) for tys in tyslist]
 
-        ufunc = parallel_vectorize_from_func(twoone_defs, exe.engine)
+        ufunc = parallel_vectorize_from_func(twoone_defs, tynumslist, exe.engine)
         # print(module)
         module.verify()
 
@@ -70,7 +77,9 @@ class TestParallelVectorize(unittest.TestCase):
 
         def_twoone = TwoOne(itype1, itype2, otype)
         twoone = def_twoone(module)
-        ufunc = parallel_vectorize_from_func(twoone, exe.engine)
+
+        tyslist = [list(map(_llvm_ty_to_dtype_num, [itype1, itype2, otype]))]
+        ufunc = parallel_vectorize_from_func(twoone, tyslist, exe.engine)
         # print(module)
         module.verify()
 

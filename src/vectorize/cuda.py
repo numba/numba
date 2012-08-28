@@ -1,6 +1,11 @@
 from llvm_cbuilder import *
+from llvm_cbuilder import shortnames as C
 from llvm.core import *
+from llvm.passes import *
+from llvm.ee import *
+import numpy as np
 from . import _common
+from ._common import _llvm_ty_to_numpy
 
 from numbapro.translate import Translate
 
@@ -123,6 +128,13 @@ class CudaVectorize(_common.GenericVectorize):
 
         devattr = device.get_attributes()
         MAX_THREAD = devattr[cudriver.device_attribute.MAX_THREADS_PER_BLOCK]
+        # Take a safer approach for MAX_THREAD is case our kernel uses too
+        # much resources.
+        #
+        # TODO: Add some intelligence to the way we choose our MAX_THREAD.
+        #       Like optimize for the maximum wrap occupancy.
+        MAX_THREAD /= 2
+
         MAX_BLOCK = devattr[cudriver.device_attribute.MAX_BLOCK_DIM_X]
 
 

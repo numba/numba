@@ -489,7 +489,7 @@ class ParallelVectorize(_common.GenericVectorize):
     def build_ufunc(self):
         assert self.translates, "No translation"
         lfunclist = self._get_lfunc_list()
+        tyslist = self._get_tys_list()
         engine = self.translates[0]._get_ee()
-        return parallel_vectorize_from_func(lfunclist, engine=engine)
-
+        return parallel_vectorize_from_func(lfunclist, tyslist, engine=engine)
 
