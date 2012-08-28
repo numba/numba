@@ -1,3 +1,9 @@
+NumbaPro
+########
+
+.. contents::
+   :maxdepth: 2
+
 Current Features
 ================
 
