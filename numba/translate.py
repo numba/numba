@@ -21,6 +21,9 @@ from .multiarray_api import MultiarrayAPI
 
 from .minivect import minitypes
 
+import logging
+logger = logging.getLogger(__name__)
+
 if __debug__:
     import pprint
 
@@ -1404,26 +1407,37 @@ class Translate(object):
     def op_BINARY_POWER(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        args = [arg1.llvm(arg1.typ), arg2.llvm(arg2.typ)]
-        if arg2.typ[0] == 'i':
+        if __debug__:
+            logger.debug("%r ** %r" % (arg1, arg2))
+        typ1, typ2 = arg1.typ, arg2.typ
+        if typ2[0] == 'i':
             INTR = getattr(lc, 'INTR_POWI')
-        elif arg2.typ[0] == 'f': # make sure it's float
+            typ2 = 'i32'
+        elif typ2[0] == 'f': # make sure it's float
             INTR = getattr(lc, 'INTR_POW')
         else:
-            raise NotImplementedError('** for type %r' % (typ,))
-        typs = [str_to_llvmtype(x.typ) for x in [arg1, arg2]]
-        func = lc.Function.intrinsic(self.mod, INTR, typs)
+            raise NotImplementedError('** for exponent type %r' % (typ2,))
+        if typ1[0] == 'i':
+            typ1 = 'f64'
+        elif typ1[0] == 'f':
+            if typ2[0] == 'f':
+                typ2 = typ1
+        else:
+            raise NotImplementedError('** for value type %r' % (typ1,))
+        ltyps = str_to_llvmtype(typ1), str_to_llvmtype(typ2)
+        func = lc.Function.intrinsic(self.mod, INTR, ltyps)
+        args = (arg1.llvm(typ1, builder = self.builder),
+                arg2.llvm(typ2, builder = self.builder))
         res = self.builder.call(func, args)
         self.stack.append(Variable(res))
-        
 
     def op_RETURN_VALUE(self, i, op, arg):
         val = self.stack.pop(-1)
         if val.val is None:
-            self.builder.ret(lc.Constant.real(self.ret_ltype, 0))
-        else:
-            self.builder.ret(val.llvm(llvmtype_to_strtype(self.ret_ltype),
-                                      builder = self.builder))
+            logger.warning("Warning: Replacing None return value with 0.")
+            val = Variable(0.)
+        self.builder.ret(val.llvm(llvmtype_to_strtype(self.ret_ltype),
+                                  builder = self.builder))
         # Add a new block at the next instruction if not at end
         if i+1 < len(self.costr) and i+1 not in self.blocks.keys():
             blk = self.lfunc.append_basic_block("RETURN_%d" % i)

@@ -16,6 +16,7 @@ from test_forloop import TestForLoop
 from test_getattr import TestGetattr
 from test_if import TestIf
 from test_indexing import TestIndexing
+from test_issues import TestIssues
 from test_mandelbrot import TestMandelbrot
 from test_multiarray_api import TestMultiarrayAPI
 from test_tuple import TestTuple
