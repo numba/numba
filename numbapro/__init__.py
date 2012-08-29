@@ -13,7 +13,10 @@ def test(verbosity=2):
     # Find all test scripts in test packages
     test_module_names = []
     for name in test_package_names:
-        test_module_names = test_module_names + [name + '.' + module for _,module,_ in pkgutil.iter_modules(__import__(name, fromlist=['']).__path__)]
+        test_module_names.extend([
+                name + '.' + module
+                for _,module,_ in pkgutil.iter_modules(
+                           __import__(name, fromlist=['']).__path__)])
 
     suite = loader.loadTestsFromNames(test_module_names)
     runner = unittest.TextTestRunner(verbosity=verbosity)
