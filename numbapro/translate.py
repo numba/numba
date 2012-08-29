@@ -154,5 +154,5 @@ class Translate(_OldTranslate):
             pmbldr.populate(fpm)
             ######## END CHANGE
 
-        if __debug__:
-            print self.mod
+        #if __debug__:
+        #    print self.mod
