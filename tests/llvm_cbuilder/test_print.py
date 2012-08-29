@@ -37,7 +37,7 @@ def main_debugprint():
 
 class TestPrint(unittest.TestCase):
     def test_debugprint(self):
-        p = Popen(["python", "test_print.py", "-child"], stdout=PIPE)
+        p = Popen(["python", __file__, "-child"], stdout=PIPE)
         p.wait()
 
         lines = p.stdout.read().decode().splitlines(False)

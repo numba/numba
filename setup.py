@@ -11,8 +11,12 @@ setup(
     ext_modules = [Extension(name = "numbapro._internal",
                              sources = ["src/_internal.c"],
                              include_dirs = [numpy.get_include()])],
-    packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize'],
-    package_dir = {'numbapro': 'src'},
+    packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize',
+                'numbapro.tests.basic_vectorize',
+                'numbapro.tests.llvm_cbuilder',
+                'numbapro.tests.parallel_vectorize',
+                'numbapro.tests.stream_vectorize'],
+    package_dir = {'numbapro': 'src', 'numbapro.tests': 'tests'},
 
     version = "0.5"
 )
