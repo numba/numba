@@ -425,6 +425,8 @@ static PyMethodDef ext_methods[] = {
     { NULL }
 };
 
+/* Don't remove this marker, it is used for inserting licensing code */
+/*MARK1*/
 
 #if IS_PY3K
 
@@ -449,6 +451,9 @@ init_internal(void)
 #endif
 {
     PyObject *m;    //, *d; // unused
+
+    /* Don't remove this marker, it is used for inserting licensing code */
+    /*MARK2*/
 
     import_array();
     import_umath();
