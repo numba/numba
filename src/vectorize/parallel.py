@@ -130,28 +130,15 @@ class ParallelUFunc(CDefinition):
         cls.ThreadCount = num_thread
 
     def body(self, func, worker, args, dimensions, steps, data):
-        # Setup variables
-        ThreadCount = self.ThreadCount
-        common = self.var(ContextCommon, name='common')
-        workqueues = self.array(WorkQueue, ThreadCount, name='workqueues')
-        contexts = self.array(Context, ThreadCount, name='contexts')
-
-        num_thread = self.var(C.int, ThreadCount, name='num_thread')
-
-        # Initialize ContextCommon
-        common.args.assign(args)
-        common.dimensions.assign(dimensions)
-        common.steps.assign(steps)
-        common.data.assign(data)
-        common.func.assign(func)
-        common.num_thread.assign(num_thread.cast(C.int))
-        common.workqueues.assign(workqueues.reference())
 
         # Determine chunksize, initial count of work-items per thread.
         # If total_work >= num_thread, equally divide the works.
         # If total_work % num_thread != 0, the last thread does all remaining works.
         # If total_work < num_thread, each thread does one work,
         # and set num_thread to total_work
+
+        num_thread = self.var(C.int, self.ThreadCount, name='num_thread')
+
         N = dimensions[0]
         ChunkSize = self.var_copy(N / num_thread.cast(N.type))
         ChunkSize_NULL = self.constant_null(ChunkSize.type)
@@ -159,6 +146,21 @@ class ParallelUFunc(CDefinition):
             with ifelse.then():
                 ChunkSize.assign(self.constant(ChunkSize.type, 1))
                 num_thread.assign(N.cast(num_thread.type))
+
+        # Setup variables
+        common = self.var(ContextCommon, name='common')
+        workqueues = self.array(WorkQueue, num_thread, name='workqueues')
+        contexts = self.array(Context, num_thread, name='contexts')
+
+        # Initialize ContextCommon
+        common.args.assign(args)
+        common.dimensions.assign(dimensions)
+        common.steps.assign(steps)
+        common.data.assign(data)
+        common.func.assign(func)
+        common.workqueues.assign(workqueues.reference())
+        common.num_thread.assign(num_thread.cast(C.int))
+
 
         # Populate workqueue for all threads
         self._populate_workqueues(workqueues, N, ChunkSize, num_thread)
@@ -173,7 +175,7 @@ class ParallelUFunc(CDefinition):
         # Check for race condition
         if CHECK_RACE_CONDITION:
             total_completed = self.var(C.intp, 0, name='total_completed')
-            for t in range(ThreadCount):
+            with self.for_range(num_thread) as (forloop, t):
                 cur_ctxt = contexts[t].as_struct(Context)
                 total_completed += cur_ctxt.completed
                 # self.debug(cur_ctxt.id, 'completed', cur_ctxt.completed)
@@ -184,6 +186,7 @@ class ParallelUFunc(CDefinition):
                     pass # keep quite if all is well
                 with ifelse.otherwise():
                     self.debug("ERROR: race occurred! Trigger segfault")
+                    self.debug('completed ', total_completed, '/', N)
                     self.unreachable()
 
         # Return
@@ -296,6 +299,7 @@ class UFuncCore(CDefinition):
             item = self.var_copy(workqueue.next, name='item')
             AMT = self.min(self.constant(item.type, GRANULARITY),
                            workqueue.last - workqueue.next)
+
             workqueue.next += AMT
             last = self.var_copy(workqueue.last, name='last')
             # Release
