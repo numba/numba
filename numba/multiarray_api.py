@@ -107,7 +107,7 @@ class MultiarrayAPI (object):
         fn_ty = lc.Type.function(_void_star, [_void_star])
         pycobj_avp = module.add_function(fn_ty, 'PyCObject_AsVoidPtr')
         ee = le.ExecutionEngine.new(module)
-        pycobj = le.GenericValue.pointer(_void_star, id(_ARRAY_API))
+        pycobj = le.GenericValue.pointer(id(_ARRAY_API))
         ee.run_static_ctors()
         voidptr = ee.run_function(pycobj_avp, [pycobj])
         ret_val = self.api_addr = voidptr.as_pointer()
