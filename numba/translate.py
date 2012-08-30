@@ -1019,6 +1019,7 @@ class Translate(object):
             assert isinstance(value, lc.Value), "Internal compiler error!"
         for pred_lblock in pred_lblocks:
             phi.add_incoming(value, pred_lblock)
+        del self.pending_phis[instr_index][local_index]
 
     def add_phi_incomming(self, phi, crnt_block, pred, local):
         '''Take one of four actions:
@@ -1037,6 +1038,11 @@ class Translate(object):
 
         4. If the predecessor is unreachable, ignore it.
         '''
+        if __debug__:
+            logger.debug("crnt_block=%r, pred=%r, local=%r,\n"
+                         "self.blocks_locals = %s" %
+                         (crnt_block, pred, local,
+                          pprint.pformat(self.blocks_locals)))
         if pred in self.blocks_locals and pred not in self.pending_blocks:
             pred_locals = self.blocks_locals[pred]
             assert pred_locals[local] is not None, ("Internal error.  "
@@ -1047,10 +1053,8 @@ class Translate(object):
         elif 0 in self.cfg.blocks_reaching[pred]:
             reaching_defs = self.cfg.get_reaching_definitions(crnt_block)
             if __debug__:
-                logger.debug("add_phi_incomming(): reaching_defs = %s\n    "
-                             "crnt_block=%r, pred=%r, local=%r" %
-                             (pprint.pformat(reaching_defs), crnt_block, pred,
-                              local))
+                logger.debug("reaching_defs = %s" %
+                             (pprint.pformat(reaching_defs),))
             definition_block = reaching_defs[pred][local]
             if ((definition_block in self.blocks_locals) and
                 (definition_block not in self.pending_blocks)):
@@ -1065,6 +1069,9 @@ class Translate(object):
                     local]
                 self.add_pending_phi(definition_index, local, phi,
                                      self.blocks[pred])
+                if __debug__:
+                    logger.debug("self.pending_phis = %r" %
+                                 (self.pending_phis,))
         else:
             if __debug__:
                 logger.debug("Block %d not reachable from entry." % pred)
@@ -1220,10 +1227,19 @@ class Translate(object):
             self.ma_obj.set_PyArray_API(self.mod)
 
     def _revisit_block(self, block_index):
-        block_state = (self.crnt_block, self.builder, self._locals[:])
+        block_state = (self.crnt_block, self.builder, self._locals)
         self.crnt_block = block_index
         self.builder = lc.Builder.new(self.blocks[block_index])
-        self.builder.position_at_beginning(self.blocks[block_index])
+        self._locals = self.blocks_locals[block_index]
+        block = self.blocks[block_index]
+        if __debug__:
+            logger.debug(repr(block.instructions))
+        instructions = [instruction for instruction in block.instructions
+                        if not isinstance(instruction, lc.PHINode)]
+        if len(instructions) > 0:
+            self.builder.position_before(instructions[0])
+        else:
+            self.builder.position_at_beginning(block)
         return block_state
 
     def _restore_block(self, block_state):
@@ -1233,13 +1249,22 @@ class Translate(object):
     def _generate_for_loop(self, i , op, arg, delayer):
         '''Generates code for a simple for loop (a loop over range,
         xrange, or arange).'''
+        arg_val = self._locals[arg]
         false_jump_target = self.pending_blocks.pop(i - 3)
         crnt_block_data = self._revisit_block(i - 3)
         inc_variable = delayer.val.get_inc()
-        self.op_LOAD_FAST(i - 3, None, arg)
+        self.stack.append(Variable(arg_val))
         self.stack.append(inc_variable)
         self.op_INPLACE_ADD(i - 3, None, None)
         self.op_STORE_FAST(i - 3, None, arg)
+        # Because the visitation order here is out of order, we have
+        # to recheck for pending phis in the preceeding block, and
+        # handle them.
+        if __debug__:
+            logger.debug(pprint.pformat((self._locals, self.pending_phis)))
+        for local_index, local_val in enumerate(self._locals):
+            if self.has_pending_phi(i - 3, local_index):
+                self.handle_pending_phi(i - 3, local_index, local_val)
         self._restore_block(crnt_block_data)
         self.op_LOAD_FAST(i, None, arg)
         self.stack.append(delayer.val.get_stop())
@@ -1494,7 +1519,7 @@ class Translate(object):
         func = self.stack.pop(-1)
         ret_typ = None
         if __debug__:
-            logger.debug("op_CALL_FUNCTION():", func)
+            logger.debug("func = %r" % (func,))
         if func.val in PY_CALL_TO_LLVM_CALL_MAP:
             res, ret_typ = PY_CALL_TO_LLVM_CALL_MAP[func.val](self, args)
         elif isinstance(func.val, MethodReference):

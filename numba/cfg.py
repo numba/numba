@@ -45,6 +45,23 @@ class ControlFlowGraph (object):
         self.blocks_out[from_block].add(to_block)
         self.blocks_in[to_block].add(from_block)
 
+    def unlink_unreachables (self):
+        changed = True
+        next_blocks = self.blocks.keys()
+        next_blocks.remove(0)
+        while changed:
+            changed = False
+            blocks = next_blocks
+            next_blocks = blocks[:]
+            for block in blocks:
+                if len(self.blocks_in[block]) == 0:
+                    blocks_out = self.blocks_out[block]
+                    for out_edge in blocks_out:
+                        self.blocks_in[out_edge].discard(block)
+                    blocks_out.clear()
+                    next_blocks.remove(block)
+                    changed = True
+
     @classmethod
     def build_cfg (cls, code_obj, *args, **kws):
         ret_val = cls(*args, **kws)
@@ -65,6 +82,7 @@ class ControlFlowGraph (object):
             method_name = "op_" + opmap[op]
             if hasattr(ret_val, method_name):
                 last_was_jump = getattr(ret_val, method_name)(i, op, arg)
+        ret_val.unlink_unreachables()
         del ret_val.crnt_block, ret_val.code_len
         return ret_val
 

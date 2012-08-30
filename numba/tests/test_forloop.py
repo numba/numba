@@ -108,22 +108,18 @@ class TestForLoop(unittest.TestCase):
         self.assertEqual(result, for_loop_fn_3(3))
         self.assertEqual(result, 81)
 
-    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'), 
-                         "Requires fix for issue #25.")
     def test_compiled_for_loop_w_guard_0(self):
         compiled_for_loop_w_guard = jit()(for_loop_w_guard_0)
-        self.assertEqual(compiled_for_loop_w_guard_0(5.),
+        self.assertEqual(compiled_for_loop_w_guard(5.),
                          for_loop_w_guard_0(5.))
-        self.assertEqual(compiled_for_loop_w_guard_0(4.),
+        self.assertEqual(compiled_for_loop_w_guard(4.),
                          for_loop_w_guard_0(4.))
 
-    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'), 
-                         "Requires fix for issue #25.")
     def test_compiled_for_loop_w_guard_1(self):
         compiled_for_loop_w_guard = jit()(for_loop_w_guard_1)
-        self.assertEqual(compiled_for_loop_w_guard_1(5.),
+        self.assertEqual(compiled_for_loop_w_guard(5.),
                          for_loop_w_guard_1(5.))
-        self.assertEqual(compiled_for_loop_w_guard_1(4.),
+        self.assertEqual(compiled_for_loop_w_guard(4.),
                          for_loop_w_guard_1(4.))
 
 # ______________________________________________________________________
