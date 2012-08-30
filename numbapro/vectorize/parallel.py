@@ -420,6 +420,8 @@ class PThreadAPI(CExternal):
 class WinThreadAPI(CExternal):
     '''external declaration of pthread API
     '''
+    _calling_convention_ = CC_X86_STDCALL
+
     handle_t = C.void_p
 
     # lpStartAddress is an LPTHREAD_START_ROUTINE, with the form
