@@ -117,8 +117,8 @@ class Translate(_OldTranslate):
         """
         self.cfg = LLVMControlFlowGraph.build_cfg(self.fco, self)
         self.cfg.compute_dataflow()
-        if __debug__:
-            self.cfg.pprint()
+        #if __debug__:
+        #    self.cfg.pprint()
         for i, op, arg in itercode(self.costr):
             name = opcode.opname[op]
             # Change the builder if the line-number

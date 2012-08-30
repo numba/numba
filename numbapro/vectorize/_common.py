@@ -2,20 +2,6 @@ import numpy as np
 from llvm_cbuilder import shortnames as _C
 from numbapro import _internal
 from numbapro.translate import Translate
-import contextlib, sys
-
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
-
-@contextlib.contextmanager
-def redirect_print(out):
-    old_stdout = sys.stdout
-    sys.stdout = out
-    yield
-    sys.stdout = old_stdout
-
 
 _llvm_ty_str_to_numpy = {
             'i8'     : np.int8,
@@ -111,13 +97,11 @@ class GenericVectorize(object):
         self.pyfunc = func
         self.translates = []
         self.args_ret_types = []
-        self.log = StringIO()
 
     def add(self, *args, **kwargs):
-        with redirect_print(self.log):
-            t = Translate(self.pyfunc, *args, **kwargs)
-            t.translate()
-            self.translates.append(t)
+        t = Translate(self.pyfunc, *args, **kwargs)
+        t.translate()
+        self.translates.append(t)
 
         argtys = kwargs['arg_types']
         retty = kwargs['ret_type']
