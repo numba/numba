@@ -69,9 +69,10 @@ class CudaVectorize(_common.GenericVectorize):
 
     def add(self, *args, **kwargs):
         kwargs.update({'module': self.module})
-        t = Translate(self.pyfunc, *args, **kwargs)
-        t.translate()
-        self.translates.append(t)
+        with _common.redirect_print(self.log):
+            t = Translate(self.pyfunc, *args, **kwargs)
+            t.translate()
+            self.translates.append(t)
 
     def build_ufunc(self):
         # quick & dirty tryout
@@ -121,7 +122,7 @@ class CudaVectorize(_common.GenericVectorize):
         assert C.intp.width in [32, 64]
         ptxtm = TargetMachine.lookup(arch, cpu=cc, opt=3) # TODO: ptx64 option
         ptxasm = ptxtm.emit_assembly(self.module)
-        print(ptxasm)
+        # print(ptxasm)
 
         # prepare device
         ptxmodule = cudriver.module_from_buffer(ptxasm)
@@ -170,7 +171,7 @@ class CudaVectorize(_common.GenericVectorize):
             time = kernel(*kernelargs,
                           block=threadct, grid=blockct,
                           time_kernel=True)
-            print 'kernel time = %s' % time
+            # print 'kernel time = %s' % time
 
             return retary
 

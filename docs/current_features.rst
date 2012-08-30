@@ -67,8 +67,8 @@ Details on Basic Vectorize
 This is the simplest vectorize.  It is suitable for small workloads in which the overhead for cache optimization, multithreading or GPU computation is too significant.
 
 
-Dtails on Stream Vectorize
---------------------------
+Details on Stream Vectorize
+---------------------------
 
 The stream vectorize implementation is work-in-progress. It aims to provide a cache optimized version of vectorize.  The current implementation works on a small chunk of data at a time.  It moves data from the array, which may be strided, into a local buffer before processing.  The stream vectorize is work-in-progress because it does not provide speedup, yet.  We may alter the technique to provide better performance gain in the future.
 
