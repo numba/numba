@@ -15,6 +15,10 @@ from test_all import *
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+    import sys, logging
+    if '-d' in sys.argv:
+        logging.getLogger().setLevel(logging.DEBUG)
+        sys.argv.remove('-d')
     unittest.main()
 
 # ______________________________________________________________________

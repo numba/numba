@@ -1,7 +1,7 @@
 import sys
 import logging
 
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(#level=logging.DEBUG,
                     format="\n\033[1m%(levelname)s -- %(module)s:%(lineno)d:%(funcName)s\033[0m\n%(message)s")
 
 try:

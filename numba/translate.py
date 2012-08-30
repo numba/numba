@@ -93,7 +93,7 @@ def map_to_strtype(type):
     "Map a minitype or str type to a str type"
     if isinstance(type, minitypes.Type):
         if __debug__:
-            print 'CONVERTING', type
+            logger.debug('CONVERTING %r' % (type,))
         if type.is_float:
             if type.itemsize == 4:
                 return 'f'
@@ -121,7 +121,7 @@ def map_to_strtype(type):
         else:
             raise NotImplementedError
         if __debug__:
-            print type
+            logger.debug(repr(type))
 
     return type
 
@@ -178,7 +178,8 @@ class _LLVMCaster(object):
             else:
                 ret_val = builder.sext(lval1, lty2)
         elif width2 < width1:
-            print("Warning: Perfoming downcast.  May lose information.")
+            logger.warning("Warning: Perfoming downcast.  "
+                           "May lose information.")
             ret_val = builder.trunc(lval1, lty2)
         return ret_val
 
@@ -297,7 +298,7 @@ class Variable(object):
 # Add complex, unsigned, and bool 
 def str_to_llvmtype(str):
     if __debug__:
-        print("str_to_llvmtype(): str = %r" % (str,))
+        logger.debug("str_to_llvmtype(): str = %r" % (str,))
     n_pointer = 0
     if str.endswith('*'):
         n_pointer = str.count('*')
@@ -375,8 +376,8 @@ def convert_to_ctypes(typ):
         n_pointer = typ.count('*')
         typ = typ[:-n_pointer]
         if __debug__:
-            print("convert_to_ctypes(): n_pointer = %d, typ' = %r" %
-                  (n_pointer, typ))
+            logger.debug("convert_to_ctypes(): n_pointer = %d, typ' = %r" %
+                         (n_pointer, typ))
     dtype_str = np.dtype(typ).str
     if dtype_str[1] == 'c':
         if dtype_str[2:] == '8':
@@ -426,7 +427,7 @@ def typ_isa_number(typ):
 # presence of a builder instance.
 def resolve_type(arg1, arg2, builder = None):
     if __debug__:
-        print("resolve_type(): arg1 = %r, arg2 = %r" % (arg1, arg2))
+        logger.debug("resolve_type(): arg1 = %r, arg2 = %r" % (arg1, arg2))
     typ = None
     typ1 = None
     typ2 = None
@@ -477,7 +478,7 @@ def resolve_type(arg1, arg2, builder = None):
             # Fall-through case: just use the left hand operand's type...
             typ = typ1
     if __debug__:
-        print("resolve_type() ==> %r" % (typ,))
+        logger.debug("resolve_type() ==> %r" % (typ,))
     return (typ,
             arg1.llvm(typ, builder = builder),
             arg2.llvm(typ, builder = builder))
@@ -602,8 +603,8 @@ class _LLVMModuleUtils(object):
     @classmethod
     def build_debugout(cls, translator, args):
         if translator.optimize:
-            print("Warning: Optimization turned on, debug output code may "
-                  "be optimized out.")
+            logger.warning("Warning: Optimization turned on, debug output "
+                           "code may be optimized out.")
         res = cls.build_print_string_constant(translator, "debugout: ")
         for arg in args:
             arg_type = arg.typ
@@ -668,8 +669,8 @@ class _LLVMModuleUtils(object):
                 [translator.builder.call(lfunc, largs)]),
             _numpy_array)
         if __debug__:
-            print "build_zeros_like(): lfunc =", str(lfunc)
-            print "build_zeros_like(): largs =", [str(arg) for arg in largs]
+            logger.debug("lfunc = %r\nlargs =%r" % (
+                    str(lfunc), [str(arg) for arg in largs]))
         return res, args[0].typ
 
     @classmethod
@@ -706,7 +707,8 @@ class _LLVMModuleUtils(object):
 
     @classmethod
     def build_conj(cls, translator, args):
-        print args
+        if __debug__:
+            logger.debug(repr(args))
         assert ((len(args) == 1) and (args[0]._llvm is not None) and
                 (args[0]._llvm.type in (_complex64, _complex128)))
         larg = args[0]._llvm
@@ -908,32 +910,36 @@ class Translate(object):
         self.cfg = LLVMControlFlowGraph.build_cfg(self.fco, self)
         self.cfg.compute_dataflow()
         if __debug__:
-            self.cfg.pprint()
+            logger.debug(self.cfg.pformat())
+        is_dead_code = False
         for i, op, arg in itercode(self.costr):
             name = opcode.opname[op]
             # Change the builder if the line-number 
             # is in the list of blocks.
             if i in self.blocks.keys():
-                if i > 0:
-                    # Emit a branch to link blocks up if the previous
-                    # block was not explicitly branched out of...
-                    bb_instrs = self.builder.basic_block.instructions
-                    if ((len(bb_instrs) == 0) or
-                        (not bb_instrs[-1].is_terminator)):
-                        self.builder.branch(self.blocks[i])
+                is_dead_code = 0 not in self.cfg.blocks_reaching[i]
+                if not is_dead_code:
+                    if i > 0:
+                        # Emit a branch to link blocks up if the previous
+                        # block was not explicitly branched out of...
+                        bb_instrs = self.builder.basic_block.instructions
+                        if ((len(bb_instrs) == 0) or
+                            (not bb_instrs[-1].is_terminator)):
+                            self.builder.branch(self.blocks[i])
 
-                    # Copy the locals exiting the soon to be
-                    # preceeding basic block.
-                    self.blocks_locals[self.crnt_block] = self._locals[:]
+                        # Copy the locals exiting the soon to be
+                        # preceeding basic block.
+                        self.blocks_locals[self.crnt_block] = self._locals[:]
 
-                    # Ensure we are playing with locals that might
-                    # actually precede the next block.
-                    self.check_locals(i)
+                        # Ensure we are playing with locals that might
+                        # actually precede the next block.
+                        self.check_locals(i)
 
-                self.crnt_block = i
-                self.builder = lc.Builder.new(self.blocks[i])
-                self.build_phi_nodes(self.crnt_block)
-            getattr(self, 'op_'+name)(i, op, arg)
+                    self.crnt_block = i
+                    self.builder = lc.Builder.new(self.blocks[i])
+                    self.build_phi_nodes(self.crnt_block)
+            if not is_dead_code:
+                getattr(self, 'op_'+name)(i, op, arg)
 
         # Perform code optimization
         if self.optimize:
@@ -944,7 +950,7 @@ class Translate(object):
             #fpm.finalize()
 
         if __debug__:
-            print self.mod
+            logger.debug(str(self.mod))
 
     def _get_ee(self):
         if self.ee is None:
@@ -977,7 +983,7 @@ class Translate(object):
             lfunc_ptr_ptr.linkage = lc.LINKAGE_INTERNAL
         lfunc = target_translator.builder.load(lfunc_ptr_ptr)
         if __debug__:
-            print "build_call_to_translated_function():", str(lfunc)
+            logger.debug(str(lfunc))
         largs = [arg.llvm(convert_to_strtype(param_typ),
                           builder = target_translator.builder)
                  for arg, param_typ in zip(args, self.arg_types)]
@@ -1015,7 +1021,7 @@ class Translate(object):
             phi.add_incoming(value, pred_lblock)
 
     def add_phi_incomming(self, phi, crnt_block, pred, local):
-        '''Take one of three actions:
+        '''Take one of four actions:
 
         1. If the predecessor block has already been visited, add its
         exit value for the given local to the phi node under
@@ -1028,6 +1034,8 @@ class Translate(object):
         3. If the reaching definition has not been visited, add a
         pending call to PHINode.add_incoming() which will be caught by
         op_STORE_LOCAL().
+
+        4. If the predecessor is unreachable, ignore it.
         '''
         if pred in self.blocks_locals and pred not in self.pending_blocks:
             pred_locals = self.blocks_locals[pred]
@@ -1036,12 +1044,13 @@ class Translate(object):
                 "already been visited.")
             phi.add_incoming(pred_locals[local].llvm(
                     llvmtype_to_strtype(phi.type)), self.blocks[pred])
-        else:
+        elif 0 in self.cfg.blocks_reaching[pred]:
             reaching_defs = self.cfg.get_reaching_definitions(crnt_block)
             if __debug__:
-                print("add_phi_incomming(): reaching_defs = %s\n    "
-                      "crnt_block=%r, pred=%r, local=%r" %
-                      (pprint.pformat(reaching_defs), crnt_block, pred, local))
+                logger.debug("add_phi_incomming(): reaching_defs = %s\n    "
+                             "crnt_block=%r, pred=%r, local=%r" %
+                             (pprint.pformat(reaching_defs), crnt_block, pred,
+                              local))
             definition_block = reaching_defs[pred][local]
             if ((definition_block in self.blocks_locals) and
                 (definition_block not in self.pending_blocks)):
@@ -1056,6 +1065,9 @@ class Translate(object):
                     local]
                 self.add_pending_phi(definition_index, local, phi,
                                      self.blocks[pred])
+        else:
+            if __debug__:
+                logger.debug("Block %d not reachable from entry." % pred)
 
     def build_phi_nodes(self, crnt_block):
         '''Determine if any phi nodes need to be created, and if so,
@@ -1303,7 +1315,7 @@ class Translate(object):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
         if __debug__:
-            print("op_BINARY_ADD(): %r + %r" % (arg1, arg2))
+            logger.debug("op_BINARY_ADD(): %r + %r" % (arg1, arg2))
         typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
             res = self.builder.fadd(arg1, arg2)
@@ -1482,7 +1494,7 @@ class Translate(object):
         func = self.stack.pop(-1)
         ret_typ = None
         if __debug__:
-            print("op_CALL_FUNCTION():", func)
+            logger.debug("op_CALL_FUNCTION():", func)
         if func.val in PY_CALL_TO_LLVM_CALL_MAP:
             res, ret_typ = PY_CALL_TO_LLVM_CALL_MAP[func.val](self, args)
         elif isinstance(func.val, MethodReference):
@@ -1556,7 +1568,7 @@ class Translate(object):
     def op_LOAD_ATTR(self, i, op, arg):
         objarg = self.stack.pop(-1)
         if __debug__:
-            print "op_LOAD_ATTR():", i, op, self.names[arg], objarg, objarg.typ
+            logger.debug(repr((i, op, self.names[arg], objarg, objarg.typ)))
         if objarg.is_module():
             res = getattr(objarg.val, self.names[arg])
         else:
@@ -1565,7 +1577,7 @@ class Translate(object):
             objarg_llvm_val = objarg.llvm()
             res = None
             if __debug__:
-                print "op_LOAD_ATTR():", objarg_llvm_val.type
+                logger.debug(str(objarg_llvm_val.type))
             if objarg_llvm_val.type == _numpy_array:
                 field_index = _numpy_array_field_ofs[self.names[arg]]
                 field_indices = [_int32_zero,
@@ -1702,21 +1714,21 @@ class Translate(object):
             ltype = lval.type
             if ltype == _numpy_array:
                 if __debug__:
-                    print("op_BINARY_SUBSCR(): arr_var.typ = %s" %
-                          (arr_var.typ,))
+                    logger.debug("op_BINARY_SUBSCR(): arr_var.typ = %s" %
+                                 (arr_var.typ,))
                 result_val = self.builder.load(
                     self._build_pointer_into_arr_data(arr_var, index_var))
                 if __debug__:
-                    print result_val
+                    logger.debug(repr(result_val))
             elif ltype.kind == lc.TYPE_POINTER:
                 result_val = self.builder.load(
                     self.builder.gep(lval, [index_var.llvm(
                                 'i32', builder = self.builder)]))
             else:
                 if __debug__:
-                    print("op_BINARY_SUBSCR(): %r arr_var = %r (%r)\n%s" %
-                              ((i, op, arg), arr_var, str(arr_var._llvm),
-                               self.mod))
+                    logger.debug("op_BINARY_SUBSCR(): %r arr_var = %r (%r)\n%s"
+                                 % ((i, op, arg), arr_var, str(arr_var._llvm),
+                                    self.mod))
                 raise NotImplementedError(
                     "Unable to handle indexing on LLVM type '%s'." %
                     (str(ltype),))
@@ -1724,9 +1736,9 @@ class Translate(object):
             raise NotImplementedError("FIXME")
         else:
             if __debug__:
-                print("op_BINARY_SUBSCR(): %r arr_var = %r (%r)\n%s" %
-                          ((i, op, arg), arr_var, str(arr_var._llvm),
-                           self.mod))
+                logger.debug("op_BINARY_SUBSCR(): %r arr_var = %r (%r)\n%s" %
+                             ((i, op, arg), arr_var, str(arr_var._llvm),
+                              self.mod))
             raise NotImplementedError("Unable to handle indexing on objects "
                                       "of type %r." % (type(arr_var.val),))
         self.stack.append(Variable(result_val))
@@ -1741,15 +1753,14 @@ class Translate(object):
         arr_var = self.stack.pop(-1)
         store_var = self.stack.pop(-1)
         if __debug__:
-            print "op_STORE_SUBSCR():", i, op, arg
-            print("op_STORE_SUBSCR(): %r[%r] = %r" % (arr_var, index_var,
-                                                      store_var))
+            logger.debug("%r\nop_STORE_SUBSCR(): %r[%r] = %r" % (
+                    (i, op, arg), arr_var, index_var, store_var))
         if arr_var._llvm is not None:
             arr_lval = arr_var._llvm
             arr_ltype = arr_lval.type
             if __debug__:
-                print("op_STORE_SUBSCR(): arr_lval = '%s', arr_ltype = '%s'" %
-                      (arr_lval, arr_ltype))
+                logger.debug("op_STORE_SUBSCR(): arr_lval = '%s', "
+                             "arr_ltype = '%s'" % (arr_lval, arr_ltype))
             if arr_ltype == _numpy_array:
                 target_addr = self._build_pointer_into_arr_data(arr_var,
                                                                 index_var)

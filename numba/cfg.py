@@ -283,7 +283,10 @@ class ControlFlowGraph (object):
                     if nreaches[local] > 1])
 
     def pprint (self, *args, **kws):
-        pprint.pprint(self.__dict__)
+        pprint.pprint(self.__dict__, *args, **kws)
+
+    def pformat (self, *args, **kws):
+        return pprint.pformat(self.__dict__, *args, **kws)
 
     def to_dot (self, graph_name = None):
         '''Return a dot (digraph visualizer in Graphviz) graph

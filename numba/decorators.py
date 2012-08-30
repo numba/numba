@@ -104,8 +104,8 @@ def jit(*args, **kws):
         global __tr_map__
         llvm = kws.pop('llvm', True)
         if func in __tr_map__:
-            print("Warning: Previously compiled version of %r may be "
-                  "garbage collected!" % (func,))
+            logger.warning("Warning: Previously compiled version of %r may be "
+                           "garbage collected!" % (func,))
         t = bytecode_translate.Translate(func, *args, **kws)
         t.translate()
         __tr_map__[func] = t
