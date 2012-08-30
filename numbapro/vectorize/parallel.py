@@ -226,14 +226,21 @@ class ParallelUFuncPosixMixin(object):
         threads = self.array(api.pthread_t, num_thread, name='threads')
 
         # self.debug("launch threads")
-        # TODO error handling
 
         with self.for_range(num_thread) as (loop, i):
-            api.pthread_create(threads[i].reference(), NULL, worker,
-                               contexts[i].reference().cast(C.void_p))
+            status = api.pthread_create(threads[i].reference(), NULL, worker,
+                                        contexts[i].reference().cast(C.void_p))
+            with self.ifelse(status != self.constant_null(status.type)) as ifelse:
+                with ifelse.then():
+                    self.debug("Error at pthread_create: ", status)
+                    self.unreachable()
 
         with self.for_range(num_thread) as (loop, i):
-            api.pthread_join(threads[i], NULL)
+            status = api.pthread_join(threads[i], NULL)
+            with self.ifelse(status != self.constant_null(status.type)) as ifelse:
+                with ifelse.then():
+                    self.debug("Error at pthread_join: ", status)
+                    self.unreachable()
 
 class ParallelUFuncWindowsMixin(object):
     '''ParallelUFunc mixin that implements _dispatch_worker to use Windows threading.
