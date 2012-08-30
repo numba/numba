@@ -14,4 +14,10 @@ except ImportError:
 from . import _numba_types
 from ._numba_types import *
 
+def test():
+    from subprocess import check_call
+
+    check_call([sys.executable, '-m', 'numba.tests.test_all'])
+
+
 __all__ = _numba_types.__all__
