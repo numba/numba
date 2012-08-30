@@ -50,7 +50,15 @@ namespace // nameless
 		} while (--count);
 
 		return reinterpret_cast<void*>(out);
-	}    
+	}
+
+	template <uintptr_t VALUE>
+	inline bool a_kind_of_magic(const void* ptrA, const void* ptrB)
+	{
+		uintptr_t a = reinterpret_cast<uintptr_t>(ptrA);
+		uintptr_t b = reinterpret_cast<uintptr_t>(ptrB);
+		return 0 ==  ((a ^ b) & ~(VALUE - 1));
+	}
 }
 
 const void* vvm_load(vvm_register* target, const void* base, size_t element_size, size_t count)
@@ -61,8 +69,11 @@ const void* vvm_load(vvm_register* target, const void* base, size_t element_size
 	return ptr_offset_bytes(base, total_size);
 }
 
+// TODO: only issue a prefetch only when changing cache line, issue a load
+//       when changing page
 void vvm_prefetch_stream(const void* base, ptrdiff_t stride, size_t count)
 {
+	const void *old = 0;
 	for (size_t i = 0; i < count; ++i)
 	{
 		__builtin_prefetch(base);
