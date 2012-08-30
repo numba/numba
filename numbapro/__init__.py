@@ -1,3 +1,6 @@
+# as _internal contains the license checking code, we import it here
+from . import _internal
+
 
 def test(verbosity=2):
     import unittest
