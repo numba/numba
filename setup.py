@@ -14,7 +14,7 @@ setup(
     packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize',
                 'numbapro.tests',
                 'numbapro.tests.basic_vectorize',
-                'numbapro.tests.llvm_cbuilder',
+                'numbapro.tests.llvm_cbuilder_tests',
                 'numbapro.tests.parallel_vectorize',
                 'numbapro.tests.stream_vectorize'],
     version = "0.5"
