@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
 
+from numba import d, i
+
 from numba.decorators import jit
 
 import numpy
@@ -89,6 +91,21 @@ def while_loop_fn_6(test_input):
 
 # ______________________________________________________________________
 
+def while_loop_fn_7(test_input):
+    '''While-loop version of for-loop tests for issue #25.
+    https://github.com/numba/numba/issues/25'''    
+    acc = 0.0
+    i = 0.0
+    while i < 5.0:
+        tmp = i
+        acc += i
+        i += 1.0
+        if tmp == test_input:
+            return acc
+    return acc
+
+# ______________________________________________________________________
+
 class TestWhile(unittest.TestCase):
     def _do_test(self, function, arg_types, *args, **kws):
         _jit = (jit(arg_types = arg_types)
@@ -129,6 +146,11 @@ class TestWhile(unittest.TestCase):
         compiled_fn = jit()(while_loop_fn_6)
         self.assertEqual(while_loop_fn_6(4.), compiled_fn(4.))
         self.assertEqual(while_loop_fn_6(5.), compiled_fn(5.))
+
+    def test_while_loop_fn_7(self):
+        compiled_fn = jit()(while_loop_fn_7)
+        self.assertEqual(while_loop_fn_7(4.), compiled_fn(4.))
+        self.assertEqual(while_loop_fn_7(5.), compiled_fn(5.))
 
 # ______________________________________________________________________
 

@@ -8,6 +8,7 @@ Grand unified unit test script for Numba.
 
 import unittest
 
+from test_avg2d import TestAvg2D
 from test_cfg import TestCFG
 from test_complex import TestComplex
 from test_extern_call import TestExternCall
