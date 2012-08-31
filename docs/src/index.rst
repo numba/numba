@@ -23,6 +23,7 @@ There are 4 versions of vectorize for building native ufunc kernels from python 
    ParallelVectorize
    CUDAVectorize
    StreamVectorize
+   GUFuncVectorize
 
 
 Dependencies

@@ -3,7 +3,7 @@ BasicVectorize
 
 This is the simplest vectorize.  It is suitable for small workloads in which the overhead for cache optimization, multithreading or GPU computation is too significant.
 
-Module Dependencies
+Imports
 -------------------
 
 ::
@@ -25,7 +25,7 @@ mathematical expressions.
  
 
 
-Compilation requires type information.  NumbaPro assumes no knowledge of type when building native ufunc.  We must therefore define argument and return dtypes for the defined ufunc.  We can add many and various dtypes for a given BasicVectorize ufunc.  This is similar to `function overloading <http://en.wikipedia.org/wiki/Function_overloading>`_ in C++
+Compilation requires type information.  NumbaPro assumes no knowledge of type when building native ufuncs.  We must therefore define argument and return dtypes for the defined ufunc.  We can add many and various dtypes for a given BasicVectorize ufunc.  This is similar to `function overloading <http://en.wikipedia.org/wiki/Function_overloading>`_ in C++
 
 ::
 

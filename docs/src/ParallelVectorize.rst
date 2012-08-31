@@ -1,10 +1,10 @@
--------
+-----------------
 ParallelVectorize
--------
+-----------------
 
 The ParallelVectorize module of NumbaPro targets multi ore architectures.  It contains a set of `llvm-py <https://github.com/llvmpy/llvmpy>`_ code generators for creating multithreaded ufuncs. 
 
-Module Dependencies
+Imports
 -------------------
 
 ::
@@ -26,7 +26,7 @@ mathematical expressions.
  
 
 
-Compilation requires type information.  NumbaPro assumes no knowledge of type when building native ufunc.  We must therefore define argument and return dtypes for the defined ufunc.  We can add many and various dtypes for a given BasicVectorize ufunc.  This is similar to `function overloading <http://en.wikipedia.org/wiki/Function_overloading>`_ in C++
+Compilation requires type information.  NumbaPro assumes no knowledge of type when building native ufuncs.  We must therefore define argument and return dtypes for the defined ufunc.  We can add many and various dtypes for a given ParallelVectorize ufunc.  This is similar to `function overloading <http://en.wikipedia.org/wiki/Function_overloading>`_ in C++
 
 ::
 
