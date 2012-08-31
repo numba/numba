@@ -26,13 +26,13 @@ There are 4 versions of vectorize for building native ufunc kernels from python 
    GUFuncVectorize
 
 
-Dependencies
+Dependencies 
 ------------
 
-* `Numba <http://numba.pydata.org/>`_
+* `Numba (0.2) <http://numba.pydata.org/>`_
 * `llvm (3.1) <http://llvm.org/releases/index.html>`_
-* `llvm-py <https://github.com/llvmpy/llvmpy>`_
-* `meta <http://pypi.python.org/pypi/meta/>`_
+* `llvm-py (0.8.2) <https://github.com/llvmpy/llvmpy>`_
+* `meta (0.4.1) <http://pypi.python.org/pypi/meta/>`_
 
 
 
