@@ -1049,7 +1049,8 @@ class Translate(object):
                 "Local value definition missing from block that has "
                 "already been visited.")
             phi.add_incoming(pred_locals[local].llvm(
-                    llvmtype_to_strtype(phi.type)), self.blocks[pred])
+                    llvmtype_to_strtype(phi.type), builder = self.builder),
+                             self.blocks[pred])
         elif 0 in self.cfg.blocks_reaching[pred]:
             reaching_defs = self.cfg.get_reaching_definitions(crnt_block)
             if __debug__:
@@ -1814,3 +1815,22 @@ class Translate(object):
 
     def op_POP_TOP(self, i, op, arg):
         self.stack.pop(-1)
+
+    def op_BINARY_AND(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
+        if typ[0] != 'i':
+            raise NotImplementedError("& not supported for type %r" % typ)
+        self.stack.append(Variable(self.builder.and_(arg1, arg2)))
+
+    def op_BINARY_RSHIFT(self, i, op, arg):
+        arg2 = self.stack.pop(-1)
+        arg1 = self.stack.pop(-1)
+        typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
+        if typ[0] != 'i':
+            raise NotImplementedError(">> not supported for type %r" % typ)
+        self.stack.append(Variable(self.builder.ashr(arg1, arg2)))
+
+    def op_INPLACE_RSHIFT(self, i, op, arg):
+        return self.op_BINARY_RSHIFT(i, op, arg)
