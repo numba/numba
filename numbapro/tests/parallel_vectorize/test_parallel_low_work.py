@@ -9,7 +9,7 @@ from time import time
 import unittest
 
 def vector_add(a, b):
-    return a ** b
+    return a + b
 
 class TestParallelLowWorkCount(unittest.TestCase):
     def test_low_workcount(self):
