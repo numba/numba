@@ -5,11 +5,6 @@ from numbapro.translate import Translate
 from numbapro import _internal
 import numpy as np
 
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
-
 class _GeneralizedUFuncFromFrunc(_common.CommonVectorizeFromFrunc):
     def __call__(self, lfunclist, tyslist, signature, engine, **kws):
         '''create generailized ufunc from a llvm.core.Function
@@ -58,13 +53,11 @@ class GUFuncVectorize(object):
         self.pyfunc = func
         self.translates = []
         self.signature = sig
-        self.log = StringIO()
 
     def add(self, arg_types):
-        with _common.redirect_print(self.log):
-            t = Translate(self.pyfunc, arg_types=arg_types)
-            t.translate()
-            self.translates.append(t)
+        t = Translate(self.pyfunc, arg_types=arg_types)
+        t.translate()
+        self.translates.append(t)
 
     def _get_tys_list(self):
         from numba.translate import convert_to_llvmtype

@@ -69,10 +69,9 @@ class CudaVectorize(_common.GenericVectorize):
 
     def add(self, *args, **kwargs):
         kwargs.update({'module': self.module})
-        with _common.redirect_print(self.log):
-            t = Translate(self.pyfunc, *args, **kwargs)
-            t.translate()
-            self.translates.append(t)
+        t = Translate(self.pyfunc, *args, **kwargs)
+        t.translate()
+        self.translates.append(t)
 
     def build_ufunc(self):
         # quick & dirty tryout

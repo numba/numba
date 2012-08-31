@@ -1155,6 +1155,8 @@ class CFunc(CValue):
                                 "argument %d mismatch: %s != %s"
                                 % (self.function.name, i, exp, got.type))
         res = self.parent.builder.call(self.function, arg_values)
+        if hasattr(self.function, 'calling_convention'):
+            res.calling_convention = self.function.calling_convention
         return CTemp(self.parent, res)
 
     @property
@@ -1334,6 +1336,9 @@ class CExternal(object):
     All class attributes that are `llvm.core.FunctionType` are converted
     to `CFunc` instance during instantiation.
     '''
+
+    _calling_convention_ = None # default
+
     def __init__(self, cbuilder):
         is_func = lambda x: isinstance(x, lc.FunctionType)
         non_magic = lambda s: not ( s.startswith('__') and s.endswith('__') )
@@ -1347,6 +1352,9 @@ class CExternal(object):
         mod = cbuilder.function.module
         for fname, ftype in to_declare:
             func = mod.get_or_insert_function(ftype, name=fname)
+            if self._calling_convention_:
+                func.calling_convention = self._calling_convention_
+
             if func.type.pointee != ftype:
                 raise NameError("Function has already been declared "
                                 "with a different type: %s != %s"
