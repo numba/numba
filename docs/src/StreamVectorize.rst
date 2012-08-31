@@ -4,7 +4,7 @@ StreamVectorize
 
 **Note: StreamVectorize is still in experimental stages.  Computation speeds may have unexpected results .**
 
-StreamVectorize aims to provide a cache optimized version of vectorize. The current implementation works on a small chunks of data at a time.  StreamVectorize copies memory to aligned, contiguous buffers (small enough presumably to fit in cache) and then executes the code on those chunks.
+StreamVectorize aims to provide a cache optimized version of vectorize. The current implementation works on small chunks of data at a time.  StreamVectorize copies memory to aligned, contiguous buffers (small enough presumably to fit in cache) and then executes the code on those chunks.
 
 Imports
 -------
@@ -38,7 +38,7 @@ Compilation requires type information.  NumbaPro assumes no knowledge of type wh
     sv.add(ret_type=f, arg_types=[f, f])
     sv.add(ret_type=d, arg_types=[d, d])
 
-Above we are using signed and unsigned 32-bit, a float **f**, and a double **d**. 
+Above we are using signed and unsigned 32-bit ints, a float **f**, and a double **d**. 
 
 To compile our ufunc we issue the following command
 

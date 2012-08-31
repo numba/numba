@@ -35,7 +35,7 @@ Compilation requires type information.  NumbaPro assumes no knowledge of type wh
 	bv.add(ret_type=f, arg_types=[f, f])
 	bv.add(ret_type=d, arg_types=[d, d])
 
-Above we are using signed and unsigned 32-bit, a float **f**, and a double **d**. 
+Above we are using signed and unsigned 32-bit ints, a float **f**, and a double **d**. 
 
 To compile our ufunc we issue the following command
 
