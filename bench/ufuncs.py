@@ -60,7 +60,7 @@ def numexpr_mad_aprox_erf(x, res):
     a5 = 1.061405429
     ne.evaluate('where(x >=0 , 1.0 - 1.0/(1.0 + a1*(1.0/(1.0 + p*abs(x))) - a2*((1.0/(1.0 + p*abs(x)))**2) + a3*((1.0/(1.0 + p*abs(x)))**3) - a4*((1.0/(1.0 + p*abs(x)))**4) + a5*((1.0/(1.0 + p*abs(x)))**5)), -(1.0 - 1.0/(1.0 + a1*(1.0/(1.0 + p*abs(x))) - a2*((1.0/(1.0 + p*abs(x)))**2) + a3*((1.0/(1.0 + p*abs(x)))**3) - a4*((1.0/(1.0 + p*abs(x)))**4) + a5*((1.0/(1.0 + p*abs(x)))**5))))', out = res)
 
-def numexpr_mad_pos_aprox_erf(x, res):
+def numexpr_mad2_aprox_erf(x, res):
     p = 0.3275911
     a1 = 0.254829592
     a2 = 0.284496736
@@ -140,7 +140,7 @@ def run_aprox_erf(elements):
             ('numpy', numpy_aprox_erf, test_args),
             ('numexpr', numexpr_aprox_erf, test_args),
             ('numexpr-crazy', numexpr_mad_aprox_erf, test_args),
-            ('numexpr-crazy-pos', numexpr_mad_pos_aprox_erf, test_args),
+            ('numexpr-crazy2', numexpr_mad2_aprox_erf, test_args),
             ('nbp-basic', bv_ufunc, test_args),
 #            ('nbp-cuda',  cv_ufunc, test_args),
             ('nbp-stream', pv_ufunc, test_args),
