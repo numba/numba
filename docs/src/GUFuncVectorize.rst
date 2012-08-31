@@ -2,18 +2,16 @@
 GUFuncVectorize
 ---------------
 
-The GUFuncVectorize module of NumbaPro this creates a fast "generalized ufunc" from the numba-compiled code.  Unlike other NumbaPro Vectorize classes, the GUFuncVectorize constructor takes an additional signature of the generalized ufunc.
+The GUFuncVectorize module of NumbaPro this creates a fast "generalized ufunc" from numba-compiled code.  Traditional UFunc perfom elementwise operationsGeneralized ufuncs   Unlike other NumbaPro Vectorize classes, the GUFuncVectorize constructor takes an additional signature of the generalized ufunc.
 
 
 Imports
--------------------
+--------
 
 ::
 
-	from numba.decorators import jit
 	from numba import *
 	import numpy as np
-	import numpy.core.umath_tests as ut
 	from numbapro.vectorize.gufunc import GUFuncVectorize
 
 ufunc Definition
@@ -41,10 +39,21 @@ Compilation requires type information.  NumbaPro assumes no knowledge of type wh
 
     gufunc = GUFuncVectorize(matmulcore, '(m,n),(n,p)->(m,p)')
     gufunc.add(arg_types=[f[:,:], f[:,:], f[:,:]])
+    gufunc.add(arg_types=[d[:,:], d[:,:], d[:,:]])
+    gufunc.add(arg_types=[int32[:,:], int32[:,:], int32[:,:]])
+
+Above we are using a signed **32-bit int**, a float **f**, and a double **d**.  The GUFuncVectorize calls `PyDynUFunc_FromFuncAndDataAndSignature <http://scipy-lectures.github.com/advanced/advanced_numpy/index.html#generalized-ufuncs>`_ which requires a the signature: *(m,n),(n,p)->(m,p)* in the constructor.  This signature defines the *"core dimensions"* of the generalized ufunc.  
+
+
+To compile our ufunc we issue the following command
 
 ::
 
-	gufunc = gufunc.build_ufunc()
+	 gufunc = gufunc.build_ufunc()
+
+**pv.build_ufunc()* returns a python callable list of functions which are compiled by Numba.
+
+Lastly, we call gufunc with two NumPy matrices 
 
 :: 
 
@@ -53,3 +62,5 @@ Compilation requires type information.  NumbaPro assumes no knowledge of type wh
     B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
   	C = gufunc(A, B)
     
+
+Notice that we don't have a third argument in the gufunc call but the generalized ufunc definition above has three arguments.  The last argument of the generalized ufunc is the the output.  Numba lacks the ability to return array objects.  A third object is implicitly defined with a shape defined by the signature.
