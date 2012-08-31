@@ -37,15 +37,23 @@ def main_debugprint():
 
 class TestPrint(unittest.TestCase):
     def test_debugprint(self):
-        p = Popen(["python", __file__, "-child"], stdout=PIPE)
+        p = Popen([sys.executable, __file__, "-child"], stdout=PIPE)
         p.wait()
 
-        lines = p.stdout.read().decode().splitlines(False)
+        # The encode(utf-8) is for Python 3 compatibility
+        lines = p.stdout.read().encode('utf-8').splitlines(False)
 
-        expect = [
-            'Show 123 1.234 1.000e-31',
-            'an_int = 123 a_float = 1.234000e+00 a_double = 1.000000e-31',
-            ]
+        # Try to account for variations in the system printf
+        if lines[0].find('e-031') >= 0:
+            expect = [
+                'Show 123 1.234 1.000e-031',
+                'an_int = 123 a_float = 1.234000e+000 a_double = 1.000000e-031',
+                ]
+        else:
+            expect = [
+                'Show 123 1.234 1.000e-31',
+                'an_int = 123 a_float = 1.234000e+00 a_double = 1.000000e-31',
+                ]
         self.assertEqual(expect, lines)
 
         p.stdout.close()
