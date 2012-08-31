@@ -1155,6 +1155,8 @@ class CFunc(CValue):
                                 "argument %d mismatch: %s != %s"
                                 % (self.function.name, i, exp, got.type))
         res = self.parent.builder.call(self.function, arg_values)
+        if hasattr(self.function, 'calling_convention'):
+            res.calling_convention = self.function.calling_convention
         return CTemp(self.parent, res)
 
     @property
