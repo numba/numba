@@ -6,25 +6,15 @@
 
 NumaPro
 =========
-NumbaPro is an enhanced version of Numba. 
+NumbaPro is an enhanced version of Numba.  With NumbaPro python developers can define NumPy ufuncs, in python, which are compiled and loaded on the fly.  Additionally, NumbaPro offers developers the ability to target mutlicore architecture for maximum efficiency.
 
+*NumbaPro can also target NVIDIA GPUs. While this functionality is being actively developed; it is, however, at the moment still in the experimental stages.*
 
 Current Features
 ----------------
 
 
-Fast Vectorize
---------------
-
 There are 4 versions of vectorize for building native ufunc kernels from python functions.
-
-They are:
-
-1. BasicVectorize_ (`numbapro.vectorize.basic`) -- A simple wrapper for vectorize
-2. ParallelVectorize (`numbapro.vectorize.parallel`) -- A multi-threaded version of vectorize.
-3. CUDAVectorize	 (`numbapro.vectorize.cuda`) -- A vectorize that uses Nvidia CUDA GPU.
-4. StreamVectorize (`numbapro.vectorize.stream`) -- A cache optimized version.  (Work in progress)
-
 
 .. toctree::
    :maxdepth: 1
@@ -33,6 +23,15 @@ They are:
    ParallelVectorize
    CUDAVectorize
    StreamVectorize
+
+
+Dependencies
+------------
+
+* `Numba <http://numba.pydata.org/>`_
+* `llvm (3.1) <http://llvm.org/releases/index.html>`_
+* `llvm-py <https://github.com/llvmpy/llvmpy>`_
+* `meta <http://pypi.python.org/pypi/meta/>`_
 
 
 

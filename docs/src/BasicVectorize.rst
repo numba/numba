@@ -3,6 +3,14 @@ BasicVectorize
 
 This is the simplest vectorize.  It is suitable for small workloads in which the overhead for cache optimization, multithreading or GPU computation is too significant.
 
+Module Dependencies
+-------------------
+
+::
+
+	import numpy as np
+	from numba import *
+	from numbapro.vectorize.basic import BasicVectorize
 
 ufunc Definition
 -----------------
@@ -13,7 +21,7 @@ mathematical expressions.
 ::	
 
 	def my_ufunc(a, b, c, d):
-		return a+b+sqrt(c*cos(asdfdsafdsaf))
+		return a+b+sqrt(c*cos(d))
  
 
 
@@ -35,7 +43,7 @@ To compile our ufunc we issue the following command
 
 	basic_ufunc = bv.build_ufunc()
 
-*bv.build_ufunc()* returns a python callable list of functions which are compiled by Numba.  *This work is normally accomplished by* `PyUFunc_FromFuncAndData <http://docs.scipy.org/doc/numpy/user/c-info.ufunc-tutorial.html>`_. We've now registered a set of overload functions ready be used as NumPy ufuncs.
+*bv.build_ufunc()* returns a python callable list of functions which are compiled by Numba.  *This work is normally accomplished by* `PyUFunc_FromFuncAndData <http://docs.scipy.org/doc/numpy/user/c-info.ufunc-tutorial.html>`_ and Numba takes care of it.* We've now registered a set of overload functions ready be used as NumPy ufuncs.
 
 Lastly, we call basic_ufunc with two NumPy array as arguments
 
