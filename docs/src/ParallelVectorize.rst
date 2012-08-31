@@ -2,7 +2,7 @@
 ParallelVectorize
 -----------------
 
-The ParallelVectorize module of NumbaPro targets multi ore architectures.  It contains a set of `llvm-py <https://github.com/llvmpy/llvmpy>`_ code generators for creating multithreaded ufuncs. 
+The ParallelVectorize module of NumbaPro targets multicore architectures.  It contains a set of `llvm-py <https://github.com/llvmpy/llvmpy>`_ code generators for creating multithreaded ufuncs. 
 
 Imports
 -------------------
