@@ -4,6 +4,9 @@
 
 import time
 
+
+_time_func = time.clock
+
 def print_profile_results(profile_results):
     """ print results from a profile_functions run
     """
@@ -19,9 +22,9 @@ def profile_functions(tests, times = 10):
     arguments.
     """
     def timeit_func(func, args):
-        t0 = time.time()
+        t0 = _time_func()
         func(*args)
-        t1 = time.time()
+        t1 = _time_func()
         return t1-t0
     
     def profile_func(test):

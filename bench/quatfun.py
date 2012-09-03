@@ -9,8 +9,37 @@ import numba as nb
 from numba.decorators import jit
 from numbapro.vectorize.gufunc import GUFuncVectorize
 
+
+def hl_quat_normalize(q0):
+    return q0/np.sqrt(np.sum(q0.q0))
+
+def hl_quat_product(q0, q1):
+    result = np.empty_like(q0)
+    quat_product(q0,q1, result)
+    return result
+
+def hl_quat_conj(q0):
+    result = np.empty_like(q0)
+    quat_conj(q0, result)
+    return result
+
+def hl_quat_from_vect(v):
+    result = np.empty((4,), dtype = v.dtype)
+    for i in range(3):
+        result[i] = v[i]
+    result[3] = 0
+    return result
+
+def hl_vect_from_quat(q):
+    return np.copy(q[0:3])
+    
+
+def hl_vect_by_quat(v, q0):
+    # sandwich product
+    return hl_vect_from_quat(hl_quat_product(hl_quat_product(q0, hl_quat_from_vect(v)), hl_quat_conj(q0)))
+
 def quat_normalize(q0, result):
-    norm = np.sum(q0*q0)
+    norm = np.sqrt(np.sum(q0*q0))
     result = q0 / norm
 
 # quats assumed to be in ijkw form
@@ -61,6 +90,12 @@ def vect_array_by_quats(array, q0, result):
     for i in range(N):
         vect_by_quat(array[i], q0, result[i])
 
+def hl_vect_array_by_quats(array, q0, result):
+    N = array.shape[0]
+    for i in range(N):
+        result[i] = hl_vect_by_quat(array[i], q0)
+
+
 
 def have_fun():
     # generate code for tests..
@@ -78,11 +113,13 @@ def have_fun():
     result = np.zeros_like(test)
 
     test_args = [ test, quat, result ]
-    print_profile_results( profile_functions([('pure_python', vect_array_by_quats, test_args),
-                                              ('numba', fun_numba, test_args),
-                                              ('numbapro', fun_numbapro, test_args),
-                                              ('pure_python_inl', vect_array_by_quats_inlined, test_args) 
-                                              ]))
+    print_profile_results( profile_functions([
+                ('python_f', hl_vect_array_by_quats, test_args),
+                ('python_p', vect_array_by_quats, test_args),
+                ('numba', fun_numba, test_args),
+                ('numbapro', fun_numbapro, test_args),
+                ('python_p_inl', vect_array_by_quats_inlined, test_args) 
+                ]))
 
 if __name__ == '__main__':
     have_fun()
