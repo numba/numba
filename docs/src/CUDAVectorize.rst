@@ -50,7 +50,7 @@ To compile our ufunc we issue the following command
 	cuda_ufunc = cv.build_ufunc()
 
 
-*cuda_ufunc = cv.build_ufunc()* returns a python callable list of functions which are compiled by Numba.  The CUDA vectorize translates the Numba compiled ufunc kernel into Nvidia PTX representation. Then, it uses PyCUDA for access to the CUDA driver and send the PTX to device execution.
+*cuda_ufunc = cv.build_ufunc()* returns a python callable list of functions which are compiled by Numba.  The CUDA vectorize translates the Numba compiled ufunc kernel into an Nvidia PTX representation. Then, it uses PyCUDA for access to the CUDA driver and send the PTX to device execution.
 
 Lastly, we call cuda_ufunc with two NumPy array as arguments
 

@@ -8,6 +8,7 @@ from llvm.ee import *
 from llvm_cbuilder import *
 import llvm_cbuilder.shortnames as C
 import unittest, logging
+import sys
 
 # logging.basicConfig(level=logging.DEBUG)
 
@@ -66,6 +67,7 @@ def gen_test_pthread(mod):
     return cb.function
 
 class TestAtomicAdd(unittest.TestCase):
+    @unittest.skipIf(sys.platform == 'win32', "test uses pthreads, not supported on Windows")
     def test_atomic_add(self):
         mod = Module.new(__name__)
         # add pthread functions
