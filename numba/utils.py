@@ -1,6 +1,10 @@
 import opcode
 import ctypes
+
 from numpy import complex64, complex128
+
+from .minivect import miniast, minitypes
+from . import _numba_types
 
 def itercode(code):
     """Return a generator of byte-offset, opcode, and argument
@@ -35,13 +39,21 @@ def debugout(*args):
         print("debugout (non-translated): %s" % (''.join((str(arg)
                                                           for arg in args)),))
 
-def get_minivect_context():
-    from .minivect import miniast
-    from . import _numba_types
+class NumbaASTBuilder(miniast.ASTBuilder):
+    def __init__(self, context):
+        super(NumbaASTBuilder, self).__init__(context)
 
-    context = miniast.Context()
-    context.typemapper = _numba_types.NumbaTypeMapper(context)
-    return context
+    def stridesvar(self, variable):
+        return miniast.StridePointer(None, minitypes.npy_intp.pointer(), variable)
+
+class NumbaContext(miniast.LLVMContext):
+    def __init__(self):
+        super(NumbaContext, self).__init__()
+        self.astbuilder = NumbaASTBuilder(self)
+        self.typemapper = _numba_types.NumbaTypeMapper(self)
+
+def get_minivect_context():
+    return NumbaContext()
 
 context = get_minivect_context()
 

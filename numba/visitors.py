@@ -64,5 +64,8 @@ class NumbaVisitorMixin(object):
 class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
     "Non-mutating visitor"
 
+    def visitlist(self, list):
+        return [self.visit(item) for item in list]
+
 class NumbaTransformer(ast.NodeTransformer, NumbaVisitorMixin):
     "Mutating visitor"
