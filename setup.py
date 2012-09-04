@@ -1,5 +1,6 @@
 from distutils.core import setup, Extension
 import numpy
+from numba import minivect
 
 setup(
     name = "numbapro",
@@ -10,7 +11,8 @@ setup(
     description = "compile Python code",
     ext_modules = [Extension(name = "numbapro._internal",
                              sources = ["numbapro/_internal.c"],
-                             include_dirs = [numpy.get_include()])],
+                             include_dirs = [numpy.get_include(),
+                                             minivect.get_include()])],
     packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize',
                 'numbapro.tests',
                 'numbapro.tests.basic_vectorize',
