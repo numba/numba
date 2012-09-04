@@ -1,7 +1,7 @@
 from matplotlib import pyplot as plt
-import pickle
+import pickle, sys
 
-with open('copy_d_bandwidth.dat', 'rb') as fin:
+with open(sys.argv[1], 'rb') as fin:
     record = pickle.load(fin)
 
 for name in 'cython numba basic stream parallel'.split():
