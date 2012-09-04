@@ -136,5 +136,3 @@ def ufunc_core_impl(fnty, func, args, steps, item):
 
     res = func(*indata, **dict(inline=True))
     outptr.store(res)
-
-

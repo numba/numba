@@ -1,4 +1,5 @@
 import ast
+import ctypes
 
 from numba import visitors as numba_visitors
 from numba.minivect import (miniast,
@@ -11,6 +12,9 @@ from numbapro import _internal
 from numbapro.vectorize import _common, basic
 
 import numpy as np
+
+debug_c = False
+debug_llvm = False
 
 minicontext = decorators.context
 
@@ -110,6 +114,7 @@ class MiniVectorize(object):
 
     specializers = [
         minispecializers.ContigSpecializer,
+        minispecializers.CTiledStridedSpecializer,
         minispecializers.StridedSpecializer,
     ]
 
@@ -166,7 +171,10 @@ class MiniVectorize(object):
         ufuncs = {}
         for mapper, dimensionality, ast in asts:
             minifunc = self.build_minifunction(ast, mapper.miniargs)
-            result = minicontext.run(minifunc, self.specializers)
+            if debug_c:
+                print minicontext.debug_c(minifunc,
+                                           minispecializers.StridedSpecializer)
+            result = list(minicontext.run(minifunc, self.specializers))
 
             # Map minitypes to NumPy dtypes, so we can find the specialization
             # given input NumPy arrays
@@ -176,6 +184,10 @@ class MiniVectorize(object):
 
             ctypes_funcs = [ctypes_func
                                 for _, _, _, (_, ctypes_func) in result]
+
+            if debug_llvm:
+                lfunc = result[-1][3][0]
+                print lfunc
 
             # Get the argument ctypes types so we can cast the NumPy data pointer
             ctypes_ret_type = ctypes_conversion.convert_to_ctypes(
@@ -225,11 +237,16 @@ class UFuncDispatcher(object):
 
         # Get the right specialization
         order = _internal.get_arrays_ordering(args)
-        contig = order & (_internal.ARRAYS_ARE_CONTIG)
+        contig = order & _internal.ARRAYS_ARE_CONTIG
+        tiled = order & _internal.ARRAYS_ARE_MIXED_CONTIG
+
+        contig_func, tiled_func, strided_func = ctypes_funcs
         if contig:
-            ctypes_func = ctypes_funcs[0]
+            ctypes_func = contig_func
+        elif tiled:
+            ctypes_func = tiled_func
         else:
-            ctypes_func = ctypes_funcs[1]
+            ctypes_func = strided_func
 
         #
         ### Build the argument list
@@ -244,14 +261,20 @@ class UFuncDispatcher(object):
         if out is None:
             out = np.empty(broadcast.shape, dtype=result_dtype)
 
-        call_args.append(out.ctypes.data_as(ctypes_ret_type))
+        def add_arg(array, ctypes_type):
+            call_args.append(array.ctypes.data_as(ctypes_type))
+            if not contig:
+                call_args.append(array.ctypes.strides)
+
+        add_arg(out, ctypes_ret_type)
 
         # Get stride arguments
         # TODO: handle lesser dimensional broadcasting operands
         for numpy_array, ctypes_arg_type in zip(args, ctypes_arg_types):
-            call_args.append(numpy_array.ctypes.data_as(ctypes_arg_type))
-            if not contig:
-                call_args.append(numpy_array.ctypes.strides)
+            add_arg(numpy_array, ctypes_arg_type)
+
+#        if tiled:
+#            call_args.append(ctypes.c_int(64))
 
         # Run the ufunc!
         ctypes_func(*call_args)
@@ -273,12 +296,13 @@ if __name__ == '__main__':
     N = 4000
 
     a = np.arange(N * N, dtype=dtype).reshape(N, N)
-    b = a.copy()
-    out = np.empty((N, N), dtype=dtype)
+    b = a.copy().T
+    out = np.zeros((N, N), dtype=dtype)
 
     ufunc(a, b, out=out)
+    assert np.all(out == a + b)
+
     t = time.time()
     for i in range(100):
         ufunc(a, b, out=out)
     print time.time() - t
-
