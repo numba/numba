@@ -134,7 +134,7 @@ def ufunc_core_impl(fnty, func, args, steps, item):
     outptr = get_offset(args[out_index], steps[out_index],
                         fnty.return_type)
 
-    res = func(*indata)
+    res = func(*indata, **dict(inline=True))
     outptr.store(res)
 
 
