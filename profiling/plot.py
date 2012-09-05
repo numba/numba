@@ -10,5 +10,5 @@ for name in 'cython numba basic stream parallel'.split():
 plt.ylabel('peak bandwidth (word/second)')
 plt.xlabel('word count (log2)')
 
-plt.legend()
+plt.legend(loc='upper left')
 plt.show()
