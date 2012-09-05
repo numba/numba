@@ -106,7 +106,7 @@ dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
     0,                                          /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    0,                                          /* tp_flags */
+    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,     /* tp_flags */
     0,                                          /* tp_doc */
     0,                                          /* tp_traverse */
     0,                                          /* tp_clear */
@@ -537,9 +537,14 @@ init_internal(void)
         return ERR_RETVAL;
 
     /* Inherit the dynamic UFunc from UFunc */
+    PyUFunc_Type.tp_flags |= Py_TPFLAGS_BASETYPE; /* Hack... */
     PyDynUFunc_Type.tp_base = &PyUFunc_Type;
     if (PyType_Ready(&PyDynUFunc_Type) < 0)
-        return RETVAL;
+        return ERR_RETVAL;
+
+    Py_INCREF(&PyDynUFunc_Type);
+    if (PyModule_AddObject(m, "dyn_ufunc", (PyObject *) &PyDynUFunc_Type) < 0)
+        return ERR_RETVAL;
 
     return RETVAL;
 }
