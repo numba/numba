@@ -8,7 +8,7 @@ from numba.minivect import (miniast,
                             ctypes_conversion)
 from numba import decorators, utils, functions
 
-from numbapro import _internal
+from numbapro import _internal, _minidispatch
 from numbapro.vectorize import _common, basic
 
 import numpy as np
@@ -110,10 +110,21 @@ class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
         raise UntranslatableError("Unsupported node of type %s" %
                                                     type(node).__name__)
 
+class NumbaContigSpecializer(minispecializers.ContigSpecializer):
+    def visit_FunctionNode(self, node):
+        node = super(minispecializers.ContigSpecializer,
+                     self).visit_FunctionNode(node)
+        self.astbuilder.create_function_type(node, strides_args=True)
+        return node
+
+    def visit_StridePointer(self, node):
+        self.visitchildren(node)
+        return node
+
 class MiniVectorize(object):
 
     specializers = [
-        minispecializers.ContigSpecializer,
+        NumbaContigSpecializer,
         minispecializers.CTiledStridedSpecializer,
         minispecializers.StridedSpecializer,
     ]
@@ -143,11 +154,12 @@ class MiniVectorize(object):
                 except UntranslatableError, e:
                     # TODO: translate with Numba, call from minivect (non-inlined)
                     print e
-                    return self.fallback_vectorize()
+                    return self.fallback_vectorize(None)
                 else:
                     minivect_asts.append((mapper, dimensionality, minivect_ast))
 
         return self.minivect(minivect_asts)
+        # return self.fallback_vectorize(self.minivect(minivect_asts))
 
     def build_minifunction(self, ast, miniargs):
         b = minicontext.astbuilder
@@ -172,8 +184,7 @@ class MiniVectorize(object):
         for mapper, dimensionality, ast in asts:
             minifunc = self.build_minifunction(ast, mapper.miniargs)
             if debug_c:
-                print minicontext.debug_c(minifunc,
-                                           minispecializers.StridedSpecializer)
+                print minicontext.debug_c(minifunc, NumbaContigSpecializer)
             result = list(minicontext.run(minifunc, self.specializers))
 
             # Map minitypes to NumPy dtypes, so we can find the specialization
@@ -182,8 +193,12 @@ class MiniVectorize(object):
             dtype_args = [minitypes.map_minitype_to_dtype(arg_type)
                               for arg_type in mapper.arg_types]
 
-            ctypes_funcs = [ctypes_func
-                                for _, _, _, (_, ctypes_func) in result]
+            llvm_funcs, ctypes_funcs = zip(*[
+                    (lfunc, ctypes_func)
+                        for _, _, _, (lfunc, ctypes_func) in result])
+            function_pointers = [
+                ctypes_conversion.get_pointer(minicontext, llvm_func)
+                    for llvm_func in llvm_funcs]
 
             if debug_llvm:
                 lfunc = result[-1][3][0]
@@ -199,86 +214,18 @@ class MiniVectorize(object):
                     ctypes_conversion.convert_to_ctypes(dtype_pointer))
 
             dtype_args.append(dimensionality)
-            ufuncs[tuple(dtype_args)] = (ctypes_funcs, ctypes_ret_type,
+            ufuncs[tuple(dtype_args)] = (function_pointers,
+                                         ctypes_funcs, ctypes_ret_type,
                                          ctypes_arg_types, result_dtype)
 
-        return UFuncDispatcher(ufuncs, len(mapper.arg_types))
+        return _minidispatch.UFuncDispatcher(ufuncs, len(mapper.arg_types))
 
-    def fallback_vectorize(self):
+    def fallback_vectorize(self, minivect_dispatcher):
         vectorizer = self.fallback(self.pyfunc)
         for ret_type, arg_types, kwargs in self.signatures:
             vectorizer.add(ret_type=ret_type, arg_types=arg_types, **kwargs)
 
-        print 'falling back...'
-        return vectorizer.build_ufunc()
-
-class UFuncDispatcher(object):
-    def __init__(self, functions, nin):
-        self.functions = functions
-        self.nin = nin
-
-    def __call__(self, *args, **kwds):
-        if len(args) != self.nin:
-            raise TypeError("Expected %d input arguments, got %d" %
-                                                (self.nin, len(args)))
-
-        args = map(np.asarray, args)
-        arg_types = tuple(arg.dtype for arg in args)
-        broadcast = np.broadcast(*args)
-        key = arg_types + (broadcast.nd,)
-        if key not in self.functions:
-            raise ValueError("No signature found for %s" % (arg_types,))
-
-        if broadcast.nd > 2:
-            raise NotImplementedError
-
-        (ctypes_funcs, ctypes_ret_type,
-         ctypes_arg_types, result_dtype) = self.functions[key]
-
-        # Get the right specialization
-        order = _internal.get_arrays_ordering(args)
-        contig = order & _internal.ARRAYS_ARE_CONTIG
-        tiled = order & _internal.ARRAYS_ARE_MIXED_CONTIG
-
-        contig_func, tiled_func, strided_func = ctypes_funcs
-        if contig:
-            ctypes_func = contig_func
-        elif tiled:
-            ctypes_func = tiled_func
-        else:
-            ctypes_func = strided_func
-
-        #
-        ### Build the argument list
-        #
-        # Create broadcasted shape argument
-        ctypes_shape_array = args[0].ctypes.shape._type_ * broadcast.nd
-        ctypes_shape_array = ctypes_shape_array(*broadcast.shape)
-        call_args = [ctypes_shape_array]
-
-        # Instantiate the LHS
-        out = kwds.pop('out', None)
-        if out is None:
-            out = np.empty(broadcast.shape, dtype=result_dtype)
-
-        def add_arg(array, ctypes_type):
-            call_args.append(array.ctypes.data_as(ctypes_type))
-            if not contig:
-                call_args.append(array.ctypes.strides)
-
-        add_arg(out, ctypes_ret_type)
-
-        # Get stride arguments
-        # TODO: handle lesser dimensional broadcasting operands
-        for numpy_array, ctypes_arg_type in zip(args, ctypes_arg_types):
-            add_arg(numpy_array, ctypes_arg_type)
-
-#        if tiled:
-#            call_args.append(ctypes.c_int(64))
-
-        # Run the ufunc!
-        ctypes_func(*call_args)
-        return out
+        return vectorizer.build_ufunc(minivect_dispatcher)
 
 
 if __name__ == '__main__':
@@ -296,8 +243,8 @@ if __name__ == '__main__':
     N = 4000
 
     a = np.arange(N * N, dtype=dtype).reshape(N, N)
-    b = a.copy().T
-    out = np.zeros((N, N), dtype=dtype)
+    b = a.copy() #.T
+    out = np.empty_like(a)
 
     ufunc(a, b, out=out)
     assert np.all(out == a + b)

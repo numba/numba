@@ -196,7 +196,8 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     if (!PyArg_ParseTuple(args, "O!O!iiO|OO", &PyList_Type, &func_list,
                                               &PyList_Type, &type_list,
                                               &nin, &nout, &data_list,
-                                              &object, &minivect_dispatcher)) {
+                                              &minivect_dispatcher,
+                                              &object)) {
         return NULL;
     }
 
