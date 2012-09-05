@@ -192,6 +192,7 @@ class CBuilder(object):
         self.first_body_block = self.function.append_basic_block('body')
         self.builder = lc.Builder.new(self.first_body_block)
         self.target_data = le.TargetData.new(self.function.module.data_layout)
+        self._auto_inline_list = []
         # Prepare arguments. Make all function arguments behave like variables.
         self.args = []
         for arg in function.args:
@@ -437,6 +438,10 @@ class CBuilder(object):
         with _change_block_temporarily(self.builder, self.declare_block):
             self.builder.branch(self.first_body_block)
 
+        # Do the auto inlining
+        for callinst in self._auto_inline_list:
+            lc.inline_function(callinst)
+
     def constant(self, ty, val):
         '''create a constant
 
@@ -679,6 +684,9 @@ class CBuilder(object):
         It has no defined semantic.
         '''
         self.builder.unreachable()
+
+    def add_auto_inline(self, callinst):
+        self._auto_inline_list.append(callinst)
 
 class _DeclareCDef(object):
     '''create a function a CDefinition to use with `CBuilder.depends`
@@ -1142,7 +1150,7 @@ class CFunc(CValue):
         super(CFunc, self).__init__(parent)
         self.function = func
 
-    def __call__(self, *args):
+    def __call__(self, *args, **opts):
         '''Call the function with the given arguments
 
         *args : variable arguments of CValue instances
@@ -1157,6 +1165,10 @@ class CFunc(CValue):
         res = self.parent.builder.call(self.function, arg_values)
         if hasattr(self.function, 'calling_convention'):
             res.calling_convention = self.function.calling_convention
+
+        if opts.get('inline'):
+            self.parent.add_auto_inline(res)
+
         return CTemp(self.parent, res)
 
     @property

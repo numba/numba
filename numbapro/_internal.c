@@ -5,8 +5,11 @@
 
 /* Python include */
 #include "Python.h"
+#include <structmember.h>
+
 #include "numpy/ndarrayobject.h"
 #include "numpy/ufuncobject.h"
+#include "miniutils.h"
 
 #if PY_MAJOR_VERSION >= 3
 #define IS_PY3K
@@ -20,21 +23,60 @@
     return NULL;                                                     \
 }
 
+typedef struct {
+    PyUFuncObject ufunc;
+    PyUFuncObject *ufunc_original;
+    PyObject *minivect_dispatcher;
+} PyDynUFuncObject;
+
+extern PyTypeObject PyDynUFunc_Type;
+
+static PyObject *
+PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher)
+{
+    /* PyDynUFuncObject *result = PyDynUFunc_Type.tp_base->tp_new(type, args, kw); */
+    PyDynUFuncObject *result = PyObject_New(PyDynUFuncObject, &PyDynUFunc_Type);
+    size_t ufunc_size;
+
+    if (!result)
+        return NULL;
+
+    /* Gross hack, copy ufunc directly into our object, skipping
+       the PyObject header. Hold on to the object to DECREF it
+       when the dynufunc is deallocated. */
+    ufunc_size = sizeof(PyUFuncObject) - offsetof(PyUFuncObject, nin);
+    memcpy(&result->ufunc.nin, &ufunc->nin, ufunc_size);
+    result->ufunc_original = ufunc;
+    result->minivect_dispatcher = minivect_dispatcher;
+
+    return (PyObject *) result;
+}
+
 /* Deallocate the PyArray_malloc calls */
 static void
-dyn_dealloc(PyUFuncObject *self)
+dyn_dealloc(PyDynUFuncObject *self)
 {
-    if (self->functions)
-        PyArray_free(self->functions);
-    if (self->types)
-        PyArray_free(self->types);
-    if (self->data)
-        PyArray_free(self->data);
-    Py_TYPE(self)->tp_base->tp_dealloc((PyObject *)self);
+    PyUFuncObject *ufunc = self->ufunc_original;
+    if (ufunc->functions)
+        PyArray_free(ufunc->functions);
+    if (ufunc->types)
+        PyArray_free(ufunc->types);
+    if (ufunc->data)
+        PyArray_free(ufunc->data);
+    /* Py_TYPE(self)->tp_base->tp_dealloc((PyObject *)self); */
+    Py_DECREF(ufunc);
 }
 
 
-NPY_NO_EXPORT PyTypeObject PyDynUFunc_Type = {
+static PyObject *
+dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
+{
+    if (self->minivect_dispatcher)
+        return PyObject_Call(self->minivect_dispatcher, args, kw);
+    return PyDynUFunc_Type.tp_base->tp_call((PyObject *) self, args, kw);
+}
+
+/* NPY_NO_EXPORT */ PyTypeObject PyDynUFunc_Type = {
 #if defined(NPY_PY3K)
     PyVarObject_HEAD_INIT(NULL, 0)
 #else
@@ -42,7 +84,7 @@ NPY_NO_EXPORT PyTypeObject PyDynUFunc_Type = {
     0,                                          /* ob_size */
 #endif
     "numbapro.dyn_ufunc",                       /* tp_name*/
-    sizeof(PyUFuncObject),                      /* tp_basicsize*/
+    sizeof(PyDynUFuncObject),                 /* tp_basicsize*/
     0,                                          /* tp_itemsize */
     /* methods */
     (destructor) dyn_dealloc,                                /* tp_dealloc */
@@ -59,12 +101,12 @@ NPY_NO_EXPORT PyTypeObject PyDynUFunc_Type = {
     0,                                          /* tp_as_sequence */
     0,                                          /* tp_as_mapping */
     0,                                          /* tp_hash */
-    0,                                          /* tp_call */
+    (ternaryfunc) dyn_call,                     /* tp_call */
     0,                                          /* tp_str */
     0,                                          /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    0,                                          /* tp_flags */
+    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,     /* tp_flags */
     0,                                          /* tp_doc */
     0,                                          /* tp_traverse */
     0,                                          /* tp_clear */
@@ -100,21 +142,33 @@ static PyObject *
 PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
                            char *types, int ntypes,
                            int nin, int nout, int identity,
-                           char *name, char *doc, PyObject *object)
+                           char *name, char *doc, PyObject *object,
+                           PyObject *minivect_dispatcher)
 {
-    PyObject *ufunc;
+    PyUFuncObject *ufunc = NULL;
+    PyObject *result;
 
-    ufunc = PyUFunc_FromFuncAndData(func, data, types, ntypes, nin, nout,
-                                    identity, name, doc, 0);
+    ufunc = (PyUFuncObject *) PyUFunc_FromFuncAndData(
+                        func, data, types, ntypes, nin, nout,
+                        identity, name, doc, 0);
+    if (!ufunc)
+        goto err;
 
     /* Kind of a gross-hack  */
-    Py_TYPE(ufunc) = &PyDynUFunc_Type;
+    /* Py_TYPE(ufunc) = &PyDynUFunc_Type; */
+
+    result = PyDynUFunc_New(ufunc, minivect_dispatcher);
+    if (!result)
+        goto err;
 
     /* Hold on to whatever object is passed in */
     Py_XINCREF(object);
-    ((PyUFuncObject *)ufunc)->obj = object;
+    ufunc->obj = object;
 
-    return ufunc;
+    return result;
+err:
+    Py_XDECREF(ufunc);
+    return NULL;
 }
 
 static PyObject *
@@ -130,6 +184,8 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     PyObject *type_obj;
     PyObject *data_obj;
     PyObject *object=NULL; /* object to hold on to while ufunc is alive */
+    PyObject *minivect_dispatcher = NULL;
+
     int i, j;
     int custom_dtype = 0;
     PyUFuncGenericFunction *funcs;
@@ -137,7 +193,10 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     void **data;
     PyObject *ufunc;
 
-    if (!PyArg_ParseTuple(args, "O!O!iiO|O", &PyList_Type, &func_list, &PyList_Type, &type_list, &nin, &nout, &data_list, &object)) {
+    if (!PyArg_ParseTuple(args, "O!O!iiO|OO", &PyList_Type, &func_list,
+                                              &PyList_Type, &type_list,
+                                              &nin, &nout, &data_list,
+                                              &object, &minivect_dispatcher)) {
         return NULL;
     }
 
@@ -237,10 +296,13 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
             }
         }
         PyArray_free(types);
-        ufunc = PyDynUFunc_FromFuncAndData((PyUFuncGenericFunction*)funcs,data,(char*)char_types,nfuncs,nin,nout,PyUFunc_None,"test",(char*)"test",object);
+        ufunc = PyDynUFunc_FromFuncAndData((PyUFuncGenericFunction*) funcs, data, (char*) char_types, nfuncs,
+                                           nin, nout, PyUFunc_None, "test", (char*) "test", object,
+                                           minivect_dispatcher);
     }
     else {
-        ufunc = PyDynUFunc_FromFuncAndData(0,0,0,0,nin,nout,PyUFunc_None,"test",(char*)"test",object);
+        ufunc = PyDynUFunc_FromFuncAndData(0,0,0,0, nin, nout, PyUFunc_None,
+                                           "test", (char*) "test", object, minivect_dispatcher);
         PyUFunc_RegisterLoopForType((PyUFuncObject*)ufunc,custom_dtype,funcs[0],types,0);
         PyArray_free(funcs);
         PyArray_free(types);
@@ -249,7 +311,6 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
 
     return ufunc;
 }
-
 
 //// Duplicate for FromFuncAndDataAndSignature
 //// Need to refactor to reduce code duplication.
@@ -264,8 +325,9 @@ PyDynUFunc_FromFuncAndDataAndSignature(PyUFuncGenericFunction *func, void **data
     PyObject *ufunc;
     ufunc = PyUFunc_FromFuncAndDataAndSignature(func, data, types, ntypes, nin, nout,
                                     identity, name, doc, 0, signature);
-    if(!ufunc)
-        return ufunc;
+    if (!ufunc)
+        return NULL;
+
     /* Kind of a gross-hack  */
     Py_TYPE(ufunc) = &PyDynUFunc_Type;
 
@@ -276,6 +338,9 @@ PyDynUFunc_FromFuncAndDataAndSignature(PyUFuncGenericFunction *func, void **data
     return ufunc;
 }
 
+/*
+    Create a generalized ufunc
+*/
 static PyObject *
 ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
 
@@ -397,10 +462,13 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
             }
         }
         PyArray_free(types);
-        ufunc = PyDynUFunc_FromFuncAndDataAndSignature((PyUFuncGenericFunction*)funcs,data,(char*)char_types,nfuncs,nin,nout,PyUFunc_None,"test",(char*)"test",signature,object);
+        ufunc = PyDynUFunc_FromFuncAndDataAndSignature(
+                (PyUFuncGenericFunction*)funcs, data, (char*) char_types, nfuncs,
+                nin, nout, PyUFunc_None, "test", (char*)"test", signature, object);
     }
     else {
-        ufunc = PyDynUFunc_FromFuncAndDataAndSignature(0,0,0,0,nin,nout,PyUFunc_None,"test",(char*)"test",signature,object);
+        ufunc = PyDynUFunc_FromFuncAndDataAndSignature(
+            0,0,0,0,nin,nout,PyUFunc_None,"test",(char*)"test",signature,object);
         PyUFunc_RegisterLoopForType((PyUFuncObject*)ufunc,custom_dtype,funcs[0],types,0);
         PyArray_free(funcs);
         PyArray_free(types);
@@ -410,17 +478,16 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     return ufunc;
 }
 
-
-
-
 static PyMethodDef ext_methods[] = {
 
 #ifdef IS_PY3K
     {"fromfunc", (PyCFunction) ufunc_fromfunc, METH_VARARGS, NULL},
     {"fromfuncsig", (PyCFunction) ufunc_fromfuncsig, METH_VARARGS, NULL},
+    {"get_arrays_ordering", (PyCFunction) get_arrays_ordering, METH_VARARGS, NULL},
 #else
     {"fromfunc", ufunc_fromfunc, METH_VARARGS, NULL},
     {"fromfuncsig", ufunc_fromfuncsig, METH_VARARGS, NULL},
+    {"get_arrays_ordering", get_arrays_ordering, METH_VARARGS, NULL},
 #endif
     { NULL }
 };
@@ -442,10 +509,12 @@ struct PyModuleDef module_def = {
 
 #ifdef IS_PY3K
 #define RETVAL m
+#define ERR_RETVAL NULL
 PyObject *
 PyInit__internal(void)
 #else
 #define RETVAL
+#define ERR_RETVAL
 PyMODINIT_FUNC
 init_internal(void)
 #endif
@@ -464,10 +533,18 @@ init_internal(void)
     m = Py_InitModule("_internal", ext_methods);
 #endif
 
+    if (add_array_order_constants(m) < 0)
+        return ERR_RETVAL;
+
     /* Inherit the dynamic UFunc from UFunc */
+    PyUFunc_Type.tp_flags |= Py_TPFLAGS_BASETYPE; /* Hack... */
     PyDynUFunc_Type.tp_base = &PyUFunc_Type;
     if (PyType_Ready(&PyDynUFunc_Type) < 0)
-        return RETVAL;
+        return ERR_RETVAL;
+
+    Py_INCREF(&PyDynUFunc_Type);
+    if (PyModule_AddObject(m, "dyn_ufunc", (PyObject *) &PyDynUFunc_Type) < 0)
+        return ERR_RETVAL;
 
     return RETVAL;
 }
