@@ -1,7 +1,7 @@
 '''
 Implements basic vectorize
 '''
-
+from llvm.core import *
 from llvm_cbuilder import *
 import llvm_cbuilder.shortnames as C
 import numpy as np
@@ -22,8 +22,24 @@ class BasicUFunc(CDefinition):
         ufunc_ptr = self.depends(self.FuncDef)
         fnty = ufunc_ptr.type.pointee
 
+        arg_ptrs = []
+        arg_steps = []
+        for i in range(len(fnty.args)+1):
+            arg_ptrs.append(self.var_copy(args[i]))
+            arg_steps.append(self.var_copy(steps[i]))
+
         with self.for_range(dimensions[0]) as (loop, item):
-            _common.ufunc_core_impl(fnty, ufunc_ptr, args, steps, item)
+            callargs = []
+            for i, argty in enumerate(fnty.args):
+                casted = arg_ptrs[i].cast(C.pointer(argty))
+                callargs.append(casted.load())
+                arg_ptrs[i].assign(arg_ptrs[i][arg_steps[i]:]) # increment pointer
+
+            res = ufunc_ptr(*callargs, **dict(inline=True))
+            retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
+            retval_ptr.store(res)
+            arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
+
         self.ret()
 
     @classmethod

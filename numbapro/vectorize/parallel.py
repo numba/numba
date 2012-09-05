@@ -30,7 +30,7 @@ CHECK_RACE_CONDITION = True
 # Granularity controls how many works are removed by the workqueue each time.
 # Applies to normal and stealing mode.
 # Too small and there will be too many cache synchronization.
-GRANULARITY = 20
+GRANULARITY = 256
 
 class WorkQueue(CStruct):
     '''structure for workqueue for parallel-ufunc.
@@ -317,9 +317,9 @@ class UFuncCore(CDefinition):
                     loop.break_loop()
 
 
-            with self.for_range(AMT) as (loop, offset):
-                self._do_work(common, item + offset, tid)
-                completed += self.constant(completed.type, 1)
+            #with self.for_range(AMT) as (loop, offset):
+            self._do_work(common, item, AMT, tid)
+            completed += AMT
 
     def _do_work_stealing(self, common, tid, completed):
         '''steal work from other workqueues.
@@ -366,9 +366,9 @@ class UFuncCore(CDefinition):
                 otherqueue.Unlock()
                 # Released
 
-                with self.for_range(STEAL_AMT) as (loop, offset):
-                    self._do_work(common, item + offset, tid)
-                    completed += self.constant(completed.type, 1)
+                #with self.for_range(STEAL_AMT) as (loop, offset):
+                self._do_work(common, item, STEAL_AMT, tid)
+                completed += STEAL_AMT
 
                 # Mark incomplete thread
                 steal_continue.assign(STEAL_CONTINUE)
@@ -377,7 +377,7 @@ class UFuncCore(CDefinition):
                 otherqueue.Unlock()
                 # Released
 
-    def _do_work(self, common, item, tid):
+    def _do_work(self, common, item, count, tid):
         '''prepare to call the actual work function
 
         Implementation depends on number and type of arguments.
@@ -399,7 +399,8 @@ class SpecializedParallelUFunc(CDefinition):
         core = self.depends(self.CoreDef)
         func = self.depends(self.FuncDef)
         to_void_p = lambda x: x.cast(C.void_p)
-        pufunc(to_void_p(func), to_void_p(core), args, dimensions, steps, data)
+        pufunc(to_void_p(func), to_void_p(core), args, dimensions, steps, data,
+               inline=True)
         self.ret()
 
     @classmethod
@@ -453,17 +454,36 @@ class WinThreadAPI(CExternal):
 class UFuncCoreGeneric(UFuncCore):
     '''A generic ufunc core worker from LLVM function type
     '''
-    def _do_work(self, common, item, tid):
+    def _do_work(self, common, item, count, tid):
         '''
         common :
         item :
         tid : for debugging
         '''
-        ufunc_type = Type.function(self.RETTY, self.ARGTYS)
-        ufunc_ptr = CFunc(self, common.func.cast(C.pointer(ufunc_type)).value)
+        fnty = Type.function(self.RETTY, self.ARGTYS)
+        ufunc_ptr = CFunc(self, common.func.cast(C.pointer(fnty)).value)
 
-        _common.ufunc_core_impl(ufunc_type, ufunc_ptr, common.args,
-                                  common.steps, item)
+
+        args = common.args
+        steps = common.steps
+
+        arg_ptrs = []
+        arg_steps = []
+        for i in range(len(fnty.args)+1):
+            arg_ptrs.append(self.var_copy(args[i][item * steps[i]:]))
+            arg_steps.append(self.var_copy(steps[i]))
+
+        with self.for_range(count) as (loop, item):
+            callargs = []
+            for i, argty in enumerate(fnty.args):
+                casted = arg_ptrs[i].cast(C.pointer(argty))
+                callargs.append(casted.load())
+                arg_ptrs[i].assign(arg_ptrs[i][arg_steps[i]:]) # increment pointer
+
+            res = ufunc_ptr(*callargs, **dict(inline=True))
+            retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
+            retval_ptr.store(res)
+            arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
 
     @classmethod
     def specialize(cls, fntype):

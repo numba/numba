@@ -25,42 +25,59 @@ class StreamUFunc(BasicUFunc):
         ZERO = self.constant(C.intp, 0)
         GRANUL = self.constant(C.intp, self.Granularity)
 
-        # populate steps for cache
-        cache_steps = self.array(C.intp, len(fnty.args) + 1)
-        for i, arg in enumerate(fnty.args):
-            cache_steps[i] = self.sizeof(arg)
-        cache_steps[len(fnty.args)] = self.sizeof(fnty.return_type)
+        caches = []
+        arg_ptrs = []
+        arg_steps = []
+        for i, ty in enumerate(fnty.args + [fnty.return_type]):
+            arg_ptrs.append(self.var_copy(args[i]))
+            arg_steps.append(self.var_copy(steps[i]))
 
-        #populate cache
+            caches.append([])
+            for j in range(self.Granularity):
+                caches[i].append(self.var(ty))
 
-        cache_ptr = []
-        for arg in fnty.args:  # cache for arguments
-            cache_ptr.append(self.array(arg, GRANUL))
-        cache_ptr.append(self.array(fnty.return_type, GRANUL))  # cache for results
-
-
-        cache = self.array(C.void_p, len(cache_ptr))
-        for i, ptr in enumerate(cache_ptr):
-            cache[i] = ptr.cast(C.void_p)
-
-
-        get_offset = lambda B, I, S, T: B[I * S].reference().cast(C.pointer(T))
-        with self.for_range(ZERO, dimensions[0], GRANUL) as (outer, base):
-
+        with self.for_range(ZERO, dimensions[0], GRANUL) as (_, base):
             remain = self.min(dimensions[0] - base, GRANUL)
-            with self.for_range(remain) as (inner, offset): # do cache
-                for i, arg in enumerate(fnty.args):
-                    cache_ptr[i][offset] = get_offset(args[i], base+offset,
-                                                      steps[i], arg).load()
+            with self.ifelse(GRANUL == remain) as ifelse:
+                with ifelse.then():
+                    # cache
+                    for i, argty in enumerate(fnty.args):
+                        for j in range(self.Granularity):
+                            casted = arg_ptrs[i].cast(C.pointer(argty))
+                            arg_val = casted.load()
+                            caches[i][j].assign(arg_val)
+                            arg_ptrs[i].assign(arg_ptrs[i][arg_steps[i]:])
 
-            with self.for_range(remain) as (inner, offset): # do work
-                _common.ufunc_core_impl(fnty, ufunc_ptr, cache, cache_steps,
-                                        offset)
+                    # execute
+                    for j in range(self.Granularity):
+                        callargs = [caches[i][j] for i in range(len(fnty.args))]
+                        caches[-1][j] = ufunc_ptr(*callargs, **dict(inline=True))
 
-            with self.for_range(remain) as (inner, offset): # extract result
-                outptr = get_offset(args[len(fnty.args)], base+offset,
-                                    steps[len(fnty.args)], fnty.return_type)
-                outptr.store(cache_ptr[len(fnty.args)][offset])
+                    # writeback
+                    for j in range(self.Granularity):
+                        retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
+                        retval_ptr.store(caches[-1][j])
+                        arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
+
+                with ifelse.otherwise():
+                    # skip caching for the remaining
+                    for j in range(self.Granularity):
+                        J = self.constant(remain.type, j)
+                        callargs = []
+                        with self.ifelse(J < remain) as ifelse:
+                            with ifelse.then():
+                                for i, argty in enumerate(fnty.args):
+                                    casted = arg_ptrs[i].cast(C.pointer(argty))
+                                    arg_val = casted.load()
+                                    callargs.append(arg_val)
+                                    arg_ptrs[i].assign(arg_ptrs[i][arg_steps[i]:])
+
+                                res = ufunc_ptr(*callargs, **dict(inline=True))
+
+                                retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
+                                retval_ptr.store(res)
+                                arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
+
         self.ret()
 
     @classmethod
@@ -80,7 +97,7 @@ class _StreamVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
 stream_vectorize_from_func = _StreamVectorizeFromFunc()
 
 class StreamVectorize(_common.GenericVectorize):
-    def build_ufunc(self, granularity=32):
+    def build_ufunc(self, granularity=8):
         assert self.translates, "No translation"
         lfunclist = self._get_lfunc_list()
         tyslist = self._get_tys_list()

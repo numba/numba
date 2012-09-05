@@ -15,7 +15,7 @@ class UFuncCore_D_D(UFuncCore):
     Specialize UFuncCore for double input, double output.
     '''
     _name_ = UFuncCore._name_ + '_d_d'
-    def _do_work(self, common, item, tid):
+    def _do_work(self, common, base, count, tid):
         ufunc_type = Type.function(C.double, [C.double])
         ufunc_ptr = CFunc(self, common.func.cast(C.pointer(ufunc_type)).value)
 
@@ -25,11 +25,14 @@ class UFuncCore_D_D(UFuncCore):
         instep = common.steps[0]
         outstep = common.steps[1]
 
-        indata = inbase[item * instep].reference().cast(C.pointer(C.double))
-        outdata = outbase[item * outstep].reference().cast(C.pointer(C.double))
+        with self.for_range(count) as (_, offset):
+            item = base + offset
 
-        res = ufunc_ptr(indata.load())
-        outdata.store(res)
+            indata = inbase[item * instep].reference().cast(C.pointer(C.double))
+            outdata = outbase[item * outstep].reference().cast(C.pointer(C.double))
+
+            res = ufunc_ptr(indata.load())
+            outdata.store(res)
 
 class Tester(CDefinition):
     '''
