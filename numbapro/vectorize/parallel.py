@@ -85,7 +85,7 @@ class ContextCommon(CStruct):
         ('steps',       C.pointer(C.intp)),
         ('data',        C.void_p),
         # specifics for work queues
-        ('func',        C.void_p),
+        #('func',        C.void_p),
         ('num_thread',  C.int),
         ('workqueues',  C.pointer(WorkQueue.llvm_type())),
     ]
@@ -114,7 +114,6 @@ class ParallelUFunc(CDefinition):
     '''
 
     _argtys_ = [
-        ('func',       C.void_p),
         ('worker',     C.void_p),
         ('args',       C.pointer(C.char_p)),
         ('dimensions', C.pointer(C.intp)),
@@ -129,7 +128,7 @@ class ParallelUFunc(CDefinition):
         cls._name_ = 'parallel_ufunc_%d' % num_thread
         cls.ThreadCount = num_thread
 
-    def body(self, func, worker, args, dimensions, steps, data):
+    def body(self, worker, args, dimensions, steps, data):
 
         # Determine chunksize, initial count of work-items per thread.
         # If total_work >= num_thread, equally divide the works.
@@ -157,7 +156,6 @@ class ParallelUFunc(CDefinition):
         common.dimensions.assign(dimensions)
         common.steps.assign(steps)
         common.data.assign(data)
-        common.func.assign(func)
         common.workqueues.assign(workqueues.reference())
         common.num_thread.assign(num_thread.cast(C.int))
 
@@ -397,20 +395,18 @@ class SpecializedParallelUFunc(CDefinition):
     def body(self, args, dimensions, steps, data,):
         pufunc = self.depends(self.PUFuncDef)
         core = self.depends(self.CoreDef)
-        func = self.depends(self.FuncDef)
         to_void_p = lambda x: x.cast(C.void_p)
-        pufunc(to_void_p(func), to_void_p(core), args, dimensions, steps, data,
+        pufunc(to_void_p(core), args, dimensions, steps, data,
                inline=True)
         self.ret()
 
     @classmethod
-    def specialize(cls, pufunc_def, core_def, func_def):
+    def specialize(cls, pufunc_def, core_def):
         '''specialize to a combination of ParallelUFunc, UFuncCore and workload
         '''
-        cls._name_ = 'specialized_%s_%s_%s'% (pufunc_def, core_def, func_def)
+        cls._name_ = 'specialized_%s_%s'% (pufunc_def, core_def)
         cls.PUFuncDef = pufunc_def
         cls.CoreDef = core_def
-        cls.FuncDef = func_def
 
 class PThreadAPI(CExternal):
     '''external declaration of pthread API
@@ -460,8 +456,9 @@ class UFuncCoreGeneric(UFuncCore):
         item :
         tid : for debugging
         '''
-        fnty = Type.function(self.RETTY, self.ARGTYS)
-        ufunc_ptr = CFunc(self, common.func.cast(C.pointer(fnty)).value)
+
+        ufunc_ptr = CFunc(self, self.WORKER)
+        fnty = self.WORKER.type.pointee
 
 
         args = common.args
@@ -486,16 +483,17 @@ class UFuncCoreGeneric(UFuncCore):
             arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
 
     @classmethod
-    def specialize(cls, fntype):
+    def specialize(cls, lfunc):
         '''specialize to a LLVM function type
 
         fntype : a LLVM function type (llvm.core.FunctionType)
         '''
-        cls._name_ = '.'.join([cls._name_] +
-                              map(str, [fntype.return_type] + fntype.args))
+        fntype = lfunc.type.pointee
+        cls._name_ = '.'.join([cls._name_, lfunc.name])
 
-        cls.RETTY = fntype.return_type
-        cls.ARGTYS = tuple(fntype.args)
+        #cls.RETTY = fntype.return_type
+        #cls.ARGTYS = tuple(fntype.args)
+        cls.WORKER = lfunc
 
 
 if sys.platform == 'win32':
@@ -509,11 +507,9 @@ class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
     def build(self, lfunc):
         import multiprocessing
         NUM_CPU = multiprocessing.cpu_count()
-
         def_spuf = SpecializedParallelUFunc(
                                     ParallelUFuncPlatform(num_thread=NUM_CPU),
-                                    UFuncCoreGeneric(lfunc.type.pointee),
-                                    CFuncRef(lfunc))
+                                    UFuncCoreGeneric(lfunc))
         return def_spuf(lfunc.module)
 
 parallel_vectorize_from_func = _ParallelVectorizeFromFunc()
