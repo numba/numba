@@ -1039,10 +1039,8 @@ class Translate(object):
         4. If the predecessor is unreachable, ignore it.
         '''
         if __debug__:
-            logger.debug("crnt_block=%r, pred=%r, local=%r,\n"
-                         "self.blocks_locals = %s" %
-                         (crnt_block, pred, local,
-                          pprint.pformat(self.blocks_locals)))
+            logger.debug("crnt_block=%r, pred=%r, local=%r" %
+                         (crnt_block, pred, local))
         if pred in self.blocks_locals and pred not in self.pending_blocks:
             pred_locals = self.blocks_locals[pred]
             assert pred_locals[local] is not None, ("Internal error.  "
@@ -1324,7 +1322,8 @@ class Translate(object):
         oldval = self._locals[arg]
         newval = self.stack.pop(-1)
         if isinstance(newval.val, DelayedObj):
-            self._generate_for_loop(i, op, arg, newval)
+            if 0 in self.cfg.blocks_reaching[i - 3]:
+                self._generate_for_loop(i, op, arg, newval)
         else:
             if self.has_pending_phi(i, arg):
                 self.handle_pending_phi(i, arg, newval)
