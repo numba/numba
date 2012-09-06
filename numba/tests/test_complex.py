@@ -8,9 +8,11 @@ Test Numba's ability to generate code that supports complex numbers.
 
 import unittest
 
+from numba import *
 from numba.decorators import jit
 from numba.utils import debugout
 from numba.llvm_types import _plat_bits
+from numba.tests import test_support
 
 import numpy
 import itertools
@@ -39,11 +41,11 @@ def prod_sum_fn (coeff, inval, ofs):
 
 # ______________________________________________________________________
 
-class TestComplex (unittest.TestCase):
+class TestComplex (test_support.ByteCodeTestCase):
     def test_get_real_fn (self):
         num0 = 3 + 2j
         num1 = numpy.complex128(num0)
-        compiled_get_real_fn = jit(arg_types = ['D'])(get_real_fn)
+        compiled_get_real_fn = self.jit(arg_types = [complex128])(get_real_fn)
         self.assertEqual(compiled_get_real_fn(num0), 3.)
         self.assertEqual(get_real_fn(num0), compiled_get_real_fn(num0))
         self.assertEqual(compiled_get_real_fn(num1), 3.)
@@ -52,7 +54,7 @@ class TestComplex (unittest.TestCase):
     def test_get_imag_fn (self):
         num0 = 0 - 2j
         num1 = numpy.complex128(num0)
-        compiled_get_imag_fn = jit(arg_types = ['D'])(get_imag_fn)
+        compiled_get_imag_fn = self.jit(arg_types = [complex128])(get_imag_fn)
         self.assertEqual(compiled_get_imag_fn(num0), -2.)
         self.assertEqual(get_imag_fn(num0), compiled_get_imag_fn(num0))
         self.assertEqual(compiled_get_imag_fn(num1), -2.)
@@ -63,8 +65,8 @@ class TestComplex (unittest.TestCase):
     def test_get_conj_fn (self):
         num0 = 4 - 1.5j
         num1 = numpy.complex128(num0)
-        compiled_get_conj_fn = jit(arg_types = ['D'],
-                                             ret_type = 'D')(get_conj_fn)
+        compiled_get_conj_fn = self.jit(arg_types = [complex128],
+                                        ret_type = complex128)(get_conj_fn)
         self.assertEqual(compiled_get_conj_fn(num0), 4 + 1.5j)
         self.assertEqual(get_conj_fn(num0), compiled_get_conj_fn(num0))
         self.assertEqual(compiled_get_conj_fn(num1), 4 + 1.5j)
@@ -73,16 +75,16 @@ class TestComplex (unittest.TestCase):
     @unittest.skipUnless(_plat_bits == 64, 'Complex return values not '
                          'supported on 32-bit systems.')
     def test_get_complex_constant_fn (self):
-        compiled_get_complex_constant_fn = jit(
-            arg_types = [], ret_type = 'D')(get_complex_constant_fn)
+        compiled_get_complex_constant_fn = self.jit(
+            arg_types = [], ret_type = complex128)(get_complex_constant_fn)
         self.assertEqual(get_complex_constant_fn(),
                          compiled_get_complex_constant_fn())
 
     @unittest.skipUnless(_plat_bits == 64, 'Complex return values not '
                          'supported on 32-bit systems.')
     def test_prod_sum_fn (self):
-        compiled_prod_sum_fn = jit(arg_types = ['D', 'D', 'D'],
-                                             ret_type = 'D')(prod_sum_fn)
+        compiled_prod_sum_fn = self.jit(arg_types = [complex128, complex128, complex128],
+                                        ret_type = complex128)(prod_sum_fn)
         rng = numpy.arange(-1., 1.1, 0.5)
         for ar, ai, xr, xi, br, bi in itertools.product(rng, rng, rng, rng, rng,
                                                         rng):
@@ -91,6 +93,11 @@ class TestComplex (unittest.TestCase):
             b = numpy.complex128(br + bi * 1j)
             self.assertEqual(prod_sum_fn(a, x, b),
                              compiled_prod_sum_fn(a, x, b))
+
+# TODO: AST complex support
+#class TestASTComplex(test_support.ASTTestCase, TestComplex):
+#    pass
+
 
 # ______________________________________________________________________
 

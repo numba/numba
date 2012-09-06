@@ -651,7 +651,6 @@ class TypeInferer(visitors.NumbaTransformer):
         else:
             arg_types = [a.variable.type for a in node.args]
             new_node = self._resolve_external_call(node, func, arg_types)
-            print new_node, func, arg_types
 
             if func_type.is_numpy_attribute:
                 result_type = self._resolve_numpy_call(func_type, node)
@@ -674,6 +673,9 @@ class TypeInferer(visitors.NumbaTransformer):
     def _resolve_ndarray_attribute(self, array_node, array_attr):
         "Resolve attributes of numpy arrays"
         return
+
+    def is_store(self, ctx):
+        return isinstance(ctx, ast.Store)
 
     def visit_Attribute(self, node):
         node.value = self.visit(node.value)
@@ -762,13 +764,14 @@ class ASTSpecializer(visitors.NumbaTransformer):
 
     def visit_NativeCallNode(self, node):
         self.generic_visit(node)
-        if node.signature.return_type.is_object:
-            node = nodes.TempNode(node)
+        #if node.signature.return_type.is_object:
+        #    node = nodes.TempNode(node)
         return node
 
     def visit_ObjectCallNode(self, node):
         self.generic_visit(node)
-        return nodes.TempNode(node)
+        return node
+        #return nodes.TempNode(node)
 
     def visit_Subscript(self, node):
         if isinstance(node.value, nodes.ArrayAttributeNode):

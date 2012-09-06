@@ -90,6 +90,7 @@ class FunctionCache(object):
                                             func_signature, lfunc, ctypes_func)
                 return func_signature, lfunc, ctypes_func
 
+        # print func, getattr(func, '_is_numba_func', False)
         # create a signature taking N objects and returning an object
         signature = ofunc(arg_types=ofunc.arg_types * len(arg_types)).signature
         return signature, None, func

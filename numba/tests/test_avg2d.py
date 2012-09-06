@@ -5,7 +5,7 @@
 import numpy
 
 from numba import d
-from numba.decorators import jit
+from numba.decorators import jit, function
 
 import unittest
 import __builtin__
@@ -33,8 +33,7 @@ def avg2d_w_cast(arr, result):
 # ______________________________________________________________________
 
 class TestAvg2D (unittest.TestCase):
-    def _do_test (self, _avg2d):
-        compiled_fn = jit(arg_types = [d[:,:], d[:]])(_avg2d)
+    def _do_test(self, _avg2d, compiled_fn):
         test_data = numpy.random.random((5,5))
         control_result = numpy.zeros((5,))
         test_result = control_result[:]
@@ -42,13 +41,35 @@ class TestAvg2D (unittest.TestCase):
         compiled_fn(test_data, test_result)
         self.assertTrue((control_result == test_result).all())
 
-    def test_avg2d (self):
-        self._do_test(avg2d)
+    def test_avg2d(self):
+        compiled_fn = jit(arg_types = [d[:,:], d[:]])(avg2d)
+        self._do_test(avg2d, compiled_fn)
+
+    def test_avg2d_ast(self):
+        compiled_fn = jit(arg_types = [d[:,:], d[:]], backend='ast')(avg2d)
+        self._do_test(avg2d, compiled_fn)
+
+    def test_avg2d_ast_function(self):
+        compiled_fn = function(avg2d)
+        self._do_test(avg2d, compiled_fn)
 
     @unittest.skipUnless(hasattr(__builtin__, '__noskip__'),
                          "Need support for float() builtin.")
-    def test_avg2d_w_cast (self):
-        self._do_test(avg2d_w_cast)
+    def test_avg2d_w_cast(self):
+        compiled_fn = jit(arg_types = [d[:,:], d[:]])(avg2d_w_cast)
+        self._do_test(avg2d_w_cast, compiled_fn)
+
+    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'),
+                         "Need support for float() builtin.")
+    def test_avg2d_w_cast(self):
+        compiled_fn = jit(arg_types = [d[:,:], d[:]], backend='ast')(avg2d_w_cast)
+        self._do_test(avg2d_w_cast, compiled_fn)
+
+    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'),
+                         "Need support for float() builtin.")
+    def test_avg2d_w_cast(self):
+        compiled_fn = function(avg2d_w_cast)
+        self._do_test(avg2d_w_cast, compiled_fn)
 
 # ______________________________________________________________________
 

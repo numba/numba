@@ -2,6 +2,7 @@ import math
 import types
 import ctypes
 
+import llvm.core
 import numpy as np
 from numpy import ctypeslib
 # from numpy.ctypeslib import _typecodes
@@ -162,7 +163,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
         if type.is_array:
             return llvm_types._numpy_array
         elif type.is_complex:
-            return lc.Type.struct([type.base_type, type.base_type])
+            return llvm.core.Type.struct([type.base_type, type.base_type])
         elif type.is_py_ssize_t:
             return llvm_types._llvm_py_ssize_t
         elif type.is_object:

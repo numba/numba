@@ -6,6 +6,7 @@ from numba import *
 from . import utils, functions, ast_translate as translate
 from numba import translate as bytecode_translate
 from .minivect import minitypes
+from numba.utils import debugout
 
 logger = logging.getLogger(__name__)
 
@@ -95,13 +96,13 @@ def function(f):
 
     wrapper._is_numba_func = True
     wrapper._numba_func = f
-    f._is_numba_func = True
     return wrapper
 
 def jit_ast(func, arg_types):
     """
     Use the AST translator to translate the function.
     """
+    func._is_numba_func = True
     result = function_cache.compile_function(func, arg_types)
     _, _, ctypes_func = result
     return ctypes_func
@@ -120,13 +121,12 @@ def jit(ret_type=double, arg_types=[double], backend='bytecode', **kws):
                            "garbage collected!" % (func,))
 
         use_ast = False
-        if kws.get('backend') == 'ast':
+        if backend == 'ast':
             use_ast = True
             for arg_type in arg_types + [ret_type]:
                 if not isinstance(arg_type, minitypes.Type):
                     use_ast = False
-                    print >>sys.stderr, ("String type specified, "
-                                         "using bytecode translator...")
+                    debugout("String type specified, using bytecode translator...")
                     break
 
         if use_ast:

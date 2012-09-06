@@ -8,6 +8,7 @@ Test type mapping.
 import numba
 from numba import *
 from numba.decorators import jit
+from numba.tests import test_support
 
 import unittest
 
@@ -29,19 +30,22 @@ def test_long(arg):
 
 # ______________________________________________________________________
 
-class TestIf(unittest.TestCase):
+class TestIf(test_support.ByteCodeTestCase):
     def test_int(self):
-        func = jit(ret_type=numba.int_,
+        func = self.jit(ret_type=numba.int_,
                                  arg_types=[numba.int_])(test_int)
         self.assertEqual(func(-1), 42)
         self.assertEqual(func(1), 22)
 
     def test_long(self):
-        func = jit(ret_type=numba.long_,
+        func = self.jit(ret_type=numba.long_,
                                  arg_types=[numba.long_])(test_long)
         self.assertEqual(func(-1), 42)
         self.assertEqual(func(1), 22)
 # ______________________________________________________________________
+
+class TestASTIf(test_support.ASTTestCase, TestIf):
+    pass
 
 if __name__ == "__main__":
     unittest.main()

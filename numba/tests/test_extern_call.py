@@ -6,12 +6,13 @@ Unit tests checking on Numba's code generation for Python/Numpy C-API calls.
 '''
 # ______________________________________________________________________
 
+import unittest
+
 from numba import *
 
 import numpy
 from numba.decorators import jit, function
-
-import unittest
+from numba.tests import test_support
 
 # ______________________________________________________________________
 
@@ -33,21 +34,24 @@ def func2(arg):
 
 # ______________________________________________________________________
 
-class TestExternCall(unittest.TestCase):
+class TestExternCall(test_support.ByteCodeTestCase):
     def test_call_zeros_like(self):
         testarr = numpy.array([1., 2, 3, 4, 5], dtype=numpy.double)
-        testfn = jit(arg_types = [double[:]], ret_type = double[:])(
+        testfn = self.jit(arg_types = [double[:]], ret_type = double[:])(
             call_zeros_like)
         self.assertTrue((testfn(testarr) == numpy.zeros_like(testarr)).all())
 
     def test_call_len(self):
         testarr = numpy.arange(10.)
-        testfn = jit(arg_types = [double[:]], ret_type = long_)(
+        testfn = self.jit(arg_types = [double[:]], ret_type = long_)(
             call_len)
         self.assertEqual(testfn(testarr), 10)
 
     def test_numba_calls_numba(self):
         self.assertEqual(func2(3), 8)
+
+class TestASTExternCall(test_support.ASTTestCase, TestExternCall):
+    pass
 
 # ______________________________________________________________________
 

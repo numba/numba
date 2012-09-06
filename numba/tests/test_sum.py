@@ -10,6 +10,7 @@ import numpy
 
 from numba import *
 from numba.decorators import jit
+from numba.tests import test_support
 
 import sys
 import unittest
@@ -38,9 +39,9 @@ def bad_sum2d(arr):
 
 # ______________________________________________________________________
 
-class TestSum2d(unittest.TestCase):
+class TestSum2d(test_support.ByteCodeTestCase):
     def test_vectorized_sum2d(self):
-        usum2d = jit(arg_types=[double[:,:]],
+        usum2d = self.jit(arg_types=[double[:,:]],
                      ret_type=double)(sum2d)
         image = numpy.random.rand(10, 10)
         plain_old_result = sum2d(image)
@@ -48,10 +49,13 @@ class TestSum2d(unittest.TestCase):
         self.assertTrue((abs(plain_old_result - hot_new_result) < 1e-9).all())
 
     def test_bad_sum2d(self):
-        compiled_bad_sum2d = jit(arg_types = [double[:,:]], ret_type = double)(
+        compiled_bad_sum2d = self.jit(arg_types = [double[:,:]], ret_type = double)(
             bad_sum2d)
         image = numpy.random.rand(10, 10)
         self.assertEqual(bad_sum2d(image), compiled_bad_sum2d(image))
+
+class TestASTSum2d(test_support.ASTTestCase, TestSum2d):
+    pass
 
 # ______________________________________________________________________
 

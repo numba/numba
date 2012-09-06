@@ -109,6 +109,11 @@ def map_to_strtype(type):
                 type = 'l'
             else:
                 type = 'int%d' % (type.itemsize * 8,)
+        elif type.is_complex:
+            if type.itemsize == 16:
+                return 'D'
+            else:
+                raise NotImplementedError(type)
         elif type.is_function:
             type = ["func"]
         elif type.is_tuple:
