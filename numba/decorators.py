@@ -2,6 +2,7 @@ import functools
 import logging
 
 import numba
+from numba import *
 from . import utils, functions, ast_translate as translate
 from numba import translate as bytecode_translate
 from .minivect import minitypes
@@ -89,8 +90,7 @@ def function(f):
         arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
         types = tuple(context.typemapper.from_python(value)
                           for value in arguments)
-        result = function_cache.compile_function(f, types)
-        _, _, ctypes_func = result
+        ctypes_func = jit_ast(f, types)
         return ctypes_func(*args, **kwargs)
 
     wrapper._is_numba_func = True
@@ -98,16 +98,44 @@ def function(f):
     f._is_numba_func = True
     return wrapper
 
-# NOTE: uses the bytecode translator
-def jit(*args, **kws):
+def jit_ast(func, arg_types):
+    """
+    Use the AST translator to translate the function.
+    """
+    result = function_cache.compile_function(func, arg_types)
+    _, _, ctypes_func = result
+    return ctypes_func
+
+def jit(ret_type=double, arg_types=[double], backend='bytecode', **kws):
+    """
+    Compile a function given the input and return types. If backend='bytecode'
+    the bytecode translator is used, if backend='ast' the AST translator is
+    used.
+    """
     def _jit(func):
         global __tr_map__
         llvm = kws.pop('llvm', True)
         if func in __tr_map__:
             logger.warning("Warning: Previously compiled version of %r may be "
                            "garbage collected!" % (func,))
-        t = bytecode_translate.Translate(func, *args, **kws)
-        t.translate()
-        __tr_map__[func] = t
-        return t.get_ctypes_func(llvm)
+
+        use_ast = False
+        if kws.get('backend') == 'ast':
+            use_ast = True
+            for arg_type in arg_types + [ret_type]:
+                if not isinstance(arg_type, minitypes.Type):
+                    use_ast = False
+                    print >>sys.stderr, ("String type specified, "
+                                         "using bytecode translator...")
+                    break
+
+        if use_ast:
+            return jit_ast(func, arg_types)
+        else:
+            t = bytecode_translate.Translate(func, ret_type=ret_type,
+                                             arg_types=arg_types, **kws)
+            t.translate()
+            __tr_map__[func] = t
+            return t.get_ctypes_func(llvm)
+
     return _jit
