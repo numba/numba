@@ -22,7 +22,7 @@ from test_mandelbrot import TestMandelbrot
 from test_multiarray_api import TestMultiarrayAPI
 from test_tuple import TestTuple
 #from test_vectorize import TestVectorize
-from test_while import TestWhile
+from test_while import TestWhile, TestASTWhile
 from test_sum import TestSum2d
 
 # ______________________________________________________________________

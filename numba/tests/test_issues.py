@@ -23,9 +23,7 @@ def _int_pow (val, exp):
             x = x * temp
             # TODO: Overflow check on x
         w >>= 1
-        # Can save a multiply by doing a check on w, but break is not
-        # currently supported...
-        #if w == 0: break
+        if w == 0: break
         temp = temp * temp
         # TODO: Overflow check on temp
     return x

@@ -19,6 +19,10 @@ from .utils import itercode
 
 import sys
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # ______________________________________________________________________
 
 class ControlFlowGraph (object):
@@ -68,6 +72,7 @@ class ControlFlowGraph (object):
         opmap = opcode.opname
         ret_val.crnt_block = 0
         ret_val.code_len = len(code_obj.co_code)
+        ret_val.loop_stack = []
         ret_val.add_block(0)
         ret_val.blocks_writes[0] = set(range(code_obj.co_argcount))
         last_was_jump = True # At start there is no prior basic block
@@ -83,7 +88,7 @@ class ControlFlowGraph (object):
             if hasattr(ret_val, method_name):
                 last_was_jump = getattr(ret_val, method_name)(i, op, arg)
         ret_val.unlink_unreachables()
-        del ret_val.crnt_block, ret_val.code_len
+        del ret_val.crnt_block, ret_val.code_len, ret_val.loop_stack
         return ret_val
 
     # NOTE: The following op_OPNAME methods are correct for Python
@@ -138,9 +143,22 @@ class ControlFlowGraph (object):
     def op_SETUP_LOOP (self, i, op, arg):
         self.add_block(i + 3)
         self.add_edge(self.crnt_block, i + 3)
+        self.loop_stack.append((i, arg))
         return True # This is not technically a jump, but we've
                     # already built the proper CFG edges, so skip the
                     # fallthrough plumbing.
+
+    def op_BREAK_LOOP (self, i, op, arg):
+        loop_i, loop_arg = self.loop_stack[-1]
+        loop_exit = loop_i + 3 + loop_arg
+        self.add_block(loop_exit)
+        self.add_edge(self.crnt_block, loop_exit)
+        self.add_block(i + 1)
+        return True
+
+    def op_POP_BLOCK (self, i, op, arg):
+        self.loop_stack.pop()
+        return False
 
     def _writes_local (self, block, write_instr_index, local_index):
         self.blocks_writes[block].add(local_index)
@@ -205,6 +223,11 @@ class ControlFlowGraph (object):
                         # blocks are indexed by their instruction
                         # index in the VM bytecode.
                         self._writes_local(block, block, affected_local)
+            if changed:
+                # Any modifications have invalidated the reaching
+                # definitions, so delete any memoized results.
+                if hasattr(self, 'reaching_definitions'):
+                    del self.reaching_definitions
 
     def idom (self, block):
         '''Compute the immediate dominator (idom) of the given block
@@ -265,32 +288,19 @@ class ControlFlowGraph (object):
     def nreaches (self, block):
         '''For each local, find the number of unique reaching
         definitions the current block has.'''
-        # Slice and dice the idom tree so that each predecessor claims
-        # at most one definition so we don't end up over or
-        # undercounting.
-        preds = self.blocks_in[block]
-        idoms = {}
-        idom_writes = {}
-        # Fib a little here to truncate traversal in loops if they are
-        # being chased before the actual idom of the current block has
-        # been handled.
-        visited = preds.copy()
-        for pred in preds:
-            idoms[pred] = set((pred,))
-            idom_writes[pred] = self.blocks_writes[pred].copy()
-            # Traverse up the idom tree, adding sets of writes as we
-            # go.
-            crnt = self.idom(pred)
-            while crnt != None and crnt not in visited:
-                idoms[pred].add(crnt)
-                idom_writes[pred].update(self.blocks_writes[crnt])
-                visited.add(crnt)
-                crnt = self.idom(crnt)
-        all_writes = set.union(*[idom_writes[pred] for pred in preds])
+        reaching_definitions = self.get_reaching_definitions(block)
+        definition_map = {}
+        for pred in self.blocks_in[block]:
+            reaching_from_pred = reaching_definitions[pred]
+            for local in reaching_from_pred.iterkeys():
+                if local not in definition_map:
+                    definition_map[local] = set()
+                definition_map[local].add(reaching_from_pred[local])
         ret_val = {}
-        for local in all_writes:
-            ret_val[local] = sum((1 if local in idom_writes[pred] else 0
-                                  for pred in preds))
+        for local in definition_map.iterkeys():
+            ret_val[local] = len(definition_map[local])
+        if __debug__:
+            logger.debug(pprint.pformat(ret_val))
         return ret_val
 
     def phi_needed (self, join):

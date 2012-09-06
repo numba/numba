@@ -3,8 +3,27 @@ import functools
 
 from numba.decorators import jit as jit_, function
 
+import __builtin__
+
+def checkSkipFlag(reason):
+    def _checkSkipFlag(fn):
+        def _checkSkipWrapper(self, *args, **kws):
+            if hasattr(__builtin__, '__noskip__'):
+                return fn(self, *args, **kws)
+            else:
+                self.skipTest(reason)
+        return _checkSkipWrapper
+    return _checkSkipFlag
+
 class ByteCodeTestCase(unittest.TestCase):
     jit = staticmethod(jit_)
 
 class ASTTestCase(ByteCodeTestCase):
     jit = staticmethod(lambda *args, **kw: jit_(*args, **dict(kw, backend='ast')))
+
+def main():
+    import sys, logging
+    if '-d' in sys.argv:
+        logging.getLogger().setLevel(logging.DEBUG)
+        sys.argv.remove('-d')
+    unittest.main()

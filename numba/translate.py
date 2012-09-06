@@ -1837,3 +1837,11 @@ class Translate(object):
 
     def op_INPLACE_RSHIFT(self, i, op, arg):
         return self.op_BINARY_RSHIFT(i, op, arg)
+
+    def op_BREAK_LOOP(self, i, op, arg):
+        if __debug__:
+            logger.debug("i = %r, op = %r, arg = %r, loop_stack = %r" %
+                         (i, op, arg, self.loop_stack))
+        loop_i, loop_arg = self.loop_stack[-1]
+        loop_exit = loop_i + 3 + loop_arg
+        self.builder.branch(self.blocks[loop_exit])

@@ -123,7 +123,7 @@ def jit(ret_type=double, arg_types=[double], backend='bytecode', **kws):
         use_ast = False
         if backend == 'ast':
             use_ast = True
-            for arg_type in arg_types + [ret_type]:
+            for arg_type in list(arg_types) + [ret_type]:
                 if not isinstance(arg_type, minitypes.Type):
                     use_ast = False
                     debugout("String type specified, using bytecode translator...")

@@ -6,20 +6,16 @@ Grand unified unit test script for Numba.
 '''
 # ______________________________________________________________________
 
-import unittest
 import __builtin__
 __builtin__.__noskip__ = True
 
 from test_all import *
+from numba.tests import test_support
 
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    import sys, logging
-    if '-d' in sys.argv:
-        logging.getLogger().setLevel(logging.DEBUG)
-        sys.argv.remove('-d')
-    unittest.main()
+    test_support.main()
 
 # ______________________________________________________________________
 # End of test_all_noskip.py
