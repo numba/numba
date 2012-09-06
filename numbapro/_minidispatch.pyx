@@ -152,12 +152,14 @@ cdef class UFuncDispatcher(object):
         # Get the right specialization
         contig = (order & _internal.ARRAYS_ARE_CONTIG) and not any_broadcasting
         inner_contig = order & _internal.ARRAYS_ARE_INNER_CONTIG
-        tiled = order & _internal.ARRAYS_ARE_MIXED_CONTIG
+        tiled = order & (_internal.ARRAYS_ARE_MIXED_CONTIG|
+                         _internal.ARRAYS_ARE_MIXED_STRIDED)
 
         # contig_cfunc, inner_contig_cfunc, tiled_cfunc, strided_cfunc = ctypes_funcs
         (contig_func, inner_contig_func,
          tiled_func, strided_func) = function_pointers
 
+        # print 'contig', contig, 'inner_contig', inner_contig, 'tiled', tiled
         if contig:
             # ctypes_func = contig_cfunc
             function_pointer = contig_func
