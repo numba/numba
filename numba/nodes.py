@@ -156,10 +156,6 @@ class TempLoadNode(Node):
 class TempStoreNode(Node):
     _fields = ['temp']
 
-# This appraoch is wrong. This way we cannot visit the original node, and the
-# numpy array must be a name. What if I have call function that returns a numpy
-# array and I index it? Separate the subscript logic below into the code
-# generator, and have DataPointerNode's only return the data pointer.
 class DataPointerNode(Node):
 
     _fields = ['node']

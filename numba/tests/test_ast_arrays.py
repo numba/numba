@@ -20,7 +20,7 @@ def matmulcore(A, B, C):
         for j in range(p):
             C[i, j] = 0
             for k in range(n):
-                C[i, j] = C[i, j] + A[i, k] * B[k, j]
+                C[i, j] += A[i, k] * B[k, j]
 
 
 def test_numba():

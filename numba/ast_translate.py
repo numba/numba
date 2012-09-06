@@ -731,6 +731,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         if (node.type.is_int or node.type.is_float) and op in self._binops:
             llvm_method_name = self._binops[op][node.type.is_int]
             meth = getattr(self.builder, llvm_method_name)
+            if not lhs.type == rhs.type:
+                print ast.dump(node)
+                assert False
             result = meth(lhs, rhs)
         else:
             raise Exception(op, node.type, lhs, rhs)

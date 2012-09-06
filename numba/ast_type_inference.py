@@ -1,4 +1,5 @@
 import ast
+import copy
 import opcode
 import types
 import __builtin__ as builtins
@@ -128,11 +129,9 @@ class TypeInferer(visitors.NumbaTransformer):
     def visit_AugAssign(self, node):
         "Inplace assignment"
         target = node.target
-        if isinstance(target, ast.Name):
-            target = ast.copy_location(ast.Name(target.id, ast.Store()), target)
-            rhs_target = ast.copy_location(ast.Name(target.id, ast.Load()), target)
-        else:
-            raise NotImplementedError("Inplace assignment on non-variable target not supported")
+        rhs_target = copy.deepcopy(target)
+        Store2Load(self.context, self.func, rhs_target).visit(rhs_target)
+        ast.fix_missing_locations(rhs_target)
 
         assignment = ast.Assign([target], ast.BinOp(rhs_target, node.op, node.value))
         return self.visit(assignment)
@@ -728,6 +727,19 @@ class TypeInferer(visitors.NumbaTransformer):
 
     def visit_Global(self, node):
         raise NotImplementedError("Global keyword")
+
+class Store2Load(visitors.NumbaVisitor):
+
+    def visit_node(self, node):
+        node.ctx = ast.Load()
+        self.generic_visit(node)
+        return node
+
+    visit_Name = visit_node
+    visit_Attribute = visit_node
+    visit_Subscript = visit_node
+    visit_List = visit_node
+    visit_Tuple = visit_node
 
 class TypeSettingVisitor(visitors.NumbaVisitor):
     """
