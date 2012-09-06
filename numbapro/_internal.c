@@ -48,6 +48,7 @@ PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher)
     memcpy(&result->ufunc.nin, &ufunc->nin, ufunc_size);
     result->ufunc_original = ufunc;
     result->minivect_dispatcher = minivect_dispatcher;
+    Py_INCREF(minivect_dispatcher);
 
     return (PyObject *) result;
 }
@@ -71,8 +72,11 @@ dyn_dealloc(PyDynUFuncObject *self)
 static PyObject *
 dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
 {
-    if (self->minivect_dispatcher)
+    if (self->minivect_dispatcher) {
+        /* PyObject_Print(args, stdout, Py_PRINT_RAW);
+        PyObject_Print(kw, stdout, Py_PRINT_RAW); */
         return PyObject_Call(self->minivect_dispatcher, args, kw);
+    }
     return PyDynUFunc_Type.tp_base->tp_call((PyObject *) self, args, kw);
 }
 

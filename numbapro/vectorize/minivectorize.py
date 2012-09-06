@@ -158,8 +158,8 @@ class MiniVectorize(object):
                 else:
                     minivect_asts.append((mapper, dimensionality, minivect_ast))
 
-        return self.minivect(minivect_asts)
-        # return self.fallback_vectorize(self.minivect(minivect_asts))
+        # return self.minivect(minivect_asts)
+        return self.fallback_vectorize(self.minivect(minivect_asts))
 
     def build_minifunction(self, ast, miniargs):
         b = minicontext.astbuilder
@@ -242,7 +242,7 @@ if __name__ == '__main__':
     dtype = np.float32
     N = 4000
 
-    a = np.arange(N * N, dtype=dtype).reshape(N, N)
+    a = np.arange(N * N, dtype=dtype).reshape(N, N)[1:-1, 1:-1]
     b = a.copy() #.T
     out = np.empty_like(a)
 
