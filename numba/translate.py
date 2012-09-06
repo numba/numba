@@ -96,20 +96,19 @@ def map_to_strtype(type):
             logger.debug('CONVERTING %r' % (type,))
         if type.is_float:
             if type.itemsize == 4:
-                return 'f'
+                return 'float32'
             elif type.itemsize == 8:
-                return 'f8'
+                return 'float64'
             else:
-                # hurgh
-                raise NotImplementedError
+                return 'float128' # Not supported...
             #type = 'f%d' % (type.itemsize * 8,)
         elif type.is_int:
             if type == minitypes.int_:
-                type = 'i'
+                type = 'int'
             elif type == minitypes.long_:
                 type = 'l'
             else:
-                type = 'i%d' % (type.itemsize,)
+                type = 'int%d' % (type.itemsize * 8,)
         elif type.is_function:
             type = ["func"]
         elif type.is_tuple:

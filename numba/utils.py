@@ -47,6 +47,7 @@ class NumbaASTBuilder(miniast.ASTBuilder):
         return miniast.StridePointer(None, minitypes.npy_intp.pointer(), variable)
 
 class NumbaContext(miniast.LLVMContext):
+    # debug = True
     def __init__(self):
         super(NumbaContext, self).__init__()
         self.astbuilder = NumbaASTBuilder(self)
