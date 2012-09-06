@@ -48,7 +48,7 @@ PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher)
     memcpy(&result->ufunc.nin, &ufunc->nin, ufunc_size);
     result->ufunc_original = ufunc;
     result->minivect_dispatcher = minivect_dispatcher;
-    Py_INCREF(minivect_dispatcher);
+    Py_XINCREF(minivect_dispatcher);
 
     return (PyObject *) result;
 }
@@ -174,6 +174,45 @@ err:
     Py_XDECREF(ufunc);
     return NULL;
 }
+
+//// Duplicate for FromFuncAndDataAndSignature
+//// Need to refactor to reduce code duplication.
+
+static PyObject *
+PyDynUFunc_FromFuncAndDataAndSignature(PyUFuncGenericFunction *func, void **data,
+                           char *types, int ntypes,
+                           int nin, int nout, int identity,
+                           char *name, char *doc, char *signature,
+                           PyObject *object)
+{
+    PyUFuncObject *ufunc = NULL;
+    PyObject *result;
+
+    ufunc = (PyUFuncObject *) PyUFunc_FromFuncAndDataAndSignature(
+                                    func, data, types, ntypes, nin, nout,
+                                    identity, name, doc, 0, signature);
+    if (!ufunc)
+        return NULL;
+
+    /* Kind of a gross-hack  */
+    /* Py_TYPE(ufunc) = &PyDynUFunc_Type; */
+
+    /* Hold on to whatever object is passed in */
+    result = PyDynUFunc_New(ufunc, NULL);
+    if (!result)
+        goto err;
+
+    /* Hold on to whatever object is passed in */
+    Py_XINCREF(object);
+    ufunc->obj = object;
+
+    return result;
+err:
+    Py_XDECREF(ufunc);
+    return NULL;
+}
+
+
 
 static PyObject *
 ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
@@ -313,32 +352,6 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         PyArray_free(types);
         PyArray_free(data);
     }
-
-    return ufunc;
-}
-
-//// Duplicate for FromFuncAndDataAndSignature
-//// Need to refactor to reduce code duplication.
-
-static PyObject *
-PyDynUFunc_FromFuncAndDataAndSignature(PyUFuncGenericFunction *func, void **data,
-                           char *types, int ntypes,
-                           int nin, int nout, int identity,
-                           char *name, char *doc, char *signature,
-                           PyObject *object)
-{
-    PyObject *ufunc;
-    ufunc = PyUFunc_FromFuncAndDataAndSignature(func, data, types, ntypes, nin, nout,
-                                    identity, name, doc, 0, signature);
-    if (!ufunc)
-        return NULL;
-
-    /* Kind of a gross-hack  */
-    Py_TYPE(ufunc) = &PyDynUFunc_Type;
-
-    /* Hold on to whatever object is passed in */
-    Py_XINCREF(object);
-    ((PyUFuncObject *)ufunc)->obj = object;
 
     return ufunc;
 }

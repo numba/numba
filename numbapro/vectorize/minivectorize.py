@@ -125,6 +125,7 @@ class MiniVectorize(object):
 
     specializers = [
         NumbaContigSpecializer,
+        minispecializers.StridedCInnerContigSpecializer,
         minispecializers.CTiledStridedSpecializer,
         minispecializers.StridedSpecializer,
     ]
@@ -184,7 +185,8 @@ class MiniVectorize(object):
         for mapper, dimensionality, ast in asts:
             minifunc = self.build_minifunction(ast, mapper.miniargs)
             if debug_c:
-                print minicontext.debug_c(minifunc, NumbaContigSpecializer)
+                print minicontext.debug_c(minifunc,
+                                          minispecializers.StridedCInnerContigSpecializer)
             result = list(minicontext.run(minifunc, self.specializers))
 
             # Map minitypes to NumPy dtypes, so we can find the specialization

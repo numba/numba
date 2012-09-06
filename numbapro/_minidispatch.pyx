@@ -73,6 +73,14 @@ cdef public int broadcast_arrays(list arrays, tuple broadcast_shape, int ndim,
             else:
                 strides_list[start + j] = cnp.PyArray_STRIDE(array, j)
 
+    # for j in range(ndim):
+    #     print 'shape%d:' % j, shape[j]
+
+    # for i in range(len(arrays)):
+    #     for j in range(ndim):
+    #         print 'stride%d:' % j, strides_list[i * ndim + j]
+    #     print
+
     shape_out[0] = shape
     strides_out[0] = strides_list
     return 0
@@ -114,9 +122,9 @@ cdef class UFuncDispatcher(object):
         out = kwds.pop('out', None)
         order = _internal.get_arrays_ordering(args)
 
-        broadcast_args = args
+        broadcast_args = list(args)
         if out is not None:
-            broadcast_args += (out,)
+            broadcast_args.append(out)
 
         # Broadcast arrays
         broadcast = np.broadcast(*broadcast_args)
@@ -143,19 +151,24 @@ cdef class UFuncDispatcher(object):
 
         # Get the right specialization
         contig = (order & _internal.ARRAYS_ARE_CONTIG) and not any_broadcasting
+        inner_contig = order & _internal.ARRAYS_ARE_INNER_CONTIG
         tiled = order & _internal.ARRAYS_ARE_MIXED_CONTIG
 
-        contig_cfunc, tiled_cfunc, strided_cfunc = ctypes_funcs
-        contig_func, tiled_func, strided_func = function_pointers
+        # contig_cfunc, inner_contig_cfunc, tiled_cfunc, strided_cfunc = ctypes_funcs
+        (contig_func, inner_contig_func,
+         tiled_func, strided_func) = function_pointers
 
         if contig:
-            ctypes_func = contig_cfunc
+            # ctypes_func = contig_cfunc
             function_pointer = contig_func
+        elif inner_contig:
+            # ctypes_func = inner_contig_func
+            function_pointer = inner_contig_func
         elif tiled:
-            ctypes_func = tiled_cfunc
+            # ctypes_func = tiled_cfunc
             function_pointer = tiled_func
         else:
-            ctypes_func = strided_cfunc
+            # ctypes_func = strided_cfunc
             function_pointer = strided_func
 
         return self.run_ufunc(function_pointer, broadcast, ndim,
@@ -165,6 +178,7 @@ cdef class UFuncDispatcher(object):
                          broadcast, int ndim, out, list arrays, bint contig):
 
         cdef cnp.npy_intp *shape_p, *strides_p
+
         arrays.insert(0, out)
         broadcast_arrays(arrays, broadcast.shape, ndim, &shape_p, &strides_p)
 
