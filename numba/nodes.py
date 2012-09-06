@@ -173,23 +173,22 @@ class DataPointerNode(Node):
     def ndim(self):
         return self.variable.type.ndim
 
-    def data_descriptors(self, builder):
+    def data_descriptors(self, llvm_value, builder):
         '''
         Returns a tuple of (dptr, strides)
         - dptr:    a pointer of the data buffer
         - strides: a pointer to an array of stride information;
                    has `ndim` elements.
         '''
-        pyarray_ptr = builder.load(self.variable.lvalue)
-        acc = PyArrayAccessor(builder, pyarray_ptr)
+        acc = PyArrayAccessor(builder, llvm_value)
         return acc.data, acc.strides
 
-    def subscript(self, translator, indices):
+    def subscript(self, translator, llvm_value, indices):
         builder = translator.builder
         caster = translator.caster
         context = translator.context
 
-        dptr, strides = self.data_descriptors(builder)
+        dptr, strides = self.data_descriptors(llvm_value, builder)
         ndim = self.ndim
 
         offset = _const_int(0)

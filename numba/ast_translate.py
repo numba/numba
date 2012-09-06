@@ -336,7 +336,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
     def visit_Subscript(self, node):
         slicevalues = self.visit(node.slice)
         if node.value.type.is_array:
-            lptr = node.value.subscript(self, slicevalues)
+            value = self.visit(node.value.node)
+            lptr = node.value.subscript(self, value, slicevalues)
         elif node.value.type.is_carray:
             value = self.visit(node.value)
             lptr = self.builder.gep(value, [slicevalues])
