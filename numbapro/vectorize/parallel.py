@@ -510,7 +510,12 @@ class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
         def_spuf = SpecializedParallelUFunc(
                                     ParallelUFuncPlatform(num_thread=NUM_CPU),
                                     UFuncCoreGeneric(lfunc))
-        return def_spuf(lfunc.module)
+
+        func = def_spuf(lfunc.module)
+
+        _common.post_vectorize_optimize(func)
+
+        return func
 
 parallel_vectorize_from_func = _ParallelVectorizeFromFunc()
 

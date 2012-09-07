@@ -92,6 +92,9 @@ class _StreamVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
     def build(self, lfunc, granularity):
         def_buf = StreamUFunc(CFuncRef(lfunc), granularity)
         func = def_buf(lfunc.module)
+
+        _common.post_vectorize_optimize(func)
+
         return func
 
 stream_vectorize_from_func = _StreamVectorizeFromFunc()

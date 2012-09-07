@@ -39,6 +39,7 @@ class BasicUFunc(CDefinition):
             retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
             retval_ptr.store(res)
             arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
+            #arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:], nontemporal=False)
 
         self.ret()
 
@@ -52,7 +53,11 @@ class BasicUFunc(CDefinition):
 class _BasicVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
     def build(self, lfunc):
         def_buf = BasicUFunc(CFuncRef(lfunc))
-        return def_buf(lfunc.module)
+        func = def_buf(lfunc.module)
+
+        _common.post_vectorize_optimize(func)
+
+        return func
 
 basic_vectorize_from_func = _BasicVectorizeFromFunc()
 
