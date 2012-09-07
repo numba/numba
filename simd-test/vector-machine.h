@@ -36,11 +36,24 @@ VVM_API void vvm_prefetch_stream(const void* base, ptrdiff_t stride, size_t coun
 VVM_API const void* vvm_load_stream (vvm_register* target, const void* base, size_t element_size, ptrdiff_t stride, size_t count);
 VVM_API const void* vvm_load        (vvm_register* target, const void* base, size_t element_size, size_t count);
 
+VVM_API const void* vvm_load_size4_stream_plain_c (vvm_register* target, const void* base, ptrdiff_t stride, size_t count);
+VVM_API const void* vvm_load_size4_stream_unroll4_c (vvm_register* target, const void* base, ptrdiff_t stride, size_t count);
+VVM_API const void* vvm_load_size4_stream_sse_v1 (vvm_register* target, const void* base, ptrdiff_t stride, size_t count);
+VVM_API const void* vvm_load_size4_stream_sse_v2 (vvm_register* target, const void* base, ptrdiff_t stride, size_t count);
+VVM_API const void* vvm_load_size4_stream_sse_v3 (vvm_register* target, const void* base, ptrdiff_t stride, size_t count);
+VVM_API const void* vvm_load_size4_stream_sse_v4 (vvm_register* target, const void* base, ptrdiff_t stride, size_t count);
+VVM_API const void* vvm_load_size4_stream_sse_v5 (vvm_register* target, const void* base, ptrdiff_t stride, size_t count);
+VVM_API const void* vvm_load_size4_stream_sse_v6 (vvm_register* target, const void* base, ptrdiff_t stride, size_t count);
+
+
 /*
  * Functions that act as a "store". They return the updated destination
  */
 VVM_API void* vvm_store_stream      (const vvm_register* source, void* base, size_t element_size, ptrdiff_t stride, size_t count);
 VVM_API void* vvm_store             (const vvm_register* source, void* base, size_t element_size, size_t count);
+VVM_API void* vvm_store_size4_stream_plain_c(const vvm_register* source, void* base, ptrdiff_t stride, size_t count);
+VVM_API void* vvm_store_size4_stream_unroll4_c(const vvm_register* source, void* base, ptrdiff_t stride, size_t count);
+VVM_API void* vvm_store_size4_stream_unroll4_nt(const vvm_register* source, void* base, ptrdiff_t stride, size_t count);
 
 /*
  * A sample operation

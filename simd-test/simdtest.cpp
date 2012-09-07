@@ -324,18 +324,24 @@ static void vvm_add_f__f_f (char**    args,
 	} while (count);
 }
 
-static void rvvm_add_f__f_f (char**    args, 
-							npy_intp* dimensions,
-							npy_intp* strides,
-							void*     data)
+
+typedef const void* (*TLoadStreamSignature)(vvm_register* target, const void* base, ptrdiff_t stride, size_t count);
+typedef void* (*TStoreStreamSignature)(const vvm_register* target, void* base, ptrdiff_t stride, size_t count);
+
+template <TLoadStreamSignature LOAD, TStoreStreamSignature STORE>
+void t_add_f__f_f(char** args,
+				  npy_intp* dimensions,
+				  npy_intp* strides,
+				  void*     data)
 {
-	static const size_t times = 11u;
-    size_t count = static_cast<size_t>(dimensions[0]);
+   size_t count = static_cast<size_t>(dimensions[0]);
 	if (0 == count)
 		return;
 
 	const void* arg0_stream = (const void*) args[0];
+	ptrdiff_t arg0_stride = (ptrdiff_t) strides[0];
 	const void* arg1_stream = (const void*) args[1];
+	ptrdiff_t arg1_stride = (ptrdiff_t) strides[1];
 	void* dst_stream     = (void*) args[2];
 	static const size_t max_count_iter = VVM_REGISTER_SIZE / sizeof(float);
 
@@ -348,13 +354,10 @@ static void rvvm_add_f__f_f (char**    args,
 	do
 	{
 		size_t chunk_count = count < max_count_iter? count : max_count_iter;
-		arg0_stream = vvm_load(reg0, arg0_stream, sizeof(float), chunk_count);
-		arg1_stream = vvm_load(reg1, arg1_stream, sizeof(float), chunk_count);
-
-		for (size_t i = 0; i < times; --i) 
-			vvm_add_float_single(reg0, reg1, reg_dst, chunk_count);
-
-		dst_stream  = vvm_store(reg_dst, dst_stream, sizeof(float), chunk_count);
+	  	arg0_stream = LOAD(reg0, arg0_stream, arg0_stride, chunk_count);
+		arg1_stream = LOAD(reg1, arg1_stream, arg1_stride, chunk_count);
+   		              vvm_add_float_single(reg0, reg1, reg_dst, chunk_count);
+  		dst_stream  = vvm_store(reg_dst, dst_stream, sizeof(float), chunk_count);
 		count -= chunk_count;
 	} while (count);
 }
@@ -545,10 +548,17 @@ static void faith_sin_f__f (char**    args,
 
 PyUFuncGenericFunction test_scalaradd[] = { &scalar_add_f__f_f };
 PyUFuncGenericFunction test_vvmadd[]    = { &vvm_add_f__f_f };
-PyUFuncGenericFunction test_rvvmadd[]   = { &rvvm_add_f__f_f };
 PyUFuncGenericFunction test_simdadd[]   = { &simd_add_f__f_f };
 PyUFuncGenericFunction test_rsimdadd[]  = { &rsimd_add_f__f_f };
 PyUFuncGenericFunction test_faithadd[]  = { &faith_add_f__f_f };
+PyUFuncGenericFunction test_add_pc[]    = { &t_add_f__f_f<vvm_load_size4_stream_plain_c, vvm_store_size4_stream_plain_c> };
+PyUFuncGenericFunction test_add_u4[]    = { &t_add_f__f_f<vvm_load_size4_stream_unroll4_c, vvm_store_size4_stream_unroll4_c> };
+PyUFuncGenericFunction test_add_v1[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v1, vvm_store_size4_stream_plain_c> };
+PyUFuncGenericFunction test_add_v2[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v1, vvm_store_size4_stream_unroll4_c> };
+PyUFuncGenericFunction test_add_v3[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v1, vvm_store_size4_stream_unroll4_nt> };
+PyUFuncGenericFunction test_add_v4[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v2, vvm_store_size4_stream_plain_c> };
+PyUFuncGenericFunction test_add_v5[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v2, vvm_store_size4_stream_unroll4_c> };
+PyUFuncGenericFunction test_add_v6[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v2, vvm_store_size4_stream_unroll4_nt> };
 
 PyUFuncGenericFunction test_scalarsin[] = { &scalar_sin_f__f  };
 PyUFuncGenericFunction test_vvmsin[]    = { &vvm_sin_f__f<1>  };
@@ -574,10 +584,18 @@ struct {
 {
 	{ test_scalaradd, "scalar_add", test_binaryop_signature, 2, 1 },
 	{ test_vvmadd,    "vvm_add"   , test_binaryop_signature, 2, 1 },
-	{ test_rvvmadd,   "rvvm_add"  , test_binaryop_signature, 2, 1 },
 	{ test_simdadd,   "simd_add"  , test_binaryop_signature, 2, 1 },
 	{ test_rsimdadd,  "rsimd_add" , test_binaryop_signature, 2, 1 },
 	{ test_faithadd,  "faith_add" , test_binaryop_signature, 2, 1 },
+	{ test_add_pc,    "add_pc"    , test_binaryop_signature, 2, 1 },
+	{ test_add_u4,    "add_u4"    , test_binaryop_signature, 2, 1 },
+	{ test_add_v1,    "add_v1"    , test_binaryop_signature, 2, 1 },
+	{ test_add_v2,    "add_v2"    , test_binaryop_signature, 2, 1 },
+	{ test_add_v3,    "add_v3"    , test_binaryop_signature, 2, 1 },
+	{ test_add_v4,    "add_v4"    , test_binaryop_signature, 2, 1 },
+	{ test_add_v5,    "add_v5"    , test_binaryop_signature, 2, 1 },
+	{ test_add_v6,    "add_v6"    , test_binaryop_signature, 2, 1 },
+
 
 	{ test_scalarsin, "scalar_sin", test_unaryop_signature, 1, 1 },
 	{ test_vvmsin,    "vvm_sin"   , test_unaryop_signature, 1, 1 },

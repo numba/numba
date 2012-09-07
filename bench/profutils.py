@@ -3,7 +3,7 @@
 #
 
 import time
-
+import numpy as np
 
 _time_func = time.clock
 
@@ -30,9 +30,9 @@ def profile_functions(tests, times = 10):
     def profile_func(test):
         timings = [timeit_func(test[1], test[2]) for i in range(0, times)]
         return { 'name': test[0],
-                 'avg': sum(timings)/len(timings), 
-                 'max': max(timings),
-                 'min': min(timings)}
+                 'avg': np.average(timings), 
+                 'max': np.max(timings),
+                 'min': np.min(timings)}
 
     return [profile_func(x) for x in tests]
 

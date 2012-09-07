@@ -69,16 +69,237 @@ const void* vvm_load(vvm_register* target, const void* base, size_t element_size
 	return ptr_offset_bytes(base, total_size);
 }
 
+const void* vvm_load_size4_stream_plain_c(vvm_register* target, const void* base, ptrdiff_t stride, size_t count)
+{
+	const uint32_t* src = reinterpret_cast<const uint32_t*>(base);
+	uint32_t* RESTRICT dst = reinterpret_cast<uint32_t* RESTRICT>(target);
+	/* assume count > 0 */
+	do
+	{
+		*dst = *src;
+		dst++;
+		src = ptr_offset_bytes(src, stride);
+	} while (--count);
+
+	return src;
+}
+
+const void* vvm_load_size4_stream_unroll4_c(vvm_register* target, const void* base, ptrdiff_t stride, size_t count)
+{
+	const uint32_t* src = reinterpret_cast<const uint32_t*>(base);
+	uint32_t* RESTRICT dst = reinterpret_cast<uint32_t* RESTRICT>(target);
+	/* assume count > 0 and multiple of 4*/
+	do 
+	{
+		for (size_t i = 0; i < 4; i ++)
+		{
+			dst[i] = *ptr_offset_bytes(src, stride * i);
+		}
+		dst += 4;
+		src = ptr_offset_bytes(src, stride * 4);
+		count -= 4;
+	} while (count);
+
+	return src;
+}
+
+const void* vvm_load_size4_stream_sse_v1(vvm_register* target, const void* base, ptrdiff_t stride, size_t count)
+{
+	const int32_t* src = reinterpret_cast<const int32_t*>(base);
+	__m128i* RESTRICT dst = reinterpret_cast<__m128i* RESTRICT>(target);
+	/* based on example 1 on intel optimization manual (example 3-31) */
+	do 
+	{
+		__m128i el0 = _mm_cvtsi32_si128(*src);
+		__m128i el1 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, stride)));
+		__m128i el2 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 2*stride)));
+		__m128i el3 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 3*stride)));
+
+		__m128i lo = _mm_unpacklo_epi32(el0, el1);
+		__m128i hi = _mm_unpacklo_epi32(el2, el3);
+		__m128i res = _mm_unpacklo_epi32(lo, hi);
+
+		_mm_store_si128(dst, res);
+
+		src = ptr_offset_bytes(src, 4*stride);
+		dst += 1;
+		count -= 4;
+	} while (count);
+
+	return reinterpret_cast<const void*>(src);	
+}
+
+const void*  vvm_load_size4_stream_sse_v2(vvm_register* target, const void* base, ptrdiff_t stride, size_t count)
+{
+	const int32_t* src = reinterpret_cast<const int32_t*>(base);
+	__m128i* RESTRICT dst = reinterpret_cast<__m128i* RESTRICT>(target);
+	/* based on example 2 on intel optimization manual (example 3-31) */
+	do 
+	{
+		__m128i el0 = _mm_cvtsi32_si128(*src);
+		__m128i el1 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, stride)));
+		__m128i el2 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 2*stride)));
+		__m128i el3 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 3*stride)));
+
+		__m128i el1s = _mm_slli_epi64(el1,32);
+		__m128i el3s = _mm_slli_epi64(el3,32);
+		__m128i el01 = _mm_or_ps(el0, el1s);
+		__m128i el23 = _mm_or_ps(el2, el3s);
+		__m128i res  = _mm_movelh_ps(el01, el23);
+
+		_mm_store_si128(dst, res);
+
+		src = ptr_offset_bytes(src, 4*stride);
+		dst += 1;
+		count -= 4;
+	} while (count);
+
+	return reinterpret_cast<const void*>(src);	
+}
+
+const void* vvm_load_size4_stream_sse_v3(vvm_register* target, const void* base, ptrdiff_t stride, size_t count)
+{
+	const int32_t* src = reinterpret_cast<const int32_t*>(base);
+	__m128i* RESTRICT dst = reinterpret_cast<__m128i* RESTRICT>(target);
+	/* based on example 3 on intel optimization manual (example 3-31) */
+	do 
+	{
+		__m128i el0 = _mm_cvtsi32_si128(*src);
+		__m128i el1 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, stride)));
+		__m128i el2 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 2*stride)));
+		__m128i el3 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 3*stride)));
+
+		__m128i el13 = _mm_movelh_ps(el1, el3);
+		__m128i el13s= _mm_slli_epi64(el13, 32);
+		__m128i el02 = _mm_movelh_ps(el0, el2);
+		__m128i res  = _mm_or_ps(el13s, el02);
+
+		_mm_store_si128(dst, res);
+
+		src = ptr_offset_bytes(src, 4*stride);
+		dst += 1;
+		count -= 4;
+	} while (count);
+
+	return reinterpret_cast<const void*>(src);	
+}
+
+// same but using streaming store...
+const void* vvm_load_size4_stream_sse_v4(vvm_register* target, const void* base, ptrdiff_t stride, size_t count)
+{
+	const int32_t* src = reinterpret_cast<const int32_t*>(base);
+	__m128i* RESTRICT dst = reinterpret_cast<__m128i* RESTRICT>(target);
+	/* based on example 1 on intel optimization manual (example 3-31) */
+	do 
+	{
+		__m128i el0 = _mm_cvtsi32_si128(*src);
+		__m128i el1 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, stride)));
+		__m128i el2 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 2*stride)));
+		__m128i el3 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 3*stride)));
+
+		__m128i lo = _mm_unpacklo_epi32(el0, el1);
+		__m128i hi = _mm_unpacklo_epi32(el2, el3);
+		__m128i res = _mm_unpacklo_epi32(lo, hi);
+
+		_mm_stream_si128(dst, res);
+
+		src = ptr_offset_bytes(src, 4*stride);
+		dst += 1;
+		count -= 4;
+	} while (count);
+
+	return reinterpret_cast<const void*>(src);	
+}
+
+const void* vvm_load_size4_stream_sse_v5(vvm_register* target, const void* base, ptrdiff_t stride, size_t count)
+{
+	const int32_t* src = reinterpret_cast<const int32_t*>(base);
+	__m128i* RESTRICT dst = reinterpret_cast<__m128i* RESTRICT>(target);
+	/* based on example 2 on intel optimization manual (example 3-31) */
+	do 
+	{
+		__m128i el0 = _mm_cvtsi32_si128(*src);
+		__m128i el1 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, stride)));
+		__m128i el2 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 2*stride)));
+		__m128i el3 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 3*stride)));
+
+		__m128i el1s = _mm_slli_epi64(el1,32);
+		__m128i el3s = _mm_slli_epi64(el3,32);
+		__m128i el01 = _mm_or_ps(el0, el1s);
+		__m128i el23 = _mm_or_ps(el2, el3s);
+		__m128i res  = _mm_movelh_ps(el01, el23);
+
+		_mm_stream_si128(dst, res);
+
+		src = ptr_offset_bytes(src, 4*stride);
+		dst += 1;
+		count -= 4;
+	} while (count);
+
+	return reinterpret_cast<const void*>(src);	
+}
+
+const void*  vvm_load_size4_stream_sse_v6(vvm_register* target, const void* base, ptrdiff_t stride, size_t count)
+{
+	const int32_t* src = reinterpret_cast<const int32_t*>(base);
+	__m128i* RESTRICT dst = reinterpret_cast<__m128i* RESTRICT>(target);
+	/* based on example 3 on intel optimization manual (example 3-31) */
+	do 
+	{
+		__m128i el0 = _mm_cvtsi32_si128(*src);
+		__m128i el1 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, stride)));
+		__m128i el2 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 2*stride)));
+		__m128i el3 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 3*stride)));
+
+		__m128i el13 = _mm_movelh_ps(el1, el3);
+		__m128i el13s= _mm_slli_epi64(el13, 32);
+		__m128i el02 = _mm_movelh_ps(el0, el2);
+		__m128i res  = _mm_or_ps(el13s, el02);
+
+		_mm_stream_si128(dst, res);
+
+		src = ptr_offset_bytes(src, 4*stride);
+		dst += 1;
+		count -= 4;
+	} while (count);
+
+	return reinterpret_cast<const void*>(src);	
+}
+
+
+
+
 // TODO: only issue a prefetch only when changing cache line, issue a load
 //       when changing page
 void vvm_prefetch_stream(const void* base, ptrdiff_t stride, size_t count)
 {
-	const void *old = 0;
-	for (size_t i = 0; i < count; ++i)
+#   define CACHELINE_SIZE 64
+#   define PAGE_SIZE 4096
+	uintptr_t test = 0;
+	do
 	{
-		__builtin_prefetch(base);
+		test = test ^ reinterpret_cast<uintptr_t>(base);
+        if (test >= CACHELINE_SIZE)
+	    {
+			// needs prefetch
+			if (test < PAGE_SIZE)
+			{
+				// just a line
+				__asm("prefetcht0 (%0)" : :"c" (base));
+			}
+			else
+			{
+				// a page
+				char foo = 0;
+				__asm volatile("movb (%1), %0" : "=c" (foo) : "c" (base) );
+			}	
+		}
+
+		test = reinterpret_cast<uintptr_t>(base);
 		base = ptr_offset_bytes(base, stride);
-	}
+	} while (--count);
+#   undef PAGE_SIZE
+#   undef CACHELINE_SIZE
 }
 
 const void* vvm_load_stream(vvm_register* target, const void* base, size_t element_size, ptrdiff_t stride, size_t count)
@@ -121,6 +342,64 @@ void* vvm_store_stream(const vvm_register* target, void* base, size_t element_si
 		return base;
 	}
 }
+
+void* vvm_store_size4_stream_plain_c(const vvm_register* source, void* target, ptrdiff_t stride, size_t count)
+{
+	int32_t* RESTRICT out = reinterpret_cast<int32_t*>(target);
+	const int32_t* in = reinterpret_cast<const int32_t*>(source);
+	do
+	{
+		*out = *in;
+		out = ptr_offset_bytes(out, stride);
+		in ++ ;
+	} while (--count);
+	
+	return reinterpret_cast<void*>(out);	
+}
+
+void* vvm_store_size4_stream_unroll4_c(const vvm_register* source, void* target, ptrdiff_t stride, size_t count)
+{
+	int32_t* RESTRICT out = reinterpret_cast<int32_t*>(target);
+	const int32_t* in = reinterpret_cast<const int32_t*>(source);
+	// assume count as a multiple of 4
+	do
+	{
+		for (size_t i = 0; i < 4; i++)
+		{
+			*ptr_offset_bytes(out, 0*stride) = in[0];
+			*ptr_offset_bytes(out, 1*stride) = in[1];
+			*ptr_offset_bytes(out, 2*stride) = in[2];
+			*ptr_offset_bytes(out, 3*stride) = in[3];
+		}
+		out = ptr_offset_bytes(out, 4*stride);
+		in += 4;
+	} while (--count);
+	
+	return reinterpret_cast<void*>(out);	
+}
+
+void* vvm_store_size4_stream_unroll4_nt(const vvm_register* source, void* target, ptrdiff_t stride, size_t count)
+{
+	int32_t* RESTRICT out = reinterpret_cast<int32_t*>(target);
+	const int32_t* in = reinterpret_cast<const int32_t*>(source);
+	// assume count as a multiple of 4
+	do
+	{
+		for (size_t i = 0; i < 4; i++)
+		{
+			_mm_stream_si32(ptr_offset_bytes(out, 0*stride), in[0]);
+			_mm_stream_si32(ptr_offset_bytes(out, 1*stride), in[1]);
+			_mm_stream_si32(ptr_offset_bytes(out, 2*stride), in[2]);
+			_mm_stream_si32(ptr_offset_bytes(out, 3*stride), in[3]);
+		}
+		out = ptr_offset_bytes(out, 4*stride);
+		in += 4;
+	} while (--count);
+	
+	return reinterpret_cast<void*>(out);	
+}
+
+
 
 
 void vvm_add_float_single(const vvm_register* srcA_in, const vvm_register* srcB_in, vvm_register* dst_out, size_t count)
