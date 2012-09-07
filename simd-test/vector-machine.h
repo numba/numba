@@ -54,6 +54,8 @@ VVM_API void* vvm_store             (const vvm_register* source, void* base, siz
 VVM_API void* vvm_store_size4_stream_plain_c(const vvm_register* source, void* base, ptrdiff_t stride, size_t count);
 VVM_API void* vvm_store_size4_stream_unroll4_c(const vvm_register* source, void* base, ptrdiff_t stride, size_t count);
 VVM_API void* vvm_store_size4_stream_unroll4_nt(const vvm_register* source, void* base, ptrdiff_t stride, size_t count);
+VVM_API void* vvm_store_size4_stream_seq(const vvm_register* source, void* target, ptrdiff_t stride, size_t count);
+VVM_API void* vvm_store_size4_stream_seq_nt(const vvm_register* source, void* target, ptrdiff_t stride, size_t count);
 
 /*
  * A sample operation

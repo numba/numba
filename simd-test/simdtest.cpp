@@ -556,8 +556,8 @@ PyUFuncGenericFunction test_add_u4[]    = { &t_add_f__f_f<vvm_load_size4_stream_
 PyUFuncGenericFunction test_add_v1[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v1, vvm_store_size4_stream_plain_c> };
 PyUFuncGenericFunction test_add_v2[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v1, vvm_store_size4_stream_unroll4_c> };
 PyUFuncGenericFunction test_add_v3[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v1, vvm_store_size4_stream_unroll4_nt> };
-PyUFuncGenericFunction test_add_v4[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v2, vvm_store_size4_stream_plain_c> };
-PyUFuncGenericFunction test_add_v5[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v2, vvm_store_size4_stream_unroll4_c> };
+PyUFuncGenericFunction test_add_v4[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v1, vvm_store_size4_stream_seq> };
+PyUFuncGenericFunction test_add_v5[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v1, vvm_store_size4_stream_seq_nt> };
 PyUFuncGenericFunction test_add_v6[]    = { &t_add_f__f_f<vvm_load_size4_stream_sse_v2, vvm_store_size4_stream_unroll4_nt> };
 
 PyUFuncGenericFunction test_scalarsin[] = { &scalar_sin_f__f  };

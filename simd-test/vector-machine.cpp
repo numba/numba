@@ -399,6 +399,55 @@ void* vvm_store_size4_stream_unroll4_nt(const vvm_register* source, void* target
 	return reinterpret_cast<void*>(out);	
 }
 
+void* vvm_store_size4_stream_seq(const vvm_register* source, void* target, ptrdiff_t stride, size_t count)
+{
+	__m128* RESTRICT out = reinterpret_cast<__m128*>(target);
+	const __m128* in = reinterpret_cast<const __m128*>(source);
+	// assume multiple of a cacheline... (64b)
+	do
+	{
+		__m128 r0 = in[0];
+		__m128 r1 = in[1];
+		__m128 r2 = in[2];
+		__m128 r3 = in[3];
+		
+		out[0] = r0;
+		out[1] = r1;
+		out[2] = r2;
+		out[3] = r3;
+		in  += 4;
+		out += 4;
+		count -= 16;
+	} while (count);
+	
+	return reinterpret_cast<void*>(out);	
+}
+
+void* vvm_store_size4_stream_seq_nt(const vvm_register* source, void* target, ptrdiff_t stride, size_t count)
+{
+	double* RESTRICT out = reinterpret_cast<double*>(target);
+	const __m128* in = reinterpret_cast<const __m128*>(source);
+	// assume multiple of a cacheline... (64b)
+	do
+	{
+		__m128 r0 = in[0];
+		__m128 r1 = in[1];
+		__m128 r2 = in[2];
+		__m128 r3 = in[3];
+		
+		_mm_stream_pd(out, r0);
+		_mm_stream_pd(out + 2, r1);
+		_mm_stream_pd(out + 4, r2);
+		_mm_stream_pd(out + 6, r3);
+
+		in  += 4;
+		out += 8;
+		count -= 16;
+	} while (count);
+	
+	return reinterpret_cast<void*>(out);	
+}
+
 
 
 
