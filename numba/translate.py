@@ -189,8 +189,13 @@ class _LLVMCaster(object):
             ret_val = builder.trunc(lval1, lty2)
         return ret_val
 
-    def build_float_cast(_, builder, lval1, lty2):
-        raise NotImplementedError("FIXME")
+    def build_float_upcast(_, builder, lval1, lty2):
+        return builder.fpext(lval1, lty2)
+
+    def build_float_downcast(_, builder, lval1, lty2):
+        logger.warning("Warning: Performing floating point downcast.  "
+                       "May lose information.")
+        return builder.fptrunc(lval1, lty2)
 
     def build_int_to_float_cast(_, builder, lval1, lty2, unsigned = False):
         ret_val = None
@@ -211,11 +216,12 @@ class _LLVMCaster(object):
     CAST_MAP = {
         lc.TYPE_POINTER : build_pointer_cast,
         lc.TYPE_INTEGER : build_int_cast,
-        lc.TYPE_FLOAT : build_float_cast,
         (lc.TYPE_INTEGER, lc.TYPE_FLOAT) : build_int_to_float_cast,
         (lc.TYPE_INTEGER, lc.TYPE_DOUBLE) : build_int_to_float_cast,
         (lc.TYPE_FLOAT, lc.TYPE_INTEGER) : build_float_to_int_cast,
         (lc.TYPE_DOUBLE, lc.TYPE_INTEGER) : build_float_to_int_cast,
+        (lc.TYPE_DOUBLE, lc.TYPE_FLOAT) : build_float_downcast,
+        (lc.TYPE_FLOAT, lc.TYPE_DOUBLE) : build_float_upcast,
         }
 
     @classmethod
@@ -433,7 +439,8 @@ def typ_isa_number(typ):
 # presence of a builder instance.
 def resolve_type(arg1, arg2, builder = None):
     if __debug__:
-        logger.debug("resolve_type(): arg1 = %r, arg2 = %r" % (arg1, arg2))
+        logger.debug("arg1 = %r, arg2 = %r, builder = %r" % (arg1, arg2,
+                                                             builder))
     typ = None
     typ1 = None
     typ2 = None
@@ -1020,14 +1027,24 @@ class Translate(object):
     def handle_pending_phi(self, instr_index, local_index, value):
         phi, pred_lblocks = self.pending_phis[instr_index][local_index]
         if isinstance(value, Variable):
-            value = value.llvm(llvmtype_to_strtype(phi.type))
+            lval = value.llvm(llvmtype_to_strtype(phi.type),
+                               builder = self.builder)
         else:
             assert isinstance(value, lc.Value), "Internal compiler error!"
+            if value.type == phi.type:
+                lval = value
+            else:
+                raise NotImplementedError(
+                    "Not currently supporting back patching casts for phi "
+                    "connections.")
+        if __debug__:
+            logger.debug("value = %r, lval = %r, phi.type = %r" %
+                         (value, str(lval), str(phi.type)))
         for pred_lblock in pred_lblocks:
-            phi.add_incoming(value, pred_lblock)
+            phi.add_incoming(lval, pred_lblock)
         del self.pending_phis[instr_index][local_index]
 
-    def add_phi_incomming(self, phi, crnt_block, pred, local):
+    def add_phi_incoming(self, phi, crnt_block, pred, local):
         '''Take one of four actions:
 
         1. If the predecessor block has already been visited, add its
@@ -1052,9 +1069,12 @@ class Translate(object):
             assert pred_locals[local] is not None, ("Internal error.  "
                 "Local value definition missing from block that has "
                 "already been visited.")
-            phi.add_incoming(pred_locals[local].llvm(
-                    llvmtype_to_strtype(phi.type), builder = self.builder),
-                             self.blocks[pred])
+            lval = pred_locals[local].llvm(llvmtype_to_strtype(phi.type),
+                                           builder = self.builder)
+            if __debug__:
+                logger.debug("lval = %r, phi.type = %r" % (str(lval),
+                                                           str(phi.type)))
+            phi.add_incoming(lval, self.blocks[pred])
         elif 0 in self.cfg.blocks_reaching[pred]:
             reaching_defs = self.cfg.get_reaching_definitions(crnt_block)
             if __debug__:
@@ -1067,8 +1087,9 @@ class Translate(object):
                 assert defn_locals[local] is not None, ("Internal error.  "
                     "Local value definition missing from block that has "
                     "already been visited.")
-                phi.add_incomming(defn_locals[local].llvm(
-                        llvmtype_to_strtype(phi.type)), self.blocks[pred])
+                lval = defn_locals[local].llvm(llvmtype_to_strtype(phi.type),
+                                               builder = self.builder)
+                phi.add_incoming(lval, self.blocks[pred])
             else:
                 definition_index = self.cfg.blocks_writer[definition_block][
                     local]
@@ -1103,7 +1124,7 @@ class Translate(object):
                     newlocal = Variable(phi)
                     self._locals[local] = newlocal
                     for pred in preds:
-                        self.add_phi_incomming(phi, crnt_block, pred, local)
+                        self.add_phi_incoming(phi, crnt_block, pred, local)
                     # This is a local write, even if it is synthetic,
                     # so check to see if we are responsible for back
                     # patching any pending phis.
@@ -1111,7 +1132,7 @@ class Translate(object):
                         # FIXME: There may be the potential for a
                         # corner case where a STORE_FAST occurs at the
                         # top of a join.  This will cause multiple,
-                        # ambiguous, calls to PHINode.add_incomming()
+                        # ambiguous, calls to PHINode.add_incoming()
                         # (once here, and once in op_STORE_FAST()).
                         # Currently checking for this in
                         # numba.cfg.ControlFlowGraph._writes_local().
