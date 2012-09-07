@@ -39,18 +39,25 @@ def debugout(*args):
         print("debugout (non-translated): %s" % (''.join((str(arg)
                                                           for arg in args)),))
 
-class NumbaASTBuilder(miniast.ASTBuilder):
+class NumbaASTBuilder(miniast.DynamicArgumentASTBuilder):
+
+    shape_type = minitypes.npy_intp.pointer()
+    strides_type = shape_type
+
     def __init__(self, context):
         super(NumbaASTBuilder, self).__init__(context)
 
-    def stridesvar(self, variable):
-        return miniast.StridePointer(None, minitypes.npy_intp.pointer(), variable)
+    #def stridesvar(self, variable):
+    #    return miniast.StridePointer(None, minitypes.npy_intp.pointer(), variable)
 
 class NumbaContext(miniast.LLVMContext):
     # debug = True
-    def __init__(self):
-        super(NumbaContext, self).__init__()
-        self.astbuilder = NumbaASTBuilder(self)
+
+    # Accept dynamic arguments
+    astbuilder_cls = NumbaASTBuilder
+
+    def init(self):
+        self.astbuilder = self.astbuilder_cls(self)
         self.typemapper = _numba_types.NumbaTypeMapper(self)
 
 def get_minivect_context():
