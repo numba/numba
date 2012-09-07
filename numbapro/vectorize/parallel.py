@@ -30,7 +30,7 @@ CHECK_RACE_CONDITION = True
 # Granularity controls how many works are removed by the workqueue each time.
 # Applies to normal and stealing mode.
 # Too small and there will be too many cache synchronization.
-GRANULARITY = 20
+GRANULARITY = 256
 
 class WorkQueue(CStruct):
     '''structure for workqueue for parallel-ufunc.
@@ -85,7 +85,7 @@ class ContextCommon(CStruct):
         ('steps',       C.pointer(C.intp)),
         ('data',        C.void_p),
         # specifics for work queues
-        ('func',        C.void_p),
+        #('func',        C.void_p),
         ('num_thread',  C.int),
         ('workqueues',  C.pointer(WorkQueue.llvm_type())),
     ]
@@ -114,7 +114,6 @@ class ParallelUFunc(CDefinition):
     '''
 
     _argtys_ = [
-        ('func',       C.void_p),
         ('worker',     C.void_p),
         ('args',       C.pointer(C.char_p)),
         ('dimensions', C.pointer(C.intp)),
@@ -129,7 +128,7 @@ class ParallelUFunc(CDefinition):
         cls._name_ = 'parallel_ufunc_%d' % num_thread
         cls.ThreadCount = num_thread
 
-    def body(self, func, worker, args, dimensions, steps, data):
+    def body(self, worker, args, dimensions, steps, data):
 
         # Determine chunksize, initial count of work-items per thread.
         # If total_work >= num_thread, equally divide the works.
@@ -157,7 +156,6 @@ class ParallelUFunc(CDefinition):
         common.dimensions.assign(dimensions)
         common.steps.assign(steps)
         common.data.assign(data)
-        common.func.assign(func)
         common.workqueues.assign(workqueues.reference())
         common.num_thread.assign(num_thread.cast(C.int))
 
@@ -317,9 +315,9 @@ class UFuncCore(CDefinition):
                     loop.break_loop()
 
 
-            with self.for_range(AMT) as (loop, offset):
-                self._do_work(common, item + offset, tid)
-                completed += self.constant(completed.type, 1)
+            #with self.for_range(AMT) as (loop, offset):
+            self._do_work(common, item, AMT, tid)
+            completed += AMT
 
     def _do_work_stealing(self, common, tid, completed):
         '''steal work from other workqueues.
@@ -366,9 +364,9 @@ class UFuncCore(CDefinition):
                 otherqueue.Unlock()
                 # Released
 
-                with self.for_range(STEAL_AMT) as (loop, offset):
-                    self._do_work(common, item + offset, tid)
-                    completed += self.constant(completed.type, 1)
+                #with self.for_range(STEAL_AMT) as (loop, offset):
+                self._do_work(common, item, STEAL_AMT, tid)
+                completed += STEAL_AMT
 
                 # Mark incomplete thread
                 steal_continue.assign(STEAL_CONTINUE)
@@ -377,7 +375,7 @@ class UFuncCore(CDefinition):
                 otherqueue.Unlock()
                 # Released
 
-    def _do_work(self, common, item, tid):
+    def _do_work(self, common, item, count, tid):
         '''prepare to call the actual work function
 
         Implementation depends on number and type of arguments.
@@ -397,19 +395,18 @@ class SpecializedParallelUFunc(CDefinition):
     def body(self, args, dimensions, steps, data,):
         pufunc = self.depends(self.PUFuncDef)
         core = self.depends(self.CoreDef)
-        func = self.depends(self.FuncDef)
         to_void_p = lambda x: x.cast(C.void_p)
-        pufunc(to_void_p(func), to_void_p(core), args, dimensions, steps, data)
+        pufunc(to_void_p(core), args, dimensions, steps, data,
+               inline=True)
         self.ret()
 
     @classmethod
-    def specialize(cls, pufunc_def, core_def, func_def):
+    def specialize(cls, pufunc_def, core_def):
         '''specialize to a combination of ParallelUFunc, UFuncCore and workload
         '''
-        cls._name_ = 'specialized_%s_%s_%s'% (pufunc_def, core_def, func_def)
+        cls._name_ = 'specialized_%s_%s'% (pufunc_def, core_def)
         cls.PUFuncDef = pufunc_def
         cls.CoreDef = core_def
-        cls.FuncDef = func_def
 
 class PThreadAPI(CExternal):
     '''external declaration of pthread API
@@ -453,29 +450,50 @@ class WinThreadAPI(CExternal):
 class UFuncCoreGeneric(UFuncCore):
     '''A generic ufunc core worker from LLVM function type
     '''
-    def _do_work(self, common, item, tid):
+    def _do_work(self, common, item, count, tid):
         '''
         common :
         item :
         tid : for debugging
         '''
-        ufunc_type = Type.function(self.RETTY, self.ARGTYS)
-        ufunc_ptr = CFunc(self, common.func.cast(C.pointer(ufunc_type)).value)
 
-        _common.ufunc_core_impl(ufunc_type, ufunc_ptr, common.args,
-                                  common.steps, item)
+        ufunc_ptr = CFunc(self, self.WORKER)
+        fnty = self.WORKER.type.pointee
+
+
+        args = common.args
+        steps = common.steps
+
+        arg_ptrs = []
+        arg_steps = []
+        for i in range(len(fnty.args)+1):
+            arg_ptrs.append(self.var_copy(args[i][item * steps[i]:]))
+            arg_steps.append(self.var_copy(steps[i]))
+
+        with self.for_range(count) as (loop, item):
+            callargs = []
+            for i, argty in enumerate(fnty.args):
+                casted = arg_ptrs[i].cast(C.pointer(argty))
+                callargs.append(casted.load())
+                arg_ptrs[i].assign(arg_ptrs[i][arg_steps[i]:]) # increment pointer
+
+            res = ufunc_ptr(*callargs, **dict(inline=True))
+            retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
+            retval_ptr.store(res)
+            arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
 
     @classmethod
-    def specialize(cls, fntype):
+    def specialize(cls, lfunc):
         '''specialize to a LLVM function type
 
         fntype : a LLVM function type (llvm.core.FunctionType)
         '''
-        cls._name_ = '.'.join([cls._name_] +
-                              map(str, [fntype.return_type] + fntype.args))
+        fntype = lfunc.type.pointee
+        cls._name_ = '.'.join([cls._name_, lfunc.name])
 
-        cls.RETTY = fntype.return_type
-        cls.ARGTYS = tuple(fntype.args)
+        #cls.RETTY = fntype.return_type
+        #cls.ARGTYS = tuple(fntype.args)
+        cls.WORKER = lfunc
 
 
 if sys.platform == 'win32':
@@ -489,11 +507,9 @@ class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
     def build(self, lfunc):
         import multiprocessing
         NUM_CPU = multiprocessing.cpu_count()
-
         def_spuf = SpecializedParallelUFunc(
                                     ParallelUFuncPlatform(num_thread=NUM_CPU),
-                                    UFuncCoreGeneric(lfunc.type.pointee),
-                                    CFuncRef(lfunc))
+                                    UFuncCoreGeneric(lfunc))
         return def_spuf(lfunc.module)
 
 parallel_vectorize_from_func = _ParallelVectorizeFromFunc()

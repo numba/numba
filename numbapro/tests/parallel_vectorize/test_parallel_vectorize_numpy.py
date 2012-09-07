@@ -7,15 +7,14 @@ from numbapro.vectorize.parallel import *
 from numbapro._internal import fromfunc
 import numpy as np
 import unittest
-from test_parallel_vectorize import UFuncCore_D_D, Work_D_D
+from test_parallel_vectorize import Work_D_D
 
 class TestInner_Numpy(unittest.TestCase):
     def test_numpy_1(self):
         module = Module.new(__name__)
 
         spufdef = SpecializedParallelUFunc(ParallelUFuncPlatform(num_thread=2),
-                                           UFuncCore_D_D(),
-                                           Work_D_D())
+                                           UFuncCoreGeneric(Work_D_D()(module)))
 
         sppufunc = spufdef(module)
 

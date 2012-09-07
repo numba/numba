@@ -1,15 +1,15 @@
- * Integration with strings of C/C++ and Fortran
+ # Python Fusion * Integration with strings of C/C++ and Fortran
  * caching mechanism for compiled functions
  * byte-code optimizations (i.e. local variable elimination, attribute lookup-lifting, constant expression, etc.)
- * multi-core support
- * simple GPU support
+ ** multi-core support
+ ** simple GPU support
  * array-expression optimizations and loop-analysis (e.g. polly)
  * profiling tools (heat-map based on hot spots)
- * tools for writing extension modules (as .bc modules) and creating shared-libraries directly from Python
- * "freezing" Python applications (removing interpreter and leaving just libpython dependency)
- * parsing C or C++headers to create LLVM-structures 
- * Ship Cython as well along with improved version of Cwrap to auto-generate wrappers using LLVM for call-backs
- * ??integration with Java through JNI
- * ??integration with .NET (Python .NET)
+ ** tools for writing extension modules (as .bc modules) and creating shared-libraries directly from Python
+ # Python Fusion * "freezing" Python applications (removing interpreter and leaving just libpython dependency)
+ # Python Fusion * parsing C or C++headers to create LLVM-structures 
+ # Python Fusion * Ship Cython as well along with improved version of Cwrap to auto-generate wrappers using LLVM for call-backs
+ # Python Fusion * ??integration with Java through JNI
+ # Python Fusion * ??integration with .NET (Python .NET)
  * FPGA interface --- integrating with Xilinx (we know some devs there...)
 
