@@ -20,7 +20,7 @@ from .cfg import ControlFlowGraph
 from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
     _void_star, _float, _double, _complex64, _complex128, _pyobject_head, \
     _trace_refs_, _head_len, _numpy_struct,  _numpy_array, \
-    _numpy_array_field_ofs
+    _numpy_array_field_ofs, _LLVMCaster
 #from .multiarray_api import MultiarrayAPI # not used
 from .symtab import Variable
 from . import _numba_types as _types
@@ -72,97 +72,6 @@ class MethodReference(object):
     def __init__(self, object_var, py_method):
         self.object_var = object_var
         self.py_method = py_method
-
-class _LLVMCaster(object):
-    # NOTE: Using a class to lower namespace polution here.  The
-    # following would be class methods, but we'd have to index them
-    # using "class.method" in the cast dictionary to get the proper
-    # binding, and that'd only succeed after the class has been built.
-
-    def __init__(self, builder):
-        self.builder = builder
-
-    def cast(self, lvalue, dst_ltype):
-        src_ltype = lvalue.type
-        return self.build_cast(self.builder, lvalue, dst_ltype)
-
-    def build_pointer_cast(_, builder, lval1, lty2):
-        return builder.bitcast(lval1, lty2)
-
-    def build_int_cast(_, builder, lval1, lty2, unsigned = False):
-        width1 = lval1.type.width
-        width2 = lty2.width
-        ret_val = lval1
-        if width2 > width1:
-            if unsigned:
-                ret_val = builder.zext(lval1, lty2)
-            else:
-                ret_val = builder.sext(lval1, lty2)
-        elif width2 < width1:
-            logger.debug("Warning: Perfoming downcast.  May lose information.")
-            ret_val = builder.trunc(lval1, lty2)
-        return ret_val
-
-    def build_float_cast(_, builder, lval1, lty2):
-        # FIXME: unused
-        raise NotImplementedError("FIXME")
-
-    def build_float_ext(_, builder, lval1, lty2):
-        return builder.fpext(lval1, lty2)
-
-    def build_float_trunc(_, builder, lval1, lty2):
-        return builder.fptrunc(lval1, lty2)
-
-    def build_int_to_float_cast(_, builder, lval1, lty2, unsigned = False):
-        ret_val = None
-        if unsigned:
-            ret_val = builder.uitofp(lval1, lty2)
-        else:
-            ret_val = builder.sitofp(lval1, lty2)
-        return ret_val
-
-    def build_float_to_int_cast(_, builder, lval1, lty2, unsigned = False):
-        ret_val = None
-        if unsigned:
-            ret_val = builder.fptoui(lval1, lty2)
-        else:
-            ret_val = builder.fptosi(lval1, lty2)
-        return ret_val
-
-    CAST_MAP = {
-        lc.TYPE_POINTER : build_pointer_cast,
-        lc.TYPE_INTEGER: build_int_cast,
-        (lc.TYPE_FLOAT, lc.TYPE_DOUBLE) : build_float_ext,
-        (lc.TYPE_DOUBLE, lc.TYPE_FLOAT) : build_float_trunc,
-        (lc.TYPE_INTEGER, lc.TYPE_FLOAT) : build_int_to_float_cast,
-        (lc.TYPE_INTEGER, lc.TYPE_DOUBLE) : build_int_to_float_cast,
-        (lc.TYPE_FLOAT, lc.TYPE_INTEGER) : build_float_to_int_cast,
-        (lc.TYPE_DOUBLE, lc.TYPE_INTEGER) : build_float_to_int_cast,
-
-    }
-
-    @classmethod
-    def build_cast(cls, builder, lval1, lty2, *args, **kws):
-        ret_val = lval1
-        lty1 = lval1.type
-        lkind1 = lty1.kind
-        lkind2 = lty2.kind
-
-        if lkind1 == lkind2:
-
-            if lkind1 in cls.CAST_MAP:
-                ret_val = cls.CAST_MAP[lkind1](cls, builder, lval1, lty2,
-                                               *args, **kws)
-            else:
-                raise NotImplementedError(lkind1)
-        else:
-            map_index = (lkind1, lkind2)
-            if map_index in cls.CAST_MAP:
-                ret_val = cls.CAST_MAP[map_index](cls, builder, lval1, lty2,
-                                                  *args, **kws)
-            else:
-                raise NotImplementedError(lkind1, lkind2)
-        return ret_val
 
 
 _compare_mapping_float = {'>':lc.FCMP_OGT,

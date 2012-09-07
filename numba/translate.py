@@ -16,7 +16,7 @@ from .cfg import ControlFlowGraph
 from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
     _void_star, _float, _double, _complex64, _complex128, _pyobject_head, \
     _trace_refs_, _head_len, _numpy_struct,  _numpy_array, \
-    _numpy_array_field_ofs
+    _numpy_array_field_ofs, _LLVMCaster
 from .multiarray_api import MultiarrayAPI
 
 from .minivect import minitypes
@@ -164,82 +164,6 @@ class MethodReference(object):
     def __init__(self, object_var, py_method):
         self.object_var = object_var
         self.py_method = py_method
-
-class _LLVMCaster(object):
-    # NOTE: Using a class to lower namespace polution here.  The
-    # following would be class methods, but we'd have to index them
-    # using "class.method" in the cast dictionary to get the proper
-    # binding, and that'd only succeed after the class has been built.
-
-    def build_pointer_cast(_, builder, lval1, lty2):
-        return builder.bitcast(lval1, lty2)
-
-    def build_int_cast(_, builder, lval1, lty2, unsigned = False):
-        width1 = lval1.type.width
-        width2 = lty2.width
-        ret_val = lval1
-        if width2 > width1:
-            if unsigned:
-                ret_val = builder.zext(lval1, lty2)
-            else:
-                ret_val = builder.sext(lval1, lty2)
-        elif width2 < width1:
-            logger.warning("Warning: Perfoming downcast.  "
-                           "May lose information.")
-            ret_val = builder.trunc(lval1, lty2)
-        return ret_val
-
-    def build_float_upcast(_, builder, lval1, lty2):
-        return builder.fpext(lval1, lty2)
-
-    def build_float_downcast(_, builder, lval1, lty2):
-        logger.warning("Warning: Performing floating point downcast.  "
-                       "May lose information.")
-        return builder.fptrunc(lval1, lty2)
-
-    def build_int_to_float_cast(_, builder, lval1, lty2, unsigned = False):
-        ret_val = None
-        if unsigned:
-            ret_val = builder.uitofp(lval1, lty2)
-        else:
-            ret_val = builder.sitofp(lval1, lty2)
-        return ret_val
-
-    def build_float_to_int_cast(_, builder, lval1, lty2, unsigned = False):
-        ret_val = None
-        if unsigned:
-            ret_val = builder.fptoui(lval1, lty2)
-        else:
-            ret_val = builder.fptosi(lval1, lty2)
-        return ret_val
-
-    CAST_MAP = {
-        lc.TYPE_POINTER : build_pointer_cast,
-        lc.TYPE_INTEGER : build_int_cast,
-        (lc.TYPE_INTEGER, lc.TYPE_FLOAT) : build_int_to_float_cast,
-        (lc.TYPE_INTEGER, lc.TYPE_DOUBLE) : build_int_to_float_cast,
-        (lc.TYPE_FLOAT, lc.TYPE_INTEGER) : build_float_to_int_cast,
-        (lc.TYPE_DOUBLE, lc.TYPE_INTEGER) : build_float_to_int_cast,
-        (lc.TYPE_DOUBLE, lc.TYPE_FLOAT) : build_float_downcast,
-        (lc.TYPE_FLOAT, lc.TYPE_DOUBLE) : build_float_upcast,
-        }
-
-    @classmethod
-    def build_cast(cls, builder, lval1, lty2, *args, **kws):
-        ret_val = None
-        lty1 = lval1.type
-        lkind1 = lty1.kind
-        lkind2 = lty2.kind
-        if lkind1 == lkind2:
-            if lkind1 in cls.CAST_MAP:
-                ret_val = cls.CAST_MAP[lkind1](cls, builder, lval1, lty2,
-                                               *args, **kws)
-        else:
-            map_index = (lkind1, lkind2)
-            if map_index in cls.CAST_MAP:
-                ret_val = cls.CAST_MAP[map_index](cls, builder, lval1, lty2,
-                                                  *args, **kws)
-        return ret_val
 
 # Variables placed on the stack. 
 #  They allow an indirection
@@ -1498,7 +1422,7 @@ class Translate(object):
     def op_RETURN_VALUE(self, i, op, arg):
         val = self.stack.pop(-1)
         if val.val is None:
-            logger.warning("Warning: Replacing None return value with 0.")
+            logger.info("Warning: Replacing None return value with 0.")
             val = Variable(0.)
         self.builder.ret(val.llvm(llvmtype_to_strtype(self.ret_ltype),
                                   builder = self.builder))
