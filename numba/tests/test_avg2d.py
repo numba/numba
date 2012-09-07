@@ -5,7 +5,7 @@
 import numpy
 
 from numba import d
-from numba.decorators import jit, function
+from numba.decorators import jit, function, function_bytecode
 
 import unittest
 import __builtin__
@@ -47,6 +47,10 @@ class TestAvg2D (unittest.TestCase):
 
     def test_avg2d_ast(self):
         compiled_fn = jit(arg_types = [d[:,:], d[:]], backend='ast')(avg2d)
+        self._do_test(avg2d, compiled_fn)
+
+    def test_avg2d_bytecode_function(self):
+        compiled_fn = function_bytecode(avg2d)
         self._do_test(avg2d, compiled_fn)
 
     def test_avg2d_ast_function(self):

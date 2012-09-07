@@ -1,3 +1,5 @@
+__all__ = ['function', 'function_bytecode', 'jit_ast', 'jit']
+
 import functools
 import logging
 
@@ -84,28 +86,61 @@ function_cache = context.function_cache = functions.FunctionCache(context)
 def function(f):
     """
     Defines a numba function, that, when called, specializes on the input
-    types.
+    types. Uses the AST translator backend. For the bytecode translator,
+    use @function_bytecode.
     """
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
         types = tuple(context.typemapper.from_python(value)
                           for value in arguments)
-        ctypes_func = jit_ast(f, types)
+        ctypes_func = jit_ast(arg_types=types)(f)
         return ctypes_func(*args, **kwargs)
 
     wrapper._is_numba_func = True
     wrapper._numba_func = f
     return wrapper
 
-def jit_ast(func, arg_types):
+# Bit of an inconsistency with jit_ast() vs jit(), but we already used
+# @function()...
+def function_bytecode(f):
+    """
+    Defines a numba function, that, when called, specializes on the input
+    types. Uses the bytecode translator backend. For the AST backend use
+    @function.
+    """
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        # Infer argument types
+        arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
+        types = tuple(context.typemapper.from_python(value)
+            for value in arguments)
+
+        # Infer the return type
+        func_signature, symtab, ast = functions._infer_types(
+                                    context, f, arg_types=types)
+
+        decorator = jit(ret_type=func_signature.return_type, arg_types=types)
+        ctypes_func = decorator(f)
+        return ctypes_func(*args, **kwargs)
+
+    wrapper._is_numba_func = True
+    wrapper._numba_func = f
+    return wrapper
+
+def jit_ast(ret_type=None, arg_types=None):
     """
     Use the AST translator to translate the function.
     """
-    func._is_numba_func = True
-    result = function_cache.compile_function(func, arg_types)
-    _, _, ctypes_func = result
-    return ctypes_func
+    assert arg_types is not None
+
+    def _jit(func):
+        func._is_numba_func = True
+        result = function_cache.compile_function(func, arg_types)
+        _, _, ctypes_func = result
+        return ctypes_func
+
+    return _jit
 
 def jit(ret_type=double, arg_types=[double], backend='bytecode', **kws):
     """
@@ -130,7 +165,7 @@ def jit(ret_type=double, arg_types=[double], backend='bytecode', **kws):
                     break
 
         if use_ast:
-            return jit_ast(func, arg_types)
+            return jit_ast(arg_types=arg_types)(func)
         else:
             t = bytecode_translate.Translate(func, ret_type=ret_type,
                                              arg_types=arg_types, **kws)

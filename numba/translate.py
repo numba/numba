@@ -122,8 +122,10 @@ def map_to_strtype(type):
             type = [map_to_strtype(type.dtype)]
         elif type.is_pointer:
             type = "%s *" % (map_to_strtype(type.base_type))
+        elif type.is_void:
+            return "int" # default return type?
         else:
-            raise NotImplementedError
+            raise NotImplementedError(type)
         if __debug__:
             logger.debug(repr(type))
 

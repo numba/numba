@@ -13,6 +13,7 @@ except ImportError:
 
 from . import _numba_types
 from ._numba_types import *
+from .decorators import *
 
 def test():
     from subprocess import check_call

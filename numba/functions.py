@@ -12,6 +12,13 @@ import llvm.core
 def _get_ast(func):
     return meta.decompiler.decompile_func(func)
 
+def _infer_types(context, func, ret_type=None, arg_types=None):
+    ast = _get_ast(func)
+    func_signature = minitypes.FunctionType(return_type=ret_type,
+                                            args=arg_types)
+    return type_inference._infer_types(context, func, ast, func_signature)
+
+
 def _compile(context, func, ret_type=None, arg_types=None, **kwds):
     """
     Compile a numba annotated function.
@@ -20,12 +27,7 @@ def _compile(context, func, ret_type=None, arg_types=None, **kwds):
         - run type inference using the given input types
         - compile the function to LLVM
     """
-    ast = _get_ast(func)
-    func_signature = minitypes.FunctionType(return_type=ret_type,
-                                            args=arg_types)
-    func_signature, symtab, ast = type_inference._infer_types(
-                            context, func, ast, func_signature)
-
+    func_signature, symtab, ast = _infer_types(context, func, ret_type, arg_types)
     func_name = naming.specialized_mangle(func.__name__, func_signature.args)
 
     t = translate.LLVMCodeGenerator(
