@@ -75,7 +75,7 @@ class StreamUFunc(BasicUFunc):
                                 res = ufunc_ptr(*callargs, **dict(inline=True))
 
                                 retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
-                                retval_ptr.store(res)
+                                retval_ptr.store(res, nontemporal=True)
                                 arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
 
         self.ret()

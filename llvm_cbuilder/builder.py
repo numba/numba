@@ -688,6 +688,12 @@ class CBuilder(object):
     def add_auto_inline(self, callinst):
         self._auto_inline_list.append(callinst)
 
+
+    def set_memop_non_temporal(self, ldst):
+        const_one = self.constant(types.int, 1).value
+        md = lc.MetaData.get(self.function.module, [const_one])
+        ldst.set_metadata('nontemporal', md)
+
 class _DeclareCDef(object):
     '''create a function a CDefinition to use with `CBuilder.depends`
 
@@ -1096,11 +1102,15 @@ class CValue(object):
         loaded = self.parent.builder.load(self.value, volatile=volatile)
         return CTemp(self.parent, loaded)
 
-    def store(self, val, volatile=False):
+    def store(self, val, volatile=False, nontemporal=False):
         '''memory store for pointer types
         '''
         self._ensure_is_pointer()
-        self.parent.builder.store(val.value, self.value, volatile=volatile)
+        inst = self.parent.builder.store(val.value, self.value,
+                                         volatile=volatile)
+        if nontemporal:
+            self.parent.set_memop_non_temporal(inst)
+
 
     def atomic_load(self, ordering, align=None, crossthread=True):
         '''atomic load memory for pointer types
@@ -1248,11 +1258,13 @@ class CVar(CValue):
     def value(self):
         return self.parent.builder.load(self.ptr)
 
-    def assign(self, val):
+    def assign(self, val, nontemporal=False):
         '''assign new value to the variable
         '''
         self._ensure_same_type(val)
-        self.parent.builder.store(val.value, self.ptr)
+        inst = self.parent.builder.store(val.value, self.ptr)
+        if nontemporal:
+            self.parent.set_memop_non_temporal(inst)
 
     @property
     def type(self):
