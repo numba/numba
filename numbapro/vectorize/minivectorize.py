@@ -119,6 +119,9 @@ class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
     def visit_Unop(self, node):
         return self.b.unop(node.type, getop(node.op), self.visit(node.operand))
 
+    def visit_Num(self, node):
+        return self.b.constant(node.n)
+
     def generic_visit(self, node):
         raise UntranslatableError("Unsupported node of type %s" %
                                                     type(node).__name__)
@@ -161,7 +164,7 @@ class MiniVectorize(object):
     def add(self, ret_type, arg_types, **kwargs):
         self.signatures.append((ret_type, arg_types, kwargs))
 
-    def build_ufunc(self):
+    def build_ufunc(self, parallel=False):
         # Specialize for all arrays 1D, all arrays 2D, all arrays 3D
         # Higher dimensional runtime operands need wrapping loop nests
         minivect_asts = []
@@ -187,7 +190,7 @@ class MiniVectorize(object):
                     minivect_asts.append((mapper, dimensionality, minivect_ast))
 
         # return self.minivect(minivect_asts)
-        return self.fallback_vectorize(self.minivect(minivect_asts))
+        return self.fallback_vectorize(self.minivect(minivect_asts, parallel))
 
     def build_minifunction(self, ast, miniargs):
         b = minicontext.astbuilder
@@ -203,7 +206,7 @@ class MiniVectorize(object):
 
         return minifunc
 
-    def minivect(self, asts):
+    def minivect(self, asts, parallel):
         """
         Given a bunch of specialized miniasts, return a ufunc object that
         invokes the right specialization when called.
@@ -247,7 +250,8 @@ class MiniVectorize(object):
                                          ctypes_funcs, ctypes_ret_type,
                                          ctypes_arg_types, result_dtype)
 
-        return _minidispatch.UFuncDispatcher(ufuncs, len(mapper.arg_types))
+        return _minidispatch.UFuncDispatcher(ufuncs, len(mapper.arg_types),
+                                             parallel)
 
     def fallback_vectorize(self, minivect_dispatcher):
         "Build an actual ufunc"
@@ -265,15 +269,16 @@ if __name__ == '__main__':
         return a + b
 
     vectorizer = MiniVectorize(vector_add)
-    f32 = minitypes.float32
-    vectorizer.add(ret_type=f32, arg_types=[f32, f32])
-    ufunc = vectorizer.build_ufunc()
+    vectorizer = basic.BasicVectorize(vector_add)
+    t = minitypes.float64
+    vectorizer.add(ret_type=t, arg_types=[t, t])
+    ufunc = vectorizer.build_ufunc() #parallel=True)
 
-    dtype = np.float32
-    N = 4000
+    dtype = np.float64
+    N = 200
 
-    a = np.arange(N * N, dtype=dtype).reshape(N, N)[1:-1, 1:-1]
-    b = a.copy() #.T
+    a = np.arange(N * N * N, dtype=dtype).reshape(N, N, N)
+    b = a.copy()
     out = np.empty_like(a)
 
     ufunc(a, b, out=out)

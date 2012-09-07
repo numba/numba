@@ -1,3 +1,9 @@
+cimport cython.parallel
+
+from libc cimport stdlib, string as libc_string
+cimport numpy as cnp
+
+
 from numba import visitors as numba_visitors
 from numba.minivect import (miniast,
                             minitypes,
@@ -10,30 +16,15 @@ from numbapro.vectorize import _common, basic
 
 import numpy as np
 
-from libc cimport stdlib
-cimport numpy as cnp
-
 include "miniutils.pyx"
 
 cdef extern from *:
     ctypedef int Py_intptr_t
 
-ctypedef int minifunc(cnp.npy_intp *shape, void **data_pointers,
+ctypedef int minifunc(cnp.npy_intp *shape, char **data_pointers,
                       cnp.npy_intp **strides_pointers) nogil except -1
 
-ctypedef int unaryfunc(
-        cnp.npy_intp *shape, void *, cnp.npy_intp *,
-                             void *, cnp.npy_intp *) except -1
-ctypedef int binaryfunc (
-        cnp.npy_intp *shape, void *, cnp.npy_intp *,
-                             void *, cnp.npy_intp *,
-                             void *, cnp.npy_intp *) except -1
-ctypedef int ternaryfunc(
-        cnp.npy_intp *shape, void *, cnp.npy_intp *,
-                             void *, cnp.npy_intp *,
-                             void *, cnp.npy_intp *,
-                             void *, cnp.npy_intp *) except -1
-
+DEF MAX_SPECIALIZATION_NDIM = 2
 
 cdef class UFuncDispatcher(object):
     """
@@ -47,10 +38,12 @@ cdef class UFuncDispatcher(object):
 
     cdef object functions
     cdef int nin
+    cdef bint parallel
 
-    def __init__(self, functions, nin):
+    def __init__(self, functions, nin, parallel):
         self.functions = functions
         self.nin = nin
+        self.parallel = parallel
 
     def __call__(self, *args, **kwds):
         """
@@ -81,7 +74,7 @@ cdef class UFuncDispatcher(object):
         ndim = broadcast.nd
 
         # Find ufunc from input arrays
-        key = arg_types + (broadcast.nd,)
+        key = arg_types + (min(broadcast.nd, 2),)
         if key not in self.functions:
             raise ValueError("No signature found for %s" % (arg_types,))
 
@@ -136,7 +129,7 @@ cdef class UFuncDispatcher(object):
         """
         cdef cnp.npy_intp *shape_p, *strides_p
         cdef cnp.npy_intp **strides_args
-        cdef void **data_pointers
+        cdef char **data_pointers
 
         arrays.insert(0, out)
         broadcast_arrays(arrays, broadcast.shape, ndim, &shape_p, &strides_p)
@@ -145,30 +138,40 @@ cdef class UFuncDispatcher(object):
 
         # For higher dimensional arrays we can still select a contiguous
         # specialization in a single go
-        if contig and ndim > 3:
-            for i in range(3, ndim):
+        if contig and ndim > MAX_SPECIALIZATION_NDIM and not self.parallel:
+            for i in range(MAX_SPECIALIZATION_NDIM, ndim):
                 shape_p[0] *= shape_p[i]
 
         try:
-            self.run_higher_dimensional(<minifunc *> function_pointer, shape_p,
-                                        data_pointers, strides_args, ndim,
-                                        len(arrays), 0, )
+            if self.parallel and ndim > MAX_SPECIALIZATION_NDIM:
+                # TODO: map 2D arrays to parallel 1D arrays? Might be bad, e.g.
+                # TODO: can't tile... Better implement thread-pool in minivect
+                self.run_higher_dimensional_parallel(
+                        <minifunc *> function_pointer, shape_p,
+                        data_pointers, strides_args, ndim,
+                        len(arrays), 0)
+            else:
+                self.run_higher_dimensional(
+                        <minifunc *> function_pointer, shape_p,
+                        data_pointers, strides_args, ndim,
+                        len(arrays), 0)
         finally:
             stdlib.free(shape_p)
             stdlib.free(strides_p)
             stdlib.free(data_pointers)
             stdlib.free(strides_args)
 
-    cdef run_higher_dimensional(self, minifunc *function_pointer,
-                                cnp.npy_intp *shape, void **data_pointers,
-                                cnp.npy_intp **strides, int ndim, int n_ops,
-                                int dim_level):
+    cdef int run_higher_dimensional(
+            self, minifunc *function_pointer, cnp.npy_intp *shape,
+            char **data_pointers, cnp.npy_intp **strides,
+            int ndim, int n_ops, int dim_level) nogil:
         """
         Run the 1 or 2 dimensional ufunc. If ndim > 2, we need a to simulate
         an outer loop nest of depth ndim - 2.
         """
         cdef int i, j
-        if ndim <= 2:
+
+        if ndim <= MAX_SPECIALIZATION_NDIM:
             # Offset the stride pointer to remove the strides for
             # preceding dimensions
             # TODO: have minivect accept a dim_level argument
@@ -198,6 +201,47 @@ cdef class UFuncDispatcher(object):
             # stride
             for j in range(n_ops):
                 data_pointers[j] -= shape[dim_level] * strides[j][dim_level]
+
+        return 0
+
+    cdef int run_higher_dimensional_parallel(
+            self, minifunc *function_pointer, cnp.npy_intp *shape,
+            char **data_pointers, cnp.npy_intp **strides,
+            int ndim, int n_ops, int dim_level) nogil:
+        """
+        Run the ufunc using OpenMP on the outermost loop level.
+        """
+        cdef int i, j
+
+        cdef char **data_pointers_copy
+        cdef cnp.npy_intp **strides_pointers_copy
+
+        with nogil, cython.parallel.parallel():
+            data_pointers_copy = <char **> stdlib.malloc(
+                                                    n_ops * sizeof(char **))
+            strides_pointers_copy = <cnp.npy_intp **> stdlib.malloc(
+                                            n_ops * sizeof(cnp.npy_intp **))
+
+            if data_pointers_copy == NULL or strides_pointers_copy == NULL:
+                with gil:
+                    raise MemoryError
+
+            # libc_string.memcpy(data_pointers_copy, data_pointers,
+            #                    n_ops * sizeof(char **))
+            libc_string.memcpy(strides_pointers_copy, strides,
+                               n_ops * sizeof(cnp.npy_intp **))
+
+            for i in cython.parallel.prange(shape[0]):
+                for j in range(n_ops):
+                    # Add stride in this dimension to the data pointers of the
+                    # arrays
+                    data_pointers_copy[j] = data_pointers[j] + i * strides[j][dim_level]
+
+                self.run_higher_dimensional(
+                        function_pointer, shape, data_pointers_copy,
+                        strides_pointers_copy, ndim - 1, n_ops, dim_level + 1)
+
+        return 0
 
     def run_ufunc_ctypes(self, ctypes_func, broadcast, ctypes_ret_type,
                          ctypes_arg_types, out, args):
