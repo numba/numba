@@ -13,8 +13,13 @@ import numpy as np
 from libc cimport stdlib
 cimport numpy as cnp
 
+include "miniutils.pyx"
+
 cdef extern from *:
     ctypedef int Py_intptr_t
+
+ctypedef int minifunc(cnp.npy_intp *shape, void **data_pointers,
+                      cnp.npy_intp **strides_pointers) except -1
 
 ctypedef int unaryfunc(
         cnp.npy_intp *shape, void *, cnp.npy_intp *,
@@ -29,68 +34,6 @@ ctypedef int ternaryfunc(
                              void *, cnp.npy_intp *,
                              void *, cnp.npy_intp *) except -1
 
-cdef public int broadcast_arrays(list arrays, tuple broadcast_shape, int ndim,
-                                 cnp.npy_intp **shape_out,
-                                 cnp.npy_intp **strides_out) except -1:
-    """
-    Broadcast the given arrays. Returns the total broadcast shape of size
-    ndim in shape_out. Returns the strides for each array in strides_out
-    in an array of size len(arrays) * ndim.
-
-    Note: Leading broadcasting dimensions should not have strides if the
-          minivect function was compiled using an array type with less
-          dimensions than `ndim`. Instead, the actual strides should be given
-          without leading zero strides.
-    """
-    cdef cnp.ndarray array
-    cdef int i, j, start, stop
-
-    cdef cnp.npy_intp *shape = <cnp.npy_intp *> stdlib.malloc(
-                                              ndim * sizeof(cnp.npy_intp))
-    cdef cnp.npy_intp *strides_list = <cnp.npy_intp *> stdlib.malloc(
-                                len(arrays) * ndim * sizeof(cnp.npy_intp))
-
-    if shape == NULL or strides_list == NULL:
-        raise MemoryError
-
-    # Build a shape list of size ndim
-    for i in range(ndim):
-        shape[i] = broadcast_shape[i]
-
-    # Build a strides list for all arrays of size ndim
-    for i, array in enumerate(arrays):
-        start = i * ndim
-
-        if array.ndim < ndim:
-            # broadcast leading dimensions
-            for j in range(start, start + ndim - array.ndim):
-                strides_list[j] = 0
-            start = j
-
-        for j in range(ndim):
-            if array.shape[j] == 1:
-                strides_list[start + j] = 0
-            else:
-                strides_list[start + j] = cnp.PyArray_STRIDE(array, j)
-
-    # for j in range(ndim):
-    #     print 'shape%d:' % j, shape[j]
-
-    # for i in range(len(arrays)):
-    #     for j in range(ndim):
-    #         print 'stride%d:' % j, strides_list[i * ndim + j]
-    #     print
-
-    shape_out[0] = shape
-    strides_out[0] = strides_list
-    return 0
-
-cdef is_broadcasting(list arrays, broadcast):
-    for array in arrays:
-        if broadcast.nd != array.ndim or array.shape != broadcast.shape:
-            return True
-
-    return False
 
 cdef class UFuncDispatcher(object):
     """
@@ -180,9 +123,13 @@ cdef class UFuncDispatcher(object):
                          broadcast, int ndim, out, list arrays, bint contig):
 
         cdef cnp.npy_intp *shape_p, *strides_p
+        cdef cnp.npy_intp **strides_args
+        cdef void **data_pointers
 
         arrays.insert(0, out)
         broadcast_arrays(arrays, broadcast.shape, ndim, &shape_p, &strides_p)
+        build_dynamic_args(arrays, strides_p, &data_pointers, &strides_args,
+                           ndim)
 
         # For higher dimensional arrays we can still select a contiguous
         # specialization
@@ -191,15 +138,18 @@ cdef class UFuncDispatcher(object):
                 shape_p[0] *= shape_p[i]
 
         try:
-            self.dispatch(function_pointer, shape_p, strides_p, ndim, out, arrays)
+            # self.dispatch(function_pointer, shape_p, strides_p, ndim, out, arrays)
+            (<minifunc *> function_pointer)(shape_p, data_pointers, strides_args)
         finally:
             stdlib.free(shape_p)
             stdlib.free(strides_p)
+            stdlib.free(data_pointers)
+            stdlib.free(strides_args)
 
     cdef dispatch(self, Py_intptr_t function_pointer, cnp.npy_intp *shape_p,
                   cnp.npy_intp *strides_p, int ndim, out, list arrays):
-        # TODO: build an LLVM function wrapper that takes an array of pointers
-        # TODO: and passes them in correctly to the minivect function
+        # TODO: modify minivect to read the data and stride pointers from a
+        # TODO: C array
         cdef char *lhs_data = <char *> cnp.PyArray_DATA(out)
         cdef cnp.npy_intp *lhs_strides = &strides_p[0]
         cdef char *rhs_data = <char *> cnp.PyArray_DATA(arrays[1])

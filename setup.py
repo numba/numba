@@ -20,7 +20,8 @@ setup(
         CythonExtension(
             name = "numbapro._minidispatch",
             sources = ["numbapro/_minidispatch.pyx"],
-            include_dirs = [numpy.get_include()]),
+            include_dirs = [numpy.get_include(), minivect.get_include()],
+            cython_include_dirs = [minivect.get_include()]),
     ],
     packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize',
                 'numbapro.tests',
