@@ -28,16 +28,21 @@ class StreamUFunc(BasicUFunc):
         caches = []
         arg_ptrs = []
         arg_steps = []
+
+        const_count = self.var_copy(dimensions[0])
+        const_count.invariant = True
         for i, ty in enumerate(fnty.args + [fnty.return_type]):
             arg_ptrs.append(self.var_copy(args[i]))
-            arg_steps.append(self.var_copy(steps[i]))
+            const_step = self.var_copy(steps[i])
+            const_step.invariant = True
+            arg_steps.append(const_step)
 
             caches.append([])
             for j in range(self.Granularity):
                 caches[i].append(self.var(ty))
 
-        with self.for_range(ZERO, dimensions[0], GRANUL) as (_, base):
-            remain = self.min(dimensions[0] - base, GRANUL)
+        with self.for_range(ZERO, const_count, GRANUL) as (_, base):
+            remain = self.min(const_count - base, GRANUL)
             with self.ifelse(GRANUL == remain) as ifelse:
                 with ifelse.then():
                     # cache

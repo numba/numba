@@ -26,7 +26,9 @@ class BasicUFunc(CDefinition):
         arg_steps = []
         for i in range(len(fnty.args)+1):
             arg_ptrs.append(self.var_copy(args[i]))
-            arg_steps.append(self.var_copy(steps[i]))
+            const_steps = self.var_copy(steps[i])
+            const_steps.invariant = True
+            arg_steps.append(const_steps)
 
         with self.for_range(dimensions[0]) as (loop, item):
             callargs = []
@@ -56,6 +58,7 @@ class _BasicVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
 
         _common.post_vectorize_optimize(func)
 
+        #print lfunc.module.to_native_assembly()
         return func
 
 basic_vectorize_from_func = _BasicVectorizeFromFunc()

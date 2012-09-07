@@ -1000,6 +1000,17 @@ class CValue(object):
         errmsg = "Cast from %s to %s is not possible."
         raise TypeError(errmsg % (self.type, ty))
 
+    def ptrtoint(self):
+        self._ensure_is_pointer()
+        builder = self.parent.builder
+        return CTemp(self.parent, builder.ptrtoint(self.value, types.intp))
+
+    def inttoptr(self, ty):
+        if not self.is_int:
+            raise TypeError("Must be an integer")
+        builder = self.parent.builder
+        return CTemp(self.parent, builder.inttoptr(self.value, ty))
+
     def _cmp_op(self, name):
         '''implements comparison operations
         '''
@@ -1095,11 +1106,12 @@ class CValue(object):
         else:
             raise TypeError("Must be a pointer or vector; got %s" % self.type)
 
-    def load(self, volatile=False):
+    def load(self, volatile=False, invariant=False):
         '''memory load for pointer types
         '''
         self._ensure_is_pointer()
-        loaded = self.parent.builder.load(self.value, volatile=volatile)
+        loaded = self.parent.builder.load(self.value, volatile=volatile,
+                                          invariant=invariant)
         return CTemp(self.parent, loaded)
 
     def store(self, val, volatile=False, nontemporal=False):
@@ -1209,6 +1221,7 @@ class CVar(CValue):
     def __init__(self, parent, ptr):
         super(CVar, self).__init__(parent)
         self.ptr = ptr
+        self.invariant = False
 
     def _inplace_binop(self, op):
         def wrapped(rhs):
@@ -1256,11 +1269,12 @@ class CVar(CValue):
 
     @property
     def value(self):
-        return self.parent.builder.load(self.ptr)
+        return self.parent.builder.load(self.ptr, invariant=self.invariant)
 
     def assign(self, val, nontemporal=False):
         '''assign new value to the variable
         '''
+        if self.invariant: raise TypeError("Assignment to invariant variable")
         self._ensure_same_type(val)
         inst = self.parent.builder.store(val.value, self.ptr)
         if nontemporal:
@@ -1354,6 +1368,7 @@ class CStruct(CValue):
     def reference(self):
         return CTemp(self.parent, self.ptr)
 
+
 class CExternal(object):
     '''subclass to define external interface
 
@@ -1384,4 +1399,5 @@ class CExternal(object):
                                 "with a different type: %s != %s"
                                 % (func.type, ftype) )
             setattr(self, fname, CFunc(cbuilder, func))
+
 

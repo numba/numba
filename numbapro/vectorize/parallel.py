@@ -468,7 +468,9 @@ class UFuncCoreGeneric(UFuncCore):
         arg_steps = []
         for i in range(len(fnty.args)+1):
             arg_ptrs.append(self.var_copy(args[i][item * steps[i]:]))
-            arg_steps.append(self.var_copy(steps[i]))
+            const_step = self.var_copy(steps[i])
+            const_step.invariant = True
+            arg_steps.append(const_step)
 
         with self.for_range(count) as (loop, item):
             callargs = []
