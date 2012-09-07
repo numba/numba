@@ -222,24 +222,30 @@ cdef class UFuncDispatcher(object):
             strides_pointers_copy = <cnp.npy_intp **> stdlib.malloc(
                                             n_ops * sizeof(cnp.npy_intp **))
 
-            if data_pointers_copy == NULL or strides_pointers_copy == NULL:
-                with gil:
-                    raise MemoryError
+            try:
+                if data_pointers_copy == NULL or strides_pointers_copy == NULL:
+                    with gil:
+                        raise MemoryError
 
-            # libc_string.memcpy(data_pointers_copy, data_pointers,
-            #                    n_ops * sizeof(char **))
-            libc_string.memcpy(strides_pointers_copy, strides,
-                               n_ops * sizeof(cnp.npy_intp **))
+                # libc_string.memcpy(data_pointers_copy, data_pointers,
+                #                    n_ops * sizeof(char **))
+                libc_string.memcpy(strides_pointers_copy, strides,
+                                   n_ops * sizeof(cnp.npy_intp **))
 
-            for i in cython.parallel.prange(shape[0]):
-                for j in range(n_ops):
-                    # Add stride in this dimension to the data pointers of the
-                    # arrays
-                    data_pointers_copy[j] = data_pointers[j] + i * strides[j][dim_level]
+                for i in cython.parallel.prange(shape[0]):
+                    for j in range(n_ops):
+                        # Add stride in this dimension to the data pointers of the
+                        # arrays
+                        data_pointers_copy[j] = (data_pointers[j] +
+                                                 i * strides[j][dim_level])
 
-                self.run_higher_dimensional(
-                        function_pointer, shape, data_pointers_copy,
-                        strides_pointers_copy, ndim - 1, n_ops, dim_level + 1)
+                    self.run_higher_dimensional(
+                            function_pointer, shape, data_pointers_copy,
+                            strides_pointers_copy, ndim - 1, n_ops,
+                            dim_level + 1)
+            finally:
+                stdlib.free(data_pointers_copy)
+                stdlib.free(strides_pointers_copy)
 
         return 0
 
