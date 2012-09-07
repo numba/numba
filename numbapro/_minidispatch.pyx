@@ -19,7 +19,7 @@ cdef extern from *:
     ctypedef int Py_intptr_t
 
 ctypedef int minifunc(cnp.npy_intp *shape, void **data_pointers,
-                      cnp.npy_intp **strides_pointers) except -1
+                      cnp.npy_intp **strides_pointers) nogil except -1
 
 ctypedef int unaryfunc(
         cnp.npy_intp *shape, void *, cnp.npy_intp *,
@@ -53,6 +53,13 @@ cdef class UFuncDispatcher(object):
         self.nin = nin
 
     def __call__(self, *args, **kwds):
+        """
+        ufunc(array1, array2, ...)
+
+        This has to figure out the data order, select the specialization,
+        perform broadcasting of shape and strides, check for overlapping
+        memory, and invoke the minivect kernel.
+        """
         cdef int ndim
 
         if len(args) != self.nin:
@@ -89,6 +96,9 @@ cdef class UFuncDispatcher(object):
                 order_arg = 'F'
 
             out = np.empty(broadcast.shape, dtype=result_dtype, order=order_arg)
+        else:
+            # TODO: check for read-after-write
+            pass
 
         any_broadcasting = is_broadcasting(broadcast_args, broadcast)
 
@@ -121,7 +131,9 @@ cdef class UFuncDispatcher(object):
 
     cdef run_ufunc(self, Py_intptr_t function_pointer,
                          broadcast, int ndim, out, list arrays, bint contig):
-
+        """
+        Broadcast the shape, build the arguments and run the ufunc.
+        """
         cdef cnp.npy_intp *shape_p, *strides_p
         cdef cnp.npy_intp **strides_args
         cdef void **data_pointers
@@ -132,72 +144,65 @@ cdef class UFuncDispatcher(object):
                            ndim)
 
         # For higher dimensional arrays we can still select a contiguous
-        # specialization
+        # specialization in a single go
         if contig and ndim > 3:
             for i in range(3, ndim):
                 shape_p[0] *= shape_p[i]
 
         try:
-            # self.dispatch(function_pointer, shape_p, strides_p, ndim, out, arrays)
-            (<minifunc *> function_pointer)(shape_p, data_pointers, strides_args)
+            self.run_higher_dimensional(<minifunc *> function_pointer, shape_p,
+                                        data_pointers, strides_args, ndim,
+                                        len(arrays), 0, )
         finally:
             stdlib.free(shape_p)
             stdlib.free(strides_p)
             stdlib.free(data_pointers)
             stdlib.free(strides_args)
 
-    cdef dispatch(self, Py_intptr_t function_pointer, cnp.npy_intp *shape_p,
-                  cnp.npy_intp *strides_p, int ndim, out, list arrays):
-        # TODO: modify minivect to read the data and stride pointers from a
-        # TODO: C array
-        cdef char *lhs_data = <char *> cnp.PyArray_DATA(out)
-        cdef cnp.npy_intp *lhs_strides = &strides_p[0]
-        cdef char *rhs_data = <char *> cnp.PyArray_DATA(arrays[1])
-        cdef cnp.npy_intp *rhs_strides = &strides_p[ndim]
+    cdef run_higher_dimensional(self, minifunc *function_pointer,
+                                cnp.npy_intp *shape, void **data_pointers,
+                                cnp.npy_intp **strides, int ndim, int n_ops,
+                                int dim_level):
+        """
+        Run the 1 or 2 dimensional ufunc. If ndim > 2, we need a to simulate
+        an outer loop nest of depth ndim - 2.
+        """
+        cdef int i, j
+        if ndim <= 2:
+            # Offset the stride pointer to remove the strides for
+            # preceding dimensions
+            # TODO: have minivect accept a dim_level argument
+            if dim_level:
+                for j in range(n_ops):
+                    strides[j] += dim_level
 
-        if self.nin == 1:
-            if ndim < 3:
-                (<unaryfunc *> function_pointer)(shape_p, lhs_data, lhs_strides,
-                                                          rhs_data, rhs_strides)
-            else:
-                self.unary_func_higher_dimensional(
-                        <unaryfunc *> function_pointer, ndim, ndim, shape_p,
-                        lhs_data, lhs_strides, rhs_data, rhs_strides)
-        elif self.nin == 2:
-            if ndim < 3:
-                (<binaryfunc *> function_pointer)(
-                        shape_p, lhs_data, lhs_strides, rhs_data, rhs_strides,
-                        <char *> cnp.PyArray_DATA(arrays[2]),
-                        &strides_p[ndim + ndim])
-            else:
-                raise NotImplementedError
+            function_pointer(&shape[dim_level], data_pointers, strides)
+
+            # Reset the stride pointers to the first stride for each operand
+            if dim_level:
+                for j in range(n_ops):
+                    strides[j] -= dim_level
         else:
-            raise NotImplementedError
+            # ndim > 2
+            for i in range(shape[dim_level]):
+                self.run_higher_dimensional(function_pointer, shape,
+                                            data_pointers, strides, ndim - 1,
+                                            n_ops, dim_level + 1)
 
-    cdef unary_func_higher_dimensional(
-                self, unaryfunc *func, int ndim, int cur_ndim,
-                cnp.npy_intp *shape,
-                char *lhs_data, cnp.npy_intp *lhs_strides,
-                char *rhs_data, cnp.npy_intp *rhs_strides):
-        cdef int i
+                # Add stride in this dimension to the data pointers of the
+                # arrays
+                for j in range(n_ops):
+                    data_pointers[j] += strides[j][dim_level]
 
-        if cur_ndim > 2:
-            for i in range(shape[ndim - cur_ndim]):
-                self.unary_func_higher_dimensional(
-                    func, ndim, cur_ndim - 1, &shape[1],
-                    lhs_data, &lhs_strides[1],
-                    rhs_data, &rhs_strides[1])
-
-                lhs_data += lhs_strides[0]
-                rhs_data += rhs_strides[0]
-        else:
-            func(shape, <void *> lhs_data, lhs_strides,
-                        <void *> rhs_data, rhs_strides)
+            # Back up the data pointers, so the outer dimension can add its
+            # stride
+            for j in range(n_ops):
+                data_pointers[j] -= shape[dim_level] * strides[j][dim_level]
 
     def run_ufunc_ctypes(self, ctypes_func, broadcast, ctypes_ret_type,
                          ctypes_arg_types, out, args):
         """
-        Run the ufunc using ctypes
+        Run the ufunc using ctypes. Unused.
         """
         # Create broadcasted shape argument
         ctypes_shape_array = args[0].ctypes.shape._type_ * broadcast.nd
