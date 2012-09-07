@@ -765,7 +765,7 @@ class CDefinition(CBuilder):
     '''
     _name_ = ''             # name of the function; should overide in subclass
     _retty_  = types.void # return type; can overide in subclass
-    _argtys_ = []       # a list of tuple(name, type); can overide in subclass
+    _argtys_ = []       # a list of tuple(name, type, [attributes]); can overide in subclass
 
     def __new__(cls, *args, **kws):
         if cls.is_generic():
@@ -790,7 +790,7 @@ class CDefinition(CBuilder):
         Raises NameError if a function of the same name has already been
         defined.
         '''
-        functype = lc.Type.function(cls._retty_, [v for k, v in cls._argtys_])
+        functype = lc.Type.function(cls._retty_, [arg[1] for arg in cls._argtys_])
         name = cls._name_
         if not name:
             raise AttributeError("Function name cannot be empty.")
@@ -801,9 +801,12 @@ class CDefinition(CBuilder):
             raise FunctionAlreadyExists(func)
 
         # Name all arguments
-        for i, (name, _) in enumerate(cls._argtys_):
+        for i, arginfo in enumerate(cls._argtys_):
+            name = arginfo[0]
             func.args[i].name = name
-
+            if len(arginfo) > 2:
+                for attr in arginfo[2]:
+                    func.args[i].add_attribute(attr)
         # Create builder and populate body
         cbuilder = object.__new__(cls)
         cbuilder.__init__(func)

@@ -114,11 +114,11 @@ class ParallelUFunc(CDefinition):
     '''
 
     _argtys_ = [
-        ('worker',     C.void_p),
-        ('args',       C.pointer(C.char_p)),
-        ('dimensions', C.pointer(C.intp)),
-        ('steps',      C.pointer(C.intp)),
-        ('data',       C.void_p),
+        ('worker',     C.void_p, [ATTR_NO_ALIAS]),
+        ('args',       C.pointer(C.char_p), [ATTR_NO_ALIAS]),
+        ('dimensions', C.pointer(C.intp), [ATTR_NO_ALIAS]),
+        ('steps',      C.pointer(C.intp), [ATTR_NO_ALIAS]),
+        ('data',       C.void_p, [ATTR_NO_ALIAS]),
     ]
 
     @classmethod
@@ -275,7 +275,7 @@ class UFuncCore(CDefinition):
     '''
     _name_ = 'ufunc_worker'
     _argtys_ = [
-        ('context', C.pointer(Context.llvm_type())),
+        ('context', C.pointer(Context.llvm_type()), [ATTR_NO_ALIAS]),
         ]
 
     def body(self, context):
@@ -386,10 +386,10 @@ class SpecializedParallelUFunc(CDefinition):
     '''a generic ufunc that wraps ParallelUFunc, UFuncCore and the workload
     '''
     _argtys_ = [
-        ('args',       C.pointer(C.char_p)),
-        ('dimensions', C.pointer(C.intp)),
-        ('steps',      C.pointer(C.intp)),
-        ('data',       C.void_p),
+        ('args',       C.pointer(C.char_p), [ATTR_NO_ALIAS]),
+        ('dimensions', C.pointer(C.intp), [ATTR_NO_ALIAS]),
+        ('steps',      C.pointer(C.intp), [ATTR_NO_ALIAS]),
+        ('data',       C.void_p, [ATTR_NO_ALIAS]),
     ]
 
     def body(self, args, dimensions, steps, data,):

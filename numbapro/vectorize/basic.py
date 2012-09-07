@@ -12,13 +12,13 @@ class BasicUFunc(CDefinition):
     '''a generic ufunc that wraps the workload
     '''
     _argtys_ = [
-        ('args',       C.pointer(C.char_p)),
-        ('dimensions', C.pointer(C.intp)),
-        ('steps',      C.pointer(C.intp)),
-        ('data',       C.void_p),
+        ('args',       C.pointer(C.char_p), [ATTR_NO_ALIAS]),
+        ('dimensions', C.pointer(C.intp), [ATTR_NO_ALIAS]),
+        ('steps',      C.pointer(C.intp), [ATTR_NO_ALIAS]),
+        ('data',       C.void_p, [ATTR_NO_ALIAS]),
     ]
 
-    def body(self, args, dimensions, steps, data,):
+    def body(self, args, dimensions, steps, data):
         ufunc_ptr = self.depends(self.FuncDef)
         fnty = ufunc_ptr.type.pointee
 
@@ -58,7 +58,6 @@ class _BasicVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
 
         _common.post_vectorize_optimize(func)
 
-        #print lfunc.module.to_native_assembly()
         return func
 
 basic_vectorize_from_func = _BasicVectorizeFromFunc()
