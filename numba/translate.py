@@ -643,6 +643,66 @@ class _LLVMModuleUtils(object):
         return ret_val
 
     @classmethod
+    def get_py_int_pow(cls, module, typ):
+        pow_fn = '__py_int_pow_%s' % typ
+        try:
+            ret_val = module.get_function_named(pow_fn)
+        except:
+            ltyp = str_to_llvmtype(typ)
+            ret_val = module.add_function(
+                lc.Type.function(ltyp, [ltyp, ltyp]), pow_fn)
+            ret_val.linkage = lc.LINKAGE_INTERNAL
+            ret_val.args[0].name = 'val'
+            ret_val.args[1].name = 'exp'
+            entry_block = ret_val.append_basic_block('entry')
+            is_done_block = ret_val.append_basic_block('is_done')
+            is_bit_set_block = ret_val.append_basic_block('is_bit_set')
+            do_mul_block = ret_val.append_basic_block('do_mul')
+            update_block = ret_val.append_basic_block('update')
+            exit_block = ret_val.append_basic_block('exit')
+            zero = lc.Constant.int(ltyp, 0)
+            one = lc.Constant.int(ltyp, 1)
+            # entry:
+            builder = lc.Builder.new(entry_block)
+            builder.branch(is_done_block)
+            # is_done:
+            builder = lc.Builder.new(is_done_block)
+            temp = builder.phi(ltyp, 'temp')
+            temp.add_incoming(one, entry_block)
+            val = builder.phi(ltyp, 'crnt_val')
+            val.add_incoming(ret_val.args[0], entry_block)
+            exp = builder.phi(ltyp, 'crnt_exp')
+            exp.add_incoming(ret_val.args[1], entry_block)
+            is_exp_gt_zero = builder.icmp(lc.ICMP_SGT, exp, zero,
+                                          'is_exp_gt_0')
+            builder.cbranch(is_exp_gt_zero, is_bit_set_block, exit_block)
+            # is_bit_set:
+            builder = lc.Builder.new(is_bit_set_block)
+            exp_bit0 = builder.and_(exp, one, 'bit0')
+            is_bit0_set = builder.icmp(lc.ICMP_NE, exp_bit0, zero,
+                                       'is_bit0_set')
+            builder.cbranch(is_bit0_set, do_mul_block, update_block)
+            # do_mul:
+            builder = lc.Builder.new(do_mul_block)
+            temp_mul = builder.mul(temp, val, 'temp_mul')
+            builder.branch(update_block)
+            # update:
+            builder = lc.Builder.new(update_block)
+            temp_ = builder.phi(ltyp, 'temp_')
+            temp_.add_incoming(temp, is_bit_set_block)
+            temp_.add_incoming(temp_mul, do_mul_block)
+            val_ = builder.mul(val, val, 'val_')
+            exp_ = builder.ashr(exp, one, 'exp_')
+            builder.branch(is_done_block)
+            temp.add_incoming(temp_, update_block)
+            val.add_incoming(val_, update_block)
+            exp.add_incoming(exp_, update_block)
+            # exit:
+            builder.position_at_end(exit_block)
+            builder.ret(temp)
+        return ret_val
+
+    @classmethod
     def build_conj(cls, translator, args):
         if __debug__:
             logger.debug(repr(args))
@@ -1397,26 +1457,18 @@ class Translate(object):
         arg1 = self.stack.pop(-1)
         if __debug__:
             logger.debug("%r ** %r" % (arg1, arg2))
-        typ1, typ2 = arg1.typ, arg2.typ
-        if typ2[0] == 'i':
-            INTR = getattr(lc, 'INTR_POWI')
-            typ2 = 'i32'
-        elif typ2[0] == 'f': # make sure it's float
+        typ, larg1, larg2 = resolve_type(arg1, arg2, self.builder)
+        if typ[0] == 'i':
+            logger.info('Warning: integer power operator does not check for '
+                        'overflow.')
+            func = _LLVMModuleUtils.get_py_int_pow(self.mod, typ)
+        elif typ[0] == 'f': # make sure it's float
             INTR = getattr(lc, 'INTR_POW')
+            func = lc.Function.intrinsic(self.mod, INTR, (larg1.type,
+                                                          larg2.type))
         else:
-            raise NotImplementedError('** for exponent type %r' % (typ2,))
-        if typ1[0] == 'i':
-            typ1 = 'f64'
-        elif typ1[0] == 'f':
-            if typ2[0] == 'f':
-                typ2 = typ1
-        else:
-            raise NotImplementedError('** for value type %r' % (typ1,))
-        ltyps = str_to_llvmtype(typ1), str_to_llvmtype(typ2)
-        func = lc.Function.intrinsic(self.mod, INTR, ltyps)
-        args = (arg1.llvm(typ1, builder = self.builder),
-                arg2.llvm(typ2, builder = self.builder))
-        res = self.builder.call(func, args)
+            raise NotImplementedError('** for type %r' % (typ,))
+        res = self.builder.call(func, (larg1, larg2))
         self.stack.append(Variable(res))
 
     def op_RETURN_VALUE(self, i, op, arg):
