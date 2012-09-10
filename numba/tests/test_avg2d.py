@@ -63,19 +63,26 @@ class TestAvg2D (unittest.TestCase):
         compiled_fn = jit(arg_types = [d[:,:], d[:]])(avg2d_w_cast)
         self._do_test(avg2d_w_cast, compiled_fn)
 
-    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'),
-                         "Need support for float() builtin.")
-    def test_avg2d_w_cast(self):
+    def test_avg2d_w_cast_ast(self):
         compiled_fn = jit(arg_types = [d[:,:], d[:]], backend='ast')(avg2d_w_cast)
         self._do_test(avg2d_w_cast, compiled_fn)
 
-    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'),
-                         "Need support for float() builtin.")
-    def test_avg2d_w_cast(self):
+    def test_avg2d_w_cast_function(self):
         compiled_fn = function(avg2d_w_cast)
         self._do_test(avg2d_w_cast, compiled_fn)
 
 # ______________________________________________________________________
+
+
+def avg2d_w_cast(arr, result):
+    M, N = arr.shape
+    for i in range(M):
+        avg = 0.
+        for j in range(N):
+            avg += arr[i,j]
+        result[i] = avg / float(N)
+
+compiled_fn = jit(arg_types = [d[:,:], d[:]], backend='ast')(avg2d_w_cast)
 
 if __name__ == "__main__":
     unittest.main()

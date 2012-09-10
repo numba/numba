@@ -743,3 +743,4 @@ class DisposalVisitor(visitors.NumbaVisitor):
         self.visit(node.node)
         lfunc = self.function_cache.function_by_name('Py_DecRef')
         self.builder.call(lfunc, node.llvm_temp)
+

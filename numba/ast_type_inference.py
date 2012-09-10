@@ -4,6 +4,8 @@ import opcode
 import types
 import __builtin__ as builtins
 
+import numba
+from numba import error
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
 from .symtab import Variable
@@ -36,7 +38,61 @@ class ASTBuilder(object):
         index = ast.Index(nodes.ConstNode(constant_index, _types.int_))
         return ast.Subscript(value=node, slice=index, ctx=ctx)
 
-class TypeInferer(visitors.NumbaTransformer):
+class BuiltinResolverMixin(object):
+    """
+    Resolve builtin calls for type inference.
+    """
+
+    def _resolve_range(self, node, arg_type):
+        result = Variable(_types.RangeType())
+        args = self.visitlist(node.args)
+
+        if not args:
+            raise error.NumbaError("No argument provided to %s" % node.id)
+
+        start = nodes.ConstNode(0, arg_type)
+        step = nodes.ConstNode(1, arg_type)
+
+        if len(args) == 3:
+            start, stop, step = args
+        elif len(args) == 2:
+            start, stop = args
+        else:
+            stop, = args
+
+        node.args = nodes.CoercionNode.coerce([start, stop, step],
+                                              dst_type=minitypes.Py_ssize_t)
+        return result
+
+    def _resolve_builtin_call(self, node, func, func_variable, func_type):
+
+        if func in (range, xrange):
+            arg_type = minitypes.Py_ssize_t
+            node.variable = self._resolve_range(node, arg_type)
+            return node
+        elif func is len and node.args[0].variable.type.is_array:
+            # Simplify to ndarray.shape[0]
+            assert len(node.args) == 1
+            shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
+            index = ast.Index(nodes.ConstNode(0, _types.int_))
+            new_node = ast.Subscript(value=shape_attr, slice=index,
+                                     ctx=ast.Load())
+            new_node.variable = Variable(shape_attr.type.base_type)
+            return new_node
+
+        elif func in (int, float):
+            if len(node.args) > 1:
+                raise error.NumbaError(
+                    "Only a single argument is supported to builtin %s" %
+                                                            func.__name__)
+            dst_types = { int : numba.int32, float : numba.float32 }
+            return nodes.CoercionNode(node.args[0], dst_type=dst_types[func])
+        else:
+            raise error.NumbaError(
+                "Unsupported call to built-in function %s" % func.__name__)
+
+
+class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin):
     """
     Type inference. Initialize with a minivect context, a Python ast,
     and a function type with a given or absent, return type.
@@ -574,27 +630,6 @@ class TypeInferer(visitors.NumbaTransformer):
 
         return result_type
 
-    def _resolve_range(self, node, arg_type):
-        result = Variable(_types.RangeType())
-        args = self.visitlist(node.args)
-
-        if not args:
-            raise error.NumbaError("No argument provided to %s" % node.id)
-
-        start = nodes.ConstNode(0, arg_type)
-        step = nodes.ConstNode(1, arg_type)
-
-        if len(args) == 3:
-            start, stop, step = args
-        elif len(args) == 2:
-            start, stop = args
-        else:
-            stop, = args
-
-        node.args = nodes.CoercionNode.coerce([start, stop, step],
-                                              minitypes.Py_ssize_t)
-        return result
-
     def _resolve_function(self, func_type, func_name):
         func = None
 
@@ -632,19 +667,9 @@ class TypeInferer(visitors.NumbaTransformer):
         func = self._resolve_function(func_type, func_variable.name)
         new_node = node
 
-        if func in (range, xrange):
-            arg_type = minitypes.Py_ssize_t
-            node.variable = self._resolve_range(node, arg_type)
-
-        elif func is len and node.args[0].variable.type.is_array:
-            # Simplify to ndarray.shape[0]
-            assert len(node.args) == 1
-            shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
-            index = ast.Index(nodes.ConstNode(0, _types.int_))
-            new_node = ast.Subscript(value=shape_attr, slice=index,
-                                     ctx=ast.Load())
-            new_node.variable = Variable(shape_attr.type.base_type)
-
+        if func_type.is_builtin:
+            new_node = self._resolve_builtin_call(node, func,
+                                                  func_variable, func_type)
         elif func_type.is_function:
             new_node = nodes.NativeCallNode(func_variable.type, node.args,
                                             func_variable.value)
