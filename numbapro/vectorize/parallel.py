@@ -114,11 +114,11 @@ class ParallelUFunc(CDefinition):
     '''
 
     _argtys_ = [
-        ('worker',     C.void_p),
-        ('args',       C.pointer(C.char_p)),
-        ('dimensions', C.pointer(C.intp)),
-        ('steps',      C.pointer(C.intp)),
-        ('data',       C.void_p),
+        ('worker',     C.void_p, [ATTR_NO_ALIAS]),
+        ('args',       C.pointer(C.char_p), [ATTR_NO_ALIAS]),
+        ('dimensions', C.pointer(C.intp), [ATTR_NO_ALIAS]),
+        ('steps',      C.pointer(C.intp), [ATTR_NO_ALIAS]),
+        ('data',       C.void_p, [ATTR_NO_ALIAS]),
     ]
 
     @classmethod
@@ -275,7 +275,7 @@ class UFuncCore(CDefinition):
     '''
     _name_ = 'ufunc_worker'
     _argtys_ = [
-        ('context', C.pointer(Context.llvm_type())),
+        ('context', C.pointer(Context.llvm_type()), [ATTR_NO_ALIAS]),
         ]
 
     def body(self, context):
@@ -386,10 +386,10 @@ class SpecializedParallelUFunc(CDefinition):
     '''a generic ufunc that wraps ParallelUFunc, UFuncCore and the workload
     '''
     _argtys_ = [
-        ('args',       C.pointer(C.char_p)),
-        ('dimensions', C.pointer(C.intp)),
-        ('steps',      C.pointer(C.intp)),
-        ('data',       C.void_p),
+        ('args',       C.pointer(C.char_p), [ATTR_NO_ALIAS]),
+        ('dimensions', C.pointer(C.intp), [ATTR_NO_ALIAS]),
+        ('steps',      C.pointer(C.intp), [ATTR_NO_ALIAS]),
+        ('data',       C.void_p, [ATTR_NO_ALIAS]),
     ]
 
     def body(self, args, dimensions, steps, data,):
@@ -468,7 +468,9 @@ class UFuncCoreGeneric(UFuncCore):
         arg_steps = []
         for i in range(len(fnty.args)+1):
             arg_ptrs.append(self.var_copy(args[i][item * steps[i]:]))
-            arg_steps.append(self.var_copy(steps[i]))
+            const_step = self.var_copy(steps[i])
+            const_step.invariant = True
+            arg_steps.append(const_step)
 
         with self.for_range(count) as (loop, item):
             callargs = []
@@ -479,7 +481,7 @@ class UFuncCoreGeneric(UFuncCore):
 
             res = ufunc_ptr(*callargs, **dict(inline=True))
             retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
-            retval_ptr.store(res)
+            retval_ptr.store(res, nontemporal=True)
             arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
 
     @classmethod
@@ -510,7 +512,12 @@ class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
         def_spuf = SpecializedParallelUFunc(
                                     ParallelUFuncPlatform(num_thread=NUM_CPU),
                                     UFuncCoreGeneric(lfunc))
-        return def_spuf(lfunc.module)
+
+        func = def_spuf(lfunc.module)
+
+        _common.post_vectorize_optimize(func)
+
+        return func
 
 parallel_vectorize_from_func = _ParallelVectorizeFromFunc()
 

@@ -28,16 +28,21 @@ class StreamUFunc(BasicUFunc):
         caches = []
         arg_ptrs = []
         arg_steps = []
+
+        const_count = self.var_copy(dimensions[0])
+        const_count.invariant = True
         for i, ty in enumerate(fnty.args + [fnty.return_type]):
             arg_ptrs.append(self.var_copy(args[i]))
-            arg_steps.append(self.var_copy(steps[i]))
+            const_step = self.var_copy(steps[i])
+            const_step.invariant = True
+            arg_steps.append(const_step)
 
             caches.append([])
             for j in range(self.Granularity):
                 caches[i].append(self.var(ty))
 
-        with self.for_range(ZERO, dimensions[0], GRANUL) as (_, base):
-            remain = self.min(dimensions[0] - base, GRANUL)
+        with self.for_range(ZERO, const_count, GRANUL) as (_, base):
+            remain = self.min(const_count - base, GRANUL)
             with self.ifelse(GRANUL == remain) as ifelse:
                 with ifelse.then():
                     # cache
@@ -75,7 +80,7 @@ class StreamUFunc(BasicUFunc):
                                 res = ufunc_ptr(*callargs, **dict(inline=True))
 
                                 retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
-                                retval_ptr.store(res)
+                                retval_ptr.store(res, nontemporal=True)
                                 arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
 
         self.ret()
@@ -92,6 +97,9 @@ class _StreamVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
     def build(self, lfunc, granularity):
         def_buf = StreamUFunc(CFuncRef(lfunc), granularity)
         func = def_buf(lfunc.module)
+
+        _common.post_vectorize_optimize(func)
+
         return func
 
 stream_vectorize_from_func = _StreamVectorizeFromFunc()

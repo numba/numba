@@ -5,6 +5,9 @@ from numba import minivect
 from Cython.Distutils import build_ext
 from Cython.Distutils.extension import Extension as CythonExtension
 
+OMP_ARGS = ['-fopenmp']
+OMP_LINK = OMP_ARGS
+
 setup(
     name = "numbapro",
     author = "Continuum Analytics, Inc.",
@@ -20,7 +23,11 @@ setup(
         CythonExtension(
             name = "numbapro._minidispatch",
             sources = ["numbapro/_minidispatch.pyx"],
-            include_dirs = [numpy.get_include()]),
+            include_dirs = [numpy.get_include(), minivect.get_include()],
+            cython_include_dirs = [minivect.get_include()],
+            extra_compile_args = OMP_ARGS,
+            extra_link_args = OMP_LINK,
+        )
     ],
     packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize',
                 'numbapro.tests',

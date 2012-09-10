@@ -42,6 +42,9 @@ def _is_block_terminated(bb):
     instrs = bb.instructions
     return len(instrs) > 0 and instrs[-1].is_terminator
 
+def _is_struct(ty):
+    return isinstance(ty, lc.StructType)
+
 def _is_cstruct(ty):
     try:
         return issubclass(ty, CStruct)
@@ -66,6 +69,10 @@ def _change_block_temporarily(builder, bb):
 @contextlib.contextmanager
 def _change_block_temporarily_dummy(*args):
     yield
+
+class CastError(TypeError):
+    def __init__(self, orig, to):
+        super(CastError, self).__init__("Cannot cast from %s to %s" % (orig, to))
 
 class _IfElse(object):
     '''if-else construct.
@@ -399,7 +406,7 @@ class CBuilder(object):
         def check_arg(x):
             if isinstance(x, int):
                 return self.constant(types.int, x)
-            if not x.is_int:
+            if not isinstance(x, IntegerValue):
                 raise TypeError(x, "All args must be of integer type.")
             return x
 
@@ -675,7 +682,11 @@ class CBuilder(object):
     def alignment(self, ty):
         '''get minimum alignment of `ty`
         '''
-        return self.target_data.abi_alignment(ty)
+        return self.abi.abi_alignment(ty)
+
+    @property
+    def abi(self):
+        return self.target_data
 
     def unreachable(self):
         '''insert instruction that causes segfault some platform (Intel),
@@ -687,6 +698,12 @@ class CBuilder(object):
 
     def add_auto_inline(self, callinst):
         self._auto_inline_list.append(callinst)
+
+
+    def set_memop_non_temporal(self, ldst):
+        const_one = self.constant(types.int, 1).value
+        md = lc.MetaData.get(self.function.module, [const_one])
+        ldst.set_metadata('nontemporal', md)
 
 class _DeclareCDef(object):
     '''create a function a CDefinition to use with `CBuilder.depends`
@@ -759,7 +776,7 @@ class CDefinition(CBuilder):
     '''
     _name_ = ''             # name of the function; should overide in subclass
     _retty_  = types.void # return type; can overide in subclass
-    _argtys_ = []       # a list of tuple(name, type); can overide in subclass
+    _argtys_ = []       # a list of tuple(name, type, [attributes]); can overide in subclass
 
     def __new__(cls, *args, **kws):
         if cls.is_generic():
@@ -784,7 +801,7 @@ class CDefinition(CBuilder):
         Raises NameError if a function of the same name has already been
         defined.
         '''
-        functype = lc.Type.function(cls._retty_, [v for k, v in cls._argtys_])
+        functype = lc.Type.function(cls._retty_, [arg[1] for arg in cls._argtys_])
         name = cls._name_
         if not name:
             raise AttributeError("Function name cannot be empty.")
@@ -795,9 +812,12 @@ class CDefinition(CBuilder):
             raise FunctionAlreadyExists(func)
 
         # Name all arguments
-        for i, (name, _) in enumerate(cls._argtys_):
+        for i, arginfo in enumerate(cls._argtys_):
+            name = arginfo[0]
             func.args[i].name = name
-
+            if len(arginfo) > 2:
+                for attr in arginfo[2]:
+                    func.args[i].add_attribute(attr)
         # Create builder and populate body
         cbuilder = object.__new__(cls)
         cbuilder.__init__(func)
@@ -819,288 +839,338 @@ class CDefinition(CBuilder):
         raise NotImplementedError
 
 class CValue(object):
-    '''
-    Signedness
-    ----------
-    Since LLVM type does not provide signedness attribute.  This information
-    is provided in the CValue.unsigned attribute.  The default value is
-    `None`, meaning that this attribute is not set.
+    def __init__(self, parent, handle):
+        self.__parent = parent
+        self.__handle = handle
 
-    In casting operation, signednss information is passed as an optional arg.
+    @property
+    def handle(self):
+        return self.__handle
 
-    In binary operation, signedness of the left operand is used.
-    '''
+    @property
+    def parent(self):
+        return self.__parent
 
-    unsigned = None  # attribute for for integer values.
+    def _temp(self, val):
+        return CTemp(self.parent, val)
 
-    _BINOP_MAP = {
-        # op-name : (signed int, unsigned int, real)
-        'add'    : (lc.Builder.add,  lc.Builder.add,  lc.Builder.fadd),
-        'sub'    : (lc.Builder.sub,  lc.Builder.sub,  lc.Builder.fsub),
-        'mul'    : (lc.Builder.mul,  lc.Builder.mul,  lc.Builder.fmul),
-        'div'    : (lc.Builder.sdiv, lc.Builder.udiv, lc.Builder.fdiv),
-        'mod'    : (lc.Builder.srem, lc.Builder.urem, lc.Builder.frem),
-    }
+def _get_operator_provider(ty):
+    if _is_pointer(ty):
+        return PointerValue
+    elif _is_int(ty):
+        return IntegerValue
+    elif _is_real(ty):
+        return RealValue
+    elif _is_vector(ty):
+        inner = _get_operator_provider(ty.element)
+        return type(str(ty), (inner, VectorIndexing), {})
+    elif _is_struct(ty):
+        return StructValue
+    else:
+        assert False, (str(ty), type(ty))
 
-    _BITWISE_MAP = {
-        # op-name : (signed int, unsigned int)
-        'lshift' : (lc.Builder.shl,  lc.Builder.shl),
-        'rshift' : (lc.Builder.lshr, lc.Builder.ashr),
-        'and'    : (lc.Builder.and_, lc.Builder.and_),
-        'or'     : (lc.Builder.or_,  lc.Builder.or_),
-        'xor'    : (lc.Builder.xor,  lc.Builder.xor),
-    }
+class CTemp(CValue):
+    def __new__(cls, parent, handle):
+        meta = _get_operator_provider(handle.type)
+        base = type(str('%s_%s' % (cls.__name__, handle.type)), (cls, meta), {})
+        return object.__new__(base)
 
-    _CMP_MAP = {
-        # op-name : (signed int, unsigned int, real)
-        'eq' : (lc.ICMP_EQ,  lc.ICMP_EQ,  lc.FCMP_OEQ),
-        'ne' : (lc.ICMP_NE,  lc.ICMP_NE,  lc.FCMP_ONE),
-        'lt' : (lc.ICMP_SLT, lc.ICMP_ULT, lc.FCMP_OLT),
-        'le' : (lc.ICMP_SLE, lc.ICMP_ULE, lc.FCMP_OLE),
-        'gt' : (lc.ICMP_SGT, lc.ICMP_UGT, lc.FCMP_OGT),
-        'ge' : (lc.ICMP_SGE, lc.ICMP_UGE, lc.FCMP_OGE),
-    }
+    def __init__(self, *args, **kws):
+        super(CTemp, self).__init__(*args, **kws)
+        self._init_mixin()
 
-    def __init__(self, parent):
-        self.parent = parent
+    @property
+    def value(self):
+        return self.handle
 
-    def _use_binop(self, op):
-        '''implements binary operations
-        '''
-        def wrapped(rhs):
-            self._ensure_same_type(rhs)
-            binop = self._BINOP_MAP[op]
-            if self.is_int:
-                if not self.unsigned:
-                    idx = 0
-                else:
-                    idx = 1
-            elif self.is_real:
-                idx = 2
-            else:
-                errmsg = "Binary operation %s does not support type %s"
-                raise TypeError(errmsg % (op, self.type))
-            res = binop[idx](self.parent.builder, self.value, rhs.value)
-            return CTemp(self.parent, res)
-        return wrapped
+    @property
+    def type(self):
+        return self.value.type
 
-    def _use_bitwise(self, op):
-        '''implements bitwise operations
-        '''
-        def wrapped(rhs):
-            self._ensure_same_type(rhs)
-            if not self.is_int:
-                errmsg = "Bitwise operation %s does not support type %s"
-                raise TypeError(op, self.type)
-            if not self.unsigned:
-                idx = 0
-            else:
-                idx = 1
-            res = self._BITWISE_MAP[idx](self.parent.builder,
-                                       self.value, rhs.value)
-            return CTemp(self.parent, res)
-        return wrapped
+class CVar(CValue):
+    def __new__(cls, parent, ptr):
+        meta = _get_operator_provider(ptr.type.pointee)
+        base = type(str('%s_%s' % (cls.__name__, ptr.type.pointee)), (cls, meta), {})
+        return object.__new__(base)
+
+    def __init__(self, parent, ptr):
+        super(CVar, self).__init__(parent, ptr)
+        self._init_mixin()
+        self.invariant = False
+
+    def reference(self):
+        return self._temp(self.handle)
+
+    @property
+    def ref(self):
+        return self.reference()
+
+    @property
+    def value(self):
+        return self.parent.builder.load(self.ref.value,
+                                        invariant=self.invariant)
+
+    @property
+    def type(self):
+        return self.ref.type.pointee
+
+    def assign(self, val, **kws):
+        if self.invariant:
+            raise TypeError("Storing to invariant variable.")
+        self.parent.builder.store(val.value, self.ref.value, **kws)
+        return self
+
+    def __iadd__(self, rhs):
+        return self.assign(self.__add__(rhs))
+
+    def __isub__(self, rhs):
+        return self.assign(self.__sub__(rhs))
+
+    def __imul__(self, rhs):
+        return self.assign(self.__mul__(rhs))
+
+    def __idiv__(self, rhs):
+        return self.assign(self.__div__(rhs))
+
+    def __imod__(self, rhs):
+        return self.assign(self.__mod__(rhs))
+
+    def __ilshift__(self, rhs):
+        return self.assign(self.__lshift__(rhs))
+
+    def __irshift__(self, rhs):
+        return self.assign(self.__rshift__(rhs))
+
+    def __iand__(self, rhs):
+        return self.assign(self.__and__(rhs))
+
+    def __ior__(self, rhs):
+        return self.assign(self.__or__(rhs))
+
+    def __ixor__(self, rhs):
+        return self.assign(self.__xor__(rhs))
+
+
+class OperatorMixin(object):
+    def _init_mixin(self):
+        pass
+
+class IntegerValue(OperatorMixin):
+
+    def _init_mixin(self):
+        self._unsigned = False
+
+    def _get_unsigned(self):
+        return self._unsigned
+
+    def _set_unsigned(self, unsigned):
+        self._unsigned = bool(unsigned)
+
+    unsigned = property(_get_unsigned, _set_unsigned)
 
     def __add__(self, rhs):
-        return self._use_binop('add')(rhs)
+        return self._temp(self.parent.builder.add(self.value, rhs.value))
 
     def __sub__(self, rhs):
-        return self._use_binop('sub')(rhs)
+        return self._temp(self.parent.builder.sub(self.value, rhs.value))
 
     def __mul__(self, rhs):
-        return self._use_binop('mul')(rhs)
+        return self._temp(self.parent.builder.mul(self.value, rhs.value))
 
     def __div__(self, rhs):
-        return self._use_binop('div')(rhs)
-
-    def __truediv__(self, rhs):
-        return self.__div__(rhs)
+        if self.unsigned:
+            return self._temp(self.parent.builder.udiv(self.value, rhs.value))
+        else:
+            return self._temp(self.parent.builder.sdiv(self.value, rhs.value))
 
     def __mod__(self, rhs):
-        return self._use_binop('mod')(rhs)
+        if self.unsigned:
+            return self._temp(self.parent.builder.urem(self.value, rhs.value))
+        else:
+            return self._temp(self.parent.builder.srem(self.value, rhs.value))
 
-    def __lshift__(self, rhs):
-        return self._use_bitwise('lshift')(rhs)
+    def __ilshift__(self, rhs):
+        return self._temp(self.parent.builder.shl(self.value, rhs.value))
 
-    def __rshift__(self, rhs):
-        return self._use_bitwise('rshift')(rhs)
+    def __irshift__(self, rhs):
+        if self.unsigned:
+            return self._temp(self.self.parent.builder.lshr(self.value, rhs.value))
+        else:
+            return self._temp(self.parent.builder.ashr(self.value, rhs.value))
 
-    def __and__(self, rhs):
-        return self._use_bitwise('and')(rhs)
+    def __iand__(self, rhs):
+        return self._temp(self.parent.builder.and_(self.value, rhs.value))
 
-    def __or__(self, rhs):
-        return self._use_bitwise('or')(rhs)
+    def __ior__(self, rhs):
+        return self._temp(self.parent.builder.or_(self.value, rhs.value))
 
-    def __xor__(self, rhs):
-        return self._use_bitwise('xor')(rhs)
-
-    def _ensure_same_type(self, val):
-        '''ensure that this instance has the same type as `val`
-
-        Raises TypeError if `self.type != val.type`
-        '''
-        if self.type != val.type:
-            errmsg = "Type mismatch: %s != %s"
-            raise TypeError(errmsg % (self.type, val.type))
-
-    @property
-    def is_int(self):
-        return _is_int(self.type) or _is_vector(self.type, _is_int)
-
-    @property
-    def is_real(self):
-        return _is_real(self.type) or _is_vector(self.type, _is_real)
-
-    def cast(self, ty, unsigned=False):
-        '''cast to another type
-
-        If `ty == self.type`, then pass thru
-        '''
-        make = lambda X: CTemp(self.parent, X)
-        if self.type == ty:
-            return self # pass thru
-        elif self.is_pointer and _is_pointer(ty):
-            builder = self.parent.builder
-            return make(builder.bitcast(self.value, ty))
-        elif self.is_int:
-            if _is_int(ty):
-                if self.type.width < ty.width:
-                    if not unsigned:
-                        return make(self.parent.builder.sext(self.value, ty))
-                    else:
-                        return make(self.parent.builder.zext(self.value, ty))
-                else:
-                    return make(self.parent.builder.trunc(self.value, ty))
-            elif _is_real(ty):
-                if not unsigned:
-                    return make(self.parent.builder.sitofp(self.value, ty))
-                else:
-                    return make(self.parent.builder.uitofp(self.value, ty))
-        elif self.is_real:
-            if _is_int(ty):
-                if not unsigned:
-                    return make(self.parent.builder.fptosi(self.value, ty))
-                else:
-                    return make(self.parent.builder.fptoui(self.value, ty))
-            else:
-                if ty == types.double:
-                    assert self.type == types.float
-                    return make(self.parent.builder.fpext(self.value, ty))
-                else:
-                    assert ty == types.float
-                    assert self.type == types.double
-                    return make(self.parent.builder.fptrunc(self.value, ty))
-
-        errmsg = "Cast from %s to %s is not possible."
-        raise TypeError(errmsg % (self.type, ty))
-
-    def _cmp_op(self, name):
-        '''implements comparison operations
-        '''
-        def wrapped(rhs):
-            make = lambda X: CTemp(self.parent, X)
-            self._ensure_same_type(rhs)
-
-            flag_bag = self._CMP_MAP[name]
-            if self.is_int:
-                comparator = self.parent.builder.icmp
-                if not self.unsigned:
-                    flag = flag_bag[0]
-                else:
-                    flag = flag_bag[1]
-            elif self.is_real:
-                comparator = self.parent.builder.fcmp
-                flag = flag_bag[2]
-            else:
-                errmsg = "Comparision between %s and %s is not supported."
-                raise TypeError(errmsg % (self.type, rhs.type))
-
-            return CTemp(self.parent, comparator(flag, self.value, rhs.value))
-        return wrapped
-
-    def __eq__(self, rhs):
-        return self._cmp_op('eq')(rhs)
-
-    def __ne__(self, rhs):
-        return self._cmp_op('ne')(rhs)
+    def __ixor__(self, rhs):
+        return self._temp(self.parent.builder.xor(self.value, rhs.value))
 
     def __lt__(self, rhs):
-        return self._cmp_op('lt')(rhs)
+        if self.unsigned:
+            return self._temp(self.parent.builder.icmp(lc.ICMP_ULT, self.value, rhs.value))
+        else:
+            return self._temp(self.parent.builder.icmp(lc.ICMP_SLT, self.value, rhs.value))
 
     def __le__(self, rhs):
-        return self._cmp_op('le')(rhs)
+        if self.unsigned:
+            return self._temp(self.parent.builder.icmp(lc.ICMP_ULE, self.value, rhs.value))
+        else:
+            return self._temp(self.parent.builder.icmp(lc.ICMP_SLE, self.value, rhs.value))
+
+    def __eq__(self, rhs):
+        return self._temp(self.parent.builder.icmp(lc.ICMP_EQ, self.value, rhs.value))
+
+    def __ne__(self, rhs):
+        return self._temp(self.parent.builder.icmp(lc.ICMP_NE, self.value, rhs.value))
 
     def __gt__(self, rhs):
-        return self._cmp_op('gt')(rhs)
+        if self.unsigned:
+            return self._temp(self.parent.builder.icmp(lc.ICMP_UGT, self.value, rhs.value))
+        else:
+            return self._temp(self.parent.builder.icmp(lc.ICMP_SGT, self.value, rhs.value))
 
     def __ge__(self, rhs):
-        return self._cmp_op('ge')(rhs)
+        if self.unsigned:
+            return self._temp(self.parent.builder.icmp(lc.ICMP_UGE, self.value, rhs.value))
+        else:
+            return self._temp(self.parent.builder.icmp(lc.ICMP_SGE, self.value, rhs.value))
+
+    def cast(self, ty, unsigned=False):
+        if ty == self.type:
+            return self._temp(self.value)
+
+        if _is_real(ty):
+            if self.unsigned or unsigned:
+                return self._temp(self.parent.builder.uitofp(self.value, ty))
+            else:
+                return self._temp(self.parent.builder.sitofp(self.value, ty))
+        elif _is_int(ty):
+            if self.parent.abi.size(self.type) < self.parent.abi.size(ty):
+                if self.unsigned or unsigned:
+                    return self._temp(self.parent.builder.zext(self.value, ty))
+                else:
+                    return self._temp(self.parent.builder.sext(self.value, ty))
+            else:
+                return self._temp(self.parent.builder.trunc(self.value, ty))
+        raise CastError(self.type, ty)
+
+class RealValue(OperatorMixin):
+    def __add__(self, rhs):
+        return self._temp(self.parent.builder.fadd(self.value, rhs.value))
+
+    def __sub__(self, rhs):
+        return self._temp(self.parent.builder.fsub(self.value, rhs.value))
+
+    def __mul__(self, rhs):
+        return self._temp(self.parent.builder.fmul(self.value, rhs.value))
+
+    def __div__(self, rhs):
+        return self._temp(self.parent.builder.fdiv(self.value, rhs.value))
+
+    def __mod__(self, rhs):
+        return self._temp(self.parent.builder.frem(self.value, rhs.value))
+
+    def __lt__(self, rhs):
+        return self._temp(self.parent.builder.fcmp(lc.FCMP_OLT, self.value, rhs.value))
+
+    def __le__(self, rhs):
+        return self._temp(self.parent.builder.fcmp(lc.FCMP_OLE, self.value, rhs.value))
+
+    def __eq__(self, rhs):
+        return self._temp(self.parent.builder.fcmp(lc.FCMP_OEQ, self.value, rhs.value))
+
+    def __ne__(self, rhs):
+        return self._temp(self.parent.builder.fcmp(lc.FCMP_ONE, self.value, rhs.value))
+
+    def __gt__(self, rhs):
+        return self._temp(self.parent.builder.fcmp(lc.FCMP_OGT, self.value, rhs.value))
+
+    def __ge__(self, rhs):
+        return self._temp(self.parent.builder.fcmp(lc.FCMP_OGE, self.value, rhs.value))
+
+    def cast(self, ty, unsigned=False):
+        if ty == self.type:
+            return self._temp(self.value)
+
+        if _is_int(ty):
+            if unsigned:
+                return self._temp(self.parent.builder.fptoui(self.value, ty))
+            else:
+                return self._temp(self.parent.builder.fptosi(self.value, ty))
+
+        if _is_real(ty):
+            if self.parent.abi.size(self.type) > self.parent.abi.size(ty):
+                return self._temp(self.parent.builder.fptrunc(self.value, ty))
+            else:
+                return self._temp(self.parent.builder.fpext(self.value, ty))
+
+        raise CastError(self.type, ty)
 
 
-    @property
-    def is_vector(self):
-        return _is_vector(self.type)
-
-    @property
-    def is_pointer(self):
-        return _is_pointer(self.type)
-
-    def _ensure_is_pointer(self):
-        if not self.is_pointer:
-            raise TypeError("Must be a pointer; got %s" % self.type)
-
-    def _ensure_is_vector(self):
-        if not self.is_vector:
-            raise TypeError("Must be a vector; got %s" % self.type)
-
+class PointerIndexing(OperatorMixin):
     def __getitem__(self, idx):
         '''implement access indexing
 
         Uses GEP.
         '''
         bldr = self.parent.builder
-        if self.is_pointer:
-            if type(idx) is slice:
-                # just handle case by case
-                # Case #1: A[idx:] get poointer offset by idx
-                if not idx.step and not idx.stop:
-                    idx = _auto_coerce_index(self.parent, idx.start)
-                    ptr = bldr.gep(self.value, [idx.value])
-                    return CArray(self.parent, ptr)
-            else: # return an variable at idx
-                idx = _auto_coerce_index(self.parent, idx)
+        if type(idx) is slice:
+            # just handle case by case
+            # Case #1: A[idx:] get pointer offset by idx
+            if not idx.step and not idx.stop:
+                idx = _auto_coerce_index(self.parent, idx.start)
                 ptr = bldr.gep(self.value, [idx.value])
-                return CVar(self.parent, ptr)
-        elif self.is_vector:
+                return CArray(self.parent, ptr)
+        else: # return an variable at idx
             idx = _auto_coerce_index(self.parent, idx)
-            val = bldr.extract_element(self.value, idx.value)
-            return CTemp(self.parent, val)
-        else:
-            raise TypeError("Must be a pointer or vector; got %s" % self.type)
+            ptr = bldr.gep(self.value, [idx.value])
+            return CVar(self.parent, ptr)
 
     def __setitem__(self, idx, val):
         idx = _auto_coerce_index(self.parent, idx)
         bldr = self.parent.builder
-        if self.is_vector:
-            vec = bldr.insert_element(self.value, val.value, idx.value)
-            bldr.store(vec, self.ptr)
-        elif self.is_pointer:
-            self[idx].assign(val)
-        else:
-            raise TypeError("Must be a pointer or vector; got %s" % self.type)
+        self[idx].assign(val)
 
-    def load(self, volatile=False):
-        '''memory load for pointer types
-        '''
-        self._ensure_is_pointer()
-        loaded = self.parent.builder.load(self.value, volatile=volatile)
-        return CTemp(self.parent, loaded)
+class PointerCasting(OperatorMixin):
+    def cast(self, ty):
+        if ty == self.type:
+            return self._temp(self.value)
 
-    def store(self, val, volatile=False):
-        '''memory store for pointer types
+        if _is_pointer(ty):
+            return self._temp(self.parent.builder.bitcast(self.value, ty))
+        raise CastError(self.type, ty)
+
+
+
+class VectorIndexing(OperatorMixin):
+    def __getitem__(self, idx):
+        '''implement access indexing
+
+        Uses GEP.
         '''
-        self._ensure_is_pointer()
-        self.parent.builder.store(val.value, self.value, volatile=volatile)
+        bldr = self.parent.builder
+        idx = _auto_coerce_index(self.parent, idx)
+        val = bldr.extract_element(self.value, idx.value)
+        return CTemp(self.parent, val)
+
+    def __setitem__(self, idx, val):
+        idx = _auto_coerce_index(self.parent, idx)
+        bldr = self.parent.builder
+        vec = bldr.insert_element(self.value, val.value, idx.value)
+        bldr.store(vec, self.ref.value)
+
+class PointerValue(PointerIndexing, PointerCasting):
+
+    def load(self, **kws):
+        return self._temp(self.parent.builder.load(self.value, **kws))
+
+    def store(self, val, nontemporal=False, **kws):
+        inst = self.parent.builder.store(val.value, self.value, **kws)
+        if nontemporal:
+            self.parent.set_memop_non_temporal(inst)
+
 
     def atomic_load(self, ordering, align=None, crossthread=True):
         '''atomic load memory for pointer types
@@ -1110,12 +1180,11 @@ class CValue(object):
 
         Other parameters are the same as `CBuilder.atomic_load`
         '''
-        self._ensure_is_pointer()
         if align is None:
             align = self.parent.alignment(self.type.pointee)
         inst = self.parent.builder.atomic_load(self.value, ordering, align,
                                                crossthread=crossthread)
-        return CTemp(self.parent, inst)
+        return self._temp(inst)
 
     def atomic_store(self, value, ordering, align=None,  crossthread=True):
         '''atomic memory store for pointer types
@@ -1125,7 +1194,6 @@ class CValue(object):
 
         Other parameters are the same as `CBuilder.atomic_store`
         '''
-        self._ensure_is_pointer()
         if align is None:
             align = self.parent.alignment(self.type.pointee)
         self.parent.builder.atomic_store(value.ptr, self.value, ordering,
@@ -1136,19 +1204,34 @@ class CValue(object):
 
         Other parameters are the same as `CBuilder.atomic_cmpxchg`
         '''
-        self._ensure_is_pointer()
         inst = self.parent.builder.atomic_cmpxchg(self.value, old.value,
                                                   new.value, ordering,
                                                   crossthread=crossthread)
-        return CTemp(self.parent, inst)
+        return self._temp(inst)
+
+    def as_struct(self, cstruct_class, volatile=False):
+        '''load a pointer to a structure and assume a structure interface
+        '''
+        ptr = self.parent.builder.load(self.value, volatile=volatile)
+        return cstruct_class(self.parent, self.value)
+
+class StructValue(OperatorMixin):
+
+    def as_struct(self, cstruct_class):
+        '''assume a structure interface
+        '''
+        return cstruct_class(self.parent, self.ref.value)
 
 
-class CFunc(CValue):
+class CFunc(CValue, PointerCasting):
     '''Wraps function pointer
     '''
     def __init__(self, parent, func):
-        super(CFunc, self).__init__(parent)
-        self.function = func
+        super(CFunc, self).__init__(parent, func)
+
+    @property
+    def function(self):
+        return self.handle
 
     def __call__(self, *args, **opts):
         '''Call the function with the given arguments
@@ -1163,13 +1246,15 @@ class CFunc(CValue):
                                 "argument %d mismatch: %s != %s"
                                 % (self.function.name, i, exp, got.type))
         res = self.parent.builder.call(self.function, arg_values)
+
         if hasattr(self.function, 'calling_convention'):
             res.calling_convention = self.function.calling_convention
 
         if opts.get('inline'):
             self.parent.add_auto_inline(res)
 
-        return CTemp(self.parent, res)
+        if ftype.return_type != lc.Type.void():
+            return CTemp(self.parent, res)
 
     @property
     def value(self):
@@ -1179,119 +1264,25 @@ class CFunc(CValue):
     def type(self):
         return self.function.type
 
-class CTemp(CValue):
-    '''Wraps temporary values
-    '''
-    def __init__(self, parent, value):
-        super(CTemp, self).__init__(parent)
-        self.value = value
 
-    @property
-    def type(self):
-        return self.value.type
-
-class CVar(CValue):
-    '''Wraps variables
-
-    Similar to C variables.
-    '''
-
-    def __init__(self, parent, ptr):
-        super(CVar, self).__init__(parent)
-        self.ptr = ptr
-
-    def _inplace_binop(self, op):
-        def wrapped(rhs):
-            res = self._use_binop(op)(rhs)
-            self.assign(res)
-            return self
-        return wrapped
-
-    def __iadd__(self, rhs):
-        return self._inplace_binop('add')(rhs)
-
-    def __isub__(self, rhs):
-        return self._inplace_binop('sub')(rhs)
-
-    def __imul__(self, rhs):
-        return self._inplace_binop('mul')(rhs)
-
-    def __idiv__(self, rhs):
-        return self._inplace_binop('div')(rhs)
-
-    def __imod__(self, rhs):
-        return self._inplace_binop('mod')(rhs)
-
-    def _inplace_bitwise(self, op):
-        def wrapped(rhs):
-            res = self._use_bitwise(op)(rhs)
-            self.assign(res)
-            return self
-        return wrapped
-
-    def __ilshift__(self, rhs):
-        return self._inplace_bitwise('lshift')(rhs)
-
-    def __irshift__(self, rhs):
-        return self._inplace_bitwise('rshift')(rhs)
-
-    def __iand__(self, rhs):
-        return self._inplace_bitwise('and')(rhs)
-
-    def __ior__(self, rhs):
-        return self._inplace_bitwise('or')(rhs)
-
-    def __ixor__(self, rhs):
-        return self._inplace_bitwise('xor')(rhs)
-
-    @property
-    def value(self):
-        return self.parent.builder.load(self.ptr)
-
-    def assign(self, val):
-        '''assign new value to the variable
-        '''
-        self._ensure_same_type(val)
-        self.parent.builder.store(val.value, self.ptr)
-
-    @property
-    def type(self):
-        return self.ptr.type.pointee
-
-    def reference(self):
-        '''get a pointer reference of the variable
-        '''
-        return CTemp(self.parent, self.ptr)
-
-    def as_struct(self, cstruct_class, volatile=False):
-        '''load a pointer to a structure and assume a structure interface
-        '''
-        if _is_pointer(self.type):
-            ptr = self.parent.builder.load(self.ptr, volatile=volatile)
-            return cstruct_class(self.parent, ptr)
-        else:
-            return cstruct_class(self.parent, self.ptr)
-
-
-class CArray(CValue):
+class CArray(CValue, PointerIndexing, PointerCasting):
     '''wraps a array
 
     Similar to C arrays
     '''
     def __init__(self, parent, base):
-        super(CArray, self).__init__(parent)
-        self.base_ptr = base
+        super(CArray, self).__init__(parent, base)
 
     @property
     def value(self):
-        return self.base_ptr
+        return self.handle
 
     def reference(self):
-        return CTemp(self.parent, self.base_ptr)
+        return self._temp(self.value)
 
     @property
     def type(self):
-        return self.base_ptr.type
+        return self.value.type
 
     def vector_load(self, count, align=0):
         parent = self.parent
@@ -1299,9 +1290,9 @@ class CArray(CValue):
         values = [self[i] for i in range(count)]
 
         vecty = types.vector(self.type.pointee, count)
-        vec = builder.load(builder.bitcast(self.base_ptr, types.pointer(vecty)),
+        vec = builder.load(builder.bitcast(self.value, types.pointer(vecty)),
                            align=align)
-        return CTemp(parent, vec)
+        return self._temp(vec)
 
     def vector_store(self, vec, align=0):
         if vec.type.element != self.type.pointee:
@@ -1309,9 +1300,10 @@ class CArray(CValue):
                             (vec.type.element, self.type.pointee))
         parent = self.parent
         builder = parent.builder
-        vecptr = builder.bitcast(self.base_ptr, types.pointer(vec.type))
+        vecptr = builder.bitcast(self.value, types.pointer(vec.type))
         builder.store(vec.value, vecptr, align=align)
         return self
+
 
 class CStruct(CValue):
     '''Wraps a structure
@@ -1329,9 +1321,9 @@ class CStruct(CValue):
         return lc.Type.struct([v for k, v in cls._fields_])
 
     def __init__(self, parent, ptr):
-        super(CStruct, self).__init__(parent)
+        super(CStruct, self).__init__(parent, ptr)
         makeind = lambda x: self.parent.constant(types.int, x).value
-        self.ptr = ptr
+
         for i, (fd, _) in enumerate(self._fields_):
             gep = self.parent.builder.gep(ptr, [makeind(0), makeind(i)])
             gep.name = "%s.%s" % (type(self).__name__, fd)
@@ -1340,7 +1332,8 @@ class CStruct(CValue):
             setattr(self, fd, CVar(self.parent, gep))
 
     def reference(self):
-        return CTemp(self.parent, self.ptr)
+        return self._temp(self.handle)
+
 
 class CExternal(object):
     '''subclass to define external interface
@@ -1372,4 +1365,5 @@ class CExternal(object):
                                 "with a different type: %s != %s"
                                 % (func.type, ftype) )
             setattr(self, fname, CFunc(cbuilder, func))
+
 

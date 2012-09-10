@@ -1,3 +1,9 @@
+"""
+Work in progress, do not use.
+"""
+
+__all__ = ['MiniVectorize']
+
 import ast
 import ctypes
 
@@ -8,7 +14,7 @@ from numba.minivect import (miniast,
                             ctypes_conversion)
 from numba import decorators, utils, functions
 
-from numbapro import _internal, _minidispatch
+from numbapro import _internal
 from numbapro.vectorize import _common, basic
 
 import numpy as np
@@ -56,12 +62,23 @@ opmap = {
 }
 
 def getop(ast_op):
+    "Map AST binary operators to string binary operators (which minivect uses)"
     ast_op = type(ast_op)
     if opmap[ast_op] is None:
         raise UnicodeTranslateError("Invalid element-wise operator")
     return opmap[ast_op]
 
 class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
+    """
+    Map and inline a ufunc written in Python to a minivect AST. The result
+    should be wrapped in a minivect function.
+
+    Raises UntranslatableError in case it cannot convert the expression. In
+    this case we could translate the ufunc using Numba, and create a minivect
+    kernel that calls this function (in the same LLVM module), and uses LLVM
+    to inline the Numba-compiled function.
+    """
+
     def __init__(self, context, func, func_ast, ret_type, arg_types):
         super(PythonUfunc2Minivect, self).__init__(context, func, ast)
 
@@ -106,11 +123,17 @@ class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
     def visit_Unop(self, node):
         return self.b.unop(node.type, getop(node.op), self.visit(node.operand))
 
+    def visit_Num(self, node):
+        return self.b.constant(node.n)
+
     def generic_visit(self, node):
         raise UntranslatableError("Unsupported node of type %s" %
                                                     type(node).__name__)
 
 class NumbaContigSpecializer(minispecializers.ContigSpecializer):
+    """
+    Make the contiguous specialization accept strides arguments (for generality).
+    """
     def visit_FunctionNode(self, node):
         node = super(minispecializers.ContigSpecializer,
                      self).visit_FunctionNode(node)
@@ -122,6 +145,10 @@ class NumbaContigSpecializer(minispecializers.ContigSpecializer):
         return node
 
 class MiniVectorize(object):
+    """
+    Vectorizer that uses minivect to produce a ufunc. The ufunc is an actual
+    ufunc that dispatches to minivect for element-wise application.
+    """
 
     specializers = [
         NumbaContigSpecializer,
@@ -141,7 +168,9 @@ class MiniVectorize(object):
     def add(self, ret_type, arg_types, **kwargs):
         self.signatures.append((ret_type, arg_types, kwargs))
 
-    def build_ufunc(self):
+    def build_ufunc(self, parallel=False):
+        # Specialize for all arrays 1D, all arrays 2D, all arrays 3D
+        # Higher dimensional runtime operands need wrapping loop nests
         minivect_asts = []
         for ret_type, arg_types, kwargs in self.signatures:
             for dimensionality in (1, 2):
@@ -150,6 +179,11 @@ class MiniVectorize(object):
                 rtype = minitypes.ArrayType(ret_type, dimensionality)
                 mapper = PythonUfunc2Minivect(decorators.context, self.pyfunc,
                                               self.ast, rtype, array_types)
+
+                if any(array_type.is_object or array_type.is_complex
+                            for array_type in array_types):
+                    return self.fallback_vectorize(None)
+
                 try:
                     minivect_ast = mapper.visit(self.ast)
                 except UntranslatableError, e:
@@ -160,7 +194,7 @@ class MiniVectorize(object):
                     minivect_asts.append((mapper, dimensionality, minivect_ast))
 
         # return self.minivect(minivect_asts)
-        return self.fallback_vectorize(self.minivect(minivect_asts))
+        return self.fallback_vectorize(self.minivect(minivect_asts, parallel))
 
     def build_minifunction(self, ast, miniargs):
         b = minicontext.astbuilder
@@ -176,17 +210,21 @@ class MiniVectorize(object):
 
         return minifunc
 
-    def minivect(self, asts):
+    def minivect(self, asts, parallel):
         """
         Given a bunch of specialized miniasts, return a ufunc object that
         invokes the right specialization when called.
         """
+        from numbapro import _minidispatch
+
         ufuncs = {}
         for mapper, dimensionality, ast in asts:
             minifunc = self.build_minifunction(ast, mapper.miniargs)
             if debug_c:
-                print minicontext.debug_c(minifunc,
-                                          minispecializers.StridedCInnerContigSpecializer)
+                print minicontext.debug_c(
+                        minifunc,
+                        minispecializers.CTiledStridedSpecializer,
+                        astbuilder_cls=miniast.DynamicArgumentASTBuilder)
             result = list(minicontext.run(minifunc, self.specializers))
 
             # Map minitypes to NumPy dtypes, so we can find the specialization
@@ -220,9 +258,11 @@ class MiniVectorize(object):
                                          ctypes_funcs, ctypes_ret_type,
                                          ctypes_arg_types, result_dtype)
 
-        return _minidispatch.UFuncDispatcher(ufuncs, len(mapper.arg_types))
+        return _minidispatch.UFuncDispatcher(ufuncs, len(mapper.arg_types),
+                                             parallel)
 
     def fallback_vectorize(self, minivect_dispatcher):
+        "Build an actual ufunc"
         vectorizer = self.fallback(self.pyfunc)
         for ret_type, arg_types, kwargs in self.signatures:
             vectorizer.add(ret_type=ret_type, arg_types=arg_types, **kwargs)
@@ -237,19 +277,20 @@ if __name__ == '__main__':
         return a + b
 
     vectorizer = MiniVectorize(vector_add)
-    f32 = minitypes.float32
-    vectorizer.add(ret_type=f32, arg_types=[f32, f32])
-    ufunc = vectorizer.build_ufunc()
+    vectorizer = basic.BasicVectorize(vector_add)
+    t = minitypes.float64
+    vectorizer.add(ret_type=t, arg_types=[t, t])
+    ufunc = vectorizer.build_ufunc() #parallel=True)
 
-    dtype = np.float32
-    N = 4000
+    dtype = np.float64
+    N = 200
 
-    a = np.arange(N * N, dtype=dtype).reshape(N, N)[1:-1, 1:-1]
-    b = a.copy() #.T
+    a = np.arange(N, dtype=dtype).reshape(N)
+    b = a.copy()
     out = np.empty_like(a)
 
     ufunc(a, b, out=out)
-    assert np.all(out == a + b)
+    assert np.all(out == a + b), out
 
     t = time.time()
     for i in range(100):

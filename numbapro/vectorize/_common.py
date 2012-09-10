@@ -2,6 +2,7 @@ import numpy as np
 from llvm_cbuilder import shortnames as _C
 from numbapro import _internal
 from numbapro.translate import Translate
+from llvm.passes import PassManager, PassManagerBuilder
 
 _llvm_ty_str_to_numpy = {
             'i8'     : np.int8,
@@ -127,17 +128,20 @@ class GenericVectorize(object):
     def build_ufunc(self):
         raise NotImplementedError
 
-def ufunc_core_impl(fnty, func, args, steps, item):
-    get_offset = lambda B, S, T: B[item * S].reference().cast(_C.pointer(T))
+def post_vectorize_optimize(func):
+    '''Perform aggressive optimization after each vectorizer.
 
-    indata = []
-    for i, argty in enumerate(fnty.args):
-        ptr = get_offset(args[i], steps[i], argty)
-        indata.append(ptr.load())
+    TODO: Currently uses Module level PassManager each is rather wasteful
+          and may have side-effect on other already optimized functions.
+          We should find out a list of optimization to add use in
+          FunctionPassManager.
+    '''
+    pmb = PassManagerBuilder.new()
+    pmb.opt_level = 3
+    pmb.vectorize = True
 
-    out_index = len(fnty.args)
-    outptr = get_offset(args[out_index], steps[out_index],
-                        fnty.return_type)
+    pm = PassManager.new()
+    pmb.populate(pm)
 
-    res = func(*indata, **dict(inline=True))
-    outptr.store(res)
+    pm.run(func.module)
+
