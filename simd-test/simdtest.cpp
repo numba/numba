@@ -327,6 +327,7 @@ static void vvm_add_f__f_f (char**    args,
 
 typedef const void* (*TLoadStreamSignature)(vvm_register* target, const void* base, ptrdiff_t stride, size_t count);
 typedef void* (*TStoreStreamSignature)(const vvm_register* target, void* base, ptrdiff_t stride, size_t count);
+typedef void (*TBinaryOpSignature)(const vvm_register* srcA, const vvm_register* srcB, vvm_register* target, size_t count);
 
 template <TLoadStreamSignature LOAD, TStoreStreamSignature STORE>
 void t_add_f__f_f(char** args,
@@ -543,6 +544,87 @@ static void faith_sin_f__f (char**    args,
 	vvm_sin_float_single((const vvm_register*)(args[0]), (vvm_register*)(args[1]), count);
 }
 
+template <TLoadStreamSignature LOAD>
+static void vvm_test_read (char**    args, 
+						   npy_intp* dimensions,
+						   npy_intp* strides,
+						   void*     data)
+{
+    size_t count = static_cast<size_t>(dimensions[0]);
+	if (0 == count)
+		return;
+
+	const void* stream = (const void*) args[0];
+	ptrdiff_t stride = (ptrdiff_t) strides[0];
+
+	static const size_t max_count_iter = VVM_REGISTER_SIZE / sizeof(float);
+
+	// in this example, assume contiguous
+	vvm_register* registers = reinterpret_cast<vvm_register*>(alloca(VVM_REGISTER_SIZE  + VVM_ALIGNMENT));
+	registers = ptr_align_up(registers, VVM_ALIGNMENT);
+	vvm_register* reg0 = ptr_offset_bytes(registers, 0);
+	do
+	{
+		size_t chunk_count = count < max_count_iter? count : max_count_iter;
+		stream = LOAD(reg0, stream, stride, chunk_count);
+		count -= chunk_count;
+	} while (count);
+}
+
+template <TStoreStreamSignature STORE>
+static void vvm_test_write (char**    args, 
+							npy_intp* dimensions,
+							npy_intp* strides,
+							void*     data)
+{
+    size_t count = static_cast<size_t>(dimensions[0]);
+	if (0 == count)
+		return;
+
+	void* stream = (void*) args[1];
+	ptrdiff_t stride = (ptrdiff_t) strides[1];
+
+	static const size_t max_count_iter = VVM_REGISTER_SIZE / sizeof(float);
+
+	// in this example, assume contiguous
+	vvm_register* registers = reinterpret_cast<vvm_register*>(alloca(VVM_REGISTER_SIZE  + VVM_ALIGNMENT));
+	registers = ptr_align_up(registers, VVM_ALIGNMENT);
+	const vvm_register* reg0 = ptr_offset_bytes(registers, 0);
+	do
+	{
+		size_t chunk_count = count < max_count_iter? count : max_count_iter;
+		stream = STORE(reg0, stream, stride, chunk_count);
+		count -= chunk_count;
+	} while (count);
+}
+
+
+template <TBinaryOpSignature OP>
+void vvm_test_binary_op(char** /* args */,
+						npy_intp* dimensions,
+						npy_intp* /* strides */,
+						void*     data)
+{
+   size_t count = static_cast<size_t>(dimensions[0]);
+	if (0 == count)
+		return;
+	static const size_t max_count_iter = VVM_REGISTER_SIZE / sizeof(float);
+
+	// in this example, assume contiguous
+	vvm_register* registers = reinterpret_cast<vvm_register*>(alloca(VVM_REGISTER_SIZE * 3 + VVM_ALIGNMENT));
+	registers = ptr_align_up(registers, VVM_ALIGNMENT);
+	vvm_register* reg0 = ptr_offset_bytes(registers, 0);
+	vvm_register* reg1 = ptr_offset_bytes(reg0, VVM_REGISTER_SIZE);
+	vvm_register* reg_dst = ptr_offset_bytes(reg1, VVM_REGISTER_SIZE);
+	do
+	{
+		size_t chunk_count = count < max_count_iter? count : max_count_iter;
+		OP(reg0, reg1, reg_dst, chunk_count);
+		count -= chunk_count;
+	} while (count);
+}
+
+
 
 /* These are the input and return dtypes of logit.*/
 
@@ -568,6 +650,16 @@ PyUFuncGenericFunction test_rvvm2sin[]  = { &vvm2_sin_f__f<11>};
 PyUFuncGenericFunction test_vvm3sin[]   = { &vvm3_sin_f__f<1> };
 PyUFuncGenericFunction test_rvvm3sin[]  = { &vvm3_sin_f__f<11>};
 PyUFuncGenericFunction test_faithsin[]  = { &faith_sin_f__f   };
+
+
+template <PyUFuncGenericFunction FN>
+struct ufunc
+{
+	static PyUFuncGenericFunction funcs[];
+};
+
+template <PyUFuncGenericFunction FN>
+PyUFuncGenericFunction ufunc<FN>::funcs[] = { FN }; 
 
 static char test_binaryop_signature[]   = { NPY_FLOAT, NPY_FLOAT, NPY_FLOAT };
 static char test_unaryop_signature[]    = { NPY_FLOAT, NPY_FLOAT };
@@ -605,6 +697,20 @@ struct {
 	{ test_vvm3sin,   "vvm3_sin"  , test_unaryop_signature, 1, 1 },
 	{ test_rvvm3sin,  "rvvm3_sin" , test_unaryop_signature, 1, 1 },
 	{ test_faithsin,  "faith_sin" , test_unaryop_signature, 1, 1 },
+
+
+	// sintetic tests:
+	{ ufunc< vvm_test_read< vvm_load_size4_stream_plain_c > >::funcs, "read_test_plain_c", test_binaryop_signature, 2, 1 },
+	{ ufunc< vvm_test_read< vvm_load_size4_stream_unroll4_c > >::funcs, "read_test_unroll4_c", test_binaryop_signature, 2, 1 },
+	{ ufunc< vvm_test_read< vvm_load_size4_stream_sse_v1 > >::funcs, "read_test_sse_v1", test_binaryop_signature, 2, 1 },
+	{ ufunc< vvm_test_read< vvm_load_size4_stream_sse_v2 > >::funcs, "read_test_sse_v2", test_binaryop_signature, 2, 1 },
+	{ ufunc< vvm_test_read< vvm_load_size4_stream_sse_v3 > >::funcs, "read_test_sse_v3", test_binaryop_signature, 2, 1 },
+	{ ufunc< vvm_test_read< vvm_load_size4_stream_sse_v4 > >::funcs, "read_test_sse_v4", test_binaryop_signature, 2, 1 },
+	{ ufunc< vvm_test_read< vvm_load_size4_stream_sse_v5 > >::funcs, "read_test_sse_v5", test_binaryop_signature, 2, 1 },
+	{ ufunc< vvm_test_read< vvm_load_size4_stream_sse_v6 > >::funcs, "read_test_sse_v6", test_binaryop_signature, 2, 1 },
+	{ ufunc< vvm_test_write< vvm_store_size4_stream_plain_c > >::funcs, "write_test_plain_c", test_binaryop_signature, 2, 1 },
+	{ ufunc< vvm_test_binary_op< vvm_add_float_single > >::funcs, "op_test", test_binaryop_signature, 2, 1 },
+
 };
 
 

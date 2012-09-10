@@ -18,7 +18,12 @@ def test_adds(element_count, repeat = 100):
         end = time.time()
         return end - start
 
-    tests = [ 'scalar_add', 'vvm_add', 'simd_add', 'rsimd_add', 'faith_add', 'add_pc', 'add_u4', 'add_v1', 'add_v2', 'add_v3', 'add_v4', 'add_v5', 'add_v6'  ]
+    tests = [ 'scalar_add', 'vvm_add', 'simd_add', 'rsimd_add', 'faith_add',
+              'add_pc', 'add_u4', 'add_v1', 'add_v2', 'add_v3', 'add_v4', 'add_v5', 'add_v6',
+              'read_test_plain_c', 'read_test_unroll4_c', 
+              'read_test_sse_v1', 'read_test_sse_v2', 'read_test_sse_v3', 
+              'read_test_sse_v4', 'read_test_sse_v5', 'read_test_sse_v6', 
+              'write_test_plain_c', 'op_test']
 
     print '\n====== test adds for %d elements (%d times) ======' % (element_count, repeat)
     for i in tests:

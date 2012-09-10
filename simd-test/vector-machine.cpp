@@ -197,15 +197,25 @@ const void* vvm_load_size4_stream_sse_v4(vvm_register* target, const void* base,
 		__m128i el2 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 2*stride)));
 		__m128i el3 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 3*stride)));
 
-		__m128i lo = _mm_unpacklo_epi32(el0, el1);
-		__m128i hi = _mm_unpacklo_epi32(el2, el3);
-		__m128i res = _mm_unpacklo_epi32(lo, hi);
+		__m128i el4 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 4*stride)));
+		__m128i el5 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 5*stride)));
+		__m128i el6 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 6*stride)));
+		__m128i el7 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 7*stride)));
 
-		_mm_stream_si128(dst, res);
+		__m128i lo0 = _mm_unpacklo_epi32(el0, el1);
+		__m128i hi0 = _mm_unpacklo_epi32(el2, el3);
+		__m128i res0 = _mm_unpacklo_epi32(lo0, hi0);
 
-		src = ptr_offset_bytes(src, 4*stride);
-		dst += 1;
-		count -= 4;
+		__m128i lo1 = _mm_unpacklo_epi32(el4, el5);
+		__m128i hi1 = _mm_unpacklo_epi32(el6, el7);
+		__m128i res1 = _mm_unpacklo_epi32(lo1, hi1);
+
+		_mm_store_si128(dst, res0);
+		_mm_store_si128(dst + 1, res1);
+
+		src = ptr_offset_bytes(src, 8*stride);
+		dst += 2;
+		count -= 8;
 	} while (count);
 
 	return reinterpret_cast<const void*>(src);	
@@ -215,7 +225,7 @@ const void* vvm_load_size4_stream_sse_v5(vvm_register* target, const void* base,
 {
 	const int32_t* src = reinterpret_cast<const int32_t*>(base);
 	__m128i* RESTRICT dst = reinterpret_cast<__m128i* RESTRICT>(target);
-	/* based on example 2 on intel optimization manual (example 3-31) */
+	/* based on example 1 on intel optimization manual (example 3-31) */
 	do 
 	{
 		__m128i el0 = _mm_cvtsi32_si128(*src);
@@ -223,17 +233,29 @@ const void* vvm_load_size4_stream_sse_v5(vvm_register* target, const void* base,
 		__m128i el2 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 2*stride)));
 		__m128i el3 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 3*stride)));
 
+		__m128i el4 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 4*stride)));
+		__m128i el5 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 5*stride)));
+		__m128i el6 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 6*stride)));
+		__m128i el7 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 7*stride)));
+
 		__m128i el1s = _mm_slli_epi64(el1,32);
 		__m128i el3s = _mm_slli_epi64(el3,32);
 		__m128i el01 = _mm_or_ps(el0, el1s);
 		__m128i el23 = _mm_or_ps(el2, el3s);
-		__m128i res  = _mm_movelh_ps(el01, el23);
+		__m128i res0 = _mm_movelh_ps(el01, el23);
 
-		_mm_stream_si128(dst, res);
+		__m128i el5s = _mm_slli_epi64(el5,32);
+		__m128i el7s = _mm_slli_epi64(el7,32);
+		__m128i el45 = _mm_or_ps(el4, el5s);
+		__m128i el67 = _mm_or_ps(el6, el7s);
+		__m128i res1 = _mm_movelh_ps(el45, el67);
 
-		src = ptr_offset_bytes(src, 4*stride);
-		dst += 1;
-		count -= 4;
+		_mm_store_si128(dst, res0);
+		_mm_store_si128(dst + 1, res1);
+
+		src = ptr_offset_bytes(src, 8*stride);
+		dst += 2;
+		count -= 8;
 	} while (count);
 
 	return reinterpret_cast<const void*>(src);	
@@ -243,7 +265,7 @@ const void*  vvm_load_size4_stream_sse_v6(vvm_register* target, const void* base
 {
 	const int32_t* src = reinterpret_cast<const int32_t*>(base);
 	__m128i* RESTRICT dst = reinterpret_cast<__m128i* RESTRICT>(target);
-	/* based on example 3 on intel optimization manual (example 3-31) */
+	/* based on example 1 on intel optimization manual (example 3-31) */
 	do 
 	{
 		__m128i el0 = _mm_cvtsi32_si128(*src);
@@ -251,16 +273,27 @@ const void*  vvm_load_size4_stream_sse_v6(vvm_register* target, const void* base
 		__m128i el2 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 2*stride)));
 		__m128i el3 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 3*stride)));
 
+		__m128i el4 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 4*stride)));
+		__m128i el5 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 5*stride)));
+		__m128i el6 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 6*stride)));
+		__m128i el7 = _mm_cvtsi32_si128(*(ptr_offset_bytes(src, 7*stride)));
+
 		__m128i el13 = _mm_movelh_ps(el1, el3);
 		__m128i el13s= _mm_slli_epi64(el13, 32);
 		__m128i el02 = _mm_movelh_ps(el0, el2);
-		__m128i res  = _mm_or_ps(el13s, el02);
+		__m128i res0 = _mm_or_ps(el13s, el02);
 
-		_mm_stream_si128(dst, res);
+		__m128i el57 = _mm_movelh_ps(el5, el7);
+		__m128i el57s= _mm_slli_epi64(el57, 32);
+		__m128i el46 = _mm_movelh_ps(el4, el6);
+		__m128i res1  = _mm_or_ps(el57s, el46);
 
-		src = ptr_offset_bytes(src, 4*stride);
-		dst += 1;
-		count -= 4;
+		_mm_store_si128(dst, res0);
+		_mm_store_si128(dst + 1, res1);
+
+		src = ptr_offset_bytes(src, 8*stride);
+		dst += 2;
+		count -= 8;
 	} while (count);
 
 	return reinterpret_cast<const void*>(src);	
