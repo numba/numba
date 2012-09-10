@@ -5,6 +5,7 @@ from . import naming
 from .minivect import minitypes
 import numba.ast_translate as translate
 import numba.ast_type_inference as type_inference
+from numba import nodes
 
 import meta.decompiler
 import llvm.core
@@ -108,6 +109,11 @@ class FunctionCache(object):
             declared_func = globals()[name]()
             lfunc = self.build_function(declared_func)
             return declared_func.signature, lfunc
+
+    def call(self, name, *args):
+        function_cls = globals()[name]
+        sig, lfunc = self.function_by_name(name)
+        return nodes.NativeCallNode(sig, args, lfunc)
 
     def build_function(self, external_function):
         """
@@ -336,6 +342,19 @@ class PyTuple_Pack(ExternalFunction):
     arg_types = [Py_ssize_t]
     return_type = object_
     is_vararg = True
+
+class Py_BuildValue(ExternalFunction):
+    arg_types = [c_string_type]
+    return_type = object_
+    is_vararg = True
+
+class PyObject_Print(ExternalFunction):
+    arg_types = [object_, void.pointer(), int_]
+    return_type = int_
+
+class PyObject_GetAttrString(ExternalFunction):
+    arg_types = [object_, c_string_type]
+    return_type = object_
 
 class PyModulo(InternalFunction):
 

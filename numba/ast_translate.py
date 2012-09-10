@@ -26,10 +26,12 @@ from .symtab import Variable
 from . import _numba_types as _types
 from ._numba_types import Complex64, Complex128, BuiltinType
 
+import numba
+from numba import *
 from . import visitors, nodes, llvm_types
 from .minivect import minitypes
 from numba.pymothoa import compiler_errors
-from numba import ndarray_helpers
+from numba import ndarray_helpers, translate
 
 import logging
 logger = logging.getLogger(__name__)
@@ -94,7 +96,6 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
                           '>=':lc.ICMP_UGE,
                           '<=':lc.ICMP_ULE,
                           '!=':lc.ICMP_NE}
-
 
 
 class LLVMContextManager(object):
@@ -188,6 +189,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
         # code generation attributes
         self.mod = LLVMContextManager().get_default_module()
+        self.module_utils = translate._LLVMModuleUtils()
 
         # self.ma_obj = None # What is this?
         self.optimize = optimize
@@ -322,6 +324,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         entry = self.append_basic_block('entry')
         self.builder = lc.Builder.new(entry)
         self.caster = _LLVMCaster(self.builder)
+        self.object_coercer = ObjectCoercer(self)
 
         for i, (ltype, argname) in enumerate(zip(self.lfunc.args, self.argnames)):
             ltype.name = argname
@@ -351,6 +354,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
         # TODO: Put current function into symbol table for recursive call
 
+        # Jump here if an error occurs
+        # TODO: return error indicator to caller
+        self.return_error()
 
         # Control FLow
         # Not needed for now.
@@ -459,10 +465,18 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         res_typ = convert_to_strtype(self.ret_type)
         return res, res_typ
 
+    def return_error(self):
+        bb = self.builder.basic_block
+        self.error_label = self.append_basic_block("error_label")
+        self.builder.position_at_end(self.error_label)
+        # print ast.dump(self.ast.error_return)
+        self.visit(self.ast.error_return)
+        self.builder.position_at_end(bb)
+
     # __________________________________________________________________________
 
     def visit_ConstNode(self, node):
-        return node.value(self.builder)
+        return node.value(self)
 
     def generate_load_symbol(self, name):
         var = self.symtab[name]
@@ -660,41 +674,50 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
     def visit_Call(self, node):
         raise Exception("This node should have been replaced")
 
+    def visit_Tuple(self, node):
+        assert isinstance(node.ctx, ast.Load)
+        types = [n.type for n in node.elts]
+        largs = self.visitlist(node.elts)
+        return self.object_coercer.build_tuple(types, largs)
+
+    def visit_Dict(self, node):
+        key_types = [k.type for k in node.keys]
+        value_types = [v.type for v in node.values]
+        llvm_keys = self.visitlist(node.keys)
+        llvm_values = self.visitlist(node.values)
+        result = self.object_coercer.build_dict(key_types, value_types,
+                                                llvm_keys, llvm_values)
+        return result
+
     def visit_ObjectCallNode(self, node):
         lty_obj = _types.object_.to_llvm(self.context)
 
-        args_tuple = self.visitlist(node.args)
-        kwargs_dict = self.visit(node.kwargs)
+        args_tuple = self.visit(node.args_tuple)
+        kwargs_dict = self.visit(node.kwargs_dict)
 
-        # FIXME: Is this a good way?
-        if kwargs_dict is lc.ConstantPointerNull:
-            # ConstantPointerNull does not have .get defined! (llvm-py bug?)
-            kwargs_dict = kwargs_dict.null(lty_obj)
-        # function = self.visit(node.function)
-
-        # FIXME: Currently uses the runtime address of the python function.
-        #        Sounds like a hack.
-        func_addr = id(node.py_func)
-        lfunc_addr_int = self.generate_constant_int(func_addr, _types.Py_ssize_t)
-        lfunc_addr = self.builder.inttoptr(lfunc_addr_int, lty_obj)
-
-        # make tuple for args_tuple
-        _, pytuple_pack = self.function_cache.function_by_name('PyTuple_Pack')
-
-        n = self.generate_constant_int(len(args_tuple), _types.Py_ssize_t)
-        args_tuple = self.builder.call(pytuple_pack, [n] + args_tuple)
+        if node.py_func:
+            # FIXME: Currently uses the runtime address of the python function.
+            #        Sounds like a hack.
+            func_addr = id(node.py_func)
+            lfunc_addr_int = self.generate_constant_int(func_addr,
+                                                        _types.Py_ssize_t)
+            lfunc_addr = self.builder.inttoptr(lfunc_addr_int, lty_obj)
+        else:
+            lfunc_addr = self.visit(node.function)
 
         # call PyObject_Call
         largs = [lfunc_addr, args_tuple, kwargs_dict]
         _, pyobject_call = self.function_cache.function_by_name('PyObject_Call')
 
         res = self.builder.call(pyobject_call, largs)
+        self.object_coercer.check_err(res)
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
 
     def visit_NativeCallNode(self, node):
         # TODO: Refcounts + error check
         largs = self.visitlist(node.args)
-        return self.builder.call(node.llvm_func, largs)
+        result = self.builder.call(node.llvm_func, largs)
+        return self.object_coercer.check_err(result)
 
     def visit_TempNode(self, node):
         if node.llvm_temp is None:
@@ -744,3 +767,98 @@ class DisposalVisitor(visitors.NumbaVisitor):
         lfunc = self.function_cache.function_by_name('Py_DecRef')
         self.builder.call(lfunc, node.llvm_temp)
 
+def check_err(translator, llvm_result, badval):
+    "Jumps to translator.error_label if an exception occurred."
+    # Use llvm_cbuilder :(
+    b = translator.builder
+
+    bb_true = translator.append_basic_block('if.true')
+    bb_endif = translator.append_basic_block('if.end')
+
+    test = b.icmp(llvm.core.ICMP_EQ, llvm_result, badval)
+    b.cbranch(test, bb_true, bb_endif)
+
+    b.position_at_end(bb_true)
+    b.branch(translator.error_label)
+    b.position_at_end(bb_endif)
+
+    return llvm_result
+
+class ObjectCoercer(object):
+    type_to_buildvalue_str = {
+        char: "b",
+        short: "h",
+        int_: "i",
+        long_: "l",
+        longlong: "L",
+        Py_ssize_t: "n",
+        npy_intp: "n", # ?
+        size_t: "n", # ?
+        uchar: "B",
+        ushort: "H",
+        uint: "I",
+        ulong: "k",
+        ulonglong: "K",
+
+        float_: "f",
+        double: "d",
+        complex128: "D",
+
+        object_: "O",
+        bool_: "p",
+        c_string_type: "s",
+    }
+
+    def __init__(self, translator):
+        self.translator = translator
+        self.builder = translator.builder
+        sig, self.py_buildvalue = translator.function_cache.function_by_name(
+                                                              'Py_BuildValue')
+        self.NULL = self.translator.visit(nodes.NULL_obj)
+
+    def check_err(self, llvm_result):
+        "Check for errors. If the result is NULL, and error should have been set"
+        int_result = self.translator.builder.ptrtoint(llvm_result,
+                                                       llvm_types._intp)
+        NULL = llvm.core.Constant.int(int_result.type, 0)
+        check_err(self.translator, int_result, NULL)
+        return llvm_result
+
+    def lstr(self, types, fmt=None):
+        typestrs = []
+        for type in types:
+            if type.is_array:
+                type = object_
+            typestrs.append(self.type_to_buildvalue_str[type])
+
+        str = "".join(typestrs)
+        if fmt is not None:
+            str = fmt % str
+
+        return self.translator.visit(nodes.ConstNode(str, c_string_type))
+
+    def buildvalue(self, *largs):
+        result = self.builder.call(self.py_buildvalue, largs)
+        return self.check_err(result)
+
+    def convert_single(self, type, llvm_result):
+        "Generate code to convert an LLVM value to a Python object"
+        lstr = self.lstr([type])
+        return self.buildvalue(lstr, llvm_result)
+
+    def build_tuple(self, types, llvm_values):
+        "Build a tuple from a bunch of LLVM values"
+        assert len(types) == len(llvm_values)
+        lstr = self.lstr(types, fmt="(%s)")
+        return self.buildvalue(lstr, *llvm_values)
+
+    def build_dict(self, key_types, value_types, llvm_keys, llvm_values):
+        "Build a dict from a bunch of LLVM values"
+        types = []
+        for k, v in zip(key_types, value_types):
+            types.append(k)
+            types.append(v)
+
+        lstr = self.lstr(types, fmt="{%s}")
+        largs = llvm_keys + llvm_values
+        return self.buildvalue(lstr, *largs)

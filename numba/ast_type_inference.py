@@ -5,11 +5,17 @@ import types
 import __builtin__ as builtins
 
 import numba
+from numba import *
 from numba import error
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
 from .symtab import Variable
-from . import visitors, nodes, error
+from . import visitors, nodes, error, _ext
+
+stdin, stdout, stderr = _ext.get_libc_file_addrs()
+stdin = nodes.ConstNode(stdin, void.pointer())
+stdout = nodes.ConstNode(stdout, void.pointer())
+stderr = nodes.ConstNode(stderr, void.pointer())
 
 import numpy
 
@@ -23,10 +29,14 @@ def _infer_types(context, func, ast, func_signature):
     type_inferer = TypeInferer(context, func, ast,
                                func_signature=func_signature)
     type_inferer.infer_types()
+    func_signature = type_inferer.func_signature
+
+    logger.debug("signature: %s" % func_signature)
+
     TypeSettingVisitor(context, func, ast).visit(ast)
     ast = TransformForIterable(context, func, ast, type_inferer.symtab).visit(ast)
-    ast = ASTSpecializer(context, func, ast).visit(ast)
-    return type_inferer.func_signature, type_inferer.symtab, ast
+    ast = ASTSpecializer(context, func, ast, func_signature).visit(ast)
+    return func_signature, type_inferer.symtab, ast
 
 class ASTBuilder(object):
     def index(self, node, constant_index, load=True):
@@ -717,11 +727,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin):
             result_type = self._resolve_numpy_attribute(node, type)
         elif type.is_object:
             result_type = type
-        elif type.is_array:
+        elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):
             # handle shape/strides/ndim etc. TODO: methods
             return nodes.ArrayAttributeNode(node.attr, node.value)
         else:
-            raise NotImplementedError((node.attr, node.value, type))
+            return self.function_cache.call(
+                        'PyObject_GetAttrString', nodes.ConstNode(node.attr),
+                        node.value)
 
         node.variable = Variable(result_type)
         return node
@@ -780,12 +792,39 @@ class TypeSettingVisitor(visitors.NumbaVisitor):
         super(TypeSettingVisitor, self).visit(node)
 
 class ASTSpecializer(visitors.NumbaTransformer):
+
+    def __init__(self, context, func, ast, func_signature):
+        super(ASTSpecializer, self).__init__(context, func, ast)
+        self.func_signature = func_signature
+
+    def visit_FunctionDef(self, node):
+        self.generic_visit(node)
+
+        ret_type = self.func_signature.return_type
+        if ret_type.is_object or ret_type.is_array:
+            value = nodes.NULL_obj
+        elif ret_type.is_void:
+            value = None
+        elif ret_type.is_float:
+            value = nodes.ConstNode(float('nan'), type=ret_type)
+        elif ret_type.is_int or ret_type.is_complex:
+            value = nodes.ConstNode(0xbadbadbad, type=ret_type)
+        else:
+            value = None
+
+        node.error_return = ast.Return(value=value)
+        return node
+
     def visit_Tuple(self, node):
-        sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
-        objs = self.visitlist(node.elts)
-        n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
-        args = [n] + objs
-        return self.visit(nodes.NativeCallNode(sig, args, lfunc))
+        if all(n.type.is_object for n in node.elts):
+            sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
+            objs = self.visitlist(node.elts)
+            n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
+            args = [n] + objs
+            return self.visit(nodes.NativeCallNode(sig, args, lfunc))
+
+        self.generic_visit(node)
+        return node
 
     def visit_NativeCallNode(self, node):
         self.generic_visit(node)
@@ -797,6 +836,23 @@ class ASTSpecializer(visitors.NumbaTransformer):
         self.generic_visit(node)
         return node
         #return nodes.TempNode(node)
+
+    def visit_Print(self, node):
+        # TDDO: handle 'dest' and 'nl' attributes
+        signature, lfunc = self.function_cache.function_by_name('printf')
+        return nodes.NativeCallNode(signature,
+                 [nodes.ConstNode("!!!!\n", c_string_type)], lfunc)
+
+        signature, lfunc = self.function_cache.function_by_name(
+                                                    'PyObject_Print')
+        Py_PRINT_RAW = nodes.ConstNode(1, int_)
+        result = []
+        for value in node.values:
+            args = [value, stdout, Py_PRINT_RAW]
+            result.append(
+                nodes.NativeCallNode(signature, args, lfunc))
+
+        return result
 
     def visit_Subscript(self, node):
         if isinstance(node.value, nodes.ArrayAttributeNode):
@@ -874,4 +930,3 @@ class TransformForIterable(visitors.NumbaTransformer):
             return node
         else:
             raise error.NumbaError("Unsupported for loop pattern")
-

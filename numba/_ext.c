@@ -114,6 +114,25 @@ ufunc_from_ptr(PyObject *self, PyObject *args)
 }
 
 static PyObject *
+get_libc_file_addrs(PyObject *self, PyObject *args)
+{
+    PyObject *result = NULL, *in = NULL, *out = NULL, *err = NULL;
+    in = PyLong_FromVoidPtr(&stdin);
+    out = PyLong_FromVoidPtr(&stdout);
+    err = PyLong_FromVoidPtr(&stderr);
+    if (!(in && out && err))
+        goto error;
+
+    result = PyTuple_Pack(3, in, out, err);
+
+error:
+    Py_XDECREF(in);
+    Py_XDECREF(out);
+    Py_XDECREF(err);
+    return result;
+}
+
+static PyObject *
 sizeof_py_ssize_t(PyObject *self, PyObject *args)
 {
     return PyInt_FromSize_t(sizeof(Py_ssize_t));
@@ -124,9 +143,12 @@ static PyMethodDef ext_methods[] = {
 #ifdef IS_PY3K
     {"make_ufunc", (PyCFunction) ufunc_from_ptr, METH_VARARGS, NULL},
     {"sizeof_py_ssize_t", (PyCFunction) sizeof_py_ssize_t, METH_NOARGS, NULL},
+    {"get_libc_file_addrs", (PyCFunction) get_libc_file_addrs, METH_NOARGS, NULL},
+
 #else
     {"make_ufunc", ufunc_from_ptr, METH_VARARGS},
     {"sizeof_py_ssize_t", sizeof_py_ssize_t, METH_NOARGS},
+    {"get_libc_file_addrs", get_libc_file_addrs, METH_NOARGS},
 #endif
     { NULL }
 };

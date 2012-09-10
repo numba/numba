@@ -1,7 +1,7 @@
 import sys
 import logging
 
-logging.basicConfig(#level=logging.DEBUG,
+logging.basicConfig(level=logging.DEBUG,
                     format="\n\033[1m%(levelname)s -- %(module)s:%(lineno)d:%(funcName)s\033[0m\n%(message)s")
 
 try:
@@ -13,6 +13,7 @@ except ImportError:
 
 from . import _numba_types
 from ._numba_types import *
+from . import decorators
 from .decorators import *
 
 def test():
@@ -21,4 +22,4 @@ def test():
     check_call([sys.executable, '-m', 'numba.tests.test_all'])
 
 
-__all__ = _numba_types.__all__
+__all__ = _numba_types.__all__ + decorators.__all__

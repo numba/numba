@@ -2,9 +2,10 @@ import ast
 import collections
 
 import numba
+from numba import *
 from .symtab import Variable
 from . import _numba_types as numba_types
-from numba import utils
+from numba import utils, translate, error
 from numba.minivect import minitypes
 
 import llvm.core
@@ -61,7 +62,9 @@ class ConstNode(Node):
         self.type = type
         self.pyval = pyval
 
-    def value(self, builder):
+    def value(self, translator):
+        builder = translator.builder
+
         type = self.type
         ltype = type.to_llvm(context)
 
@@ -76,9 +79,17 @@ class ConstNode(Node):
             lvalue = llvm.core.Constant.struct([(base_ltype, constant.real),
                                                 (base_ltype, constant.imag)])
         elif type.is_pointer and self.pyval == 0:
-            return llvm.core.ConstantPointerNull
+            lvalue = llvm.core.Constant.null(type.base_type.to_llvm(context))
+        elif type.is_pointer:
+            addr_int = translator.visit(ConstNode(self.pyval, type=Py_ssize_t))
+            lvalue = translator.builder.inttoptr(addr_int, ltype)
         elif type.is_object:
             raise NotImplementedError
+        elif type.is_c_string:
+            lvalue = translate._LLVMModuleUtils.get_string_constant(
+                                            translator.mod, constant)
+            type_char_p = numba_types.c_string_type.to_llvm(translator.context)
+            lvalue = translator.builder.bitcast(lvalue, type_char_p)
         elif type.is_function:
             # TODO:
             # lvalue = map_to_function(constant, type, self.mod)
@@ -92,9 +103,13 @@ class ConstNode(Node):
 class FunctionCallNode(Node):
     def __init__(self, signature, args):
         self.signature = signature
-        self.args = [CoercionNode(arg, arg_dst_type)
-                         for arg_dst_type, arg in zip(signature.args, args)]
         self.variable = Variable(signature.return_type)
+        self.original_args = args
+
+    def coerce_args(self):
+        self.args = [CoercionNode(arg, arg_dst_type)
+                         for arg_dst_type, arg in zip(self.signature.args,
+                                                      self.original_args)]
 
 class NativeCallNode(FunctionCallNode):
     _fields = ['args']
@@ -103,21 +118,30 @@ class NativeCallNode(FunctionCallNode):
         super(NativeCallNode, self).__init__(signature, args)
         self.llvm_func = llvm_func
         self.py_func = py_func
+        self.coerce_args()
+
+NULL_obj = ConstNode(0, object_.pointer())
 
 class ObjectCallNode(FunctionCallNode):
-    _fields = ['function', 'args', 'kwargs']
+    _fields = ['function', 'args_tuple', 'kwargs_dict']
 
     def __init__(self, signature, call_node, py_func=None):
         super(ObjectCallNode, self).__init__(signature, call_node.args)
         self.function = call_node.func
-        if call_node.keywords:
-            keywords = [(k.arg, k.value) for k in call_node.keywords]
-            keys, values = zip(*keywords)
-            self.kwargs = ast.Dict(keys, values)
-            self.kwargs.variable = Variable(minitypes.object_)
-        else:
-            self.kwargs = ConstNode(0, minitypes.object_.pointer())
         self.py_func = py_func
+
+        self.args_tuple = ast.Tuple(elts=call_node.args, ctx=ast.Load())
+        self.args_tuple.variable = Variable(numba_types.TupleType(
+                                                size=len(call_node.args)))
+
+        if call_node.keywords:
+            keywords = [(ConstNode(k.arg), k.value) for k in call_node.keywords]
+            keys, values = zip(*keywords)
+            self.kwargs_dict = ast.Dict(keys, values)
+            self.kwargs_dict.variable = Variable(minitypes.object_)
+        else:
+            self.kwargs_dict = NULL_obj
+
 
 class ObjectTempNode(Node):
     """
@@ -226,7 +250,7 @@ class ArrayAttributeNode(Node):
         elif attribute_name == 'data':
             type = array_type.dtype.pointer()
         else:
-            raise NotImplementedError(node.attr)
+            raise error._UnknownAttribute(attribute_name)
 
         self.type = type
         self.variable = Variable(type)
