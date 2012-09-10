@@ -17,24 +17,32 @@ def add(a, b):
 def add_multiple_args(a, b, c, d):
     return a + b + c + d
 
-vectorizers = [
-    BasicVectorize,
-    ParallelVectorize,
-    StreamVectorize,
-    CudaVectorize,
-    # MiniVectorize,
-    GUFuncVectorize,
-]
+def gufunc_add(a, b):
+    result = 0.0
+    for i in range(a.shape[0]):
+        result += a[i] * b[i]
+
+    return result
+
 
 def ufunc_reduce(ufunc, arg):
     for i in range(arg.ndim):
         arg = ufunc.reduce(arg)
     return arg
 
+vectorizers = [
+    BasicVectorize,
+    ParallelVectorize,
+    StreamVectorize,
+    # CudaVectorize,
+    # MiniVectorize,
+    # GUFuncVectorize,
+]
+
 class TestUFuncs(object): #unittest.TestCase):
-    def _test_ufunc_attributes(self, cls, a, b):
+    def _test_ufunc_attributes(self, cls, a, b, *args):
         "Test ufunc attributes"
-        vectorizer = cls(add)
+        vectorizer = cls(add, *args)
         vectorizer.add(ret_type=f, arg_types=[f, f])
         ufunc = vectorizer.build_ufunc()
 
@@ -49,7 +57,6 @@ class TestUFuncs(object): #unittest.TestCase):
         vectorizer.add(ret_type=f, arg_types=[f, f, f, f])
         ufunc = vectorizer.build_ufunc()
 
-        print ufunc(a, b, c, d)
         assert np.all(ufunc(a, b, c, d) == a + b + c + d)
 
     def test_ufunc_attributes(self):
@@ -71,6 +78,17 @@ class TestUFuncs(object): #unittest.TestCase):
                                         c[:, :], d[np.newaxis, :, :])
 
 
-TestUFuncs().test_multiple_args()
+#    def test_gufunc(self):
+#        "Test multiple args"
+#        vectorizer = GUFuncVectorize(gufunc_add, "(m)(m)->()")
+#        vectorizer.add(arg_types=[f[:], f[:]])
+#        ufunc = vectorizer.build_ufunc()
+#
+#        a = np.arange(12 * 10, dtype=dtype).reshape(12, 10)
+#        b = np.arange(12, dtype=dtype)
+#        assert np.all(ufunc(a, b) == np.dot(a, b)), ufunc(a, b)
+
+
 if __name__ == '__main__':
-    unittest.main()
+    TestUFuncs().test_gufunc()
+    # unittest.main()
