@@ -1,3 +1,7 @@
+"""
+Work in progress, do not use.
+"""
+
 __all__ = ['MiniVectorize']
 
 import ast
@@ -10,7 +14,7 @@ from numba.minivect import (miniast,
                             ctypes_conversion)
 from numba import decorators, utils, functions
 
-from numbapro import _internal, _minidispatch
+from numbapro import _internal
 from numbapro.vectorize import _common, basic
 
 import numpy as np
@@ -169,7 +173,7 @@ class MiniVectorize(object):
         # Higher dimensional runtime operands need wrapping loop nests
         minivect_asts = []
         for ret_type, arg_types, kwargs in self.signatures:
-            for dimensionality in (2,): #(1, 2):
+            for dimensionality in (1, 2):
                 array_types = [minitypes.ArrayType(arg_type, dimensionality)
                                    for arg_type in arg_types]
                 rtype = minitypes.ArrayType(ret_type, dimensionality)
@@ -211,12 +215,16 @@ class MiniVectorize(object):
         Given a bunch of specialized miniasts, return a ufunc object that
         invokes the right specialization when called.
         """
+        from numbapro import _minidispatch
+
         ufuncs = {}
         for mapper, dimensionality, ast in asts:
             minifunc = self.build_minifunction(ast, mapper.miniargs)
             if debug_c:
-                print minicontext.debug_c(minifunc,
-                                          minispecializers.StridedCInnerContigSpecializer)
+                print minicontext.debug_c(
+                        minifunc,
+                        minispecializers.CTiledStridedSpecializer,
+                        astbuilder_cls=miniast.DynamicArgumentASTBuilder)
             result = list(minicontext.run(minifunc, self.specializers))
 
             # Map minitypes to NumPy dtypes, so we can find the specialization
@@ -277,12 +285,12 @@ if __name__ == '__main__':
     dtype = np.float64
     N = 200
 
-    a = np.arange(N * N * N, dtype=dtype).reshape(N, N, N)
+    a = np.arange(N, dtype=dtype).reshape(N)
     b = a.copy()
     out = np.empty_like(a)
 
     ufunc(a, b, out=out)
-    assert np.all(out == a + b)
+    assert np.all(out == a + b), out
 
     t = time.time()
     for i in range(100):

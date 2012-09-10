@@ -102,8 +102,8 @@ cdef class UFuncDispatcher(object):
                          _internal.ARRAYS_ARE_MIXED_STRIDED)
 
         # contig_cfunc, inner_contig_cfunc, tiled_cfunc, strided_cfunc = ctypes_funcs
-        (contig_func, inner_contig_func,
-         tiled_func, strided_func) = function_pointers
+        (contig_func, inner_contig_func, tiled_func,
+         strided_func) = function_pointers
 
         # print 'contig', contig, 'inner_contig', inner_contig, 'tiled', tiled
         if contig:
@@ -112,9 +112,9 @@ cdef class UFuncDispatcher(object):
         elif inner_contig:
             # ctypes_func = inner_contig_func
             function_pointer = inner_contig_func
-        elif tiled:
+        # elif tiled:
             # ctypes_func = tiled_cfunc
-            function_pointer = tiled_func
+            # function_pointer = tiled_func
         else:
             # ctypes_func = strided_cfunc
             function_pointer = strided_func
@@ -143,7 +143,7 @@ cdef class UFuncDispatcher(object):
                 shape_p[0] *= shape_p[i]
 
         try:
-            if self.parallel and ndim > MAX_SPECIALIZATION_NDIM:
+            if self.parallel and ndim > MAX_SPECIALIZATION_NDIM and not contig:
                 # TODO: map 2D arrays to parallel 1D arrays? Might be bad, e.g.
                 # TODO: can't tile... Better implement thread-pool in minivect
                 self.run_higher_dimensional_parallel(
@@ -161,10 +161,12 @@ cdef class UFuncDispatcher(object):
             stdlib.free(data_pointers)
             stdlib.free(strides_args)
 
+        return arrays[0]
+
     cdef int run_higher_dimensional(
             self, minifunc *function_pointer, cnp.npy_intp *shape,
             char **data_pointers, cnp.npy_intp **strides,
-            int ndim, int n_ops, int dim_level) nogil:
+            int ndim, int n_ops, int dim_level) nogil except -1:
         """
         Run the 1 or 2 dimensional ufunc. If ndim > 2, we need a to simulate
         an outer loop nest of depth ndim - 2.
@@ -207,7 +209,7 @@ cdef class UFuncDispatcher(object):
     cdef int run_higher_dimensional_parallel(
             self, minifunc *function_pointer, cnp.npy_intp *shape,
             char **data_pointers, cnp.npy_intp **strides,
-            int ndim, int n_ops, int dim_level) nogil:
+            int ndim, int n_ops, int dim_level) nogil except -1:
         """
         Run the ufunc using OpenMP on the outermost loop level.
         """
