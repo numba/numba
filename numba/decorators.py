@@ -1,4 +1,4 @@
-__all__ = ['function', 'function_bytecode', 'jit_ast', 'jit']
+__all__ = ['function', 'autojit', 'function_bytecode', 'jit_ast', 'jit']
 
 import functools
 import logging
@@ -87,7 +87,7 @@ def function(f):
     """
     Defines a numba function, that, when called, specializes on the input
     types. Uses the AST translator backend. For the bytecode translator,
-    use @function_bytecode.
+    use @autojit.
     """
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
@@ -103,6 +103,7 @@ def function(f):
 
 # Bit of an inconsistency with jit_ast() vs jit(), but we already used
 # @function()...
+_func_cache = {}
 def function_bytecode(f):
     """
     Defines a numba function, that, when called, specializes on the input
@@ -114,19 +115,25 @@ def function_bytecode(f):
         # Infer argument types
         arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
         types = tuple(context.typemapper.from_python(value)
-            for value in arguments)
+                          for value in arguments)
+        if types in _func_cache:
+            ctypes_func = _func_cache[types]
+        else:
+            # Infer the return type
+            func_signature, symtab, ast = functions._infer_types(
+                                        context, f, arg_types=types)
 
-        # Infer the return type
-        func_signature, symtab, ast = functions._infer_types(
-                                    context, f, arg_types=types)
+            decorator = jit(ret_type=func_signature.return_type, arg_types=types)
+            ctypes_func = decorator(f)
+            _func_cache[types] = ctypes_func
 
-        decorator = jit(ret_type=func_signature.return_type, arg_types=types)
-        ctypes_func = decorator(f)
         return ctypes_func(*args, **kwargs)
 
     wrapper._is_numba_func = True
     wrapper._numba_func = f
     return wrapper
+
+autojit = function_bytecode
 
 def jit_ast(ret_type=None, arg_types=None):
     """

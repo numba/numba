@@ -73,17 +73,6 @@ class TestAvg2D (unittest.TestCase):
 
 # ______________________________________________________________________
 
-
-def avg2d_w_cast(arr, result):
-    M, N = arr.shape
-    for i in range(M):
-        avg = 0.
-        for j in range(N):
-            avg += arr[i,j]
-        result[i] = avg / float(N)
-
-compiled_fn = jit(arg_types = [d[:,:], d[:]], backend='ast')(avg2d_w_cast)
-
 if __name__ == "__main__":
     unittest.main()
 
