@@ -1,12 +1,44 @@
+import os
+import subprocess
+from distutils import sysconfig
 from distutils.core import setup, Extension
-import numpy
+
 from numba import minivect
 
+import numpy
 from Cython.Distutils import build_ext
 from Cython.Distutils.extension import Extension as CythonExtension
 
 OMP_ARGS = ['-fopenmp']
 OMP_LINK = OMP_ARGS
+
+def search_on_path(filename):
+    """Find file on system path."""
+    # http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/52224
+    search_path = os.environ["PATH"]
+
+    paths = search_path.split(os.pathsep)
+    for path in paths:
+        if os.path.exists(os.path.join(path, filename)):
+            return os.path.abspath(os.path.join(path, filename))
+
+def compile_cuda():
+    CFLAGS = sysconfig.get_config_var('CFLAGS').split()
+    CFLAGS = [f for f in CFLAGS if 'aliasing' not in f and 'Wall' not in f]
+
+    # TODO: something better
+    p = subprocess.Popen(
+        ['nvcc', '-c', os.path.join('numbapro', '_cuda.c')] + CFLAGS)
+    if p.wait() != 0:
+        raise Exception("nvcc exited with exit status %d" % p.returncode)
+
+nvcc_path = search_on_path("nvcc")
+if nvcc_path is None:
+    raise Exception("nvcc not found")
+
+CUDA_ROOT = os.path.dirname(os.path.dirname(nvcc_path))
+CUDA_LIB_DIR = os.path.join(CUDA_ROOT, 'lib')
+CUDA_INCLUDE = os.path.join(CUDA_ROOT, 'include')
 
 setup(
     name = "numbapro",
@@ -27,7 +59,16 @@ setup(
             cython_include_dirs = [minivect.get_include()],
             extra_compile_args = OMP_ARGS,
             extra_link_args = OMP_LINK,
+        ),
+        CythonExtension(
+            name = "numbapro.utils",
+            sources = ["numbapro/utils.pyx", "numbapro/_cuda.c"],
+            include_dirs = [numpy.get_include(), CUDA_INCLUDE],
+            # extra_objects = ["numbapro/_cuda.o"],
+            library_dirs = [CUDA_LIB_DIR],
+            libraries = ["cuda"],
         )
+
     ],
     packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize',
                 'numbapro.tests',
