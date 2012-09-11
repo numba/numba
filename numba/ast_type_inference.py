@@ -783,8 +783,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
             return nodes.ArrayAttributeNode(node.attr, node.value)
         else:
             return self.function_cache.call(
-                        'PyObject_GetAttrString', nodes.ConstNode(node.attr),
-                        node.value)
+                        'PyObject_GetAttrString', node.value,
+                        nodes.ConstNode(node.attr))
 
         node.variable = Variable(result_type)
         return node
@@ -872,21 +872,25 @@ class ASTSpecializer(visitors.NumbaTransformer):
             objs = self.visitlist(node.elts)
             n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
             args = [n] + objs
-            return self.visit(nodes.NativeCallNode(sig, args, lfunc))
+            node = self.visit(nodes.NativeCallNode(sig, args, lfunc))
+        else:
+            self.generic_visit(node)
 
+        return nodes.ObjectTempNode(node)
+
+    def visit_Dict(self, node):
         self.generic_visit(node)
-        return node
+        return nodes.ObjectTempNode(node)
 
     def visit_NativeCallNode(self, node):
         self.generic_visit(node)
-        #if node.signature.return_type.is_object:
-        #    node = nodes.TempNode(node)
+        if node.signature.return_type.is_object:
+            node = nodes.ObjectTempNode(node)
         return node
 
     def visit_ObjectCallNode(self, node):
         self.generic_visit(node)
-        return node
-        #return nodes.TempNode(node)
+        return nodes.ObjectTempNode(node)
 
     def visit_Print(self, node):
         # TDDO: handle 'dest' and 'nl' attributes

@@ -266,9 +266,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
         # TODO: Put current function into symbol table for recursive call
 
-        # Jump here if an error occurs
-        # TODO: return error indicator to caller
-        self.return_error()
+        self.setup_return()
 
         # Control FLow
         # Not needed for now.
@@ -377,12 +375,32 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         res_typ = convert_to_strtype(self.ret_type)
         return res, res_typ
 
-    def return_error(self):
+    def setup_return(self):
+        # Assign to this value which will be returned
+        self.is_void_return = self.func_signature.return_type.is_void
+        if not self.is_void_return:
+            llvm_ret_type = self.func_signature.return_type.to_llvm(self.context)
+            self.return_value = self.builder.alloca(llvm_ret_type,
+                                                    "return_value")
+
+        # All object temporaries are initialized to NULL here
+        self.init_temps_label = self.append_basic_block('init_temps_label')
+        # All non-NULL object emporaries are DECREFed here
+        self.cleanup_label = self.append_basic_block('cleanup_label')
+
         bb = self.builder.basic_block
+        # Jump here in case of an error
         self.error_label = self.append_basic_block("error_label")
         self.builder.position_at_end(self.error_label)
-        # print ast.dump(self.ast.error_return)
+        # Set error return value and jump to cleanup
         self.visit(self.ast.error_return)
+
+        self.builder.position_at_end(self.cleanup_label)
+        if self.is_void_return:
+            self.builder.ret()
+        else:
+            self.builder.ret(self.return_value)
+
         self.builder.position_at_end(bb)
 
     # __________________________________________________________________________
@@ -524,9 +542,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
     def visit_Return(self, node):
         if node.value is not None:
-            self.builder.ret(self.visit(node.value))
-        else:
-            self.builder.ret_void()
+            assert not self.is_void_return
+            self.builder.store(self.return_value, self.visit(node.value))
+        self.builder.branch(self.cleanup_label)
+
+        # if node.value is not None:
+        #     self.builder.ret(self.visit(node.value))
+        # else:
+        #     self.builder.ret_void()
 
     def is_block_terminated(self):
         '''
@@ -725,13 +748,25 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         return self.visit(node.temp)
 
     def visit_ObjectTempNode(self, node):
+        bb = self.builder.basic_block
+
+        # Initialize temp to NULL at beginning of function
+        self.builder.position_at_end(self.init_temps_label)
+        lhs = self.builder.alloca(llvm_types._pyobject_head_struct_p)
+        self.generate_assign(self.visit(nodes.NULL_obj), lhs)
+        node.llvm_temp = lhs
+
+        # Assign value
+        self.builder.position_at_end(bb)
         rhs = self.visit(node.node)
-        return rhs
-        # FIXME: don't understand the following
-        #    lhs = self.builder.alloca(llvm_types._pyobject_head_struct_p)
-        #    self.generate_assign(rhs, lhs)
-        #    node.llvm_temp = lhs
-        #    return lhs
+        self.generate_assign(rhs, lhs)
+
+        # Generate Py_XDECREF(temp)
+        self.builder.position_at_end(self.cleanup_label)
+        py_decref = self.function_cache.function_by_name('Py_DecRef')
+        self.object_coercer.check_err(
+                    lhs, callback=lambda b: b.call(py_decref, [lhs]))
+        return lhs
 
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)
@@ -759,8 +794,7 @@ class DisposalVisitor(visitors.NumbaVisitor):
         lfunc = self.function_cache.function_by_name('Py_DecRef')
         self.builder.call(lfunc, node.llvm_temp)
 
-def check_err(translator, llvm_result, badval):
-    "Jumps to translator.error_label if an exception occurred."
+def if_badval(translator, llvm_result, badval, callback):
     # Use llvm_cbuilder :(
     b = translator.builder
 
@@ -771,7 +805,7 @@ def check_err(translator, llvm_result, badval):
     b.cbranch(test, bb_true, bb_endif)
 
     b.position_at_end(bb_true)
-    b.branch(translator.error_label)
+    callback(b)
     b.position_at_end(bb_endif)
 
     return llvm_result
@@ -808,12 +842,18 @@ class ObjectCoercer(object):
                                                               'Py_BuildValue')
         self.NULL = self.translator.visit(nodes.NULL_obj)
 
-    def check_err(self, llvm_result):
-        "Check for errors. If the result is NULL, and error should have been set"
+    def check_err(self, llvm_result, callback=None):
+        """
+        Check for errors. If the result is NULL, and error should have been set
+        Jumps to translator.error_label if an exception occurred.
+        """
         int_result = self.translator.builder.ptrtoint(llvm_result,
                                                        llvm_types._intp)
         NULL = llvm.core.Constant.int(int_result.type, 0)
-        check_err(self.translator, int_result, NULL)
+        default_callback = lambda b: b.branch(translator.error_label)
+        if_badval(self.translator, int_result, NULL,
+                  callback=callback or default_callback)
+
         return llvm_result
 
     def lstr(self, types, fmt=None):
