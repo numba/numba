@@ -7,6 +7,8 @@ import numpy as np
 from . import _common
 from ._common import _llvm_ty_to_numpy
 
+from numba.minivect import minitypes
+from numbapro import _cudadispatch
 from numbapro.translate import Translate
 
 class _CudaStagingCaller(CDefinition):
@@ -62,23 +64,32 @@ class _CudaStagingCaller(CDefinition):
     def _pointer(cls, ty):
         return C.pointer(ty)
 
+def get_dtypes(ret_type, arg_types):
+    ret_dtype = minitypes.map_minitype_to_dtype(ret_type)
+    arg_dtypes = tuple(minitypes.map_minitype_to_dtype(arg_type)
+                           for arg_type in arg_types)
+    return ret_dtype, arg_dtypes
+
 class CudaVectorize(_common.GenericVectorize):
     def __init__(self, func):
         super(CudaVectorize, self).__init__(func)
         self.module = Module.new("ptx_%s" % func.func_name)
+        self.func_types = []
 
-    def add(self, *args, **kwargs):
+    def add(self, ret_type, arg_types, **kwargs):
         kwargs.update({'module': self.module})
-        t = Translate(self.pyfunc, *args, **kwargs)
+        self.func_types.append((ret_type, arg_types))
+        t = Translate(self.pyfunc, ret_type=ret_type, arg_types=arg_types,
+                      **kwargs)
         t.translate()
         self.translates.append(t)
 
-    def build_ufunc(self):
+    def build_ufunc(self, device_number=-1):
         # quick & dirty tryout
         # PyCuda should be optional
-        from pycuda import driver as cudriver
-        from pycuda.autoinit import device, context # use default
-        from math import ceil
+        # from pycuda import driver as cudriver
+        # from pycuda.autoinit import device, context # use default
+        # from math import ceil
 
         lfunclist = self._get_lfunc_list()
 
@@ -88,93 +99,42 @@ class CudaVectorize(_common.GenericVectorize):
         pmbldr.opt_level = 3
         pmbldr.populate(fpm)
 
+        types_to_name = {}
 
-        functype_list = []
-        for lfunc in lfunclist: # generate caller for all function
-            lfty = lfunc.type.pointee
-            nptys = tuple(map(np.dtype, map(_llvm_ty_to_numpy, lfty.args)))
-
+        for (ret_type, arg_types), lfunc in zip(self.func_types, lfunclist):
+            ret_dtype, arg_dtypes = get_dtypes(ret_type, arg_types)
+            # generate a caller for all functions
             lcaller = self._build_caller(lfunc)
             fpm.run(lcaller)    # run the optimizer
 
             # unicode problem?
             fname = lcaller.name
-            if type(fname) is unicode:
+            if isinstance(fname, unicode):
                 fname = fname.encode('utf-8')
-            functype_list.append([fname,
-                                 _llvm_ty_to_numpy(lfty.return_type),
-                                 nptys])
 
-        # force inlining & trim internal function
+            types_to_name[arg_dtypes] = ret_dtype, fname
+
+        # force inlining & trim internal functions
         pm = PassManager.new()
         pm.add(PASS_INLINE)
         pm.run(self.module)
 
-        # generate ptx asm
-        cc = 'compute_%d%d' % device.compute_capability() # select device cc
+        # generate ptx asm for all functions
+        cc = 'compute_%d%d' % _cudadispatch.compute_capability(device_number)
         if HAS_PTX:
             arch = 'ptx%d' % C.intp.width # select by host pointer size
         elif HAS_NVPTX:
             arch = {32: 'nvptx', 64: 'nvptx64'}[C.intp.width]
         else:
             raise Exception("llvmpy does not have PTX/NVPTX support")
+
         assert C.intp.width in [32, 64]
         ptxtm = TargetMachine.lookup(arch, cpu=cc, opt=3) # TODO: ptx64 option
         ptxasm = ptxtm.emit_assembly(self.module)
-        # print(ptxasm)
 
-        # prepare device
-        ptxmodule = cudriver.module_from_buffer(ptxasm)
+        return _cudadispatch.CudaUFuncDispatcher(ptxasm, types_to_name,
+                                                 device_number)
 
-        devattr = device.get_attributes()
-        MAX_THREAD = devattr[cudriver.device_attribute.MAX_THREADS_PER_BLOCK]
-        # Take a safer approach for MAX_THREAD is case our kernel uses too
-        # much resources.
-        #
-        # TODO: Add some intelligence to the way we choose our MAX_THREAD.
-        #       Like optimize for the maximum wrap occupancy.
-        MAX_THREAD /= 2
-
-        MAX_BLOCK = devattr[cudriver.device_attribute.MAX_BLOCK_DIM_X]
-
-
-        # get function
-        kernel_list = [(ptxmodule.get_function(name), retty, argty)
-                         for name, retty, argty in functype_list]
-
-        def _ufunc_hack(*args):
-            # determine type & kernel
-            # FIXME: this is just a hack currently
-            tys = tuple(map(lambda x: x.dtype, args))
-            for kernel, retty, argtys in kernel_list:
-                if argtys == tys:
-                    break
-
-            # prepare broadcasted arrays
-            bcargs = np.broadcast_arrays(*args)
-            N = bcargs[0].shape[0]
-
-            retary = np.empty(N, dtype=retty)
-
-            # device compute
-            if N > MAX_THREAD:
-                threadct =  MAX_THREAD, 1, 1
-                blockct = int(ceil(float(N) / MAX_THREAD)), 1
-            else:
-                threadct =  N, 1, 1
-                blockct  =  1, 1
-
-            kernelargs = list(map(cudriver.In, bcargs))
-            kernelargs += [cudriver.Out(retary), np.int32(N)]
-
-            time = kernel(*kernelargs,
-                          block=threadct, grid=blockct,
-                          time_kernel=True)
-            # print 'kernel time = %s' % time
-
-            return retary
-
-        return _ufunc_hack
 
     def _build_caller(self, lfunc):
         lfunc.calling_convention = CC_PTX_DEVICE

@@ -14,17 +14,20 @@ typedef struct {
     int MAX_BLOCK_DIM_Z;
     /* max device memory */
     int MAX_SHARED_MEMORY;
+    int COMPUTE_CAPABILITY_MAJOR;
+    int COMPUTE_CAPABILITY_MINOR;
 } CudaDeviceAttrs;
 
-extern void init_cuda_exc_type(PyObject *exc_type);
-extern int init_attributes(CudaDeviceAttrs *attrs);
+extern int init_cuda_exc_type(void);
+extern int get_device(CUdevice *cu_device, int device_number);
+extern int init_attributes(CUdevice cu_device, CudaDeviceAttrs *attrs);
 extern int cuda_load(PyObject *ptx_str, CUmodule *cu_module);
 extern int cuda_getfunc(CUmodule cu_module, CUfunction *cu_func, char *funcname);
 
 extern int
 invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
                   CUfunction cu_func, PyListObject *inputs,
-                  PyObject *out, int copy_in, int copy_out, void **out_mem,
+                  PyObject *out, int copy_in, int copy_out,
                   unsigned int griddimx, unsigned int griddimy,
                   unsigned int griddimz, unsigned int blockdimx,
                   unsigned int blockdimy, unsigned int blockdimz);

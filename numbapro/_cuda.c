@@ -1,5 +1,6 @@
 #include <Python.h>
 #include <cuda.h>
+#include <cuda_runtime_api.h>
 #include "numpy/ndarrayobject.h"
 #include "numpy/ufuncobject.h"
 
@@ -8,35 +9,73 @@
 /* prototypes */
 static const char *curesult_to_str(CUresult e);
 
-#define CHECK_CUDA_ERROR(error) if (cu_result != CUDA_SUCCESS) {       \
+#define CHECK_CUDA_RESULT(cu_result)                                \
+    if (cu_result != CUDA_SUCCESS) {                                \
         PyErr_SetString(cuda_exc_type, curesult_to_str(cu_result)); \
-        return -1;                                                     \
+        return -1;                                                  \
+    }
+
+#define CHECK_CUDA_ERROR(msg, error)                  \
+    if (error != cudaSuccess) {                       \
+        PyErr_Format(cuda_exc_type, "%s failed: %s",  \
+                     msg, cudaGetErrorString(error)); \
+        return -1;                                    \
     }
 
 #define CUDA_ERROR_BUFFER_SIZE 128
 
 static PyObject *cuda_exc_type;
 
-void
-init_cuda_exc_type(PyObject *exc_type)
+int
+init_cuda_exc_type(void)
 {
-    Py_INCREF(exc_type);
-    cuda_exc_type = exc_type;
+    if (!cuda_exc_type) {
+        cuda_exc_type = PyErr_NewException("_cudadispatch.CudaError",
+                                           NULL, NULL);
+    }
+    /* Return 0 on error */
+    return !!cuda_exc_type;
 }
 
 int
-init_attributes(CudaDeviceAttrs *attrs)
+get_device(CUdevice *cu_device, int device_number)
 {
     CUresult cu_result;
-    CUdevice cu_device;
-    CudaDeviceAttrs out;
+    cudaError_t cu_error;
 
-    cu_result = cuCtxGetDevice(&cu_device);
-    CHECK_CUDA_ERROR(cu_result);
+    if (device_number < 0) {
+        int i, device_count;
+
+        cu_error = cudaGetDeviceCount(&device_count);
+        CHECK_CUDA_ERROR("get CUDA device count", cu_error)
+
+        for (i = 0; i < device_count; i++) {
+            cu_error = cudaSetDevice(i);
+            if (cu_error == cudaSuccess) {
+                device_number = i;
+                break;
+            }
+        }
+        if (device_number < 0) {
+            PyErr_SetString(cuda_exc_type, "No usable devices found");
+            return -1;
+        }
+    }
+    /* cu_result = cuCtxGetDevice(&cu_device); */
+    cu_result = cuDeviceGet(cu_device, device_number);
+    CHECK_CUDA_RESULT(cu_result)
+    return 0;
+}
+
+int
+init_attributes(CUdevice cu_device, CudaDeviceAttrs *attrs)
+{
+    CUresult cu_result;
+    CudaDeviceAttrs out;
 
 #define _GETATTR(value, attr) \
         cu_result = cuDeviceGetAttribute(&out.value, attr, cu_device); \
-        CHECK_CUDA_ERROR(cu_result);
+        CHECK_CUDA_RESULT(cu_result);
 
     _GETATTR(MAX_THREADS_PER_BLOCK, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK)
     _GETATTR(MAX_GRID_DIM_X, CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X)
@@ -46,6 +85,10 @@ init_attributes(CudaDeviceAttrs *attrs)
     _GETATTR(MAX_BLOCK_DIM_Y, CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y)
     _GETATTR(MAX_BLOCK_DIM_Z, CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z)
     _GETATTR(MAX_SHARED_MEMORY, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
+    cu_result = cuDeviceComputeCapability(&attrs->COMPUTE_CAPABILITY_MAJOR,
+                                          &attrs->COMPUTE_CAPABILITY_MINOR,
+                                          cu_device);
+    CHECK_CUDA_RESULT(cu_result)
 
 #undef _GETATTR
 
@@ -92,22 +135,24 @@ cuda_getfunc(CUmodule cu_module, CUfunction *cu_func, char *funcname)
 {
     CUresult cu_result;
     cu_result = cuModuleGetFunction(cu_func, cu_module, funcname);
-    CHECK_CUDA_ERROR(cu_result);
+    CHECK_CUDA_RESULT(cu_result);
     return 0;
 }
 
 int
 invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
                   CUfunction cu_func, PyListObject *inputs,
-                  PyObject *out, int copy_in, int copy_out, void **out_mem,
+                  PyObject *out, int copy_in, int copy_out,
                   unsigned int griddimx, unsigned int griddimy,
                   unsigned int griddimz, unsigned int blockdimx,
                   unsigned int blockdimy, unsigned int blockdimz)
 {
     CUresult cu_result;
+    cudaError_t error_code;
     void **args;
     int i;
     int total_count;
+    int retval = 0;
 
     if (ufunc->nin != PyList_GET_SIZE(inputs)) {
         PyErr_Format(PyExc_TypeError,
@@ -125,28 +170,78 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
 
     TODO: pass strides to allow strided arrays
     */
-    args = malloc((ufunc->nin + 1) * sizeof(void *));
+    args = calloc(ufunc->nin + 1,  sizeof(void *));
     if (!args) {
         PyErr_NoMemory();
         return -1;
     }
 
-    for (i = 0; i < ufunc->nin; i++) {
-        args[i] = PyArray_DATA(PyList_GET_ITEM(inputs, i));
+    if (PyList_Append((PyObject *) inputs, out) < 0)
+        goto error;
+
+#define CHECK_CUDA_MEM_ERR(action)                                          \
+        if (error_code != cudaSuccess) {                                    \
+            PyErr_Format(cuda_exc_type, "Got cudaError_t %d for memory %s", \
+                         error_code, action);                               \
+            goto error;                                                     \
+        }
+
+    for (i = 0; i < ufunc->nin + 1; i++) {
+        PyObject *array = PyList_GET_ITEM(inputs, i);
+        void *data = PyArray_DATA(array);
+        npy_intp size = PyArray_NBYTES(array);
+
+        /* Allocate memory on device for array */
+        error_code = cudaMalloc(&args[i], size);
+        CHECK_CUDA_MEM_ERR("allocation")
+
+        if (i != ufunc->nin || copy_in) {
+            /* Copy array to device, skip 'out' unless 'copy_in' is true */
+            error_code = cudaMemcpy(args[i], data, size, cudaMemcpyHostToDevice);
+            CHECK_CUDA_MEM_ERR("copy to device")
+        }
     }
-    args[ufunc->nin] = PyArray_DATA(out);
-    args[ufunc->nin + 1] = &total_count;
     total_count = (int) PyArray_SIZE(out);
+    args[ufunc->nin + 1] = &total_count;
 
     /* Launch kernel & check result */
     cu_result = cuLaunchKernel(cu_func, griddimx, griddimy, griddimz,
                                blockdimx, blockdimy, blockdimz,
                                0 /* sharedMemBytes */, 0 /* hStream */,
                                args, 0);
-    free(args);
-    CHECK_CUDA_ERROR(cu_result);
 
-    return 0;
+    if (cu_result != CUDA_SUCCESS) {
+        PyErr_SetString(cuda_exc_type, curesult_to_str(cu_result));
+        goto error;
+    }
+
+    /* Wait for kernel to finish */
+    cudaDeviceSynchronize();
+
+    goto cleanup;
+
+error:
+    retval = -1;
+cleanup:
+    /* Copy memory back from device to host */
+    for (i = 0; i < ufunc->nin + 1; i++) {
+        PyObject *array = PyList_GET_ITEM(inputs, i);
+        void *data = PyArray_DATA(array);
+        npy_intp size = PyArray_NBYTES(array);
+
+        if (args[i] == NULL)
+            break;
+
+        error_code = cudaMemcpy(data, args[i], size, cudaMemcpyDeviceToHost);
+        CHECK_CUDA_MEM_ERR("copy to host")
+
+        error_code = cudaFree(args[i]);
+        CHECK_CUDA_MEM_ERR("free")
+    }
+    /* Deallocate packed arguments */
+    free(args);
+
+    return retval;
 }
 
 int

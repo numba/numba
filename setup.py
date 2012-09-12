@@ -51,7 +51,16 @@ setup(
         Extension(
             name = "numbapro._internal",
             sources = ["numbapro/_internal.c"],
-            include_dirs = [numpy.get_include(), minivect.get_include()]),
+            include_dirs = [numpy.get_include(), minivect.get_include()]
+        ),
+
+        CythonExtension(
+            name = "numbapro.utils",
+            sources = ["numbapro/utils.pyx"],
+            include_dirs = [numpy.get_include()],
+            # extra_objects = ["numbapro/_cuda.o"],
+        ),
+
         CythonExtension(
             name = "numbapro._minidispatch",
             sources = ["numbapro/_minidispatch.pyx"],
@@ -60,15 +69,15 @@ setup(
             extra_compile_args = OMP_ARGS,
             extra_link_args = OMP_LINK,
         ),
+
         CythonExtension(
-            name = "numbapro.utils",
-            sources = ["numbapro/utils.pyx", "numbapro/_cuda.c"],
+            name = "numbapro._cudadispatch",
+            sources = ["numbapro/_cudadispatch.pyx", "numbapro/_cuda.c"],
             include_dirs = [numpy.get_include(), CUDA_INCLUDE],
             # extra_objects = ["numbapro/_cuda.o"],
             library_dirs = [CUDA_LIB_DIR],
-            libraries = ["cuda"],
+            libraries = ["cuda", "cudart"],
         )
-
     ],
     packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize',
                 'numbapro.tests',
