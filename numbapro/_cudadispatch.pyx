@@ -28,7 +28,7 @@ cdef cuda.CUdevice get_device(int device_number) except *:
     cdef cuda.CUdevice result
 
     device_number = get_device_number(device_number)
-    cuda.get_device(&result, device_number)
+    cuda.get_device(&result, NULL, device_number)
     return result
 
 def compute_capability(int device_number):
@@ -41,7 +41,6 @@ def compute_capability(int device_number):
 
 cdef class CudaFunction(utils.Function):
     cdef cuda.CUfunction cu_function
-    cdef bytes ptx_code
     cdef bytes func_name
 
     def __init__(self, func_name):
@@ -55,8 +54,11 @@ cdef class CudaFunction(utils.Function):
         pass
 
 cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
-    cdef cuda.CUdevice cu_device
+
     cdef cuda.CudaDeviceAttrs device_attrs
+
+    cdef cuda.CUdevice cu_device
+    cdef cuda.CUcontext cu_context
     cdef cuda.CUmodule cu_module
     cdef cuda.CUfunction cu_ufunc
 
@@ -65,9 +67,9 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
     def __init__(self, ptx_code, types_to_name, device_number):
         cdef CudaFunction func
 
-        cuda.get_device(&self.cu_device, device_number)
+        cuda.get_device(&self.cu_device, &self.cu_context, device_number)
         cuda.init_attributes(self.cu_device, &self.device_attrs)
-        cuda.cuda_load(self.ptx_code, &self.cu_module)
+        cuda.cuda_load(ptx_code, &self.cu_module)
 
         self.functions = {}
         for dtypes, (result_dtype, name) in types_to_name.items():
@@ -75,8 +77,8 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
             func.load(&self.cu_module)
             self.functions[dtypes] = (result_dtype, func)
 
-    def __call__(self, ufunc, *args):
-        cdef CudaFunction func
+    def __call__(self, *args):
+        cdef CudaFunction cuda_func
         cdef cnp.npy_intp N, MAX_THREAD, thread_count, block_count
 
         dtypes = tuple(a.dtype for a in args)
@@ -98,8 +100,14 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         thread_count =  min(MAX_THREAD, N)
         block_count = int(math.ceil(float(N) / MAX_THREAD))
 
-        print 'invoking...'
+        # TODO: Dispatch from actual ufunc
+        ufunc = np.add
+        assert all(isinstance(array, np.ndarray) for array in broadcast_arrays)
         cuda.invoke_cuda_ufunc(ufunc, &self.device_attrs, cuda_func.cu_function,
                                broadcast_arrays, out, False, True,
                                block_count, 1, 1,
                                MAX_THREAD, 1, 1)
+
+    def __dealloc__(self):
+        cuda.dealloc(self.cu_module, self.cu_context)
+

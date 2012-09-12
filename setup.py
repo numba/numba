@@ -1,4 +1,5 @@
 import os
+import sys
 import subprocess
 from distutils import sysconfig
 from distutils.core import setup, Extension
@@ -40,6 +41,9 @@ CUDA_ROOT = os.path.dirname(os.path.dirname(nvcc_path))
 CUDA_LIB_DIR = os.path.join(CUDA_ROOT, 'lib')
 CUDA_INCLUDE = os.path.join(CUDA_ROOT, 'include')
 
+if sys.maxint > 2 ** 31 and os.path.exists(CUDA_LIB_DIR + '64'):
+    CUDA_LIB_DIR += '64'
+
 setup(
     name = "numbapro",
     author = "Continuum Analytics, Inc.",
@@ -77,6 +81,7 @@ setup(
             # extra_objects = ["numbapro/_cuda.o"],
             library_dirs = [CUDA_LIB_DIR],
             libraries = ["cuda", "cudart"],
+            depends = ["numbapro/_cuda.h", "numbapro/cuda.pxd", "numbapro/utils.pxd"],
         )
     ],
     packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize',

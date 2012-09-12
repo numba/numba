@@ -19,10 +19,12 @@ typedef struct {
 } CudaDeviceAttrs;
 
 extern int init_cuda_exc_type(void);
-extern int get_device(CUdevice *cu_device, int device_number);
+extern int get_device(CUdevice *cu_device, CUcontext *cu_context,
+                      int device_number);
 extern int init_attributes(CUdevice cu_device, CudaDeviceAttrs *attrs);
 extern int cuda_load(PyObject *ptx_str, CUmodule *cu_module);
 extern int cuda_getfunc(CUmodule cu_module, CUfunction *cu_func, char *funcname);
+extern int dealloc(CUmodule, CUcontext);
 
 extern int
 invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,

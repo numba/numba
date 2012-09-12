@@ -22,7 +22,7 @@ static const char *curesult_to_str(CUresult e);
         return -1;                                    \
     }
 
-#define CUDA_ERROR_BUFFER_SIZE 128
+#define BUFSIZE 128
 
 static PyObject *cuda_exc_type;
 
@@ -38,7 +38,23 @@ init_cuda_exc_type(void)
 }
 
 int
-get_device(CUdevice *cu_device, int device_number)
+dealloc(CUmodule cu_module, CUcontext cu_context)
+{
+    CUresult cu_result;
+
+    if (cu_module) {
+        cu_result = cuModuleUnload(cu_module);
+        CHECK_CUDA_RESULT(cu_result)
+    }
+    if (cu_context) {
+        cu_result = cuCtxDestroy(cu_context);
+        CHECK_CUDA_RESULT(cu_result)
+    }
+    return 0;
+}
+
+int
+get_device(CUdevice *cu_device, CUcontext *cu_context, int device_number)
 {
     CUresult cu_result;
     cudaError_t cu_error;
@@ -64,6 +80,11 @@ get_device(CUdevice *cu_device, int device_number)
     /* cu_result = cuCtxGetDevice(&cu_device); */
     cu_result = cuDeviceGet(cu_device, device_number);
     CHECK_CUDA_RESULT(cu_result)
+
+    if (cu_context) {
+        cuCtxCreate(cu_context, 0, *cu_device);
+        CHECK_CUDA_RESULT(cu_result)
+    }
     return 0;
 }
 
@@ -101,7 +122,10 @@ cuda_load(PyObject *ptx_str, CUmodule *cu_module)
 {
     char *ptx;
     CUresult cu_result;
-    char cu_errors[CUDA_ERROR_BUFFER_SIZE];
+    int bufsize = BUFSIZE;
+    char cu_errors[BUFSIZE];
+
+    cu_errors[0] = '\0';
 
     /* Capture error log */
     CUjit_option options[2];
@@ -116,14 +140,15 @@ cuda_load(PyObject *ptx_str, CUmodule *cu_module)
 
     options[0] = CU_JIT_ERROR_LOG_BUFFER;
     options[1] = CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES;
-    values[0] = (void *) cu_errors;
-    values[1] = (void *) CUDA_ERROR_BUFFER_SIZE;
+    values[0] = &cu_errors[0];
+    values[1] = &bufsize;
 
-    cu_result = cuModuleLoadDataEx(cu_module, ptx, 3, options, values);
+    cu_result = cuModuleLoadDataEx(cu_module, ptx, 2, options, values);
 
+/*    cu_result = cuModuleLoadData(cu_module, ptx); */
     if (cu_result != CUDA_SUCCESS) {
-        PyErr_Format(PyExc_ValueError, "%s: %s",
-                     curesult_to_str(cu_result), cu_errors);
+        PyErr_Format(PyExc_ValueError, "%s (%d): %s",
+                     curesult_to_str(cu_result), (int) cu_result, cu_errors);
         return -1;
     }
 
@@ -354,6 +379,9 @@ static const char *curesult_to_str(CUresult e)
 
       case CUDA_ERROR_UNKNOWN:
         return "unknown";
+
+      case CUDA_ERROR_CONTEXT_IS_DESTROYED:
+        return "context is destroyed";
 
       default:
         return "invalid/unknown error code";
