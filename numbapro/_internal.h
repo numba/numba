@@ -1,0 +1,8 @@
+/* Find out array orderings */
+#define ARRAY_C_ORDER 0x1
+
+#define ARRAYS_ARE_CONTIG 0x2
+#define ARRAYS_ARE_INNER_CONTIG 0x4
+#define ARRAYS_ARE_MIXED_CONTIG 0x10
+#define ARRAYS_ARE_STRIDED 0x20
+#define ARRAYS_ARE_MIXED_STRIDED 0x40
