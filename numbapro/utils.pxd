@@ -23,9 +23,9 @@ cdef class UFuncDispatcher(object):
     cdef int run_higher_dimensional(
             self, Function function, cnp.npy_intp *shape,
             char **data_pointers, cnp.npy_intp **strides,
-            int ndim, int n_ops, int dim_level) nogil except -1
+            int ndim, int n_ops, int dim_level, bint contig) nogil except -1
 
     cdef int run_higher_dimensional_parallel(
             self, Function function, cnp.npy_intp *shape,
             char **data_pointers, cnp.npy_intp **strides,
-            int ndim, int n_ops, int dim_level) nogil except -1
+            int ndim, int n_ops, int dim_level, bint contig) nogil except -1

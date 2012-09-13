@@ -17,9 +17,6 @@ import numpy as np
 
 include "miniutils.pyx"
 
-DEF MAX_SPECIALIZATION_NDIM = 2
-
-
 cdef class Function(object):
     "Wraps a minivect or cuda function"
 
@@ -33,18 +30,26 @@ cdef class UFuncDispatcher(object):
     Given a dict of signatures mapping to functions, dispatch to the right
     ufunc for element-wise operations.
 
-    functions: a dict mapping (dtypeA, dtypeB, dimensionality) ->
-                                    (func_pointer, ctypes_func, ctypes_ret_type,
-                                     ctypes_arg_type, result_dtype)
+    functions:
+
+        A dict mapping
+
+            self.key((dtypeA, dtypeB), broadcast(*input_arrays))
+
+        to
+
+            (result_dtype, (contig_func, inner_contig_func,
+                            tiled_func, strided_func))
     """
 
-    def __init__(self, functions, nin, parallel):
+    def __init__(self, functions, nin, parallel, max_specialization_ndim=2):
+        self.max_specialization_ndim = max_specialization_ndim
         self.functions = functions
         self.nin = nin
         self.parallel = parallel
 
-    def key(self, arg_dtypes):
-        return arg_dtypes
+    def key(self, arg_dtypes, broadcast):
+        return arg_dtypes, broadcast.nd
 
     def __call__(self, *args, **kwds):
         """
@@ -77,7 +82,9 @@ cdef class UFuncDispatcher(object):
         # Find ufunc from input arrays
         key = self.key(arg_types, broadcast)
         if key not in self.functions:
-            raise ValueError("No signature found for %s" % (arg_types,))
+            raise ValueError(
+                "No signature found for input types (%s, ndim=%d)" % (
+                    ", ".join(str(dtype) for dtype in arg_types), broadcast.nd))
 
         #(functions, ctypes_funcs, ctypes_ret_type,
         # ctypes_arg_types, result_dtype) = self.functions[key]
@@ -103,21 +110,16 @@ cdef class UFuncDispatcher(object):
         tiled = order & (_internal.ARRAYS_ARE_MIXED_CONTIG|
                          _internal.ARRAYS_ARE_MIXED_STRIDED)
 
-        # contig_cfunc, inner_contig_cfunc, tiled_cfunc, strided_cfunc = ctypes_funcs
         contig_func, inner_contig_func, tiled_func, strided_func = functions
 
         # print 'contig', contig, 'inner_contig', inner_contig, 'tiled', tiled
         if contig:
-            # ctypes_func = contig_cfunc
             function = contig_func
         elif inner_contig:
-            # ctypes_func = inner_contig_func
             function = inner_contig_func
         # elif tiled:
-            # ctypes_func = tiled_cfunc
             # function = tiled_func
         else:
-            # ctypes_func = strided_cfunc
             function = strided_func
 
         return self.run_ufunc(function, broadcast, ndim, out, args, contig)
@@ -143,16 +145,17 @@ cdef class UFuncDispatcher(object):
                 shape_p[0] *= shape_p[i]
 
         try:
-            if self.parallel and ndim > self.max_specialization_ndim and not contig:
+            if (self.parallel and ndim > self.max_specialization_ndim and not
+                    contig):
                 # TODO: map 2D arrays to parallel 1D arrays? Might be bad, e.g.
                 # TODO: can't tile... Better implement thread-pool in minivect
                 self.run_higher_dimensional_parallel(
                         function, shape_p, data_pointers, strides_args, ndim,
-                        len(arrays), 0)
+                        len(arrays), 0, contig)
             else:
                 self.run_higher_dimensional(
                         function, shape_p, data_pointers, strides_args, ndim,
-                        len(arrays), 0)
+                        len(arrays), 0, contig)
         finally:
             stdlib.free(shape_p)
             stdlib.free(strides_p)
@@ -164,14 +167,14 @@ cdef class UFuncDispatcher(object):
     cdef int run_higher_dimensional(
             self, Function function, cnp.npy_intp *shape,
             char **data_pointers, cnp.npy_intp **strides,
-            int ndim, int n_ops, int dim_level) nogil except -1:
+            int ndim, int n_ops, int dim_level, bint contig) nogil except -1:
         """
         Run the 1 or 2 dimensional ufunc. If ndim > 2, we need a to simulate
         an outer loop nest of depth ndim - 2.
         """
         cdef int i, j
 
-        if ndim <= self.max_specialization_ndim:
+        if ndim <= self.max_specialization_ndim or contig:
             # Offset the stride pointer to remove the strides for
             # preceding dimensions
             # TODO: have minivect accept a dim_level argument
@@ -190,7 +193,7 @@ cdef class UFuncDispatcher(object):
             for i in range(shape[dim_level]):
                 self.run_higher_dimensional(function, shape,
                                             data_pointers, strides, ndim - 1,
-                                            n_ops, dim_level + 1)
+                                            n_ops, dim_level + 1, contig)
 
                 # Add stride in this dimension to the data pointers of the
                 # arrays
@@ -207,7 +210,7 @@ cdef class UFuncDispatcher(object):
     cdef int run_higher_dimensional_parallel(
             self, Function function, cnp.npy_intp *shape,
             char **data_pointers, cnp.npy_intp **strides,
-            int ndim, int n_ops, int dim_level) nogil except -1:
+            int ndim, int n_ops, int dim_level, bint contig) nogil except -1:
         """
         Run the ufunc using OpenMP on the outermost loop level.
         """
@@ -242,7 +245,7 @@ cdef class UFuncDispatcher(object):
                     self.run_higher_dimensional(
                             function, shape, data_pointers_copy,
                             strides_pointers_copy, ndim - 1, n_ops,
-                            dim_level + 1)
+                            dim_level + 1, contig)
             finally:
                 stdlib.free(data_pointers_copy)
                 stdlib.free(strides_pointers_copy)

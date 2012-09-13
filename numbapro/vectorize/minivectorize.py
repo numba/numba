@@ -222,6 +222,18 @@ class MiniVectorize(object):
 
         return minifunc
 
+    def get_ctypes_args(self, mapper):
+        "Get the argument ctypes types so we can cast the NumPy data pointer"
+        ctypes_ret_type = ctypes_conversion.convert_to_ctypes(
+                                mapper.ret_type.dtype.pointer())
+        ctypes_arg_types = []
+        for arg_type in mapper.arg_types:
+            dtype_pointer = arg_type.dtype.pointer()
+            ctypes_arg_types.append(ctypes_conversion.convert_to_ctypes(
+                                                            dtype_pointer))
+
+        return ctypes_arg_types, ctypes_ret_type
+
     def minivect(self, asts, parallel):
         """
         Given a bunch of specialized miniasts, return a ufunc object that
@@ -235,7 +247,8 @@ class MiniVectorize(object):
             if debug_c:
                 print minicontext.debug_c(
                         minifunc,
-                        minispecializers.CTiledStridedSpecializer,
+                        NumbaContigSpecializer,
+                        # minispecializers.CTiledStridedSpecializer,
                         astbuilder_cls=miniast.DynamicArgumentASTBuilder)
             result = list(minicontext.run(minifunc, self.specializers))
 
@@ -256,22 +269,13 @@ class MiniVectorize(object):
                 lfunc = result[-1][3][0]
                 print lfunc
 
-            # Get the argument ctypes types so we can cast the NumPy data pointer
-            ctypes_ret_type = ctypes_conversion.convert_to_ctypes(
-                                    mapper.ret_type.dtype.pointer())
-            ctypes_arg_types = []
-            for arg_type in mapper.arg_types:
-                dtype_pointer = arg_type.dtype.pointer()
-                ctypes_arg_types.append(
-                    ctypes_conversion.convert_to_ctypes(dtype_pointer))
+            # ctypes_arg_types, ctypes_ret_type = self.get_ctypes_args(mapper)
 
             dtype_args.append(dimensionality)
-            ufuncs[tuple(dtype_args)] = (function_pointers,
-                                         ctypes_funcs, ctypes_ret_type,
-                                         ctypes_arg_types, result_dtype)
+            ufuncs[tuple(dtype_args)] = (function_pointers, result_dtype)
 
-        return _minidispatch.UFuncDispatcher(ufuncs, len(mapper.arg_types),
-                                             parallel)
+        return _minidispatch.MiniUFuncDispatcher(ufuncs, len(mapper.arg_types),
+                                                 parallel)
 
     def fallback_vectorize(self, minivect_dispatcher):
         "Build an actual ufunc"
