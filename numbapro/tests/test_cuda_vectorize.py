@@ -1,6 +1,6 @@
 import numpy as np
 from numba import *
-from numbapro.vectorize.cuda import CudaVectorize
+from numbapro.vectorize import CudaVectorize
 from time import time
 
 def vector_add(a, b):

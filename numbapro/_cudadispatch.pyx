@@ -8,6 +8,8 @@ import logging
 
 import numpy as np
 
+include "miniutils.pyx"
+
 cuda.init_cuda_exc_type()
 cnp.import_array()
 
@@ -151,6 +153,8 @@ cdef class CudaGeneralizedUFuncDispatcher(CudaUFuncDispatcher):
             core_dimensions.append(array.ndim - ufunc.core_num_dims[i])
 
         arrays = [np.asarray(a) for a in args]
+        broadcast = np.broadcast(*arrays)
+        ndim = broadcast.nd
         broadcast_arrays(arrays, broadcast.shape, ndim, &shape_p, &strides_p)
         build_dynamic_args(arrays, strides_p, &data_pointers, &strides_args,
                            ndim)
