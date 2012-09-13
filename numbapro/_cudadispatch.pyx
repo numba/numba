@@ -12,6 +12,7 @@ cuda.init_cuda_exc_type()
 cnp.import_array()
 
 cdef int get_device_number(int device_number):
+    "Get the CUDA device number from ~/.cuda_device, or -1."
     if device_number < 0:
         try:
             n = open(os.path.expanduser("~/.cuda_device")).read().strip()
@@ -26,6 +27,10 @@ cdef int get_device_number(int device_number):
     return device_number
 
 cdef cuda.CUdevice get_device(int device_number) except *:
+    """
+    Get the cuda device from a device number. Provide -1 to get the
+    first working device.
+    """
     cdef cuda.CUdevice result
 
     device_number = get_device_number(device_number)
@@ -33,6 +38,7 @@ cdef cuda.CUdevice get_device(int device_number) except *:
     return result
 
 def compute_capability(int device_number):
+    "Get the CUDA compute capability of the device"
     cdef cuda.CudaDeviceAttrs device_attrs
     cdef cuda.CUdevice cu_device = get_device(device_number)
 
@@ -41,6 +47,7 @@ def compute_capability(int device_number):
             device_attrs.COMPUTE_CAPABILITY_MINOR)
 
 cdef class CudaFunction(utils.Function):
+    "Wrap a compiled CUDA function"
     cdef cuda.CUfunction cu_function
     cdef bytes func_name
 
@@ -55,6 +62,9 @@ cdef class CudaFunction(utils.Function):
         pass
 
 cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
+    """
+    Invoke the CUDA ufunc specialization for the given inputs.
+    """
 
     cdef cuda.CudaDeviceAttrs device_attrs
 
@@ -80,6 +90,17 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
             func.load(&self.cu_module)
             self.functions[dtypes] = (result_dtype, func)
 
+    def broadcast_inputs(self, args):
+        # prepare broadcasted contiguous arrays
+        # TODO: Allow strided memory (use mapped memory + strides?)
+        # TODO: don't perform actual broadcasting, pass in strides
+        args = [np.ascontiguousarray(a) for a in args]
+        broadcast_arrays = np.broadcast_arrays(*args)
+        return broadcast_arrays
+
+    def allocate_output(self, broadcast_arrays, result_dtype):
+        return np.empty_like(broadcast_arrays[0], dtype=result_dtype)
+
     def __call__(self, cnp.ufunc ufunc, *args):
         cdef CudaFunction cuda_func
         cdef cnp.npy_intp N, MAX_THREAD, thread_count, block_count
@@ -90,14 +111,10 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
 
         result_dtype, cuda_func = self.functions[dtypes]
 
-        # prepare broadcasted contiguous arrays
-        # TODO: Allow strided memory (use mapped memory + strides?)
-        # TODO: don't perform actual broadcasting, pass in strides
-        args = [np.ascontiguousarray(a) for a in args]
-        broadcast_arrays = np.broadcast_arrays(*args)
+        broadcast_arrays = self.broadcast_inputs(args)
         N = np.prod(broadcast_arrays[0].shape)
 
-        out = np.empty_like(broadcast_arrays[0], dtype=result_dtype)
+        out = self.allocate_output(broadcast_arrays, result_dtype)
 
         MAX_THREAD = self.device_attrs.MAX_THREADS_PER_BLOCK
         thread_count =  min(MAX_THREAD, N)
@@ -114,3 +131,28 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
     def __dealloc__(self):
         cuda.dealloc(self.cu_module, self.cu_context)
 
+
+cdef class CudaGeneralizedUFuncDispatcher(CudaUFuncDispatcher):
+    """
+    Implements a generalized CUDA function.
+    """
+
+    def __call__(self, cnp.ufunc ufunc, *args):
+        cdef int i
+        cdef cnp.npy_intp *shape_p, *strides_p
+        cdef cnp.npy_intp **strides_args
+        cdef char **data_pointers
+
+        assert ufunc.nin == len(args)
+
+        # number of core dimensions per input
+        core_dimensions = []
+        for i, array in enumerate(args):
+            core_dimensions.append(array.ndim - ufunc.core_num_dims[i])
+
+        arrays = [np.asarray(a) for a in args]
+        broadcast_arrays(arrays, broadcast.shape, ndim, &shape_p, &strides_p)
+        build_dynamic_args(arrays, strides_p, &data_pointers, &strides_args,
+                           ndim)
+
+        # TODO: finish

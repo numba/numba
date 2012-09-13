@@ -68,6 +68,7 @@ setup(
         CythonExtension(
             name = "numbapro._minidispatch",
             sources = ["numbapro/_minidispatch.pyx"],
+            depends = [minivect.get_include() + "/miniutils.pyx"],
             include_dirs = [numpy.get_include(), minivect.get_include()],
             cython_include_dirs = [minivect.get_include()],
             extra_compile_args = OMP_ARGS,
