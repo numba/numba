@@ -26,9 +26,19 @@ static const char *curesult_to_str(CUresult e);
 
 static PyObject *cuda_exc_type;
 
+static void
+import_numpy_array(void)
+{
+    import_array();
+}
+
 int
 init_cuda_exc_type(void)
 {
+    import_numpy_array();
+    if (PyErr_Occurred())
+        return -1;
+
     if (!cuda_exc_type) {
         cuda_exc_type = PyErr_NewException("_cudadispatch.CudaError",
                                            NULL, NULL);
@@ -175,6 +185,8 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
     CUresult cu_result;
     cudaError_t error_code;
     void **args;
+    CUdeviceptr *device_pointers;
+
     int i;
     int total_count;
     int retval = 0;
@@ -195,8 +207,9 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
 
     TODO: pass strides to allow strided arrays
     */
-    args = calloc(ufunc->nin + 1,  sizeof(void *));
-    if (!args) {
+    args = calloc(ufunc->nin + 2,  sizeof(void *));
+    device_pointers = calloc(ufunc->nin + 1, sizeof(CUdeviceptr));
+    if (!args || !device_pointers) {
         PyErr_NoMemory();
         return -1;
     }
@@ -217,12 +230,14 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
         npy_intp size = PyArray_NBYTES(array);
 
         /* Allocate memory on device for array */
-        error_code = cudaMalloc(&args[i], size);
+        error_code = cudaMalloc(&device_pointers[i], size);
         CHECK_CUDA_MEM_ERR("allocation")
+        args[i] = &device_pointers[i];
 
         if (i != ufunc->nin || copy_in) {
             /* Copy array to device, skip 'out' unless 'copy_in' is true */
-            error_code = cudaMemcpy(args[i], data, size, cudaMemcpyHostToDevice);
+            error_code = cudaMemcpy(device_pointers[i], data, size,
+                                    cudaMemcpyHostToDevice);
             CHECK_CUDA_MEM_ERR("copy to device")
         }
     }
@@ -257,13 +272,15 @@ cleanup:
         if (args[i] == NULL)
             break;
 
-        error_code = cudaMemcpy(data, args[i], size, cudaMemcpyDeviceToHost);
+        error_code = cudaMemcpy(data, device_pointers[i], size,
+                                cudaMemcpyDeviceToHost);
         CHECK_CUDA_MEM_ERR("copy to host")
 
-        error_code = cudaFree(args[i]);
+        error_code = cudaFree(device_pointers[i]);
         CHECK_CUDA_MEM_ERR("free")
     }
     /* Deallocate packed arguments */
+    free(device_pointers);
     free(args);
 
     return retval;

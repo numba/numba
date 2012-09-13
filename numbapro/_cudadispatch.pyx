@@ -9,6 +9,7 @@ import logging
 import numpy as np
 
 cuda.init_cuda_exc_type()
+cnp.import_array()
 
 cdef int get_device_number(int device_number):
     if device_number < 0:
@@ -71,6 +72,8 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         cuda.init_attributes(self.cu_device, &self.device_attrs)
         cuda.cuda_load(ptx_code, &self.cu_module)
 
+        print ptx_code
+
         self.functions = {}
         for dtypes, (result_dtype, name) in types_to_name.items():
             func = CudaFunction(name)
@@ -107,6 +110,7 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
                                broadcast_arrays, out, False, True,
                                block_count, 1, 1,
                                MAX_THREAD, 1, 1)
+        return out
 
     def __dealloc__(self):
         cuda.dealloc(self.cu_module, self.cu_context)
