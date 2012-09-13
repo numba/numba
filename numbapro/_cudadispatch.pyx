@@ -72,7 +72,7 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         cuda.init_attributes(self.cu_device, &self.device_attrs)
         cuda.cuda_load(ptx_code, &self.cu_module)
 
-        print ptx_code
+        # print ptx_code
 
         self.functions = {}
         for dtypes, (result_dtype, name) in types_to_name.items():
@@ -80,7 +80,7 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
             func.load(&self.cu_module)
             self.functions[dtypes] = (result_dtype, func)
 
-    def __call__(self, *args):
+    def __call__(self, cnp.ufunc ufunc, *args):
         cdef CudaFunction cuda_func
         cdef cnp.npy_intp N, MAX_THREAD, thread_count, block_count
 
@@ -104,7 +104,6 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         block_count = int(math.ceil(float(N) / MAX_THREAD))
 
         # TODO: Dispatch from actual ufunc
-        ufunc = np.add
         assert all(isinstance(array, np.ndarray) for array in broadcast_arrays)
         cuda.invoke_cuda_ufunc(ufunc, &self.device_attrs, cuda_func.cu_function,
                                broadcast_arrays, out, False, True,

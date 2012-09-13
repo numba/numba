@@ -1,3 +1,4 @@
+import logging
 import unittest
 
 import numpy as np
@@ -34,22 +35,23 @@ vectorizers = [
     BasicVectorize,
     ParallelVectorize,
     StreamVectorize,
-    # CudaVectorize,
+    CudaVectorize,
     # MiniVectorize,
     # GUFuncVectorize,
 ]
 
-class TestUFuncs(object): #unittest.TestCase):
+class TestUFuncs(unittest.TestCase):
     def _test_ufunc_attributes(self, cls, a, b, *args):
         "Test ufunc attributes"
         vectorizer = cls(add, *args)
         vectorizer.add(ret_type=f, arg_types=[f, f])
         ufunc = vectorizer.build_ufunc()
 
-        assert np.all(ufunc(a, b) == a + b), ufunc(a, b)
-        assert ufunc_reduce(ufunc, a) == np.sum(a)
-        assert np.all(ufunc.accumulate(a) == np.add.accumulate(a))
-        assert np.all(ufunc.outer(a, b) == np.add.outer(a, b))
+        info = (cls, a.ndim)
+        assert np.all(ufunc(a, b) == a + b), info
+        assert ufunc_reduce(ufunc, a) == np.sum(a), info
+        assert np.all(ufunc.accumulate(a) == np.add.accumulate(a)), info
+        assert np.all(ufunc.outer(a, b) == np.add.outer(a, b)), info
 
     def _test_multiple_args(self, cls, a, b, c, d):
         "Test multiple args"
@@ -90,5 +92,5 @@ class TestUFuncs(object): #unittest.TestCase):
 
 
 if __name__ == '__main__':
-    TestUFuncs().test_gufunc()
+    TestUFuncs('test_ufunc_attributes').test_ufunc_attributes()
     # unittest.main()

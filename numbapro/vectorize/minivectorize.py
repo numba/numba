@@ -68,6 +68,18 @@ def getop(ast_op):
         raise UnicodeTranslateError("Invalid element-wise operator")
     return opmap[ast_op]
 
+def fallback_vectorize(fallback_cls, pyfunc, signatures,
+                       minivect_dispatcher, cuda_dispatcher):
+    """
+    Build an actual ufunc, but dispatch to the given dispatcher for
+    element-wise operations.
+    """
+    vectorizer = fallback_cls(pyfunc)
+    for ret_type, arg_types, kwargs in signatures:
+        vectorizer.add(ret_type=ret_type, arg_types=arg_types, **kwargs)
+
+    return vectorizer.build_ufunc(minivect_dispatcher, cuda_dispatcher)
+
 class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
     """
     Map and inline a ufunc written in Python to a minivect AST. The result
@@ -263,12 +275,8 @@ class MiniVectorize(object):
 
     def fallback_vectorize(self, minivect_dispatcher):
         "Build an actual ufunc"
-        vectorizer = self.fallback(self.pyfunc)
-        for ret_type, arg_types, kwargs in self.signatures:
-            vectorizer.add(ret_type=ret_type, arg_types=arg_types, **kwargs)
-
-        return vectorizer.build_ufunc(minivect_dispatcher)
-
+        return fallback_vectorize(self.fallback, self.pyfunc, self.signatures,
+                                  minivect_dispatcher, None)
 
 if __name__ == '__main__':
     import time

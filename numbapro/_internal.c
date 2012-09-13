@@ -27,12 +27,14 @@ typedef struct {
     PyUFuncObject ufunc;
     PyUFuncObject *ufunc_original;
     PyObject *minivect_dispatcher;
+    PyObject *cuda_dispatcher;
 } PyDynUFuncObject;
 
 extern PyTypeObject PyDynUFunc_Type;
 
 static PyObject *
-PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher)
+PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher,
+               PyObject *cuda_dispatcher)
 {
     /* PyDynUFuncObject *result = PyDynUFunc_Type.tp_base->tp_new(type, args, kw); */
     PyDynUFuncObject *result = PyObject_New(PyDynUFuncObject, &PyDynUFunc_Type);
@@ -49,6 +51,8 @@ PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher)
     result->ufunc_original = ufunc;
     result->minivect_dispatcher = minivect_dispatcher;
     Py_XINCREF(minivect_dispatcher);
+    result->cuda_dispatcher = cuda_dispatcher;
+    Py_XINCREF(cuda_dispatcher);
 
     return (PyObject *) result;
 }
@@ -58,6 +62,9 @@ static void
 dyn_dealloc(PyDynUFuncObject *self)
 {
     PyUFuncObject *ufunc = self->ufunc_original;
+    Py_XDECREF(self->minivect_dispatcher);
+    Py_XDECREF(self->cuda_dispatcher);
+
     if (ufunc->functions)
         PyArray_free(ufunc->functions);
     if (ufunc->types)
@@ -73,9 +80,27 @@ static PyObject *
 dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
 {
     if (self->minivect_dispatcher) {
-        /* PyObject_Print(args, stdout, Py_PRINT_RAW);
-        PyObject_Print(kw, stdout, Py_PRINT_RAW); */
         return PyObject_Call(self->minivect_dispatcher, args, kw);
+    } else if (self->cuda_dispatcher) {
+        int i;
+        /* Insert 'ufunc' ('self') as the first argument */
+        PyObject *new_args = PyTuple_New(PyTuple_GET_SIZE(args) + 1);
+        PyObject *result;
+
+        if (!new_args)
+            return NULL;
+
+        Py_INCREF(self);
+        PyTuple_SET_ITEM(new_args, 0, (PyObject *) self);
+        for (i = 1; i < PyTuple_GET_SIZE(args) + 1; i++) {
+            PyObject *obj = PyTuple_GET_ITEM(args, i - 1);
+            Py_INCREF(obj);
+            PyTuple_SET_ITEM(new_args, i, obj);
+        }
+
+        result = PyObject_Call(self->cuda_dispatcher, new_args, kw);
+        Py_DECREF(new_args);
+        return result;
     }
     return PyDynUFunc_Type.tp_base->tp_call((PyObject *) self, args, kw);
 }
@@ -147,7 +172,8 @@ PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
                            char *types, int ntypes,
                            int nin, int nout, int identity,
                            char *name, char *doc, PyObject *object,
-                           PyObject *minivect_dispatcher)
+                           PyObject *minivect_dispatcher,
+                           PyObject *cuda_dispatcher)
 {
     PyUFuncObject *ufunc = NULL;
     PyObject *result;
@@ -161,7 +187,7 @@ PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
     /* Kind of a gross-hack  */
     /* Py_TYPE(ufunc) = &PyDynUFunc_Type; */
 
-    result = PyDynUFunc_New(ufunc, minivect_dispatcher);
+    result = PyDynUFunc_New(ufunc, minivect_dispatcher, cuda_dispatcher);
     if (!result)
         goto err;
 
@@ -198,7 +224,7 @@ PyDynUFunc_FromFuncAndDataAndSignature(PyUFuncGenericFunction *func, void **data
     /* Py_TYPE(ufunc) = &PyDynUFunc_Type; */
 
     /* Hold on to whatever object is passed in */
-    result = PyDynUFunc_New(ufunc, NULL);
+    result = PyDynUFunc_New(ufunc, NULL, NULL);
     if (!result)
         goto err;
 
@@ -228,6 +254,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     PyObject *data_obj;
     PyObject *object=NULL; /* object to hold on to while ufunc is alive */
     PyObject *minivect_dispatcher = NULL;
+    PyObject *cuda_dispatcher = NULL;
 
     int i, j;
     int custom_dtype = 0;
@@ -236,13 +263,20 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     void **data;
     PyObject *ufunc;
 
-    if (!PyArg_ParseTuple(args, "O!O!iiO|OO", &PyList_Type, &func_list,
-                                              &PyList_Type, &type_list,
-                                              &nin, &nout, &data_list,
-                                              &minivect_dispatcher,
-                                              &object)) {
+    if (!PyArg_ParseTuple(args, "O!O!iiO|OOO", &PyList_Type, &func_list,
+                                               &PyList_Type, &type_list,
+                                               &nin, &nout, &data_list,
+                                               &minivect_dispatcher,
+                                               &cuda_dispatcher,
+                                               &object)) {
         return NULL;
     }
+
+    if (minivect_dispatcher == Py_None)
+        minivect_dispatcher = NULL;
+
+    if (cuda_dispatcher == Py_None)
+        cuda_dispatcher = NULL;
 
     nfuncs = PyList_Size(func_list);
 
@@ -342,11 +376,12 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         PyArray_free(types);
         ufunc = PyDynUFunc_FromFuncAndData((PyUFuncGenericFunction*) funcs, data, (char*) char_types, nfuncs,
                                            nin, nout, PyUFunc_None, "test", (char*) "test", object,
-                                           minivect_dispatcher);
+                                           minivect_dispatcher, cuda_dispatcher);
     }
     else {
         ufunc = PyDynUFunc_FromFuncAndData(0,0,0,0, nin, nout, PyUFunc_None,
-                                           "test", (char*) "test", object, minivect_dispatcher);
+                                           "test", (char*) "test", object,
+                                           minivect_dispatcher, cuda_dispatcher);
         PyUFunc_RegisterLoopForType((PyUFuncObject*)ufunc,custom_dtype,funcs[0],types,0);
         PyArray_free(funcs);
         PyArray_free(types);

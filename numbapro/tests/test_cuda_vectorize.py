@@ -67,11 +67,15 @@ def test_nd():
         our_result = cuda_ufunc(data, data2)
         assert np.allclose(result, our_result), (dtype, order)
 
-    for nd in range(1, 7):
+    for nd in range(1, 8):
         for dtype in test_dtypes:
             for order in ('C', 'F'):
                 test(dtype, order, nd)
 
+def test_ufunc_attrib():
+    assert cuda_ufunc.reduce(np.arange(10, dtype=np.int32)) == 45
+
 if __name__ == '__main__':
-    # test_1d()
+    test_ufunc_attrib()
     test_nd()
+    test_1d()

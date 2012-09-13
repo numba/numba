@@ -10,6 +10,7 @@ from ._common import _llvm_ty_to_numpy
 from numba.minivect import minitypes
 from numbapro import _cudadispatch
 from numbapro.translate import Translate
+from numbapro.vectorize import minivectorize, basic
 
 class _CudaStagingCaller(CDefinition):
     def body(self, *args, **kwargs):
@@ -74,11 +75,11 @@ class CudaVectorize(_common.GenericVectorize):
     def __init__(self, func):
         super(CudaVectorize, self).__init__(func)
         self.module = Module.new("ptx_%s" % func.func_name)
-        self.func_types = []
+        self.signatures = []
 
     def add(self, ret_type, arg_types, **kwargs):
         kwargs.update({'module': self.module})
-        self.func_types.append((ret_type, arg_types))
+        self.signatures.append((ret_type, arg_types, kwargs))
         t = Translate(self.pyfunc, ret_type=ret_type, arg_types=arg_types,
                       **kwargs)
         t.translate()
@@ -101,7 +102,7 @@ class CudaVectorize(_common.GenericVectorize):
 
         types_to_name = {}
 
-        for (ret_type, arg_types), lfunc in zip(self.func_types, lfunclist):
+        for (ret_type, arg_types, _), lfunc in zip(self.signatures, lfunclist):
             ret_dtype, arg_dtypes = get_dtypes(ret_type, arg_types)
             # generate a caller for all functions
             lcaller = self._build_caller(lfunc)
@@ -132,8 +133,13 @@ class CudaVectorize(_common.GenericVectorize):
         ptxtm = TargetMachine.lookup(arch, cpu=cc, opt=3) # TODO: ptx64 option
         ptxasm = ptxtm.emit_assembly(self.module)
 
-        return _cudadispatch.CudaUFuncDispatcher(ptxasm, types_to_name,
-                                                 device_number)
+
+        dispatcher = _cudadispatch.CudaUFuncDispatcher(ptxasm, types_to_name,
+                                                       device_number)
+
+        return minivectorize.fallback_vectorize(
+                    basic.BasicVectorize, self.pyfunc, self.signatures,
+                    minivect_dispatcher=None, cuda_dispatcher=dispatcher)
 
 
     def _build_caller(self, lfunc):

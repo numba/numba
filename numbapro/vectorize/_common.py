@@ -43,7 +43,8 @@ class CommonVectorizeFromFrunc(object):
         raise NotImplementedError
 
     def __call__(self, lfunclist, tyslist, engine,
-                 minivect_dispatcher=None, **kws):
+                 minivect_dispatcher=None, cuda_dispatcher=None,
+                 **kws):
         '''create ufunc from a llvm.core.Function
 
         lfunclist : a single or iterable of llvm.core.Function instance
@@ -70,11 +71,9 @@ class CommonVectorizeFromFrunc(object):
         # For instance, -1 for typenum will cause segfault.
         # If elements of type-list (2nd arg) is tuple instead,
         # there will also memory corruption. (Seems like code rewrite.)
-        args = ()
-        if minivect_dispatcher is not None:
-            args = (minivect_dispatcher,)
         ufunc = _internal.fromfunc(ptrlist, tyslist, inct, outct,
-                                   datlist, *args)
+                                   datlist, minivect_dispatcher,
+                                   cuda_dispatcher)
         return ufunc
 
     def _prepare_pointers(self, lfunclist, engine, **kws):

@@ -1,3 +1,5 @@
+cimport numpy as cnp
+
 cdef extern from "cuda.h":
     ctypedef void *CUdevice
     ctypedef void *CUcontext
@@ -31,7 +33,7 @@ cdef extern from "_cuda.h": # external utilities from _cuda.c
                      char *funcname) except -1
     int dealloc(CUmodule, CUcontext) except -1
 
-    int invoke_cuda_ufunc(object ufunc, CudaDeviceAttrs *device_attrs,
+    int invoke_cuda_ufunc(cnp.ufunc ufunc, CudaDeviceAttrs *device_attrs,
                           CUfunction cu_func, list inputs,
                           object out, int copy_in, int copy_out,
                           unsigned int griddimx, unsigned int griddimy,

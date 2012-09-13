@@ -230,13 +230,13 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
         npy_intp size = PyArray_NBYTES(array);
 
         /* Allocate memory on device for array */
-        error_code = cudaMalloc(&device_pointers[i], size);
+        error_code = cudaMalloc((void **) &device_pointers[i], size);
         CHECK_CUDA_MEM_ERR("allocation")
         args[i] = &device_pointers[i];
 
         if (i != ufunc->nin || copy_in) {
             /* Copy array to device, skip 'out' unless 'copy_in' is true */
-            error_code = cudaMemcpy(device_pointers[i], data, size,
+            error_code = cudaMemcpy((void *) device_pointers[i], data, size,
                                     cudaMemcpyHostToDevice);
             CHECK_CUDA_MEM_ERR("copy to device")
         }
@@ -256,7 +256,8 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
     }
 
     /* Wait for kernel to finish */
-    cudaDeviceSynchronize();
+    error_code = cudaDeviceSynchronize();
+    CHECK_CUDA_ERROR("device synchronization", error_code)
 
     goto cleanup;
 
@@ -272,11 +273,11 @@ cleanup:
         if (args[i] == NULL)
             break;
 
-        error_code = cudaMemcpy(data, device_pointers[i], size,
+        error_code = cudaMemcpy(data, (void *) device_pointers[i], size,
                                 cudaMemcpyDeviceToHost);
         CHECK_CUDA_MEM_ERR("copy to host")
 
-        error_code = cudaFree(device_pointers[i]);
+        error_code = cudaFree((void *) device_pointers[i]);
         CHECK_CUDA_MEM_ERR("free")
     }
     /* Deallocate packed arguments */
