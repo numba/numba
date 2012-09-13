@@ -5,6 +5,7 @@ import numpy as np
 
 from numba import *
 from numbapro.vectorize import *
+from numbapro.vectorize.minivectorize import MiniVectorize
 
 dtype = np.float32
 a = np.arange(80, dtype=dtype).reshape(8, 10)
@@ -33,10 +34,10 @@ def ufunc_reduce(ufunc, arg):
 
 vectorizers = [
     BasicVectorize,
-    ParallelVectorize,
-    StreamVectorize,
-    CudaVectorize,
-    # MiniVectorize,
+    # ParallelVectorize,
+    # StreamVectorize,
+    # CudaVectorize,
+    MiniVectorize,
     # GUFuncVectorize,
 ]
 
@@ -53,13 +54,14 @@ class TestUFuncs(unittest.TestCase):
         assert np.all(ufunc.accumulate(a) == np.add.accumulate(a)), info
         assert np.all(ufunc.outer(a, b) == np.add.outer(a, b)), info
 
-    def _test_multiple_args(self, cls, a, b, c, d):
+    def _test_broadcasting(self, cls, a, b, c, d):
         "Test multiple args"
         vectorizer = cls(add_multiple_args)
         vectorizer.add(ret_type=f, arg_types=[f, f, f, f])
         ufunc = vectorizer.build_ufunc()
 
-        assert np.all(ufunc(a, b, c, d) == a + b + c + d)
+        info = (cls, a.shape)
+        assert np.all(ufunc(a, b, c, d) == a + b + c + d), info
 
     def test_ufunc_attributes(self):
         for v in vectorizers: # 1D
@@ -70,15 +72,23 @@ class TestUFuncs(unittest.TestCase):
             self._test_ufunc_attributes(v, a[:, np.newaxis, :],
                                            b[np.newaxis, :, :])
 
-    def test_multiple_args(self):
+    def test_broadcasting(self):
         for v in vectorizers: # 1D
-            self._test_multiple_args(v, a[0], b[0], c[0], d[0])
+            self._test_broadcasting(v, a[0], b[0], c[0], d[0])
         for v in vectorizers: # 2D
-            self._test_multiple_args(v, a, b, c, d)
+            self._test_broadcasting(v, a, b, c, d)
         for v in vectorizers: # 3D
-            self._test_multiple_args(v, a[:, np.newaxis, :], b[np.newaxis, :, :],
-                                        c[:, :], d[np.newaxis, :, :])
+            self._test_broadcasting(v, a[:, np.newaxis, :], b[np.newaxis, :, :],
+                                       c[:, np.newaxis, :], d[np.newaxis, :, :])
 
+    def test_implicit_broadcasting(self):
+        for v in vectorizers:
+            vectorizer = v(add)
+            vectorizer.add(ret_type=f, arg_types=[f, f])
+            ufunc = vectorizer.build_ufunc()
+
+            broadcasting_b = b[np.newaxis, :, np.newaxis, np.newaxis, :]
+            assert np.all(ufunc(a, broadcasting_b) == a + broadcasting_b)
 
 #    def test_gufunc(self):
 #        "Test multiple args"
@@ -92,5 +102,5 @@ class TestUFuncs(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    TestUFuncs('test_ufunc_attributes').test_ufunc_attributes()
-    # unittest.main()
+    # TestUFuncs('test_implicit_broadcasting').test_implicit_broadcasting()
+    unittest.main()
