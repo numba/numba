@@ -258,7 +258,7 @@ class MiniVectorize(object):
         # Generate 'lhs[i, j] = kernel(A[i, j], B[i, j])'
         lhs = mapper.miniargs[0].variable
         kernel_args = [arg.variable for arg in mapper.miniargs[1:]]
-        funccall = b.funccall(funcname, kernel_args)
+        funccall = b.funccall(funcname, kernel_args, inline=True)
         assmt = b.assign(lhs, funccall)
         if lhs.type.is_object:
             assmt = b.stats(b.decref(lhs), assmt)
