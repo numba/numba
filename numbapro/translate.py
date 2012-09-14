@@ -8,7 +8,8 @@ import __builtin__
 from numba.translate import Translate as _OldTranslate
 
 class Translate(_OldTranslate):
-    def __init__(self, func, ret_type='d', arg_types=['d'], module=None, **kws):
+    def __init__(self, func, ret_type='d', arg_types=['d'], module=None,
+                 engine=None, **kws):
         self.func = func
         self.fco = func.func_code
         self.names = self.fco.co_names
@@ -45,6 +46,8 @@ class Translate(_OldTranslate):
         # global _ObjectCache
         # setattr(_ObjectCache, '_ObjectCache__instances', WeakValueDictionary())
 
+        if engine is not None:
+            self.ee = engine
         if module is not None:
             self.mod = module
         elif not hasattr(type(self), 'mod'):

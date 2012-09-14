@@ -6,6 +6,7 @@ __all__ = ['MiniVectorize']
 
 import ast
 import ctypes
+import logging
 
 from numba import visitors as numba_visitors
 from numba.minivect import (miniast,
@@ -14,7 +15,7 @@ from numba.minivect import (miniast,
                             ctypes_conversion)
 from numba import decorators, utils, functions
 
-from numbapro import _internal
+from numbapro import _internal, utils as dispatcher_utils
 from numbapro.vectorize import _common, basic
 
 import numpy as np
@@ -23,6 +24,7 @@ debug_c = False
 debug_llvm = False
 
 minicontext = decorators.context
+b = minicontext.astbuilder
 
 class UntranslatableError(Exception):
     pass
@@ -69,16 +71,22 @@ def getop(ast_op):
     return opmap[ast_op]
 
 def fallback_vectorize(fallback_cls, pyfunc, signatures,
-                       minivect_dispatcher, cuda_dispatcher):
+                       minivect_dispatcher, cuda_dispatcher, **kw):
     """
     Build an actual ufunc, but dispatch to the given dispatcher for
     element-wise operations.
+
+    Extra keyword arguments include
+        module: the llvm module to compile in
+        engine: the llvm execution engine to use
     """
     vectorizer = fallback_cls(pyfunc)
     for ret_type, arg_types, kwargs in signatures:
+        kwargs = dict(kwargs, **kw)
         vectorizer.add(ret_type=ret_type, arg_types=arg_types, **kwargs)
 
-    return vectorizer.build_ufunc(minivect_dispatcher, cuda_dispatcher)
+    ufunc = vectorizer.build_ufunc(minivect_dispatcher, cuda_dispatcher)
+    return ufunc, vectorizer._get_lfunc_list()
 
 class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
     """
@@ -93,10 +101,6 @@ class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
 
     def __init__(self, context, func, func_ast, ret_type, arg_types):
         super(PythonUfunc2Minivect, self).__init__(context, func, ast)
-
-        if self.global_names:
-            raise UntranslatableError("Function uses globals")
-
         assert isinstance(func_ast, ast.FunctionDef)
 
         self.ret_type = ret_type
@@ -115,6 +119,9 @@ class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
         self.seen_return = False
 
     def visit_FunctionDef(self, node):
+        if self.global_names:
+            raise UntranslatableError("Function uses globals")
+
         return self.b.stats(*self.visitlist(node.body))
 
     def visit_Name(self, node):
@@ -160,6 +167,8 @@ class MiniVectorize(object):
     """
     Vectorizer that uses minivect to produce a ufunc. The ufunc is an actual
     ufunc that dispatches to minivect for element-wise application.
+
+    See _minidispatch.pyx for the dispatch code.
     """
 
     specializers = [
@@ -178,14 +187,33 @@ class MiniVectorize(object):
         self.fallback = fallback
 
     def add(self, ret_type, arg_types, **kwargs):
+        "Add a signature for the kernel"
+        # collect the signatures for compilation
         self.signatures.append((ret_type, arg_types, kwargs))
 
     def build_ufunc(self, parallel=False):
-        # Specialize for all arrays 1D, all arrays 2D, all arrays 3D
-        # Higher dimensional runtime operands need wrapping loop nests
+        """
+        Specialize for all arrays 1D or all arrays 2D.
+        Higher dimensional runtime operands need wrapping loop nests, which
+        is performed by the dispatcher.
+        """
+        # Compile the kernels using Numba, and create a ufunc without
+        # dispatcher
+        dyn_ufunc, lfuncs = self.fallback_vectorize(
+                minivect_dispatcher=None,
+                module=minicontext.llvm_module,
+                engine=minicontext.llvm_ee)
+
+        # Try to directly map and inline the kernels by mapping to a minivect
+        # AST. If this fails, we reuse the compiled kernels ('lfuncs'), and
+        # generate code to call the kernels from minivect.
+
+        # This will allow us to get parallelism at the outermost looping level,
+        # as well as efficient element-wise traversal order.
         minivect_asts = []
-        for ret_type, arg_types, kwargs in self.signatures:
+        for lfunc, (ret_type, arg_types, kwargs) in zip(lfuncs, self.signatures):
             for dimensionality in (1, 2):
+                # Set up types and AST mapper
                 array_types = [minitypes.ArrayType(arg_type, dimensionality)
                                    for arg_type in arg_types]
                 rtype = minitypes.ArrayType(ret_type, dimensionality)
@@ -194,23 +222,55 @@ class MiniVectorize(object):
 
                 if any(array_type.is_object or array_type.is_complex
                             for array_type in array_types):
-                    return self.fallback_vectorize(None)
-
-                try:
-                    minivect_ast = mapper.visit(self.ast)
-                except UntranslatableError, e:
-                    # TODO: translate with Numba, call from minivect (non-inlined)
-                    print e
-                    return self.fallback_vectorize(None)
+                    # Operations on complex numbers or objects are not
+                    # supported by minivect, generate a kernel call
+                    logging.info("Kernel not inlined, has objects/complex numbers")
+                    minivect_ast = self.build_kernel_call(
+                                    lfunc, mapper, ret_type, arg_types, kwargs)
                 else:
-                    minivect_asts.append((mapper, dimensionality, minivect_ast))
+                    # Try to directly map and inline, or fall back to generating
+                    # a call
+                    try:
+                        minivect_ast = mapper.visit(self.ast)
+                    except UntranslatableError, e:
+                        logging.info("Kernel not inlined: %s" % (e,))
+                        minivect_ast = self.build_kernel_call(
+                                    lfunc, mapper, ret_type, arg_types, kwargs)
+                    else:
+                        logging.info("Kernel directly inlined")
 
-        # return self.minivect(minivect_asts)
-        return self.fallback_vectorize(self.minivect(minivect_asts, parallel))
+                minivect_asts.append((mapper, dimensionality, minivect_ast))
+
+        # Create minivect dispatcher, and set as attribute of the dyn_ufunc
+        dispatcher = self.minivect(minivect_asts, parallel)
+        dispatcher_utils.set_dispatchers(dyn_ufunc, dispatcher, None)
+        return dyn_ufunc
+
+    def build_kernel_call(self, lfunc, mapper, ret_type, arg_types, kwargs):
+        """
+        Call the kernel in a bunch of loops with scalar arguments.
+        """
+        # Build the kernel function signature
+        signature = minitypes.FunctionType(return_type=ret_type,
+                                           arg_types=arg_types)
+        funcname = b.funcname(signature, lfunc.name, is_external=False)
+
+        # Generate 'lhs[i, j] = kernel(A[i, j], B[i, j])'
+        lhs = mapper.miniargs[0].variable
+        kernel_args = [arg.variable for arg in mapper.miniargs[1:]]
+        funccall = b.funccall(funcname, kernel_args)
+        assmt = b.assign(lhs, funccall)
+        if lhs.type.is_object:
+            assmt = b.stats(b.decref(lhs), assmt)
+
+        # Generate outer loops
+        body = b.nditerate(assmt)
+        return body
 
     def build_minifunction(self, ast, miniargs):
-        b = minicontext.astbuilder
-
+        """
+        Build a minivect function from the given ast and arguments.
+        """
         type = minitypes.npy_intp.pointer()
         shape_variable = b.variable(type, 'shape')
 
@@ -221,18 +281,6 @@ class MiniVectorize(object):
         # minifunc.print_tree(minicontext)
 
         return minifunc
-
-    def get_ctypes_args(self, mapper):
-        "Get the argument ctypes types so we can cast the NumPy data pointer"
-        ctypes_ret_type = ctypes_conversion.convert_to_ctypes(
-                                mapper.ret_type.dtype.pointer())
-        ctypes_arg_types = []
-        for arg_type in mapper.arg_types:
-            dtype_pointer = arg_type.dtype.pointer()
-            ctypes_arg_types.append(ctypes_conversion.convert_to_ctypes(
-                                                            dtype_pointer))
-
-        return ctypes_arg_types, ctypes_ret_type
 
     def minivect(self, asts, parallel):
         """
@@ -277,19 +325,34 @@ class MiniVectorize(object):
         return _minidispatch.MiniUFuncDispatcher(ufuncs, len(mapper.arg_types),
                                                  parallel)
 
-    def fallback_vectorize(self, minivect_dispatcher):
+    def fallback_vectorize(self, minivect_dispatcher, **kwargs):
         "Build an actual ufunc"
         return fallback_vectorize(self.fallback, self.pyfunc, self.signatures,
-                                  minivect_dispatcher, None)
+                                  minivect_dispatcher, None, **kwargs)
+
+    def get_ctypes_args(self, mapper):
+        """
+        UNUSED.
+        Get the argument ctypes types so we can cast the NumPy data pointer.
+        """
+        ctypes_ret_type = ctypes_conversion.convert_to_ctypes(
+                                mapper.ret_type.dtype.pointer())
+        ctypes_arg_types = []
+        for arg_type in mapper.arg_types:
+            dtype_pointer = arg_type.dtype.pointer()
+            ctypes_arg_types.append(
+                    ctypes_conversion.convert_to_ctypes(dtype_pointer))
+
+        return ctypes_arg_types, ctypes_ret_type
 
 if __name__ == '__main__':
     import time
 
     def vector_add(a, b):
-        return a + b
+        return a + np.sqrt(b)
 
     vectorizer = MiniVectorize(vector_add)
-    vectorizer = basic.BasicVectorize(vector_add)
+    # vectorizer = basic.BasicVectorize(vector_add)
     t = minitypes.float64
     vectorizer.add(ret_type=t, arg_types=[t, t])
     ufunc = vectorizer.build_ufunc() #parallel=True)
@@ -302,7 +365,7 @@ if __name__ == '__main__':
     out = np.empty_like(a)
 
     ufunc(a, b, out=out)
-    assert np.all(out == a + b), out
+    assert np.all(out == vector_add(a, b)), out
 
     t = time.time()
     for i in range(100):

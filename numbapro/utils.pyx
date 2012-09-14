@@ -1,7 +1,11 @@
 cimport cython.parallel
 from libc cimport stdlib, string as libc_string
+from cpython cimport *
+
 cimport numpy as cnp
 cimport utils as cutils
+
+import logging
 
 from numba import visitors as numba_visitors
 from numba.minivect import (miniast,
@@ -16,6 +20,22 @@ from numbapro.vectorize import _common, basic
 import numpy as np
 
 include "miniutils.pyx"
+
+cdef extern from "_internal.h":
+    ctypedef struct PyDynUFuncObject:
+        PyObject *minivect_dispatcher
+        PyObject *cuda_dispatcher
+
+def set_dispatchers(ufunc, mini_dispatcher, cuda_dispatcher):
+    assert isinstance(ufunc, _internal.dyn_ufunc)
+
+    if mini_dispatcher is not None:
+        (<PyDynUFuncObject *> ufunc).minivect_dispatcher = <PyObject *> mini_dispatcher
+        Py_INCREF(mini_dispatcher)
+
+    if cuda_dispatcher is not None:
+        (<PyDynUFuncObject *> ufunc).cuda_dispatcher = <PyObject *> cuda_dispatcher
+        Py_INCREF(cuda_dispatcher)
 
 cdef class Function(object):
     "Wraps a minivect or cuda function"
@@ -112,13 +132,14 @@ cdef class UFuncDispatcher(object):
 
         contig_func, inner_contig_func, tiled_func, strided_func = functions
 
-        # print 'contig', contig, 'inner_contig', inner_contig, 'tiled', tiled
+        logging.info('contig: %s, inner_contig: %s, tiled: %s' %
+                                        (contig, inner_contig, tiled))
         if contig:
             function = contig_func
         elif inner_contig:
             function = inner_contig_func
-        # elif tiled:
-            # function = tiled_func
+#        elif tiled:
+#            function = tiled_func
         else:
             function = strided_func
 
@@ -219,7 +240,7 @@ cdef class UFuncDispatcher(object):
         cdef char **data_pointers_copy
         cdef cnp.npy_intp **strides_pointers_copy
 
-        with nogil, cython.parallel.parallel():
+        with cython.parallel.parallel():
             data_pointers_copy = <char **> stdlib.malloc(
                                                     n_ops * sizeof(char **))
             strides_pointers_copy = <cnp.npy_intp **> stdlib.malloc(

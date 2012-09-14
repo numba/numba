@@ -10,6 +10,7 @@
 #include "numpy/ndarrayobject.h"
 #include "numpy/ufuncobject.h"
 #include "miniutils.h"
+#include "_internal.h"
 
 #if PY_MAJOR_VERSION >= 3
 #define IS_PY3K
@@ -22,13 +23,6 @@
                     APPEND("PyLong_AsLong overflow at ", __LINE__)); \
     return NULL;                                                     \
 }
-
-typedef struct {
-    PyUFuncObject ufunc;
-    PyUFuncObject *ufunc_original;
-    PyObject *minivect_dispatcher;
-    PyObject *cuda_dispatcher;
-} PyDynUFuncObject;
 
 extern PyTypeObject PyDynUFunc_Type;
 
@@ -237,8 +231,6 @@ err:
     Py_XDECREF(ufunc);
     return NULL;
 }
-
-
 
 static PyObject *
 ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
