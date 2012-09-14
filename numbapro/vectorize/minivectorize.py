@@ -330,20 +330,6 @@ class MiniVectorize(object):
         return fallback_vectorize(self.fallback, self.pyfunc, self.signatures,
                                   minivect_dispatcher, None, **kwargs)
 
-    def get_ctypes_args(self, mapper):
-        """
-        UNUSED.
-        Get the argument ctypes types so we can cast the NumPy data pointer.
-        """
-        ctypes_ret_type = ctypes_conversion.convert_to_ctypes(
-                                mapper.ret_type.dtype.pointer())
-        ctypes_arg_types = []
-        for arg_type in mapper.arg_types:
-            dtype_pointer = arg_type.dtype.pointer()
-            ctypes_arg_types.append(
-                    ctypes_conversion.convert_to_ctypes(dtype_pointer))
-
-        return ctypes_arg_types, ctypes_ret_type
 
 if __name__ == '__main__':
     import time
@@ -355,7 +341,7 @@ if __name__ == '__main__':
     # vectorizer = basic.BasicVectorize(vector_add)
     t = minitypes.float64
     vectorizer.add(ret_type=t, arg_types=[t, t])
-    ufunc = vectorizer.build_ufunc() #parallel=True)
+    ufunc = vectorizer.build_ufunc(parallel=True)
 
     dtype = np.float64
     N = 200

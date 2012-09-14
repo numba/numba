@@ -38,18 +38,17 @@ ext_modules = [
         name = "numbapro.utils",
         sources = ["numbapro/utils.pyx"],
         include_dirs = [numpy.get_include()],
-        depends = ["miniutils_dep"],
-        # extra_objects = ["numbapro/_cuda.o"],
+        depends = [miniutils_dep, "numbapro/utils.pxd"],
+        extra_compile_args = OMP_ARGS,
+        extra_link_args = OMP_LINK,
     ),
 
     CythonExtension(
         name = "numbapro._minidispatch",
         sources = ["numbapro/_minidispatch.pyx"],
-        depends = [miniutils_dep],
+        depends = [miniutils_dep, "numbapro/utils.pxd"],
         include_dirs = [numpy.get_include(), minivect.get_include()],
         cython_include_dirs = [minivect.get_include()],
-        extra_compile_args = OMP_ARGS,
-        extra_link_args = OMP_LINK,
     ),
 ]
 
