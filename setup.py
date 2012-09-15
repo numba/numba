@@ -49,6 +49,9 @@ setup(
     ],
     description = "compiling Python code using LLVM",
     packages = find_packages(),
+    package_data = {
+        'numba.minivect' : ['include/*'],
+    },
     ext_modules = [Extension(name = "numba._ext",
                              sources = ["numba/_ext.c"],
                              include_dirs=[numpy.get_include()])],
