@@ -470,13 +470,8 @@ class _LLVMModuleUtils(object):
 
     @classmethod
     def get_printf(cls, module):
-        try:
-            ret_val = module.get_function_named('printf')
-        except:
-            ret_val = module.add_function(
-                lc.Type.function(_int32, [_void_star], True),
-                'printf')
-        return ret_val
+        return module.get_or_insert_function(
+            lc.Type.function(_int32, [_void_star], True), 'printf')
 
     @classmethod
     def get_string_constant(cls, module, const_str):
@@ -575,13 +570,9 @@ class _LLVMModuleUtils(object):
         return res, None
 
     @classmethod
-    def get_py_incref(cls, module):
-        try:
-            ret_val = module.get_function_named('Py_IncRef')
-        except:
-            ret_val = module.add_function(
-                lc.Type.function(_void_star, [_void_star]), 'Py_IncRef')
-        return ret_val
+    def get_py_incref(cls, module, py_obj_ptr_type = _void_star):
+        return module.get_or_insert_function(
+            lc.Type.function(py_obj_ptr_type, [py_obj_ptr_type]), 'Py_IncRef')
 
     @classmethod
     def build_zeros_like(cls, translator, args):
