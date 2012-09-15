@@ -4,7 +4,7 @@ cdef class MiniFunction(Function):
 
     cdef minifunc *func
 
-    def __init__(self, Py_intptr_t func):
+    def __init__(self, Py_uintptr_t func):
         self.func = <minifunc *> func
 
     cdef int invoke(self, cnp.npy_intp *shape, char **data_pointers,

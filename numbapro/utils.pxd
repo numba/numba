@@ -2,6 +2,7 @@ cimport numpy as cnp
 
 cdef extern from "Python.h":
     ctypedef int Py_intptr_t
+    ctypedef unsigned int Py_uintptr_t
 
 ctypedef int minifunc(cnp.npy_intp *shape, char **data_pointers,
                       cnp.npy_intp **strides_pointers) nogil except -1

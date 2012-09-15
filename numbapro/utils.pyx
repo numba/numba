@@ -191,7 +191,6 @@ cdef class UFuncDispatcher(object):
                         function, shape_p, data_pointers, strides_args, ndim,
                         len(arrays), 0, contig)
             elif self.parallel:
-                print 'run parallel!'
                 self.run_ufunc_parallel(
                     function, shape_p, data_pointers, strides_args, ndim,
                     len(arrays), 0, contig)
