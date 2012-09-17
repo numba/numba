@@ -52,8 +52,8 @@ setup(
     package_data = {
         'numba.minivect' : ['include/*'],
     },
-    ext_modules = [Extension(name = "numba._ext",
-                             sources = ["numba/_ext.c"],
-                             include_dirs=[numpy.get_include()])],
+    #ext_modules = [Extension(name = "numba._ext",
+    #                         sources = ["numba/_ext.c"],
+    #                         include_dirs=[numpy.get_include()])],
     version = '0.2'
 )
