@@ -16,7 +16,6 @@ from numba.minivect import (miniast,
 from numba import decorators, utils, functions
 
 from numbapro import _internal
-from numbapro.vectorize import _common, basic
 
 import numpy as np
 
