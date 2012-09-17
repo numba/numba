@@ -11,7 +11,7 @@ def print_profile_results(profile_results):
     """ print results from a profile_functions run
     """
     for x in profile_results:
-        print '%(name)s avg: %(avg)f max: %(max)f min: %(min)f' % x 
+        print '%(name)20s avg: %(avg)10f max: %(max)10f min: %(min)10f' % x
 
 def profile_functions(tests, times = 10):
     """ Return timing information on profile runs of a list of functions

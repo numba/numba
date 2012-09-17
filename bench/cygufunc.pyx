@@ -5,6 +5,7 @@ from libc.math cimport sqrt
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def pairwise_cython(double[:,::1] X, double[:,::1] D):
+    cdef int i, j, k
     cdef int M = X.shape[0]
     cdef int N = X.shape[1]
     cdef double tmp, d

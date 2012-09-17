@@ -82,17 +82,21 @@ cdef class UFuncDispatcher(object):
         memory, and invoke the minivect kernel.
         """
         cdef int ndim
+        cdef bint any_broadcasting, contig, inner_contig, tiled
 
+        out = kwds.pop('out', None)
         if len(args) != self.nin:
-            raise TypeError("Expected %d input arguments, got %d" %
-                                                (self.nin, len(args)))
+            if out is not None or len(args) != self.nin + 1:
+                raise TypeError("Expected %d input arguments, got %d" %
+                                                    (self.nin, len(args)))
+            else:
+                out = args[-1]
+                args = args[:-1]
 
         args = list(map(np.asarray, args))
         arg_types = tuple(arg.dtype for arg in args)
 
-        out = kwds.pop('out', None)
         order = _internal.get_arrays_ordering(args)
-
         broadcast_args = list(args)
         if out is not None:
             broadcast_args.append(out)

@@ -19,19 +19,30 @@ They are:
 1. Basic vectorize (`numbapro.vectorize.basic`) -- A simple wrapper for vectorize.
 2. Stream vectorize (`numbapro.vectorize.stream`) -- A cache optimized version.  (Work in progress)
 3. Parallel vectorize (`numbapro.vectorize.parallel`) -- A multi-threaded version of vectorize.
-4. CUDA vectorize (`numbapro.vectorize.cuda`) -- A vectorize that uses Nvidia CUDA GPU.
+4. CUDA vectorize (`numbapro.vectorize.cuda`) -- A vectorizer that uses Nvidia CUDA GPU.
+5. Mini vectorize (`numbapro.vectorize.minivectorize`) -- A vectorizer that works well with mixed
+data orders (e.g. mixing C and Fortran ordered arrays).
 
-All these vectorize versions use Numba to compile the functions into LLVM.  Then, NumbaPro wraps and enhances these LLVM functions into ufuncs.  User may choose different version of vectorize depending on the complexity of the workload.  Cache optimization, multithreading and GPU computation have their associated overheads.  Therefore, there may not be much benefits for smaller workloads.
+All these vectorize versions use Numba to compile the functions into LLVM.
+Then, NumbaPro wraps and enhances these LLVM functions into ufuncs.
+Users may choose different versions of vectorize depending on the complexity of the workload.
+Cache optimization, multithreading and GPU computation have their associated overheads.
+Therefore, there may not a lot of benefit for smaller workloads.
 
 User API
 --------
 
-The following 4 classes are native ufunc builders corresponding to the 4 versions of vectorize.
+All vectorizers may be easily imported from `numbapro.vectorize`::
 
-1. `numbapro.vectorize.basic.BasicVectorize`
-2. `numbapro.vectorize.stream.StreamVectorize`
-3. `numbapro.vectorize.parallel.ParallelVectorize`
-4. `numbapro.vectorize.cuda.CudaVectorize`
+    from numbapro.vectorize import *
+
+The following vectorizer classes are available under the `numbapro.vectorize` namespace:
+
+1. `BasicVectorize`
+2. `StreamVectorize`
+3. `ParallelVectorize`
+4. `CudaVectorize`
+5. `MiniVectorize` and `ParallelMiniVectorize`
 
 All their basic usage are similar.  Here, we will use `BasicVectorize` as an example.
 
@@ -45,18 +56,19 @@ First, create a BasicVectorize instance from `vector_add`::
     from numbapro.vectorize.basic import BasicVectorize
     bv = BasicVectorize(vector_add)
 
-Second, add the supporting types of the ufunc.  
-        
-The above code tell Numba to compile a integer, a float and a double version of `vector_add`::
+Second, add the supporting types of the ufunc using Numba types::
 
     from numba import *
     bv.add(ret_type=int32, arg_types=[int32, int32])  # integer
     bv.add(ret_type=f,     arg_types=[f, f])          # float
     bv.add(ret_type=d,     arg_types=[d, d])          # double
 
+The code below defines integer, float and double versions of `vector_add`, which
+allows the ufunc to be used on arrays of those types.
+
 Finally, create the ufunc::
 
-    vector_add_ufunc = bv.build_ufunc()    
+    vector_add_ufunc = bv.build_ufunc()
 
 `bv.build_ufunc()` returns a python callable representing the ufunc.
 
@@ -89,20 +101,36 @@ The CUDA vectorize translates the Numba compiled ufunc kernel into Nvidia PTX re
 
 Due to the overhead for memory transfer between the host and the device, this is not suitable for small workloads.
 
+Details on Mini Vectorize
+-------------------------
+
+The Mini vectorizer is an alternative vectorizer which can provide more stable performance for various
+sorts of mixed data layouts by dispatching to different code specializations (for instance tiled
+implementations). It may also give better performance than parallel vectorize when the inner
+dimension is small or strided.
+
 Fast Generalized Ufunc
 ======================
 
-Numbapro enables users to write Numpy generalized ufunc inside Python.  Regular ufuncs created by the `numpy.vectorize` or the fast vectorize described above only take scalar input and scalar output.  Generalized ufunc has the ability to take numpy arrays as input and output.  For detail description of generalized ufunc, please see http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html.
+Numbapro enables users to write Numpy generalized ufuncs inside Python.
+Regular ufuncs kernels created by users only take scalars as input and return scalars as output.
+Generalized ufunc user kernels have the ability to take numpy arrays as input and output.
+This mean the kernel can be applied on entire sub-arrays of larger arrays, while respecting all
+NumPy rules such as broadcasting. For a detailed description of generalized ufuncs,
+we refer the reader to http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html.
 
 User API
 --------
 
-The fast generalized ufunc feature is implemented in `numbapro.vectorize.gufunc`.  The generalized ufunc  builder `GUFuncVectorize` is defined in the module.  Its usage is similar to the other ufunc builder described above.  The only different is the constructor takes an additional signature of the generalized ufunc. 
+The fast generalized ufunc feature is implemented in `numbapro.vectorize.gufunc`, which
+defines the `GUFuncVectorize` class (also available under `numbapro.vectorize.GUFuncVectorize`.
+Its usage is similar to the other ufunc builder described above.
+The only difference is that the constructor takes an additional signature of the generalized ufunc.
 
 Example
 -------
 
-The following implements `import numpy.core.umath_tests.matrix_multiply` using NumbaPro::
+The following code implements `import numpy.core.umath_tests.matrix_multiply` using NumbaPro::
 
     def matmulcore(A, B, C):  # the generalized ufunc kernel
         m, n = A.shape
@@ -114,12 +142,12 @@ The following implements `import numpy.core.umath_tests.matrix_multiply` using N
                     C[i, j] += A[i, k] * B[k, j]
 
     from numbapro.vectorize.gufunc import GUFuncVectorize
-    
+
     gufunc = GUFuncVectorize(matmulcore, '(m,n),(n,p)->(m,p)')
-    
+
     # specialize to 32-bit float
     gufunc.add(arg_types=[f[:,:], f[:,:], f[:,:]])
-    
+
     # build the generalized ufunc
     gufunc = gufunc.build_ufunc()
 

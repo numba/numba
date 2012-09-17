@@ -2,7 +2,7 @@
 ParallelVectorize
 -----------------
 
-The ParallelVectorize module of NumbaPro targets multicore architectures.  It contains a set of `llvm-py <https://github.com/llvmpy/llvmpy>`_ code generators for creating multithreaded ufuncs. 
+The ParallelVectorize module of NumbaPro targets multicore architectures.  It contains a set of `llvm-py <https://github.com/llvmpy/llvmpy>`_ code generators for creating multithreaded ufuncs.
 
 Imports
 -------------------
@@ -11,7 +11,7 @@ Imports
 
 	import numpy as np
 	from numba import *
-	from numbapro.vectorize.parallel import ParallelVectorize
+	from numbapro.vectorize import ParallelVectorize
 
 ufunc Definition
 -----------------
@@ -19,11 +19,11 @@ ufunc Definition
 ParallelVectorize ufunc arguments are scalars of a NumPy array.  Function definitions can be arbitrary
 mathematical expressions.
 
-::	
+::
 
 	def my_ufunc(a, b, c, d):
 		return a+b+sqrt(c*cos(d))
- 
+
 
 
 Compilation requires type information.  NumbaPro assumes no knowledge of type when building native ufuncs.  We must therefore define argument and return dtypes for the defined ufunc.  We can add many and various dtypes for a given ParallelVectorize ufunc.  This is similar to `function overloading <http://en.wikipedia.org/wiki/Function_overloading>`_ in C++

@@ -14,7 +14,7 @@ Imports
 
 	import numpy as np
 	from numba import *
-	from numbapro.vectorize.cuda import CudaVectorize
+	from numbapro.vectorize import CudaVectorize
 
 
 
@@ -24,11 +24,11 @@ ufunc Definition
 CudaVectorize ufunc arguments are scalars of a NumPy array.  Function definitions can be arbitrary
 mathematical expressions.
 
-::	
+::
 
 	def my_ufunc(a, b, c, d):
 		return a+b+sqrt(c*cos(d))
- 
+
 
 
 Compilation requires type information.  NumbaPro assumes no knowledge of type when building native ufunc.  We must therefore define argument and return dtypes for the defined ufunc.  We can add many and various dtypes for a given CudaVectorize ufunc.  This is similar to `function overloading <http://en.wikipedia.org/wiki/Function_overloading>`_ in C++
@@ -39,7 +39,7 @@ Compilation requires type information.  NumbaPro assumes no knowledge of type wh
     cv.add(ret_type=int32, arg_types=[int32, int32])
     cv.add(ret_type=f, arg_types=[f, f])
     cv.add(ret_type=d, arg_types=[d, d])
-    
+
 
 Above we are using a signed 32-bit **int**, a float **f**, and a double **d**. 
 

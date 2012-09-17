@@ -14,7 +14,9 @@ Current Features
 ----------------
 
 
-There are 4 versions of vectorize for building native ufunc kernels from python functions.
+There are several versions of vectorize for building native ufunc kernels from python functions.
+Users can also build generalized ufuncs, in which user-defined kernels can operate on sub-arrays
+and not just scalars, using `GUFuncVectorize`.
 
 .. toctree::
    :maxdepth: 1
@@ -23,10 +25,11 @@ There are 4 versions of vectorize for building native ufunc kernels from python 
    ParallelVectorize
    CUDAVectorize
    StreamVectorize
+   MiniVectorize
    GUFuncVectorize
 
 
-Dependencies 
+Dependencies
 ------------
 
 * `Numba (0.2) <http://numba.pydata.org/>`_

@@ -7,5 +7,5 @@ try:
 except ImportError, e:
     CudaVectorize = BasicVectorize
 
-# from .minivectorize import MiniVectorize
+from .minivectorize import MiniVectorize, ParallelMiniVectorize
 from .gufunc import GUFuncVectorize

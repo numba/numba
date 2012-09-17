@@ -1,7 +1,9 @@
 BasicVectorize
 ==============
 
-This is the simplest vectorize.  It is suitable for small workloads in which the overhead for cache optimization, multithreading or GPU computation is too significant.
+This is the simplest vectorize.  It is suitable for small workloads in which
+the overhead for cache optimization, and multithreading or GPU computation is
+too significant.
 
 Imports
 -------------------
@@ -18,14 +20,15 @@ ufunc Definition
 BasicVectorize ufunc arguments are scalars of a NumPy array.  Function definitions can be arbitrary
 mathematical expressions.
 
-::	
+::
 
 	def my_ufunc(a, b, c, d):
 		return a+b+sqrt(c*cos(d))
- 
 
-
-Compilation requires type information.  NumbaPro assumes no knowledge of type when building native ufuncs.  We must therefore define argument and return dtypes for the defined ufunc.  We can add many and various dtypes for a given BasicVectorize ufunc.  This is similar to `function overloading <http://en.wikipedia.org/wiki/Function_overloading>`_ in C++
+Compilation requires type information.  NumbaPro assumes no knowledge of type when building native
+ufuncs.  We must therefore define argument and return dtypes for the defined ufunc.  We can add
+many and various dtypes for a given BasicVectorize ufuncs, using Numba types, to create different
+versions of the code depending on the inputs.
 
 ::
 
@@ -35,7 +38,7 @@ Compilation requires type information.  NumbaPro assumes no knowledge of type wh
 	bv.add(ret_type=f, arg_types=[f, f])
 	bv.add(ret_type=d, arg_types=[d, d])
 
-Above we are using signed and unsigned 32-bit ints, a float **f**, and a double **d**. 
+Above we are using signed and unsigned 32-bit ints, a float **f**, and a double **d**.
 
 To compile our ufunc we issue the following command
 
@@ -47,7 +50,7 @@ To compile our ufunc we issue the following command
 
 Lastly, we call basic_ufunc with two NumPy array as arguments
 
-:: 
+::
 
 	data = np.array(np.random.random(100))
 	result = basic_ufunc(data, data)

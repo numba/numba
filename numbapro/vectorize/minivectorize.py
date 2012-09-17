@@ -11,12 +11,13 @@ import logging
 from numba import visitors as numba_visitors
 from numba.minivect import (miniast,
                             minitypes,
+                            minierror,
                             specializers as minispecializers,
                             ctypes_conversion)
 from numba import decorators, utils, functions
 
 from numbapro import _internal, utils as dispatcher_utils
-from numbapro.vectorize import _common, basic
+from numbapro.vectorize import _common, basic, parallel
 
 import numpy as np
 
@@ -225,7 +226,7 @@ class MiniVectorize(object):
                     # a call
                     try:
                         minivect_ast = mapper.visit(self.ast)
-                    except UntranslatableError, e:
+                    except (UntranslatableError, minierror.Error), e:
                         logging.info("Kernel not inlined: %s" % (e,))
                         minivect_ast = self.build_kernel_call(
                                     lfunc, mapper, ret_type, arg_types, kwargs)
@@ -256,9 +257,7 @@ class MiniVectorize(object):
         if lhs.type.is_object:
             assmt = b.stats(b.decref(lhs), assmt)
 
-        # Generate outer loops
-        body = b.nditerate(assmt)
-        return body
+        return assmt
 
     def build_minifunction(self, ast, miniargs):
         """
@@ -360,6 +359,14 @@ class MiniVectorize(object):
         return fallback_vectorize(self.fallback, self.pyfunc, self.signatures,
                                   minivect_dispatcher, None, **kwargs)
 
+class ParallelMiniVectorize(MiniVectorize):
+
+    def __init__(self, func, fallback=parallel.ParallelVectorize):
+        super(ParallelMiniVectorize, self).__init__(func, fallback)
+
+    def build_ufunc(self, parallel=True):
+        assert parallel
+        return super(ParallelMiniVectorize, self).build_ufunc(True)
 
 if __name__ == '__main__':
     import time
