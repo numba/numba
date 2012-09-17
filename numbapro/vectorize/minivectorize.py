@@ -171,13 +171,6 @@ class MiniVectorize(object):
     See _minidispatch.pyx for the dispatch code.
     """
 
-    specializers = [
-        NumbaContigSpecializer,
-        minispecializers.StridedCInnerContigSpecializer,
-        minispecializers.CTiledStridedSpecializer,
-        minispecializers.StridedSpecializer,
-    ]
-
     num_exprs = 0
 
     def __init__(self, func, fallback=basic.BasicVectorize):
@@ -282,6 +275,64 @@ class MiniVectorize(object):
 
         return minifunc
 
+    def _debug(self, minifunc):
+        if debug_c:
+            print minicontext.debug_c(
+                minifunc,
+                NumbaContigSpecializer,
+                # minispecializers.CTiledStridedSpecializer,
+                astbuilder_cls=miniast.DynamicArgumentASTBuilder)
+
+    def _debug_llvm(self, result):
+        if debug_llvm:
+            lfunc = result[-1][3][0]
+            print lfunc
+
+    def _get_function_pointers(self, mapper, codes):
+        # Map minitypes to NumPy dtypes, so we can find the specialization
+        # given input NumPy arrays
+        result_dtype = minitypes.map_minitype_to_dtype(mapper.ret_type.dtype)
+        dtype_args = [minitypes.map_minitype_to_dtype(arg_type)
+                          for arg_type in mapper.arg_types]
+
+        llvm_funcs = []
+        function_pointers = []
+        for code_result in codes:
+            if code_result is None:
+                llvm_funcs.append(None)
+                function_pointers.append(None)
+            else:
+                _, _, _, (llvm_func, ctypes_func) = code_result
+                llvm_funcs.append(llvm_func)
+                function_pointers.append(
+                    ctypes_conversion.get_pointer(minicontext, llvm_func))
+
+        return dtype_args, function_pointers, result_dtype
+
+    def _specialize(self, minifunc):
+        if minifunc.ndim < 2:
+            # Remove tiled specializer
+            specializers = [
+                NumbaContigSpecializer,
+                minispecializers.StridedSpecializer,
+            ]
+        else:
+            specializers = [
+                minispecializers.StridedCInnerContigSpecializer,
+                minispecializers.CTiledStridedSpecializer,
+                minispecializers.StridedSpecializer,
+            ]
+
+        result = list(minicontext.run(minifunc, specializers))
+
+        contig = inner_contig = tiled = strided = None
+        if minifunc.ndim < 2:
+            contig, strided = result
+        else:
+            inner_contig, tiled, strided = result
+
+        return [contig, inner_contig, tiled, strided]
+
     def minivect(self, asts, parallel):
         """
         Given a bunch of specialized miniasts, return a ufunc object that
@@ -292,32 +343,11 @@ class MiniVectorize(object):
         ufuncs = {}
         for mapper, dimensionality, ast in asts:
             minifunc = self.build_minifunction(ast, mapper.miniargs)
-            if debug_c:
-                print minicontext.debug_c(
-                        minifunc,
-                        NumbaContigSpecializer,
-                        # minispecializers.CTiledStridedSpecializer,
-                        astbuilder_cls=miniast.DynamicArgumentASTBuilder)
-            result = list(minicontext.run(minifunc, self.specializers))
-
-            # Map minitypes to NumPy dtypes, so we can find the specialization
-            # given input NumPy arrays
-            result_dtype = minitypes.map_minitype_to_dtype(mapper.ret_type.dtype)
-            dtype_args = [minitypes.map_minitype_to_dtype(arg_type)
-                              for arg_type in mapper.arg_types]
-
-            llvm_funcs, ctypes_funcs = zip(*[
-                    (lfunc, ctypes_func)
-                        for _, _, _, (lfunc, ctypes_func) in result])
-            function_pointers = [
-                ctypes_conversion.get_pointer(minicontext, llvm_func)
-                    for llvm_func in llvm_funcs]
-
-            if debug_llvm:
-                lfunc = result[-1][3][0]
-                print lfunc
-
-            # ctypes_arg_types, ctypes_ret_type = self.get_ctypes_args(mapper)
+            self._debug(minifunc)
+            codes = self._specialize(minifunc)
+            dtype_args, function_pointers, result_dtype = \
+                        self._get_function_pointers(mapper, codes)
+            self._debug_llvm(codes)
 
             dtype_args.append(dimensionality)
             ufuncs[tuple(dtype_args)] = (function_pointers, result_dtype)

@@ -16,7 +16,8 @@ cdef class MiniUFuncDispatcher(UFuncDispatcher):
     def __init__(self, functions, nin, parallel):
         super(MiniUFuncDispatcher, self).__init__(functions, nin, parallel)
         for key, (kernels, result_dtype) in functions.items():
-            kernels = tuple(MiniFunction(kernel) for kernel in kernels)
+            kernels = tuple(None if not kernel else MiniFunction(kernel)
+                                for kernel in kernels)
             functions[key] = (kernels, result_dtype)
 
     def key(self, arg_dtypes, broadcast, contig, inner_contig, tiled):
@@ -25,4 +26,4 @@ cdef class MiniUFuncDispatcher(UFuncDispatcher):
         else:
             nd = broadcast.nd
 
-        return arg_dtypes + (min(broadcast.nd, 2),)
+        return arg_dtypes + (min(nd, 2),)

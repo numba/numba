@@ -102,5 +102,5 @@ class TestUFuncs(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    # TestUFuncs('test_implicit_broadcasting').test_implicit_broadcasting()
+    # TestUFuncs('test_broadcasting').test_broadcasting()
     unittest.main()

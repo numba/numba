@@ -25,13 +25,16 @@ def search_on_path(filename):
 OMP_ARGS = ['-fopenmp']
 OMP_LINK = OMP_ARGS
 
-miniutils_dep = minivect.get_include() + "/miniutils.pyx"
+miniutils = minivect.get_include() + "/miniutils"
+miniutils_dep = miniutils + ".pyx"
+miniutils_header_dep = miniutils + ".h"
 
 ext_modules = [
     Extension(
         name = "numbapro._internal",
         sources = ["numbapro/_internal.c"],
-        include_dirs = [numpy.get_include(), minivect.get_include()]
+        include_dirs = [numpy.get_include(), minivect.get_include()],
+        depends = [miniutils_header_dep],
     ),
 
     CythonExtension(

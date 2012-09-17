@@ -105,9 +105,9 @@ cdef class UFuncDispatcher(object):
         # overall data order
         any_broadcasting = is_broadcasting(broadcast_args, broadcast)
         contig = (order & _internal.ARRAYS_ARE_CONTIG) and not any_broadcasting
-        inner_contig = order & _internal.ARRAYS_ARE_INNER_CONTIG
+        inner_contig = order & _internal.ARRAYS_ARE_INNER_CONTIG and ndim > 1
         tiled = order & (_internal.ARRAYS_ARE_MIXED_CONTIG|
-                         _internal.ARRAYS_ARE_MIXED_STRIDED)
+                         _internal.ARRAYS_ARE_MIXED_STRIDED) and ndim > 1
 
         if order & _internal.ARRAY_C_ORDER:
             order_arg = 'C'
@@ -132,14 +132,14 @@ cdef class UFuncDispatcher(object):
 
         contig_func, inner_contig_func, tiled_func, strided_func = functions
 
-        logging.info('contig: %s, inner_contig: %s, tiled: %s' %
-                                        (contig, inner_contig, tiled))
+        logging.info('contig: %s, inner_contig: %s, tiled: %s, ndim: %d' %
+                                        (contig, inner_contig, tiled, ndim))
         if contig:
             function = contig_func
         elif inner_contig:
             function = inner_contig_func
-#        elif tiled:
-#            function = tiled_func
+        elif tiled:
+            function = tiled_func
         else:
             function = strided_func
 
@@ -160,11 +160,14 @@ cdef class UFuncDispatcher(object):
         if ndim > 1:
             for i in range(1, ndim):
                 shape_p[0] *= shape_p[i]
+            logging.info('Contig shape: %d' % (shape_p[0],))
 
-            print shape_p[0]
             if order == 'C':
                 for i in range(n_ops):
                     strides[i][0] = strides[i][ndim - 1]
+                    if self.parallel:
+                        logging.info('Contig stride for op %d: %d' %
+                                                        (i, strides[i][0]))
 
     cdef run_ufunc(self, Function function, broadcast, int ndim, out,
                    list arrays, bint contig, order):
@@ -175,6 +178,8 @@ cdef class UFuncDispatcher(object):
         cdef cnp.npy_intp **strides_args
         cdef char **data_pointers
 
+        assert function is not None, (ndim, len(arrays))
+
         arrays.insert(0, out)
         broadcast_arrays(arrays, broadcast.shape, ndim, &shape_p, &strides_p)
         build_dynamic_args(arrays, strides_p, &data_pointers, &strides_args,
@@ -183,7 +188,6 @@ cdef class UFuncDispatcher(object):
         if contig:
             self._flatten_contig_shape(shape_p, strides_args, ndim,
                                        len(arrays), contig, order)
-            ndim = 1
 
         try:
             if self.parallel and ndim > self.max_specialization_ndim:
