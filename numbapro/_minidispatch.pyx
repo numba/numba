@@ -1,4 +1,4 @@
-from utils cimport *
+from dispatch cimport *
 
 cdef class MiniFunction(Function):
 

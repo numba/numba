@@ -1,4 +1,4 @@
-cimport utils
+cimport dispatch
 cimport cuda
 cimport numpy as cnp
 
@@ -48,7 +48,7 @@ def compute_capability(int device_number):
     return (device_attrs.COMPUTE_CAPABILITY_MAJOR,
             device_attrs.COMPUTE_CAPABILITY_MINOR)
 
-cdef class CudaFunction(utils.Function):
+cdef class CudaFunction(dispatch.Function):
     "Wrap a compiled CUDA function"
     cdef cuda.CUfunction cu_function
     cdef bytes func_name

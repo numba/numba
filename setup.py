@@ -38,10 +38,10 @@ ext_modules = [
     ),
 
     CythonExtension(
-        name = "numbapro.utils",
-        sources = ["numbapro/utils.pyx"],
+        name = "numbapro.dispatch",
+        sources = ["numbapro/dispatch.pyx"],
         include_dirs = [numpy.get_include()],
-        depends = [miniutils_dep, "numbapro/utils.pxd"],
+        depends = [miniutils_dep, "numbapro/dispatch.pxd"],
         extra_compile_args = OMP_ARGS,
         extra_link_args = OMP_LINK,
     ),
@@ -49,7 +49,7 @@ ext_modules = [
     CythonExtension(
         name = "numbapro._minidispatch",
         sources = ["numbapro/_minidispatch.pyx"],
-        depends = [miniutils_dep, "numbapro/utils.pxd"],
+        depends = [miniutils_dep, "numbapro/dispatch.pxd"],
         include_dirs = [numpy.get_include(), minivect.get_include()],
         cython_include_dirs = [minivect.get_include()],
     ),
@@ -71,7 +71,7 @@ if nvcc_path is not None:
         # extra_objects = ["numbapro/_cuda.o"],
         library_dirs = [CUDA_LIB_DIR],
         libraries = ["cuda", "cudart"],
-        depends = ["numbapro/_cuda.h", "numbapro/cuda.pxd", "numbapro/utils.pxd"],
+        depends = ["numbapro/_cuda.h", "numbapro/cuda.pxd", "numbapro/dispatch.pxd"],
     )
     ext_modules.append(ext)
 

@@ -16,7 +16,7 @@ from numba.minivect import (miniast,
                             ctypes_conversion)
 from numba import decorators, utils, functions
 
-from numbapro import _internal, utils as dispatcher_utils
+from numbapro import _internal, dispatch
 from numbapro.vectorize import _common, basic, parallel
 
 import numpy as np
@@ -237,7 +237,7 @@ class MiniVectorize(object):
 
         # Create minivect dispatcher, and set as attribute of the dyn_ufunc
         dispatcher = self.minivect(minivect_asts, parallel)
-        dispatcher_utils.set_dispatchers(dyn_ufunc, dispatcher, None)
+        dispatch.set_dispatchers(dyn_ufunc, dispatcher, None)
         return dyn_ufunc
 
     def build_kernel_call(self, lfunc, mapper, ret_type, arg_types, kwargs):

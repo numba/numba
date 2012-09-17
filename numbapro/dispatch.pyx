@@ -3,9 +3,8 @@ cimport cython.parallel
 from libc cimport stdlib, string as libc_string
 from cpython cimport *
 cimport openmp
-
 cimport numpy as cnp
-cimport utils as cutils
+from dispatch cimport *
 
 import logging
 
