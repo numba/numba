@@ -9,7 +9,7 @@
 
 PyObject *
 PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher,
-               PyObject *cuda_dispatcher)
+               PyObject *cuda_dispatcher, int use_cuda_gufunc)
 {
     /* PyDynUFuncObject *result = PyDynUFunc_Type.tp_base->tp_new(type, args, kw); */
     PyDynUFuncObject *result = PyObject_New(PyDynUFuncObject, &PyDynUFunc_Type);
@@ -28,6 +28,7 @@ PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher,
     Py_XINCREF(minivect_dispatcher);
     result->cuda_dispatcher = cuda_dispatcher;
     Py_XINCREF(cuda_dispatcher);
+    result->use_cuda_gufunc = use_cuda_gufunc;
 
     return (PyObject *) result;
 }
@@ -133,7 +134,7 @@ dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
         return PyObject_Call(self->minivect_dispatcher, args, kw);
     } else if (self->cuda_dispatcher) {
         return _dispatch_cuda(self, args, kw);
-    } else if (self->ufunc.core_enabled) {
+    } else if (self->ufunc.core_enabled && self->use_cuda_gufunc) {
         /* Generalized ufunc */
         return _dispatch_gufunc(self, args, kw);
     }

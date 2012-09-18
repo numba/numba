@@ -1,3 +1,5 @@
+from numba.minivect import minitypes
+import numba.decorators
 from llvm.core import Type
 
 void = Type.void()
@@ -11,12 +13,15 @@ int64 = Type.int(64)
 float = Type.float()
 double = Type.double()
 
+npy_intp = minitypes.npy_intp.to_llvm(numba.decorators.context)
+
 # pointers
 
 pointer = Type.pointer
 
 void_p = pointer(char)
 char_p = pointer(char)
+npy_intp_p = pointer(npy_intp)
 
 # platform dependent
 

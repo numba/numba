@@ -1,4 +1,5 @@
 cimport numpy as cnp
+from cpython cimport PyObject
 
 cdef extern from "cuda.h":
     ctypedef void *CUdevice
@@ -39,3 +40,11 @@ cdef extern from "_cuda.h": # external utilities from _cuda.c
                           unsigned int griddimx, unsigned int griddimy,
                           unsigned int griddimz, unsigned int blockdimx,
                           unsigned int blockdimy, unsigned int blockdimz) except -1
+
+    void cuda_outer_loop(char **args, cnp.npy_intp *dimensions, cnp.npy_intp *steps,
+                         void *func, PyObject **arrays)
+
+    ctypedef struct CudaFunctionAndData:
+        CUfunction cu_func
+        int nops
+        int nout

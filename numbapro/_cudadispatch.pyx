@@ -134,6 +134,24 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         cuda.dealloc(self.cu_module, self.cu_context)
 
 
+def build_structs(function_pointers):
+    cdef CudaFunction func
+
+#    cuda.get_device(&self.cu_device, &self.cu_context, device_number)
+#    cuda.init_attributes(self.cu_device, &self.device_attrs)
+#    cuda.cuda_load(ptx_code, &self.cu_module)
+#
+#    # print ptx_code
+#
+#    self.functions = {}
+#    for dtypes, (result_dtype, name) in types_to_name.items():
+#        func = CudaFunction(name)
+#        func.load(&self.cu_module)
+#        self.functions[dtypes] = (result_dtype, func)
+
+def get_cuda_outer_loop_addr():
+    return <dispatch.Py_uintptr_t> &cuda.cuda_outer_loop
+
 cdef class CudaGeneralizedUFuncDispatcher(CudaUFuncDispatcher):
     """
     Implements a generalized CUDA function.
@@ -141,22 +159,28 @@ cdef class CudaGeneralizedUFuncDispatcher(CudaUFuncDispatcher):
 
     def __call__(self, cnp.ufunc ufunc, *args):
         cdef int i
-        cdef cnp.npy_intp *shape_p, *strides_p
+        cdef cnp.npy_intp *outer_shape_p, *outer_strides_p
+        cdef cnp.npy_intp *inner_shape_p, *inner_strides_p
+
         cdef cnp.npy_intp **strides_args
         cdef char **data_pointers
+        cdef int core_dims
+        cdef int ndim = 0, core_ndim = 0
 
-        assert ufunc.nin == len(args)
+        assert ufunc.nin + ufunc.nout == len(args)
+
+        args = [np.asarray(arg) for arg in args]
 
         # number of core dimensions per input
         core_dimensions = []
         for i, array in enumerate(args):
-            core_dimensions.append(array.ndim - ufunc.core_num_dims[i])
+            core_dims = ufunc.core_num_dims[i]
+            ndim = max(ndim, cnp.PyArray_NDIM(array) - core_dims)
+            core_ndim = max(core_ndim, core_dims)
+            core_dimensions.append(core_dims)
 
         arrays = [np.asarray(a) for a in args]
-        broadcast = np.broadcast(*arrays)
-        ndim = broadcast.nd
-        broadcast_arrays(arrays, broadcast.shape, ndim, &shape_p, &strides_p)
-        build_dynamic_args(arrays, strides_p, &data_pointers, &strides_args,
-                           ndim)
-
-        # TODO: finish
+        broadcast_arrays(arrays, None, ndim, &outer_shape_p, &outer_strides_p,
+                         False)
+        broadcast_arrays(arrays, None, ndim, &inner_shape_p, &inner_strides_p,
+                         True)

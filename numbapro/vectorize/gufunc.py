@@ -1,12 +1,21 @@
 from . import _common
+from numba import *
+import numba.decorators
+from numba.minivect import minitypes
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from numbapro.translate import Translate
-from numbapro import _internal
+from numbapro import _internal, _cudadispatch
 import numpy as np
 
 class _GeneralizedUFuncFromFrunc(_common.CommonVectorizeFromFrunc):
-    def __call__(self, lfunclist, tyslist, signature, engine, **kws):
+    def build_functions(self, ptrlist):
+        """
+        Return a list of pointers to the kernels.
+        """
+        return ptrlist
+
+    def __call__(self, lfunclist, tyslist, signature, engine, use_cuda, **kws):
         '''create generailized ufunc from a llvm.core.Function
 
         lfunclist : a single or iterable of llvm.core.Function instance
@@ -22,6 +31,7 @@ class _GeneralizedUFuncFromFrunc(_common.CommonVectorizeFromFrunc):
             lfunclist = [lfunclist]
 
         ptrlist = self._prepare_pointers(lfunclist, engine, **kws)
+        self.build_functions(ptrlist)
 
         inct = len(tyslist[0]) - 1
         outct = 1
@@ -35,7 +45,7 @@ class _GeneralizedUFuncFromFrunc(_common.CommonVectorizeFromFrunc):
         # there will also memory corruption. (Seems like code rewrite.)
 
         gufunc = _internal.fromfuncsig(ptrlist, tyslist, inct, outct, datlist,
-                                       signature)
+                                       signature, use_cuda)
 
         return gufunc
 
@@ -45,10 +55,14 @@ class _GeneralizedUFuncFromFrunc(_common.CommonVectorizeFromFrunc):
         # print guf
         return guf
 
-gufunc_from_func = _GeneralizedUFuncFromFrunc()
-
+class _GeneralizedUFuncFromFrunc(_GeneralizedUFuncFromFrunc):
+    def build_functions(self, ptrlist):
+        return _cudadispatch.build_cuda_functions()
 
 class GUFuncVectorize(object):
+
+    gufunc_from_func = _GeneralizedUFuncFromFrunc()
+
     def __init__(self, func, sig):
         self.pyfunc = func
         self.translates = []
@@ -75,12 +89,18 @@ class GUFuncVectorize(object):
     def _get_lfunc_list(self):
         return [t.lfunc for t in self.translates]
 
-    def build_ufunc(self):
+    def build_ufunc(self, use_cuda=False):
         assert self.translates, "No translation"
         lfunclist = self._get_lfunc_list()
         tyslist = self._get_tys_list()
         engine = self.translates[0]._get_ee()
-        return gufunc_from_func(lfunclist, tyslist, self.signature, engine)
+        return self.gufunc_from_func(
+            lfunclist, tyslist, self.signature, engine, use_cuda=use_cuda)
+
+class CUDAGUFuncVectorize(GUFuncVectorize):
+    def build_ufunc(self):
+        return super(CUDAGUFuncVectorize, self).build_ufunc(use_cuda=True)
+
 
 class PyObjectHead(CStruct):
     _fields_ = [
@@ -145,6 +165,14 @@ class GUFuncEntry(CDefinition):
         ('data',       C.void_p),
     ]
 
+    def _outer_loop(self, dimensions, innerfunc, pyarys, steps):
+        # implement outer loop
+        with self.for_range(dimensions[0]) as (loop, idx):
+            innerfunc(*map(lambda x: x.reference(), pyarys))
+
+            for i, ary in enumerate(pyarys):
+                ary.data.assign(ary.data[steps[i]:])
+
     def body(self, args, dimensions, steps, data):
         innerfunc = self.depends(self.FuncDef)
 
@@ -174,13 +202,7 @@ class GUFuncEntry(CDefinition):
 
             ary.fakeit(args[i], ary_dims, ary_steps)
 
-        # implement outer loop
-        with self.for_range(dimensions[0]) as (loop, idx):
-            innerfunc(*map(lambda x: x.reference(), pyarys))
-
-            for i, ary in enumerate(pyarys):
-                ary.data.assign(ary.data[steps[i]:])
-
+        self._outer_loop(args, dimensions, innerfunc, pyarys, steps)
         self.ret()
 
     @classmethod
@@ -192,5 +214,70 @@ class GUFuncEntry(CDefinition):
         cls.FuncDef = func_def
         cls.Signature = signature
 
+def get_cuda_outer_loop(builder):
+    context = numba.decorators.context
 
+    arg_types = [
+        char.pointer().pointer(), # char **args
+        npy_intp.pointer(),       # npy_intp *dimensions
+        npy_intp.pointer(),       # npy_intp *steps
+        void.pointer(),           # void *func
+        object_.pointer(),        # PyObject **arrays
+    ]
+    signature = minitypes.FunctionTYpe(return_type=void, arg_types=arg_types)
+    lfunc_type = signature.pointer().to_llvm(numba.decorators.context)
 
+    func_addr = _cudadispatch.get_cuda_outer_loop_addr()
+    func_int_addr = llvm.core.Constant.int(int64.to_llvm(context), func_addr)
+    func_pointer = builder.inttoptr(func_int_addr, lfunc_type)
+    lfunc = builder.load(func_pointer)
+    return CFuncRef(lfunc)
+
+def create_wrapper(kernel, nops):
+    class CUDAKernelWrapper(CDefinition):
+        """
+        Wrapper around generalized ufunc that computes the data pointer for each
+        array.
+        """
+
+        _argtys_ = [('op%d', PyArray) for i in range(nops)]
+        _argtys_ += [('steps', C.npy_intp_p)]
+
+        def body(self, *arrays, **kwds):
+            steps = kwds.pop('step')
+
+            # get current thread index
+            tid_x = self.get_intrinsic(INTR_PTX_READ_TID_X, [])
+            ntid_x = self.get_intrinsic(INTR_PTX_READ_NTID_X, [])
+            ctaid_x = self.get_intrinsic(INTR_PTX_READ_CTAID_X, [])
+
+            tid = self.var_copy(tid_x())
+            blkdim = self.var_copy(ntid_x())
+            blkid = self.var_copy(ctaid_x())
+
+            # Adjust data pointer
+            i = steps[tid]
+            for array in arrays:
+                array.data.assign(array.data[i:])
+
+            # Call actual kernel
+            kernel(*arrays)
+
+            self.ret()
+
+        @classmethod
+        def specialize(cls, signature, func_def):
+            '''specialize to a workload
+            '''
+            signature = signature.replace(' ', '') # remove all spaces
+            cls._name_ = 'gufunc_kernel_wrapper_%s_%s'% (signature, func_def)
+            cls.FuncDef = func_def
+            cls.Signature = signature
+
+class GUFuncCUDAEntry(GUFuncEntry):
+
+    def _outer_loop(self, dimensions, innerfunc, pyarys, steps):
+        super(GUFuncCUDAEntry, self)._outer_loop(dimensions, innerfunc,
+                                                 pyarys, steps)
+        cuda_outer_loop = get_cuda_outer_loop(innerfunc.parent.builder)
+        cuda_outer_loop(args, dimensions, steps, innerfunc, pyarys)

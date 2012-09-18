@@ -18,6 +18,12 @@ typedef struct {
     int COMPUTE_CAPABILITY_MINOR;
 } CudaDeviceAttrs;
 
+typedef struct {
+    CUfunction cu_func;
+    int nops;
+    int nout;
+} CudaFunctionAndData:
+
 extern int init_cuda_exc_type(void);
 extern int get_device(CUdevice *cu_device, CUcontext *cu_context,
                       int device_number);
@@ -33,3 +39,6 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
                   unsigned int griddimx, unsigned int griddimy,
                   unsigned int griddimz, unsigned int blockdimx,
                   unsigned int blockdimy, unsigned int blockdimz);
+
+void cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps,
+                     void *func, PyObject **arrays);

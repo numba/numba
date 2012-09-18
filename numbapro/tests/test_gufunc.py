@@ -2,7 +2,7 @@ from numba.decorators import jit
 from numba import *
 import numpy as np
 import numpy.core.umath_tests as ut
-from numbapro.vectorize.gufunc import GUFuncVectorize
+from numbapro.vectorize.gufunc import GUFuncVectorize, CUDAGUFuncVectorize
 
 
 def matmulcore(A, B, C):
@@ -30,8 +30,8 @@ def test_numba():
     if (C != Gold).any():
         raise ValueError
 
-def test_gufunc():
-    gufunc = GUFuncVectorize(matmulcore, '(m,n),(n,p)->(m,p)')
+def _test_gufunc(vectorizer):
+    gufunc = vectorizer(matmulcore, '(m,n),(n,p)->(m,p)')
     gufunc.add(arg_types=[f[:,:], f[:,:], f[:,:]])
     gufunc = gufunc.build_ufunc()
 
@@ -45,14 +45,19 @@ def test_gufunc():
     print(C)
     print(Gold)
 
-
     if (C != Gold).any():
         raise ValueError
 
+def test_gufunc():
+    _test_gufunc(GUFuncVectorize)
+
+def test_cuda_gufunc():
+    _test_gufunc(CUDAGUFuncVectorize)
 
 def main():
     test_numba()
     test_gufunc()
+    test_cuda_gufunc()
     print 'All good!'
 
 if __name__ == '__main__':
