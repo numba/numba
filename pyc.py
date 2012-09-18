@@ -9,8 +9,8 @@
   Usage:  pyc <input-py-file(s)> -o output-file
 
   Compile input files to a single shared library (final step uses the platform
-  linker which must be installed). 
-  
+  linker which must be installed).
+
   Options:
              -h  Help
              -o  Name of output file (default is name of first input with extension changed)
@@ -20,7 +20,11 @@
              --linker-args string of args (be sure to use quotes)
              --headers output header files
 """
-import sys, os
+import sys, os, logging
+import pyc_internal as pyc
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 def which(program):
     def is_exe(fpath):
@@ -51,23 +55,32 @@ def get_ending(args):
         return distutils.sysconfig.get_config_var('SO')
 
 def parse_arguments(args):
-    args.inputs = args.inputs
-    if args.inputs[0] in ['pyc.py', 'pyc']:
-        args.inputs = args.inputs[1:]
-    args.output = args.output or os.path.splitext(inputs[0])[0]+get_ending(args)
+    inputs = args.inputs
+    args.output = args.output[0] if args.output else os.path.splitext(inputs[0])[0] + get_ending(args)
+    logger.debug('args.output --> %s', args.output)
+
 
 def main(args=[]):
     if not args:
         args = sys.argv
-    import argparse        
+    import argparse
     parser = argparse.ArgumentParser(description="Compile Python modules to a single shared library")
     parser.add_argument("inputs", nargs='+', help="Input file(s)")
     parser.add_argument("-o", nargs=1, dest="output", help="Output file")
-    parser.add_argument("-c", action="store_true", dest="olibs", help="Create object file from each input instead of shared-library")
-    parser.add_argument("--llvm", action="store_true", help="Emit llvm instead of native code")
+    parser.add_argument("-c", action="store_true", dest="olibs",
+                        help="Create object file from each input instead of shared-library")
+    parser.add_argument("--llvm", action="store_true",
+                        help="Emit llvm instead of native code")
     parser.add_argument("--linker", nargs=1, help="Path to linker (default is platform dependent)")
     parser.add_argument("--linker-args", help="Arguments to pass to linker")
+
+    if os.path.basename(args[0]) in ['pyc.py', 'pyc']:
+        args = args[1:]
+
     parse_arguments(parser.parse_args(args))
+
+
 
 if __name__ == "__main__":
     main()
+
