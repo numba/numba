@@ -32,9 +32,9 @@ miniutils_header_dep = miniutils + ".h"
 ext_modules = [
     Extension(
         name = "numbapro._internal",
-        sources = ["numbapro/_internal.c"],
+        sources = ["numbapro/_internal.c", "numbapro/_ufunc.c", "numbapro/_gufunc.c"],
         include_dirs = [numpy.get_include(), minivect.get_include()],
-        depends = [miniutils_header_dep],
+        depends = ["numbapro/_internal.h", miniutils_header_dep],
     ),
 
     CythonExtension(
