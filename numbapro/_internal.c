@@ -50,6 +50,81 @@ dyn_dealloc(PyDynUFuncObject *self)
     Py_DECREF(ufunc);
 }
 
+static PyObject *
+_dispatch_cuda(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
+{
+    int i;
+    /* Insert 'ufunc' ('self') as the first argument */
+    PyObject *new_args = PyTuple_New(PyTuple_GET_SIZE(args) + 1);
+    PyObject *result;
+
+    if (!new_args)
+        return NULL;
+
+    Py_INCREF(self);
+    PyTuple_SET_ITEM(new_args, 0, (PyObject *) self);
+    for (i = 1; i < PyTuple_GET_SIZE(args) + 1; i++) {
+        PyObject *obj = PyTuple_GET_ITEM(args, i - 1);
+        Py_INCREF(obj);
+        PyTuple_SET_ITEM(new_args, i, obj);
+    }
+
+    result = PyObject_Call(self->cuda_dispatcher, new_args, kw);
+    Py_DECREF(new_args);
+    return result;
+}
+
+static PyObject *
+_dispatch_gufunc(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
+{
+    int i;
+    PyArrayObject *mps[NPY_MAXARGS] = { NULL };
+    PyObject *retobj[NPY_MAXARGS];
+    PyObject *result;
+    PyUFuncObject *ufunc = &self->ufunc;
+
+    /* Call ufunc */
+    if (PyUFunc_GeneralizedFunction(ufunc, args, kw, mps) < 0) {
+        /* Free everything, take care of NPY_ARRAY_UPDATEIFCOPY */
+        for (i = 0; i < ufunc->nargs; i++) {
+            PyArray_XDECREF_ERR(mps[i]);
+        }
+        return NULL;
+
+    }
+
+    /* Free the input references */
+    for (i = 0; i < ufunc->nin; i++) {
+        Py_XDECREF(mps[i]);
+    }
+
+    /* Build return value(s) */
+    for (i = 0; i < ufunc->nout; i++) {
+        int j = ufunc->nin+i;
+        /* default behavior */
+        retobj[i] = PyArray_Return(mps[j]);
+    }
+
+    if (ufunc->nout == 1) {
+        result = retobj[0];
+    } else {
+        result = PyTuple_New(ufunc->nout);
+        if (!result) {
+            PyErr_NoMemory();
+            goto fail;
+        }
+        for (i = 0; i < ufunc->nout; i++) {
+            PyTuple_SET_ITEM(result, i, retobj[i]);
+        }
+    }
+
+    return result;
+fail:
+    for (i = ufunc->nin; i < ufunc->nargs; i++) {
+        Py_XDECREF(mps[i]);
+    }
+    return NULL;
+}
 
 static PyObject *
 dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
@@ -57,25 +132,10 @@ dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
     if (self->minivect_dispatcher) {
         return PyObject_Call(self->minivect_dispatcher, args, kw);
     } else if (self->cuda_dispatcher) {
-        int i;
-        /* Insert 'ufunc' ('self') as the first argument */
-        PyObject *new_args = PyTuple_New(PyTuple_GET_SIZE(args) + 1);
-        PyObject *result;
-
-        if (!new_args)
-            return NULL;
-
-        Py_INCREF(self);
-        PyTuple_SET_ITEM(new_args, 0, (PyObject *) self);
-        for (i = 1; i < PyTuple_GET_SIZE(args) + 1; i++) {
-            PyObject *obj = PyTuple_GET_ITEM(args, i - 1);
-            Py_INCREF(obj);
-            PyTuple_SET_ITEM(new_args, i, obj);
-        }
-
-        result = PyObject_Call(self->cuda_dispatcher, new_args, kw);
-        Py_DECREF(new_args);
-        return result;
+        return _dispatch_cuda(self, args, kw);
+    } else if (self->ufunc.core_enabled) {
+        /* Generalized ufunc */
+        return _dispatch_gufunc(self, args, kw);
     }
     return PyDynUFunc_Type.tp_base->tp_call((PyObject *) self, args, kw);
 }

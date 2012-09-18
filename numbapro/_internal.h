@@ -22,6 +22,10 @@ extern PyObject * ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy),
 PyObject *
 PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher,
                PyObject *cuda_dispatcher);
+int PyUFunc_GeneralizedFunction(PyUFuncObject *ufunc,
+                                PyObject *args, PyObject *kwds,
+                                PyArrayObject **op);
+
 
 #if PY_MAJOR_VERSION >= 3
 #define IS_PY3K
