@@ -21,6 +21,7 @@
              --headers output header files
 """
 import sys, os, logging
+import subprocess, tempfile
 import pyc_internal as pyc
 
 logging.basicConfig(level=logging.DEBUG)
@@ -51,6 +52,8 @@ def get_ending(args):
     import distutils.sysconfig
     if args.llvm:
         return ".bc"
+    if args.olibs:
+        return ".o"
     else:
         return distutils.sysconfig.get_config_var('SO')
 
@@ -84,11 +87,18 @@ def main(args=[]):
     compiler = pyc.Compiler(argattr.inputs)
     if argattr.llvm:
         logger.debug('emit llvm')
-        compiler.emit_llvm(argattr.output)
+        compiler.write_llvm_bitcode(argattr.output)
+    elif argattr.olibs:
+        logger.debug('emit object file')
+        compiler.write_native_object(argattr.output)
     else:
-        assert False
-
-
+        logger.debug('emit shared library')
+        logger.debug('write to temporary object file %s', tempfile.gettempdir())
+        temp_obj = tempfile.gettempdir() + os.sep + os.path.basename(argattr.output) + '.o'
+        compiler.write_native_object(temp_obj)          # write temporary object
+        cmdargs = find_linker(), '-shared', '-o', argattr.output, temp_obj
+        subprocess.check_call(cmdargs)
+        os.remove(temp_obj)   # remove temporary object
 
 if __name__ == "__main__":
     main()

@@ -6,6 +6,9 @@ from numba v0.1
 from numba.translate import *
 import __builtin__
 from numba.translate import Translate as _OldTranslate
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Translate(_OldTranslate):
     def __init__(self, func, ret_type='d', arg_types=['d'], module=None,
@@ -61,11 +64,16 @@ class Translate(_OldTranslate):
         self._delaylist = [range, xrange, enumerate]
         self.ret_type = ret_type
         self.arg_types = arg_types
+
+        ######## BEGIN CHANGE
+        self.flags = kws.copy()
+
         self.setup_func()
         # self.ee = None
         self.ma_obj = None
-        self.optimize = kws.pop('optimize', True)
-        self.flags = kws
+        self.optimize = self.flags.pop('optimize', True)
+        ######## END CHANGE
+
 
     def setup_func(self):
         # The return type will not be known until the return
@@ -81,9 +89,16 @@ class Translate(_OldTranslate):
         self.arg_ltypes = [convert_to_llvmtype(x) for x in self.arg_types]
         ty_func = lc.Type.function(self.ret_ltype, self.arg_ltypes)
         ######## BEGIN CHANGE
-        orig_func_name = self.func.func_name
-        argtyps_decor = '.'.join(str(ty) for ty in self.arg_ltypes)
-        self.lfunc = self.mod.add_function(ty_func, '_'.join([orig_func_name, argtyps_decor]))
+        if self.flags.get('name'):
+            func_name = self.flags['name']
+        else:
+            orig_func_name = self.func.func_name
+            argtyps_decor = '_'.join(str(ty) for ty in self.arg_ltypes)
+            func_name = '_'.join([orig_func_name, argtyps_decor])
+        self.lfunc = self.mod.add_function(ty_func, func_name)
+        if self.lfunc.name != func_name and self.flags.get('name'):
+            logger.warning('Redefinition of function named "%s"; auto rename to "%s"' % (func_name, self.lfunc.name))
+
         ######## END CHANGE
         assert isinstance(self.lfunc, lc.Function), (
             "Expected %r from llvm-py, got instance of type %r, however." %
