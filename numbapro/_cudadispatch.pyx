@@ -78,6 +78,8 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
     cdef public dict functions
     cdef public dict name_to_func
 
+    cdef cuda.CudaFunctionAndData *info
+
     def __init__(self, ptx_code, types_to_name, device_number):
         cdef CudaFunction func
 
@@ -88,11 +90,13 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         # print ptx_code
 
         self.functions = {}
+        self.name_to_func = {}
         for dtypes, (result_dtype, name) in types_to_name.items():
+            print name
             func = CudaFunction(name)
             func.load(&self.cu_module)
             self.functions[dtypes] = (result_dtype, func)
-            self.func_to_name[name] = func
+            self.name_to_func[name] = func
 
     def broadcast_inputs(self, args):
         # prepare broadcasted contiguous arrays
@@ -132,8 +136,32 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
                                MAX_THREAD, 1, 1)
         return out
 
+    def build_datalist(self, list func_names):
+        """
+        This is called for generalized CUDA ufuncs. They do not go through
+        __call__, but rather call the functions directly. Our function needs
+        some extra info which we build here.
+        """
+        cdef CudaFunction func
+        cdef int i, nops = len(self.functions.keys()[0])
+
+        self.info = <cuda.CudaFunctionAndData *> stdlib.malloc(
+                        len(func_names) * sizeof(cuda.CudaFunctionAndData))
+        if self.info == NULL:
+            raise MemoryError
+
+        result = []
+        for i, func_name in enumerate(func_names):
+            func = self.name_to_func[func_name]
+            self.info[i].cu_func = func.cu_function
+            self.info[i].nops = nops
+            result.append(<dispatch.Py_uintptr_t> &self.info[i])
+
+        return result
+
     def __dealloc__(self):
         cuda.dealloc(self.cu_module, self.cu_context)
+        stdlib.free(self.info)
 
 
 def build_structs(func_names):
@@ -182,7 +210,7 @@ cdef class CudaGeneralizedUFuncDispatcher(CudaUFuncDispatcher):
             core_dimensions.append(core_dims)
 
         arrays = [np.asarray(a) for a in args]
-        broadcast_arrays(arrays, None, ndim, &outer_shape_p, &outer_strides_p,
-                         False)
-        broadcast_arrays(arrays, None, ndim, &inner_shape_p, &inner_strides_p,
-                         True)
+#        broadcast_arrays(arrays, None, ndim, &outer_shape_p, &outer_strides_p,
+#                         False)
+#        broadcast_arrays(arrays, None, ndim, &inner_shape_p, &inner_strides_p,
+#                         True)

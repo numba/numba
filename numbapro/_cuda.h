@@ -23,7 +23,6 @@ typedef struct {
 typedef struct {
     CUfunction cu_func;
     int nops;
-    int nout;
 } CudaFunctionAndData;
 
 extern int init_cuda_exc_type(void);

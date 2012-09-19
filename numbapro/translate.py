@@ -3,6 +3,7 @@ A temporary hack to experiment with a different implementation of Translate
 from numba v0.1
 '''
 
+import numba
 from numba.translate import *
 import __builtin__
 from numba.translate import Translate as _OldTranslate
@@ -10,9 +11,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+funcs_seen = 0
+
 class Translate(_OldTranslate):
-    def __init__(self, func, ret_type, arg_types, module=None,
-                 engine=None, **kws):
+    def __init__(self, func, ret_type=numba.double, arg_types=[numba.double],
+                 module=None, engine=None, **kws):
         self.func = func
         self.fco = func.func_code
         self.names = self.fco.co_names
@@ -85,6 +88,7 @@ class Translate(_OldTranslate):
         #   emit the instructions.
         # For now, we assume the function has been called already
         #   or the return type is otherwise known and passed in
+        global funcs_seen
         self.ret_ltype = convert_to_llvmtype(self.ret_type)
         # The arg_ltypes we will be able to get from what is passed in
         argnames = self.fco.co_varnames[:self.fco.co_argcount]
@@ -95,8 +99,9 @@ class Translate(_OldTranslate):
             func_name = self.flags['name']
         else:
             orig_func_name = self.func.func_name
-            argtyps_decor = '_'.join(str(ty) for ty in self.arg_ltypes)
-            func_name = '_'.join([orig_func_name, argtyps_decor])
+            func_name = '%s%d' % (orig_func_name, funcs_seen)
+            funcs_seen += 1
+
         self.lfunc = self.mod.add_function(ty_func, func_name)
         if self.lfunc.name != func_name and self.flags.get('name'):
             logger.warning('Redefinition of function named "%s"; auto rename to "%s"' % (func_name, self.lfunc.name))

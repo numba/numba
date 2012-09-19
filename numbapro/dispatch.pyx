@@ -183,8 +183,7 @@ cdef class UFuncDispatcher(object):
         assert function is not None, (ndim, len(arrays))
 
         arrays.insert(0, out)
-        broadcast_arrays(arrays, broadcast.shape, ndim, &shape_p, &strides_p,
-                         False)
+        broadcast_arrays(arrays, broadcast.shape, ndim, &shape_p, &strides_p)
         build_dynamic_args(arrays, strides_p, &data_pointers, &strides_args,
                            ndim)
 

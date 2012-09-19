@@ -24,6 +24,10 @@ cdef extern from "_cuda.h": # external utilities from _cuda.c
         int COMPUTE_CAPABILITY_MAJOR
         int COMPUTE_CAPABILITY_MINOR
 
+    ctypedef struct CudaFunctionAndData:
+        CUfunction cu_func
+        int nops
+
     int init_cuda_exc_type() except -1
 
     int get_device(CUdevice *cu_device, CUcontext *cu_context, 

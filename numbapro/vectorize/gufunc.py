@@ -7,6 +7,7 @@ from numba.minivect import minitypes
 
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
+from llvm_cbuilder import builder
 from numbapro.translate import Translate
 from numbapro import _internal, _cudadispatch
 from numbapro.vectorize import cuda
@@ -15,11 +16,11 @@ import numpy as np
 import llvm.core
 
 class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFrunc):
-    def build_functions(self, lfunclist, ptrlist, cuda_dispatcher):
+    def datalist(self, lfunclist, ptrlist, cuda_dispatcher):
         """
-        Return a list of pointers to the kernels.
+        Return a list of data pointers to the kernels.
         """
-        return ptrlist
+        return [None] * len(lfunclist)
 
     def __call__(self, lfunclist, tyslist, signature, engine, use_cuda,
                  cuda_dispatcher=None, **kws):
@@ -38,12 +39,9 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFrunc):
             lfunclist = [lfunclist]
 
         ptrlist = self._prepare_pointers(lfunclist, engine, **kws)
-        self.build_functions(lfunclist, ptrlist, cuda_dispatcher)
-
         inct = len(tyslist[0]) - 1
         outct = 1
-
-        datlist = [None] * len(lfunclist)
+        datlist = self.datalist(lfunclist, ptrlist, cuda_dispatcher)
 
         # Becareful that fromfunc does not provide full error checking yet.
         # If typenum is out-of-bound, we have nasty memory corruptions.
@@ -51,6 +49,7 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFrunc):
         # If elements of type-list (2nd arg) is tuple instead,
         # there will also memory corruption. (Seems like code rewrite.)
 
+        print ptrlist, tyslist
         gufunc = _internal.fromfuncsig(ptrlist, tyslist, inct, outct, datlist,
                                        signature, use_cuda)
 
@@ -62,17 +61,11 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFrunc):
         # print guf
         return guf
 
-class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
-    def build_functions(self, lfunclist, ptrlist, cuda_dispatcher):
-        func_names = [lfunc.name for lfunc in lfunclist]
-        return _cudadispatch.build_cuda_functions(func_names, cuda_dispatcher)
-
-    def build(self, lfunc, signature):
-        wrapper_builder = GUFuncCUDAEntry(signature, CFuncRef(lfunc))
-        wrapper = wrapper_builder(lfunc.module)
-        return wrapper
 
 class GUFuncVectorize(object):
+    """
+    Vectorizer for generalized ufuncs.
+    """
 
     gufunc_from_func = _GeneralizedUFuncFromFunc()
 
@@ -107,40 +100,6 @@ class GUFuncVectorize(object):
         lfunclist = self._get_lfunc_list()
         tyslist = self._get_tys_list()
         engine = self.translates[0]._get_ee()
-        return self.gufunc_from_func(
-            lfunclist, tyslist, self.signature, engine, use_cuda=use_cuda)
-
-class CudaVectorize(cuda.CudaVectorize):
-#    def _get_lfunc_list(self):
-#        llvm_funcs = super(CudaVectorize, self)._get_lfunc_list()
-#        return [create_kernel_wrapper(llvm_func) for llvm_func in llvm_funcs]
-
-    def _build_caller(self, lfunc):
-        lfunc.calling_convention = llvm.core.CC_PTX_DEVICE
-        lfunc.linkage = llvm.core.LINKAGE_INTERNAL # do not emit device function
-        lcaller_def = create_kernel_wrapper(lfunc)
-        lcaller = lcaller_def(self.module)
-        lcaller.calling_convention = llvm.core.CC_PTX_KERNEL
-        return lcaller
-
-
-class CUDAGUFuncVectorize(GUFuncVectorize):
-    """
-    Generalized ufunc vectorizer. Executes generalized ufuncs on the GPU.
-    """
-
-    gufunc_from_func = _GeneralizedCUDAUFuncFromFunc()
-
-    def __init__(self, func, sig):
-        super(CUDAGUFuncVectorize, self).__init__(func, sig)
-        self.cuda_vectorizer = CudaVectorize(func)
-
-    def add(self, arg_types):
-        self.cuda_vectorizer.add(ret_type=void, arg_types=arg_types)
-
-    def build_ufunc(self, device_number=-1):
-        dispatcher = self.cuda_vectorizer._build_ufunc(device_number)
-        # TODO:
         return self.gufunc_from_func(
             lfunclist, tyslist, self.signature, engine, use_cuda=use_cuda)
 
@@ -257,7 +216,82 @@ class GUFuncEntry(CDefinition):
         cls.FuncDef = func_def
         cls.Signature = signature
 
+#
+### Generalized CUDA ufuncs
+#
+
+class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
+    def datalist(self, lfunclist, ptrlist, cuda_dispatcher):
+        """
+        Build a bunch of CudaFunctionAndData and make sure it is passed to
+        our ufunc.
+        """
+        func_names = [lfunc.name for lfunc in lfunclist]
+        return cuda_dispatcher.build_datalist(func_names)
+
+    def build(self, lfunc, signature):
+        """
+        lfunc: the CUDA kernel which we wrap. Our wrapper creates the
+               fake PyArray objects from the info passed in by NumPy. It then
+               calls _cuda.c:cuda_outer_loop which does the memory transfers
+               and kernel invocation
+        """
+        wrapper_builder = GUFuncCUDAEntry(signature, CFuncRef(lfunc))
+        wrapper = wrapper_builder(lfunc.module)
+        return wrapper
+
+class CudaVectorize(cuda.CudaVectorize):
+    """
+    Builds a wrapper for generalized ufunc CUDA kernels.
+    """
+
+    def _build_caller(self, lfunc):
+#        lfunc.calling_convention = llvm.core.CC_PTX_DEVICE
+#        lfunc.linkage = llvm.core.LINKAGE_INTERNAL # do not emit device function
+#        lcaller_def = create_kernel_wrapper(lfunc)
+#        lcaller = lcaller_def(self.module)
+#        lcaller.calling_convention = llvm.core.CC_PTX_KERNEL
+#        return lcaller
+        lfunc.calling_convention = llvm.core.CC_PTX_KERNEL
+        return lfunc
+
+class CUDAGUFuncVectorize(GUFuncVectorize):
+    """
+    Generalized ufunc vectorizer. Executes generalized ufuncs on the GPU.
+    """
+
+    gufunc_from_func = _GeneralizedCUDAUFuncFromFunc()
+
+    def __init__(self, func, sig):
+        super(CUDAGUFuncVectorize, self).__init__(func, sig)
+        self.cuda_vectorizer = CudaVectorize(func)
+
+    def add(self, arg_types):
+        self.cuda_vectorizer.add(ret_type=void, arg_types=arg_types)
+
+    def _get_tys_list(self):
+        types = []
+        for ret_type, arg_types, kwargs in self.cuda_vectorizer.signatures:
+            tys = arg_types + [ret_type]
+            types.append([
+                minitypes.map_minitype_to_dtype(t.dtype if t.is_array else t).num
+                    for t in arg_types])
+
+        return types
+
+    def build_ufunc(self, device_number=-1):
+        lfunclist = self.cuda_vectorizer._get_lfunc_list()
+        tyslist = self._get_tys_list()
+        engine = self.cuda_vectorizer.translates[0]._get_ee()
+        dispatcher = self.cuda_vectorizer._build_ufunc(device_number)
+        return self.gufunc_from_func(
+            lfunclist, tyslist, self.signature, engine,
+            cuda_dispatcher=dispatcher, use_cuda=True)
+
 def get_cuda_outer_loop(builder):
+    """
+    Build an llvm_func that references _cuda.c:cuda_outer_loop
+    """
     context = numba.decorators.context
 
     arg_types = [
@@ -267,14 +301,17 @@ def get_cuda_outer_loop(builder):
         void.pointer(),           # void *func
         object_.pointer(),        # PyObject **arrays
     ]
-    signature = minitypes.FunctionTYpe(return_type=void, arg_types=arg_types)
+    signature = minitypes.FunctionType(return_type=void, args=arg_types)
     lfunc_type = signature.pointer().to_llvm(numba.decorators.context)
 
     func_addr = _cudadispatch.get_cuda_outer_loop_addr()
+    # return CFuncRef('cuda_outer_loop', lfunc_type, func_addr)
     func_int_addr = llvm.core.Constant.int(int64.to_llvm(context), func_addr)
     func_pointer = builder.inttoptr(func_int_addr, lfunc_type)
-    lfunc = builder.load(func_pointer)
-    return CFuncRef(lfunc)
+    lfunc = func_pointer
+    # lfunc = builder.load(func_pointer)
+    # return CFuncRef(func_pointer)
+    return lfunc
 
 def create_kernel_wrapper(kernel):
     class CUDAKernelWrapper(CDefinition):
@@ -283,7 +320,7 @@ def create_kernel_wrapper(kernel):
         each array on the GPU.
         """
 
-        _name_ = kernel.name + '_cuda_wrapper'
+        _name_ = 'cuda_wrapper'
         _retty_ = C.void
         _argtys_ = [('op%d' % i, llvm.core.Type.pointer(PyArray.llvm_type()))
                         for i in range(len(kernel.args))]
@@ -332,9 +369,26 @@ def create_kernel_wrapper(kernel):
     return CUDAKernelWrapper()
 
 class GUFuncCUDAEntry(GUFuncEntry):
+    """
+    This function is invoked by NumPy and sets up the fake PyArrayObjects and
+    calls _cuda.c:cuda_outer_loop
+    """
 
-    def _outer_loop(self, args, dimensions, innerfunc, pyarys, steps):
-        super(GUFuncCUDAEntry, self)._outer_loop(dimensions, innerfunc,
-                                                 pyarys, steps)
-        cuda_outer_loop = get_cuda_outer_loop(innerfunc.parent.builder)
-        cuda_outer_loop(args, dimensions, steps, innerfunc, pyarys)
+    def _outer_loop(self, args, dimensions, innerfunc, py_arrays, steps):
+        """
+        innerfunc: the CUDA kernel
+        """
+        super(GUFuncCUDAEntry, self)._outer_loop(args, dimensions, innerfunc,
+                                                 py_arrays, steps)
+        llvm_builder = innerfunc.parent.builder
+        cbuilder = innerfunc.parent
+
+        cuda_outer_loop = get_cuda_outer_loop(llvm_builder)
+        array_list = cbuilder.array(llvm_types._numpy_array, len(py_arrays))
+        for i, py_array in enumerate(py_arrays):
+            # array_list[i].assign(py_array.ref)
+            llvm_builder.store(py_array.handle, array_list[i].handle)
+
+        largs = (args.handle, dimensions.handle, steps.handle,
+                 innerfunc.handle, array_list.handle)
+        llvm_builder.call(cuda_outer_loop, largs)

@@ -63,7 +63,6 @@ class _CudaStagingCaller(CDefinition):
 
     @classmethod
     def _pointer(cls, ty):
-        print ty
         return C.pointer(ty)
 
 def get_dtypes(ret_type, arg_types):
@@ -89,6 +88,7 @@ class CudaVectorize(_common.GenericVectorize):
                       **kwargs)
         t.translate()
         self.translates.append(t)
+        self.args_ret_types.append(arg_types + [ret_type])
 
     def _build_ufunc(self, device_number):
         # quick & dirty tryout
@@ -99,6 +99,7 @@ class CudaVectorize(_common.GenericVectorize):
 
         lfunclist = self._get_lfunc_list()
 
+        str(lfunclist[0])
         # setup optimizer for the staging caller
         fpm = FunctionPassManager.new(self.module)
         pmbldr = PassManagerBuilder.new()
@@ -111,6 +112,7 @@ class CudaVectorize(_common.GenericVectorize):
             ret_dtype, arg_dtypes = get_dtypes(ret_type, arg_types)
             # generate a caller for all functions
             lcaller = self._build_caller(lfunc)
+            assert lcaller.module is lfunc.module
             fpm.run(lcaller)    # run the optimizer
 
             # unicode problem?
@@ -138,9 +140,9 @@ class CudaVectorize(_common.GenericVectorize):
         ptxtm = TargetMachine.lookup(arch, cpu=cc, opt=3) # TODO: ptx64 option
         ptxasm = ptxtm.emit_assembly(self.module)
 
-
         dispatcher = _cudadispatch.CudaUFuncDispatcher(ptxasm, types_to_name,
                                                        device_number)
+        return dispatcher
 
     def build_ufunc(self, device_number=-1):
         dispatcher = self._build_ufunc(device_number)
@@ -156,4 +158,3 @@ class CudaVectorize(_common.GenericVectorize):
         lcaller = lcaller_def(self.module)
         lcaller.calling_convention = CC_PTX_KERNEL
         return lcaller
-
