@@ -58,7 +58,7 @@ def parse_arguments(args):
     inputs = args.inputs
     args.output = args.output[0] if args.output else os.path.splitext(inputs[0])[0] + get_ending(args)
     logger.debug('args.output --> %s', args.output)
-
+    return args
 
 def main(args=[]):
     if not args:
@@ -77,7 +77,16 @@ def main(args=[]):
     if os.path.basename(args[0]) in ['pyc.py', 'pyc']:
         args = args[1:]
 
-    parse_arguments(parser.parse_args(args))
+    argattr = parse_arguments(parser.parse_args(args))
+
+    # run the compiler
+    logger.debug('inputs --> %s', argattr.inputs)
+    compiler = pyc.Compiler(argattr.inputs)
+    if argattr.llvm:
+        logger.debug('emit llvm')
+        compiler.emit_llvm(argattr.output)
+    else:
+        assert False
 
 
 
