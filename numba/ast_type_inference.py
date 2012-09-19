@@ -2,7 +2,6 @@ import ast
 import copy
 import opcode
 import types
-import ctypes
 import __builtin__ as builtins
 
 import numba
@@ -11,11 +10,9 @@ from numba import error
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
 from .symtab import Variable
-from . import visitors, nodes, error
+from . import visitors, nodes, error, _ext
 
-stdin, stdout, stderr = (
-    ctypes.addressof(ctypes.c_void_p.in_dll(ctypes.pythonapi, sym))
-    for sym in ('stdin', 'stdout', 'stderr'))
+stdin, stdout, stderr = _ext.get_libc_file_addrs()
 stdin = nodes.ConstNode(stdin, void.pointer())
 stdout = nodes.ConstNode(stdout, void.pointer())
 stderr = nodes.ConstNode(stderr, void.pointer())
