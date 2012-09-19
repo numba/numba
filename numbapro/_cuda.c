@@ -301,6 +301,25 @@ cleanup:
         return -1;                                    \
     }
 
+static int
+alloc_and_copy(void *data, size_t size, void **result, cudaStream_t stream)
+{
+	cudaError_t error_code;
+	void *p;
+
+	error_code = cudaMalloc(&p, size);
+	CHECK_CUDA_MEM_ERR("allocation")
+
+	error_code = cudaMemcpyAsync((void *) p, data, size,
+								 cudaMemcpyHostToDevice, stream);
+	CHECK_CUDA_MEM_ERR("copy to device")
+
+	*result = p;
+	return 0;
+error:
+	return -1;
+}
+
 static inline int
 _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *func,
                  PyObject **arrays)
@@ -313,43 +332,45 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *func,
     cudaStream_t stream;
     CUresult cu_result;
     cudaError_t error_code;
-    CUdeviceptr *device_pointers = calloc(info->nops, sizeof(CUdeviceptr));
-    void **kernelargs = malloc(info->nops * sizeof(void **));
 
-    if (!device_pointers) {
-    	PyErr_NoMemory();
-		return -1;
-    }
+    void *device_pointers[MAXARGS] = { NULL };
+    void *kernelargs[MAXARGS];
+    void *data_pointers[MAXARGS];
+    npy_intp sizes[MAXARGS];
+
+    int nargs = info->nops + 1;
 
     error_code = cudaStreamCreate(&stream);
     CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
 
-    /* TODO: allocate arrays outside and invoke N kernels (need wrapper function) */
-    for (i = 0; i < dimensions[0]; i++) {
-        for (j = 0; j < info->nops; j++) {
-        	Py_ssize_t nbytes = 1;
-        	/* TODO: this needs to be done only once */
-			for (j = 0; j < PyArray_NDIM(arrays[i]); j++) {
-				nbytes *= PyArray_DIM(arrays[i], j) * steps[step_offset];
-				step_offset += 1;
-			}
-            error_code = cudaMalloc((void **) &device_pointers[i], size);
-            CHECK_CUDA_MEM_ERR("allocation")
-            kernelargs[i] = &device_pointers[i];
-        }
-        /* Launch kernel & check result */
-		cu_result = cuLaunchKernel(info->cu_func,
-								   1, 1, 1,
-								   1, 1, 1,
-								   0 /* sharedMemBytes */, stream, args, 0);
+	for (i = 0; i < info->nops; i++) {
+		data_pointers[i] = PyArray_DATA(arrays[i]);
+		sizes[i] = steps[i];
+	}
+	data_pointers[i] = steps; /* 'steps' kernel argument */
+	sizes[i] = info->nops * sizeof(npy_intp);
 
-		if (cu_result != CUDA_SUCCESS) {
-			PyErr_SetString(cuda_exc_type, curesult_to_str(cu_result));
+	for (i = 0; i < nargs; i++) {
+		/* This works best when data is contiguous !!! */
+		if (alloc_and_copy(data_pointers[i], sizes[i],
+						   &device_pointers[i], stream) < 0)
 			goto error;
-		}
-    }
+		kernelargs[i] = &device_pointers[i];
+	}
 
-    /* TODO: do this in wrapper function */
+	/* Launch kernel & check result */
+	/* TODO: use multiple thread blocks */
+	cu_result = cuLaunchKernel(info->cu_func,
+							   dimensions[0], 1, 1,
+							   1, 1, 1,
+							   0 /* sharedMemBytes */, stream,
+							   kernelargs, 0);
+
+	if (cu_result != CUDA_SUCCESS) {
+		PyErr_SetString(cuda_exc_type, curesult_to_str(cu_result));
+		goto error;
+	}
+
     /* Wait for kernel to finish */
 	error_code = cudaDeviceSynchronize();
 	CHECK_CUDA_ERROR("device synchronization", error_code)
@@ -358,17 +379,16 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *func,
 error:
 	result = -1;
 cleanup:
-	for (i = 0; i < nops; i++) {
-		error_code = cudaMemcpy(args[i], (void *) device_pointers[i], size,
-		                        cudaMemcpyDeviceToHost);
-		CHECK_CUDA_MEM_ERR("copy to host")
+	/* TODO: error handling */
+	for (i = 0; i < nargs; i++) {
+		if (!device_pointers[i])
+			break;
 
-		error_code = cudaFree((void *) device_pointers[i]);
-		CHECK_CUDA_MEM_ERR("free")
+		(void) cudaMemcpy(args[i], (void *) device_pointers[i], sizes[i],
+						  cudaMemcpyDeviceToHost);
+		(void) cudaFree(device_pointers[i]);
 	}
-	free(device_pointers);
-	free(kernelargs);
-
+	(void) cudaStreamDestroy(stream);
 	return result;
 }
 

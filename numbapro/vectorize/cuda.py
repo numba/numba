@@ -63,10 +63,15 @@ class _CudaStagingCaller(CDefinition):
 
     @classmethod
     def _pointer(cls, ty):
+        print ty
         return C.pointer(ty)
 
 def get_dtypes(ret_type, arg_types):
-    ret_dtype = minitypes.map_minitype_to_dtype(ret_type)
+    try:
+        ret_dtype = minitypes.map_minitype_to_dtype(ret_type)
+    except KeyError:
+        ret_dtype = None
+
     arg_dtypes = tuple(minitypes.map_minitype_to_dtype(arg_type)
                            for arg_type in arg_types)
     return ret_dtype, arg_dtypes
@@ -85,7 +90,7 @@ class CudaVectorize(_common.GenericVectorize):
         t.translate()
         self.translates.append(t)
 
-    def build_ufunc(self, device_number=-1):
+    def _build_ufunc(self, device_number):
         # quick & dirty tryout
         # PyCuda should be optional
         # from pycuda import driver as cudriver
@@ -137,6 +142,8 @@ class CudaVectorize(_common.GenericVectorize):
         dispatcher = _cudadispatch.CudaUFuncDispatcher(ptxasm, types_to_name,
                                                        device_number)
 
+    def build_ufunc(self, device_number=-1):
+        dispatcher = self._build_ufunc(device_number)
         return minivectorize.fallback_vectorize(
                     basic.BasicVectorize, self.pyfunc, self.signatures,
                     minivect_dispatcher=None, cuda_dispatcher=dispatcher)

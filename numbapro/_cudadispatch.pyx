@@ -75,7 +75,8 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
     cdef cuda.CUmodule cu_module
     cdef cuda.CUfunction cu_ufunc
 
-    cdef dict functions
+    cdef public dict functions
+    cdef public dict name_to_func
 
     def __init__(self, ptx_code, types_to_name, device_number):
         cdef CudaFunction func
@@ -91,6 +92,7 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
             func = CudaFunction(name)
             func.load(&self.cu_module)
             self.functions[dtypes] = (result_dtype, func)
+            self.func_to_name[name] = func
 
     def broadcast_inputs(self, args):
         # prepare broadcasted contiguous arrays
@@ -134,7 +136,7 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         cuda.dealloc(self.cu_module, self.cu_context)
 
 
-def build_structs(function_pointers):
+def build_structs(func_names):
     cdef CudaFunction func
 
 #    cuda.get_device(&self.cu_device, &self.cu_context, device_number)

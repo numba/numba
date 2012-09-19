@@ -1,6 +1,8 @@
 #include <Python.h>
 #include <cuda.h>
 
+#define MAXARGS 32
+
 typedef struct {
     /* max total threads per block */
     int MAX_THREADS_PER_BLOCK;
@@ -22,7 +24,7 @@ typedef struct {
     CUfunction cu_func;
     int nops;
     int nout;
-} CudaFunctionAndData:
+} CudaFunctionAndData;
 
 extern int init_cuda_exc_type(void);
 extern int get_device(CUdevice *cu_device, CUcontext *cu_context,
