@@ -23,9 +23,11 @@ _sizeof_py_ssize_t = ctypes.sizeof(
 
 _int1 = lc.Type.int(1)
 _int8 = lc.Type.int(8)
+_int8_star = lc.Type.pointer(_int8)
 _int32 = lc.Type.int(32)
 _int64 = lc.Type.int(64)
 _llvm_py_ssize_t = lc.Type.int(_sizeof_py_ssize_t * 8)
+_llvm_size_t = _llvm_py_ssize_t
 _intp = lc.Type.int(_plat_bits)
 _intp_star = lc.Type.pointer(_intp)
 _void_star = lc.Type.pointer(lc.Type.int(8))

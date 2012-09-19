@@ -16,7 +16,7 @@ from .cfg import ControlFlowGraph
 from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
     _void_star, _float, _double, _complex64, _complex128, _pyobject_head, \
     _trace_refs_, _head_len, _numpy_struct,  _numpy_array, \
-    _numpy_array_field_ofs, _LLVMCaster
+    _numpy_array_field_ofs, _LLVMCaster, _int8_star, _llvm_size_t
 from .multiarray_api import MultiarrayAPI
 
 from .minivect import minitypes
@@ -88,6 +88,8 @@ def pythontype_to_strtype(typ):
         return ["func"]
     elif issubclass(typ, tuple):
         return 'tuple'
+    elif issubclass(typ, str):
+        return 'S'
 
 def map_to_strtype(type):
     "Map a minitype or str type to a str type"
@@ -123,7 +125,9 @@ def map_to_strtype(type):
         elif type.is_pointer:
             type = "%s *" % (map_to_strtype(type.base_type))
         elif type.is_void:
-            return "int" # default return type?
+            type = "int" # default return type?
+        elif type.is_c_string:
+            type = 'S'
         else:
             raise NotImplementedError(type)
         if __debug__:
@@ -239,19 +243,22 @@ def str_to_llvmtype(str):
     if str.endswith('*'):
         n_pointer = str.count('*')
         str = str[:-n_pointer]
-    if str[0] == 'f':
+    first_char = str[0]
+    if first_char == 'f':
         if str[1:] == '32':
             ret_val = lc.Type.float()
         elif str[1:] == '64':
             ret_val = lc.Type.double()
-    elif str[0] == 'i':
+    elif first_char == 'i':
         num = int(str[1:])
         ret_val = lc.Type.int(num)
-    elif str[0] == 'c':
+    elif first_char == 'c':
         if str[1:] == '64':
             ret_val = _complex64
         elif str[1:] == '128':
             ret_val = _complex128
+    elif first_char == 'S':
+        ret_val = _int8_star
     elif str.startswith('arr['):
         ret_val = _numpy_array
     else:
@@ -467,6 +474,17 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
 
 class _LLVMModuleUtils(object):
     __string_constants = {}
+
+    __lib_fns = {
+        'printf' : lc.Type.function(_int32, [_void_star], True),
+        'strlen' : lc.Type.function(_llvm_size_t, [_int8_star]),
+        'strncpy' : lc.Type.function(_int8_star, [_int8_star, _int8_star,
+                                                  _llvm_size_t]),
+        }
+
+    @classmethod
+    def get_lib_fn(cls, module, fn):
+        return module.get_or_insert_function(cls.__lib_fns[fn], fn)
 
     @classmethod
     def get_printf(cls, module):
@@ -900,8 +918,11 @@ class Translate(object):
         if __debug__:
             logger.debug(self.cfg.pformat())
         is_dead_code = False
+        # Filter out the OPNAME+x opcodes, assuming the handler knows
+        # what it is doing based on the actual opcode.
+        opnames = [name.split('+')[0] for name in opcode.opname]
         for i, op, arg in itercode(self.costr):
-            name = opcode.opname[op]
+            name = opnames[op]
             # Change the builder if the line-number
             # is in the list of blocks.
             if i in self.blocks.keys():
@@ -1842,9 +1863,41 @@ class Translate(object):
         #       should modify resolve_type to handle one operand
         typ, arg1, _ = resolve_type(arg1, arg1, self.builder)
         if typ[0] == 'f':
-            self.stack.append(Variable(self.builder.fsub(lc.Constant.null(arg1.type), arg1)))
+            self.stack.append(Variable(
+                    self.builder.fsub(lc.Constant.null(arg1.type), arg1)))
         elif typ[0] == 'i':
-            self.stack.append(Variable(self.builder.sub(lc.Constant.null(arg1.type), arg1)))
+            self.stack.append(Variable(
+                    self.builder.sub(lc.Constant.null(arg1.type), arg1)))
         else:
             raise NotImplementedError("Does not support for type %s" % typ)
 
+    def _apply_slice(self, indexable, lower = None, upper = None):
+        ret_val = None
+        if __debug__:
+            logger.debug(repr((indexable, lower, upper)))
+        if indexable.typ[0] == 'S':
+            llvm_indexable = indexable.llvm(builder = self.builder)
+            # calculate the alloca size.
+            if upper is None:
+                upper = self.builder.call(
+                    _LLVMModuleUtils.get_lib_fn(self.mod, 'strlen'), [
+                        llvm_indexable])
+            raise NotImplementedError("FIXME")
+        else:
+            raise NotImplementedError("Slices unsupported for type %r" %
+                                      (indexable.typ,))
+        if __debug__:
+            logger.debug(repr(ret_val))
+        return ret_val
+
+    def op_SLICE(self, i, op, arg):
+        op -= opcode.opmap['SLICE+0']
+        if op & 2:
+            upper = self.stack.pop(-1)
+        else:
+            upper = None
+        if op & 1:
+            lower = self.stack.pop(-1)
+        else:
+            lower = None
+        self.stack.append(self._apply_slice(self.stack.pop(-1), lower, upper))
