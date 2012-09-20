@@ -117,8 +117,8 @@ init_attributes(CUdevice cu_device, CudaDeviceAttrs *attrs)
     _GETATTR(MAX_BLOCK_DIM_Y, CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y)
     _GETATTR(MAX_BLOCK_DIM_Z, CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z)
     _GETATTR(MAX_SHARED_MEMORY, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
-    cu_result = cuDeviceComputeCapability(&attrs->COMPUTE_CAPABILITY_MAJOR,
-                                          &attrs->COMPUTE_CAPABILITY_MINOR,
+    cu_result = cuDeviceComputeCapability(&out.COMPUTE_CAPABILITY_MAJOR,
+                                          &out.COMPUTE_CAPABILITY_MINOR,
                                           cu_device);
     CHECK_CUDA_RESULT(cu_result)
 
