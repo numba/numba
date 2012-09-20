@@ -236,6 +236,7 @@ class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
                calls _cuda.c:cuda_outer_loop which does the memory transfers
                and kernel invocation
         """
+        print lfunc
         print lfunc.name
         func = CFuncRef(lfunc)
         wrapper_builder = GUFuncCUDAEntry(signature, func)

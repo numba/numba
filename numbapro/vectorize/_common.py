@@ -78,7 +78,11 @@ class CommonVectorizeFromFrunc(object):
 
     def _prepare_pointers(self, lfunclist, engine, **kws):
         # build all functions
-        spuflist = [self.build(lfunc, **kws) for lfunc in lfunclist]
+        # spuflist = [self.build(lfunc, **kws) for lfunc in lfunclist]
+        spuflist = []
+        for i, lfunc in enumerate(lfunclist):
+            print "processing...", i
+            spuflist.append(lfunc)
 
         # We have an engine, build ufunc
 

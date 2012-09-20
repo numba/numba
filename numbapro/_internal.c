@@ -84,15 +84,15 @@ _dispatch_gufunc(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
     PyObject *result;
     PyUFuncObject *ufunc = &self->ufunc;
 
-    /* Call ufunc */
-    if (PyUFunc_GeneralizedFunction(ufunc, args, kw, mps) < 0) {
-        /* Free everything, take care of NPY_ARRAY_UPDATEIFCOPY */
-        for (i = 0; i < ufunc->nargs; i++) {
-            PyArray_XDECREF_ERR(mps[i]);
-        }
-        return NULL;
-
-    }
+//    /* Call ufunc */
+//    if (PyUFunc_GeneralizedFunction(ufunc, args, kw, mps) < 0) {
+//        /* Free everything, take care of NPY_ARRAY_UPDATEIFCOPY */
+//        for (i = 0; i < ufunc->nargs; i++) {
+//            PyArray_XDECREF_ERR(mps[i]);
+//        }
+//        return NULL;
+//
+//    }
 
     /* Free the input references */
     for (i = 0; i < ufunc->nin; i++) {
@@ -136,7 +136,7 @@ dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
         return _dispatch_cuda(self, args, kw);
     } else if (0 && self->ufunc.core_enabled && self->use_cuda_gufunc) {
         /* Generalized ufunc */
-        return _dispatch_gufunc(self, args, kw);
+        /* return _dispatch_gufunc(self, args, kw); */
     }
     return PyDynUFunc_Type.tp_base->tp_call((PyObject *) self, args, kw);
 }
