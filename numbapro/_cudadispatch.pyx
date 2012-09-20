@@ -144,7 +144,6 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         """
         cdef CudaFunction func
         cdef int i, nops = len(self.functions.keys()[0])
-        print self.functions.keys()[0], nops
 
         self.info = <cuda.CudaFunctionAndData *> stdlib.malloc(
                         len(func_names) * sizeof(cuda.CudaFunctionAndData))
