@@ -367,7 +367,7 @@ def create_kernel_wrapper(kernel):
             # Call actual kernel
             # kernel_func = self.depends(CFuncRef(kernel))
             # kernel_func(*arrays)
-            b.call(kernel, [array.handle for array in arrays])
+            b.call(kernel, [array.value for array in arrays])
 
             self.ret()
 
@@ -429,6 +429,11 @@ class GUFuncCUDAEntry(GUFuncEntry):
                                                            steps, info)]
         array_list = array_list.cast(_ltype(object_.pointer()))
         largs.append(array_list.handle)
+
+        #NOTE: why does it work on some platform (OSX) without explicit type casting?
+        largs = [llvm_builder.bitcast(v, t)
+                 for v, t in zip(largs, cuda_outer_loop.type.pointee.args)]
+
         llvm_builder.call(cuda_outer_loop, largs)
 
     @classmethod
