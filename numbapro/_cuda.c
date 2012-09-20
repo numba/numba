@@ -310,8 +310,13 @@ alloc_and_copy(void *data, size_t size, void **result, cudaStream_t stream)
 	error_code = cudaMalloc(&p, size);
 	CHECK_CUDA_MEM_ERR("allocation")
 
-	error_code = cudaMemcpyAsync((void *) p, data, size,
-								 cudaMemcpyHostToDevice, stream);
+    if (stream)
+        error_code = cudaMemcpyAsync((void *) p, data, size,
+                                     cudaMemcpyHostToDevice, stream);
+    else
+	    error_code = cudaMemcpy((void *) p, data, size,
+	                            cudaMemcpyHostToDevice);
+
 	CHECK_CUDA_MEM_ERR("copy to device")
 
 	*result = p;
@@ -321,15 +326,15 @@ error:
 }
 
 static inline int
-_cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *func,
+_cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
                  PyObject **arrays)
 {
     npy_intp i, j;
-    CudaFunctionAndData *info = (CudaFunctionAndData *) func;
+    CudaFunctionAndData *info = (CudaFunctionAndData *) data;
     int step_offset = info->nops;
     int result = 0;
 
-    cudaStream_t stream;
+    cudaStream_t stream = NULL;
     CUresult cu_result;
     cudaError_t error_code;
 
@@ -340,8 +345,8 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *func,
 
     int nargs = info->nops + 1;
 
-    error_code = cudaStreamCreate(&stream);
-    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
+//    error_code = cudaStreamCreate(&stream);
+//    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
 
 	for (i = 0; i < info->nops; i++) {
 		data_pointers[i] = PyArray_DATA(arrays[i]);
@@ -358,6 +363,7 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *func,
 		kernelargs[i] = &device_pointers[i];
 	}
 
+    printf("Launching N=%d kernels\n", (int) dimensions[0]);
 	/* Launch kernel & check result */
 	/* TODO: use multiple thread blocks */
 	cu_result = cuLaunchKernel(info->cu_func,
@@ -377,6 +383,7 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *func,
 
     goto cleanup;
 error:
+    (void) cudaGetLastError(); /* clear error */
 	result = -1;
 cleanup:
 	/* TODO: error handling */
@@ -388,15 +395,15 @@ cleanup:
 						  cudaMemcpyDeviceToHost);
 		(void) cudaFree(device_pointers[i]);
 	}
-	(void) cudaStreamDestroy(stream);
+//	(void) cudaStreamDestroy(stream);
 	return result;
 }
 
 void
-cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *func,
+cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
                 PyObject **arrays)
 {
-    (void) _cuda_outer_loop(args, dimensions, steps, func, arrays);
+    (void) _cuda_outer_loop(args, dimensions, steps, data, arrays);
 }
 
 

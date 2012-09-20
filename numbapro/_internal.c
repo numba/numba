@@ -132,9 +132,9 @@ dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
 {
     if (self->minivect_dispatcher) {
         return PyObject_Call(self->minivect_dispatcher, args, kw);
-    } else if (self->cuda_dispatcher) {
+    } else if (self->cuda_dispatcher && !self->use_cuda_gufunc) {
         return _dispatch_cuda(self, args, kw);
-    } else if (self->ufunc.core_enabled && self->use_cuda_gufunc) {
+    } else if (0 && self->ufunc.core_enabled && self->use_cuda_gufunc) {
         /* Generalized ufunc */
         return _dispatch_gufunc(self, args, kw);
     }

@@ -49,9 +49,8 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFrunc):
         # If elements of type-list (2nd arg) is tuple instead,
         # there will also memory corruption. (Seems like code rewrite.)
 
-        print ptrlist, tyslist
         gufunc = _internal.fromfuncsig(ptrlist, tyslist, inct, outct, datlist,
-                                       signature, use_cuda)
+                                       signature, cuda_dispatcher)
 
         return gufunc
 
@@ -167,7 +166,7 @@ class GUFuncEntry(CDefinition):
         ('data',       C.void_p),
     ]
 
-    def _outer_loop(self, args, dimensions, innerfunc, pyarys, steps):
+    def _outer_loop(self, args, dimensions, innerfunc, pyarys, steps, data):
         # implement outer loop
         with self.for_range(dimensions[0]) as (loop, idx):
             innerfunc(*map(lambda x: x.reference(), pyarys))
@@ -204,7 +203,7 @@ class GUFuncEntry(CDefinition):
 
             ary.fakeit(args[i], ary_dims, ary_steps)
 
-        self._outer_loop(args, dimensions, innerfunc, pyarys, steps)
+        self._outer_loop(args, dimensions, innerfunc, pyarys, steps, data)
         self.ret()
 
     @classmethod
@@ -374,12 +373,10 @@ class GUFuncCUDAEntry(GUFuncEntry):
     calls _cuda.c:cuda_outer_loop
     """
 
-    def _outer_loop(self, args, dimensions, innerfunc, py_arrays, steps):
+    def _outer_loop(self, args, dimensions, innerfunc, py_arrays, steps, info):
         """
         innerfunc: the CUDA kernel
         """
-        super(GUFuncCUDAEntry, self)._outer_loop(args, dimensions, innerfunc,
-                                                 py_arrays, steps)
         llvm_builder = innerfunc.parent.builder
         cbuilder = innerfunc.parent
 
@@ -389,6 +386,7 @@ class GUFuncCUDAEntry(GUFuncEntry):
             # array_list[i].assign(py_array.ref)
             llvm_builder.store(py_array.handle, array_list[i].handle)
 
-        largs = (args.handle, dimensions.handle, steps.handle,
-                 innerfunc.handle, array_list.handle)
-        llvm_builder.call(cuda_outer_loop, largs)
+        largs = [llvm_builder.load(arg.handle) for arg in (args, dimensions,
+                                                           steps, info)]
+        largs.append(array_list.handle)
+        print llvm_builder.call(cuda_outer_loop, largs)

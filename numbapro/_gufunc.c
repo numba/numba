@@ -22,7 +22,7 @@ PyDynUFunc_FromFuncAndDataAndSignature(PyUFuncGenericFunction *func, void **data
                            char *types, int ntypes,
                            int nin, int nout, int identity,
                            char *name, char *doc, char *signature,
-                           PyObject *object, int use_cuda)
+                           PyObject *object, PyObject *cuda_dispatcher)
 {
     PyUFuncObject *ufunc = NULL;
     PyObject *result;
@@ -37,7 +37,7 @@ PyDynUFunc_FromFuncAndDataAndSignature(PyUFuncGenericFunction *func, void **data
     /* Py_TYPE(ufunc) = &PyDynUFunc_Type; */
 
     /* Hold on to whatever object is passed in */
-    result = PyDynUFunc_New(ufunc, NULL, NULL, use_cuda);
+    result = PyDynUFunc_New(ufunc, NULL, cuda_dispatcher, !!cuda_dispatcher);
     if (!result)
         goto err;
 
@@ -67,7 +67,7 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     PyObject *type_obj;
     PyObject *data_obj;
     PyObject *object = NULL; /* object to hold on to while ufunc is alive */
-    PyObject *use_cuda = NULL;
+    PyObject *cuda_dispatcher = NULL;
     int i, j;
     int custom_dtype = 0;
     PyUFuncGenericFunction *funcs;
@@ -75,12 +75,11 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     void **data;
     PyObject *ufunc;
     char * signature;
-    int use_cuda_gufunc = 0;
 
     if (!PyArg_ParseTuple(args, "O!O!iiOs|OO", &PyList_Type, &func_list,
                                                &PyList_Type, &type_list,
                                                &nin, &nout, &data_list,
-                                               &signature, &use_cuda,
+                                               &signature, &cuda_dispatcher,
                                                &object)) {
         return NULL;
     }
@@ -173,13 +172,6 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         }
     }
 
-    /* Check whether we need to create a CUDA generalized ufunc */
-    if (use_cuda) {
-        use_cuda_gufunc = PyObject_IsTrue(use_cuda);
-        if (use_cuda_gufunc < 0)
-            return NULL;
-    }
-
     if (!custom_dtype) {
         char *char_types = PyArray_malloc(nfuncs * (nin+nout) * sizeof(char));
         for (i = 0; i < nfuncs; i++) {
@@ -191,12 +183,12 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         ufunc = PyDynUFunc_FromFuncAndDataAndSignature(
                 (PyUFuncGenericFunction*)funcs, data, (char*) char_types, nfuncs,
                 nin, nout, PyUFunc_None, "test", (char*)"test", signature, object,
-                use_cuda_gufunc);
+                cuda_dispatcher);
     }
     else {
         ufunc = PyDynUFunc_FromFuncAndDataAndSignature(
             0,0,0,0,nin,nout,PyUFunc_None,"test",(char*)"test",signature,object,
-            use_cuda_gufunc);
+            cuda_dispatcher);
         PyUFunc_RegisterLoopForType((PyUFuncObject*)ufunc,custom_dtype,funcs[0],types,0);
         PyArray_free(funcs);
         PyArray_free(types);

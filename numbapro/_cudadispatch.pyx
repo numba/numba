@@ -1,3 +1,4 @@
+import numbapro
 cimport dispatch
 cimport cuda
 cimport numpy as cnp
@@ -92,7 +93,6 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         self.functions = {}
         self.name_to_func = {}
         for dtypes, (result_dtype, name) in types_to_name.items():
-            print name
             func = CudaFunction(name)
             func.load(&self.cu_module)
             self.functions[dtypes] = (result_dtype, func)
@@ -144,6 +144,7 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         """
         cdef CudaFunction func
         cdef int i, nops = len(self.functions.keys()[0])
+        print self.functions.keys()[0], nops
 
         self.info = <cuda.CudaFunctionAndData *> stdlib.malloc(
                         len(func_names) * sizeof(cuda.CudaFunctionAndData))
@@ -155,6 +156,7 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
             func = self.name_to_func[func_name]
             self.info[i].cu_func = func.cu_function
             self.info[i].nops = nops
+            # numbapro.drop_in_gdb(addr=<dispatch.Py_uintptr_t> &self.info[i].nops)
             result.append(<dispatch.Py_uintptr_t> &self.info[i])
 
         return result

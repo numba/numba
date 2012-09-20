@@ -24,3 +24,9 @@ def test(verbosity=2, failfast=False):
     suite = loader.loadTestsFromNames(test_module_names)
     runner = unittest.TextTestRunner(verbosity=verbosity, failfast=True)
     return runner.run(suite)
+
+def drop_in_gdb(addr=None, type='int'):
+    import os, signal
+    if addr is not None:
+        print 'watch *(%s *) %s' % (type, hex(addr))
+    os.kill(os.getpid(), signal.SIGINT)
