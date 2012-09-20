@@ -1,6 +1,7 @@
 from ctypes import *
+from pyc import find_shared_ending
 
-lib = CDLL('./test.so')
+lib = CDLL('./test' + find_shared_ending())
 
 lib.mult.argtypes = [c_double, c_double]
 lib.mult.restype = c_double

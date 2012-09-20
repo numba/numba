@@ -42,20 +42,27 @@ def which(program):
                 return exe_file
     return None
 
-def find_linker():
-    if sys.platform.startswith('win'):
-        return which("link.exe")
-    else:
-        return which("ld")
+_configs = {'win' : ("link.exe", "/dll", '.dll'),
+	'dar': ("libtool", "-dynamic", '.dylib'),
+ 	'default': ("ld", "-shared", ".so")
+}
 
-def get_ending(args):
-    import distutils.sysconfig
+def get_configs(arg):
+    return _configs.get(sys.platform[:3], _configs['default'])[arg]
+
+import functools
+
+find_linker = functools.partial(get_configs, 0)
+find_args = functools.partial(get_configs, 1)
+find_shared_ending = functools.partial(get_configs, 2)
+
+def get_ending(args):  
     if args.llvm:
         return ".bc"
     if args.olibs:
         return ".o"
     else:
-        return distutils.sysconfig.get_config_var('SO')
+        return find_shared_ending()
 
 def parse_arguments(args):
     inputs = args.inputs
@@ -95,8 +102,9 @@ def main(args=[]):
         logger.debug('emit shared library')
         logger.debug('write to temporary object file %s', tempfile.gettempdir())
         temp_obj = tempfile.gettempdir() + os.sep + os.path.basename(argattr.output) + '.o'
+        temp_obj = os.path.basename(argattr.output)+'.o'
         compiler.write_native_object(temp_obj)          # write temporary object
-        cmdargs = find_linker(), '-shared', '-o', argattr.output, temp_obj
+        cmdargs = find_linker(), find_args(), '-o', argattr.output, temp_obj
         subprocess.check_call(cmdargs)
         os.remove(temp_obj)   # remove temporary object
 
