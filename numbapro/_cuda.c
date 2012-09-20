@@ -220,8 +220,8 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
 
 #define CHECK_CUDA_MEM_ERR(action)                                          \
         if (error_code != cudaSuccess) {                                    \
-            PyErr_Format(cuda_exc_type, "Got cudaError_t %d for memory %s", \
-                         error_code, action);                               \
+            PyErr_Format(cuda_exc_type, "Got '%s' for memory %s",           \
+                         cudaGetErrorString(error_code), action);           \
             goto error;                                                     \
         }
 
