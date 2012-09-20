@@ -13,7 +13,7 @@
 
   Options:
              -h  Help
-             -o  Name of output file (default is name of first input with extension changed)
+             -o  Name of output file (default is name of first input -- with new ending)
              -c  Create object code from each input file instead of shared library
              --llvm Emit llvm module instead of object code
              --linker path-to-linker (if not on $PATH and llvm not provided)
