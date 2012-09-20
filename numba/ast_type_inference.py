@@ -10,12 +10,13 @@ from numba import error
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
 from .symtab import Variable
-from . import visitors, nodes, error, _ext
+from . import visitors, nodes, error
+# from . import _ext
 
-stdin, stdout, stderr = _ext.get_libc_file_addrs()
-stdin = nodes.ConstNode(stdin, void.pointer())
-stdout = nodes.ConstNode(stdout, void.pointer())
-stderr = nodes.ConstNode(stderr, void.pointer())
+#stdin, stdout, stderr = _ext.get_libc_file_addrs()
+#stdin = nodes.ConstNode(stdin, void.pointer())
+#stdout = nodes.ConstNode(stdout, void.pointer())
+#stderr = nodes.ConstNode(stderr, void.pointer())
 
 import numpy
 
@@ -839,10 +840,7 @@ class ASTSpecializer(visitors.NumbaTransformer):
 
     def visit_Print(self, node):
         # TDDO: handle 'dest' and 'nl' attributes
-        signature, lfunc = self.function_cache.function_by_name('printf')
-        return nodes.NativeCallNode(signature,
-                 [nodes.ConstNode("!!!!\n", c_string_type)], lfunc)
-
+        raise NotImplementedError
         signature, lfunc = self.function_cache.function_by_name(
                                                     'PyObject_Print')
         Py_PRINT_RAW = nodes.ConstNode(1, int_)
