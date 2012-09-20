@@ -5,6 +5,7 @@
 #include "numpy/ufuncobject.h"
 
 #include "_cuda.h"
+#include "_internal.h"
 
 /* prototypes */
 static const char *curesult_to_str(CUresult e);
@@ -329,9 +330,8 @@ static inline int
 _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
                  PyObject **arrays)
 {
-    npy_intp i, j;
+    npy_intp i;
     CudaFunctionAndData *info = (CudaFunctionAndData *) data;
-    int step_offset = info->nops;
     int result = 0;
 
     cudaStream_t stream = NULL;
@@ -349,8 +349,26 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
 //    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
 
 	for (i = 0; i < info->nops; i++) {
-		data_pointers[i] = PyArray_DATA(arrays[i]);
-		sizes[i] = steps[i];
+	    ndarray *array = (ndarray *) arrays[i];
+		void *device_data_pointer;
+		npy_intp *device_shape_pointer;
+
+		data_pointers[i] = &arrays[i];
+		sizes[i] = sizeof(PyArrayObject);
+
+		/* Copy array data to device */
+		if (alloc_and_copy(array->data, steps[i],
+                           &device_data_pointer, stream) < 0)
+            goto error;
+        /* Copy shape and strides to device */
+        if (alloc_and_copy(array->dimensions,
+                           array->nd * 2 * sizeof(npy_intp), /* size */
+                           (void **) &device_shape_pointer, stream) < 0)
+            goto error;
+
+		array->data = device_data_pointer;
+		array->dimensions = device_shape_pointer;
+		array->strides = device_shape_pointer + array->nd;
 	}
 	data_pointers[i] = steps; /* 'steps' kernel argument */
 	sizes[i] = info->nops * sizeof(npy_intp);
@@ -387,6 +405,7 @@ error:
 	result = -1;
 cleanup:
 	/* TODO: error handling */
+	/* TODO: memcpy and free PyArray_DATA() */
 	for (i = 0; i < nargs; i++) {
 		if (!device_pointers[i])
 			break;

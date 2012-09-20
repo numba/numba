@@ -131,13 +131,14 @@ class PyArray(CStruct):
         self.data.assign(data)
         self.nd.assign(self.parent.constant(C.int, len(dimensions)))
 
-        ary_dims = self.parent.array(C.intp, len(dimensions))
+        ary_dims = self.parent.array(C.intp, len(dimensions) * 2)
+        ary_steps = ary_dims[len(dimensions):]
         for i, dim in enumerate(dimensions):
             ary_dims[i] = dim
 
         self.dimensions.assign(ary_dims)
 
-        ary_steps = self.parent.array(C.intp, len(steps))
+        # ary_steps = self.parent.array(C.intp, len(steps))
         for i, step in enumerate(steps):
             ary_steps[i] = step
         self.strides.assign(ary_steps)
@@ -235,7 +236,9 @@ class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
                calls _cuda.c:cuda_outer_loop which does the memory transfers
                and kernel invocation
         """
-        wrapper_builder = GUFuncCUDAEntry(signature, CFuncRef(lfunc))
+        print lfunc.name
+        func = CFuncRef(lfunc)
+        wrapper_builder = GUFuncCUDAEntry(signature, func)
         wrapper = wrapper_builder(lfunc.module)
         return wrapper
 
@@ -245,12 +248,15 @@ class CudaVectorize(cuda.CudaVectorize):
     """
 
     def _build_caller(self, lfunc):
-#        lfunc.calling_convention = llvm.core.CC_PTX_DEVICE
-#        lfunc.linkage = llvm.core.LINKAGE_INTERNAL # do not emit device function
-#        lcaller_def = create_kernel_wrapper(lfunc)
-#        lcaller = lcaller_def(self.module)
-#        lcaller.calling_convention = llvm.core.CC_PTX_KERNEL
-#        return lcaller
+        assert self.module is lfunc.module
+
+        lfunc.calling_convention = llvm.core.CC_PTX_DEVICE
+        lfunc.linkage = llvm.core.LINKAGE_INTERNAL # do not emit device function
+        lcaller_def = create_kernel_wrapper(lfunc)
+        lcaller = lcaller_def(self.module)
+        lcaller.calling_convention = llvm.core.CC_PTX_KERNEL
+        return lcaller
+
         lfunc.calling_convention = llvm.core.CC_PTX_KERNEL
         return lfunc
 
@@ -312,6 +318,7 @@ def get_cuda_outer_loop(builder):
     # return CFuncRef(func_pointer)
     return lfunc
 
+wrapper_count = 0
 def create_kernel_wrapper(kernel):
     class CUDAKernelWrapper(CDefinition):
         """
@@ -319,7 +326,8 @@ def create_kernel_wrapper(kernel):
         each array on the GPU.
         """
 
-        _name_ = 'cuda_wrapper'
+        _name_ = 'cuda_wrapper%d' % wrapper_count
+        wrapper_count += 1
         _retty_ = C.void
         _argtys_ = [('op%d' % i, llvm.core.Type.pointer(PyArray.llvm_type()))
                         for i in range(len(kernel.args))]
@@ -339,9 +347,14 @@ def create_kernel_wrapper(kernel):
             blkid = self.var_copy(ctaid_x())
 
             # Adjust data pointer for the kernel
+            # Note that we invoke the kernel N times simultaneously, so to
+            # adjust the data pointer we need a copy of each PyArrayObject
+            # struct
             b = steps.parent.builder
             _int32_zero = llvm.core.Constant.int(llvm_types._int32, 0)
             id = tid + blkdim * blkid
+            arrays = [self.var_copy(array) for array in arrays]
+
             for i, array in enumerate(arrays):
                 # array = PyArray(self, array.handle)
                 # offset = id * steps[i].cast(id.type)
@@ -355,9 +368,10 @@ def create_kernel_wrapper(kernel):
                         ldata_pointer)
 
             # Call actual kernel
-            kernel_func = self.depends(CFuncRef(kernel))
-            kernel_func(*arrays)
-            # b.call(kernel, arrays)
+            # kernel_func = self.depends(CFuncRef(kernel))
+            # kernel_func(*arrays)
+            # print arrays[0].handle
+            b.call(kernel, [array.handle for array in arrays])
 
             self.ret()
 
