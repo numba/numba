@@ -81,7 +81,6 @@ class CommonVectorizeFromFrunc(object):
         # spuflist = [self.build(lfunc, **kws) for lfunc in lfunclist]
         spuflist = []
         for i, lfunc in enumerate(lfunclist):
-            print "processing...", i
             spuflist.append(self.build(lfunc, **kws))
 
         # We have an engine, build ufunc

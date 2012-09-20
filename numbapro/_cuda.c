@@ -308,6 +308,8 @@ alloc_and_copy(void *data, size_t size, void **result, cudaStream_t stream)
 	cudaError_t error_code;
 	void *p;
 
+    printf("Allocating chunk of %d bytes\n", (int) size);
+
 	error_code = cudaMalloc(&p, size);
 	CHECK_CUDA_MEM_ERR("allocation")
 
@@ -356,10 +358,12 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
 		data_pointers[i] = &arrays[i];
 		sizes[i] = sizeof(PyArrayObject);
 
+
 		/* Copy array data to device */
 		if (alloc_and_copy(array->data, steps[i],
                            &device_data_pointer, stream) < 0)
             goto error;
+
         /* Copy shape and strides to device */
         if (alloc_and_copy(array->dimensions,
                            array->nd * 2 * sizeof(npy_intp), /* size */

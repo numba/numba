@@ -87,4 +87,7 @@ typedef struct {
     int flags;
     /* For weak references */
     PyObject *weakreflist;
+    void *maskna_dtype;
+    void *maskna_data;
+    void *maskna_strides;
 } ndarray;

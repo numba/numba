@@ -102,16 +102,24 @@ class GUFuncVectorize(object):
         return self.gufunc_from_func(
             lfunclist, tyslist, self.signature, engine, use_cuda=use_cuda)
 
+_intp_ptr = C.pointer(C.intp)
 
 class PyObjectHead(CStruct):
     _fields_ = [
-        ('f1', C.intp),
-        ('f2', C.pointer(C.int)),
-        ]
+        ('ob_refcnt', C.intp),
+        ('type_pointer', _intp_ptr),
+    ]
 
-_intp_ptr = C.pointer(C.intp)
+    if llvm_types._trace_refs_:
+        # Account for _PyObject_HEAD_EXTRA
+        _fields_ = [
+            ('ob_next', _intp_ptr),
+            ('ob_prev', _intp_ptr),
+        ] + _fields_
+
 
 class PyArray(CStruct):
+
     _fields_ = PyObjectHead._fields_ + [
         ('data',           C.void_p),
         ('nd',             C.int),
@@ -240,9 +248,10 @@ class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
         """
         lfunc: lfunclist was [wrapper] * n_funcs, so we're done
         """
-        #return lfunc
         wrapper_builder = GUFuncCUDAEntry(signature, None)
-        return wrapper_builder(self.module)
+        lfunc = wrapper_builder(self.module)
+        # print lfunc
+        return lfunc
 
 
 class CudaVectorize(cuda.CudaVectorize):
@@ -368,6 +377,11 @@ def create_kernel_wrapper(kernel):
 
     return CUDAKernelWrapper()
 
+PyArray_p = llvm.core.Type.pointer(PyArray.llvm_type())
+PyArray_pp = llvm.core.Type.pointer(PyArray_p)
+
+def _ltype(minitype):
+    return minitype.to_llvm(numba.decorators.context)
 
 def get_cuda_outer_loop(builder):
     """
@@ -380,18 +394,15 @@ def get_cuda_outer_loop(builder):
         npy_intp.pointer(),       # npy_intp *dimensions
         npy_intp.pointer(),       # npy_intp *steps
         void.pointer(),           # void *func
-        object_.pointer(),        # PyObject **arrays
+        object_.pointer(),        # PyObject *arrays
     ]
     signature = minitypes.FunctionType(return_type=void, args=arg_types)
-    lfunc_type = signature.pointer().to_llvm(numba.decorators.context)
+    lfunc_type = _ltype(signature.pointer())
 
     func_addr = _cudadispatch.get_cuda_outer_loop_addr()
-    # return CFuncRef('cuda_outer_loop', lfunc_type, func_addr)
     func_int_addr = llvm.core.Constant.int(int64.to_llvm(context), func_addr)
     func_pointer = builder.inttoptr(func_int_addr, lfunc_type)
     lfunc = func_pointer
-    # lfunc = builder.load(func_pointer)
-    # return CFuncRef(func_pointer)
     return lfunc
 
 num_wrappers = 0
@@ -409,13 +420,14 @@ class GUFuncCUDAEntry(GUFuncEntry):
         cbuilder = args.parent
 
         cuda_outer_loop = get_cuda_outer_loop(llvm_builder)
+        # array_list = cbuilder.array(PyArray.llvm_type(), len(py_arrays))
         array_list = cbuilder.array(llvm_types._numpy_array, len(py_arrays))
         for i, py_array in enumerate(py_arrays):
-            # array_list[i].assign(py_array.ref)
-            llvm_builder.store(py_array.handle, array_list[i].handle)
+            array_list[i].assign(py_array.reference())
 
         largs = [llvm_builder.load(arg.handle) for arg in (args, dimensions,
                                                            steps, info)]
+        array_list = array_list.cast(_ltype(object_.pointer()))
         largs.append(array_list.handle)
         llvm_builder.call(cuda_outer_loop, largs)
 

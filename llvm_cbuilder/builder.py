@@ -1335,6 +1335,8 @@ class CStruct(CValue):
                 raise AttributeError("Field name shadows another attribute")
             setattr(self, fd, CVar(self.parent, gep))
 
+        self.type = self.llvm_type()
+
     def reference(self):
         return self._temp(self.handle)
 
