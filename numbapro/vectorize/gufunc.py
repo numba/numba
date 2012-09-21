@@ -9,9 +9,13 @@ from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm_cbuilder import builder
 from numbapro.translate import Translate
-from numbapro import _internal, _cudadispatch
-from numbapro.vectorize import cuda
+from numbapro import _internal
+try:
+    from numbapro import _cudadispatch
+except ImportError: # ignore missing cuda dependency
+    pass
 
+from numbapro.vectorize import cuda
 import numpy as np
 import llvm.core
 

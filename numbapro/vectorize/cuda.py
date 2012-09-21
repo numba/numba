@@ -8,7 +8,10 @@ from . import _common
 from ._common import _llvm_ty_to_numpy
 
 from numba.minivect import minitypes
-from numbapro import _cudadispatch
+try:
+    from numbapro import _cudadispatch
+except ImportError: # ignore missing cuda dependency
+    pass
 from numbapro.translate import Translate
 from numbapro.vectorize import minivectorize, basic
 

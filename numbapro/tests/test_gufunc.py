@@ -57,7 +57,12 @@ def test_cuda_gufunc():
 def main():
     test_numba()
     test_gufunc()
-    test_cuda_gufunc()
+    try:
+        from numbapro import _cudadispatch
+    except ImportError:
+        print 'skipped CUDA gufunc test'
+    else:
+        test_cuda_gufunc()
     print 'All good!'
 
 if __name__ == '__main__':
