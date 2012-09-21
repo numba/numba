@@ -175,7 +175,7 @@ class GUFuncEntry(CDefinition):
         ('data',       C.void_p),
     ]
 
-    def _outer_loop(self, args, dimensions, innerfunc, pyarys, steps, data):
+    def _outer_loop(self, args, dimensions, pyarys, steps, data):
         # implement outer loop
         innerfunc = self.depends(self.FuncDef)
         with self.for_range(dimensions[0]) as (loop, idx):
