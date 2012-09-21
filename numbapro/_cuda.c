@@ -328,6 +328,18 @@ error:
 	return -1;
 }
 
+/*
+    Call the generalized ufunc cuda kernel wrapper.
+
+    Arguments are in the form of
+
+        wrapper(PyArrayObject *A, char *data_A, npy_intp *shape_A,
+                PyArrayObject *B, char *data_B, npy_intp *shape_B,
+                npy_intp *steps)
+
+    The wrapper fills out the data, shape and strides pointers on the GPU.
+    The strides pointers are located at &shape[ndim].
+*/
 static inline int
 _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
                  PyObject **arrays)
@@ -340,42 +352,29 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
     CUresult cu_result;
     cudaError_t error_code;
 
-    void *device_pointers[MAXARGS] = { NULL };
-    void *kernelargs[MAXARGS];
-    void *data_pointers[MAXARGS];
-    npy_intp sizes[MAXARGS];
+    void *device_pointers[MAXARGS * 3 + 1] = { NULL };
+    void *kernelargs[MAXARGS * 3 + 1];
+    void *data_pointers[MAXARGS * 3 + 1];
+    npy_intp sizes[MAXARGS * 3 + 1];
 
-    int nargs = info->nops + 1;
+    int nargs = info->nops * 3 + 1;
 
 //    error_code = cudaStreamCreate(&stream);
 //    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
 
 	for (i = 0; i < info->nops; i++) {
 	    ndarray *array = (ndarray *) arrays[i];
-		void *device_data_pointer;
-		npy_intp *device_shape_pointer;
 
-		data_pointers[i] = &arrays[i];
-		sizes[i] = sizeof(PyArrayObject);
+		data_pointers[i*3] = array;
+		data_pointers[i*3+1] = array->data;
+		data_pointers[i*3+2] = array->dimensions;
 
-
-		/* Copy array data to device */
-		if (alloc_and_copy(array->data, steps[i],
-                           &device_data_pointer, stream) < 0)
-            goto error;
-
-        /* Copy shape and strides to device */
-        if (alloc_and_copy(array->dimensions,
-                           array->nd * 2 * sizeof(npy_intp), /* size */
-                           (void **) &device_shape_pointer, stream) < 0)
-            goto error;
-
-		array->data = device_data_pointer;
-		array->dimensions = device_shape_pointer;
-		array->strides = device_shape_pointer + array->nd;
+		sizes[i*3] = sizeof(PyArrayObject);
+		sizes[i*3+1] = steps[i] * dimensions[0];
+        sizes[i*3+2] = array->nd * 2 * sizeof(npy_intp);
 	}
-	data_pointers[i] = steps; /* 'steps' kernel argument */
-	sizes[i] = info->nops * sizeof(npy_intp);
+	data_pointers[i*3] = steps; /* 'steps' kernel argument */
+	sizes[i*3] = info->nops * sizeof(npy_intp);
 
 	for (i = 0; i < nargs; i++) {
 		/* This works best when data is contiguous !!! */
@@ -408,14 +407,13 @@ error:
     (void) cudaGetLastError(); /* clear error */
 	result = -1;
 cleanup:
-	/* TODO: error handling */
-	/* TODO: memcpy and free PyArray_DATA() */
+    /* TODO: error handling */
 	for (i = 0; i < nargs; i++) {
 		if (!device_pointers[i])
 			break;
 
-		(void) cudaMemcpy(args[i], (void *) device_pointers[i], sizes[i],
-						  cudaMemcpyDeviceToHost);
+		(void) cudaMemcpy(data_pointers[i], (void *) device_pointers[i],
+		                  sizes[i], cudaMemcpyDeviceToHost);
 		(void) cudaFree(device_pointers[i]);
 	}
 //	(void) cudaStreamDestroy(stream);

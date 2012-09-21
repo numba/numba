@@ -248,8 +248,6 @@ class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
         """
         lfunc: lfunclist was [wrapper] * n_funcs, so we're done
         """
-        wrapper_builder = GUFuncCUDAEntry(signature, None)
-        lfunc = wrapper_builder(self.module)
         # print lfunc
         return lfunc
 
@@ -270,8 +268,10 @@ class CudaVectorize(cuda.CudaVectorize):
         lfunc.linkage = llvm.core.LINKAGE_INTERNAL # do not emit device function
         lcaller_def = create_kernel_wrapper(lfunc)
         lcaller = lcaller_def(self.module)
+        lcaller.verify()
         lcaller.calling_convention = llvm.core.CC_PTX_KERNEL
         self.cuda_wrappers.append(lcaller)
+        # print lcaller
         return lcaller
 
 
@@ -326,13 +326,19 @@ def create_kernel_wrapper(kernel):
         _name_ = 'cuda_wrapper%d' % wrapper_count
         wrapper_count += 1
         _retty_ = C.void
-        _argtys_ = [('op%d' % i, llvm.core.Type.pointer(PyArray.llvm_type()))
-                        for i in range(len(kernel.args))]
-        _argtys_ += [('steps', C.npy_intp_p)]
+        _argtys_ = []
+        for i in range(len(kernel.args)):
+            name = 'op%d' % i
+            array_arg = (name, llvm.core.Type.pointer(PyArray.llvm_type()))
+            data_arg = (name + '_data', C.char_p)
+            shape_arg = (name + '_shape', C.npy_intp_p)
+            _argtys_.extend([array_arg, data_arg, shape_arg])
+
+        _argtys_.append(('steps', C.npy_intp_p))
 
         def body(self, *args):
-            arrays = args[:-1]
-            steps = args[-1]
+            args, steps = args[:-1], args[-1]
+            arrays, data_pointers, shape_pointers = args[::3], args[1::3], args[2::3]
 
             # get current thread index
             tid_x = self.get_intrinsic(llvm.core.INTR_PTX_READ_TID_X, [])
@@ -347,22 +353,43 @@ def create_kernel_wrapper(kernel):
             # Note that we invoke the kernel N times simultaneously, so to
             # adjust the data pointer we need a copy of each PyArrayObject
             # struct
-            b = steps.parent.builder
-            _int32_zero = llvm.core.Constant.int(llvm_types._int32, 0)
-            id = tid + blkdim * blkid
-            arrays = [self.var_copy(array) for array in arrays]
+            def constant(offset):
+                return self.constant(llvm_types._int32, offset).handle
 
-            for i, array in enumerate(arrays):
-                # array = PyArray(self, array.handle)
+            if llvm_types._trace_refs_:
+                data_offset = 4
+            else:
+                data_offset = 2
+            ndim_offset = constant(data_offset + 1)
+            shape_offset = constant(data_offset + 2)
+            strides_offset = constant(data_offset + 3)
+            data_offset = constant(data_offset)
+
+            id = tid + blkdim * blkid
+            # arrays = [self.var_copy(array) for array in arrays]
+            it = enumerate(zip(arrays, data_pointers, shape_pointers))
+            for i, (array, data_pointer, shape_pointer) in it:
+                b = array.parent.builder
                 # offset = id * steps[i].cast(id.type)
                 # array.data.assign(array.data[offset:])
 
-                array = array.handle
-                offset = id * steps[i].cast(id.type)
-                loffset = offset.handle
-                ldata_pointer = b.gep(array, [_int32_zero])
-                b.store(b.gep(b.load(ldata_pointer), [loffset]),
-                        ldata_pointer)
+                array = array.value
+                # offset = id * steps[i].cast(id.type)
+                # loffset = offset.handle
+                zero = constant(0)
+                loffset = zero
+
+                # print ndim_offset, b.gep(array, [ndim_offset])
+                ndim = b.load(b.gep(array, [ndim_offset]))
+
+                src_data_pointer = data_pointer.value
+                src_shape_pointer = shape_pointer.value
+                b.store(b.gep(src_data_pointer, [loffset]),
+                        b.gep(array, [zero, data_offset]))
+                b.store(src_shape_pointer,
+                        b.gep(array, [zero, shape_offset]))
+                b.store(b.gep(src_shape_pointer, [ndim]),
+                        b.gep(array, [zero, strides_offset]))
 
             # Call actual kernel
             # kernel_func = self.depends(CFuncRef(kernel))
@@ -376,9 +403,6 @@ def create_kernel_wrapper(kernel):
             pass
 
     return CUDAKernelWrapper()
-
-PyArray_p = llvm.core.Type.pointer(PyArray.llvm_type())
-PyArray_pp = llvm.core.Type.pointer(PyArray_p)
 
 def _ltype(minitype):
     return minitype.to_llvm(numba.decorators.context)
@@ -414,7 +438,8 @@ class GUFuncCUDAEntry(GUFuncEntry):
 
     def _outer_loop(self, args, dimensions, py_arrays, steps, info):
         """
-        innerfunc: the CUDA kernel
+        The outer loop is implemented by _cuda.c:cuda_outer_loop, call it
+        from this wrapper.
         """
         llvm_builder = args.parent.builder
         cbuilder = args.parent
