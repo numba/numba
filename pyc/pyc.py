@@ -83,6 +83,8 @@ def main(args=[]):
                         help="Emit llvm instead of native code")
     parser.add_argument("--linker", nargs=1, help="Path to linker (default is platform dependent)")
     parser.add_argument("--linker-args", help="Arguments to pass to linker")
+    parser.add_argument('--header', action="store_true",
+                        help="Emit C header file with function signatures")
 
     if os.path.basename(args[0]) in ['pyc.py', 'pyc']:
         args = args[1:]
@@ -107,6 +109,9 @@ def main(args=[]):
         cmdargs = find_linker(), find_args(), '-o', argattr.output, temp_obj
         subprocess.check_call(cmdargs)
         os.remove(temp_obj)   # remove temporary object
+
+    if argattr.header:
+        pyc.emit_header(argattr.output)
 
 if __name__ == "__main__":
     main()

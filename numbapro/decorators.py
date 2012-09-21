@@ -3,6 +3,7 @@ from numba import double
 import llvm.core as _lc
 
 default_module = _lc.Module.new('default')
+translates = []
 
 def export(ret_type=double, arg_types=[double], backend='bytecode', **kws):
     def _export(func, name=None):
@@ -12,4 +13,5 @@ def export(ret_type=double, arg_types=[double], backend='bytecode', **kws):
                                 module=default_module,
                                 name=name, **kws)
         t.translate()
+        translates.append(t)
     return _export

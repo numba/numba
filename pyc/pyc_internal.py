@@ -35,3 +35,12 @@ class Compiler(object):
         logger.debug(pymod)
         lmod = decorators.default_module
         return lmod
+
+def emit_header(output):
+    fname, ext = os.path.splitext(output)
+    with open(fname + '.h', 'wb') as fout:
+        for t in decorators.translates:
+            name = t.func.func_name
+            ret_type = str(t.ret_type)
+            args = ", ".join(str(arg_type) for arg_type in t.arg_types)
+            fout.write("extern %s %s(%s);\n" % (ret_type, name, args))
