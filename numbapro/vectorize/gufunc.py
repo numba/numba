@@ -332,13 +332,15 @@ def create_kernel_wrapper(kernel):
             array_arg = (name, llvm.core.Type.pointer(PyArray.llvm_type()))
             data_arg = (name + '_data', C.char_p)
             shape_arg = (name + '_shape', C.npy_intp_p)
-            _argtys_.extend([array_arg, data_arg, shape_arg])
+            strides_arg = ("name" + '_strides', C.npy_intp_p)
+            _argtys_.extend([array_arg, data_arg, shape_arg, strides_arg])
 
         _argtys_.append(('steps', C.npy_intp_p))
 
         def body(self, *args):
             args, steps = args[:-1], args[-1]
-            arrays, data_pointers, shape_pointers = args[::3], args[1::3], args[2::3]
+            arrays, data_pointers, shape_pointers, strides_pointers = (
+                        args[0::4], args[1::4], args[2::4], args[3::4])
 
             # get current thread index
             tid_x = self.get_intrinsic(llvm.core.INTR_PTX_READ_TID_X, [])
@@ -367,8 +369,9 @@ def create_kernel_wrapper(kernel):
 
             id = tid + blkdim * blkid
             # arrays = [self.var_copy(array) for array in arrays]
-            it = enumerate(zip(arrays, data_pointers, shape_pointers))
-            for i, (array, data_pointer, shape_pointer) in it:
+            it = enumerate(zip(arrays, data_pointers, shape_pointers,
+                               strides_pointers))
+            for i, (array, data_pointer, shape_pointer, strides_pointer) in it:
                 b = array.parent.builder
                 # offset = id * steps[i].cast(id.type)
                 # array.data.assign(array.data[offset:])
@@ -384,11 +387,12 @@ def create_kernel_wrapper(kernel):
 
                 src_data_pointer = data_pointer.value
                 src_shape_pointer = shape_pointer.value
+                src_strides_pointer = strides_pointer.value
                 b.store(b.gep(src_data_pointer, [loffset]),
                         b.gep(array, [zero, data_offset]))
                 b.store(src_shape_pointer,
                         b.gep(array, [zero, shape_offset]))
-                b.store(b.gep(src_shape_pointer, [ndim]),
+                b.store(src_strides_pointer,
                         b.gep(array, [zero, strides_offset]))
 
             # Call actual kernel

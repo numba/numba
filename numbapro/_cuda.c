@@ -302,6 +302,21 @@ cleanup:
         return -1;                                    \
     }
 
+static void
+print_array(ndarray *array, char *name)
+{
+    int i;
+    printf("array %s, ndim=%d:\n", name, array->nd);
+    printf("    shape:");
+    for (i = 0; i < array->nd; i++) {
+        printf(" %d ", array->dimensions[i]);
+    }
+    printf("    strides:");
+    for (i = 0; i < array->nd; i++) {
+        printf(" %d ", array->strides[i]);
+    }
+}
+
 static int
 alloc_and_copy(void *data, size_t size, void **result, cudaStream_t stream)
 {
@@ -352,29 +367,35 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
     CUresult cu_result;
     cudaError_t error_code;
 
-    void *device_pointers[MAXARGS * 3 + 1] = { NULL };
-    void *kernelargs[MAXARGS * 3 + 1];
-    void *data_pointers[MAXARGS * 3 + 1];
-    npy_intp sizes[MAXARGS * 3 + 1];
+    void *device_pointers[MAXARGS * 4 + 1] = { NULL };
+    void *kernelargs[MAXARGS * 4 + 1];
+    void *data_pointers[MAXARGS * 4 + 1];
+    npy_intp sizes[MAXARGS * 4 + 1];
 
-    int nargs = info->nops * 3 + 1;
+    int nargs = info->nops * 4 + 1;
 
+    if (info->nops > MAXARGS) {
+        PyErr_SetString(cuda_exc_type, "Too many array arguments to function");
+        return -1;
+    }
 //    error_code = cudaStreamCreate(&stream);
 //    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
 
 	for (i = 0; i < info->nops; i++) {
 	    ndarray *array = (ndarray *) arrays[i];
 
-		data_pointers[i*3] = array;
-		data_pointers[i*3+1] = array->data;
-		data_pointers[i*3+2] = array->dimensions;
+		data_pointers[i*4] = array;
+		data_pointers[i*4+1] = array->data;
+		data_pointers[i*4+2] = array->dimensions;
+		data_pointers[i*4+3] = array->strides;
 
-		sizes[i*3] = sizeof(PyArrayObject);
-		sizes[i*3+1] = steps[i] * dimensions[0];
-        sizes[i*3+2] = array->nd * 2 * sizeof(npy_intp);
+		sizes[i*4] = sizeof(PyArrayObject);
+		sizes[i*4+1] = steps[i] * dimensions[0];
+        sizes[i*4+2] = array->nd * sizeof(npy_intp);
+        sizes[i*4+3] = array->nd * sizeof(npy_intp);
 	}
-	data_pointers[i*3] = steps; /* 'steps' kernel argument */
-	sizes[i*3] = info->nops * sizeof(npy_intp);
+	data_pointers[i*4] = steps; /* 'steps' kernel argument */
+	sizes[i*4] = info->nops * sizeof(npy_intp);
 
 	for (i = 0; i < nargs; i++) {
 		/* This works best when data is contiguous !!! */
