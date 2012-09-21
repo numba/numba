@@ -55,8 +55,8 @@ def test_cuda_gufunc():
     _test_gufunc(CUDAGUFuncVectorize)
 
 def main():
-    #test_numba()
-    #test_gufunc()
+    test_numba()
+    test_gufunc()
     test_cuda_gufunc()
     print 'All good!'
 
