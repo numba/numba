@@ -8,7 +8,7 @@ import unittest, logging
 #logging.basicConfig(level=logging.DEBUG)
 
 class FooIf(CDefinition):
-    _name_ = 'foo'
+    _name_ = 'foo_if'
     _retty_ = C.int
     _argtys_ = [('x', C.int),
                 ('y', C.int),]
@@ -23,7 +23,7 @@ class FooIf(CDefinition):
 
 
 class FooWhile(CDefinition):
-    _name_ = 'foo'
+    _name_ = 'foo_while'
     _retty_ = C.int
     _argtys_ = [('x', C.int)]
 
@@ -38,7 +38,7 @@ class FooWhile(CDefinition):
             return y
 
 class FooForRange(CDefinition):
-    _name_ = 'foo'
+    _name_ = 'foo_for_range'
     _retty_ = C.int
     _argtys_ = [('x', C.int)]
 

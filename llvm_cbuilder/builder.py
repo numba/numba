@@ -364,9 +364,13 @@ class CBuilder(object):
             self.builder.ret(val.value)
         else:
             if retty != types.void:
-                errmsg = "Cannot return void"
-                raise TypeError(errmsg)
-            self.builder.ret_void()
+                # errmsg = "Cannot return void"
+                # raise TypeError(errmsg, retty)
+                bb = self.function.append_basic_block('unreachable_bb')
+                self.builder.position_at_end(bb)
+                self.builder.ret(self.builder.alloca(retty, name='undef'))
+            else:
+                self.builder.ret_void()
 
     @contextlib.contextmanager
     def ifelse(self, cond):

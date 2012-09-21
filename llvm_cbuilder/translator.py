@@ -1,5 +1,6 @@
 # A handy translator that converts control flow into the appropriate
 # llvm_cbuilder constructs
+from numba.functions import _get_ast
 import inspect, functools, ast
 import logging
 
@@ -8,22 +9,9 @@ logger = logging.getLogger(__name__)
 def translate(func):
     # TODO use meta package
     wrapper = functools.wraps(func)
-    source = inspect.getsource(func)
-    lines = list(source.splitlines())
-
-    # skip first two lines
-    # assume they are
-    #     @translate
-    #     def blahblah():
-    assert lines[0].lstrip().startswith('@')
-    assert lines[1].lstrip().startswith('def')
-    first_line_len = len(lines[2])
-    indent = first_line_len - len(lines[2].lstrip())
-    source = '\n'.join(line[indent:] for line in lines[2:])
-
     caller_frame = inspect.currentframe().f_back
-
-    tree = ast.parse(source)
+    tree = _get_ast(func)
+    tree = ast.copy_location(ast.Module(body=tree.body), tree)
     tree = ExpandControlFlow().visit(tree)
     tree = ast.fix_missing_locations(tree)
 
@@ -34,7 +22,7 @@ def translate(func):
 
     try:
         return eval(compile(tree, '<string>', 'exec'))
-    except:
+    except Exception, e:
         logger.debug(ast.dump(tree))
         from ArminRonacher import codegen # uses Armin Ronacher's codegen to debug
         # http://dev.pocoo.org/hg/sandbox/file/852a1248c8eb/ast/codegen.py
