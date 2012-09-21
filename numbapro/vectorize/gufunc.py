@@ -179,7 +179,10 @@ class GUFuncEntry(CDefinition):
         # implement outer loop
         innerfunc = self.depends(self.FuncDef)
         with self.for_range(dimensions[0]) as (loop, idx):
-            innerfunc(*map(lambda x: x.reference(), pyarys))
+            args = [arg.reference().cast(arg_type.type)
+                        for arg, arg_type in zip(pyarys, innerfunc.handle.args)]
+            innerfunc(*args)
+            # innerfunc(*map(lambda x: x.reference(), pyarys))
 
             for i, ary in enumerate(pyarys):
                 ary.data.assign(ary.data[steps[i]:])
@@ -248,7 +251,7 @@ class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
         """
         lfunc: lfunclist was [wrapper] * n_funcs, so we're done
         """
-        print lfunc
+        # print lfunc
         return lfunc
 
 
@@ -271,7 +274,7 @@ class CudaVectorize(cuda.CudaVectorize):
         lcaller.verify()
         lcaller.calling_convention = llvm.core.CC_PTX_KERNEL
         self.cuda_wrappers.append(lcaller)
-        print lcaller
+        # print lcaller
         return lcaller
 
 
@@ -338,6 +341,7 @@ def create_kernel_wrapper(kernel):
         _argtys_.append(('steps', C.npy_intp_p))
 
         def body(self, *args):
+            args = list(args)
             args, steps = args[:-1], args[-1]
             arrays, data_pointers, shape_pointers, strides_pointers = (
                         args[0::4], args[1::4], args[2::4], args[3::4])
@@ -371,19 +375,17 @@ def create_kernel_wrapper(kernel):
             # arrays = [self.var_copy(array) for array in arrays]
             it = enumerate(zip(arrays, data_pointers, shape_pointers,
                                strides_pointers))
-            for i, (array, data_pointer, shape_pointer, strides_pointer) in it:
-                b = array.parent.builder
+            for i, (array_list, data_pointer, shape_pointer, strides_pointer) in it:
+                b = array_list.parent.builder
                 # offset = id * steps[i].cast(id.type)
                 # array.data.assign(array.data[offset:])
 
-                array = array.value
-                # offset = id * steps[i].cast(id.type)
-                # loffset = offset.handle
+                array = arrays[i] = array_list[id:].handle
+                # arrays[i] = array = array_list.value
+                offset = id * steps[i].cast(llvm_types._int32)
+                loffset = offset.value
                 zero = constant(0)
-                loffset = zero
-
-                # print ndim_offset, b.gep(array, [ndim_offset])
-                ndim = b.load(b.gep(array, [ndim_offset]))
+                # loffset = zero
 
                 src_data_pointer = data_pointer.value
                 src_shape_pointer = shape_pointer.value
@@ -398,8 +400,7 @@ def create_kernel_wrapper(kernel):
             # Call actual kernel
             # kernel_func = self.depends(CFuncRef(kernel))
             # kernel_func(*arrays)
-            b.call(kernel, [array.value for array in arrays])
-
+            b.call(kernel, arrays)
             self.ret()
 
         @classmethod

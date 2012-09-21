@@ -42,8 +42,8 @@ def _test_gufunc(vectorizer):
     C = gufunc(A, B)
     Gold = ut.matrix_multiply(A, B)
 
-    print(C)
-    print(Gold)
+    # print(C)
+    # print(Gold)
 
     if (C != Gold).any():
         raise ValueError

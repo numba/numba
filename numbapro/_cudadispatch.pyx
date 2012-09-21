@@ -165,21 +165,6 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         stdlib.free(self.info)
 
 
-def build_structs(func_names):
-    cdef CudaFunction func
-
-#    cuda.get_device(&self.cu_device, &self.cu_context, device_number)
-#    cuda.init_attributes(self.cu_device, &self.device_attrs)
-#    cuda.cuda_load(ptx_code, &self.cu_module)
-#
-#    # print ptx_code
-#
-#    self.functions = {}
-#    for dtypes, (result_dtype, name) in types_to_name.items():
-#        func = CudaFunction(name)
-#        func.load(&self.cu_module)
-#        self.functions[dtypes] = (result_dtype, func)
-
 def get_cuda_outer_loop_addr():
     return <dispatch.Py_uintptr_t> &cuda.cuda_outer_loop
 

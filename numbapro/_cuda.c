@@ -311,10 +311,11 @@ print_array(ndarray *array, char *name)
     for (i = 0; i < array->nd; i++) {
         printf(" %d ", array->dimensions[i]);
     }
-    printf("    strides:");
+    printf("\n    strides:");
     for (i = 0; i < array->nd; i++) {
         printf(" %d ", array->strides[i]);
     }
+    puts("");
 }
 
 static int
@@ -323,7 +324,7 @@ alloc_and_copy(void *data, size_t size, void **result, cudaStream_t stream)
 	cudaError_t error_code;
 	void *p;
 
-    printf("Allocating chunk of %d bytes\n", (int) size);
+    /* printf("Allocating chunk of %d bytes\n", (int) size); */
 
 	error_code = cudaMalloc(&p, size);
 	CHECK_CUDA_MEM_ERR("allocation")
@@ -359,7 +360,7 @@ static inline int
 _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
                  PyObject **arrays)
 {
-    npy_intp i;
+    npy_intp i, j;
     CudaFunctionAndData *info = (CudaFunctionAndData *) data;
     int result = 0;
 
@@ -373,23 +374,34 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
     npy_intp sizes[MAXARGS * 4 + 1];
 
     int nargs = info->nops * 4 + 1;
+    ndarray *array_copies;
 
     if (info->nops > MAXARGS) {
         PyErr_SetString(cuda_exc_type, "Too many array arguments to function");
         return -1;
     }
-//    error_code = cudaStreamCreate(&stream);
-//    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
+
+    error_code = cudaStreamCreate(&stream);
+    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
+
+    array_copies = malloc(sizeof(ndarray) * info->nops * dimensions[0]);
+    if (!array_copies) {
+        PyErr_NoMemory();
+        return -1;
+    }
 
 	for (i = 0; i < info->nops; i++) {
 	    ndarray *array = (ndarray *) arrays[i];
+	    for (j = 0; j < dimensions[0]; j++) {
+	        array_copies[i * dimensions[0] + j] = *array;
+	    }
 
-		data_pointers[i*4] = array;
+		data_pointers[i*4] = &array_copies[i * dimensions[0]];
 		data_pointers[i*4+1] = array->data;
 		data_pointers[i*4+2] = array->dimensions;
 		data_pointers[i*4+3] = array->strides;
 
-		sizes[i*4] = sizeof(PyArrayObject);
+		sizes[i*4] = sizeof(ndarray) * dimensions[0];
 		sizes[i*4+1] = steps[i] * dimensions[0];
         sizes[i*4+2] = array->nd * sizeof(npy_intp);
         sizes[i*4+3] = array->nd * sizeof(npy_intp);
@@ -405,7 +417,6 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
 		kernelargs[i] = &device_pointers[i];
 	}
 
-    printf("Launching N=%d kernels\n", (int) dimensions[0]);
 	/* Launch kernel & check result */
 	/* TODO: use multiple thread blocks */
 	cu_result = cuLaunchKernel(info->cu_func,
@@ -433,11 +444,15 @@ cleanup:
 		if (!device_pointers[i])
 			break;
 
-		(void) cudaMemcpy(data_pointers[i], (void *) device_pointers[i],
-		                  sizes[i], cudaMemcpyDeviceToHost);
+        if (i % 4 == 1) {
+            /* Only copy data back */
+            (void) cudaMemcpy(data_pointers[i], (void *) device_pointers[i],
+                              sizes[i], cudaMemcpyDeviceToHost);
+        }
 		(void) cudaFree(device_pointers[i]);
 	}
-//	(void) cudaStreamDestroy(stream);
+	free(array_copies);
+	(void) cudaStreamDestroy(stream);
 	return result;
 }
 
