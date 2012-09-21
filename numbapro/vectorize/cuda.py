@@ -146,9 +146,10 @@ class CudaVectorize(_common.GenericVectorize):
 
     def build_ufunc(self, device_number=-1):
         dispatcher = self._build_ufunc(device_number)
-        return minivectorize.fallback_vectorize(
+        ufunc, lfuncs = minivectorize.fallback_vectorize(
                     basic.BasicVectorize, self.pyfunc, self.signatures,
                     minivect_dispatcher=None, cuda_dispatcher=dispatcher)
+        return ufunc
 
 
     def _build_caller(self, lfunc):

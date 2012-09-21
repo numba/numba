@@ -248,7 +248,7 @@ class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
         """
         lfunc: lfunclist was [wrapper] * n_funcs, so we're done
         """
-        # print lfunc
+        print lfunc
         return lfunc
 
 
@@ -271,7 +271,7 @@ class CudaVectorize(cuda.CudaVectorize):
         lcaller.verify()
         lcaller.calling_convention = llvm.core.CC_PTX_KERNEL
         self.cuda_wrappers.append(lcaller)
-        # print lcaller
+        print lcaller
         return lcaller
 
 
