@@ -6,7 +6,17 @@ from .minivect import minitypes
 import numba.ast_translate as translate
 from numba import nodes
 
-import meta.decompiler
+import logging
+import traceback
+logger = logging.getLogger(__name__)
+
+try:
+    from meta.decompiler import decompile_func
+except Exception, exn:
+    logger.warn("Could not import Meta - AST translation will not work:\n%s" %
+                traceback.format_exc())
+    decompile_func = None
+
 import llvm.core
 
 def is_numba_func(func):
@@ -28,7 +38,7 @@ def fix_ast_lineno(tree):
     return tree
 
 def _get_ast(func):
-    return meta.decompiler.decompile_func(func)
+    return decompile_func(func)
 
 def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
     import numba.ast_type_inference as type_inference
