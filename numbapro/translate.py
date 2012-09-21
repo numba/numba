@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Translate(_OldTranslate):
-    def __init__(self, func, ret_type='d', arg_types=['d'], module=None,
+    def __init__(self, func, ret_type, arg_types, module=None,
                  engine=None, **kws):
         self.func = func
         self.fco = func.func_code
@@ -29,6 +29,8 @@ class Translate(_OldTranslate):
                 # builtins is an attribtue.
                 self._myglobals[name] = getattr(__builtin__, name, None)
 
+        self.mini_rettype = ret_type
+        self.mini_argtypes = arg_types
         ret_type, arg_types = self.map_types(ret_type, arg_types)
 
         ######## BEGIN CHANGE

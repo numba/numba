@@ -37,10 +37,14 @@ class Compiler(object):
         return lmod
 
 def emit_header(output):
+    from numba.minivect import minitypes
+
     fname, ext = os.path.splitext(output)
     with open(fname + '.h', 'wb') as fout:
-        for t in decorators.translates:
-            name = t.func.func_name
-            ret_type = str(t.ret_type)
-            args = ", ".join(str(arg_type) for arg_type in t.arg_types)
+        fout.write(minitypes.get_utility())
+        fout.write("\n/* Prototypes */\n")
+        for t, name in decorators.translates:
+            name = name or t.func.func_name
+            ret_type = t.mini_rettype.declare()
+            args = ", ".join(arg_type.declare() for arg_type in t.mini_argtypes)
             fout.write("extern %s %s(%s);\n" % (ret_type, name, args))

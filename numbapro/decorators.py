@@ -13,5 +13,5 @@ def export(ret_type=double, arg_types=[double], backend='bytecode', **kws):
                                 module=default_module,
                                 name=name, **kws)
         t.translate()
-        translates.append(t)
+        translates.append((t, name))
     return _export
