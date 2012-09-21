@@ -10,9 +10,16 @@ from numba import error
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
 from .symtab import Variable
-from . import visitors, nodes, error, _ext
+from . import visitors, nodes, error
+try:
+    from . import _ext
+except ImportError:
+    _ext = None
 
-stdin, stdout, stderr = _ext.get_libc_file_addrs()
+if _ext:
+    stdin, stdout, stderr = _ext.get_libc_file_addrs()
+else:
+    stdin = stdout = stderr = 0
 stdin = nodes.ConstNode(stdin, void.pointer())
 stdout = nodes.ConstNode(stdout, void.pointer())
 stderr = nodes.ConstNode(stderr, void.pointer())
