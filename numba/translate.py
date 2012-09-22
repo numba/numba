@@ -481,6 +481,9 @@ class _LLVMModuleUtils(object):
         'strlen' : lc.Type.function(_llvm_size_t, [_int8_star]),
         'strncpy' : lc.Type.function(_int8_star, [_int8_star, _int8_star,
                                                   _llvm_size_t]),
+        'strndup' : lc.Type.function(_int8_star, [_int8_star, _llvm_size_t]),
+        'malloc' : lc.Type.function(_void_star, [_llvm_size_t]),
+        'free' : lc.Type.function(lc.Type.void(), [_void_star]),
         }
 
     @classmethod
@@ -586,6 +589,22 @@ class _LLVMModuleUtils(object):
             raise NotImplementedError("Currently unable to handle calls to "
                                       "len() for arguments that are not Numpy "
                                       "arrays.")
+        return res, None
+
+    @classmethod
+    def build_int(cls, translator, args):
+        res = None
+        if len(args) >= 1 and len(args) <= 2:
+            if args[0].typ.startswith('S'):
+                res = translator.builder.call(
+                    _LLVMModuleUtils.get_lib_fn(translator.mod, 'atol'),
+                    [])
+                raise NotImplementedError('FIXME')
+            else:
+                raise NotImplementedError('Base conversions not currently '
+                                          'supported.')
+        else:
+            raise TypeError('int() takes at least 1 and at most 2 arguments')
         return res, None
 
     @classmethod
@@ -713,6 +732,75 @@ class _LLVMModuleUtils(object):
         return ret_val
 
     @classmethod
+    def get_c_str_slice(cls, module):
+        ret_val = module.get_or_insert_function(
+            lc.Type.function(_int8_star, (_int8_star, _llvm_size_t,
+                                          _llvm_size_t)), '__c_str_slice')
+        if ret_val.is_declaration:
+            ret_val.linkage = lc.LINKAGE_INTERNAL
+            ret_val.args[0].name = 'in_str'
+            ret_val.args[1].name = 'lower'
+            ret_val.args[2].name = 'upper'
+            entry_block = ret_val.append_basic_block('entry')
+            lower_lt_0_block = ret_val.append_basic_block('lower_lt_0')
+            check_upper_block = ret_val.append_basic_block('check_upper')
+            upper_lt_0_block = ret_val.append_basic_block('upper_lt_0')
+            check_sublen_lb_block = ret_val.append_basic_block(
+                'check_sublen_lb')
+            sublen_lt_0_block = ret_val.append_basic_block('sublen_lt_0')
+            exit_block = ret_val.append_basic_block('exit')
+            zero = lc.Constant.int(_llvm_size_t, 0)
+            one = lc.Constant.int(_llvm_size_t, 1)
+            l_strlen = cls.get_lib_fn(module, 'strlen')
+            l_strndup = cls.get_lib_fn(module, 'strndup')
+            l_malloc = cls.get_lib_fn(module, 'malloc')
+            # entry:
+            builder = lc.Builder.new(entry_block)
+            in_str_len = builder.call(l_strlen, [ret_val.args[0]], 'in_str_len')
+            is_lower_lt_0 = builder.icmp(lc.ICMP_SLT, ret_val.args[1], zero,
+                                         'is_lower_lt_0')
+            builder.cbranch(is_lower_lt_0, lower_lt_0_block, check_upper_block)
+            # lower_lt_0:
+            builder = lc.Builder.new(lower_lt_0_block)
+            adj_lower = builder.add(ret_val.args[1], in_str_len, 'adj_lower')
+            builder.branch(check_upper_block)
+            # check_upper:
+            builder = lc.Builder.new(check_upper_block)
+            lower_phi = builder.phi(_llvm_size_t, 'lower_phi')
+            lower_phi.add_incoming(ret_val.args[1], entry_block)
+            lower_phi.add_incoming(adj_lower, lower_lt_0_block)
+            is_upper_lt_0 = builder.icmp(lc.ICMP_SLT, ret_val.args[2], zero,
+                                         'is_upper_lt_0')
+            builder.cbranch(is_upper_lt_0, upper_lt_0_block,
+                            check_sublen_lb_block)
+            # upper_lt_0:
+            builder = lc.Builder.new(upper_lt_0_block)
+            adj_upper = builder.add(ret_val.args[2], in_str_len, 'adj_upper')
+            builder.branch(check_sublen_lb_block)
+            # check_sublen_lb_block:
+            builder = lc.Builder.new(check_sublen_lb_block)
+            upper_phi = builder.phi(_llvm_size_t, 'upper_phi')
+            upper_phi.add_incoming(ret_val.args[2], check_upper_block)
+            upper_phi.add_incoming(adj_upper, upper_lt_0_block)
+            sublen = builder.sub(upper_phi, lower_phi, 'sublen')
+            is_sublen_lt_0 = builder.icmp(lc.ICMP_SLT, sublen, zero,
+                                          'is_sublen_lt_0')
+            builder.cbranch(is_sublen_lt_0, sublen_lt_0_block, exit_block)
+            # sublen_lt_0_block:
+            builder = lc.Builder.new(sublen_lt_0_block)
+            builder.branch(exit_block)
+            # exit_block
+            builder = lc.Builder.new(exit_block)
+            sublen_phi = builder.phi(_llvm_size_t, 'sublen_phi')
+            sublen_phi.add_incoming(sublen, check_sublen_lb_block)
+            sublen_phi.add_incoming(zero, sublen_lt_0_block)
+            in_str_start = builder.gep(ret_val.args[0], [lower_phi],
+                                      'in_str_start')
+            substr = builder.call(l_strndup, (in_str_start, sublen_phi))
+            builder.ret(substr)
+        return ret_val
+
+    @classmethod
     def build_conj(cls, translator, args):
         if __debug__:
             logger.debug(repr(args))
@@ -732,6 +820,7 @@ class _LLVMModuleUtils(object):
 PY_CALL_TO_LLVM_CALL_MAP = {
     debugout : _LLVMModuleUtils.build_debugout,
     len : _LLVMModuleUtils.build_len,
+    int : _LLVMModuleUtils.build_int,
     np.zeros_like : _LLVMModuleUtils.build_zeros_like,
     np.complex64.conj : _LLVMModuleUtils.build_conj,
     np.complex128.conj : _LLVMModuleUtils.build_conj,
@@ -1877,13 +1966,33 @@ class Translate(object):
         if __debug__:
             logger.debug(repr((indexable, lower, upper)))
         if indexable.typ[0] == 'S':
-            llvm_indexable = indexable.llvm(builder = self.builder)
+            l_strlen = _LLVMModuleUtils.get_lib_fn(self.mod, 'strlen')
+            l_strncpy = _LLVMModuleUtils.get_lib_fn(self.mod, 'strncpy')
+            l_indexable = indexable.llvm(builder = self.builder)
             # calculate the alloca size.
+            size_t_typ = llvmtype_to_strtype(_llvm_size_t)
             if upper is None:
-                upper = self.builder.call(
-                    _LLVMModuleUtils.get_lib_fn(self.mod, 'strlen'), [
-                        llvm_indexable])
-            raise NotImplementedError("FIXME")
+                l_upper = self.builder.call(l_strlen, [l_indexable])
+            else:
+                l_upper = upper.llvm(size_t_typ, builder = self.builder)
+            if lower is None:
+                l_lower = lc.Constant.int(_llvm_size_t, 0)
+            else:
+                l_lower = lower.llvm(size_t_typ, builder = self.builder)
+            l_heap_result = self.builder.call(
+                _LLVMModuleUtils.get_c_str_slice(self.mod), [
+                    l_indexable, l_lower, l_upper])
+            substr_len = self.builder.call(l_strlen, [l_heap_result])
+            # XXX Might have issues on 64-bit systems.
+            l_result = self.builder.alloca_array(
+                _int8, self.builder.add(substr_len,
+                                        lc.Constant.int(_llvm_size_t, 1)))
+            self.builder.call(l_strncpy, [l_result, l_heap_result,
+                                          substr_len])
+            self.builder.call(
+                _LLVMModuleUtils.get_lib_fn(self.mod, 'free'),
+                [l_heap_result])
+            ret_val = Variable(l_result, None, 'S')
         else:
             raise NotImplementedError("Slices unsupported for type %r" %
                                       (indexable.typ,))
