@@ -11,9 +11,20 @@ def translate(func):
     wrapper = functools.wraps(func)
     caller_frame = inspect.currentframe().f_back
     tree = _get_ast(func)
-    tree = ast.copy_location(ast.Module(body=tree.body), tree)
+    tree = ast.Module(body=tree.body)
     tree = ExpandControlFlow().visit(tree)
-    tree = ast.fix_missing_locations(tree)
+
+    # NOTE: A hack to fix assertion error in debug mode due to bad lineno.
+    #       Lineno must increase monotonically for co_lnotab,
+    #       the "line number table" to work correctly.
+    #       This script just set all lineno to 1 and col_offset = to 0.
+    #       This makes it impossible to do traceback, but it is not possible
+    #       anyway since we are dynamically changing the source code.
+    for node in ast.walk(tree):
+        # only ast.expr and ast.stmt and their subclass has lineno and col_offset.
+        if isinstance(node,  ast.expr) or isinstance(node, ast.stmt):
+            node.lineno = 1
+            node.col_offset = 0
 
     # prepare locals for execution
     local_dict = locals()
@@ -21,7 +32,8 @@ def translate(func):
     local_dict.update(caller_frame.f_globals)
 
     try:
-        return eval(compile(tree, '<string>', 'exec'))
+        compiled = compile(tree, '<string>', 'exec')
+        return eval(compiled)
     except Exception, e:
         logger.debug(ast.dump(tree))
         from ArminRonacher import codegen # uses Armin Ronacher's codegen to debug
@@ -97,7 +109,7 @@ class ExpandControlFlow(ast.NodeTransformer):
         ifelse = load_template(_if_else_template)
         ifelse = MacroExpander(mapping).visit(ifelse)
         newnode = self.generic_visit(ifelse)
-        return ast.copy_location(newnode, node)
+        return newnode
 
     def visit_While(self, node):
         mapping = {
@@ -107,7 +119,7 @@ class ExpandControlFlow(ast.NodeTransformer):
         whileloop = load_template(_while_template)
         whileloop = MacroExpander(mapping).visit(whileloop)
         newnode = self.generic_visit(whileloop)
-        return ast.copy_location(newnode, node)
+        return newnode
 
     def visit_For(self, node):
         try:
@@ -125,13 +137,13 @@ class ExpandControlFlow(ast.NodeTransformer):
         forloop = load_template(_for_range_template)
         forloop = MacroExpander(mapping).visit(forloop)
         newnode = self.generic_visit(forloop)
-        return ast.copy_location(newnode, node)
+        return newnode
 
     def visit_Return(self, node):
         mapping = {'__RETURN__' : node.value}
         ret = load_template(_return_template)
         repl = MacroExpander(mapping).visit(ret)
-        return ast.copy_location(repl, node)
+        return repl
 
     def visit_Num(self, node):
         '''convert immediate values
@@ -148,7 +160,7 @@ class ExpandControlFlow(ast.NodeTransformer):
             '__VALUE__' : node,
         }
         constant = MacroExpander(mapping).visit(template).value
-        newnode = ast.copy_location(constant, node)
+        newnode = constant
         return newnode
 
 class MacroExpander(ast.NodeTransformer):
@@ -187,6 +199,7 @@ class MacroExpander(ast.NodeTransformer):
             pass
         else:
             if repl is not None and not isinstance(repl, list):
-                return ast.copy_location(repl, node)
+                return repl
         return node
+
 
