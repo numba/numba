@@ -63,6 +63,11 @@ def main():
         print 'skipped CUDA gufunc test'
     else:
         test_cuda_gufunc()
+
+        # stress test
+        for i in range(100):
+            test_gufunc()
+            test_cuda_gufunc()
     print 'All good!'
 
 if __name__ == '__main__':

@@ -27,7 +27,7 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFrunc):
         return [None] * len(lfunclist)
 
     def __call__(self, lfunclist, tyslist, signature, engine, use_cuda,
-                 cuda_dispatcher=None, **kws):
+                 vectorizer, cuda_dispatcher=None, **kws):
         '''create generailized ufunc from a llvm.core.Function
 
         lfunclist : a single or iterable of llvm.core.Function instance
@@ -53,8 +53,9 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFrunc):
         # If elements of type-list (2nd arg) is tuple instead,
         # there will also memory corruption. (Seems like code rewrite.)
 
+        # Hold on to the vectorizer while the ufunc lives
         gufunc = _internal.fromfuncsig(ptrlist, tyslist, inct, outct, datlist,
-                                       signature, cuda_dispatcher)
+                                       signature, cuda_dispatcher, vectorizer)
 
         return gufunc
 
@@ -104,7 +105,8 @@ class GUFuncVectorize(object):
         tyslist = self._get_tys_list()
         engine = self.translates[0]._get_ee()
         return self.gufunc_from_func(
-            lfunclist, tyslist, self.signature, engine, use_cuda=use_cuda)
+            lfunclist, tyslist, self.signature, engine,
+            vectorizer=self, use_cuda=use_cuda)
 
 _intp_ptr = C.pointer(C.intp)
 
@@ -238,6 +240,7 @@ class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
 
     def __init__(self, module, signature):
         self.module = module
+        self.signature = signature
         # Create a wrapper around _cuda.c:cuda_outer_loop
         wrapper_builder = GUFuncCUDAEntry(signature, None)
         self.wrapper = wrapper_builder(self.module)
@@ -255,8 +258,12 @@ class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
         """
         lfunc: lfunclist was [wrapper] * n_funcs, so we're done
         """
+        assert signature == self.signature
         # print lfunc
-        return lfunc
+        # return lfunc
+        # Must return a new wrapper to avoid random segfaults. TODO: why?
+        wrapper_builder = GUFuncCUDAEntry(signature, None)
+        return wrapper_builder(self.module)
 
 
 class CudaVectorize(cuda.CudaVectorize):
@@ -319,7 +326,7 @@ class CUDAGUFuncVectorize(GUFuncVectorize):
         self.gufunc_from_func.cuda_kernels = self.cuda_vectorizer.cuda_wrappers
         return self.gufunc_from_func(
             lfunclist, tyslist, self.signature, engine=self.llvm_ee,
-            cuda_dispatcher=dispatcher, use_cuda=True)
+            vectorizer=self, cuda_dispatcher=dispatcher, use_cuda=True)
 
 
 wrapper_count = 0
