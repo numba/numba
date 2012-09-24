@@ -46,7 +46,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer):
     def visit_Assign(self, node):
         self.is_slice_assign = False
         self.visitlist(node.targets)
-        if (len(node.targets) == 1 and node.targets[0].is_array and
+        if (len(node.targets) == 1 and node.targets[0].type.is_array and
                 self.is_slice_assign):
             return self.register_array_expression(self.visit(node.value),
                                                   lhs=node.targets[0])
@@ -160,7 +160,8 @@ class UFuncRewriter(ArrayExpressionRewrite):
             ret_type = lhs.type.dtype
 
         vectorizer = self.vectorizer_cls(py_ufunc)
-        arg_types = [op.type for op in ufunc_builder.operands]
+        arg_types = [op.type.dtype if op.type.is_array else op.type
+                         for op in ufunc_builder.operands]
         vectorizer.add(ret_type=ret_type, arg_types=arg_types)
         ufunc = vectorizer.build_ufunc()
 
@@ -174,6 +175,7 @@ class UFuncRewriter(ArrayExpressionRewrite):
             keywords = None
         else:
             keywords = [ast.keyword('out', lhs)]
+
         return nodes.ObjectCallNode(signature=signature,
-                                    func=nodes.ObjectInjectNode(ufunc),
-                                    args=args, keywords=keywords)
+                                    func=None, args=args, keywords=keywords,
+                                    py_func=ufunc)
