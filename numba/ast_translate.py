@@ -223,97 +223,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             finally:
                 self._nodes.pop() # pop current node
 
-    def visit_Attribute(self, node):
-        result = self.visit(node.value)
-        if isinstance(node.ctx, ast.Load):
-            return self.generate_load_attribute(node, result)
-        else:
-            self.generate_store_attribute(node, result)
-
-    def visit_Assign(self, node):
-        target = self.visit(node.targets[0])
-        value = self.visit(node.value)
-        return self.generate_assign(value, target)
-
-    def visit_Num(self, node):
-        if node.type.is_int:
-            return self.generate_constant_int(node.n)
-        elif node.type.is_float:
-            return self.generate_constant_real(node.n)
-        else:
-            assert node.type.is_complex
-            return self.generate_constant_complex(node.n)
-
-    def visit_Subscript(self, node):
-        slicevalues = self.visit(node.slice)
-        if node.value.type.is_array:
-            value = self.visit(node.value.node)
-            lptr = node.value.subscript(self, value, slicevalues)
-        elif node.value.type.is_carray:
-            value = self.visit(node.value)
-            lptr = self.builder.gep(value, [slicevalues])
-
-        if isinstance(node.ctx, ast.Load): # load the value
-            return self.builder.load(lptr)
-        elif isinstance(node.ctx, ast.Store): # return a pointer for storing
-            return lptr
-        else:
-            # unreachable
-            raise AssertionError("Unknown subscript context: %s" % node.ctx)
-
-    def visit_Index(self, node):
-        return self.visit(node.value)
-
-    def visit_ExtSlice(self, node):
-        return self.visitlist(node.dims)
-
-    def visit_Name(self, node):
-        if isinstance(node.ctx, ast.Load): # load
-            return self.generate_load_symbol(node.id)
-        elif isinstance(node.ctx, ast.Store): # store
-            return self.generate_store_symbol(node.id)
-        # unreachable
-        raise AssertionError('unreachable')
-
-    def visit_If(self, node):
-        test = self.visit(node.test)
-        iftrue_body = node.body
-        orelse_body = node.orelse
-        self.generate_if(test, iftrue_body, orelse_body)
-
-    def visit_For(self, node):
-        if node.orelse:
-            # FIXME
-            raise NotImplementedError('Else in for-loop is not implemented.')
-
-        if node.iter.type.is_range:
-            self.generate_for_range(node, node.target, node.iter, node.body)
-        else:
-            raise NotImplementedError(ast.dump(node))
-
-    def visit_BoolOp(self, node):
-        if len(node.values)!=2: raise AssertionError
-        return self.generate_boolop(node.op, node.values[0], node.values[1])
-
-    def generate_boolop(self, op_class, lhs, rhs):
-        raise NotImplementedError
-
-    def visit_UnaryOp(self, node):
-        operand = self.visit(node.operand)
-        if isinstance(node.op, ast.Not):
-            return self.generate_not(operand)
-        raise NotImplementedError(ast.dump(node))
-
     # __________________________________________________________________________
 
     def setup_func(self):
-        # Seems not necessary
-        # convert (numpy) array arguments to a pointer to the dtype
-        #        self.func_signature = minitypes.FunctionType(
-        #            return_type=self.func_signature.return_type,
-        #            args=[arg_type.dtype.pointer() if arg_type.is_array else arg_type
-        #                      for arg_type in self.func_signature.args])
-
         self.lfunc_type = self.to_llvm(self.func_signature)
         self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
         self.nlocals = len(self.fco.co_varnames)
@@ -488,6 +400,55 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
     def generate_store_symbol(self, name):
         return self.symtab[name].lvalue
 
+    def visit_Attribute(self, node):
+        result = self.visit(node.value)
+        if isinstance(node.ctx, ast.Load):
+            return self.generate_load_attribute(node, result)
+        else:
+            self.generate_store_attribute(node, result)
+
+    def visit_Assign(self, node):
+        target = self.visit(node.targets[0])
+        value = self.visit(node.value)
+        return self.generate_assign(value, target)
+
+    def visit_Num(self, node):
+        if node.type.is_int:
+            return self.generate_constant_int(node.n)
+        elif node.type.is_float:
+            return self.generate_constant_real(node.n)
+        else:
+            assert node.type.is_complex
+            return self.generate_constant_complex(node.n)
+
+    def visit_Name(self, node):
+        if isinstance(node.ctx, ast.Load): # load
+            return self.generate_load_symbol(node.id)
+        elif isinstance(node.ctx, ast.Store): # store
+            return self.generate_store_symbol(node.id)
+            # unreachable
+        raise AssertionError('unreachable')
+
+    def visit_For(self, node):
+        if node.orelse:
+            # FIXME
+            raise NotImplementedError('Else in for-loop is not implemented.')
+
+        if node.iter.type.is_range:
+            self.generate_for_range(node, node.target, node.iter, node.body)
+        else:
+            raise NotImplementedError(ast.dump(node))
+
+    def visit_BoolOp(self, node):
+        assert len(node.values) == 2
+        raise NotImplementedError
+
+    def visit_UnaryOp(self, node):
+        operand = self.visit(node.operand)
+        if isinstance(node.op, ast.Not):
+            return self.generate_not(operand)
+        raise NotImplementedError(ast.dump(node))
+
     def visit_Compare(self, node):
         lhs, rhs = node.left, node.right
         lhs_lvalue, rhs_lvalue = self.visitlist([lhs, rhs])
@@ -516,7 +477,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 
-    def generate_if(self, test, iftrue_body, orelse_body):
+    def visit_If(self, node):
+        test = self.visit(node.test)
+        iftrue_body = node.body
+        orelse_body = node.orelse
+
         bb_true = self.append_basic_block('if.true')
         bb_false = self.append_basic_block('if.false')
         bb_endif = self.append_basic_block('if.end')
@@ -670,6 +635,32 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
 
         return val
+
+    def visit_Subscript(self, node):
+        slicevalues = self.visit(node.slice)
+        if node.value.type.is_array:
+            value = self.visit(node.value.node)
+            lptr = node.value.subscript(self, value, slicevalues)
+        elif node.value.type.is_carray:
+            value = self.visit(node.value)
+            lptr = self.builder.gep(value, [slicevalues])
+
+        if isinstance(node.ctx, ast.Load): # load the value
+            return self.builder.load(lptr)
+        elif isinstance(node.ctx, ast.Store): # return a pointer for storing
+            return lptr
+        else:
+            # unreachable
+            raise AssertionError("Unknown subscript context: %s" % node.ctx)
+
+    def visit_Index(self, node):
+        return self.visit(node.value)
+
+    def visit_ExtSlice(self, node):
+        return self.visitlist(node.dims)
+
+    def visit_Slice(self, node):
+        pass
 
     def visit_Call(self, node):
         raise Exception("This node should have been replaced")

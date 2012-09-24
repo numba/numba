@@ -371,6 +371,10 @@ class PyObject_GetAttrString(ExternalFunction):
     arg_types = [object_, c_string_type]
     return_type = object_
 
+class PySlice_New(ExternalFunction):
+    arg_types = [object_, object_, object_]
+    return_type = object_
+
 class PyModulo(InternalFunction):
 
     @property

@@ -623,7 +623,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
         return node
 
     def visit_Ellipsis(self, node):
-
         return nodes.ConstNode(Ellipsis, _types.EllipsisType())
 
     def visit_Slice(self, node):
@@ -635,7 +634,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
         for value in values:
             if value is None:
                 constants.append(None)
-            elif constant.variable.is_constant:
+            elif value.variable.is_constant:
                 constants.append(value.variable.constant_value)
             else:
                 break
