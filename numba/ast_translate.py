@@ -301,6 +301,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             if not self.is_block_terminated():
                 self.builder.ret_void()
 
+        self.terminate_cleanup_blocks()
+
         # Done code generation
         del self.builder  # release the builder to make GC happy
 
@@ -383,8 +385,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             self.return_value = self.builder.alloca(llvm_ret_type,
                                                     "return_value")
 
-        # All object temporaries are initialized to NULL here
-        self.init_temps_label = self.append_basic_block('init_temps_label')
         # All non-NULL object emporaries are DECREFed here
         self.cleanup_label = self.append_basic_block('cleanup_label')
 
@@ -402,6 +402,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             self.builder.ret(self.return_value)
 
         self.builder.position_at_end(bb)
+
+    def terminate_cleanup_blocks(self):
+        pass
 
     # __________________________________________________________________________
 
@@ -543,7 +546,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
     def visit_Return(self, node):
         if node.value is not None:
             assert not self.is_void_return
-            self.builder.store(self.return_value, self.visit(node.value))
+            retval = self.visit(node.value)
+            self.builder.store(retval, self.return_value)
         self.builder.branch(self.cleanup_label)
 
         # if node.value is not None:
@@ -732,7 +736,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         # TODO: Refcounts + error check
         largs = self.visitlist(node.args)
         result = self.builder.call(node.llvm_func, largs)
-        return self.object_coercer.check_err(result)
+        if node.type.is_object:
+            return self.object_coercer.check_err(result)
+        return result
 
     def visit_TempNode(self, node):
         if node.llvm_temp is None:
@@ -751,7 +757,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         bb = self.builder.basic_block
 
         # Initialize temp to NULL at beginning of function
-        self.builder.position_at_end(self.init_temps_label)
+        self.builder.position_at_beginning(self.lfunc.get_entry_basic_block())
         lhs = self.builder.alloca(llvm_types._pyobject_head_struct_p)
         self.generate_assign(self.visit(nodes.NULL_obj), lhs)
         node.llvm_temp = lhs
@@ -761,8 +767,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         rhs = self.visit(node.node)
         self.generate_assign(rhs, lhs)
 
-        # Generate Py_XDECREF(temp)
-        self.builder.position_at_end(self.cleanup_label)
+        # Generate Py_XDECREF(temp) (call Py_DecRef only if not NULL)
+        self.builder.position_at_beginning(self.cleanup_label)
         py_decref = self.function_cache.function_by_name('Py_DecRef')
         self.object_coercer.check_err(
                     lhs, callback=lambda b: b.call(py_decref, [lhs]))
@@ -847,6 +853,10 @@ class ObjectCoercer(object):
         Check for errors. If the result is NULL, and error should have been set
         Jumps to translator.error_label if an exception occurred.
         """
+        print '*' * 50
+        print llvm_result
+        print llvm_types._intp
+        print '*' * 50
         int_result = self.translator.builder.ptrtoint(llvm_result,
                                                        llvm_types._intp)
         NULL = llvm.core.Constant.int(int_result.type, 0)

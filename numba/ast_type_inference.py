@@ -863,6 +863,7 @@ class ASTSpecializer(visitors.NumbaTransformer):
         else:
             value = None
 
+        value = nodes.CoercionNode(value, dst_type=ret_type)
         node.error_return = ast.Return(value=value)
         return node
 
