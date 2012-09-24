@@ -1410,7 +1410,7 @@ class Translate(object):
         elif typ[0] == 'c':
             res = self._generate_complex_op(self._complex_mul, arg1, arg2)
         else:
-            raise NotImplementedError("FIXME")
+            raise NotImplementedError("FIXME", arg1.type, arg2.type)
         self.stack.append(Variable(res))
 
     def op_INPLACE_MULTIPLY(self, i, op, arg):

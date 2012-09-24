@@ -10,6 +10,21 @@ from numba import nodes
 import meta.decompiler
 import llvm.core
 
+def fix_ast_lineno(tree):
+    # NOTE: A hack to fix assertion error in debug mode due to bad lineno.
+    #       Lineno must increase monotonically for co_lnotab,
+    #       the "line number table" to work correctly.
+    #       This script just set all lineno to 1 and col_offset = to 0.
+    #       This makes it impossible to do traceback, but it is not possible
+    #       anyway since we are dynamically changing the source code.
+    for node in ast.walk(tree):
+        # only ast.expr and ast.stmt and their subclass has lineno and col_offset.
+        # if isinstance(node,  ast.expr) or isinstance(node, ast.stmt):
+        node.lineno = 1
+        node.col_offset = 0
+
+    return tree
+
 def _get_ast(func):
     return meta.decompiler.decompile_func(func)
 

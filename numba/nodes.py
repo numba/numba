@@ -125,17 +125,17 @@ NULL_obj = ConstNode(0, object_.pointer())
 class ObjectCallNode(FunctionCallNode):
     _fields = ['function', 'args_tuple', 'kwargs_dict']
 
-    def __init__(self, signature, call_node, py_func=None):
-        super(ObjectCallNode, self).__init__(signature, call_node.args)
-        self.function = call_node.func
+    def __init__(self, signature, func, args, keywords, py_func=None):
+        super(ObjectCallNode, self).__init__(signature, args)
+        self.function = func
         self.py_func = py_func
 
-        self.args_tuple = ast.Tuple(elts=call_node.args, ctx=ast.Load())
+        self.args_tuple = ast.Tuple(elts=args, ctx=ast.Load())
         self.args_tuple.variable = Variable(numba_types.TupleType(
-                                                size=len(call_node.args)))
+                                                size=len(args)))
 
-        if call_node.keywords:
-            keywords = [(ConstNode(k.arg), k.value) for k in call_node.keywords]
+        if keywords:
+            keywords = [(ConstNode(k.arg), k.value) for k in keywords]
             keys, values = zip(*keywords)
             self.kwargs_dict = ast.Dict(keys, values)
             self.kwargs_dict.variable = Variable(minitypes.object_)
@@ -153,6 +153,15 @@ class ObjectTempNode(Node):
     def __init__(self, node):
         self.node = node
         self.llvm_temp = None
+
+class ObjectInjectNode(Node):
+    """
+    An AST node that loads the given object (which may for instance not be
+    a local in the function).
+    """
+
+    def __init__(self, object):
+        self.object = object
 
 class TempNode(Node): #, ast.Name):
     """

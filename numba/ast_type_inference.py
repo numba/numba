@@ -23,21 +23,57 @@ import numpy
 import logging
 logger = logging.getLogger(__name__)
 
+class Pipeline(object):
+    def __init__(self, context, func, ast, func_signature):
+        self.context = context
+        self.func = func
+        self.ast = ast
+        self.func_signature = func_signature
+        self.symtab = None
+
+        self.order = [
+            'type_infer',
+            'type_set',
+            'transform_for',
+            'specialize',
+        ]
+
+    def type_infer(self, ast):
+        type_inferer = TypeInferer(self.context, self.func, ast,
+                                   func_signature=self.func_signature)
+        type_inferer.infer_types()
+        self.func_signature = type_inferer.func_signature
+        logger.debug("signature: %s" % self.func_signature)
+        self.symtab = type_inferer.symtab
+        return ast
+
+    def type_set(self, ast):
+        TypeSettingVisitor(self.context, self.func, ast).visit(ast)
+        return ast
+
+    def transform_for(self, ast):
+        transform = TransformForIterable(self.context, self.func, ast,
+                                         self.symtab)
+        return transform.visit(ast)
+
+    def specialize(self, ast):
+        specializer = ASTSpecializer(self.context, self.func, ast,
+                                     self.func_signature)
+        return specializer.visit(ast)
+
+    def run_pipeline(self):
+        ast = self.ast
+        for method_name in self.order:
+            ast = getattr(self, method_name)(ast)
+
+        return self.func_signature, self.symtab, ast
+
 def _infer_types(context, func, ast, func_signature):
     """
     Run type inference on the given ast.
     """
-    type_inferer = TypeInferer(context, func, ast,
-                               func_signature=func_signature)
-    type_inferer.infer_types()
-    func_signature = type_inferer.func_signature
-
-    logger.debug("signature: %s" % func_signature)
-
-    TypeSettingVisitor(context, func, ast).visit(ast)
-    ast = TransformForIterable(context, func, ast, type_inferer.symtab).visit(ast)
-    ast = ASTSpecializer(context, func, ast, func_signature).visit(ast)
-    return func_signature, type_inferer.symtab, ast
+    pipeline = context.numba_pipeline(context, func, ast, func_signature)
+    return pipeline.run_pipeline()
 
 class ASTBuilder(object):
     def index(self, node, constant_index, load=True):
@@ -665,7 +701,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin):
             return nodes.NativeCallNode(signature, call_node.args,
                                         llvm_func, py_func)
 
-        return nodes.ObjectCallNode(signature, call_node, py_func)
+        return nodes.ObjectCallNode(signature, call_node.func,
+                                    call_node.args, call_node.keywords,
+                                    py_func)
 
     def visit_Call(self, node):
         node.func = self.visit(node.func)

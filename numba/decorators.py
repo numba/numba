@@ -5,7 +5,7 @@ import logging
 
 import numba
 from numba import *
-from . import utils, functions, ast_translate as translate
+from . import utils, functions, ast_translate as translate, ast_type_inference
 from numba import translate as bytecode_translate
 from .minivect import minitypes
 from numba.utils import debugout
@@ -81,6 +81,7 @@ __tr_map__ = {}
 
 context = utils.get_minivect_context()
 context.llvm_context = translate.LLVMContextManager()
+context.numba_pipeline = ast_type_inference.Pipeline
 function_cache = context.function_cache = functions.FunctionCache(context)
 
 def function(f):
@@ -177,6 +178,7 @@ def jit(ret_type=double, arg_types=[double], backend='bytecode', **kws):
             t = bytecode_translate.Translate(func, ret_type=ret_type,
                                              arg_types=arg_types, **kws)
             t.translate()
+            print t.lfunc
             __tr_map__[func] = t
             return t.get_ctypes_func(llvm)
 
