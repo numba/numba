@@ -826,7 +826,7 @@ class TypeSettingVisitor(visitors.NumbaVisitor):
     """
 
     def visit(self, node):
-        if isinstance(node, ast.expr):
+        if hasattr(node, 'variable'):
             node.type = node.variable.type
         super(TypeSettingVisitor, self).visit(node)
 
@@ -878,7 +878,6 @@ class ASTSpecializer(visitors.NumbaTransformer):
 
     def visit_Print(self, node):
         # TDDO: handle 'dest' and 'nl' attributes
-        raise NotImplementedError
         signature, lfunc = self.function_cache.function_by_name(
                                                     'PyObject_Print')
         Py_PRINT_RAW = nodes.ConstNode(1, int_)

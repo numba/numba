@@ -84,6 +84,35 @@ context.llvm_context = translate.LLVMContextManager()
 context.numba_pipeline = ast_type_inference.Pipeline
 function_cache = context.function_cache = functions.FunctionCache(context)
 
+class NumbaFunction(object):
+    def __init__(self, py_func, wrapper=None, ctypes_func=None, signature=None):
+        self.py_func = py_func
+        self.wrapper = wrapper
+        self.ctypes_func = ctypes_func
+        self.signature = signature
+
+        self.__name__ = py_func.__name__
+        self.__doc__ = py_func.__doc__
+
+        if ctypes_func is None:
+            self._is_numba_func = True
+            self._numba_func = py_func
+
+    def __repr__(self):
+        if self.ctypes_func:
+            compiled = 'compiled numba function (%s)' % self.signature
+        else:
+            compiled = 'specializing numba function'
+
+        return '<%s %s>' % (compiled, self.py_func)
+
+    def __call__(self, *args, **kwargs):
+        if self.ctypes_func:
+            return self.ctypes_func(*args, **kwargs)
+        else:
+            return self.wrapper(*args, **kwargs)
+
+
 def function(f):
     """
     Defines a numba function, that, when called, specializes on the input
@@ -98,9 +127,8 @@ def function(f):
         ctypes_func = jit_ast(arg_types=types)(f)
         return ctypes_func(*args, **kwargs)
 
-    wrapper._is_numba_func = True
-    wrapper._numba_func = f
-    return wrapper
+    f.live_objects = []
+    return NumbaFunction(f, wrapper=wrapper)
 
 # Bit of an inconsistency with jit_ast() vs jit(), but we already used
 # @function()...
@@ -143,10 +171,14 @@ def jit_ast(ret_type=None, arg_types=None):
     assert arg_types is not None
 
     def _jit(func):
+        if not hasattr(func, 'live_objects'):
+            func.live_objects = []
         func._is_numba_func = True
         result = function_cache.compile_function(func, arg_types)
-        _, _, ctypes_func = result
-        return ctypes_func
+        signature, lfunc, ctypes_func = result
+        # print lfunc
+        return NumbaFunction(func, ctypes_func=ctypes_func,
+                             signature=signature)
 
     return _jit
 

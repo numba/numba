@@ -142,6 +142,8 @@ class ObjectCallNode(FunctionCallNode):
         else:
             self.kwargs_dict = NULL_obj
 
+        self.type = signature.return_type
+
 
 class ObjectTempNode(Node):
     """
@@ -154,14 +156,6 @@ class ObjectTempNode(Node):
         self.node = node
         self.llvm_temp = None
 
-class ObjectInjectNode(Node):
-    """
-    An AST node that loads the given object (which may for instance not be
-    a local in the function).
-    """
-
-    def __init__(self, object):
-        self.object = object
 
 class TempNode(Node): #, ast.Name):
     """

@@ -1,4 +1,5 @@
 import math
+import copy
 import types
 import ctypes
 
@@ -183,6 +184,23 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return module_type
         else:
             return super(NumbaTypeMapper, self).from_python(value)
+
+    def promote_types(self, type1, type2):
+        if (type1.is_array or type2.is_array) and not \
+            (type1.is_array and type2.is_array):
+            if type1.is_array:
+                array_type = type1
+                other_type = type2
+            else:
+                array_type = type2
+                other_type = type1
+
+            type = copy.copy(array_type)
+            type.dtype = self.promote_types(array_type.dtype, other_type)
+            return type
+
+        return super(NumbaTypeMapper, self).promote_types(type1, type2)
+
 
 def _map_dtype(dtype):
     """

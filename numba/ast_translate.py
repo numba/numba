@@ -698,6 +698,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         if node.py_func:
             # FIXME: Currently uses the runtime address of the python function.
             #        Sounds like a hack.
+            self.func.live_objects.append(node.py_func)
             func_addr = id(node.py_func)
             lfunc_addr_int = self.generate_constant_int(func_addr,
                                                         _types.Py_ssize_t)
