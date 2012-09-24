@@ -29,14 +29,15 @@ class NumbaproPipeline(ast_type_inference.Pipeline):
 decorators.context.numba_pipeline = NumbaproPipeline
 
 
-class ArrayExpressionRewrite(visitors.NumbaTransformer):
+class ArrayExpressionRewrite(visitors.NumbaTransformer,
+                             ast_type_inference.NumpyMixin):
     """
     Find element-wise expressions and run ElementalMapper to turn it into
     a minivect AST or a ufunc.
     """
 
-    in_elemental = 0
     is_slice_assign = False
+    nesting_level = 0
 
     def register_array_expression(self, node, lhs=None):
         """
@@ -46,24 +47,36 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer):
     def visit_Assign(self, node):
         self.is_slice_assign = False
         self.visitlist(node.targets)
+
+        self.nesting_level = self.is_slice_assign
+        node.value = self.visit(node.value)
+        self.nesting_level = 0
+
+        elementwise = getattr(node.value, 'elementwise', False)
         if (len(node.targets) == 1 and node.targets[0].type.is_array and
-                self.is_slice_assign):
+                self.is_slice_assign and elementwise):
             return self.register_array_expression(self.visit(node.value),
                                                   lhs=node.targets[0])
 
-        node.value = self.visit(value)
+        node.value = self.visit(node.value)
         return node
 
     def visit_Subscript(self, node):
         self.generic_visit(node)
-        self.is_slice_assign = isinstance(node.ctx, ast.Store)
+        self.is_slice_assign = (isinstance(node.ctx, ast.Store) and
+                                node.type.is_array)
+        if self._is_ellipsis(node.slice):
+            return node.value
         return node
 
     def visit_BinOp(self, node):
-        if node.type.is_array:
+        node.elementwise = node.type.is_array
+        if node.elementwise and self.nesting_level == 0:
             return self.register_array_expression(node)
 
+        self.nesting_level += 1
         self.generic_visit(node)
+        self.nesting_level -= 1
         return node
 
     visit_UnaryOp = visit_BinOp
@@ -110,7 +123,7 @@ class UFuncBuilder(visitors.NumbaTransformer):
         self.demote_type(result)
         return result
 
-    def build_ufunc_ast(self):
+    def build_ufunc_ast(self, tree):
         args = [ast.Name(id='op%d' % i, ctx=ast.Param())
                     for i, op in enumerate(self.operands)]
         arguments = ast.arguments(args, # args
@@ -118,7 +131,7 @@ class UFuncBuilder(visitors.NumbaTransformer):
                                   None, # kwarg
                                   [],   # defaults
         )
-        body = ast.Return(value=self.ast)
+        body = ast.Return(value=tree)
         func = ast.FunctionDef(name='ufunc', args=arguments,
                                body=[body], decorator_list=[])
         # print ast.dump(func)
@@ -143,8 +156,8 @@ class UFuncRewriter(ArrayExpressionRewrite):
 
         # Build ufunc AST module
         ufunc_builder = UFuncBuilder(self.context, self.func, node)
-        ufunc_builder.visit(node)
-        ufunc_ast = ufunc_builder.build_ufunc_ast()
+        tree = ufunc_builder.visit(node)
+        ufunc_ast = ufunc_builder.build_ufunc_ast(tree)
         module = ast.Module(body=[ufunc_ast])
         functions.fix_ast_lineno(module)
 
