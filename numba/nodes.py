@@ -145,6 +145,16 @@ class ObjectCallNode(FunctionCallNode):
         self.type = signature.return_type
 
 
+class ObjectInjectNode(Node):
+    """
+    Refer to a Python object in the llvm code.
+    """
+
+    def __init__(self, object, **kwargs):
+        super(ObjectInjectNode, self).__init__(**kwargs)
+        self.object = object
+
+
 class ObjectTempNode(Node):
     """
     Coerce a node to a temporary which is reference counted.

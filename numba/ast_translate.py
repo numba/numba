@@ -657,7 +657,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
     def visit_CoercionNode(self, node):
         val = self.visit(node.node)
-        if node.node.type != node.dst_type:
+        node_type = node.node.type
+        if node.dst_type.is_object and not node_type.is_object:
+            return self.object_coercer.convert_single(node_type, val)
+        elif node.node.type != node.dst_type:
             # logger.debug('Coerce %s --> %s', node.node.type, node.dst_type)
             val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
 
@@ -665,9 +668,21 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
     def visit_Subscript(self, node):
         slicevalues = self.visit(node.slice)
-        if node.value.type.is_array:
+        if (node.value.type.is_array and
+                isinstance(node.value, nodes.DataPointerNode)):
+            # Indexing
+            assert not node.type.is_array
             value = self.visit(node.value.node)
             lptr = node.value.subscript(self, value, slicevalues)
+        elif node.type.is_array:
+            # Slicing
+            array = self.visit(node.value)
+            if isinstance(node.ctx, ast.Load):
+                getitem = self.function_cache.call('PyObject_GetItem',
+                                                   array, slicevalues)
+                return self.visit(getitem)
+            else:
+                raise NotImplementedError
         elif node.value.type.is_carray:
             value = self.visit(node.value)
             lptr = self.builder.gep(value, [slicevalues])
@@ -685,9 +700,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
     def visit_ExtSlice(self, node):
         return self.visitlist(node.dims)
-
-    def visit_Slice(self, node):
-        pass
 
     def visit_Call(self, node):
         raise Exception("This node should have been replaced")
@@ -707,22 +719,23 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
                                                 llvm_keys, llvm_values)
         return result
 
-    def visit_ObjectCallNode(self, node):
-        lty_obj = _types.object_.to_llvm(self.context)
+    def visit_ObjectInjectNode(self, node):
+        # FIXME: Currently uses the runtime address of the python function.
+        #        Sounds like a hack.
+        self.func.live_objects.append(node.object)
+        addr = id(node.py_func)
+        obj_addr_int = self.generate_constant_int(addr, _types.Py_ssize_t)
+        obj = self.builder.inttoptr(obj_addr_int,
+                                    _types.object_.to_llvm(self.context))
+        return obj
 
+    def visit_ObjectCallNode(self, node):
         args_tuple = self.visit(node.args_tuple)
         kwargs_dict = self.visit(node.kwargs_dict)
 
-        if node.py_func:
-            # FIXME: Currently uses the runtime address of the python function.
-            #        Sounds like a hack.
-            self.func.live_objects.append(node.py_func)
-            func_addr = id(node.py_func)
-            lfunc_addr_int = self.generate_constant_int(func_addr,
-                                                        _types.Py_ssize_t)
-            lfunc_addr = self.builder.inttoptr(lfunc_addr_int, lty_obj)
-        else:
-            lfunc_addr = self.visit(node.function)
+        if node.function is None:
+            node.function = nodes.ObjectInjectNode(node.py_func)
+        lfunc_addr = self.visit(node.function)
 
         # call PyObject_Call
         largs = [lfunc_addr, args_tuple, kwargs_dict]
@@ -736,7 +749,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         # TODO: Refcounts + error check
         largs = self.visitlist(node.args)
         result = self.builder.call(node.llvm_func, largs)
-        if node.type.is_object:
+        if node.signature.return_type.is_object:
             return self.object_coercer.check_err(result)
         return result
 
@@ -769,9 +782,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
         # Generate Py_XDECREF(temp) (call Py_DecRef only if not NULL)
         self.builder.position_at_beginning(self.cleanup_label)
-        py_decref = self.function_cache.function_by_name('Py_DecRef')
+        sig, py_decref = self.function_cache.function_by_name('Py_DecRef')
         self.object_coercer.check_err(
-                    lhs, callback=lambda b: b.call(py_decref, [lhs]))
+                    lhs, callback=lambda b: b.call(py_decref, [b.load(lhs)]))
         return lhs
 
     def visit_ArrayAttributeNode(self, node):
@@ -853,14 +866,10 @@ class ObjectCoercer(object):
         Check for errors. If the result is NULL, and error should have been set
         Jumps to translator.error_label if an exception occurred.
         """
-        print '*' * 50
-        print llvm_result
-        print llvm_types._intp
-        print '*' * 50
         int_result = self.translator.builder.ptrtoint(llvm_result,
                                                        llvm_types._intp)
         NULL = llvm.core.Constant.int(int_result.type, 0)
-        default_callback = lambda b: b.branch(translator.error_label)
+        default_callback = lambda b: b.branch(self.translator.error_label)
         if_badval(self.translator, int_result, NULL,
                   callback=callback or default_callback)
 

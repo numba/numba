@@ -36,6 +36,7 @@ class Pipeline(object):
             'type_set',
             'transform_for',
             'specialize',
+            'late_specializer',
         ]
 
     def type_infer(self, ast):
@@ -60,6 +61,12 @@ class Pipeline(object):
         specializer = ASTSpecializer(self.context, self.func, ast,
                                      self.func_signature)
         return specializer.visit(ast)
+
+    def late_specializer(self, ast):
+        return LateSpecializer(self.context, self.func, ast).visit(ast)
+
+    def insert_specializer(self, name, after):
+        self.order.insert(self.order.index(after), name)
 
     def run_pipeline(self):
         ast = self.ast
@@ -867,32 +874,6 @@ class ASTSpecializer(visitors.NumbaTransformer):
         node.error_return = ast.Return(value=value)
         return node
 
-    def visit_Tuple(self, node):
-        if all(n.type.is_object for n in node.elts):
-            sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
-            objs = self.visitlist(node.elts)
-            n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
-            args = [n] + objs
-            node = self.visit(nodes.NativeCallNode(sig, args, lfunc))
-        else:
-            self.generic_visit(node)
-
-        return nodes.ObjectTempNode(node)
-
-    def visit_Dict(self, node):
-        self.generic_visit(node)
-        return nodes.ObjectTempNode(node)
-
-    def visit_NativeCallNode(self, node):
-        self.generic_visit(node)
-        if node.signature.return_type.is_object:
-            node = nodes.ObjectTempNode(node)
-        return node
-
-    def visit_ObjectCallNode(self, node):
-        self.generic_visit(node)
-        return nodes.ObjectTempNode(node)
-
     def visit_Print(self, node):
         # TDDO: handle 'dest' and 'nl' attributes
         signature, lfunc = self.function_cache.function_by_name(
@@ -980,3 +961,64 @@ class TransformForIterable(visitors.NumbaTransformer):
             return node
         else:
             raise error.NumbaError("Unsupported for loop pattern")
+
+class LateSpecializer(visitors.NumbaTransformer):
+
+    def visit_Tuple(self, node):
+        if all(n.type.is_object for n in node.elts):
+            sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
+            objs = self.visitlist(node.elts)
+            n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
+            args = [n] + objs
+            node = self.visit(nodes.NativeCallNode(sig, args, lfunc))
+        else:
+            self.generic_visit(node)
+
+        return nodes.ObjectTempNode(node)
+
+    def visit_Dict(self, node):
+        self.generic_visit(node)
+        return nodes.ObjectTempNode(node)
+
+    def visit_NativeCallNode(self, node):
+        self.generic_visit(node)
+        if node.signature.return_type.is_object:
+            node = nodes.ObjectTempNode(node)
+        return node
+
+    def visit_ObjectCallNode(self, node):
+        self.generic_visit(node)
+        return nodes.ObjectTempNode(node)
+
+    def visit_CoercionNode(self, node):
+        self.generic_visit(node)
+        node_type = node.node.type
+        if node.dst_type.is_object and not node_type.is_object:
+            return nodes.ObjectTempNode(node)
+        return node
+
+    def visit_ExtSlice(self, node):
+        return self.visit(ast.Tuple(elts=node.dims, ctx=ast.Load()))
+
+    def visit_Slice(self, node):
+        """
+        Rewrite slice objects. Do this late in the pipeline so that other
+        code can still recognize the code structure.
+        """
+        slice_values = [node.lower, node.upper, node.step]
+
+        if all(isinstance(node, nodes.ConstNode) for node in slice_values):
+            get_const = lambda node: None if node is None else node.pyval
+            value = slice(get_const(node.lower), get_const(node.upper),
+                          get_const(node.step))
+            return self.visit(nodes.ObjectInjectNode(value))
+
+        bounds = []
+        for node in slice_values:
+            if node is None:
+                bounds.append(nodes.NULL_obj)
+            else:
+                bounds.append(self.visit(node))
+
+        new_slice = self.function_cache.call('PySlice_New', *bounds)
+        return nodes.ObjectTempNode(new_slice)

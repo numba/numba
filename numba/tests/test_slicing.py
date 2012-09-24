@@ -1,4 +1,3 @@
-import unittest
 import numpy as np
 from numba import *
 from numba.decorators import function
