@@ -30,3 +30,5 @@ def drop_in_gdb(addr=None, type='int'):
     if addr is not None:
         print 'watch *(%s *) %s' % (type, hex(addr))
     os.kill(os.getpid(), signal.SIGINT)
+
+import numbapro.array_expressions

@@ -1,0 +1,179 @@
+import ast
+import copy
+import opcode
+import types
+import __builtin__ as builtins
+
+import numba
+from numba import *
+from numba import error
+from numba.minivect import minierror, minitypes
+from numba import translate, utils, functions, nodes
+from numba.symtab import Variable
+from numba import visitors, nodes, error, _ext, ast_type_inference
+from numba import decorators
+
+from numbapro import vectorize
+
+import numpy
+
+class NumbaproPipeline(ast_type_inference.Pipeline):
+    def __init__(self, context, func, ast, func_signature):
+        super(NumbaproPipeline, self).__init__(context, func, ast,
+                                               func_signature)
+        self.order.append('rewrite_array_expressions')
+
+    def rewrite_array_expressions(self, ast):
+        return UFuncRewriter(self.context, self.func, ast).visit(ast)
+
+decorators.context.numba_pipeline = NumbaproPipeline
+
+
+class ArrayExpressionRewrite(visitors.NumbaTransformer):
+    """
+    Find element-wise expressions and run ElementalMapper to turn it into
+    a minivect AST or a ufunc.
+    """
+
+    in_elemental = 0
+    is_slice_assign = False
+
+    def register_array_expression(self, node, lhs=None):
+        """
+        Start the mapping process for the outmost node in the array expression.
+        """
+
+    def visit_Assign(self, node):
+        self.is_slice_assign = False
+        self.visitlist(node.targets)
+        if (len(node.targets) == 1 and node.targets[0].is_array and
+                self.is_slice_assign):
+            return self.register_array_expression(self.visit(node.value),
+                                                  lhs=node.targets[0])
+
+        node.value = self.visit(value)
+        return node
+
+    def visit_Subscript(self, node):
+        self.generic_visit(node)
+        self.is_slice_assign = isinstance(node.ctx, ast.Store)
+        return node
+
+    def visit_BinOp(self, node):
+        if node.type.is_array:
+            return self.register_array_expression(node)
+
+        self.generic_visit(node)
+        return node
+
+    visit_UnaryOp = visit_BinOp
+
+ufunc_count = 0
+class UFuncBuilder(visitors.NumbaTransformer):
+    """
+    Create a Python ufunc AST function. Demote the types of arrays to scalars
+    in the ufunc and generate a return.
+    """
+
+    def __init__(self, context, func, ast):
+        super(UFuncBuilder, self).__init__(context, func, ast)
+        self.operands = []
+
+    def demote_type(self, node):
+        if node.type.is_array:
+            node.type = node.type.dtype
+
+    def visit_BinOp(self, node):
+        self.demote_type(node)
+        node.left = self.visit(node.left)
+        node.right = self.visit(node.right)
+        return node
+
+    def visit_UnaryOp(self, node):
+        self.demote_type(node)
+        node.op = self.visit(node.op)
+        return node
+
+    def visit_CoercionNode(self, node):
+        return self.visit(node.node)
+
+    def _generic_visit(self, node):
+        super(UFuncBuilder, self).generic_visit(node)
+
+    def generic_visit(self, node):
+        """
+        Register Name etc as operands to the ufunc
+        """
+        self.operands.append(node)
+        result = ast.Name(id='op%d' % (len(self.operands) - 1), ctx=ast.Load())
+        result.type = node.type
+        self.demote_type(result)
+        return result
+
+    def build_ufunc_ast(self):
+        args = [ast.Name(id='op%d' % i, ctx=ast.Param())
+                    for i, op in enumerate(self.operands)]
+        arguments = ast.arguments(args, # args
+                                  None, # vararg
+                                  None, # kwarg
+                                  [],   # defaults
+        )
+        body = ast.Return(value=self.ast)
+        func = ast.FunctionDef(name='ufunc', args=arguments,
+                               body=[body], decorator_list=[])
+        # print ast.dump(func)
+        return func
+
+class UFuncRewriter(ArrayExpressionRewrite):
+    """
+    Compile array expressions to ufuncs.
+
+    vectorizer_cls: the ufunc vectorizer to use
+    """
+
+    def __init__(self, context, func, ast, vectorizer_cls=None):
+        super(UFuncRewriter, self).__init__(context, func, ast)
+        self.vectorizer_cls = vectorizer_cls or vectorize.BasicVectorize
+
+    def register_array_expression(self, node, lhs=None):
+        if lhs is None:
+            result_type = node.type
+        else:
+            result_type = lhs.type
+
+        # Build ufunc AST module
+        ufunc_builder = UFuncBuilder(self.context, self.func, node)
+        ufunc_builder.visit(node)
+        ufunc_ast = ufunc_builder.build_ufunc_ast()
+        module = ast.Module(body=[ufunc_ast])
+        functions.fix_ast_lineno(module)
+
+        # Create Python ufunc function
+        d = {}
+        exec compile(module, '<ast>', 'exec') in d, d
+        py_ufunc = d['ufunc']
+
+        # Vectorize Python function
+        if lhs is None:
+            ret_type = node.type
+        else:
+            ret_type = lhs.type.dtype
+
+        vectorizer = self.vectorizer_cls(py_ufunc)
+        arg_types = [op.type for op in ufunc_builder.operands]
+        vectorizer.add(ret_type=ret_type, arg_types=arg_types)
+        ufunc = vectorizer.build_ufunc()
+
+        # Call ufunc
+        signature = minitypes.FunctionType(
+                return_type=result_type,
+                arg_types=[op.type for op in ufunc_builder.operands])
+
+        args = ufunc_builder.operands
+        if lhs is None:
+            keywords = None
+        else:
+            keywords = [ast.keyword('out', lhs)]
+        return nodes.ObjectCallNode(signature=signature,
+                                    func=nodes.ObjectInjectNode(ufunc),
+                                    args=args, keywords=keywords)

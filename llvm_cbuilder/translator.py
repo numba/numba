@@ -1,6 +1,6 @@
 # A handy translator that converts control flow into the appropriate
 # llvm_cbuilder constructs
-from numba.functions import _get_ast
+from numba.functions import _get_ast, fix_ast_lineno
 import inspect, functools, ast
 import logging
 
@@ -13,18 +13,7 @@ def translate(func):
     tree = _get_ast(func)
     tree = ast.Module(body=tree.body)
     tree = ExpandControlFlow().visit(tree)
-
-    # NOTE: A hack to fix assertion error in debug mode due to bad lineno.
-    #       Lineno must increase monotonically for co_lnotab,
-    #       the "line number table" to work correctly.
-    #       This script just set all lineno to 1 and col_offset = to 0.
-    #       This makes it impossible to do traceback, but it is not possible
-    #       anyway since we are dynamically changing the source code.
-    for node in ast.walk(tree):
-        # only ast.expr and ast.stmt and their subclass has lineno and col_offset.
-        if isinstance(node,  ast.expr) or isinstance(node, ast.stmt):
-            node.lineno = 1
-            node.col_offset = 0
+    fix_ast_lineno(tree)
 
     # prepare locals for execution
     local_dict = locals()
