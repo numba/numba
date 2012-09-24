@@ -138,8 +138,166 @@ class BuiltinResolverMixin(object):
             raise error.NumbaError(
                 "Unsupported call to built-in function %s" % func.__name__)
 
+class NumpyMixin(object):
+    def _is_constant_index(self, node):
+        return (isinstance(node, ast.Index) and
+                isinstance(node.value, nodes.ConstNode))
 
-class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin):
+    def _is_newaxis(self, node):
+        v = node.variable
+        return (self._is_constant_index(node) and
+                node.value.pyval is None) or v.type.is_newaxis
+
+    def _is_ellipsis(self, node):
+        return (self._is_constant_index(node) and
+                node.value.pyval is Ellipsis)
+
+    def _unellipsify(self, node, slices, subscript_node):
+        """
+        Given an array node `node`, process all AST slices and create the
+        final type:
+
+            - process newaxes (None or numpy.newaxis)
+            - replace Ellipsis with a bunch of ast.Slice objects
+            - process integer indices
+            - append any missing slices in trailing dimensions
+        """
+        type = node.variable.type
+
+        if not type.is_array:
+            assert type.is_object
+            return minitypes.object_, node
+
+        if (len(slices) == 1 and self._is_constant_index(slices[0]) and
+                slices[0].value.pyval is Ellipsis):
+            # A[...]
+            return type, node
+
+        result = []
+        seen_ellipsis = False
+
+        # Filter out newaxes
+        newaxes = [newaxis for newaxis in slices if self._is_newaxis(newaxis)]
+        n_indices = len(slices) - len(newaxes)
+
+        full_slice = ast.Slice(lower=None, upper=None, step=None)
+        ast.copy_location(full_slice, slices[0])
+
+        # process ellipses and count integer indices
+        indices_seen = 0
+        for slice_node in slices[::-1]:
+            slice_type = slice_node.variable.type
+            if slice_type.is_ellipsis:
+                if seen_ellipsis:
+                    result.append(full_slice)
+                else:
+                    nslices = type.ndim - n_indices
+                    result.extend([full_slice] * nslices)
+                    seen_ellipsis = True
+            elif (slice_type.is_slice or slice_type.is_int or
+                  self._is_newaxis(slice_node)):
+                indices_seen += slice_type.is_int
+                result.append(slice_node)
+            else:
+                # TODO: Coerce all object operands to integer indices?
+                # TODO: (This will break indexing with the Ellipsis object or
+                # TODO:  with slice objects that we couldn't infer)
+                return minitypes.object_, nodes.CoercionNode(node,
+                                                             minitypes.object_)
+
+        # append any missing slices (e.g. a2d[:]
+        result_length = len(result) - len(newaxes)
+        if result_length < type.ndim:
+            nslices = type.ndim - result_length
+            result.extend([full_slice] * nslices)
+
+        subscript_node.slice = ast.ExtSlice(result)
+        ast.copy_location(subscript_node.slice, slices[0])
+
+        # create the final array type and set it in value.variable
+        result_dtype = node.variable.type.dtype
+        result_ndim = node.variable.type.ndim + len(newaxes) - indices_seen
+        if result_ndim > 0:
+            result_type = result_dtype[(slice(None),) * result_ndim]
+        elif result_ndim == 0:
+            result_type = result_dtype
+        else:
+            result_type = minitypes.object_
+
+        return result_type, node
+
+    def _resolve_attribute_dtype(self, dtype):
+        "Resolve the type for numpy dtype attributes"
+        if dtype.is_numpy_attribute:
+            numpy_attr = getattr(dtype.module, dtype.attr, None)
+            if isinstance(numpy_attr, numpy.dtype):
+                return _types.NumpyDtypeType(dtype=numpy_attr)
+            elif issubclass(numpy_attr, numpy.generic):
+                return _types.NumpyDtypeType(dtype=numpy.dtype(numpy_attr))
+
+    def _get_dtype(self, node, args, dtype=None):
+        "Get the dtype keyword argument from a call to a numpy attribute."
+        for keyword in node.keywords:
+            if keyword.arg == 'dtype':
+                dtype = keyword.value.variable.type
+                return self._resolve_attribute_dtype(dtype)
+        else:
+            # second argument is a dtype
+            if args and args[0].variable.type.is_numpy_dtype:
+                return args[0].variable.type
+
+        return dtype
+
+    def _resolve_empty_like(self, node):
+        "Parse the result type for np.empty_like calls"
+        args = node.args
+        if args:
+            arg = node.args[0]
+            args = args[1:]
+        else:
+            for keyword in node.keywords:
+                if keyword.arg == 'a':
+                    arg = keyword.value
+                    break
+            else:
+                return None
+
+        type = arg.variable.type
+        if type.is_array:
+            dtype = self._get_dtype(node, args)
+            if dtype is None:
+                return type
+            else:
+                if not dtype.is_numpy_dtype:
+                    # We have a dtype that cannot be inferred
+                    # raise NotImplementedError("Uninferred dtype")
+                    return None
+                return minitypes.ArrayType(dtype.resolve(), type.ndim)
+
+    def _resolve_arange(self, node):
+        "Resolve a call to np.arange()"
+        dtype = self._get_dtype(node, node.args, _types.NumpyDtypeType(
+            dtype=numpy.dtype(numpy.int64)))
+        if dtype is not None:
+            # return a 1D array type of the given dtype
+            return dtype.resolve()[:]
+
+    def _resolve_numpy_call(self, func_type, node):
+        """
+        Resolve a call of some numpy attribute or sub-attribute.
+        """
+        numpy_func = getattr(func_type.module, func_type.attr)
+        if numpy_func in (numpy.zeros_like, numpy.ones_like,
+                          numpy.empty_like):
+            result_type = self._resolve_empty_like(node)
+        elif numpy_func is numpy.arange:
+            result_type = self._resolve_arange(node)
+        else:
+            result_type = None
+
+        return result_type
+
+class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
     """
     Type inference. Initialize with a minivect context, a Python ast,
     and a function type with a given or absent, return type.
@@ -412,80 +570,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin):
         else:
             raise NotImplementedError
 
-    def _is_newaxis(self, node):
-        v = node.variable
-        return ((v.type.is_object and v.constant_value is None) or
-                v.type.is_newaxis)
-
-    def _unellipsify(self, node, slices, subscript_node):
-        """
-        Given an array node `node`, process all AST slices and create the
-        final type:
-
-            - process newaxes (None or numpy.newaxis)
-            - replace Ellipsis with a bunch of ast.Slice objects
-            - process integer indices
-            - append any missing slices in trailing dimensions
-        """
-        type = node.variable.type
-
-        if not type.is_array:
-            assert type.is_object
-            return minitypes.object_, node
-
-        result = []
-        seen_ellipsis = False
-
-        # Filter out newaxes
-        newaxes = [newaxis for newaxis in slices if self._is_newaxis(newaxis)]
-        n_indices = len(slices) - len(newaxes)
-
-        full_slice = ast.Slice(lower=None, upper=None, step=None)
-        ast.copy_location(full_slice, slices[0])
-
-        # process ellipses and count integer indices
-        indices_seen = 0
-        for slice_node in slices[::-1]:
-            slice_type = slice_node.variable.type
-            if slice_type.is_ellipsis:
-                if seen_ellipsis:
-                    result.append(full_slice)
-                else:
-                    nslices = type.ndim - n_indices + 1
-                    result.extend([full_slice] * nslices)
-                    seen_ellipsis = True
-            elif (slice_type.is_slice or slice_type.is_int or
-                      self._is_newaxis(slice_node)):
-                indices_seen += slice_type.is_int
-                result.append(slice_node)
-            else:
-                # TODO: Coerce all object operands to integer indices?
-                # TODO: (This will break indexing with the Ellipsis object or
-                # TODO:  with slice objects that we couldn't infer)
-                return minitypes.object_, nodes.CoercionNode(node,
-                                                             minitypes.object_)
-
-        # append any missing slices (e.g. a2d[:]
-        result_length = len(result) - len(newaxes)
-        if result_length < type.ndim:
-            nslices = type.ndim - result_length
-            result.extend([full_slice] * nslices)
-
-        subscript_node.slice = ast.ExtSlice(result)
-        ast.copy_location(subscript_node.slice, slices[0])
-
-        # create the final array type and set it in value.variable
-        result_dtype = node.variable.type.dtype
-        result_ndim = node.variable.type.ndim + len(newaxes) - indices_seen
-        if result_ndim > 0:
-            result_type = result_dtype[(slice(None),) * result_ndim]
-        elif result_ndim == 0:
-            result_type = result_dtype
-        else:
-            result_type = minitypes.object_
-
-        return result_type, node
-
     def visit_Subscript(self, node):
         node.value = self.visit(node.value)
         node.slice = self.visit(node.slice)
@@ -605,77 +689,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin):
                                constant_value=constant_value)
         node.variable = Variable(type)
         return node
-
-    def _resolve_attribute_dtype(self, dtype):
-        "Resolve the type for numpy dtype attributes"
-        if dtype.is_numpy_attribute:
-            numpy_attr = getattr(dtype.module, dtype.attr, None)
-            if isinstance(numpy_attr, numpy.dtype):
-                return _types.NumpyDtypeType(dtype=numpy_attr)
-            elif issubclass(numpy_attr, numpy.generic):
-                return _types.NumpyDtypeType(dtype=numpy.dtype(numpy_attr))
-
-    def _get_dtype(self, node, args, dtype=None):
-        "Get the dtype keyword argument from a call to a numpy attribute."
-        for keyword in node.keywords:
-            if keyword.arg == 'dtype':
-                dtype = keyword.value.variable.type
-                return self._resolve_attribute_dtype(dtype)
-        else:
-            # second argument is a dtype
-            if args and args[0].variable.type.is_numpy_dtype:
-                return args[0].variable.type
-
-        return dtype
-
-    def _resolve_empty_like(self, node):
-        "Parse the result type for np.empty_like calls"
-        args = node.args
-        if args:
-            arg = node.args[0]
-            args = args[1:]
-        else:
-            for keyword in node.keywords:
-                if keyword.arg == 'a':
-                    arg = keyword.value
-                    break
-            else:
-                return None
-
-        type = arg.variable.type
-        if type.is_array:
-            dtype = self._get_dtype(node, args)
-            if dtype is None:
-                return type
-            else:
-                if not dtype.is_numpy_dtype:
-                    # We have a dtype that cannot be inferred
-                    # raise NotImplementedError("Uninferred dtype")
-                    return None
-                return minitypes.ArrayType(dtype.resolve(), type.ndim)
-
-    def _resolve_arange(self, node):
-        "Resolve a call to np.arange()"
-        dtype = self._get_dtype(node, node.args, _types.NumpyDtypeType(
-                                        dtype=numpy.dtype(numpy.int64)))
-        if dtype is not None:
-            # return a 1D array type of the given dtype
-            return dtype.resolve()[:]
-
-    def _resolve_numpy_call(self, func_type, node):
-        """
-        Resolve a call of some numpy attribute or sub-attribute.
-        """
-        numpy_func = getattr(func_type.module, func_type.attr)
-        if numpy_func in (numpy.zeros_like, numpy.ones_like,
-                          numpy.empty_like):
-            result_type = self._resolve_empty_like(node)
-        elif numpy_func is numpy.arange:
-            result_type = self._resolve_arange(node)
-        else:
-            result_type = None
-
-        return result_type
 
     def _resolve_function(self, func_type, func_name):
         func = None
@@ -893,9 +906,7 @@ class ASTSpecializer(visitors.NumbaTransformer):
         if isinstance(node.value, nodes.ArrayAttributeNode):
             if node.value.is_read_only and isinstance(node.ctx, ast.Store):
                 raise error.NumbaError("Attempt to load read-only attribute")
-            pass # intentional do nothing
-
-        elif node.value.type.is_array:
+        elif node.value.type.is_array and not node.type.is_array:
             node.value = nodes.DataPointerNode(node.value)
         return node
 
