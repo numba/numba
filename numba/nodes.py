@@ -59,6 +59,7 @@ class DeferredCoercionNode(CoercionNode):
         self.node = node
         self.variable = variable
 
+
 class ConstNode(Node):
     """
     Wrap a constant.
@@ -88,13 +89,14 @@ class ConstNode(Node):
             base_ltype = self.to_llvm(type.base_type)
             lvalue = llvm.core.Constant.struct([(base_ltype, constant.real),
                                                 (base_ltype, constant.imag)])
-        elif type.is_pointer and self.pyval == 0:
-            lvalue = llvm.core.Constant.null(type.base_type.to_llvm(context))
         elif type.is_pointer:
             addr_int = translator.visit(ConstNode(self.pyval, type=Py_ssize_t))
             lvalue = translator.builder.inttoptr(addr_int, ltype)
         elif type.is_object:
-            raise NotImplementedError
+            if self.pyval is _NULL:
+                lvalue = llvm.core.Constant.null(type.to_llvm(context))
+            else:
+                raise NotImplementedError("Use ObjectInjectNode")
         elif type.is_c_string:
             lvalue = translate._LLVMModuleUtils.get_string_constant(
                                             translator.mod, constant)
@@ -109,6 +111,9 @@ class ConstNode(Node):
                                                         (self.pyval, type))
 
         return lvalue
+
+_NULL = object()
+NULL_obj = ConstNode(_NULL, object_)
 
 class FunctionCallNode(Node):
     def __init__(self, signature, args, name=''):
@@ -131,8 +136,6 @@ class NativeCallNode(FunctionCallNode):
         self.llvm_func = llvm_func
         self.py_func = py_func
         self.coerce_args()
-
-NULL_obj = ConstNode(0, object_.pointer())
 
 class ObjectCallNode(FunctionCallNode):
     _fields = ['function', 'args_tuple', 'kwargs_dict']

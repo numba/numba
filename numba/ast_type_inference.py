@@ -870,7 +870,9 @@ class ASTSpecializer(visitors.NumbaTransformer):
         else:
             value = None
 
-        value = nodes.CoercionNode(value, dst_type=ret_type)
+        if value is not None:
+            value = nodes.CoercionNode(value, dst_type=ret_type)
+
         node.error_return = ast.Return(value=value)
         return node
 
@@ -997,8 +999,21 @@ class LateSpecializer(visitors.NumbaTransformer):
             return nodes.ObjectTempNode(node)
         return node
 
-    def visit_ExtSlice(self, node):
-        return self.visit(ast.Tuple(elts=node.dims, ctx=ast.Load()))
+    def visit_Subscript(self, node):
+        if node.type.is_object and isinstance(node.slice, ast.ExtSlice):
+            node.value = self.visit(node.value)
+            node.slice = self.visit_Extslice(node, object_slice=True)
+        else:
+            self.generic_visit(node)
+
+        return node
+
+    def visit_ExtSlice(self, node, object_slice=False):
+        if object_slice:
+            return self.visit(ast.Tuple(elts=node.dims, ctx=ast.Load()))
+        else:
+            self.generic_visit(node)
+            return node
 
     def visit_Slice(self, node):
         """

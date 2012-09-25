@@ -400,7 +400,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
     def terminate_cleanup_blocks(self):
         self.builder.position_at_end(self.current_cleanup_bb)
         if self.is_void_return:
-            self.builder.ret()
+            self.builder.ret_void()
         else:
             self.builder.ret(self.builder.load(self.return_value))
 
