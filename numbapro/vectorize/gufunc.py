@@ -113,7 +113,8 @@ _intp_ptr = C.pointer(C.intp)
 class PyObjectHead(CStruct):
     _fields_ = [
         ('ob_refcnt', C.intp),
-        ('type_pointer', _intp_ptr),
+        # NOTE: not a integer, just need to match definition in numba
+        ('type_pointer', C.pointer(C.int)),
     ]
 
     if llvm_types._trace_refs_:
