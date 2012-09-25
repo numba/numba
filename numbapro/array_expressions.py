@@ -21,7 +21,8 @@ class NumbaproPipeline(ast_type_inference.Pipeline):
     def __init__(self, context, func, ast, func_signature):
         super(NumbaproPipeline, self).__init__(context, func, ast,
                                                func_signature)
-        self.order.append('rewrite_array_expressions')
+        self.insert_specializer('rewrite_array_expressions',
+                                after='specialize')
 
     def rewrite_array_expressions(self, ast):
         return UFuncRewriter(self.context, self.func, ast).visit(ast)
@@ -137,6 +138,7 @@ class UFuncBuilder(visitors.NumbaTransformer):
         # print ast.dump(func)
         return func
 
+
 class UFuncRewriter(ArrayExpressionRewrite):
     """
     Compile array expressions to ufuncs.
@@ -189,6 +191,7 @@ class UFuncRewriter(ArrayExpressionRewrite):
         else:
             keywords = [ast.keyword('out', lhs)]
 
+        func = nodes.ObjectInjectNode(ufunc)
         return nodes.ObjectCallNode(signature=signature,
-                                    func=None, args=args, keywords=keywords,
+                                    func=func, args=args, keywords=keywords,
                                     py_func=ufunc)
