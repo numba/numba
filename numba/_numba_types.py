@@ -80,6 +80,10 @@ class NumpyAttributeType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "%s.%s" % (self.module.__name__, self.attr)
 
+    @property
+    def value(self):
+        return getattr(self.module, self.attr)
+
 class NumpyDtypeType(NumbaType, minitypes.ObjectType):
     is_numpy_dtype = True
     dtype = None

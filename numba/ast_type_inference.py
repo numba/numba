@@ -1039,3 +1039,10 @@ class LateSpecializer(visitors.NumbaTransformer):
                                              temp_name='slice')
         return self.visit(new_slice)
         # return nodes.ObjectTempNode(new_slice)
+
+    def visit_Attribute(self, node):
+        if node.type.is_numpy_attribute:
+            return nodes.ObjectInjectNode(node.type.value)
+
+        self.generic_visit(node)
+        return node

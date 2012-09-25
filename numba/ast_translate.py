@@ -299,7 +299,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             self.visit(node)
         else:
             if not self.is_block_terminated():
-                self.builder.ret_void()
+                # self.builder.ret_void()
+                self.builder.branch(self.cleanup_label)
 
         self.terminate_cleanup_blocks()
 
@@ -402,7 +403,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         if self.is_void_return:
             self.builder.ret_void()
         else:
-            self.builder.ret(self.builder.load(self.return_value))
+            retval = self.builder.load(self.return_value)
+            ret_type = self.func_signature.return_type
+            if ret_type.is_object or ret_type.is_array:
+                ret_ltype = object_.to_llvm(self.context)
+                obj = self.builder.bitcast(retval, ret_ltype)
+                sig, lfunc = self.function_cache.function_by_name('Py_IncRef')
+                self.builder.call(lfunc, [obj])
+
+            self.builder.ret(retval)
 
     # __________________________________________________________________________
 
@@ -723,7 +732,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         # FIXME: Currently uses the runtime address of the python function.
         #        Sounds like a hack.
         self.func.live_objects.append(node.object)
-        addr = id(node.py_func)
+        addr = id(node.object)
         obj_addr_int = self.generate_constant_int(addr, _types.Py_ssize_t)
         obj = self.builder.inttoptr(obj_addr_int,
                                     _types.object_.to_llvm(self.context))
@@ -742,7 +751,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         _, pyobject_call = self.function_cache.function_by_name('PyObject_Call')
 
         res = self.builder.call(pyobject_call, largs, name=node.name)
-        self.object_coercer.check_err(res)
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
 
     def visit_NativeCallNode(self, node):
@@ -798,7 +806,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         self.current_cleanup_bb = self.builder.basic_block
 
         self.builder.position_at_end(bb)
-        return self.builder.load(lhs)
+        return self.builder.load(lhs, name=name + '_load')
 
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)
