@@ -21,7 +21,7 @@ def test_numpy_attrs():
     np_result = np.sum(a, axis=0)
     assert np.all(result == np_result)
 
-    # assert np_copy(a).strides == a.copy(order='F').strides
+    assert np_copy(a).strides == a.copy(order='F').strides
 
 if __name__ == "__main__":
     test_numpy_attrs()

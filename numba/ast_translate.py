@@ -403,15 +403,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         if self.is_void_return:
             self.builder.ret_void()
         else:
-            retval = self.builder.load(self.return_value)
             ret_type = self.func_signature.return_type
-            if ret_type.is_object or ret_type.is_array:
-                ret_ltype = object_.to_llvm(self.context)
-                obj = self.builder.bitcast(retval, ret_ltype)
-                sig, lfunc = self.function_cache.function_by_name('Py_IncRef')
-                self.builder.call(lfunc, [obj])
-
-            self.builder.ret(retval)
+            self.builder.ret(self.builder.load(self.return_value))
 
     # __________________________________________________________________________
 
@@ -557,6 +550,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             retval = self.builder.bitcast(retval,
                                           self.return_value.type.pointee)
             self.builder.store(retval, self.return_value)
+
+            ret_type = self.func_signature.return_type
+            if ret_type.is_object or ret_type.is_array:
+                sig, lfunc = self.function_cache.function_by_name('Py_IncRef')
+                ltype_obj = object_.to_llvm(self.context)
+                self.builder.call(lfunc, [self.builder.bitcast(retval,
+                                                               ltype_obj)])
 
         self.builder.branch(self.cleanup_label)
 
@@ -792,21 +792,28 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         self.object_coercer.check_err(rhs)
 
         # Generate Py_XDECREF(temp) (call Py_DecRef only if not NULL)
+        self.decref_temp(lhs)
+        return self.builder.load(lhs, name=name + '_load')
+
+    def decref_temp(self, temp, func='Py_DecRef'):
         bb = self.builder.basic_block
         self.builder.position_at_end(self.current_cleanup_bb)
-        sig, py_decref = self.function_cache.function_by_name('Py_DecRef')
+        sig, py_decref = self.function_cache.function_by_name(func)
 
         def cleanup(b, bb_true, bb_endif):
-            b.call(py_decref, [self.builder.load(lhs)])
+            object_ltype = object_.to_llvm(self.context)
+            b.call(py_decref, [b.bitcast(b.load(temp), object_ltype)])
             b.branch(bb_endif)
 
-        self.object_coercer.check_err(self.builder.load(lhs),
+        self.object_coercer.check_err(self.builder.load(temp),
                                       callback=cleanup,
                                       cmp=llvm.core.ICMP_NE)
         self.current_cleanup_bb = self.builder.basic_block
 
         self.builder.position_at_end(bb)
-        return self.builder.load(lhs, name=name + '_load')
+
+    def incref_temp(self, temp):
+        return self.decref_temp(temp, func='Py_IncRef')
 
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)
