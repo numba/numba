@@ -965,12 +965,12 @@ class TransformForIterable(visitors.NumbaTransformer):
 class LateSpecializer(visitors.NumbaTransformer):
 
     def visit_Tuple(self, node):
-        if all(n.type.is_object for n in node.elts):
+        if all(n.type.is_object or n.type.is_array for n in node.elts):
             sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
             objs = self.visitlist(node.elts)
             n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
             args = [n] + objs
-            node = self.visit(nodes.NativeCallNode(sig, args, lfunc))
+            node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
         else:
             self.generic_visit(node)
 
@@ -1018,7 +1018,9 @@ class LateSpecializer(visitors.NumbaTransformer):
             if node is None:
                 bounds.append(nodes.NULL_obj)
             else:
-                bounds.append(self.visit(node))
+                bounds.append(node)
 
-        new_slice = self.function_cache.call('PySlice_New', *bounds)
-        return nodes.ObjectTempNode(new_slice)
+        new_slice = self.function_cache.call('PySlice_New', *bounds,
+                                             temp_name='slice')
+        return self.visit(new_slice)
+        # return nodes.ObjectTempNode(new_slice)

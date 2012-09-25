@@ -387,6 +387,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
         # All non-NULL object emporaries are DECREFed here
         self.cleanup_label = self.append_basic_block('cleanup_label')
+        self.current_cleanup_bb = self.cleanup_label
 
         bb = self.builder.basic_block
         # Jump here in case of an error
@@ -394,17 +395,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         self.builder.position_at_end(self.error_label)
         # Set error return value and jump to cleanup
         self.visit(self.ast.error_return)
-
-        self.builder.position_at_end(self.cleanup_label)
-        if self.is_void_return:
-            self.builder.ret()
-        else:
-            self.builder.ret(self.return_value)
-
         self.builder.position_at_end(bb)
 
     def terminate_cleanup_blocks(self):
-        pass
+        self.builder.position_at_end(self.current_cleanup_bb)
+        if self.is_void_return:
+            self.builder.ret()
+        else:
+            self.builder.ret(self.builder.load(self.return_value))
 
     # __________________________________________________________________________
 
@@ -547,7 +545,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         if node.value is not None:
             assert not self.is_void_return
             retval = self.visit(node.value)
+            retval = self.builder.bitcast(retval,
+                                          self.return_value.type.pointee)
             self.builder.store(retval, self.return_value)
+
         self.builder.branch(self.cleanup_label)
 
         # if node.value is not None:
@@ -659,7 +660,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         val = self.visit(node.node)
         node_type = node.node.type
         if node.dst_type.is_object and not node_type.is_object:
-            return self.object_coercer.convert_single(node_type, val)
+            return self.object_coercer.convert_single(node_type, val,
+                                                      name=node.name)
         elif node.node.type != node.dst_type:
             # logger.debug('Coerce %s --> %s', node.node.type, node.dst_type)
             val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
@@ -667,25 +669,23 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         return val
 
     def visit_Subscript(self, node):
-        slicevalues = self.visit(node.slice)
         if (node.value.type.is_array and
                 isinstance(node.value, nodes.DataPointerNode)):
             # Indexing
             assert not node.type.is_array
             value = self.visit(node.value.node)
-            lptr = node.value.subscript(self, value, slicevalues)
+            lptr = node.value.subscript(self, value, self.visit(node.slice))
         elif node.type.is_array:
             # Slicing
-            array = self.visit(node.value)
             if isinstance(node.ctx, ast.Load):
                 getitem = self.function_cache.call('PyObject_GetItem',
-                                                   array, slicevalues)
+                                                   node.value, node.slice)
                 return self.visit(getitem)
             else:
                 raise NotImplementedError
         elif node.value.type.is_carray:
             value = self.visit(node.value)
-            lptr = self.builder.gep(value, [slicevalues])
+            lptr = self.builder.gep(value, [self.visit(node.slice)])
 
         if isinstance(node.ctx, ast.Load): # load the value
             return self.builder.load(lptr)
@@ -741,17 +741,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         largs = [lfunc_addr, args_tuple, kwargs_dict]
         _, pyobject_call = self.function_cache.function_by_name('PyObject_Call')
 
-        res = self.builder.call(pyobject_call, largs)
+        res = self.builder.call(pyobject_call, largs, name=node.name)
         self.object_coercer.check_err(res)
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
 
     def visit_NativeCallNode(self, node):
         # TODO: Refcounts + error check
         largs = self.visitlist(node.args)
-        result = self.builder.call(node.llvm_func, largs)
-        if node.signature.return_type.is_object:
-            return self.object_coercer.check_err(result)
-        return result
+        return self.builder.call(node.llvm_func, largs, name=node.name)
 
     def visit_TempNode(self, node):
         if node.llvm_temp is None:
@@ -767,11 +764,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         return self.visit(node.temp)
 
     def visit_ObjectTempNode(self, node):
-        bb = self.builder.basic_block
+        assert not isinstance(node.node, nodes.ObjectTempNode)
 
+        bb = self.builder.basic_block
         # Initialize temp to NULL at beginning of function
         self.builder.position_at_beginning(self.lfunc.get_entry_basic_block())
-        lhs = self.builder.alloca(llvm_types._pyobject_head_struct_p)
+        name = getattr(node.node, 'name', 'object') + '_temp'
+        lhs = self.builder.alloca(llvm_types._pyobject_head_struct_p,
+                                  name=name)
         self.generate_assign(self.visit(nodes.NULL_obj), lhs)
         node.llvm_temp = lhs
 
@@ -780,12 +780,25 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         rhs = self.visit(node.node)
         self.generate_assign(rhs, lhs)
 
+        # goto error if NULL
+        self.object_coercer.check_err(rhs)
+
         # Generate Py_XDECREF(temp) (call Py_DecRef only if not NULL)
-        self.builder.position_at_beginning(self.cleanup_label)
+        bb = self.builder.basic_block
+        self.builder.position_at_end(self.current_cleanup_bb)
         sig, py_decref = self.function_cache.function_by_name('Py_DecRef')
-        self.object_coercer.check_err(
-                    lhs, callback=lambda b: b.call(py_decref, [b.load(lhs)]))
-        return lhs
+
+        def cleanup(b, bb_true, bb_endif):
+            b.call(py_decref, [self.builder.load(lhs)])
+            b.branch(bb_endif)
+
+        self.object_coercer.check_err(self.builder.load(lhs),
+                                      callback=cleanup,
+                                      cmp=llvm.core.ICMP_NE)
+        self.current_cleanup_bb = self.builder.basic_block
+
+        self.builder.position_at_end(bb)
+        return self.builder.load(lhs)
 
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)
@@ -813,18 +826,19 @@ class DisposalVisitor(visitors.NumbaVisitor):
         lfunc = self.function_cache.function_by_name('Py_DecRef')
         self.builder.call(lfunc, node.llvm_temp)
 
-def if_badval(translator, llvm_result, badval, callback):
+def if_badval(translator, llvm_result, badval, callback, cmp):
     # Use llvm_cbuilder :(
     b = translator.builder
 
     bb_true = translator.append_basic_block('if.true')
     bb_endif = translator.append_basic_block('if.end')
 
-    test = b.icmp(llvm.core.ICMP_EQ, llvm_result, badval)
+    test = b.icmp(cmp, llvm_result, badval)
     b.cbranch(test, bb_true, bb_endif)
 
     b.position_at_end(bb_true)
-    callback(b)
+    callback(b, bb_true, bb_endif)
+    # b.branch(bb_endif)
     b.position_at_end(bb_endif)
 
     return llvm_result
@@ -861,7 +875,7 @@ class ObjectCoercer(object):
                                                               'Py_BuildValue')
         self.NULL = self.translator.visit(nodes.NULL_obj)
 
-    def check_err(self, llvm_result, callback=None):
+    def check_err(self, llvm_result, callback=None, cmp=llvm.core.ICMP_EQ):
         """
         Check for errors. If the result is NULL, and error should have been set
         Jumps to translator.error_label if an exception occurred.
@@ -869,9 +883,15 @@ class ObjectCoercer(object):
         int_result = self.translator.builder.ptrtoint(llvm_result,
                                                        llvm_types._intp)
         NULL = llvm.core.Constant.int(int_result.type, 0)
-        default_callback = lambda b: b.branch(self.translator.error_label)
-        if_badval(self.translator, int_result, NULL,
-                  callback=callback or default_callback)
+
+        if callback:
+            if_badval(self.translator, int_result, NULL,
+                      callback=callback or default_callback, cmp=cmp)
+        else:
+            test = self.builder.icmp(cmp, int_result, NULL)
+            bb = self.translator.append_basic_block('no_error')
+            self.builder.cbranch(test, self.translator.error_label, bb)
+            self.builder.position_at_end(bb)
 
         return llvm_result
 
@@ -888,20 +908,23 @@ class ObjectCoercer(object):
 
         return self.translator.visit(nodes.ConstNode(str, c_string_type))
 
-    def buildvalue(self, *largs):
-        result = self.builder.call(self.py_buildvalue, largs)
-        return self.check_err(result)
+    def buildvalue(self, *largs, **kwds):
+        # The caller should check for errors using check_err or by wrapping
+        # its node in an ObjectTempNode
+        name = kwds.get('name', '')
+        result = self.builder.call(self.py_buildvalue, largs, name=name)
+        return result
 
-    def convert_single(self, type, llvm_result):
+    def convert_single(self, type, llvm_result, name=''):
         "Generate code to convert an LLVM value to a Python object"
         lstr = self.lstr([type])
-        return self.buildvalue(lstr, llvm_result)
+        return self.buildvalue(lstr, llvm_result, name=name)
 
     def build_tuple(self, types, llvm_values):
         "Build a tuple from a bunch of LLVM values"
         assert len(types) == len(llvm_values)
         lstr = self.lstr(types, fmt="(%s)")
-        return self.buildvalue(lstr, *llvm_values)
+        return self.buildvalue(lstr, *llvm_values, name='tuple')
 
     def build_dict(self, key_types, value_types, llvm_keys, llvm_values):
         "Build a dict from a bunch of LLVM values"
@@ -912,4 +935,4 @@ class ObjectCoercer(object):
 
         lstr = self.lstr(types, fmt="{%s}")
         largs = llvm_keys + llvm_values
-        return self.buildvalue(lstr, *largs)
+        return self.buildvalue(lstr, *largs, name='dict')

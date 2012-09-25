@@ -125,10 +125,11 @@ class FunctionCache(object):
             lfunc = self.build_function(declared_func)
             return declared_func.signature, lfunc
 
-    def call(self, name, *args):
+    def call(self, name, *args, **kw):
+        temp_name = kw.get('temp_name', '')
         function_cls = globals()[name]
         sig, lfunc = self.function_by_name(name)
-        return nodes.NativeCallNode(sig, args, lfunc)
+        return nodes.NativeCallNode(sig, args, lfunc, name=temp_name)
 
     def build_function(self, external_function):
         """

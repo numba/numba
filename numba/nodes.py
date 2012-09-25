@@ -28,12 +28,18 @@ class Node(ast.AST):
         vars(self).update(kwargs)
 
 class CoercionNode(Node):
+    """
+    Coerce a node to a different type
+    """
+
     _fields = ['node']
-    def __init__(self, node, dst_type):
+
+    def __init__(self, node, dst_type, name=''):
         self.node = node
         self.dst_type = dst_type
         self.variable = Variable(dst_type)
         self.type = dst_type
+        self.name = name
 
     @classmethod
     def coerce(cls, node_or_nodes, dst_type):
@@ -54,6 +60,10 @@ class DeferredCoercionNode(CoercionNode):
         self.variable = variable
 
 class ConstNode(Node):
+    """
+    Wrap a constant.
+    """
+
     def __init__(self, pyval, type=None):
         if type is None:
             type = context.typemapper.from_python(pyval)
@@ -101,21 +111,23 @@ class ConstNode(Node):
         return lvalue
 
 class FunctionCallNode(Node):
-    def __init__(self, signature, args):
+    def __init__(self, signature, args, name=''):
         self.signature = signature
         self.variable = Variable(signature.return_type)
+        self.name = name
         self.original_args = args
 
     def coerce_args(self):
-        self.args = [CoercionNode(arg, arg_dst_type)
-                         for arg_dst_type, arg in zip(self.signature.args,
-                                                      self.original_args)]
+        self.args = list(self.original_args)
+        for i, dst_type in enumerate(self.signature.args):
+            self.args[i] = CoercionNode(self.args[i], dst_type,
+                                        name='func_%s_arg%d' % (self.name, i))
 
 class NativeCallNode(FunctionCallNode):
     _fields = ['args']
 
-    def __init__(self, signature, args, llvm_func, py_func=None):
-        super(NativeCallNode, self).__init__(signature, args)
+    def __init__(self, signature, args, llvm_func, py_func=None, **kw):
+        super(NativeCallNode, self).__init__(signature, args, **kw)
         self.llvm_func = llvm_func
         self.py_func = py_func
         self.coerce_args()
@@ -125,7 +137,9 @@ NULL_obj = ConstNode(0, object_.pointer())
 class ObjectCallNode(FunctionCallNode):
     _fields = ['function', 'args_tuple', 'kwargs_dict']
 
-    def __init__(self, signature, func, args, keywords, py_func=None):
+    def __init__(self, signature, func, args, keywords, py_func=None, **kw):
+        if py_func and not kw.get('name', None):
+            kw['name'] = py_func.__name__
         super(ObjectCallNode, self).__init__(signature, args)
         self.function = func
         self.py_func = py_func
@@ -163,8 +177,10 @@ class ObjectTempNode(Node):
     _fields = ['node']
 
     def __init__(self, node):
+        assert not isinstance(node, ObjectTempNode)
         self.node = node
         self.llvm_temp = None
+        self.type = object_
 
 
 class TempNode(Node): #, ast.Name):
