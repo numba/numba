@@ -218,6 +218,7 @@ class NumpyMixin(object):
             nslices = type.ndim - result_length
             result.extend([full_slice] * nslices)
 
+        result.reverse()
         subscript_node.slice = ast.ExtSlice(result)
         ast.copy_location(subscript_node.slice, slices[0])
 
@@ -601,7 +602,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
             if slices is None:
                 result_type = minitypes.object_
             else:
-                result_type, node.value = self._unellipsify(node.value, slices, node)
+                result_type, node.value = self._unellipsify(
+                                    node.value, slices, node)
         elif value_type.is_carray:
             if not node.slice.variable.type.is_int:
                 self.error(node.slice, "Can only index with an int")
@@ -646,7 +648,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
             else:
                 break
         else:
-            return nodes.ConstNode(slice(*constants), type)
+            return nodes.ObjectInjectNode(slice(*constants), type)
 
         node.variable = Variable(type)
         return node
@@ -986,6 +988,7 @@ class LateSpecializer(visitors.NumbaTransformer):
 
     def visit_ObjectCallNode(self, node):
         # self.generic_visit(node)
+        assert node.function
         node.function = self.visit(node.function)
         node.args_tuple = self.visit(node.args_tuple)
         node.kwargs_dict = self.visit(node.kwargs_dict)
@@ -999,11 +1002,24 @@ class LateSpecializer(visitors.NumbaTransformer):
         return node
 
     def visit_Subscript(self, node):
-        if node.type.is_object and isinstance(node.slice, ast.ExtSlice):
+        # print ast.dump(node)
+        if ((node.type.is_object or node.type.is_array) and
+                isinstance(node.slice, ast.ExtSlice)):
             node.value = self.visit(node.value)
-            node.slice = self.visit_Extslice(node, object_slice=True)
+            node.slice = self.visit_ExtSlice(node.slice, object_slice=True)
         else:
             self.generic_visit(node)
+
+        if node.type.is_array or node.type.is_object:
+            # Array or object slicing
+            if isinstance(node.ctx, ast.Load):
+                result = self.function_cache.call('PyObject_GetItem',
+                                                  node.value, node.slice)
+                # print ast.dump(result)
+                return result
+            else:
+                # This is handled in visit_Assign
+                pass
 
         return node
 
@@ -1013,6 +1029,24 @@ class LateSpecializer(visitors.NumbaTransformer):
         else:
             self.generic_visit(node)
             return node
+
+    def visit_Assign(self, node):
+        target = node.targets[0]
+        if (len(node.targets) == 1 and
+                isinstance(target, ast.Subscript) and
+                (target.type.is_array or target.type.is_object)):
+            # Slice assignment / index assignment w/ objects
+            # TODO: discount array indexing with dtype object
+            target = self.visit(target)
+            obj = target.value
+            key = target.slice
+            value = self.visit(node.value)
+            call = self.function_cache.call('PyObject_SetItem',
+                                            obj, key, value)
+            return call
+
+        self.generic_visit(node)
+        return node
 
     def visit_Slice(self, node):
         """
@@ -1043,7 +1077,8 @@ class LateSpecializer(visitors.NumbaTransformer):
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
 
-        node = self.function_cache.call('PyObject_GetAttrString',
-                                        node.value, nodes.ConstNode(node.attr))
-        self.generic_visit(node)
-        return node
+        new_node = self.function_cache.call(
+                            'PyObject_GetAttrString', node.value,
+                            nodes.ConstNode(node.attr))
+        self.generic_visit(new_node)
+        return new_node

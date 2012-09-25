@@ -256,7 +256,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             # FIXME: 'None' should be handled as a special case (probably).
             if (name not in self.argnames and
                 not isinstance(var.type, BuiltinType) and
-                not var.type.is_object and
                 var.is_local):
                 # Not argument and not builtin type.
                 # Allocate storage for all variables.
@@ -684,14 +683,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             assert not node.type.is_array
             value = self.visit(node.value.node)
             lptr = node.value.subscript(self, value, self.visit(node.slice))
-        elif node.type.is_array:
-            # Slicing
-            if isinstance(node.ctx, ast.Load):
-                getitem = self.function_cache.call('PyObject_GetItem',
-                                                   node.value, node.slice)
-                return self.visit(getitem)
-            else:
-                raise NotImplementedError("slice assignment")
+        elif node.type.is_array or node.type.is_object:
+            raise NotImplementedError("This node should have been replaced")
         elif node.value.type.is_carray:
             value = self.visit(node.value)
             lptr = self.builder.gep(value, [self.visit(node.slice)])
@@ -755,7 +748,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
 
     def visit_NativeCallNode(self, node):
-        # TODO: Refcounts + error check
         largs = self.visitlist(node.args)
         return self.builder.call(node.llvm_func, largs, name=node.name)
 
@@ -885,6 +877,7 @@ class ObjectCoercer(object):
     }
 
     def __init__(self, translator):
+        self.context = translator.context
         self.translator = translator
         self.builder = translator.builder
         sig, self.py_buildvalue = translator.function_cache.function_by_name(
@@ -933,6 +926,11 @@ class ObjectCoercer(object):
 
     def convert_single(self, type, llvm_result, name=''):
         "Generate code to convert an LLVM value to a Python object"
+        if type == minitypes.npy_intp:
+            lpy_ssize_t = minitypes.Py_ssize_t.to_llvm(self.context)
+            llvm_result = self.translator.caster.cast(llvm_result, lpy_ssize_t)
+            type = minitypes.Py_ssize_t
+
         lstr = self.lstr([type])
         return self.buildvalue(lstr, llvm_result, name=name)
 

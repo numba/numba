@@ -34,6 +34,11 @@ class CoercionNode(Node):
 
     _fields = ['node']
 
+    def __new__(cls, node, dst_type, name=''):
+        if node.variable.type == dst_type:
+            return node
+        return super(CoercionNode, cls).__new__(cls, node, dst_type, name=name)
+
     def __init__(self, node, dst_type, name=''):
         self.node = node
         self.dst_type = dst_type
@@ -41,7 +46,7 @@ class CoercionNode(Node):
         self.type = dst_type
         self.name = name
 
-        if (dst_type.is_object and not node.type.is_object and
+        if (dst_type.is_object and not node.variable.type.is_object and
                 isinstance(node, ArrayAttributeNode)):
             self.node = self.coerce_numpy_attribute(node)
 
@@ -163,6 +168,7 @@ class ObjectCallNode(FunctionCallNode):
         if py_func and not kw.get('name', None):
             kw['name'] = py_func.__name__
         super(ObjectCallNode, self).__init__(signature, args)
+        assert func is not None
         self.function = func
         self.py_func = py_func
 
@@ -186,10 +192,11 @@ class ObjectInjectNode(Node):
     Refer to a Python object in the llvm code.
     """
 
-    def __init__(self, object, **kwargs):
+    def __init__(self, object, type=None, **kwargs):
         super(ObjectInjectNode, self).__init__(**kwargs)
         self.object = object
-        self.type = object_
+        self.type = type or object_
+        self.variable = Variable(self.type)
 
 
 class ObjectTempNode(Node):
@@ -203,6 +210,7 @@ class ObjectTempNode(Node):
         assert not isinstance(node, ObjectTempNode)
         self.node = node
         self.llvm_temp = None
+        self.variable = Variable(object_)
         self.type = object_
 
 
