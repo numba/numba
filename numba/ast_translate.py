@@ -416,7 +416,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         if var.is_local:
             return self.builder.load(var.lvalue)
         else:
-            raise NotImplementedError(var)
+            raise NotImplementedError("global variables:", var)
 
     def generate_store_symbol(self, name):
         return self.symtab[name].lvalue
@@ -691,7 +691,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
                                                    node.value, node.slice)
                 return self.visit(getitem)
             else:
-                raise NotImplementedError
+                raise NotImplementedError("slice assignment")
         elif node.value.type.is_carray:
             value = self.visit(node.value)
             lptr = self.builder.gep(value, [self.visit(node.slice)])
@@ -714,6 +714,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         raise Exception("This node should have been replaced")
 
     def visit_Tuple(self, node):
+        raise NotImplementedError("This node should have been replaced")
         assert isinstance(node.ctx, ast.Load)
         types = [n.type for n in node.elts]
         largs = self.visitlist(node.elts)

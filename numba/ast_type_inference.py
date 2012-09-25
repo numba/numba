@@ -786,14 +786,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
         elif type.is_object:
             result_type = type
         elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):
-            # handle shape/strides/ndim etc. TODO: methods
+            # handle shape/strides/ndim etc
             return nodes.ArrayAttributeNode(node.attr, node.value)
         else:
-            return self.function_cache.call(
-                        'PyObject_GetAttrString', node.value,
-                        nodes.ConstNode(node.attr))
+            # use PyObject_GetAttrString
+            result_type = object_
 
         node.variable = Variable(result_type)
+        node.type = result_type
         return node
 
     def visit_Return(self, node):
@@ -967,15 +967,11 @@ class TransformForIterable(visitors.NumbaTransformer):
 class LateSpecializer(visitors.NumbaTransformer):
 
     def visit_Tuple(self, node):
-        if all(n.type.is_object or n.type.is_array for n in node.elts):
-            sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
-            objs = self.visitlist(node.elts)
-            n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
-            args = [n] + objs
-            node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
-        else:
-            self.generic_visit(node)
-
+        sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
+        objs = self.visitlist(nodes.CoercionNode.coerce(node.elts, object_))
+        n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
+        args = [n] + objs
+        node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
         return nodes.ObjectTempNode(node)
 
     def visit_Dict(self, node):
@@ -989,7 +985,10 @@ class LateSpecializer(visitors.NumbaTransformer):
         return node
 
     def visit_ObjectCallNode(self, node):
-        self.generic_visit(node)
+        # self.generic_visit(node)
+        node.function = self.visit(node.function)
+        node.args_tuple = self.visit(node.args_tuple)
+        node.kwargs_dict = self.visit(node.kwargs_dict)
         return nodes.ObjectTempNode(node)
 
     def visit_CoercionNode(self, node):
@@ -1044,5 +1043,7 @@ class LateSpecializer(visitors.NumbaTransformer):
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
 
+        node = self.function_cache.call('PyObject_GetAttrString',
+                                        node.value, nodes.ConstNode(node.attr))
         self.generic_visit(node)
         return node

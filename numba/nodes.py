@@ -41,6 +41,22 @@ class CoercionNode(Node):
         self.type = dst_type
         self.name = name
 
+        if (dst_type.is_object and not node.type.is_object and
+                isinstance(node, ArrayAttributeNode)):
+            self.node = self.coerce_numpy_attribute(node)
+
+    def coerce_numpy_attribute(self, node):
+        """
+        Numpy array attributes, such as 'data', get rewritten to direct
+        accesses. Since they are being coerced back to objects, use a generic
+        attribute access instead.
+        """
+        node = ast.Attribute(value=node.array, attr=node.attr_name,
+                             ctx=ast.Load())
+        node.variable = Variable(object_)
+        node.type = object_
+        return node
+
     @classmethod
     def coerce(cls, node_or_nodes, dst_type):
         if isinstance(node_or_nodes, list):
@@ -122,11 +138,6 @@ class FunctionCallNode(Node):
         self.name = name
         self.original_args = args
 
-    def coerce_args(self):
-        self.args = list(self.original_args)
-        for i, dst_type in enumerate(self.signature.args):
-            self.args[i] = CoercionNode(self.args[i], dst_type,
-                                        name='func_%s_arg%d' % (self.name, i))
 
 class NativeCallNode(FunctionCallNode):
     _fields = ['args']
@@ -136,6 +147,14 @@ class NativeCallNode(FunctionCallNode):
         self.llvm_func = llvm_func
         self.py_func = py_func
         self.coerce_args()
+        self.type = signature.return_type
+
+    def coerce_args(self):
+        self.args = list(self.original_args)
+        for i, dst_type in enumerate(self.signature.args):
+            self.args[i] = CoercionNode(self.args[i], dst_type,
+                                        name='func_%s_arg%d' % (self.name, i))
+
 
 class ObjectCallNode(FunctionCallNode):
     _fields = ['function', 'args_tuple', 'kwargs_dict']
@@ -154,7 +173,7 @@ class ObjectCallNode(FunctionCallNode):
         if keywords:
             keywords = [(ConstNode(k.arg), k.value) for k in keywords]
             keys, values = zip(*keywords)
-            self.kwargs_dict = ast.Dict(keys, values)
+            self.kwargs_dict = ast.Dict(list(keys), list(values))
             self.kwargs_dict.variable = Variable(minitypes.object_)
         else:
             self.kwargs_dict = NULL_obj
@@ -170,6 +189,7 @@ class ObjectInjectNode(Node):
     def __init__(self, object, **kwargs):
         super(ObjectInjectNode, self).__init__(**kwargs)
         self.object = object
+        self.type = object_
 
 
 class ObjectTempNode(Node):
