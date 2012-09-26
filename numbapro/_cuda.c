@@ -375,6 +375,8 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
 
     int nargs = info->nops * 4 + 1;
     ndarray *array_copies;
+    
+    const int result_idx = 4 * (info->nops - 1) + 1;
 
     if (info->nops > MAXARGS) {
         PyErr_SetString(cuda_exc_type, "Too many array arguments to function");
@@ -460,17 +462,17 @@ error:
 	result = -1;
 cleanup:
     /* TODO: error handling */
+    
+    (void) cudaMemcpy(data_pointers[result_idx], 
+                      (void *) device_pointers[result_idx],
+                      sizes[result_idx], cudaMemcpyDeviceToHost);
+
 	for (i = 0; i < nargs; i++) {
 		if (!device_pointers[i])
 			break;
-
-        if (i % 4 == 1) {
-            /* Only copy data back */
-            (void) cudaMemcpy(data_pointers[i], (void *) device_pointers[i],
-                              sizes[i], cudaMemcpyDeviceToHost);
-        }
 		(void) cudaFree(device_pointers[i]);
 	}
+	cudaFree(device_dim0);
 	free(array_copies);
 	(void) cudaStreamDestroy(stream);
 	return result;
