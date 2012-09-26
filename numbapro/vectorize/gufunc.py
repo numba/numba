@@ -108,6 +108,9 @@ class GUFuncVectorize(object):
             lfunclist, tyslist, self.signature, engine,
             vectorizer=self, use_cuda=use_cuda)
 
+class ASTGUFuncVectorize(_common.ASTVectorizeMixin, GUFuncVectorize):
+    "Use the AST numba backend to compile the gufunc"
+
 _intp_ptr = C.pointer(C.intp)
 
 class PyObjectHead(CStruct):

@@ -14,6 +14,7 @@ from numba import visitors, nodes, error, _ext, ast_type_inference
 from numba import decorators
 
 from numbapro import vectorize
+from numbapro.vectorize import basic
 
 import numpy
 
@@ -148,7 +149,7 @@ class UFuncRewriter(ArrayExpressionRewrite):
 
     def __init__(self, context, func, ast, vectorizer_cls=None):
         super(UFuncRewriter, self).__init__(context, func, ast)
-        self.vectorizer_cls = vectorizer_cls or vectorize.BasicVectorize
+        self.vectorizer_cls = vectorizer_cls or basic.BasicASTVectorize
 
     def register_array_expression(self, node, lhs=None):
         if lhs is None:

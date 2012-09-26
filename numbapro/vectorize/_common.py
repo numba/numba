@@ -1,4 +1,9 @@
 import numpy as np
+
+import llvm.core
+import llvm.ee
+
+from numba import decorators, ast_translate
 from llvm_cbuilder import shortnames as _C
 from numbapro import _internal
 from numbapro.translate import Translate
@@ -127,8 +132,32 @@ class GenericVectorize(object):
     def _get_lfunc_list(self):
         return [t.lfunc for t in self.translates]
 
+    def _get_ee(self):
+        return self.translates[0]._get_ee()
+
     def build_ufunc(self):
         raise NotImplementedError
+
+class ASTVectorizeMixin(object):
+
+    def __init__(self, *args, **kwargs):
+        super(ASTVectorizeMixin, self).__init__(*args, **kwargs)
+        self.llvm_context = ast_translate.LLVMContextManager()
+        self.mod = self.llvm_context.get_default_module()
+        self.ee = self.llvm_context.get_execution_engine()
+
+    def _get_ee(self):
+        return self.ee
+
+    def add(self, ret_type=None, arg_types=None):
+        dec = decorators.jit_ast(ret_type, arg_types)
+        numba_func = dec(self.pyfunc)
+        self.args_ret_types.append(numba_func.signature.args +
+                                   [numba_func.signature.return_type])
+        self.translates.append(numba_func)
+
+class GenericASTVectorize(ASTVectorizeMixin, GenericVectorize):
+    "Use the AST backend to compile the ufunc"
 
 def post_vectorize_optimize(func):
     '''Perform aggressive optimization after each vectorizer.

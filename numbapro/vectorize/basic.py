@@ -67,9 +67,11 @@ class BasicVectorize(_common.GenericVectorize):
         assert self.translates, "No translation"
         lfunclist = self._get_lfunc_list()
         tyslist = self._get_tys_list()
-        engine = self.translates[0]._get_ee()
+        engine = self._get_ee()
         return basic_vectorize_from_func(lfunclist, tyslist, engine=engine,
                                          minivect_dispatcher=minivect_dispatcher,
                                          cuda_dispatcher=cuda_dispatcher)
 
 
+class BasicASTVectorize(_common.GenericASTVectorize, BasicVectorize):
+    "Use the AST backend to compile the ufunc"

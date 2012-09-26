@@ -1,4 +1,7 @@
 import numbapro
+from numbapro.vectorize import GUFuncVectorize
+from numbapro.vectorize.gufunc import ASTGUFuncVectorize
+from numba import *
 from numba.decorators import function
 
 import numpy as np
@@ -46,6 +49,25 @@ def test_matmul():
     result = array_expr_matmul(a, b)
     assert np.all(result == np.dot(a, b))
 
+def test_gufunc_array_expressions():
+    gufunc = ASTGUFuncVectorize(array_expr_matmul.py_func, '(m,n),(n,p)->(m,p)')
+    gufunc.add(arg_types=[f[:,:], f[:,:], f[:,:]])
+    gufunc = gufunc.build_ufunc()
+
+    matrix_ct = 10
+    A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
+    B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
+
+    C = gufunc(A, B)
+    Gold = ut.matrix_multiply(A, B)
+
+    # print(C)
+    # print(Gold)
+
+    if (C != Gold).any():
+        raise ValueError
+
 if __name__ == '__main__':
+#    test_gufunc_array_expressions()
     test_array_expressions()
     test_matmul()
