@@ -177,7 +177,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
     """
 
     def __init__(self, context, func, ast, func_signature, symtab,
-                 optimize=True, func_name=None, **kwds):
+                 optimize=True, func_name=None,
+                 llvm_module=None, llvm_ee=None, **kwds):
         super(LLVMCodeGenerator, self).__init__(context, func, ast)
 
         self.func_name = func_name or func.__name__
@@ -188,7 +189,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         self.blocks = {} # stores id => basic-block
 
         # code generation attributes
-        self.mod = LLVMContextManager().get_default_module()
+        self.mod = llvm_module or LLVMContextManager().get_default_module()
+        self.ee = llvm_ee or LLVMContextManager().get_execution_engine()
         self.module_utils = translate._LLVMModuleUtils()
 
         # self.ma_obj = None # What is this?
@@ -314,7 +316,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             fp.run(self.lfunc)
 
     def get_ctypes_func(self, llvm=True):
-        ee = LLVMContextManager().get_execution_engine()
+        ee = self.ee
         import ctypes
         sig = self.func_signature
         restype = _types.convert_to_ctypes(sig.return_type)

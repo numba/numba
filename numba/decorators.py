@@ -85,11 +85,13 @@ context.numba_pipeline = ast_type_inference.Pipeline
 function_cache = context.function_cache = functions.FunctionCache(context)
 
 class NumbaFunction(object):
-    def __init__(self, py_func, wrapper=None, ctypes_func=None, signature=None):
+    def __init__(self, py_func, wrapper=None, ctypes_func=None, signature=None,
+                 lfunc=None):
         self.py_func = py_func
         self.wrapper = wrapper
         self.ctypes_func = ctypes_func
         self.signature = signature
+        self.lfunc = lfunc
 
         self.__name__ = py_func.__name__
         self.__doc__ = py_func.__doc__
@@ -164,7 +166,7 @@ def function_bytecode(f):
 
 autojit = function_bytecode
 
-def jit_ast(ret_type=None, arg_types=None):
+def jit_ast(ret_type=None, arg_types=None, _llvm_module=None, _llvm_ee=None):
     """
     Use the AST translator to translate the function.
     """
@@ -174,11 +176,13 @@ def jit_ast(ret_type=None, arg_types=None):
         if not hasattr(func, 'live_objects'):
             func.live_objects = []
         func._is_numba_func = True
-        result = function_cache.compile_function(func, arg_types)
+        result = function_cache.compile_function(func, arg_types,
+                                                 llvm_module=_llvm_module,
+                                                 llvm_ee=_llvm_ee)
         signature, lfunc, ctypes_func = result
         # print lfunc
         return NumbaFunction(func, ctypes_func=ctypes_func,
-                             signature=signature)
+                             signature=signature, lfunc=lfunc)
 
     return _jit
 
