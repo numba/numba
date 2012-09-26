@@ -10,7 +10,7 @@ from numba import error
 from numba.minivect import minierror, minitypes
 from numba import translate, utils, functions, nodes
 from numba.symtab import Variable
-from numba import visitors, nodes, error, _ext, ast_type_inference
+from numba import visitors, nodes, error, ast_type_inference
 from numba import decorators
 
 from numbapro import vectorize
