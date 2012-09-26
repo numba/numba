@@ -344,24 +344,13 @@ def create_kernel_wrapper(kernel):
         _name_ = 'cuda_wrapper%d' % wrapper_count
         wrapper_count += 1
         _retty_ = C.void
-        _argtys_ = []
-        for i in range(len(kernel.args)):
-            name = 'op%d' % i
-            array_arg = (name, llvm.core.Type.pointer(PyArray.llvm_type()))
-            data_arg = (name + '_data', C.char_p)
-            shape_arg = (name + '_shape', C.npy_intp_p)
-            strides_arg = ("name" + '_strides', C.npy_intp_p)
-            _argtys_.extend([array_arg, data_arg, shape_arg, strides_arg])
-
-        _argtys_.append(('steps', C.npy_intp_p))
-        _argtys_.append(('count', C.npy_intp_p))
+        _argtys_ = [('args',       C.pointer(C.char_p)),
+                    ('dimensions', C.pointer(C.pointer(C.intp))),
+                    ('steps',      C.pointer(C.pointer(C.intp))),
+                    ('arylens',     C.pointer(C.intp)),
+                    ('count',      C.intp),]
        
-        def body(self, *args):
-            args = list(args)
-            args, steps, count = args[:-2], args[-2], args[-1]
-            arrays, data_pointers, shape_pointers, strides_pointers = (
-                        args[0::4], args[1::4], args[2::4], args[3::4])
-
+        def body(self, args, dimensions, steps, arylens, count):
             # get current thread index
             tid_x = self.get_intrinsic(llvm.core.INTR_PTX_READ_TID_X, [])
             ntid_x = self.get_intrinsic(llvm.core.INTR_PTX_READ_NTID_X, [])
@@ -370,59 +359,24 @@ def create_kernel_wrapper(kernel):
             tid = self.var_copy(tid_x())
             blkdim = self.var_copy(ntid_x())
             blkid = self.var_copy(ctaid_x())
-
-            # Adjust data pointer for the kernel
-            # Note that we invoke the kernel N times simultaneously, so to
-            # adjust the data pointer we need a copy of each PyArrayObject
-            # struct
-            def constant(offset):
-                return self.constant(llvm_types._int32, offset).handle
-
-            if llvm_types._trace_refs_:
-                data_offset = 4
-            else:
-                data_offset = 2
-            ndim_offset = constant(data_offset + 1)
-            shape_offset = constant(data_offset + 2)
-            strides_offset = constant(data_offset + 3)
-            data_offset = constant(data_offset)
-
-            id = tid + blkdim * blkid
+            
+            id = (tid + blkdim * blkid).cast(C.intp)
             
             # Escape condition
-            with self.ifelse(id.cast(count.type.pointee) >= count.load()) as ifelse:
+            with self.ifelse(id >= count) as ifelse:
                 with ifelse.then():
                     self.ret()
+            # build pyarrays for argument to inner function
+            n_pyarys = len(kernel.type.pointee.args)
+            pyarys = [self.var(PyArray) for _ in range(n_pyarys)]
+
+            # populate pyarrays
+            for i, ary in enumerate(pyarys):
+                ary.data.assign(args[i][id * arylens[i]:])
+                ary.dimensions.assign(dimensions[i])
+                ary.strides.assign(steps[i])
             
-            # arrays = [self.var_copy(array) for array in arrays]
-            it = enumerate(zip(arrays, data_pointers, shape_pointers,
-                               strides_pointers))
-            for i, (array_list, data_pointer, shape_pointer, strides_pointer) in it:
-                b = array_list.parent.builder
-                # offset = id * steps[i].cast(id.type)
-                # array.data.assign(array.data[offset:])
-
-                array = arrays[i] = array_list[id:].handle
-                # arrays[i] = array = array_list.value
-                offset = id * steps[i].cast(llvm_types._int32)
-                loffset = offset.value
-                zero = constant(0)
-                # loffset = zero
-
-                src_data_pointer = data_pointer.value
-                src_shape_pointer = shape_pointer.value
-                src_strides_pointer = strides_pointer.value
-                b.store(b.gep(src_data_pointer, [loffset]),
-                        b.gep(array, [zero, data_offset]))
-                b.store(src_shape_pointer,
-                        b.gep(array, [zero, shape_offset]))
-                b.store(src_strides_pointer,
-                        b.gep(array, [zero, strides_offset]))
-
-            # Call actual kernel
-            # kernel_func = self.depends(CFuncRef(kernel))
-            # kernel_func(*arrays)
-            b.call(kernel, arrays)
+            self.builder.call(kernel, [x.handle for x in pyarys])
             self.ret()
 
         @classmethod
