@@ -416,12 +416,32 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
 			goto error;
 		kernelargs[i] = &device_pointers[i];
 	}
+	
+	/* Pass outer-loop count to the kernel */
+	npy_intp * device_dim0 = NULL;
+	if(alloc_and_copy(&dimensions[0], sizeof(npy_intp),
+	                  &device_dim0, stream) < 0 )
+       goto error;
+        
+	kernelargs[i] = &device_dim0;
 
 	/* Launch kernel & check result */
 	/* TODO: use multiple thread blocks */
+    int thread_per_block = dimensions[0];
+	int block_per_grid = 1;
+	
+	/* XXX: assume a smaller thread limit to prevent CC support problem
+	        and out of register problem */
+	const int MAX_THREAD = 256;
+	if (thread_per_block >= MAX_THREAD) {
+	    block_per_grid = thread_per_block / MAX_THREAD;
+	    block_per_grid += thread_per_block % MAX_THREAD ? 1 : 0;
+	    thread_per_block = MAX_THREAD;
+	}
+	
 	cu_result = cuLaunchKernel(info->cu_func,
-							   dimensions[0], 1, 1,
-							   1, 1, 1,
+	                           block_per_grid, 1, 1,
+							   thread_per_block, 1, 1,
 							   0 /* sharedMemBytes */, stream,
 							   kernelargs, 0);
 

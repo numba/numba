@@ -354,10 +354,11 @@ def create_kernel_wrapper(kernel):
             _argtys_.extend([array_arg, data_arg, shape_arg, strides_arg])
 
         _argtys_.append(('steps', C.npy_intp_p))
-
+        _argtys_.append(('count', C.npy_intp_p))
+       
         def body(self, *args):
             args = list(args)
-            args, steps = args[:-1], args[-1]
+            args, steps, count = args[:-2], args[-2], args[-1]
             arrays, data_pointers, shape_pointers, strides_pointers = (
                         args[0::4], args[1::4], args[2::4], args[3::4])
 
@@ -387,6 +388,12 @@ def create_kernel_wrapper(kernel):
             data_offset = constant(data_offset)
 
             id = tid + blkdim * blkid
+            
+            # Escape condition
+            with self.ifelse(id.cast(count.type.pointee) >= count.load()) as ifelse:
+                with ifelse.then():
+                    self.ret()
+            
             # arrays = [self.var_copy(array) for array in arrays]
             it = enumerate(zip(arrays, data_pointers, shape_pointers,
                                strides_pointers))
