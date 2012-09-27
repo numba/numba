@@ -820,7 +820,7 @@ class LLVMControlFlowGraph (ControlFlowGraph):
         return ret_val
 
 class Translate(object):
-    def __init__(self, func, ret_type='d', arg_types=['d'], **kws):
+    def __init__(self, func, restype='d', argtypes=['d'], **kws):
         self.func = func
         self.fco = func.func_code
         self.names = self.fco.co_names
@@ -837,7 +837,7 @@ class Translate(object):
                 # builtins is an attribtue.
                 self._myglobals[name] = getattr(__builtin__, name, None)
 
-        ret_type, arg_types = self.map_types(ret_type, arg_types)
+        ret_type, arg_types = self.map_types(restype, argtypes)
 
         # NOTE: Was seeing weird corner case where
         # llvm.core.Module.new() was not returning a module object,

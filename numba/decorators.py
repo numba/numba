@@ -90,7 +90,7 @@ def autojit2(f):
         arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
         types = tuple(context.typemapper.from_python(value)
                           for value in arguments)
-        ctypes_func = jit2(arg_types=types)(f)
+        ctypes_func = jit2(argtypes=types)(f)
         return ctypes_func(*args, **kwargs)
 
     f.live_objects = []
@@ -114,7 +114,7 @@ def autojit(f, backend='bytecode'):
         else:
             # Infer the return type
             func_signature, symtab, ast = functions._infer_types(
-                                        context, f, arg_types=types)
+                                        context, f, argtypes=types)
 
             decorator = jit(restype=func_signature.return_type, argtypes=types, backend=backend)
             ctypes_func = decorator(f)
@@ -130,13 +130,13 @@ def jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None):
     """
     Use the AST translator to translate the function.
     """
-    assert arg_types is not None
+    assert argtypes is not None
 
     def _jit(func):
         if not hasattr(func, 'live_objects'):
             func.live_objects = []
         func._is_numba_func = True
-        result = function_cache.compile_function(func, arg_types,
+        result = function_cache.compile_function(func, argtypes,
                                                  llvm_module=_llvm_module,
                                                  llvm_ee=_llvm_ee)
         signature, lfunc, ctypes_func = result
@@ -172,7 +172,7 @@ def jit(restype=double, argtypes=[double], backend='bytecode', **kws):
             return jit2(argtypes=argtypes)(func)
         else:
             t = bytecode_translate.Translate(func, restype=restype,
-                                             arg_types=arg_types, **kws)
+                                             argtypes=argtypes, **kws)
             t.translate()
             # print t.lfunc
             __tr_map__[func] = t

@@ -71,11 +71,11 @@ class FunctionCache(object):
 
         self.string_constants = {}
 
-    def get_function(self, py_func, arg_types=None):
+    def get_function(self, py_func, argtypes=None):
         result = None
 
-        if arg_types is not None:
-            result = self.compiled_functions.get((py_func, tuple(arg_types)))
+        if argtypes is not None:
+            result = self.compiled_functions.get((py_func, tuple(argtypes)))
 
         if result is None and py_func in self.external_functions:
             signature, lfunc = self.external_functions[py_func]
@@ -95,7 +95,7 @@ class FunctionCache(object):
         if the function was compiled.
         """
         if func is not None:
-            result = self.get_function(func, arg_types)
+            result = self.get_function(func, argtypes)
             if result is not None:
                 return result
 
@@ -110,7 +110,7 @@ class FunctionCache(object):
 
         # print func, getattr(func, '_is_numba_func', False)
         # create a signature taking N objects and returning an object
-        signature = ofunc(arg_types=ofunc.arg_types * len(arg_types)).signature
+        signature = ofunc(argtypes=ofunc.arg_types * len(arg_types)).signature
         return signature, None, func
 
     def function_by_name(self, name):
