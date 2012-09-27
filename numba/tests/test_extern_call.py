@@ -11,7 +11,7 @@ import unittest
 from numba import *
 
 import numpy
-from numba.decorators import jit, function
+from numba.decorators import jit, autojit2
 from numba.tests import test_support
 
 # ______________________________________________________________________
@@ -24,11 +24,11 @@ def call_zeros_like(arr):
 def call_len(arr):
     return len(arr)
 
-@function
+@autojit2
 def func1(arg):
     return arg * 2
 
-@function
+@autojit2
 def func2(arg):
     return func1(arg + 1)
 

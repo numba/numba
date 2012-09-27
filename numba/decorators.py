@@ -1,9 +1,8 @@
-__all__ = ['function', 'autojit', 'function_bytecode', 'jit_ast', 'jit']
+__all__ = ['autojit2', 'autojit', 'jit2', 'jit']
 
 import functools
 import logging
 
-import numba
 from numba import *
 from . import utils, functions, ast_translate as translate, ast_type_inference
 from numba import translate as bytecode_translate
@@ -11,41 +10,6 @@ from .minivect import minitypes
 from numba.utils import debugout
 
 logger = logging.getLogger(__name__)
-
-# Create a new callable object
-#  that creates a fast version of Python code using LLVM
-# It maintains the generic function call for situations
-#  where it cannot figure out a fast version, and specializes
-#  based on the types that are passed in.
-#  It maintains a dictionary keyed by python code +
-#   argument-types with a tuple of either
-#       (bitcode-file-name, function_name)
-#  or (llvm mod object and llvm func object)
-
-class CallSite(object):
-    # Must support
-    # func = CallSite(func)
-    # func = CallSite()(func)
-    # func = Callsite(*args, **kwds)(func)
-    #  args[0] cannot be callable
-    def __init__(self, *args, **kwds):
-        # True if this instance is now a function
-        self._isfunc = False
-        self._args = args
-        if len(args) > 1 and callable(args[0]):
-            self._tocall = args[0]
-            self._isfunc = True
-            self._args = args[1:]
-
-    def __call__(self, *args, **kwds):
-        if self._isfunc:
-            return self._tocall(*args, **kwds)
-        else:
-            if len(args) < 1 or not callable(args[0]):
-                raise ValueError, "decorated object must be callable"
-            self._tocall = args[0]
-            self._isfunc = True
-            return self
 
 # A simple fast-vectorize example was removed because it only supports one
 #  use-case --- slower NumPy vectorize is included here instead.
@@ -115,7 +79,7 @@ class NumbaFunction(object):
             return self.wrapper(*args, **kwargs)
 
 
-def function(f):
+def autojit2(f):
     """
     Defines a numba function, that, when called, specializes on the input
     types. Uses the AST translator backend. For the bytecode translator,
@@ -126,20 +90,18 @@ def function(f):
         arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
         types = tuple(context.typemapper.from_python(value)
                           for value in arguments)
-        ctypes_func = jit_ast(arg_types=types)(f)
+        ctypes_func = jit2(arg_types=types)(f)
         return ctypes_func(*args, **kwargs)
 
     f.live_objects = []
     return NumbaFunction(f, wrapper=wrapper)
 
-# Bit of an inconsistency with jit_ast() vs jit(), but we already used
-# @function()...
 _func_cache = {}
-def function_bytecode(f):
+def autojit(f, backend='bytecode'):
     """
     Defines a numba function, that, when called, specializes on the input
     types. Uses the bytecode translator backend. For the AST backend use
-    @function.
+    @autojit2
     """
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
@@ -154,7 +116,7 @@ def function_bytecode(f):
             func_signature, symtab, ast = functions._infer_types(
                                         context, f, arg_types=types)
 
-            decorator = jit(ret_type=func_signature.return_type, arg_types=types)
+            decorator = jit(ret_type=func_signature.return_type, arg_types=types, backend=backend)
             ctypes_func = decorator(f)
             _func_cache[types] = ctypes_func
 
@@ -164,9 +126,7 @@ def function_bytecode(f):
     wrapper._numba_func = f
     return wrapper
 
-autojit = function_bytecode
-
-def jit_ast(ret_type=None, arg_types=None, _llvm_module=None, _llvm_ee=None):
+def jit2(ret_type=None, arg_types=None, _llvm_module=None, _llvm_ee=None):
     """
     Use the AST translator to translate the function.
     """
@@ -209,12 +169,12 @@ def jit(ret_type=double, arg_types=[double], backend='bytecode', **kws):
                     break
 
         if use_ast:
-            return jit_ast(arg_types=arg_types)(func)
+            return jit2(arg_types=arg_types)(func)
         else:
             t = bytecode_translate.Translate(func, ret_type=ret_type,
                                              arg_types=arg_types, **kws)
             t.translate()
-            print t.lfunc
+            # print t.lfunc
             __tr_map__[func] = t
             return t.get_ctypes_func(llvm)
 

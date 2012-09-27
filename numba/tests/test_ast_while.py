@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
 
-from numba.decorators import function
+from numba.decorators import autojit2
 
 import numpy
 import numpy as np
@@ -75,12 +75,12 @@ def _while_loop_fn_5(i_max, j_max):
 
 # ______________________________________________________________________
 
-while_loop_fn_0 = function(_while_loop_fn_0)
-while_loop_fn_1 = function(_while_loop_fn_1)
-while_loop_fn_2 = function(_while_loop_fn_2)
-while_loop_fn_3 = function(_while_loop_fn_3)
-while_loop_fn_4 = function(_while_loop_fn_4)
-while_loop_fn_5 = function(_while_loop_fn_5)
+while_loop_fn_0 = autojit2(_while_loop_fn_0)
+while_loop_fn_1 = autojit2(_while_loop_fn_1)
+while_loop_fn_2 = autojit2(_while_loop_fn_2)
+while_loop_fn_3 = autojit2(_while_loop_fn_3)
+while_loop_fn_4 = autojit2(_while_loop_fn_4)
+while_loop_fn_5 = autojit2(_while_loop_fn_5)
 
 class TestWhile(unittest.TestCase):
     def _do_test(self, name, *args, **kws):

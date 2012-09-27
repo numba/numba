@@ -7,7 +7,7 @@ computations.
 '''
 # ______________________________________________________________________
 
-from numba.decorators import jit, function
+from numba.decorators import jit, autojit2
 
 import unittest
 
@@ -47,7 +47,7 @@ except:
         tb.print_exc()
     mandel_1c = None
 
-mandel_1c_ast = function(mandel_1)
+mandel_1c_ast = autojit2(mandel_1)
 
 #@jit(arg_types = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])
 def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
@@ -83,7 +83,7 @@ except:
         tb.print_exc()
     mandel_driver_1c = None
 
-mandel_driver_1c_ast = function(mandel_driver_1)
+mandel_driver_1c_ast = autojit2(mandel_driver_1)
 
 def make_palette():
     '''Shamefully stolen from

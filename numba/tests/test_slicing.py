@@ -1,8 +1,8 @@
 import numpy as np
 from numba import *
-from numba.decorators import function
+from numba.decorators import autojit2
 
-@function
+@autojit2
 def slice_array(a, start, stop, step):
     return a[start:stop:step]
 

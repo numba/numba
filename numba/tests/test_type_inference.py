@@ -27,7 +27,7 @@ def _simple_func(arg):
         result = 42.
     return result
 
-simple_func = decorators.function(_simple_func)
+simple_func = decorators.autojit2(_simple_func)
 
 def _for_loop(start, stop, inc):
     acc = 0
@@ -35,7 +35,7 @@ def _for_loop(start, stop, inc):
         acc += value
     return acc
 
-for_loop = decorators.function(_for_loop)
+for_loop = decorators.autojit2(_for_loop)
 
 def test_arange():
     a = numpy.arange(10)

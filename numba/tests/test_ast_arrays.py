@@ -8,11 +8,11 @@ Test the Numba compiler on a simple for loop over an iterable object.
 
 import numba
 from numba import *
-from numba.decorators import function
+from numba.decorators import autojit2
 
 import numpy as np
 
-@function
+@autojit2
 def matmulcore(A, B, C):
     m, n = A.shape
     n, p = B.shape
