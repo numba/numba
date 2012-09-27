@@ -141,10 +141,10 @@ intp = minitypes.npy_intp
 #
 
 O = object_
-b = bool_
+b1 = bool_
 i1 = int8
 i2 = int16
-i = i4 = int32
+i4 = int32
 i8 = int64
 u1 = uint8
 u2 = uint16
@@ -155,8 +155,8 @@ f = f4 = float_
 d = f8 = double
 f16 = float128
 
-c8 = complex64
-c16 = complex128
+F = c8 = complex64
+D = c16 = complex128
 c32 = complex256
 
 class NumbaTypeMapper(minitypes.TypeMapper):

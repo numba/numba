@@ -13,7 +13,7 @@ If you are looking for a full Python compiler to handle all Python syntax,
 look at PyPy, ShedSkin, Nutika, or other projects.
 
 Numba is also not a tracing jit.  It *compiles* your code before it gets
-run using type information you provide in the decorator.
+run either using run-time type information or type information you provide in the decorator.
 
 Dependencies:
 
