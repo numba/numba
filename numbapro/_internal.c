@@ -7,6 +7,20 @@
 #include "miniutils.h"
 #include "_internal.h"
 
+/* For version 1.6 and earlier */
+#ifndef NPY_ARRAY_ALIGNED
+    #define NPY_ARRAY_ALIGNED NPY_ALIGNED
+#endif
+#ifndef NPY_ARRAY_OWNDATA
+    #define NPY_ARRAY_OWNDATA NPY_OWNDATA
+#endif
+#ifndef NPY_ARRAY_C_CONTIGUOUS
+    #define NPY_ARRAY_C_CONTIGUOUS NPY_C_CONTIGUOUS
+#endif
+#ifndef NPY_ARRAY_F_CONTIGUOUS
+    #define NPY_ARRAY_F_CONTIGUOUS NPY_F_CONTIGUOUS
+#endif
+
 PyObject *
 PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher,
                PyObject *cuda_dispatcher, int use_cuda_gufunc)
