@@ -75,7 +75,7 @@ def main(args=[]):
         temp_obj = tempfile.gettempdir() + os.sep + os.path.basename(args.output) + '.o'
         #temp_obj = os.path.basename(args.output)+'.o'
         compiler.write_native_object(temp_obj)          # write temporary object
-        cmdargs = pyc.find_linker(), pyc.find_args(), '-o', args.output, temp_obj
+        cmdargs = (pyc.find_linker(),) + pyc.find_args() + ('-o', args.output, temp_obj)
         subprocess.check_call(cmdargs)
         os.remove(temp_obj)   # remove temporary object
 

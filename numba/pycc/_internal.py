@@ -24,9 +24,9 @@ def which(program):
                 return exe_file
     return None
 
-_configs = {'win' : ("link.exe", "/dll", '.dll'),
-    'dar': ("libtool", "-dynamic", '.dylib'),
-    'default': ("ld", "-shared", ".so")
+_configs = {'win' : ("link.exe", ("/dll",), '.dll'),
+    'dar': ("libtool", ("-dynamic",), '.dylib'),
+    'default': ("ld", ("-shared",), ".so")
 }
 
 def get_configs(arg):
