@@ -1,0 +1,9 @@
+
+Version 0.2
+============
+
+* Added an ast approach to compilation
+* Removed d, f, i, b from numba namespace (use f8, f4, i4, b1)
+* Changed function to autojit2
+* Added autojit function to decorate calls to the function and use types of the variable to create compiled versions. 
+* changed keyword arguments to jit and autojit functions to restype and argtypes to be consistent with ctypes module.
