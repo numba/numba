@@ -227,4 +227,7 @@ cdef class CudaNumbaFuncDispatcher(object): #cutils.UFuncDispatcher):
                                  gx, gy, gz, bx, by, bz)
 
 
+    def __dealloc__(self):
+        cuda.dealloc(self.cu_module, self.cu_context)
+
 
