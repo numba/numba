@@ -13,8 +13,8 @@ from numba.minivect.minitypes import *
 from numba.minivect import miniast, minitypes
 
 __all__ = minitypes.__all__ + [
-    'O', 'b', 'i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8',
-    'f4', 'f8', 'f16', 'c8', 'c16', 'c32', 'f', 'd', 'i',
+    'O', 'b1', 'i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8',
+    'f4', 'f8', 'f16', 'c8', 'c16', 'c32' 
 ]
 
 class NumbaType(minitypes.Type):
@@ -151,12 +151,12 @@ u2 = uint16
 u4 = uint32
 u8 = uint64
 
-f = f4 = float_
-d = f8 = double
+f4 = float_
+f8 = double
 f16 = float128
 
-F = c8 = complex64
-D = c16 = complex128
+c8 = complex64
+c16 = complex128
 c32 = complex256
 
 class NumbaTypeMapper(minitypes.TypeMapper):
