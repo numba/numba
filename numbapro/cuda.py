@@ -1,4 +1,7 @@
 import sys
+import logging
+logger = logging.getLogger(__name__)
+
 from llvm import core as _lc
 from llvm import ee as _le
 from llvm import passes as _lp
@@ -91,13 +94,13 @@ def jit(restype='int32', argtypes=[]):
         #if use_ast:
         #    return jit2(argtypes=argtypes)(func)
         #else:
-        t = CudaTranslate(func, restype=restype, argtypes=argtypes)
+        t = CudaTranslate(func, restype=restype, argtypes=argtypes,
+                          module=_lc.Module.new("ptx_%s" % str(func)))
         t.translate()
 
         cnf = CudaNumbaFunction(t.lfunc)
 
         __tr_map__[func] = cnf
-
         return cnf
     return _jit
 
@@ -109,11 +112,26 @@ class CudaNumbaFunction(object):
         self.module = lfunc.module
 
         # builder wrapper
-        wrapper_type = _lc.Type.function(_lc.Type.void(), lfunc.type.pointee.args)
+
+        # NOTE: a simple hack to handle single-precision float conversion
+        argtys = lfunc.type.pointee.args
+        fix_floats = []
+        fixed_argtys = list(argtys)
+        for i, argty in enumerate(argtys):
+            if argty == _lc.Type.float():
+                fix_floats.append(i)
+                fixed_argtys[i] = _lc.Type.double()
+
+        wrapper_type = _lc.Type.function(_lc.Type.void(), fixed_argtys)
         func_name = 'ptxwrapper_%s' % lfunc.name
         wrapper = self.module.add_function(wrapper_type, func_name)
         builder = _lc.Builder.new(wrapper.append_basic_block('entry'))
-        inline_me = builder.call(lfunc, wrapper.args) # ignore return value
+
+        fixed_args = list(wrapper.args)
+        for idx in fix_floats:
+            fixed_args[idx] = builder.fptrunc(wrapper.args[idx], argtys[idx])
+
+        inline_me = builder.call(lfunc, fixed_args) # ignore return value
         builder.ret_void()
 
         # force inline of original function

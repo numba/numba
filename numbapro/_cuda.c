@@ -522,12 +522,13 @@ int cuda_numba_function(PyListObject *args, void *func,
     ndarray *arrays[MAXARGS] = {NULL};
     ndarray tmparys[MAXARGS] = {0};
     void* device_pointers[MAXARGS] = {NULL};
+    void* host_pointers[MAXARGS] = {NULL};
     void * kernel_args[MAXARGS] = {NULL};
 
     /* Prepare arguments */
     for (i=0; i<nargs; ++i){
         PyObject * pyobj = PyList_GET_ITEM(args, i);
-        if (PyArray_Check(pyobj)) {
+        if (PyArray_Check(pyobj)) { // is pyarray
             ndarray *ary = (ndarray*) pyobj;
             ndarray *tmpary = &tmparys[i];
             arrays[i] = ary;
@@ -552,6 +553,25 @@ int cuda_numba_function(PyListObject *args, void *func,
                 goto error;
 
             kernel_args[i] = &device_pointers[i];
+        } else if (PyInt_Check(pyobj)) {
+            long value = PyInt_AsLong(pyobj);
+            if (PyErr_Occurred()) {
+                goto error;
+            }
+            host_pointers[i] = malloc(sizeof(value));
+            memcpy(host_pointers[i], &value, sizeof(value));
+            kernel_args[i] = host_pointers[i];
+        } else if (PyFloat_Check(pyobj)) {
+            double value = PyFloat_AsDouble(pyobj);
+            if (PyErr_Occurred()) {
+                goto error;
+            }
+            host_pointers[i] = malloc(sizeof(value));
+            memcpy(host_pointers[i], &value, sizeof(value));
+            kernel_args[i] = host_pointers[i];
+        } else {
+            PyErr_SetString(PyExc_TypeError, "Type not handled");
+            goto error;
         }
     }
 
@@ -569,22 +589,24 @@ int cuda_numba_function(PyListObject *args, void *func,
     /* Retrieve results */
     for (i=0; i<nargs; ++i){
         ndarray *ary = arrays[i];
-        ndarray *tmpary = &tmparys[i];
+        if (ary) {
+            ndarray *tmpary = &tmparys[i];
 
-        error_code = cudaMemcpyAsync(ary->data, tmpary->data,
-                                     ary->strides[0] * ary->dimensions[0],
-                                     cudaMemcpyDeviceToHost, stream);
-        CHECK_CUDA_ERROR("retrieve data", error_code)
+            error_code = cudaMemcpyAsync(ary->data, tmpary->data,
+                                         ary->strides[0] * ary->dimensions[0],
+                                         cudaMemcpyDeviceToHost, stream);
+            CHECK_CUDA_ERROR("retrieve data", error_code)
 
-        error_code = cudaMemcpyAsync(ary->dimensions, tmpary->dimensions,
-                                     sizeof(npy_intp) * ary->nd,
-                                     cudaMemcpyDeviceToHost, stream);
-        CHECK_CUDA_ERROR("retrieve dimension", error_code)
+            error_code = cudaMemcpyAsync(ary->dimensions, tmpary->dimensions,
+                                         sizeof(npy_intp) * ary->nd,
+                                         cudaMemcpyDeviceToHost, stream);
+            CHECK_CUDA_ERROR("retrieve dimension", error_code)
 
-        error_code = cudaMemcpyAsync(ary->strides, tmpary->strides,
-                                     sizeof(npy_intp) * ary->nd,
-                                     cudaMemcpyDeviceToHost, stream);
-        CHECK_CUDA_ERROR("retrieve strides", error_code)
+            error_code = cudaMemcpyAsync(ary->strides, tmpary->strides,
+                                         sizeof(npy_intp) * ary->nd,
+                                         cudaMemcpyDeviceToHost, stream);
+            CHECK_CUDA_ERROR("retrieve strides", error_code)
+        }
     }
 
     error_code = cudaStreamSynchronize(stream);
@@ -596,10 +618,14 @@ error:
     result = -1;
 cleanup:
     for (i=0; i<nargs; ++i){
-        cudaFree(tmparys[i].data);
-        cudaFree(tmparys[i].dimensions);
-        cudaFree(tmparys[i].strides);
-        cudaFree(device_pointers[i]);
+        if (arrays[i]) {
+            cudaFree(tmparys[i].data);
+            cudaFree(tmparys[i].dimensions);
+            cudaFree(tmparys[i].strides);
+            cudaFree(device_pointers[i]);
+        } else {
+            free(host_pointers[i]);
+        }
     }
     return result;
 }

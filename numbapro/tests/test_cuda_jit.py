@@ -2,28 +2,61 @@ import numpy as np
 from numba import *
 from numbapro import cuda
 
-@cuda.jit(argtypes=[f4[:], f4[:]])
-def array_copy(src, dst):
+
+def array_copy(src, dst, n):
     tid = cuda.threadIdx.x
     blkid = cuda.blockIdx.x
     blkdim = cuda.blockDim.x
 
     i = tid + blkid * blkdim
 
+    if i >= n:
+        return
+
     dst[i] = src[i]
 
-def main():
-    N = 1024 * 2
+
+def array_scale(src, dst, scale, n):
+    tid = cuda.threadIdx.x
+    blkid = cuda.blockIdx.x
+    blkdim = cuda.blockDim.x
+
+    i = tid + blkid * blkdim
+
+    if i >= n:
+        return
+
+    dst[i] = src[i] * scale
+
+def test_array_copy():
+    N = 2 * 333
     src = np.arange(N, dtype=np.float32)
     dst = np.empty_like(src)
 
-    src_copy = src.copy()
-    dst_copy = dst.copy()
-
-    array_copy.configure((2,), (1024,))
-    array_copy(src, dst)
+    prototype = cuda.jit(argtypes=[f4[:], f4[:], i4])
+    cudafunc = prototype(array_copy)
+    cudafunc.configure((2,), (333,))
+    cudafunc(src, dst, N)
 
     assert (src == dst).all()
+
+def test_array_scale():
+    N = 333 * 3
+    scale = 3.14
+    src = np.arange(N, dtype=np.float32)
+    dst = np.empty_like(src)
+
+    prototype = cuda.jit(argtypes=[f4[:], f4[:], f4, i4])
+    cudafunc = prototype(array_scale)
+    cudafunc.configure((3,), (333,))
+    cudafunc(src, dst, scale, N)
+
+    assert (src * scale == dst).all()
+
+
+def main():
+    test_array_copy()
+    test_array_scale()
 
 if __name__ == '__main__':
     for i in range(100):
