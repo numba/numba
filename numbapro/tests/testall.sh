@@ -32,4 +32,5 @@ run_test test_parallel_vectorize.py
 run_test test_stream_vectorize.py
 
 run_test test_gufunc.py
-
+run_test test_cuda_vectorize.py
+run_test test_mini_vectorize.py
