@@ -32,14 +32,14 @@ def test_long(arg):
 
 class TestIf(test_support.ByteCodeTestCase):
     def test_int(self):
-        func = self.jit(ret_type=numba.int_,
-                                 arg_types=[numba.int_])(test_int)
+        func = self.jit(restype=numba.int_,
+                                 argtypes=[numba.int_])(test_int)
         self.assertEqual(func(-1), 42)
         self.assertEqual(func(1), 22)
 
     def test_long(self):
-        func = self.jit(ret_type=numba.long_,
-                                 arg_types=[numba.long_])(test_long)
+        func = self.jit(restype=numba.long_,
+                                 argtypes=[numba.long_])(test_long)
         self.assertEqual(func(-1), 42)
         self.assertEqual(func(1), 22)
 # ______________________________________________________________________

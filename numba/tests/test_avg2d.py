@@ -42,11 +42,11 @@ class TestAvg2D (unittest.TestCase):
         self.assertTrue((control_result == test_result).all())
 
     def test_avg2d(self):
-        compiled_fn = jit(arg_types = [d[:,:], d[:]])(avg2d)
+        compiled_fn = jit(argtypes = [d[:,:], d[:]])(avg2d)
         self._do_test(avg2d, compiled_fn)
 
     def test_avg2d_ast(self):
-        compiled_fn = jit(arg_types = [d[:,:], d[:]], backend='ast')(avg2d)
+        compiled_fn = jit(argtypes = [d[:,:], d[:]], backend='ast')(avg2d)
         self._do_test(avg2d, compiled_fn)
 
     def test_avg2d_bytecode_function(self):
@@ -60,11 +60,11 @@ class TestAvg2D (unittest.TestCase):
     @unittest.skipUnless(hasattr(__builtin__, '__noskip__'),
                          "Need support for float() builtin.")
     def test_avg2d_w_cast(self):
-        compiled_fn = jit(arg_types = [d[:,:], d[:]])(avg2d_w_cast)
+        compiled_fn = jit(argtypes = [d[:,:], d[:]])(avg2d_w_cast)
         self._do_test(avg2d_w_cast, compiled_fn)
 
     def test_avg2d_w_cast_ast(self):
-        compiled_fn = jit(arg_types = [d[:,:], d[:]], backend='ast')(avg2d_w_cast)
+        compiled_fn = jit(argtypes = [d[:,:], d[:]], backend='ast')(avg2d_w_cast)
         self._do_test(avg2d_w_cast, compiled_fn)
 
     def test_avg2d_w_cast_function(self):

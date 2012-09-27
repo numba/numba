@@ -35,8 +35,8 @@ def filter2d(image, filt):
 
 class TestFilter2d(unittest.TestCase):
     def test_vectorized_filter2d(self):
-        ufilter2d = jit(arg_types=[double[:,:], double[:,:]],
-                                  ret_type=double[:,:])(filter2d)
+        ufilter2d = jit(argtypes=[double[:,:], double[:,:]],
+                                  restype=double[:,:])(filter2d)
         image = numpy.random.random((50, 50))
         filt = numpy.random.random((5, 5))
         filt /= filt.sum()

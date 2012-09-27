@@ -82,28 +82,28 @@ class TestForLoop(unittest.TestCase):
     def test_compiled_for_loop_fn_0(self):
         test_data = numpy.array([1, 2, 3], dtype = 'l')
         compiled_for_loop_fn = jit(
-            arg_types = [['l']])(for_loop_fn_0)
+            argtypes = [['l']])(for_loop_fn_0)
         result = compiled_for_loop_fn(test_data)
         self.assertEqual(result, 6)
         self.assertEqual(result, for_loop_fn_0(testdata))
 
     def test_compiled_for_loop_fn_1(self):
-        compiled_for_loop_fn = jit(arg_types = ['i','i','i'],
-                                             ret_type = 'i')(for_loop_fn_1)
+        compiled_for_loop_fn = jit(argtypes = ['i','i','i'],
+                                             restype = 'i')(for_loop_fn_1)
         result = compiled_for_loop_fn(1, 4, 1)
         self.assertEqual(result, 6)
         self.assertEqual(result, for_loop_fn_1(1, 4, 1))
 
     def test_compiled_for_loop_fn_2(self):
-        compiled_for_loop_fn = jit(arg_types = ['i'],
-                                             ret_type = 'i')(for_loop_fn_2)
+        compiled_for_loop_fn = jit(argtypes = ['i'],
+                                             restype = 'i')(for_loop_fn_2)
         result = compiled_for_loop_fn(4)
         self.assertEqual(result, 36)
         self.assertEqual(result, for_loop_fn_2(4))
 
     def test_compiled_for_loop_fn_3(self):
-        compiled_for_loop_fn = jit(arg_types = ['i'],
-                                             ret_type = 'i')(for_loop_fn_3)
+        compiled_for_loop_fn = jit(argtypes = ['i'],
+                                             restype = 'i')(for_loop_fn_3)
         result = compiled_for_loop_fn(3)
         self.assertEqual(result, for_loop_fn_3(3))
         self.assertEqual(result, 81)

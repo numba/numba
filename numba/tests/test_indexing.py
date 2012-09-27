@@ -61,13 +61,13 @@ class TestIndexing (unittest.TestCase):
     def test_get_index_fn_0 (self):
         arr = numpy.ones((4,4,4), dtype=numpy.double)
         arr[1,2,3] = 0.
-        compiled_fn = jit(ret_type=double,
-                                    arg_types=[double[:, :, ::1]])(get_index_fn_0)
+        compiled_fn = jit(restype=double,
+                                    argtypes=[double[:, :, ::1]])(get_index_fn_0)
         self.assertEqual(compiled_fn(arr), 0.)
 
     def test_set_index_fn_0 (self):
         arr = numpy.ones((4,4,4))
-        compiled_fn = jit(arg_types=[double[:,:,::1]])(set_index_fn_0)
+        compiled_fn = jit(argtypes=[double[:,:,::1]])(set_index_fn_0)
         self.assertEqual(arr[1,2,3], 1.)
         compiled_fn(arr)
         self.assertEqual(arr[1,2,3], 0.)
@@ -76,27 +76,27 @@ class TestIndexing (unittest.TestCase):
         control_arr = numpy.zeros((50, 50, 2), dtype=numpy.double)
         test_arr = numpy.zeros_like(control_arr)
         set_index_fn_1(-1., 1., -1., control_arr)
-        arg_types = double, double, double, double[:,:,:]
-        compiled_fn = jit(arg_types=arg_types)(set_index_fn_1)
+        argtypes = double, double, double, double[:,:,:]
+        compiled_fn = jit(argtypes=argtypes)(set_index_fn_1)
         compiled_fn(-1., 1., -1., test_arr)
         self.assertTrue((numpy.abs(control_arr - test_arr) < 1e9).all())
 
     def test_get_shape_fn_0(self):
         arr = numpy.zeros((5,6,7), dtype=numpy.double)
-        compiled_fn = jit(ret_type=int_,
-                                    arg_types=[double[:, :, ::1]])(get_shape_fn_0)
+        compiled_fn = jit(restype=int_,
+                                    argtypes=[double[:, :, ::1]])(get_shape_fn_0)
         self.assertEqual(compiled_fn(arr), 5)
 
     def test_get_shape_fn_1(self):
         arr = numpy.zeros((5,6,7), dtype=numpy.double)
-        compiled_fn = jit(ret_type=int_,
-                                    arg_types=[double[:, :, ::1]])(get_shape_fn_1)
+        compiled_fn = jit(restype=int_,
+                                    argtypes=[double[:, :, ::1]])(get_shape_fn_1)
         self.assertEqual(compiled_fn(arr), 6)
 
     def test_get_shape_fn_2(self):
         arr = numpy.zeros((5,6,7), dtype=numpy.double)
-        compiled_fn = jit(ret_type=int_,
-                                    arg_types=[double[:, :, ::1]])(get_shape_fn_2)
+        compiled_fn = jit(restype=int_,
+                                    argtypes=[double[:, :, ::1]])(get_shape_fn_2)
         self.assertEqual(compiled_fn(arr), 7)
 
     def test_set_index_fn_2 (self):
@@ -105,8 +105,8 @@ class TestIndexing (unittest.TestCase):
 
         set_index_fn_2(control_arr)
 
-        arg_types = double[:, :],
-        compiled_fn = jit(arg_types=arg_types)(set_index_fn_2)
+        argtypes = double[:, :],
+        compiled_fn = jit(argtypes=argtypes)(set_index_fn_2)
 
         compiled_fn(test_arr)
 

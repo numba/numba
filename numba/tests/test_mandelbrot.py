@@ -17,7 +17,7 @@ import __builtin__
 
 # ______________________________________________________________________
 
-#@jit(arg_types = ['d','d','i'], ret_type = 'i')
+#@jit(argtypes = ['d','d','i'], restype = 'i')
 def mandel_1(real_coord, imag_coord, max_iters):
     '''Given a the real and imaginary parts of a complex number,
     determine if it is a candidate for membership in the Mandelbrot
@@ -39,7 +39,7 @@ def mandel_1(real_coord, imag_coord, max_iters):
     return -1
 
 try:
-    mandel_1c = jit(arg_types = ['d', 'd', 'i'], ret_type = 'i')(
+    mandel_1c = jit(argtypes = ['d', 'd', 'i'], restype = 'i')(
         mandel_1)
 except:
     if __debug__:
@@ -49,7 +49,7 @@ except:
 
 mandel_1c_ast = autojit2(mandel_1)
 
-#@jit(arg_types = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])
+#@jit(argtypes = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])
 def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
     nb_colors = len(colors)
     width = image.shape[0]
@@ -76,7 +76,7 @@ def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
 
 try:
     mandel_driver_1c = jit(
-        arg_types = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])(mandel_driver_1)
+        argtypes = ['d', 'd', 'd', 'i', [['b']], [[['b']]]])(mandel_driver_1)
 except:
     if __debug__:
         import traceback as tb

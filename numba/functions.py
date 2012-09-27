@@ -28,14 +28,14 @@ def fix_ast_lineno(tree):
 def _get_ast(func):
     return meta.decompiler.decompile_func(func)
 
-def _infer_types(context, func, ret_type=None, arg_types=None):
+def _infer_types(context, func, restype=None, argtypes=None):
     ast = _get_ast(func)
-    func_signature = minitypes.FunctionType(return_type=ret_type,
-                                            args=arg_types)
+    func_signature = minitypes.FunctionType(return_type=restype,
+                                            args=argtypes)
     return type_inference._infer_types(context, func, ast, func_signature)
 
 
-def _compile(context, func, ret_type=None, arg_types=None, **kwds):
+def _compile(context, func, restype=None, argtypes=None, **kwds):
     """
     Compile a numba annotated function.
 
@@ -43,7 +43,7 @@ def _compile(context, func, ret_type=None, arg_types=None, **kwds):
         - run type inference using the given input types
         - compile the function to LLVM
     """
-    func_signature, symtab, ast = _infer_types(context, func, ret_type, arg_types)
+    func_signature, symtab, ast = _infer_types(context, func, restype, argtypes)
     func_name = naming.specialized_mangle(func.__name__, func_signature.args)
 
     t = translate.LLVMCodeGenerator(
@@ -83,7 +83,7 @@ class FunctionCache(object):
 
         return result
 
-    def compile_function(self, func, arg_types, ret_type=None, **kwds):
+    def compile_function(self, func, argtypes, restype=None, **kwds):
         """
         Compile a python function given the argument types. Compile only
         if not compiled already, and only if an annotated numba function
@@ -103,7 +103,7 @@ class FunctionCache(object):
                 func = getattr(func, '_numba_func', func)
                 # numba function, compile
                 func_signature, lfunc, ctypes_func = _compile(
-                                self.context, func, ret_type, arg_types, **kwds)
+                                self.context, func, restype, argtypes, **kwds)
                 self.compiled_functions[func, tuple(func_signature.args)] = (
                                             func_signature, lfunc, ctypes_func)
                 return func_signature, lfunc, ctypes_func

@@ -37,13 +37,13 @@ def bad_return_fn (arg0, arg1):
 
 class TestIssues (unittest.TestCase):
     def test_int_pow_fn (self):
-        compiled_fn = jit(arg_types = (int32, int32), ret_type = int32)(
+        compiled_fn = jit(argtypes = (int32, int32), restype = int32)(
             int_pow_fn)
         self.assertEqual(compiled_fn(2, 3), 8)
         self.assertEqual(compiled_fn(3, 4), int_pow_fn(3, 4))
 
     def test_bad_return_fn (self):
-        jit(arg_types = (int32, int32), ret_type = int32)(bad_return_fn)(0, 0)
+        jit(argtypes = (int32, int32), restype = int32)(bad_return_fn)(0, 0)
 
 # ______________________________________________________________________
 

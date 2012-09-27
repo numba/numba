@@ -41,15 +41,15 @@ def bad_sum2d(arr):
 
 class TestSum2d(test_support.ByteCodeTestCase):
     def test_vectorized_sum2d(self):
-        usum2d = self.jit(arg_types=[double[:,:]],
-                     ret_type=double)(sum2d)
+        usum2d = self.jit(argtypes=[double[:,:]],
+                     restype=double)(sum2d)
         image = numpy.random.rand(10, 10)
         plain_old_result = sum2d(image)
         hot_new_result = usum2d(image)
         self.assertTrue((abs(plain_old_result - hot_new_result) < 1e-9).all())
 
     def test_bad_sum2d(self):
-        compiled_bad_sum2d = self.jit(arg_types = [double[:,:]], ret_type = double)(
+        compiled_bad_sum2d = self.jit(argtypes = [double[:,:]], restype = double)(
             bad_sum2d)
         image = numpy.random.rand(10, 10)
         self.assertEqual(bad_sum2d(image), compiled_bad_sum2d(image))

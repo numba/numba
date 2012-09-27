@@ -37,13 +37,13 @@ def func2(arg):
 class TestExternCall(test_support.ByteCodeTestCase):
     def test_call_zeros_like(self):
         testarr = numpy.array([1., 2, 3, 4, 5], dtype=numpy.double)
-        testfn = self.jit(arg_types = [double[:]], ret_type = double[:])(
+        testfn = self.jit(argtypes = [double[:]], restype = double[:])(
             call_zeros_like)
         self.assertTrue((testfn(testarr) == numpy.zeros_like(testarr)).all())
 
     def test_call_len(self):
         testarr = numpy.arange(10.)
-        testfn = self.jit(arg_types = [double[:]], ret_type = long_)(
+        testfn = self.jit(argtypes = [double[:]], restype = long_)(
             call_len)
         self.assertEqual(testfn(testarr), 10)
 

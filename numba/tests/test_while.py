@@ -121,9 +121,9 @@ def while_loop_fn_8(test_input):
 # ______________________________________________________________________
 
 class TestWhile(test_support.ByteCodeTestCase):
-    def _do_test(self, function, arg_types, *args, **kws):
-        _jit = (self.jit(arg_types = arg_types)
-                if arg_types is not None else self.jit())
+    def _do_test(self, function, argtypes, *args, **kws):
+        _jit = (self.jit(argtypes = argtypes)
+                if argtypes is not None else self.jit())
         compiled_fn = _jit(function)
         self.assertEqual(compiled_fn(*args, **kws), function(*args, **kws))
 
@@ -139,20 +139,20 @@ class TestWhile(test_support.ByteCodeTestCase):
         self._do_test(while_loop_fn_2, [double[:]], numpy.array([1., 2., 3.]))
 
     def test_while_loop_fn_3(self):
-        compiled_fn = self.jit(arg_types = [long_])(while_loop_fn_3)
+        compiled_fn = self.jit(argtypes = [long_])(while_loop_fn_3)
         compiled_result = compiled_fn(3)
         self.assertEqual(compiled_result, while_loop_fn_3(3))
         self.assertEqual(compiled_result, 8.)
 
     def test_while_loop_fn_4(self):
-        compiled_fn = self.jit(arg_types = (long_, long_, long_),
-                               ret_type = long_)(while_loop_fn_4)
+        compiled_fn = self.jit(argtypes = (long_, long_, long_),
+                               restype = long_)(while_loop_fn_4)
         compiled_result = compiled_fn(1, 4, 1)
         self.assertEqual(compiled_result, while_loop_fn_4(1, 4, 1))
         self.assertEqual(compiled_result, 6)
 
     def test_while_loop_fn_5(self):
-        compiled_fn = self.jit(arg_types = [double, double])(while_loop_fn_5)
+        compiled_fn = self.jit(argtypes = [double, double])(while_loop_fn_5)
         compiled_result = compiled_fn(3, 4)
         self.assertEqual(compiled_result, while_loop_fn_5(3, 4))
         self.assertEqual(compiled_result, 18.)

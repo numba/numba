@@ -116,7 +116,7 @@ def autojit(f, backend='bytecode'):
             func_signature, symtab, ast = functions._infer_types(
                                         context, f, arg_types=types)
 
-            decorator = jit(ret_type=func_signature.return_type, arg_types=types, backend=backend)
+            decorator = jit(restype=func_signature.return_type, argtypes=types, backend=backend)
             ctypes_func = decorator(f)
             _func_cache[types] = ctypes_func
 
@@ -126,7 +126,7 @@ def autojit(f, backend='bytecode'):
     wrapper._numba_func = f
     return wrapper
 
-def jit2(ret_type=None, arg_types=None, _llvm_module=None, _llvm_ee=None):
+def jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None):
     """
     Use the AST translator to translate the function.
     """
@@ -146,7 +146,7 @@ def jit2(ret_type=None, arg_types=None, _llvm_module=None, _llvm_ee=None):
 
     return _jit
 
-def jit(ret_type=double, arg_types=[double], backend='bytecode', **kws):
+def jit(restype=double, argtypes=[double], backend='bytecode', **kws):
     """
     Compile a function given the input and return types. If backend='bytecode'
     the bytecode translator is used, if backend='ast' the AST translator is
@@ -162,16 +162,16 @@ def jit(ret_type=double, arg_types=[double], backend='bytecode', **kws):
         use_ast = False
         if backend == 'ast':
             use_ast = True
-            for arg_type in list(arg_types) + [ret_type]:
+            for arg_type in list(argtypes) + [restype]:
                 if not isinstance(arg_type, minitypes.Type):
                     use_ast = False
                     debugout("String type specified, using bytecode translator...")
                     break
 
         if use_ast:
-            return jit2(arg_types=arg_types)(func)
+            return jit2(argtypes=argtypes)(func)
         else:
-            t = bytecode_translate.Translate(func, ret_type=ret_type,
+            t = bytecode_translate.Translate(func, restype=restype,
                                              arg_types=arg_types, **kws)
             t.translate()
             # print t.lfunc

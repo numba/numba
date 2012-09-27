@@ -45,7 +45,7 @@ class TestComplex (test_support.ByteCodeTestCase):
     def test_get_real_fn (self):
         num0 = 3 + 2j
         num1 = numpy.complex128(num0)
-        compiled_get_real_fn = self.jit(arg_types = [complex128])(get_real_fn)
+        compiled_get_real_fn = self.jit(argtypes = [complex128])(get_real_fn)
         self.assertEqual(compiled_get_real_fn(num0), 3.)
         self.assertEqual(get_real_fn(num0), compiled_get_real_fn(num0))
         self.assertEqual(compiled_get_real_fn(num1), 3.)
@@ -54,7 +54,7 @@ class TestComplex (test_support.ByteCodeTestCase):
     def test_get_imag_fn (self):
         num0 = 0 - 2j
         num1 = numpy.complex128(num0)
-        compiled_get_imag_fn = self.jit(arg_types = [complex128])(get_imag_fn)
+        compiled_get_imag_fn = self.jit(argtypes = [complex128])(get_imag_fn)
         self.assertEqual(compiled_get_imag_fn(num0), -2.)
         self.assertEqual(get_imag_fn(num0), compiled_get_imag_fn(num0))
         self.assertEqual(compiled_get_imag_fn(num1), -2.)
@@ -65,8 +65,8 @@ class TestComplex (test_support.ByteCodeTestCase):
     def test_get_conj_fn (self):
         num0 = 4 - 1.5j
         num1 = numpy.complex128(num0)
-        compiled_get_conj_fn = self.jit(arg_types = [complex128],
-                                        ret_type = complex128)(get_conj_fn)
+        compiled_get_conj_fn = self.jit(argtypes = [complex128],
+                                        restype = complex128)(get_conj_fn)
         self.assertEqual(compiled_get_conj_fn(num0), 4 + 1.5j)
         self.assertEqual(get_conj_fn(num0), compiled_get_conj_fn(num0))
         self.assertEqual(compiled_get_conj_fn(num1), 4 + 1.5j)
@@ -76,15 +76,15 @@ class TestComplex (test_support.ByteCodeTestCase):
                          'supported on 32-bit systems.')
     def test_get_complex_constant_fn (self):
         compiled_get_complex_constant_fn = self.jit(
-            arg_types = [], ret_type = complex128)(get_complex_constant_fn)
+            argtypes = [], restype = complex128)(get_complex_constant_fn)
         self.assertEqual(get_complex_constant_fn(),
                          compiled_get_complex_constant_fn())
 
     @unittest.skipUnless(_plat_bits == 64, 'Complex return values not '
                          'supported on 32-bit systems.')
     def test_prod_sum_fn (self):
-        compiled_prod_sum_fn = self.jit(arg_types = [complex128, complex128, complex128],
-                                        ret_type = complex128)(prod_sum_fn)
+        compiled_prod_sum_fn = self.jit(argtypes = [complex128, complex128, complex128],
+                                        restype = complex128)(prod_sum_fn)
         rng = numpy.arange(-1., 1.1, 0.5)
         for ar, ai, xr, xi, br, bi in itertools.product(rng, rng, rng, rng, rng,
                                                         rng):

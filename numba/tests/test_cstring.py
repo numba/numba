@@ -14,7 +14,7 @@ def convert(input_str):
 
 class CStringTests(object):
     def test_convert(self):
-        jit_convert = self.jit(arg_types = (cstring,), ret_type = int_)(
+        jit_convert = self.jit(argtypes = (cstring,), restype = int_)(
             convert)
         for exp in xrange(10):
             test_str = str(10 ** exp)

@@ -35,7 +35,7 @@ def fbcorr(imgs, filters, output):
 
 class TestFbcorr(unittest.TestCase):
     def test_vectorized_fbcorr(self):
-        ufbcorr = jit(arg_types=(nd4type, nd4type, nd4type))(fbcorr)
+        ufbcorr = jit(argtypes=(nd4type, nd4type, nd4type))(fbcorr)
 
         imgs = np.random.randn(10, 64, 64, 3)
         filt = np.random.randn(6, 5, 5, 3)
