@@ -68,6 +68,12 @@ class CoercionNode(Node):
             return [cls(node, dst_type) for node in node_or_nodes]
         return cls(node_or_nodes, dst_type)
 
+class CoerceToObject(CoercionNode):
+    "Coerce native values to objects"
+
+class CoerceToNative(CoercionNode):
+    "Coerce objects to native values"
+
 class DeferredCoercionNode(CoercionNode):
     """
     Coerce to the type of the given variable. The type of the variable may
@@ -135,6 +141,7 @@ class ConstNode(Node):
 
 _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)
+
 
 class FunctionCallNode(Node):
     def __init__(self, signature, args, name=''):
@@ -210,8 +217,8 @@ class ObjectTempNode(Node):
         assert not isinstance(node, ObjectTempNode)
         self.node = node
         self.llvm_temp = None
-        self.variable = Variable(object_)
-        self.type = object_
+        self.type = getattr(node, 'type', node.variable.type)
+        self.variable = Variable(self.type)
 
 
 class TempNode(Node): #, ast.Name):

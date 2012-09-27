@@ -430,6 +430,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
             self.generate_store_attribute(node, result)
 
     def visit_Assign(self, node):
+        ast.dump(node)
         target = self.visit(node.targets[0])
         value = self.visit(node.value)
         return self.generate_assign(value, target)
@@ -668,15 +669,20 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
     def visit_CoercionNode(self, node):
         val = self.visit(node.node)
-        node_type = node.node.type
-        if node.dst_type.is_object and not node_type.is_object:
-            return self.object_coercer.convert_single(node_type, val,
-                                                      name=node.name)
-        elif node.node.type != node.dst_type:
-            # logger.debug('Coerce %s --> %s', node.node.type, node.dst_type)
-            val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
-
+        # logger.debug('Coerce %s --> %s', node.node.type, node.dst_type)
+        val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
         return val
+
+    def visit_CoerceToObject(self, node):
+        val = self.visit(node.node)
+        return self.object_coercer.convert_single(node.node.type, val,
+                                                  name=node.name)
+
+    def visit_CoerceToNative(self, node):
+        assert node.node.type.is_tuple
+        val = self.visit(node.node)
+        return self.object_coercer.to_native(node.dst_type, val,
+                                             name=node.name)
 
     def visit_Subscript(self, node):
         if (node.value.type.is_array and
@@ -767,7 +773,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         return self.visit(node.temp)
 
     def visit_ObjectTempNode(self, node):
-        assert not isinstance(node.node, nodes.ObjectTempNode)
+        if isinstance(node.node, nodes.ObjectTempNode):
+            return self.visit(node.node)
 
         bb = self.builder.basic_block
         # Initialize temp to NULL at beginning of function
@@ -836,7 +843,7 @@ class DisposalVisitor(visitors.NumbaVisitor):
         lfunc = self.function_cache.function_by_name('Py_DecRef')
         self.builder.call(lfunc, node.llvm_temp)
 
-def if_badval(translator, llvm_result, badval, callback, cmp):
+def if_badval(translator, llvm_result, badval, callback, cmp=llvm.core.ICMP_EQ):
     # Use llvm_cbuilder :(
     b = translator.builder
 
@@ -884,6 +891,9 @@ class ObjectCoercer(object):
         self.builder = translator.builder
         sig, self.py_buildvalue = translator.function_cache.function_by_name(
                                                               'Py_BuildValue')
+        sig, self.pyarg_parsetuple = translator.function_cache.function_by_name(
+                                                              'PyArg_ParseTuple')
+        self.function_cache = translator.function_cache
         self.NULL = self.translator.visit(nodes.NULL_obj)
 
     def check_err(self, llvm_result, callback=None, cmp=llvm.core.ICMP_EQ):
@@ -906,6 +916,11 @@ class ObjectCoercer(object):
 
         return llvm_result
 
+    def check_err_int(self, llvm_result, badval):
+        llvm_badval = llvm.core.Constant.int(llvm_result.type, badval)
+        if_badval(self.translator, llvm_result, llvm_badval,
+                  callback=lambda b, *args: b.branch(self.translator.error_label))
+
     def lstr(self, types, fmt=None):
         typestrs = []
         for type in types:
@@ -926,13 +941,25 @@ class ObjectCoercer(object):
         result = self.builder.call(self.py_buildvalue, largs, name=name)
         return result
 
-    def convert_single(self, type, llvm_result, name=''):
-        "Generate code to convert an LLVM value to a Python object"
+    def npy_intp_to_py_ssize_t(self, llvm_result, type):
         if type == minitypes.npy_intp:
             lpy_ssize_t = minitypes.Py_ssize_t.to_llvm(self.context)
             llvm_result = self.translator.caster.cast(llvm_result, lpy_ssize_t)
             type = minitypes.Py_ssize_t
 
+        return llvm_result, type
+
+    def py_ssize_t_to_npy_intp(self, llvm_result, type):
+        if type == minitypes.npy_intp:
+            lnpy_intp = minitypes.npy_intp.to_llvm(self.context)
+            llvm_result = self.translator.caster.cast(llvm_result, lnpy_intp)
+            type = minitypes.Py_ssize_t
+
+        return llvm_result, type
+
+    def convert_single(self, type, llvm_result, name=''):
+        "Generate code to convert an LLVM value to a Python object"
+        llvm_result, type = self.npy_intp_to_py_ssize_t(llvm_result, type)
         lstr = self.lstr([type])
         return self.buildvalue(lstr, llvm_result, name=name)
 
@@ -952,3 +979,24 @@ class ObjectCoercer(object):
         lstr = self.lstr(types, fmt="{%s}")
         largs = llvm_keys + llvm_values
         return self.buildvalue(lstr, *largs, name='dict')
+
+    def parse_tuple(self, lstr, llvm_tuple, types, name=''):
+        lresults = []
+        for i, type in enumerate(types):
+            var = self.builder.alloca(type.to_llvm(self.context),
+                                       name=name and "%s%d" % (name, i))
+            lresults.append(var)
+
+        largs = [llvm_tuple, lstr] + lresults
+        parse_result = self.builder.call(self.pyarg_parsetuple, largs)
+        self.check_err_int(parse_result, 0)
+        return map(self.builder.load, lresults)
+
+    def to_native(self, type, llvm_tuple, name=''):
+        "Generate code to convert a Python object to an LLVM value"
+        lstr = self.lstr([type])
+        lresult, = self.parse_tuple(lstr, llvm_tuple, [type], name=name)
+        return lresult
+
+
+

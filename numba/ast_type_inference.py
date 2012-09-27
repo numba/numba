@@ -973,8 +973,9 @@ class LateSpecializer(visitors.NumbaTransformer):
         objs = self.visitlist(nodes.CoercionNode.coerce(node.elts, object_))
         n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
         args = [n] + objs
-        node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
-        return nodes.ObjectTempNode(node)
+        new_node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
+        new_node.type = _types.TupleType(size=len(node.elts))
+        return nodes.ObjectTempNode(new_node)
 
     def visit_Dict(self, node):
         self.generic_visit(node)
@@ -998,7 +999,14 @@ class LateSpecializer(visitors.NumbaTransformer):
         self.generic_visit(node)
         node_type = node.node.type
         if node.dst_type.is_object and not node_type.is_object:
-            return nodes.ObjectTempNode(node)
+            return nodes.ObjectTempNode(nodes.CoerceToObject(
+                    node.node, node.dst_type, name=node.name))
+        elif node_type.is_object and not node.dst_type.is_object:
+            # Create a tuple for PyArg_ParseTuple
+            # TODO: efficient conversions
+            tup = ast.Tuple(elts=[node.node], ctx=ast.Load())
+            tup = self.visit(tup)
+            return nodes.CoerceToNative(tup, node.dst_type, name=node.name)
         return node
 
     def visit_Subscript(self, node):

@@ -110,7 +110,7 @@ class FunctionCache(object):
 
         # print func, getattr(func, '_is_numba_func', False)
         # create a signature taking N objects and returning an object
-        signature = ofunc(argtypes=ofunc.arg_types * len(arg_types)).signature
+        signature = ofunc(argtypes=ofunc.arg_types * len(argtypes)).signature
         return signature, None, func
 
     def function_by_name(self, name):
@@ -362,6 +362,11 @@ class PyTuple_Pack(ExternalFunction):
 class Py_BuildValue(ExternalFunction):
     arg_types = [c_string_type]
     return_type = object_
+    is_vararg = True
+
+class PyArg_ParseTuple(ExternalFunction):
+    arg_types = [object_, c_string_type]
+    return_type = int_
     is_vararg = True
 
 class PyObject_Print(ExternalFunction):
