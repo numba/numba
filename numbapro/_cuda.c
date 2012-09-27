@@ -381,10 +381,10 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
         dim_count += ((ndarray*)arrays[i])->nd;
         total_size += steps[i] * dimensions[0];
     }
-    
+
     void *device_args, *device_dims, *device_steps, *device_arylen;
     const npy_intp device_count = dimensions[0];
-    
+
     void* temp_args[MAXARGS] = {NULL};
     void* temp_dims[MAXARGS] = {NULL};
     void* temp_steps[MAXARGS] = {NULL};
@@ -398,7 +398,7 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
     if( alloc_and_copy(&temp_args, sizeof(void*) * info->nops,
                        &device_args, stream) < 0 )
         goto error;
-    
+
     // dimensions
     for (i = 0; i < info->nops; ++i){
         ndarray *array = arrays[i];
@@ -406,11 +406,11 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
                            &temp_dims[i], stream) < 0 )
             goto error;
     }
-    
+
     if( alloc_and_copy(&temp_dims, sizeof(void*) * info->nops,
                        &device_dims, stream) < 0 )
         goto error;
-        
+
     // steps
     for (i = 0; i < info->nops; ++i){
         ndarray *array = arrays[i];
@@ -418,7 +418,7 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
                            &temp_steps[i], stream) < 0 )
             goto error;
     }
-    
+
     if( alloc_and_copy(&temp_steps, sizeof(void*) * info->nops,
                        &device_steps, stream) < 0 )
         goto error;
@@ -427,7 +427,7 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
     if( alloc_and_copy(steps, sizeof(npy_intp) * info->nops,
                        &device_arylen, stream) < 0 )
         goto error;
-        
+
     void * kernel_args[] = {&device_args, &device_dims, &device_steps,
                             &device_arylen, &device_count};
 
@@ -436,7 +436,7 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
 	/* TODO: use multiple thread blocks */
     int thread_per_block = dimensions[0];
 	int block_per_grid = 1;
-	
+
 	/* XXX: assume a smaller thread limit to prevent CC support problem
 	        and out of register problem */
 	const int MAX_THREAD = 128;
@@ -445,7 +445,7 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
 	    block_per_grid += thread_per_block % MAX_THREAD ? 1 : 0;
 	    thread_per_block = MAX_THREAD;
 	}
-		
+
 	cu_result = cuLaunchKernel(info->cu_func,
 	                           block_per_grid, 1, 1,
 							   thread_per_block, 1, 1,
@@ -457,17 +457,17 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
 		goto error;
 	}
 
-    /* Wait for kernel to finish 
+    /* Wait for kernel to finish
     NOTE: cudaDeviceSynchronize should not be necessary.
     */
-    //	error_code = cudaDeviceSynchronize(); 
+    //	error_code = cudaDeviceSynchronize();
     //	CHECK_CUDA_ERROR("device synchronization", error_code)
 
     /* Copy the output array */
     /* TODO: error handling */
-    error_code = cudaMemcpyAsync(args[info->nops - 1], 
+    error_code = cudaMemcpyAsync(args[info->nops - 1],
                                  temp_args[info->nops - 1],
-                                 steps[info->nops - 1] * dimensions[0], 
+                                 steps[info->nops - 1] * dimensions[0],
                                  cudaMemcpyDeviceToHost,
                                  stream);
     CHECK_CUDA_ERROR("retrieve result", error_code)
@@ -481,7 +481,7 @@ error:
 	result = -1;
 cleanup:
     /* TODO: error handling */
-        
+
     for(i = 0; i < info->nops; ++i ){
         cudaFree(temp_args[i]);
         cudaFree(temp_dims[i]);
@@ -491,7 +491,7 @@ cleanup:
     cudaFree(device_dims);
     cudaFree(device_steps);
     cudaFree(device_arylen);
-    
+
 	(void) cudaStreamDestroy(stream);
 	return result;
 }
@@ -503,6 +503,106 @@ cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
     (void) _cuda_outer_loop(args, dimensions, steps, data, arrays);
 }
 
+
+int cuda_numba_function(PyListObject *args, void *func,
+                        unsigned int griddimx, unsigned int griddimy,
+                        unsigned int griddimz, unsigned int blockdimx,
+                        unsigned int blockdimy, unsigned int blockdimz)
+{
+    int result = 0;
+    int i, j;
+    CUresult cu_result;
+    cudaError_t error_code;
+    cudaStream_t stream = NULL;
+    error_code = cudaStreamCreate(&stream);
+    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
+
+    const long nargs = PyList_GET_SIZE(args);
+
+    ndarray *arrays[MAXARGS] = {NULL};
+    ndarray tmparys[MAXARGS] = {0};
+    void* device_pointers[MAXARGS] = {NULL};
+    void * kernel_args[MAXARGS] = {NULL};
+
+    /* Prepare arguments */
+    for (i=0; i<nargs; ++i){
+        PyObject * pyobj = PyList_GET_ITEM(args, i);
+        if (PyArray_Check(pyobj)) {
+            ndarray *ary = (ndarray*) pyobj;
+            ndarray *tmpary = &tmparys[i];
+            arrays[i] = ary;
+
+
+            if (alloc_and_copy(ary->data, ary->strides[0] * ary->dimensions[0],
+                               &tmpary->data, stream) < 0)
+                goto error;
+
+            if (alloc_and_copy(ary->dimensions, sizeof(npy_intp) * ary->nd,
+                               &tmpary->dimensions, stream) < 0)
+                goto error;
+
+            if (alloc_and_copy(ary->strides, sizeof(npy_intp) * ary->nd,
+                               &tmpary->strides, stream) < 0)
+                goto error;
+
+            tmpary->nd = ary->nd;
+
+            if (alloc_and_copy(tmpary, sizeof(ndarray),
+                               &device_pointers[i], stream) < 0)
+                goto error;
+
+            kernel_args[i] = &device_pointers[i];
+        }
+    }
+
+    cu_result = cuLaunchKernel(func,
+	                           griddimx, griddimy, griddimz,
+							   blockdimx, blockdimy, blockdimz,
+							   0 /* sharedMemBytes */ , stream,
+							   kernel_args, 0);
+
+	if (cu_result != CUDA_SUCCESS) {
+		PyErr_SetString(cuda_exc_type, curesult_to_str(cu_result));
+		goto error;
+	}
+
+    /* Retrieve results */
+    for (i=0; i<nargs; ++i){
+        ndarray *ary = arrays[i];
+        ndarray *tmpary = &tmparys[i];
+
+        error_code = cudaMemcpyAsync(ary->data, tmpary->data,
+                                     ary->strides[0] * ary->dimensions[0],
+                                     cudaMemcpyDeviceToHost, stream);
+        CHECK_CUDA_ERROR("retrieve data", error_code)
+
+        error_code = cudaMemcpyAsync(ary->dimensions, tmpary->dimensions,
+                                     sizeof(npy_intp) * ary->nd,
+                                     cudaMemcpyDeviceToHost, stream);
+        CHECK_CUDA_ERROR("retrieve dimension", error_code)
+
+        error_code = cudaMemcpyAsync(ary->strides, tmpary->strides,
+                                     sizeof(npy_intp) * ary->nd,
+                                     cudaMemcpyDeviceToHost, stream);
+        CHECK_CUDA_ERROR("retrieve strides", error_code)
+    }
+
+    error_code = cudaStreamSynchronize(stream);
+    CHECK_CUDA_ERROR("stream synchronize", error_code)
+
+    goto cleanup;
+error:
+    (void) cudaGetLastError(); /* clear error */
+    result = -1;
+cleanup:
+    for (i=0; i<nargs; ++i){
+        cudaFree(tmparys[i].data);
+        cudaFree(tmparys[i].dimensions);
+        cudaFree(tmparys[i].strides);
+        cudaFree(device_pointers[i]);
+    }
+    return result;
+}
 
 /* Shamelessly copied from pycuda/src/cpp/cuda.hpp */
 static const char *curesult_to_str(CUresult e)

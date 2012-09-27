@@ -200,3 +200,31 @@ cdef class CudaGeneralizedUFuncDispatcher(CudaUFuncDispatcher):
 #                         False)
 #        broadcast_arrays(arrays, None, ndim, &inner_shape_p, &inner_strides_p,
 #                         True)
+
+
+cdef class CudaNumbaFuncDispatcher(object): #cutils.UFuncDispatcher):
+    """
+    Invoke the CUDA ufunc specialization for the given inputs.
+    """
+
+    cdef cuda.CudaDeviceAttrs device_attrs
+
+    cdef cuda.CUdevice cu_device
+    cdef cuda.CUcontext cu_context
+    cdef cuda.CUmodule cu_module
+    cdef cuda.CUfunction cu_function
+
+    def __init__(self, ptx_code, func_name, device_number):
+        cuda.get_device(&self.cu_device, &self.cu_context, device_number)
+        cuda.init_attributes(self.cu_device, &self.device_attrs)
+        cuda.cuda_load(ptx_code, &self.cu_module)
+        cuda.cuda_getfunc(self.cu_module, &self.cu_function, func_name)
+
+    def __call__(self, args, griddim, blkdim):
+        gx, gy, gz = griddim
+        bx, by, bz = blkdim
+        cuda.cuda_numba_function(list(args), self.cu_function,
+                                 gx, gy, gz, bx, by, bz)
+
+
+

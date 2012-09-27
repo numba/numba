@@ -131,8 +131,8 @@ class CudaVectorize(_common.GenericVectorize):
         pm.run(self.module)
 
         # generate ptx asm for all functions
-	
-	# Note. Oddly, the llvm ptx backend does not have compute capacility 
+
+        # Note. Oddly, the llvm ptx backend does not have compute capacility
         #       beyound 2.0, but it has the streaming-multiprocessor,
         #       which is the same.
         cc = 'sm_%d%d' % _cudadispatch.compute_capability(device_number)

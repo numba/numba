@@ -30,7 +30,7 @@ cdef extern from "_cuda.h": # external utilities from _cuda.c
 
     int init_cuda_exc_type() except -1
 
-    int get_device(CUdevice *cu_device, CUcontext *cu_context, 
+    int get_device(CUdevice *cu_device, CUcontext *cu_context,
                    int device_number) except -1
     int init_attributes(CUdevice cu_device, CudaDeviceAttrs *attrs) except -1
     int cuda_load(object ptx_str, CUmodule *cu_module) except -1
@@ -47,8 +47,14 @@ cdef extern from "_cuda.h": # external utilities from _cuda.c
 
     void cuda_outer_loop(char **args, cnp.npy_intp *dimensions, cnp.npy_intp *steps,
                          void *func, PyObject **arrays)
+# XXX: Unused?
+#    ctypedef struct CudaFunctionAndData:
+#        CUfunction cu_func
+#        int nops
+#        int nout
 
-    ctypedef struct CudaFunctionAndData:
-        CUfunction cu_func
-        int nops
-        int nout
+    int cuda_numba_function(object args, CUfunction func,
+                          unsigned int griddimx, unsigned int griddimy,
+                          unsigned int griddimz, unsigned int blockdimx,
+                          unsigned int blockdimy, unsigned int blockdimz) except -1
+

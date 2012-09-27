@@ -43,3 +43,11 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
 
 void cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps,
                      void *func, PyObject **arrays);
+
+int cuda_numba_function(PyListObject *args, void *func,
+                          unsigned int griddimx, unsigned int griddimy,
+                          unsigned int griddimz, unsigned int blockdimx,
+                          unsigned int blockdimy, unsigned int blockdimz);
+
+
+
