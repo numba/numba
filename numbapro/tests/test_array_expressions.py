@@ -59,11 +59,9 @@ def array_expr_gufunc(A, B, C):
         for j in range(p):
             C[i, j] = (A[i, :] * B[:, j]).sum()
 
-    return C
-
 def test_gufunc_array_expressions():
     gufunc = ASTGUFuncVectorize(array_expr_gufunc, '(m,n),(n,p)->(m,p)')
-    gufunc.add(argtypes=[f[:,:], f[:,:], f[:,:]])
+    gufunc.add(argtypes=[f[:,:], f[:,:], object_]) #f[:,:]])
     gufunc = gufunc.build_ufunc()
 
     matrix_ct = 10
@@ -81,5 +79,5 @@ def test_gufunc_array_expressions():
 
 if __name__ == '__main__':
     test_gufunc_array_expressions()
-#    test_array_expressions()
-#    test_matmul()
+    test_array_expressions()
+    test_matmul()

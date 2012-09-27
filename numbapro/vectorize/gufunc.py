@@ -162,7 +162,7 @@ class PyArray(CStruct):
         self.base.assign(self.parent.constant_null(C.void_p))
         dtype_p = constant(C.py_ssize_t, id(dtype))
         self.descr.assign(dtype_p.cast(C.void_p))
-        self.flags.assign(constant(C.int, 0))
+        self.flags.assign(constant(C.int, _internal.NPY_WRITEABLE))
 
         self.data.assign(data)
         self.nd.assign(constant(C.int, len(dimensions)))
@@ -218,6 +218,7 @@ class GUFuncEntry(CDefinition):
     def body(self, args, dimensions, steps, data):
         diminfo = list(_parse_signature(self.Signature))
         n_pyarys = len(diminfo)
+        assert n_pyarys == len(self.dtypes)
 
         # extract unique dimension names
         dims = []

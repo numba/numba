@@ -237,6 +237,19 @@ struct PyModuleDef module_def = {
 };
 #endif
 
+static int
+add_ndarray_flags_constants(PyObject *module)
+{
+#define __err_if_neg(expr) if (expr < 0) return -1;
+    __err_if_neg(PyModule_AddIntConstant(module, "NPY_WRITEABLE", NPY_WRITEABLE));
+    __err_if_neg(PyModule_AddIntConstant(module, "NPY_ARRAY_ALIGNED", NPY_ARRAY_ALIGNED));
+    __err_if_neg(PyModule_AddIntConstant(module, "NPY_ARRAY_OWNDATA", NPY_ARRAY_OWNDATA));
+    __err_if_neg(PyModule_AddIntConstant(module, "NPY_ARRAY_C_CONTIGUOUS", NPY_ARRAY_C_CONTIGUOUS));
+    __err_if_neg(PyModule_AddIntConstant(module, "NPY_ARRAY_F_CONTIGUOUS", NPY_ARRAY_F_CONTIGUOUS));
+#undef __err_if_neg
+    return 0;
+}
+
 #ifdef IS_PY3K
 #define RETVAL m
 #define ERR_RETVAL NULL
@@ -269,6 +282,9 @@ init_internal(void)
 #endif
 
     if (add_array_order_constants(m) < 0)
+        return ERR_RETVAL;
+
+    if (add_ndarray_flags_constants(m) < 0)
         return ERR_RETVAL;
 
     /* Inherit the dynamic UFunc from UFunc */
