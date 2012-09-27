@@ -109,20 +109,20 @@ class GenericVectorize(object):
     def __init__(self, func):
         self.pyfunc = func
         self.translates = []
-        self.args_ret_types = []
+        self.args_restypes = []
 
     def add(self, *args, **kwargs):
         t = Translate(self.pyfunc, *args, **kwargs)
         t.translate()
         self.translates.append(t)
 
-        argtys = kwargs['arg_types']
-        retty = kwargs['ret_type']
-        self.args_ret_types.append(argtys + [retty])
+        argtys = kwargs['argtypes']
+        retty = kwargs['restype']
+        self.args_restypes.append(argtys + [retty])
 
     def _get_tys_list(self):
         tyslist = []
-        for args_ret in self.args_ret_types:
+        for args_ret in self.args_restypes:
             tys = []
             for ty in args_ret:
                 tys.append(np.dtype(_numbatypes_to_numpy(ty)).num)
@@ -149,10 +149,10 @@ class ASTVectorizeMixin(object):
     def _get_ee(self):
         return self.ee
 
-    def add(self, ret_type=None, arg_types=None):
-        dec = decorators.jit_ast(ret_type, arg_types)
+    def add(self, restype=None, argtypes=None):
+        dec = decorators.jit_ast(restype, argtypes)
         numba_func = dec(self.pyfunc)
-        self.args_ret_types.append(numba_func.signature.args +
+        self.args_restypes.append(numba_func.signature.args +
                                    [numba_func.signature.return_type])
         self.translates.append(numba_func)
 

@@ -51,7 +51,7 @@ def test_matmul():
 
 def test_gufunc_array_expressions():
     gufunc = ASTGUFuncVectorize(array_expr_matmul.py_func, '(m,n),(n,p)->(m,p)')
-    gufunc.add(arg_types=[f[:,:], f[:,:], f[:,:]])
+    gufunc.add(argtypes=[f[:,:], f[:,:], f[:,:]])
     gufunc = gufunc.build_ufunc()
 
     matrix_ct = 10

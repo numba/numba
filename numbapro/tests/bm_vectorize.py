@@ -75,25 +75,25 @@ class Benchmark:
 
     def build_basic_vectorize(self):
         pv = BasicVectorize(polynomial)
-        # pv.add(ret_type=int32, arg_types=[int32, int32])
-        pv.add(ret_type=f, arg_types=[f, f])
-        pv.add(ret_type=d, arg_types=[d, d])
+        # pv.add(restype=int32, argtypes=[int32, int32])
+        pv.add(restype=f, argtypes=[f, f])
+        pv.add(restype=d, argtypes=[d, d])
         ufunc = pv.build_ufunc()
         return ufunc
 
     def build_parallel_vectorize(self):
         pv = ParallelVectorize(polynomial)
-        # pv.add(ret_type=int32, arg_types=[int32, int32])
-        pv.add(ret_type=f, arg_types=[f, f])
-        pv.add(ret_type=d, arg_types=[d, d])
+        # pv.add(restype=int32, argtypes=[int32, int32])
+        pv.add(restype=f, argtypes=[f, f])
+        pv.add(restype=d, argtypes=[d, d])
         ufunc = pv.build_ufunc()
         return ufunc
 
     def build_stream_vectorize(self):
         pv = StreamVectorize(polynomial)
-        # pv.add(ret_type=int32, arg_types=[int32, int32])
-        pv.add(ret_type=f, arg_types=[f, f])
-        pv.add(ret_type=d, arg_types=[d, d])
+        # pv.add(restype=int32, argtypes=[int32, int32])
+        pv.add(restype=f, argtypes=[f, f])
+        pv.add(restype=d, argtypes=[d, d])
         ufunc = pv.build_ufunc(granularity=32)
         return ufunc
 

@@ -9,10 +9,10 @@ def vector_add(a, b):
 def main():
     # build basic native code ufunc
     bv = BasicVectorize(vector_add)
-    bv.add(ret_type=int32, arg_types=[int32, int32])
-    bv.add(ret_type=uint32, arg_types=[uint32, uint32])
-    bv.add(ret_type=f, arg_types=[f, f])
-    bv.add(ret_type=d, arg_types=[d, d])
+    bv.add(restype=int32, argtypes=[int32, int32])
+    bv.add(restype=uint32, argtypes=[uint32, uint32])
+    bv.add(restype=f, argtypes=[f, f])
+    bv.add(restype=d, argtypes=[d, d])
     basic_ufunc = bv.build_ufunc()
 
     # build python ufunc

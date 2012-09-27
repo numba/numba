@@ -27,10 +27,10 @@ def pairwise_python(X, D):
 
 def run_bench():
     signature = [nb.d[:,:], nb.d[:,:]]
-    pw_numba = jit(arg_types=signature)(pairwise_python)
+    pw_numba = jit(argtypes=signature)(pairwise_python)
 
     gufunc = GUFuncVectorize(pairwise_python, '(m,n)->(m,m)')
-    gufunc.add(arg_types=[nb.d[:,:], nb.d[:,:]])
+    gufunc.add(argtypes=[nb.d[:,:], nb.d[:,:]])
     pw_numbapro = gufunc.build_ufunc()
 
     X = np.random.random((1000, 3))

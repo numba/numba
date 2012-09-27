@@ -171,20 +171,20 @@ class UFuncRewriter(ArrayExpressionRewrite):
 
         # Vectorize Python function
         if lhs is None:
-            ret_type = node.type
+            restype = node.type
         else:
-            ret_type = lhs.type.dtype
+            restype = lhs.type.dtype
 
         vectorizer = self.vectorizer_cls(py_ufunc)
-        arg_types = [op.type.dtype if op.type.is_array else op.type
+        argtypes = [op.type.dtype if op.type.is_array else op.type
                          for op in ufunc_builder.operands]
-        vectorizer.add(ret_type=ret_type, arg_types=arg_types)
+        vectorizer.add(restype=restype, argtypes=argtypes)
         ufunc = vectorizer.build_ufunc()
 
         # Call ufunc
         signature = minitypes.FunctionType(
                 return_type=result_type,
-                arg_types=[op.type for op in ufunc_builder.operands])
+                argtypes=[op.type for op in ufunc_builder.operands])
 
         args = ufunc_builder.operands
         if lhs is None:

@@ -28,6 +28,6 @@ def ufunc_discriminant(vecttype=BasicVectorize):
     else:
         supported_types = [int32, int64, f, d]
     for ty in supported_types:
-        vect.add(ret_type=ty, arg_types=[ty] * 3)
+        vect.add(restype=ty, argtypes=[ty] * 3)
     return vect.build_ufunc()
 

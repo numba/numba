@@ -36,9 +36,9 @@ Compilation requires type information.  NumbaPro assumes no knowledge of type wh
 ::
 
     cv = CudaVectorize(my_ufunc)
-    cv.add(ret_type=int32, arg_types=[int32, int32])
-    cv.add(ret_type=f, arg_types=[f, f])
-    cv.add(ret_type=d, arg_types=[d, d])
+    cv.add(restype=int32, argtypes=[int32, int32])
+    cv.add(restype=f, argtypes=[f, f])
+    cv.add(restype=d, argtypes=[d, d])
 
 
 Above we are using a signed 32-bit **int**, a float **f**, and a double **d**. 

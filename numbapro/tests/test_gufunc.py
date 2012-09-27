@@ -18,7 +18,7 @@ def matmulcore(A, B, C):
 
 def test_numba():
     from itertools import product
-    jit_matmulcore = jit(arg_types=[f[:,:], f[:,:], f[:,:]])(matmulcore)
+    jit_matmulcore = jit(argtypes=[f[:,:], f[:,:], f[:,:]])(matmulcore)
 
     A = np.arange(16, dtype=np.float32).reshape(4, 4)
     B = np.arange(16, dtype=np.float32).reshape(4, 4)
@@ -32,7 +32,7 @@ def test_numba():
 
 def _test_gufunc(vectorizer):
     gufunc = vectorizer(matmulcore, '(m,n),(n,p)->(m,p)')
-    gufunc.add(arg_types=[f[:,:], f[:,:], f[:,:]])
+    gufunc.add(argtypes=[f[:,:], f[:,:], f[:,:]])
     gufunc = gufunc.build_ufunc()
 
     matrix_ct = 1001 # an odd number to test thread/block division in CUDA

@@ -45,7 +45,7 @@ class TestUFuncs(unittest.TestCase):
     def _test_ufunc_attributes(self, cls, a, b, *args):
         "Test ufunc attributes"
         vectorizer = cls(add, *args)
-        vectorizer.add(ret_type=f, arg_types=[f, f])
+        vectorizer.add(restype=f, argtypes=[f, f])
         ufunc = vectorizer.build_ufunc()
 
         info = (cls, a.ndim)
@@ -57,7 +57,7 @@ class TestUFuncs(unittest.TestCase):
     def _test_broadcasting(self, cls, a, b, c, d):
         "Test multiple args"
         vectorizer = cls(add_multiple_args)
-        vectorizer.add(ret_type=f, arg_types=[f, f, f, f])
+        vectorizer.add(restype=f, argtypes=[f, f, f, f])
         ufunc = vectorizer.build_ufunc()
 
         info = (cls, a.shape)
@@ -84,7 +84,7 @@ class TestUFuncs(unittest.TestCase):
     def test_implicit_broadcasting(self):
         for v in vectorizers:
             vectorizer = v(add)
-            vectorizer.add(ret_type=f, arg_types=[f, f])
+            vectorizer.add(restype=f, argtypes=[f, f])
             ufunc = vectorizer.build_ufunc()
 
             broadcasting_b = b[np.newaxis, :, np.newaxis, np.newaxis, :]
@@ -93,7 +93,7 @@ class TestUFuncs(unittest.TestCase):
 #    def test_gufunc(self):
 #        "Test multiple args"
 #        vectorizer = GUFuncVectorize(gufunc_add, "(m)(m)->()")
-#        vectorizer.add(arg_types=[f[:], f[:]])
+#        vectorizer.add(argtypes=[f[:], f[:]])
 #        ufunc = vectorizer.build_ufunc()
 #
 #        a = np.arange(12 * 10, dtype=dtype).reshape(12, 10)

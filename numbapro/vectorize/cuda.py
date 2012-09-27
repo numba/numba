@@ -68,14 +68,14 @@ class _CudaStagingCaller(CDefinition):
     def _pointer(cls, ty):
         return C.pointer(ty)
 
-def get_dtypes(ret_type, arg_types):
+def get_dtypes(restype, argtypes):
     try:
-        ret_dtype = minitypes.map_minitype_to_dtype(ret_type)
+        ret_dtype = minitypes.map_minitype_to_dtype(restype)
     except KeyError:
         ret_dtype = None
 
     arg_dtypes = tuple(minitypes.map_minitype_to_dtype(arg_type)
-                           for arg_type in arg_types)
+                           for arg_type in argtypes)
     return ret_dtype, arg_dtypes
 
 class CudaVectorize(_common.GenericVectorize):
@@ -84,14 +84,14 @@ class CudaVectorize(_common.GenericVectorize):
         self.module = Module.new("ptx_%s" % func.func_name)
         self.signatures = []
 
-    def add(self, ret_type, arg_types, **kwargs):
+    def add(self, restype, argtypes, **kwargs):
         kwargs.update({'module': self.module})
-        self.signatures.append((ret_type, arg_types, kwargs))
-        t = Translate(self.pyfunc, ret_type=ret_type, arg_types=arg_types,
+        self.signatures.append((restype, argtypes, kwargs))
+        t = Translate(self.pyfunc, restype=restype, argtypes=argtypes,
                       **kwargs)
         t.translate()
         self.translates.append(t)
-        self.args_ret_types.append(arg_types + [ret_type])
+        self.args_restypes.append(argtypes + [restype])
 
     def _build_ufunc(self, device_number):
         # quick & dirty tryout
@@ -111,8 +111,8 @@ class CudaVectorize(_common.GenericVectorize):
 
         types_to_name = {}
 
-        for (ret_type, arg_types, _), lfunc in zip(self.signatures, lfunclist):
-            ret_dtype, arg_dtypes = get_dtypes(ret_type, arg_types)
+        for (restype, argtypes, _), lfunc in zip(self.signatures, lfunclist):
+            ret_dtype, arg_dtypes = get_dtypes(restype, argtypes)
             # generate a caller for all functions
             lcaller = self._build_caller(lfunc)
             assert lcaller.module is lfunc.module

@@ -78,8 +78,8 @@ class GUFuncVectorize(object):
         self.translates = []
         self.signature = sig
 
-    def add(self, arg_types):
-        t = Translate(self.pyfunc, arg_types=arg_types)
+    def add(self, argtypes):
+        t = Translate(self.pyfunc, argtypes=argtypes)
         t.translate()
         self.translates.append(t)
 
@@ -88,7 +88,7 @@ class GUFuncVectorize(object):
         tyslist = []
         for t in self.translates:
             tys = []
-            for ty in t.arg_types:
+            for ty in t.argtypes:
                 while isinstance(ty, list):
                     ty = ty[0]
                 lty = convert_to_llvmtype(ty)
@@ -309,16 +309,16 @@ class CUDAGUFuncVectorize(GUFuncVectorize):
         # self.llvm_fpm = llvm.passes.FunctionPassManager.new(self.llvm_module)
         # self.llvm_fpm.initialize()
 
-    def add(self, arg_types):
-        self.cuda_vectorizer.add(ret_type=void, arg_types=arg_types)
+    def add(self, argtypes):
+        self.cuda_vectorizer.add(restype=void, argtypes=argtypes)
 
     def _get_tys_list(self):
         types = []
-        for ret_type, arg_types, kwargs in self.cuda_vectorizer.signatures:
-            tys = arg_types + [ret_type]
+        for restype, argtypes, kwargs in self.cuda_vectorizer.signatures:
+            tys = argtypes + [restype]
             types.append([
                 minitypes.map_minitype_to_dtype(t.dtype if t.is_array else t).num
-                    for t in arg_types])
+                    for t in argtypes])
 
         return types
 
@@ -394,14 +394,14 @@ def get_cuda_outer_loop(builder):
     """
     context = numba.decorators.context
 
-    arg_types = [
+    argtypes = [
         char.pointer().pointer(), # char **args
         npy_intp.pointer(),       # npy_intp *dimensions
         npy_intp.pointer(),       # npy_intp *steps
         void.pointer(),           # void *func
         object_.pointer(),        # PyObject *arrays
     ]
-    signature = minitypes.FunctionType(return_type=void, args=arg_types)
+    signature = minitypes.FunctionType(return_type=void, args=argtypes)
     lfunc_type = _ltype(signature.pointer())
 
     func_addr = _cudadispatch.get_cuda_outer_loop_addr()

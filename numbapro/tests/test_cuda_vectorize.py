@@ -8,9 +8,9 @@ def vector_add(a, b):
 
 # build cuda code ufunc
 pv = CudaVectorize(vector_add)
-pv.add(ret_type=int32, arg_types=[int32, int32])
-pv.add(ret_type=f, arg_types=[f, f])
-#pv.add(ret_type=d, arg_types=[d, d])
+pv.add(restype=int32, argtypes=[int32, int32])
+pv.add(restype=f, argtypes=[f, f])
+#pv.add(restype=d, argtypes=[d, d])
 cuda_ufunc = pv.build_ufunc()
 
 test_dtypes = np.float32, np.int32

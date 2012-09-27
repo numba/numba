@@ -9,10 +9,10 @@ def vector_add(a, b):
 def main():
     # build parallel native code ufunc
     pv = ParallelVectorize(vector_add)
-    pv.add(ret_type=int32, arg_types=[int32, int32])
-    pv.add(ret_type=uint32, arg_types=[uint32, uint32])
-    pv.add(ret_type=f, arg_types=[f, f])
-    pv.add(ret_type=d, arg_types=[d, d])
+    pv.add(restype=int32, argtypes=[int32, int32])
+    pv.add(restype=uint32, argtypes=[uint32, uint32])
+    pv.add(restype=f, argtypes=[f, f])
+    pv.add(restype=d, argtypes=[d, d])
     para_ufunc = pv.build_ufunc()
 
     # build python ufunc

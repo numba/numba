@@ -91,7 +91,7 @@ def numexpr_add(a, b, out):
 def run_computeY_AoS(elements):
     def build_ufunc(kind, func, type):
         builder = kind(func)
-        builder.add(ret_type = type, arg_types = [type] * 3)
+        builder.add(restype = type, argtypes = [type] * 3)
         return builder.build_ufunc()
 
     dataset = np.random.random((elements, 3))
@@ -115,7 +115,7 @@ def run_computeY_AoS(elements):
 def run_computeY_SoA(elements):
     def build_ufunc(kind, func, type):
         builder = kind(func)
-        builder.add(ret_type = type, arg_types = [type] * 3)
+        builder.add(restype = type, argtypes = [type] * 3)
         return builder.build_ufunc()
 
     dataset = np.random.random((3, elements))
@@ -139,7 +139,7 @@ def run_computeY_SoA(elements):
 def run_aprox_erf(elements):
     def build_ufunc(kind, func, type):
         builder = kind(func)
-        builder.add(ret_type = type, arg_types = [ type ])
+        builder.add(restype = type, argtypes = [ type ])
         return builder.build_ufunc()
 
     dataset = np.random.random(elements)
@@ -168,7 +168,7 @@ def run_aprox_erf(elements):
 def run_add(elements):
     def build_ufunc(kind):
         builder = kind(add)
-        builder.add(ret_type = nb.d, arg_types = [ nb.d, nb.d ])
+        builder.add(restype = nb.d, argtypes = [ nb.d, nb.d ])
         return builder.build_ufunc()
 
     dataset1 = np.random.random(elements * elements).reshape(elements, elements)

@@ -33,10 +33,10 @@ versions of the code depending on the inputs.
 ::
 
 	bv = BasicVectorize(my_ufunc)
-	bv.add(ret_type=int32, arg_types=[int32, int32])
-	bv.add(ret_type=uint32, arg_types=[uint32, uint32])
-	bv.add(ret_type=f, arg_types=[f, f])
-	bv.add(ret_type=d, arg_types=[d, d])
+	bv.add(restype=int32, argtypes=[int32, int32])
+	bv.add(restype=uint32, argtypes=[uint32, uint32])
+	bv.add(restype=f, argtypes=[f, f])
+	bv.add(restype=d, argtypes=[d, d])
 
 Above we are using signed and unsigned 32-bit ints, a float **f**, and a double **d**.
 

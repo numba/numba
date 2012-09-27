@@ -7,8 +7,8 @@ def vector_add(a, b):
     return a + b
 
 pv = Vectorize(vector_add)
-pv.add(ret_type=int32, arg_types=[int32, int32])
-pv.add(ret_type=f, arg_types=[f, f])
+pv.add(restype=int32, argtypes=[int32, int32])
+pv.add(restype=f, argtypes=[f, f])
 mini_ufunc = pv.build_ufunc()
 
 test_dtypes = np.float32, np.int32

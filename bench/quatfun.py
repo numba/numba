@@ -100,9 +100,9 @@ def hl_vect_array_by_quats(array, q0, result):
 def have_fun():
     # generate code for tests..
     signature = [nb.d[:,:], nb.d[:], nb.d[:,:]]
-    fun_numba = jit(arg_types=signature)(vect_array_by_quats_inlined)
+    fun_numba = jit(argtypes=signature)(vect_array_by_quats_inlined)
     builder = GUFuncVectorize(vect_array_by_quats_inlined, '(m,n), (o) -> (m,n)')
-    builder.add(arg_types=signature)
+    builder.add(argtypes=signature)
     fun_numbapro = builder.build_ufunc()
 
     # setup data

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 funcs_seen = 0
 
 class Translate(_OldTranslate):
-    def __init__(self, func, ret_type=numba.double, arg_types=[numba.double],
+    def __init__(self, func, restype=numba.double, argtypes=[numba.double],
                  module=None, engine=None, **kws):
         self.func = func
         self.fco = func.func_code
@@ -32,9 +32,9 @@ class Translate(_OldTranslate):
                 # builtins is an attribtue.
                 self._myglobals[name] = getattr(__builtin__, name, None)
 
-        self.mini_rettype = ret_type
-        self.mini_argtypes = arg_types
-        ret_type, arg_types = self.map_types(ret_type, arg_types)
+        self.mini_rettype = restype
+        self.mini_argtypes = argtypes
+        restype, argtypes = self.map_types(restype, argtypes)
 
         ######## BEGIN CHANGE
 
@@ -67,8 +67,8 @@ class Translate(_OldTranslate):
             "Expected %r from llvm-py, got instance of type %r, however." %
             (lc.Module, type(self.mod)))
         self._delaylist = [range, xrange, enumerate]
-        self.ret_type = ret_type
-        self.arg_types = arg_types
+        self.restype = restype
+        self.argtypes = argtypes
 
         ######## BEGIN CHANGE
         self.flags = kws.copy()
@@ -89,10 +89,10 @@ class Translate(_OldTranslate):
         # For now, we assume the function has been called already
         #   or the return type is otherwise known and passed in
         global funcs_seen
-        self.ret_ltype = convert_to_llvmtype(self.ret_type)
+        self.ret_ltype = convert_to_llvmtype(self.restype)
         # The arg_ltypes we will be able to get from what is passed in
         argnames = self.fco.co_varnames[:self.fco.co_argcount]
-        self.arg_ltypes = [convert_to_llvmtype(x) for x in self.arg_types]
+        self.arg_ltypes = [convert_to_llvmtype(x) for x in self.argtypes]
         ty_func = lc.Type.function(self.ret_ltype, self.arg_ltypes)
         ######## BEGIN CHANGE
         if self.flags.get('name'):
@@ -112,7 +112,7 @@ class Translate(_OldTranslate):
             (lc.Function, type(self.lfunc)))
         self.nlocals = len(self.fco.co_varnames)
         self._locals = [None] * self.nlocals
-        for i, (name, typ) in enumerate(zip(argnames, self.arg_types)):
+        for i, (name, typ) in enumerate(zip(argnames, self.argtypes)):
             assert isinstance(self.lfunc.args[i], lc.Argument), (
                 "Expected %r from llvm-py, got instance of type %r, however." %
                 (lc.Argument, type(self.lfunc.args[i])))

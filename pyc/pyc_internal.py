@@ -45,6 +45,6 @@ def emit_header(output):
         fout.write("\n/* Prototypes */\n")
         for t, name in decorators.translates:
             name = name or t.func.func_name
-            ret_type = t.mini_rettype.declare()
+            restype = t.mini_rettype.declare()
             args = ", ".join(arg_type.declare() for arg_type in t.mini_argtypes)
-            fout.write("extern %s %s(%s);\n" % (ret_type, name, args))
+            fout.write("extern %s %s(%s);\n" % (restype, name, args))

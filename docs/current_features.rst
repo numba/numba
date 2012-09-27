@@ -59,9 +59,9 @@ First, create a BasicVectorize instance from `vector_add`::
 Second, add the supporting types of the ufunc using Numba types::
 
     from numba import *
-    bv.add(ret_type=int32, arg_types=[int32, int32])  # integer
-    bv.add(ret_type=f,     arg_types=[f, f])          # float
-    bv.add(ret_type=d,     arg_types=[d, d])          # double
+    bv.add(restype=int32, argtypes=[int32, int32])  # integer
+    bv.add(restype=f,     argtypes=[f, f])          # float
+    bv.add(restype=d,     argtypes=[d, d])          # double
 
 The code below defines integer, float and double versions of `vector_add`, which
 allows the ufunc to be used on arrays of those types.
@@ -146,7 +146,7 @@ The following code implements `import numpy.core.umath_tests.matrix_multiply` us
     gufunc = GUFuncVectorize(matmulcore, '(m,n),(n,p)->(m,p)')
 
     # specialize to 32-bit float
-    gufunc.add(arg_types=[f[:,:], f[:,:], f[:,:]])
+    gufunc.add(argtypes=[f[:,:], f[:,:], f[:,:]])
 
     # build the generalized ufunc
     gufunc = gufunc.build_ufunc()

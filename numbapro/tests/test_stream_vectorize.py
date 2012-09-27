@@ -9,10 +9,10 @@ def vector_add(a, b):
 def main():
     # build stream native code ufunc
     sv = StreamVectorize(vector_add)
-    sv.add(ret_type=int32, arg_types=[int32, int32])
-    sv.add(ret_type=uint32, arg_types=[uint32, uint32])
-    sv.add(ret_type=f, arg_types=[f, f])
-    sv.add(ret_type=d, arg_types=[d, d])
+    sv.add(restype=int32, argtypes=[int32, int32])
+    sv.add(restype=uint32, argtypes=[uint32, uint32])
+    sv.add(restype=f, argtypes=[f, f])
+    sv.add(restype=d, argtypes=[d, d])
     stream_ufunc = sv.build_ufunc(granularity=32)
 
     # build python ufunc

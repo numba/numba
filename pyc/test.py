@@ -4,8 +4,8 @@ from numba import *
 def mult(a, b):
     return a * b
 
-export(arg_types=[d, d], ret_type=d)(mult, name='mult')
-export(arg_types=[f, f], ret_type=f)(mult, name='multf')
-export(arg_types=[int32, int32], ret_type=int32)(mult, name='muli')
-export(arg_types=[complex128, complex128], ret_type=complex128)(mult, name='multc')
+export(argtypes=[d, d], restype=d)(mult, name='mult')
+export(argtypes=[f, f], restype=f)(mult, name='multf')
+export(argtypes=[int32, int32], restype=int32)(mult, name='muli')
+export(argtypes=[complex128, complex128], restype=complex128)(mult, name='multc')
 

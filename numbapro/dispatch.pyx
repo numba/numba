@@ -92,7 +92,7 @@ cdef class UFuncDispatcher(object):
                 args = args[:-1]
 
         args = list(map(np.asarray, args))
-        arg_types = tuple(arg.dtype for arg in args)
+        argtypes = tuple(arg.dtype for arg in args)
 
         order = _internal.get_arrays_ordering(args)
         broadcast_args = list(args)
@@ -117,11 +117,11 @@ cdef class UFuncDispatcher(object):
             order_arg = 'F'
 
         # Find ufunc from input arrays
-        key = self.key(arg_types, broadcast, contig, inner_contig, tiled)
+        key = self.key(argtypes, broadcast, contig, inner_contig, tiled)
         if key not in self.functions:
             raise ValueError(
                 "No signature found for input types (%s, ndim=%d)" % (
-                    ", ".join(str(dtype) for dtype in arg_types), broadcast.nd))
+                    ", ".join(str(dtype) for dtype in argtypes), broadcast.nd))
 
         functions, result_dtype = self.functions[key]
 

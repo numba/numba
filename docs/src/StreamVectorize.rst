@@ -34,9 +34,9 @@ Compilation requires type information.  NumbaPro assumes no knowledge of type wh
 ::
 
     sv = StreamVectorize(my_ufun)
-    sv.add(ret_type=int32, arg_types=[int32, int32])
-    sv.add(ret_type=f, arg_types=[f, f])
-    sv.add(ret_type=d, arg_types=[d, d])
+    sv.add(restype=int32, argtypes=[int32, int32])
+    sv.add(restype=f, argtypes=[f, f])
+    sv.add(restype=d, argtypes=[d, d])
 
 Above we are using signed and unsigned 32-bit ints, a float **f**, and a double **d**. 
 
