@@ -4,9 +4,9 @@ from numba v0.1
 '''
 
 import numba
-from numba.translate import *
+from .translate import *
+_OldTranslate = Translate
 import __builtin__
-from numba.translate import Translate as _OldTranslate
 import logging
 
 logger = logging.getLogger(__name__)

@@ -24,7 +24,7 @@ import sys, os, logging
 import subprocess, tempfile
 import functools
 
-import pycc._internal as pyc
+import numba.pycc as pyc
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -73,11 +73,12 @@ def main(args=[]):
         logger.debug('emit shared library')
         logger.debug('write to temporary object file %s', tempfile.gettempdir())
         temp_obj = tempfile.gettempdir() + os.sep + os.path.basename(args.output) + '.o'
-        temp_obj = os.path.basename(args.output)+'.o'
+        #temp_obj = os.path.basename(args.output)+'.o'
         compiler.write_native_object(temp_obj)          # write temporary object
-        cmdargs = find_linker(), find_args(), '-o', args.output, temp_obj
+        cmdargs = pyc.find_linker(), pyc.find_args(), '-o', args.output, temp_obj
         subprocess.check_call(cmdargs)
         os.remove(temp_obj)   # remove temporary object
+
 
     if args.header:
         pyc.emit_header(args.output)

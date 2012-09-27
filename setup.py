@@ -49,7 +49,7 @@ setup(
     ],
     description = "compiling Python code using LLVM",
     packages = find_packages(),
-    scripts = ['numba/pycc.py']
+    scripts = ['numba/pycc/pycc'],
     package_data = {
         'numba.minivect' : ['include/*'],
     },

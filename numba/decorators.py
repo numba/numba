@@ -9,7 +9,7 @@ from numba import translate as bytecode_translate
 from .minivect import minitypes
 from numba.utils import debugout
 
-from . import translate2
+from numba import translate2
 from numba import double
 import llvm.core as _lc
 

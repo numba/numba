@@ -1,9 +1,13 @@
 import logging
 import os
+import sys
 import functools
 from importlib import import_module
 from numba import decorators
 logger = logging.getLogger(__name__)
+
+__all__ = ['which', 'find_linker', 'find_args', 'find_shared_ending', 'Compiler',
+           'emit_header']
 
 def which(program):
     def is_exe(fpath):
@@ -33,10 +37,6 @@ find_args = functools.partial(get_configs, 1)
 find_shared_ending = functools.partial(get_configs, 2)
 
 
-def _filepath_to_module(filepath):
-    name, _ext = filepath.split('.', 1)
-    return name.replace(os.sep, '.')
-
 class Compiler(object):
     def __init__(self, inputs):
         self.inputs = inputs
@@ -58,10 +58,7 @@ class Compiler(object):
             fout.write(lmod.to_native_object())
 
     def compile_to_default_module(self, ifile):
-        modname = _filepath_to_module(ifile)
-        logger.debug('module name %s', modname)
-        pymod = import_module(modname)
-        logger.debug(pymod)
+        execfile(ifile)
         lmod = decorators.default_module
         return lmod
 
@@ -72,7 +69,7 @@ def emit_header(output):
     with open(fname + '.h', 'wb') as fout:
         fout.write(minitypes.get_utility())
         fout.write("\n/* Prototypes */\n")
-        for t, name in decorators.translates:
+        for t, name in decorators.translated:
             name = name or t.func.func_name
             restype = t.mini_rettype.declare()
             args = ", ".join(arg_type.declare() for arg_type in t.mini_argtypes)

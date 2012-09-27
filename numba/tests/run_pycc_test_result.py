@@ -1,7 +1,7 @@
 from ctypes import *
-from pycc_internal import find_shared_ending
+from numba.pycc import find_shared_ending
 
-lib = CDLL('./test' + find_shared_ending())
+lib = CDLL('./compile_with_pycc' + find_shared_ending())
 
 lib.mult.argtypes = [c_double, c_double]
 lib.mult.restype = c_double
