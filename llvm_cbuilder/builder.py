@@ -1057,6 +1057,11 @@ class IntegerValue(OperatorMixin):
                     return self._temp(self.parent.builder.sext(self.value, ty))
             else:
                 return self._temp(self.parent.builder.trunc(self.value, ty))
+        elif _is_pointer(ty) and _is_int(self.type):
+            return self._temp(self.parent.builder.inttoptr(self.value, ty))
+        elif _is_int(ty) and _is_pointer(self.type):
+            return self._temp(self.parent.builder.ptrtoint(self.value, ty))
+
         raise CastError(self.type, ty)
 
 class RealValue(OperatorMixin):

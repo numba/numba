@@ -14,6 +14,7 @@ float = Type.float()
 double = Type.double()
 
 npy_intp = minitypes.npy_intp.to_llvm(numba.decorators.context)
+py_ssize_t = minitypes.Py_ssize_t.to_llvm(numba.decorators.context)
 
 # pointers
 

@@ -4,6 +4,7 @@ import numpy as np
 import numpy.core.umath_tests as ut
 from numbapro.vectorize.gufunc import GUFuncVectorize, CUDAGUFuncVectorize
 
+f = float_
 
 def matmulcore(A, B, C):
     m, n = A.shape

@@ -120,12 +120,17 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     /* build function signatures array */
     for (i = 0; i < nfuncs; i++) {
         type_obj = PyList_GetItem(type_list, i);
+        if (!type_obj)
+            return NULL;
 
         for (j = 0; j < (nin+nout); j++) {
             int dtype_num;
+            PyObject *dtype_num_obj = PyList_GetItem(type_obj, j);
+            if (!dtype_num_obj)
+                return NULL;
 
             SENTRY_VALID_LONG(
-                types[i*(nin+nout) + j] = PyLong_AsLong(PyList_GetItem(type_obj, j))
+                types[i*(nin+nout) + j] = PyLong_AsLong(dtype_num_obj)
             );
 
             dtype_num = PyLong_AsLong(PyList_GetItem(type_obj, j));

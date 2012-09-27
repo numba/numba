@@ -57,10 +57,12 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         elementwise = getattr(node.value, 'elementwise', False)
         if (len(node.targets) == 1 and node.targets[0].type.is_array and
                 self.is_slice_assign and elementwise):
-            return self.register_array_expression(self.visit(node.value),
+            return self.register_array_expression(node.value,
                                                   lhs=node.targets[0])
 
-        node.value = self.visit(node.value)
+        if len(node.targets) == 1:
+            node.value = nodes.CoercionNode(node.value, node.targets[0].type)
+
         return node
 
     def visit_Subscript(self, node):
@@ -193,6 +195,7 @@ class UFuncRewriter(ArrayExpressionRewrite):
             keywords = [ast.keyword('out', lhs)]
 
         func = nodes.ObjectInjectNode(ufunc)
-        return nodes.ObjectCallNode(signature=signature,
-                                    func=func, args=args, keywords=keywords,
-                                    py_func=ufunc)
+        call_ufunc = nodes.ObjectCallNode(signature=signature,
+                                          func=func, args=args,
+                                          keywords=keywords, py_func=ufunc)
+        return nodes.ObjectTempNode(call_ufunc)

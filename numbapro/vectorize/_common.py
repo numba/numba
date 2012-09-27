@@ -4,6 +4,7 @@ import llvm.core
 import llvm.ee
 
 from numba import decorators, ast_translate
+from numba.minivect import minitypes
 from llvm_cbuilder import shortnames as _C
 from numbapro import _internal
 from numbapro.translate import Translate
@@ -145,6 +146,7 @@ class ASTVectorizeMixin(object):
         self.llvm_context = ast_translate.LLVMContextManager()
         self.mod = self.llvm_context.get_default_module()
         self.ee = self.llvm_context.get_execution_engine()
+        self.args_restypes = getattr(self, 'args_restypes', [])
 
     def _get_ee(self):
         return self.ee
@@ -155,6 +157,20 @@ class ASTVectorizeMixin(object):
         self.args_restypes.append(numba_func.signature.args +
                                    [numba_func.signature.return_type])
         self.translates.append(numba_func)
+
+    def get_argtypes(self, numba_func):
+        return numba_func.signature.args + [numba_func.signature.return_type]
+
+    def _get_tys_list(self):
+        types_lists = []
+        for numba_func in self.translates:
+            dtype_nums = []
+            types_lists.append(dtype_nums)
+            for arg_type in self.get_argtypes(numba_func):
+                dtype = minitypes.map_minitype_to_dtype(arg_type)
+                dtype_nums.append(dtype.num)
+
+        return types_lists
 
 class GenericASTVectorize(ASTVectorizeMixin, GenericVectorize):
     "Use the AST backend to compile the ufunc"

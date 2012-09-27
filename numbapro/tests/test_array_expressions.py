@@ -6,6 +6,8 @@ from numba.decorators import autojit2 as function
 
 import numpy as np
 
+f = float_
+
 @function
 def array_expr(a, b, c):
     return a + b * c
@@ -49,8 +51,17 @@ def test_matmul():
     result = array_expr_matmul(a, b)
     assert np.all(result == np.dot(a, b))
 
+def array_expr_gufunc(A, B, C):
+    m, n = A.shape
+    n, p = B.shape
+    for i in range(m):
+        for j in range(p):
+            C[i, j] = (A[i, :] * B[:, j]).sum()
+
+    return C
+
 def test_gufunc_array_expressions():
-    gufunc = ASTGUFuncVectorize(array_expr_matmul.py_func, '(m,n),(n,p)->(m,p)')
+    gufunc = ASTGUFuncVectorize(array_expr_gufunc, '(m,n),(n,p)->(m,p)')
     gufunc.add(argtypes=[f[:,:], f[:,:], f[:,:]])
     gufunc = gufunc.build_ufunc()
 
@@ -68,6 +79,6 @@ def test_gufunc_array_expressions():
         raise ValueError
 
 if __name__ == '__main__':
-#    test_gufunc_array_expressions()
-    test_array_expressions()
-    test_matmul()
+    test_gufunc_array_expressions()
+#    test_array_expressions()
+#    test_matmul()

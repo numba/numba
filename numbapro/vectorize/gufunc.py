@@ -99,11 +99,14 @@ class GUFuncVectorize(object):
     def _get_lfunc_list(self):
         return [t.lfunc for t in self.translates]
 
+    def _get_ee(self):
+        return self.translates[0]._get_ee()
+
     def build_ufunc(self, use_cuda=False):
         assert self.translates, "No translation"
         lfunclist = self._get_lfunc_list()
         tyslist = self._get_tys_list()
-        engine = self.translates[0]._get_ee()
+        engine = self._get_ee()
         return self.gufunc_from_func(
             lfunclist, tyslist, self.signature, engine,
             vectorizer=self, use_cuda=use_cuda)
@@ -111,13 +114,16 @@ class GUFuncVectorize(object):
 class ASTGUFuncVectorize(_common.ASTVectorizeMixin, GUFuncVectorize):
     "Use the AST numba backend to compile the gufunc"
 
+    def get_argtypes(self, numba_func):
+        return numba_func.signature.args
+
 _intp_ptr = C.pointer(C.intp)
 
 class PyObjectHead(CStruct):
     _fields_ = [
         ('ob_refcnt', C.intp),
         # NOTE: not a integer, just need to match definition in numba
-        ('type_pointer', C.pointer(C.int)),
+        ('ob_type', C.pointer(C.int)),
     ]
 
     if llvm_types._trace_refs_:
@@ -146,8 +152,14 @@ class PyArray(CStruct):
 
     def fakeit(self, data, dimensions, steps):
         assert len(dimensions) == len(steps)
+        constant = self.parent.constant
+
+        self.ob_refcnt.assign(constant(C.intp, 1))
+        type_p = constant(C.py_ssize_t, id(np.ndarray))
+        self.ob_type.assign(type_p.cast(C.pointer(C.int)))
+
         self.data.assign(data)
-        self.nd.assign(self.parent.constant(C.int, len(dimensions)))
+        self.nd.assign(constant(C.int, len(dimensions)))
 
         ary_dims = self.parent.array(C.intp, len(dimensions) * 2)
         ary_steps = ary_dims[len(dimensions):]
