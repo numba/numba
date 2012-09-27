@@ -150,7 +150,7 @@ class ASTVectorizeMixin(object):
         return self.ee
 
     def add(self, restype=None, argtypes=None):
-        dec = decorators.jit_ast(restype, argtypes)
+        dec = decorators.jit2(restype, argtypes)
         numba_func = dec(self.pyfunc)
         self.args_restypes.append(numba_func.signature.args +
                                    [numba_func.signature.return_type])

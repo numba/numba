@@ -4,6 +4,7 @@ There was a deadlock problem when work count is smaller than number of threads.
 
 import numpy as np
 from numba import *
+f, d = f4, f8
 from numbapro.vectorize.parallel import ParallelVectorize
 from time import time
 import unittest

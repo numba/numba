@@ -911,8 +911,7 @@ class CVar(CValue):
 
     @property
     def value(self):
-        return self.parent.builder.load(self.ref.value,
-                                        invariant=self.invariant)
+        return self.parent.builder.load(self.ref.value)
 
     @property
     def type(self):

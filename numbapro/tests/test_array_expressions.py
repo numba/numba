@@ -2,7 +2,7 @@ import numbapro
 from numbapro.vectorize import GUFuncVectorize
 from numbapro.vectorize.gufunc import ASTGUFuncVectorize
 from numba import *
-from numba.decorators import function
+from numba.decorators import autojit2 as function
 
 import numpy as np
 
