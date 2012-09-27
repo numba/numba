@@ -5,6 +5,7 @@ from numba import *
 from numba.decorators import autojit2 as function
 
 import numpy as np
+import numpy.core.umath_tests as ut
 
 f = float_
 
@@ -72,8 +73,8 @@ def test_gufunc_array_expressions():
     C = gufunc(A, B)
     Gold = ut.matrix_multiply(A, B)
 
-    # print(C)
-    # print(Gold)
+    print(C)
+    print(Gold)
 
     if (C != Gold).any():
         raise ValueError

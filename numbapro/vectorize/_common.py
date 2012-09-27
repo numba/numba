@@ -45,8 +45,11 @@ def _numbatypes_to_numpy(ty):
     return ret
 
 class CommonVectorizeFromFrunc(object):
-    def build(self, lfunc):
+    def build(self, lfunc, dtypes):
         raise NotImplementedError
+
+    def get_dtype_nums(self, tyslist):
+        return [[dtype.num for dtype in dtypes] for dtypes in tyslist]
 
     def __call__(self, lfunclist, tyslist, engine,
                  minivect_dispatcher=None, cuda_dispatcher=None,
@@ -64,7 +67,7 @@ class CommonVectorizeFromFrunc(object):
             lfunclist = [lfunclist]
 
 
-        ptrlist = self._prepare_pointers(lfunclist, engine, **kws)
+        ptrlist = self._prepare_pointers(lfunclist, tyslist, engine, **kws)
 
         fntype = lfunclist[0].type.pointee
         inct = len(fntype.args)
@@ -77,17 +80,18 @@ class CommonVectorizeFromFrunc(object):
         # For instance, -1 for typenum will cause segfault.
         # If elements of type-list (2nd arg) is tuple instead,
         # there will also memory corruption. (Seems like code rewrite.)
+        tyslist = self.get_dtype_nums(tyslist)
         ufunc = _internal.fromfunc(ptrlist, tyslist, inct, outct,
                                    datlist, minivect_dispatcher,
                                    cuda_dispatcher)
         return ufunc
 
-    def _prepare_pointers(self, lfunclist, engine, **kws):
+    def _prepare_pointers(self, lfunclist, tyslist, engine, **kws):
         # build all functions
         # spuflist = [self.build(lfunc, **kws) for lfunc in lfunclist]
         spuflist = []
-        for i, lfunc in enumerate(lfunclist):
-            spuflist.append(self.build(lfunc, **kws))
+        for i, (lfunc, dtypes) in enumerate(zip(lfunclist, tyslist)):
+            spuflist.append(self.build(lfunc, dtypes, **kws))
 
         # We have an engine, build ufunc
 
@@ -126,7 +130,7 @@ class GenericVectorize(object):
         for args_ret in self.args_restypes:
             tys = []
             for ty in args_ret:
-                tys.append(np.dtype(_numbatypes_to_numpy(ty)).num)
+                tys.append(np.dtype(_numbatypes_to_numpy(ty)))
             tyslist.append(tys)
         return tyslist
 
@@ -168,7 +172,7 @@ class ASTVectorizeMixin(object):
             types_lists.append(dtype_nums)
             for arg_type in self.get_argtypes(numba_func):
                 dtype = minitypes.map_minitype_to_dtype(arg_type)
-                dtype_nums.append(dtype.num)
+                dtype_nums.append(dtype)
 
         return types_lists
 

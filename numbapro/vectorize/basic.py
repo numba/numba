@@ -52,7 +52,7 @@ class BasicUFunc(CDefinition):
         cls.FuncDef = func_def
 
 class _BasicVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
-    def build(self, lfunc):
+    def build(self, lfunc, dtypes):
         def_buf = BasicUFunc(CFuncRef(lfunc))
         func = def_buf(lfunc.module)
 

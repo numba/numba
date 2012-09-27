@@ -42,7 +42,8 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFrunc):
         except TypeError:
             lfunclist = [lfunclist]
 
-        ptrlist = self._prepare_pointers(lfunclist, engine, **kws)
+        self.tyslist = tyslist
+        ptrlist = self._prepare_pointers(lfunclist, tyslist, engine, **kws)
         inct = len(tyslist[0]) - 1
         outct = 1
         datlist = self.datalist(lfunclist, ptrlist, cuda_dispatcher)
@@ -54,13 +55,14 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFrunc):
         # there will also memory corruption. (Seems like code rewrite.)
 
         # Hold on to the vectorizer while the ufunc lives
+        tyslist = self.get_dtype_nums(tyslist)
         gufunc = _internal.fromfuncsig(ptrlist, tyslist, inct, outct, datlist,
                                        signature, cuda_dispatcher, vectorizer)
 
         return gufunc
 
-    def build(self, lfunc, signature):
-        def_guf = GUFuncEntry(signature, CFuncRef(lfunc))
+    def build(self, lfunc, dtypes, signature):
+        def_guf = GUFuncEntry(dtypes, signature, CFuncRef(lfunc))
         guf = def_guf(lfunc.module)
         # print guf
         return guf
@@ -71,12 +73,11 @@ class GUFuncVectorize(object):
     Vectorizer for generalized ufuncs.
     """
 
-    gufunc_from_func = _GeneralizedUFuncFromFunc()
-
     def __init__(self, func, sig):
         self.pyfunc = func
         self.translates = []
         self.signature = sig
+        self.gufunc_from_func = _GeneralizedUFuncFromFunc()
 
     def add(self, argtypes):
         t = Translate(self.pyfunc, argtypes=argtypes)
@@ -92,7 +93,7 @@ class GUFuncVectorize(object):
                 while isinstance(ty, list):
                     ty = ty[0]
                 lty = convert_to_llvmtype(ty)
-                tys.append(np.dtype(_common._llvm_ty_to_numpy(lty)).num)
+                tys.append(np.dtype(_common._llvm_ty_to_numpy(lty)))
             tyslist.append(tys)
         return tyslist
 
@@ -150,13 +151,18 @@ class PyArray(CStruct):
         ('maskna_strides', _intp_ptr),
     ]
 
-    def fakeit(self, data, dimensions, steps):
+    def fakeit(self, dtype, data, dimensions, steps):
         assert len(dimensions) == len(steps)
         constant = self.parent.constant
 
         self.ob_refcnt.assign(constant(C.intp, 1))
         type_p = constant(C.py_ssize_t, id(np.ndarray))
         self.ob_type.assign(type_p.cast(C.pointer(C.int)))
+
+        self.base.assign(self.parent.constant_null(C.void_p))
+        dtype_p = constant(C.py_ssize_t, id(dtype))
+        self.descr.assign(dtype_p.cast(C.void_p))
+        self.flags.assign(constant(C.int, 0))
 
         self.data.assign(data)
         self.nd.assign(constant(C.int, len(dimensions)))
@@ -225,7 +231,7 @@ class GUFuncEntry(CDefinition):
 
         # populate pyarrays
         step_offset = len(pyarys)
-        for i, ary in enumerate(pyarys):
+        for i, (dtype, ary) in enumerate(zip(self.dtypes, pyarys)):
             ary_ndim = len(diminfo[i])
             ary_dims = [dimensions[1 + dims.index(k)] for k in diminfo[i]]
             ary_steps = []
@@ -234,16 +240,17 @@ class GUFuncEntry(CDefinition):
                 ary_steps.append(steps[step_offset])
                 step_offset += 1
 
-            ary.fakeit(args[i], ary_dims, ary_steps)
+            ary.fakeit(dtype, args[i], ary_dims, ary_steps)
 
         self._outer_loop(args, dimensions, pyarys, steps, data)
         self.ret()
 
     @classmethod
-    def specialize(cls, signature, func_def):
+    def specialize(cls, dtypes, signature, func_def):
         '''specialize to a workload
         '''
         signature = signature.replace(' ', '') # remove all spaces
+        cls.dtypes = dtypes
         cls._name_ = 'gufunc_%s_%s'% (signature, func_def)
         cls.FuncDef = func_def
         cls.Signature = signature
@@ -270,7 +277,7 @@ class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
         func_names = [lfunc.name for lfunc in self.cuda_kernels]
         return cuda_dispatcher.build_datalist(func_names)
 
-    def build(self, lfunc, signature):
+    def build(self, lfunc, dtypes, signature):
         """
         lfunc: lfunclist was [wrapper] * n_funcs, so we're done
         """
@@ -329,7 +336,7 @@ class CUDAGUFuncVectorize(GUFuncVectorize):
         for restype, argtypes, kwargs in self.cuda_vectorizer.signatures:
             tys = argtypes + [restype]
             types.append([
-                minitypes.map_minitype_to_dtype(t.dtype if t.is_array else t).num
+                minitypes.map_minitype_to_dtype(t.dtype if t.is_array else t)
                     for t in argtypes])
 
         return types

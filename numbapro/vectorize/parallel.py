@@ -506,7 +506,7 @@ else:
         pass
 
 class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
-    def build(self, lfunc):
+    def build(self, lfunc, dtypes):
         import multiprocessing
         NUM_CPU = multiprocessing.cpu_count()
         def_spuf = SpecializedParallelUFunc(

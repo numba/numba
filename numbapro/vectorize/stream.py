@@ -94,7 +94,7 @@ class StreamUFunc(BasicUFunc):
         cls.FuncDef = func_def
 
 class _StreamVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
-    def build(self, lfunc, granularity):
+    def build(self, lfunc, dtypes, granularity):
         def_buf = StreamUFunc(CFuncRef(lfunc), granularity)
         func = def_buf(lfunc.module)
 
