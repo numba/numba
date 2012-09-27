@@ -9,6 +9,24 @@ from numba import translate as bytecode_translate
 from .minivect import minitypes
 from numba.utils import debugout
 
+from . import translate2
+from numba import double
+import llvm.core as _lc
+
+default_module = _lc.Module.new('default')
+translated = []
+def export(restype=double, argtypes=[double], backend='bytecode', **kws):
+    def _export(func, name=None):
+        # XXX: need to implement ast backend.
+        t = translate2.Translate(func, restype=restype,
+                                argtypes=argtypes,
+                                module=default_module,
+                                name=name, **kws)
+        t.translate()
+        translated.append((t, name))
+    return _export
+
+
 logger = logging.getLogger(__name__)
 
 # A simple fast-vectorize example was removed because it only supports one
@@ -97,7 +115,7 @@ def autojit2(f):
     return NumbaFunction(f, wrapper=wrapper)
 
 _func_cache = {}
-def autojit(f, backend='bytecode'):
+def autojit(f):
     """
     Defines a numba function, that, when called, specializes on the input
     types. Uses the bytecode translator backend. For the AST backend use
@@ -116,7 +134,7 @@ def autojit(f, backend='bytecode'):
             func_signature, symtab, ast = functions._infer_types(
                                         context, f, argtypes=types)
 
-            decorator = jit(restype=func_signature.return_type, argtypes=types, backend=backend)
+            decorator = jit(restype=func_signature.return_type, argtypes=types)
             ctypes_func = decorator(f)
             _func_cache[types] = ctypes_func
 
