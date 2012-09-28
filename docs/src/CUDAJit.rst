@@ -2,10 +2,11 @@
 CUDA JIT
 -------------
 
-**Note: CUDA JIT is still in experimental stages.  Computation speeds may have unexpected results .**
+**Note: CUDA JIT is still in experimental stages.  Computation speeds may have unexpected results.**
 
+**Warning: CUDA devices with compute capability less than 1.3 do not support double precision arithmetic.**
 
-CUDA JIT translates Python function into a CUDA kernel.  It uses translated code from Numba and converts it to `PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_.  Numbapro interacts with the CUDA Runtime Libraries to load the PTX onto the CUDA device and execute.  
+CUDA JIT translates Python function into a CUDA kernel.  It uses translated code from Numba and converts it to `PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_.  NumbaPro interacts with the CUDA Runtime Libraries to load the PTX onto the CUDA device and execute.  
 
 Imports
 -------
