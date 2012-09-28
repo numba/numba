@@ -4,6 +4,8 @@
 import ctypes
 import ctypes.util
 
+from numba import *
+
 # ______________________________________________________________________
 
 c_void_pp = ctypes.POINTER(ctypes.c_void_p)
@@ -36,6 +38,10 @@ def get_stdio_streams ():
             raise NotImplementedError("Unsupported platform, don't know how to "
                                       "find pointers to stdio streams!")
     return ret_val
+
+def get_stream_as_node(fp):
+    return nodes.CoercionNode(nodes.ConstNode(fp, Py_ssize_t),
+                              void.pointer())
 
 # ______________________________________________________________________
 

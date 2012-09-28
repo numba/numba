@@ -415,7 +415,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
     def generate_load_symbol(self, name):
         var = self.symtab[name]
         if var.is_local:
-            return self.builder.load(var.lvalue)
+            return self.builder.load(var.lvalue, name='load_' + name)
         else:
             raise NotImplementedError("global variables:", var)
 
@@ -638,6 +638,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         self.builder.branch(bb_cond)
         self.builder.position_at_end(bb_exit)
 
+    def visit_Suite(self, node):
+        self.visitlist(node.body)
+        return None
+
     def generate_constant_int(self, val, ty=_types.int_):
         lconstant = lc.Constant.int(ty.to_llvm(self.context), val)
         return lconstant
@@ -670,13 +674,24 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
     def visit_CoercionNode(self, node):
         val = self.visit(node.node)
         # logger.debug('Coerce %s --> %s', node.node.type, node.dst_type)
-        val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
+        node_type = node.node.type
+        dst_type = node.dst_type
+        ldst_type = dst_type.to_llvm(self.context)
+        if node_type.is_pointer and dst_type.is_int:
+            val = self.builder.ptrtoint(val, ldst_type)
+        elif node_type.is_int and dst_type.is_pointer:
+            val = self.builder.inttoptr(val, ldst_type)
+        else:
+            val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
+
         return val
 
     def visit_CoerceToObject(self, node):
-        val = self.visit(node.node)
-        return self.object_coercer.convert_single(node.node.type, val,
-                                                  name=node.name)
+        result = self.visit(node.node)
+        if not node.node.type == minitypes.object_:
+            result = self.object_coercer.convert_single(node.node.type, result,
+                                                        name=node.name)
+        return result
 
     def visit_CoerceToNative(self, node):
         assert node.node.type.is_tuple

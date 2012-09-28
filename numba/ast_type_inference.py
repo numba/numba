@@ -11,6 +11,7 @@ from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
 from .symtab import Variable
 from . import visitors, nodes, error
+from numba import stdio_util
 # from . import _ext
 
 #stdin, stdout, stderr = _ext.get_libc_file_addrs()
@@ -504,6 +505,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
         return node
 
     def visit_Name(self, node):
+        node.name = node.id
         variable = self.symtab.get(node.id)
         if variable:
             # local variable
@@ -880,6 +882,9 @@ class ASTSpecializer(visitors.NumbaTransformer):
 
     def visit_Print(self, node):
         # TDDO: handle 'dest' and 'nl' attributes
+        stdin, stdout, stderr = stdio_util.get_stdio_streams()
+        stdout = stdio_util.get_stream_as_node(stdout)
+
         signature, lfunc = self.function_cache.function_by_name(
                                                     'PyObject_Print')
         Py_PRINT_RAW = nodes.ConstNode(1, int_)
@@ -889,6 +894,9 @@ class ASTSpecializer(visitors.NumbaTransformer):
             result.append(
                 nodes.NativeCallNode(signature, args, lfunc))
 
+        puts_call = self.function_cache.call("puts", nodes.ConstNode(""))
+        result.append(puts_call)
+        # result = ast.Suite(body=[result, puts_call])
         return result
 
     def visit_Subscript(self, node):
@@ -1010,7 +1018,7 @@ class LateSpecializer(visitors.NumbaTransformer):
         return node
 
     def visit_Subscript(self, node):
-        # print ast.dump(node)
+        logging.debug(ast.dump(node))
         if ((node.type.is_object or node.type.is_array) and
                 isinstance(node.slice, ast.ExtSlice)):
             node.value = self.visit(node.value)

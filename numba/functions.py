@@ -332,6 +332,10 @@ class printf(ExternalFunction):
     return_type = int32
     is_vararg = True
 
+class puts(ExternalFunction):
+    arg_types = [c_string_type]
+    return_type = int32
+
 class Py_IncRef(ofunc):
     # TODO: rewrite calls to Py_IncRef/Py_DecRef to direct integer
     # TODO: increments/decrements

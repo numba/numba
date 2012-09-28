@@ -289,7 +289,7 @@ class DataPointerNode(Node):
         if not isinstance(indices, collections.Iterable):
             indices = (indices,)
 
-        for i, index in zip(range(ndim), reversed(indices)):
+        for i, index in zip(range(ndim), indices):
             # why is the indices reversed?
             stride_ptr = builder.gep(strides, [_const_int(i)])
             stride = builder.load(stride_ptr)
