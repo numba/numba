@@ -52,7 +52,7 @@ if CUDA_DIR is not None:
     if sys.platform == 'linux2' and platform.architecture()[0] == '64bit':
         CUDA_LIB_DIR = join(CUDA_DIR, 'lib64')
     else:
-        CUDA_LIB_DIR = join(CUDA_DIR, 'lib64')
+        CUDA_LIB_DIR = join(CUDA_DIR, 'lib')
 
     ext = CythonExtension(
         name = "numbapro._cudadispatch",
