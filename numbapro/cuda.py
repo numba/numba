@@ -125,28 +125,28 @@ class CudaNumbaFunction(object):
     def __init__(self, lfunc):
         self.module = lfunc.module
 
-        # builder wrapper
+        def apply_typemap(ty):
+            if isinstance(ty, _lc.IntegerType):
+                return 'i'
+            elif ty == _lc.Type.float():
+                return 'f'
+            elif ty == _lc.Type.double():
+                return 'd'
+            else:
+                return '_'
 
-        # NOTE: a simple hack to handle single-precision float conversion
         argtys = lfunc.type.pointee.args
-        fix_floats = []
-        fixed_argtys = list(argtys)
-        for i, argty in enumerate(argtys):
-            if argty == _lc.Type.float():
-                fix_floats.append(i)
-                fixed_argtys[i] = _lc.Type.double()
+        typemap_string = ''.join(map(apply_typemap, argtys))
 
-        wrapper_type = _lc.Type.function(_lc.Type.void(), fixed_argtys)
+        self.typemap = typemap_string
+
+        # builder wrapper
+        wrapper_type = _lc.Type.function(_lc.Type.void(), argtys)
         func_name = 'ptxwrapper_%s' % lfunc.name
         wrapper = self.module.add_function(wrapper_type, func_name)
         builder = _lc.Builder.new(wrapper.append_basic_block('entry'))
 
-        # NOTE: convert double precision float to single-precision as needed.
-        fixed_args = list(wrapper.args)
-        for idx in fix_floats:
-            fixed_args[idx] = builder.fptrunc(wrapper.args[idx], argtys[idx])
-
-        inline_me = builder.call(lfunc, fixed_args) # ignore return value
+        inline_me = builder.call(lfunc, wrapper.args) # ignore return value
         builder.ret_void()
 
         # force inline of original function
@@ -183,11 +183,12 @@ class CudaNumbaFunction(object):
         # generate PTX
         ptxtm = _le.TargetMachine.lookup(arch, cpu=cc, opt=3)
         ptxasm = ptxtm.emit_assembly(self.module)
-        self.ptxasm = ptxasm
+        self._ptxasm = ptxasm
 
         self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(ptxasm,
                                                                 func_name,
-                                                                device_number)
+                                                                device_number,
+                                                                typemap_string)
 
     def configure(self, griddim, blockdim):
         '''Configure kernel grid dimension and block dimension.
@@ -212,6 +213,17 @@ class CudaNumbaFunction(object):
         In another words, this function will return only upon the completion
         of the CUDA kernel.
         '''
+        # Cast scalar arguments to match the prototype.
+        def convert(ty, val):
+            if ty == 'f' or ty == 'd':
+                return float(val)
+            elif ty == 'i':
+                return int(val)
+            else:
+                return val
+
+        args = [convert(ty, val) for ty, val in zip(self.typemap, args)]
+
         self.dispatcher(args, self._griddim, self._blockdim)
 
     @property
@@ -225,6 +237,12 @@ class CudaNumbaFunction(object):
         '''The LLVM target mcahine backend used to generate the PTX.
         '''
         return self._arch
+
+    @property
+    def ptx(self):
+        '''Returns the PTX assembly for this function.
+        '''
+        return self._ptxasm
 
 class CudaTranslate(_Translate):
      def op_LOAD_ATTR(self, i, op, arg):

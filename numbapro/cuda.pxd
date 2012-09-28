@@ -56,5 +56,6 @@ cdef extern from "_cuda.h": # external utilities from _cuda.c
     int cuda_numba_function(object args, CUfunction func,
                           unsigned int griddimx, unsigned int griddimy,
                           unsigned int griddimz, unsigned int blockdimx,
-                          unsigned int blockdimy, unsigned int blockdimz) except -1
+                          unsigned int blockdimy, unsigned int blockdimz,
+                          char * typemap) except -1
 

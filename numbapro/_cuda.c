@@ -507,7 +507,8 @@ cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
 int cuda_numba_function(PyListObject *args, void *func,
                         unsigned int griddimx, unsigned int griddimy,
                         unsigned int griddimz, unsigned int blockdimx,
-                        unsigned int blockdimy, unsigned int blockdimz)
+                        unsigned int blockdimy, unsigned int blockdimz,
+                        char * typemap)
 {
     int result = 0;
     int i, j;
@@ -566,8 +567,18 @@ int cuda_numba_function(PyListObject *args, void *func,
             if (PyErr_Occurred()) {
                 goto error;
             }
-            host_pointers[i] = malloc(sizeof(value));
-            memcpy(host_pointers[i], &value, sizeof(value));
+            if (typemap[i] == 'd'){
+                host_pointers[i] = malloc(sizeof(value));
+                memcpy(host_pointers[i], &value, sizeof(value));
+            } else if (typemap[i] == 'f'){
+                float truncated = value;
+                host_pointers[i] = malloc(sizeof(truncated));
+                memcpy(host_pointers[i], &truncated, sizeof(truncated));
+            } else {
+                PyErr_SetString(PyExc_TypeError, "Invalid float argument");
+                goto error;
+            }
+
             kernel_args[i] = host_pointers[i];
         } else {
             PyErr_SetString(PyExc_TypeError, "Type not handled");

@@ -214,18 +214,21 @@ cdef class CudaNumbaFuncDispatcher(object): #cutils.UFuncDispatcher):
     cdef cuda.CUmodule cu_module
     cdef cuda.CUfunction cu_function
 
-    def __init__(self, ptx_code, func_name, device_number):
+    cdef char* typemap
+
+    def __init__(self, ptx_code, func_name, device_number, typemap):
         cuda.get_device(&self.cu_device, &self.cu_context, device_number)
         cuda.init_attributes(self.cu_device, &self.device_attrs)
         cuda.cuda_load(ptx_code, &self.cu_module)
         cuda.cuda_getfunc(self.cu_module, &self.cu_function, func_name)
+        self.typemap = typemap
 
     def __call__(self, args, griddim, blkdim):
         gx, gy, gz = griddim
         bx, by, bz = blkdim
         cuda.cuda_numba_function(list(args), self.cu_function,
-                                 gx, gy, gz, bx, by, bz)
-
+                                 gx, gy, gz, bx, by, bz,
+                                 self.typemap)
 
     def __dealloc__(self):
         cuda.dealloc(self.cu_module, self.cu_context)
