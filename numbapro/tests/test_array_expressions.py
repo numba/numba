@@ -2,26 +2,26 @@ import numbapro
 from numbapro.vectorize import GUFuncVectorize
 from numbapro.vectorize.gufunc import ASTGUFuncVectorize
 from numba import *
-from numba.decorators import autojit2 as function
+from numba.decorators import autojit
 
 import numpy as np
 import numpy.core.umath_tests as ut
 
 f = float_
 
-@function
+@autojit(backend='ast')
 def array_expr(a, b, c):
     return a + b * c
 
-@function
+@autojit(backend='ast')
 def func(a):
     return a * 2.0
 
-@function
+@autojit(backend='ast')
 def array_expr2(a, b, c):
     return a + b + func(c)
 
-@function
+@autojit(backend='ast')
 def array_expr3(a, b, c):
     a[...] = a + b * c
 
@@ -35,7 +35,7 @@ def test_array_expressions():
     array_expr3.py_func(numpy_result, numpy_result, numpy_result)
     assert np.all(result == numpy_result)
 
-@function
+@autojit(backend='ast')
 def array_expr_matmul(A, B):
     m, n = A.shape
     n, p = B.shape
@@ -61,7 +61,7 @@ def array_expr_gufunc(A, B, C):
 
 def test_gufunc_array_expressions():
     gufunc = ASTGUFuncVectorize(array_expr_gufunc, '(m,n),(n,p)->(m,p)')
-    gufunc.add(argtypes=[f[:,:], f[:,:], object_]) #f[:,:]])
+    gufunc.add(argtypes=[f[:,:], f[:,:], f[:,:]])
     gufunc = gufunc.build_ufunc()
 
     matrix_ct = 10
@@ -71,10 +71,9 @@ def test_gufunc_array_expressions():
     C = gufunc(A, B)
     Gold = ut.matrix_multiply(A, B)
 
-    print(C)
-    print(Gold)
-
     if (C != Gold).any():
+        print(C)
+        print(Gold)
         raise ValueError
 
 if __name__ == '__main__':

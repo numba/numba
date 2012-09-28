@@ -60,9 +60,6 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
             return self.register_array_expression(node.value,
                                                   lhs=node.targets[0])
 
-        if len(node.targets) == 1:
-            node.value = nodes.CoercionNode(node.value, node.targets[0].type)
-
         return node
 
     def visit_Subscript(self, node):
