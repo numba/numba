@@ -46,8 +46,8 @@ ext_modules = [
     ),
 ]
 
-CUDA_DIR = os.environ.get('CUDA_DIR')
-if CUDA_DIR is not None:
+CUDA_DIR = os.environ.get('CUDA_DIR', '/usr/local/cuda')
+if os.path.exists(CUDA_DIR):
     CUDA_INCLUDE = join(CUDA_DIR, 'include')
     if sys.platform == 'linux2' and platform.architecture()[0] == '64bit':
         CUDA_LIB_DIR = join(CUDA_DIR, 'lib64')
