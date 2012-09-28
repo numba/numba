@@ -647,25 +647,37 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         return lconstant
 
     _binops = {
-        ast.Add: ('fadd', 'add'),
-        ast.Sub: ('fsub', 'sub'),
-        ast.Mult: ('fmul', 'mul'),
-        ast.Div: ('fdiv', 'div'),
+        ast.Add: ('fadd', ('add', 'add')),
+        ast.Sub: ('fsub', ('sub', 'sub')),
+        ast.Mult: ('fmul', ('mul', 'mul')),
+        ast.Div: ('fdiv', ('udiv', 'sdiv')),
         # TODO: reuse previously implemented modulo
     }
+
+    def _handle_pow(self, node, lhs, rhs):
+        assert node.right.type.is_int
+        ltype = node.type.to_llvm(self.context)
+        restype = translate.llvmtype_to_strtype(ltype)
+        func = self.module_utils.get_py_int_pow(self.mod, restype)
+        return self.builder.call(func, (lhs, rhs))
 
     def visit_BinOp(self, node):
         lhs = self.visit(node.left)
         rhs = self.visit(node.right)
         op = type(node.op)
 
-        if (node.type.is_int or node.type.is_float) and op in self._binops:
+        valid_type = node.type.is_int or node.type.is_float
+        if valid_type and op in self._binops:
             llvm_method_name = self._binops[op][node.type.is_int]
+            if node.type.is_int:
+                llvm_method_name = llvm_method_name[node.type.signed]
             meth = getattr(self.builder, llvm_method_name)
             if not lhs.type == rhs.type:
                 print ast.dump(node)
                 assert False
             result = meth(lhs, rhs)
+        elif valid_type and op == ast.Pow:
+            return self._handle_pow(node, lhs, rhs)
         else:
             raise Exception(op, node.type, lhs, rhs)
 
