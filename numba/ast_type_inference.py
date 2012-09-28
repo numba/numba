@@ -507,6 +507,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
         return node
 
     def visit_Name(self, node):
+        from numba import functions
+
         node.name = node.id
         variable = self.symtab.get(node.id)
         if variable:
@@ -521,8 +523,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
             if variable.type.is_global:
                 # TODO: look up globals in dict at call time
                 obj = self.func.func_globals[node.name]
-                type = self.context.typemapper.from_python(obj)
-                return nodes.const(obj, type)
+                if not functions.is_numba_func(obj):
+                    type = self.context.typemapper.from_python(obj)
+                    return nodes.const(obj, type)
             elif variable.type.is_builtin:
                 # Rewrite builtin-ins later on, give other code the chance
                 # to handle them first

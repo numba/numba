@@ -10,6 +10,9 @@ from numba import nodes
 import meta.decompiler
 import llvm.core
 
+def is_numba_func(func):
+    return getattr(func, '_is_numba_func', False)
+
 def fix_ast_lineno(tree):
     # NOTE: A hack to fix assertion error in debug mode due to bad lineno.
     #       Lineno must increase monotonically for co_lnotab,
@@ -99,7 +102,7 @@ class FunctionCache(object):
             if result is not None:
                 return result
 
-            if getattr(func, '_is_numba_func', False):
+            if is_numba_func(func):
                 func = getattr(func, '_numba_func', func)
                 # numba function, compile
                 func_signature, lfunc, ctypes_func = _compile(

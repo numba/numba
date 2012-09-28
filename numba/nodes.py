@@ -102,8 +102,8 @@ class ConstNode(Node):
         if type is None:
             type = context.typemapper.from_python(pyval)
 
-        if pyval is not _NULL:
-            assert not type.is_object
+        # if pyval is not _NULL:
+        #     assert not type.is_object
 
         self.variable = Variable(type, is_constant=True, constant_value=pyval)
         self.type = type
