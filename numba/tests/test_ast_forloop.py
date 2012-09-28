@@ -9,7 +9,7 @@ Test the Numba compiler on a simple for loop over an iterable object.
 import numba
 from numba import *
 from numba import jit2 as numba_compile
-from numba.decorators import autojit2
+from numba.decorators import autojit
 
 from numba.minivect import minitypes
 hash(minitypes.double[:])
@@ -55,10 +55,10 @@ def _for_loop_fn_3 (stop):
                     acc += 1
     return acc
 
-for_loop_fn_0 = autojit2(_for_loop_fn_0)
-for_loop_fn_1 = autojit2(_for_loop_fn_1)
-for_loop_fn_2 = autojit2(_for_loop_fn_2)
-for_loop_fn_3 = autojit2(_for_loop_fn_3)
+for_loop_fn_0 = autojit(backend='ast')(_for_loop_fn_0)
+for_loop_fn_1 = autojit(backend='ast')(_for_loop_fn_1)
+for_loop_fn_2 = autojit(backend='ast')(_for_loop_fn_2)
+for_loop_fn_3 = autojit(backend='ast')(_for_loop_fn_3)
 
 # ______________________________________________________________________
 

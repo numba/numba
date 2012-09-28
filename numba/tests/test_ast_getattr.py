@@ -2,7 +2,7 @@
 # ______________________________________________________________________
 
 from numba.translate import _plat_bits
-from numba.decorators import autojit2
+from numba.decorators import autojit
 
 import numpy as np
 import numpy
@@ -11,24 +11,24 @@ import unittest
 
 # ______________________________________________________________________
 
-@autojit2
+@autojit(backend='ast')
 def get_ndarray_ndim(ndarr):
     return ndarr.ndim
 
-@autojit2
+@autojit(backend='ast')
 def get_ndarray_shape(ndarr):
     return ndarr.shape
 
-@autojit2
+@autojit(backend='ast')
 def get_ndarray_data(ndarr):
     return ndarr.data
 
-@autojit2
+@autojit(backend='ast')
 def get_ndarray_2_shape_unpack_0(ndarr):
     dim0, _ = ndarr.shape
     return dim0
 
-@autojit2
+@autojit(backend='ast')
 def get_ndarray_2_shape_unpack_1(ndarr):
     _, dim1 = ndarr.shape
     return dim1

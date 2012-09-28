@@ -3,20 +3,20 @@ import sys
 import numpy as np
 
 from numba import *
-from numba.decorators import jit, autojit2
+from numba.decorators import jit, autojit
 from numba.tests import test_support
 
 a = np.arange(80).reshape(8, 10)
 
-@autojit2
+@autojit(backend='ast')
 def np_sum(a):
     return np.sum(a, axis=0)
 
-@autojit2
+@autojit(backend='ast')
 def np_copy(a):
     return a.copy(order='F')
 
-@autojit2
+@autojit(backend='ast')
 def test_attributes(a):
     return (a.T,
             a.T.T,

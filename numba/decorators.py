@@ -1,7 +1,8 @@
-__all__ = ['autojit2', 'autojit', 'jit2', 'jit']
+__all__ = ['autojit', 'jit2', 'jit']
 
 import functools
 import logging
+import types
 
 from numba import *
 from . import utils, functions, ast_translate as translate, ast_type_inference
@@ -97,7 +98,7 @@ class NumbaFunction(object):
             return self.wrapper(*args, **kwargs)
 
 
-def autojit2(f):
+def _autojit2(f):
     """
     Defines a numba function, that, when called, specializes on the input
     types. Uses the AST translator backend. For the bytecode translator,
@@ -115,7 +116,7 @@ def autojit2(f):
     return NumbaFunction(f, wrapper=wrapper)
 
 _func_cache = {}
-def autojit(f):
+def _autojit(f):
     """
     Defines a numba function, that, when called, specializes on the input
     types. Uses the bytecode translator backend. For the AST backend use
@@ -143,6 +144,16 @@ def autojit(f):
     wrapper._is_numba_func = True
     wrapper._numba_func = f
     return wrapper
+
+def autojit(backend='bytecode'):
+    if backend not in ('bytecode', 'ast'):
+        raise Exception("The autojit decorator should be called: "
+                        "@autojit(backend='bytecode|ast')")
+
+    if backend == 'bytecode':
+        return _autojit
+    else:
+        return _autojit2
 
 def jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None):
     """

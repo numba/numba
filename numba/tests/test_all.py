@@ -25,6 +25,8 @@ from test_tuple import TestTuple
 #from test_vectorize import TestVectorize
 from test_while import TestWhile, TestASTWhile
 from test_sum import TestSum2d
+from test_extern_call import TestASTExternCall
+from test_ast_arrays import TestASTArrays
 
 # ______________________________________________________________________
 

@@ -1,7 +1,7 @@
 import unittest
 import functools
 
-from numba.decorators import jit as jit_, autojit2
+from numba.decorators import jit as jit_, autojit
 
 import __builtin__
 

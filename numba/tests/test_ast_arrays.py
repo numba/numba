@@ -6,13 +6,15 @@ Test the Numba compiler on a simple for loop over an iterable object.
 '''
 # ______________________________________________________________________
 
+import unittest
+
 import numba
 from numba import *
-from numba.decorators import autojit2
+from numba.decorators import autojit
 
 import numpy as np
 
-@autojit2
+@autojit(backend='bytecode')
 def matmulcore(A, B, C):
     m, n = A.shape
     n, p = B.shape
@@ -23,16 +25,17 @@ def matmulcore(A, B, C):
                 C[i, j] += A[i, k] * B[k, j]
 
 
-def test_numba():
-    A = np.arange(16, dtype=np.float32).reshape(4, 4)
-    B = np.arange(16, dtype=np.float32).reshape(4, 4)
-    C = np.zeros(16, dtype=np.float32).reshape(4, 4)
-    Gold = np.matrix(A) * np.matrix(B)
+class TestASTArrays(unittest.TestCase):
 
-    matmulcore(A, B, C)
+    def test_numba(self):
+        A = np.arange(16, dtype=np.float32).reshape(4, 4)
+        B = np.arange(16, dtype=np.float32).reshape(4, 4)
+        C = np.zeros(16, dtype=np.float32).reshape(4, 4)
+        Gold = np.matrix(A) * np.matrix(B)
 
-    if (C != Gold).any():
-        raise ValueError
+        matmulcore(A, B, C)
+
+        self.assertTrue(np.all(C == Gold))
 
 if __name__ == '__main__':
-    test_numba()
+    unittest.main()

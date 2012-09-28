@@ -5,7 +5,7 @@
 import numpy
 
 from numba import f8 as d
-from numba.decorators import jit, autojit2, autojit
+from numba.decorators import jit, autojit
 
 import unittest
 import __builtin__
@@ -50,11 +50,11 @@ class TestAvg2D (unittest.TestCase):
         self._do_test(avg2d, compiled_fn)
 
     def test_avg2d_bytecode_function(self):
-        compiled_fn = autojit(avg2d)
+        compiled_fn = autojit(backend='bytecode')(avg2d)
         self._do_test(avg2d, compiled_fn)
 
     def test_avg2d_ast_function(self):
-        compiled_fn = autojit2(avg2d)
+        compiled_fn = autojit(backend='ast')(avg2d)
         self._do_test(avg2d, compiled_fn)
 
     @unittest.skipUnless(hasattr(__builtin__, '__noskip__'),
@@ -68,7 +68,7 @@ class TestAvg2D (unittest.TestCase):
         self._do_test(avg2d_w_cast, compiled_fn)
 
     def test_avg2d_w_cast_function(self):
-        compiled_fn = autojit2(avg2d_w_cast)
+        compiled_fn = autojit(backend='ast')(avg2d_w_cast)
         self._do_test(avg2d_w_cast, compiled_fn)
 
 # ______________________________________________________________________
