@@ -1,7 +1,7 @@
 import os
 import sys
-import subprocess
-from distutils import sysconfig
+import platform
+from os.path import join
 from distutils.core import setup, Extension
 
 from numba import minivect
@@ -9,17 +9,6 @@ from numba import minivect
 import numpy
 from Cython.Distutils import build_ext
 from Cython.Distutils.extension import Extension as CythonExtension
-
-
-def search_on_path(filename):
-    """Find file on system path."""
-    # http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/52224
-    search_path = os.environ["PATH"]
-
-    paths = search_path.split(os.pathsep)
-    for path in paths:
-        if os.path.exists(os.path.join(path, filename)):
-            return os.path.abspath(os.path.join(path, filename))
 
 
 OMP_ARGS = ['-fopenmp']
@@ -57,14 +46,13 @@ ext_modules = [
     ),
 ]
 
-nvcc_path = search_on_path("nvcc")
-if nvcc_path is not None:
-    CUDA_ROOT = os.path.dirname(os.path.dirname(nvcc_path))
-    CUDA_LIB_DIR = os.path.join(CUDA_ROOT, 'lib')
-    CUDA_INCLUDE = os.path.join(CUDA_ROOT, 'include')
-
-    if sys.maxint > 2 ** 31 and os.path.exists(CUDA_LIB_DIR + '64'):
-        CUDA_LIB_DIR += '64'
+CUDA_DIR = os.environ.get('CUDA_DIR')
+if CUDA_DIR is not None:
+    CUDA_INCLUDE = join(CUDA_DIR, 'include')
+    if sys.platform == 'linux2' and platform.architecture()[0] == '64bit':
+        CUDA_LIB_DIR = join(CUDA_DIR, 'lib64')
+    else:
+        CUDA_LIB_DIR = join(CUDA_DIR, 'lib64')
 
     ext = CythonExtension(
         name = "numbapro._cudadispatch",
@@ -73,7 +61,8 @@ if nvcc_path is not None:
         # extra_objects = ["numbapro/_cuda.o"],
         library_dirs = [CUDA_LIB_DIR],
         libraries = ["cuda", "cudart"],
-        depends = ["numbapro/_cuda.h", "numbapro/cuda.pxd", "numbapro/dispatch.pxd"],
+        depends = ["numbapro/_cuda.h", "numbapro/cuda.pxd",
+                   "numbapro/dispatch.pxd"],
         cython_gdb=True,
     )
     ext_modules.append(ext)
