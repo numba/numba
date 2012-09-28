@@ -10,7 +10,6 @@ from numba import translate as bytecode_translate
 from .minivect import minitypes
 from numba.utils import debugout
 
-from numba import translate2
 from numba import double
 import llvm.core as _lc
 
@@ -19,11 +18,13 @@ translated = []
 def export(restype=double, argtypes=[double], backend='bytecode', **kws):
     def _export(func, name=None):
         # XXX: need to implement ast backend.
-        t = translate2.Translate(func, restype=restype,
-                                argtypes=argtypes,
-                                module=default_module,
-                                name=name, **kws)
+        t = bytecode_translate.Translate(func, restype=restype,
+                                         argtypes=argtypes,
+                                         module=default_module,
+                                         name=name, **kws)
         t.translate()
+        t.mini_rettype = restype
+        t.mini_argtypes = argtypes
         translated.append((t, name))
     return _export
 
