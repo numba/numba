@@ -38,11 +38,11 @@ Compilation requires type information.  NumbaPro assumes no knowledge of type wh
 ::
 
     gufunc = GUFuncVectorize(matmulcore, '(m,n),(n,p)->(m,p)')
-    gufunc.add(argtypes=[f[:,:], f[:,:], f[:,:]])
-    gufunc.add(argtypes=[d[:,:], d[:,:], d[:,:]])
+    gufunc.add(argtypes=[f4[:,:], f4[:,:], f4[:,:]])
+    gufunc.add(argtypes=[f8[:,:], f8[:,:], f8[:,:]])
     gufunc.add(argtypes=[int32[:,:], int32[:,:], int32[:,:]])
 
-Above we are using a signed **32-bit int**, a float **f**, and a double **d**.  The GUFuncVectorize calls `PyDynUFunc_FromFuncAndDataAndSignature <http://scipy-lectures.github.com/advanced/advanced_numpy/index.html#generalized-ufuncs>`_ which requires a the signature: *(m,n),(n,p)->(m,p)* in the constructor.  This signature defines the *"core dimensions"* of the generalized ufunc.  
+Above we are using a signed **32-bit int**, a float **f4**, and a double **f8**.  The GUFuncVectorize calls `PyDynUFunc_FromFuncAndDataAndSignature <http://scipy-lectures.github.com/advanced/advanced_numpy/index.html#generalized-ufuncs>`_ which requires a the signature: *(m,n),(n,p)->(m,p)* in the constructor.  This signature defines the *"core dimensions"* of the generalized ufunc.  
 
 
 To compile our ufunc we issue the following command

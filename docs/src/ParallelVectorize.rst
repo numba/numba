@@ -33,10 +33,10 @@ Compilation requires type information.  NumbaPro assumes no knowledge of type wh
     pv = ParallelVectorize(vector_add)
 	pv.add(restype=int32, argtypes=[int32, int32])
 	pv.add(restype=uint32, argtypes=[uint32, uint32])
-	pv.add(restype=f, argtypes=[f, f])
-	pv.add(restype=d, argtypes=[d, d])
+	pv.add(restype=f4, argtypes=[f4, f4])
+	pv.add(restype=f8, argtypes=[f8, f8])
 
-Above we are using signed and unsigned 32-bit ints, a float **f**, and a double **d**. 
+Above we are using signed and unsigned 32-bit ints, a float **f4**, and a double **f8**. 
 
 To compile our ufunc we issue the following command
 

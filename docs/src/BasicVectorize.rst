@@ -35,10 +35,10 @@ versions of the code depending on the inputs.
 	bv = BasicVectorize(my_ufunc)
 	bv.add(restype=int32, argtypes=[int32, int32])
 	bv.add(restype=uint32, argtypes=[uint32, uint32])
-	bv.add(restype=f, argtypes=[f, f])
-	bv.add(restype=d, argtypes=[d, d])
+	bv.add(restype=f4, argtypes=[f4, f4])
+	bv.add(restype=f8, argtypes=[f8, f8])
 
-Above we are using signed and unsigned 32-bit ints, a float **f**, and a double **d**.
+Above we are using signed and unsigned 32-bit ints, a float **f4**, and a double **f8**.
 
 To compile our ufunc we issue the following command
 
