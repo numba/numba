@@ -15,7 +15,8 @@ def call_abs(num):
 
 class TestConversion(unittest.TestCase):
     def test_globals(self):
-        assert access_global() is some_global
+        result = access_global()
+        assert result == some_global, result
 
     def test_builtins(self):
         result = call_abs(-10)

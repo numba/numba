@@ -102,6 +102,9 @@ class ConstNode(Node):
         if type is None:
             type = context.typemapper.from_python(pyval)
 
+        if pyval is not _NULL:
+            assert not type.is_object
+
         self.variable = Variable(type, is_constant=True, constant_value=pyval)
         self.type = type
         self.pyval = pyval
@@ -145,8 +148,17 @@ class ConstNode(Node):
 
         return lvalue
 
+
 _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)
+
+def const(obj, type):
+    if type.is_object:
+        node = ObjectInjectNode(obj, type)
+    else:
+        node = ConstNode(obj)
+
+    return node
 
 
 class FunctionCallNode(Node):

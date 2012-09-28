@@ -521,9 +521,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
             if variable.type.is_global:
                 # TODO: look up globals in dict at call time
                 obj = self.func.func_globals[node.name]
-                node = nodes.ConstNode(obj)
-                # node =  nodes.ObjectInjectNode(obj, node.type)
-                return node
+                type = self.context.typemapper.from_python(obj)
+                return nodes.const(obj, type)
             elif variable.type.is_builtin:
                 # Rewrite builtin-ins later on, give other code the chance
                 # to handle them first
