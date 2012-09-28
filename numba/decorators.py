@@ -141,9 +141,8 @@ def _autojit(f):
 
         return ctypes_func(*args, **kwargs)
 
-    wrapper._is_numba_func = True
-    wrapper._numba_func = f
-    return wrapper
+    f.live_objects = []
+    return NumbaFunction(f, wrapper=wrapper)
 
 def autojit(backend='bytecode'):
     if backend not in ('bytecode', 'ast'):
