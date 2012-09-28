@@ -4,7 +4,7 @@ from numba v0.1
 '''
 
 import numba
-from .translate import *
+from numba.translate import *
 _OldTranslate = Translate
 import __builtin__
 import logging
