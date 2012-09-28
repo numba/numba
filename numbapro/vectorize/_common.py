@@ -22,8 +22,8 @@ _llvm_ty_str_to_numpy = {
 def _llvm_ty_to_numpy(ty):
     return _llvm_ty_str_to_numpy[str(ty)]
 
-def _llvm_ty_to_dtype_num(ty):
-    return np.dtype(_llvm_ty_to_numpy(ty)).num
+def _llvm_ty_to_dtype(ty):
+    return np.dtype(_llvm_ty_to_numpy(ty)) #.num
 
 _numbatypes_str_to_numpy = {
             'int8'     : np.int8,

@@ -1,5 +1,5 @@
 from numbapro.vectorize.basic import basic_vectorize_from_func
-from numbapro.vectorize._common import _llvm_ty_to_dtype_num
+from numbapro.vectorize._common import _llvm_ty_to_dtype
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm.core import *
@@ -42,7 +42,7 @@ class TestBasicVectorize(unittest.TestCase):
 
         tynumslist = []
         for tys in tyslist:
-            tynumslist.append(list(map(_llvm_ty_to_dtype_num, tys)))
+            tynumslist.append(list(map(_llvm_ty_to_dtype, tys)))
 
         oneone_defs = [OneOne(*tys)(module) for tys in tyslist]
 
@@ -76,7 +76,7 @@ class TestBasicVectorize(unittest.TestCase):
         def_oneone = OneOne(itype, otype)
         oneone = def_oneone(module)
 
-        tyslist = [list(map(_llvm_ty_to_dtype_num, [itype, otype]))]
+        tyslist = [list(map(_llvm_ty_to_dtype, [itype, otype]))]
         ufunc = basic_vectorize_from_func(oneone, tyslist, exe.engine)
 
         print(module)
