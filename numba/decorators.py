@@ -181,6 +181,8 @@ def jit(restype=double, argtypes=[double], backend='bytecode', **kws):
     the bytecode translator is used, if backend='ast' the AST translator is
     used.
     """
+    assert 'arg_types' not in kws
+    assert 'ret_type' not in kws
     def _jit(func):
         global __tr_map__
         llvm = kws.pop('llvm', True)
