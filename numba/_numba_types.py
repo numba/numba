@@ -118,13 +118,13 @@ class NewAxisType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "newaxis"
 
-class GlobalType(NumbaType):
+class GlobalType(NumbaType, minitypes.ObjectType):
     is_global = True
 
-class BuiltinType(NumbaType):
+class BuiltinType(NumbaType, minitypes.ObjectType):
     is_builtin = True
 
-class ModuleAttributeType(NumbaType):
+class ModuleAttributeType(NumbaType, minitypes.ObjectType):
     is_module_attr = True
 
 class RangeType(NumbaType):

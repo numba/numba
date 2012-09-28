@@ -177,9 +177,15 @@ class NativeCallNode(FunctionCallNode):
 class ObjectCallNode(FunctionCallNode):
     _fields = ['function', 'args_tuple', 'kwargs_dict']
 
-    def __init__(self, signature, func, args, keywords, py_func=None, **kw):
+    def __init__(self, signature, func, args, keywords=None, py_func=None, **kw):
         if py_func and not kw.get('name', None):
             kw['name'] = py_func.__name__
+        if signature is None:
+            signature = minitypes.FunctionType(return_type=object_,
+                                               args=[object_] * len(args))
+            if keywords:
+                signature.args.extend([object_] * len(keywords))
+
         super(ObjectCallNode, self).__init__(signature, args)
         assert func is not None
         self.function = func

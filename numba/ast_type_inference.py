@@ -143,8 +143,10 @@ class BuiltinResolverMixin(object):
             dst_types = { int : numba.int32, float : numba.float32 }
             return nodes.CoercionNode(node.args[0], dst_type=dst_types[func])
         else:
-            raise error.NumbaError(
-                "Unsupported call to built-in function %s" % func.__name__)
+            # raise error.NumbaError(
+            #     "Unsupported call to built-in function %s" % func.__name__)
+            func = nodes.ObjectInjectNode(func)
+            return nodes.ObjectCallNode(None, func, node.args)
 
 class NumpyMixin(object):
     def _is_constant_index(self, node):
@@ -1098,3 +1100,15 @@ class LateSpecializer(visitors.NumbaTransformer):
                             nodes.ConstNode(node.attr))
         self.generic_visit(new_node)
         return new_node
+
+    def visit_Name(self, node):
+        if node.type.is_global or node.type.is_builtin:
+            # TODO: look up globals in dict at call time
+            if node.type.is_global:
+                obj = self.func.func_globals[node.name]
+            else:
+                obj = getattr(builtins, node.name)
+
+            return nodes.ObjectInjectNode(obj, node.type)
+
+        return node
