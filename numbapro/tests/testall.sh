@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Use -cuda switch to enable CUDA tests, which are disabled by default.
 function run_test_in
 {
   echo "== Testing $1"
@@ -32,7 +33,10 @@ run_test test_parallel_vectorize.py
 run_test test_stream_vectorize.py
 
 run_test test_gufunc.py
-run_test test_cuda_vectorize.py
 run_test test_mini_vectorize.py
 
-run_test test_cuda_jit.py
+if [ "$1" == "-cuda" ]
+  then
+    run_test test_cuda_vectorize.py
+    run_test test_cuda_jit.py
+fi
