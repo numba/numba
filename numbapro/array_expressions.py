@@ -2,6 +2,7 @@ import ast
 import copy
 import opcode
 import types
+import logging
 import __builtin__ as builtins
 
 import numba
@@ -162,6 +163,8 @@ class UFuncRewriter(ArrayExpressionRewrite):
         ufunc_ast = ufunc_builder.build_ufunc_ast(tree)
         module = ast.Module(body=[ufunc_ast])
         functions.fix_ast_lineno(module)
+
+        logging.debug(ast.dump(ufunc_ast))
 
         # Create Python ufunc function
         d = {}

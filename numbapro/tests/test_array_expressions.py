@@ -57,7 +57,9 @@ def array_expr_gufunc(A, B, C):
     n, p = B.shape
     for i in range(m):
         for j in range(p):
-            C[i, j] = (A[i, :] * B[:, j]).sum()
+            result = (A[i, :] * B[:, j]).sum()
+            # print result
+            C[i, j] = result
 
 def test_gufunc_array_expressions():
     gufunc = ASTGUFuncVectorize(array_expr_gufunc, '(m,n),(n,p)->(m,p)')
