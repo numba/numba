@@ -75,13 +75,23 @@ _ATTRIBUTABLES = set([threadIdx, blockIdx, blockDim, gridDim, _THIS_MODULE])
 
 __tr_map__ = {}
 
-def jit(restype='int32', argtypes=[]):
+def jit(argtypes=[]):
+    '''JIT python function into a CUDA kernel.
+
+    A CUDA kernel does not return any value.
+    To retrieve result, use an array as a parameter.
+    By default, all array data will be copied back to the host.
+    Scalar parameter is copied to the host and will be not be read back.
+    It is not possible to pass scalar parameter by reference.
+
+    Support for double-precision floats depends on your CUDA device.
+    '''
+    restype='int32' # no return value for CUDA kernel
     def _jit(func):
         global __tr_map__
         if func in __tr_map__:
             logger.warning("Warning: Previously compiled version of %r may be "
                            "garbage collected!" % (func,))
-
         #use_ast = False
         #if backend == 'ast':
         #    use_ast = True
@@ -94,6 +104,8 @@ def jit(restype='int32', argtypes=[]):
         #if use_ast:
         #    return jit2(argtypes=argtypes)(func)
         #else:
+
+        # NOTE: This will use bytecode translate path
         t = CudaTranslate(func, restype=restype, argtypes=argtypes,
                           module=_lc.Module.new("ptx_%s" % str(func)))
         t.translate()
@@ -106,8 +118,10 @@ def jit(restype='int32', argtypes=[]):
 
 
 class CudaNumbaFunction(object):
-    _griddim = 1, 1, 1
-    _blockdim = 1, 1, 1
+
+    _griddim = 1, 1, 1      # default grid dimension
+    _blockdim = 1, 1, 1     # default block dimension
+
     def __init__(self, lfunc):
         self.module = lfunc.module
 
@@ -127,6 +141,7 @@ class CudaNumbaFunction(object):
         wrapper = self.module.add_function(wrapper_type, func_name)
         builder = _lc.Builder.new(wrapper.append_basic_block('entry'))
 
+        # NOTE: convert double precision float to single-precision as needed.
         fixed_args = list(wrapper.args)
         for idx in fix_floats:
             fixed_args[idx] = builder.fptrunc(wrapper.args[idx], argtys[idx])
@@ -165,6 +180,7 @@ class CudaNumbaFunction(object):
 
         assert _llvm_cbuilder_types.intp.width in [32, 64]
 
+        # generate PTX
         ptxtm = _le.TargetMachine.lookup(arch, cpu=cc, opt=3)
         ptxasm = ptxtm.emit_assembly(self.module)
         self.ptxasm = ptxasm
@@ -173,8 +189,13 @@ class CudaNumbaFunction(object):
                                                                 func_name,
                                                                 device_number)
 
-
     def configure(self, griddim, blockdim):
+        '''Configure kernel grid dimension and block dimension.
+
+        griddim, blockdim -- Triples of at most 3 integers. Missing dimensions
+                             are automatically filled with `1`.
+
+        '''
         self._griddim = griddim
         self._blockdim = blockdim
 
@@ -184,23 +205,30 @@ class CudaNumbaFunction(object):
         while len(self._blockdim) < 3:
             self._blockdim += (1,)
 
-
     def __call__(self, *args):
-        self.dispatcher(args, self._griddim, self._blockdim)
+        '''Call the CUDA kernel.
 
+        This call is synchronous to the host.
+        In another words, this function will return only upon the completion
+        of the CUDA kernel.
+        '''
+        self.dispatcher(args, self._griddim, self._blockdim)
 
     @property
     def compute_capability(self):
+        '''The compute_capability of the PTX is generated for.
+        '''
         return self._cc
 
     @property
-    def architecture(self):
+    def target_machine(self):
+        '''The LLVM target mcahine backend used to generate the PTX.
+        '''
         return self._arch
 
 class CudaTranslate(_Translate):
      def op_LOAD_ATTR(self, i, op, arg):
-        '''
-        Add cuda intrinsics
+        '''Add cuda intrinsics lookup.
         '''
         peekarg = self.stack[-1]
         if peekarg.val in _ATTRIBUTABLES:
