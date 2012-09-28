@@ -266,8 +266,8 @@ class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
         self.module = module
         self.signature = signature
         # Create a wrapper around _cuda.c:cuda_outer_loop
-        wrapper_builder = GUFuncCUDAEntry(signature, None)
-        self.wrapper = wrapper_builder(self.module)
+        # wrapper_builder = GUFuncCUDAEntry(signature, None)
+        # self.wrapper = wrapper_builder(self.module)
         self.cuda_kernels = None
 
     def datalist(self, lfunclist, ptrlist, cuda_dispatcher):
@@ -286,7 +286,7 @@ class _GeneralizedCUDAUFuncFromFunc(_GeneralizedUFuncFromFunc):
         # print lfunc
         # return lfunc
         # Must return a new wrapper to avoid random segfaults. TODO: why?
-        wrapper_builder = GUFuncCUDAEntry(signature, None)
+        wrapper_builder = GUFuncCUDAEntry(dtypes, signature, None)
         return wrapper_builder(self.module)
 
 
@@ -344,7 +344,7 @@ class CUDAGUFuncVectorize(GUFuncVectorize):
 
     def build_ufunc(self, device_number=-1):
         n_funcs = len(self.cuda_vectorizer.signatures)
-        lfunclist = [self.gufunc_from_func.wrapper] * n_funcs
+        lfunclist = [None] * n_funcs # [self.gufunc_from_func.wrapper] * n_funcs
         tyslist = self._get_tys_list()
         dispatcher = self.cuda_vectorizer._build_ufunc(device_number)
         self.gufunc_from_func.cuda_kernels = self.cuda_vectorizer.cuda_wrappers
@@ -463,11 +463,11 @@ class GUFuncCUDAEntry(GUFuncEntry):
         llvm_builder.call(cuda_outer_loop, largs)
 
     @classmethod
-    def specialize(cls, signature, func_def):
+    def specialize(cls, dtypes, signature, func_def):
         '''specialize to a workload
         '''
         global num_wrappers
-        super(GUFuncCUDAEntry, cls).specialize(signature, func_def)
+        super(GUFuncCUDAEntry, cls).specialize(dtypes, signature, func_def)
         cls._name_ = 'cuda_outer_loop_wrapper_%d' % num_wrappers
         num_wrappers += 1
 
