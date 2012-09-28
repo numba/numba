@@ -452,8 +452,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
             return self._handle_unpacking(node)
 
         target = self.visit(node.targets[0])
-        node.targets[0] = self.assign(target.variable, node.value.variable,
-                                      target)
+        node.value = self.assign(target.variable, node.value.variable,
+                                 node.value)
         return node
 
     def assign(self, lhs_var, rhs_var, rhs_node):

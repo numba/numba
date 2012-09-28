@@ -27,6 +27,7 @@ from test_while import TestWhile, TestASTWhile
 from test_sum import TestSum2d
 from test_extern_call import TestASTExternCall
 from test_ast_arrays import TestASTArrays
+from test_object_conversion import TestConversion
 
 # ______________________________________________________________________
 

@@ -211,7 +211,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         try:
             fn = getattr(self, 'visit_%s' % type(node).__name__)
         except AttributeError as e:
-            logger.exception(e)
+            # logger.exception(e)
             logger.error('Unhandled visit to %s', ast.dump(node))
             raise
             #raise compiler_errors.InternalError(node, 'Not yet implemented.')
@@ -220,7 +220,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
                 self._nodes.append(node) # push current node
                 return fn(node)
             except Exception as e:
-                logger.exception(e)
+                # logger.exception(e)
                 raise
             finally:
                 self._nodes.pop() # pop current node

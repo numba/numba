@@ -40,6 +40,12 @@ class CoercionNode(Node):
         return super(CoercionNode, cls).__new__(cls, node, dst_type, name=name)
 
     def __init__(self, node, dst_type, name=''):
+        if node is self:
+            # We are trying to coerce a CoercionNode which already has the
+            # right type, so __new__ returns a CoercionNode, which then results
+            # in __init__ being called
+            return
+
         self.node = node
         self.dst_type = dst_type
         self.variable = Variable(dst_type)
