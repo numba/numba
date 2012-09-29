@@ -39,24 +39,33 @@ CUDA JIT enhances Numba translation by recognizing CUDA intrinsics for `threadId
 
 Similar to `numba.decorators.jit`, argument types are defined in `argtypes` for `cuda.jit`.  Since a CUDA kernel does not return any value, there are no `restype`.
 
-To invoke the CUDA kernel, it must be configured for the grid and block dimensions.
+To invoke the CUDA kernel, it must be configured for the grid and block dimensions. By default, gridDim and blockDim are (1, 1, 1).
 
 ::
 
 	griddim = 10, 1
 	blockdim = 32, 1, 1
-	cuda_sum.configure(griddim, blockdim)
+	cuda_sum_configured = cuda_sum.configure(griddim, blockdim)
 
 Above, we configured the kernel to use 10 blocks and 32 threads per block.
 
-Lastly, we call cuda_sum with three NumPy arrays as arguments.
+Lastly, we call `cuda_sum_configured` with three NumPy arrays as arguments.
 
 :: 
 
 	a = np.array(np.random.random(320), dtype=np.float32)
 	b = np.array(np.random.random(320), dtype=np.float32)
 	c = np.empty_like(a)
-	cuda_sum(a, b, c)
+	cuda_sum_configured(a, b, c)
+	
+Alternatively, we can use the shorthand for configuring and invoking the kernel:
+
+::
+
+    cuda_sum[griddim, blockdim](a, b, c)
+    
+This syntax corresponds to the CUDA-C syntax `cuda_sum<<<griddim, blockdim>>>(a, b, c)`.
+    
 	
 **Note: All arrays are passed to the device without casting even if the array type does not match the signature of the CUDA kernel.  It is important to ensure all arguments have the correct type.**
 

@@ -35,8 +35,7 @@ def test_array_copy():
 
     prototype = cuda.jit(argtypes=[f4[:], f4[:], i4])
     cudafunc = prototype(array_copy)
-    cudafunc.configure((2,), (333,))
-    cudafunc(src, dst, N)
+    cudafunc[(2,), (333,)](src, dst, N)
 
     assert (src == dst).all()
 
@@ -48,8 +47,8 @@ def test_array_scale():
 
     prototype = cuda.jit(argtypes=[f4[:], f4[:], f4, i4])
     cudafunc = prototype(array_scale)
-    cudafunc.configure((3,), (333,))
-    cudafunc(src, dst, scale, N)
+    cudafunc_configured = cudafunc.configure((3,), (333,))
+    cudafunc_configured(src, dst, scale, N)
 
     assert (src * scale == dst).all()
 

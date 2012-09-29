@@ -191,20 +191,32 @@ class CudaNumbaFunction(object):
                                                                 typemap_string)
 
     def configure(self, griddim, blockdim):
-        '''Configure kernel grid dimension and block dimension.
+        '''Returns a new instance that is configured with the
+        specified kernel grid dimension and block dimension.
 
         griddim, blockdim -- Triples of at most 3 integers. Missing dimensions
                              are automatically filled with `1`.
 
         '''
-        self._griddim = griddim
-        self._blockdim = blockdim
+        import copy
+        inst = copy.copy(self) # clone the object
 
-        while len(self._griddim) < 3:
-            self._griddim += (1,)
+        inst._griddim = griddim
+        inst._blockdim = blockdim
 
-        while len(self._blockdim) < 3:
-            self._blockdim += (1,)
+        while len(inst._griddim) < 3:
+            inst._griddim += (1,)
+
+        while len(inst._blockdim) < 3:
+            inst._blockdim += (1,)
+
+        return inst
+
+    def __getitem__(self, args):
+        '''Shorthand for self.configure()
+        '''
+        griddim, blockdim = args
+        return self.configure(griddim, blockdim)
 
     def __call__(self, *args):
         '''Call the CUDA kernel.
