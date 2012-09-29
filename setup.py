@@ -46,13 +46,21 @@ ext_modules = [
     ),
 ]
 
-CUDA_DIR = os.environ.get('CUDA_DIR', '/usr/local/cuda')
+CUDA_DIR = os.environ.get('CUDA_DIR', os.environ.get('CUDA_PATH', '/usr/local/cuda'))
 if os.path.exists(CUDA_DIR):
     CUDA_INCLUDE = join(CUDA_DIR, 'include')
-    if sys.platform == 'linux2' and platform.architecture()[0] == '64bit':
-        CUDA_LIB_DIR = join(CUDA_DIR, 'lib64')
+    if platform.architecture()[0] == '64bit':
+        if sys.platform == 'linux2':
+            CUDA_LIB_DIR = join(CUDA_DIR, 'lib64')
+        elif sys.platform == 'win32':
+            CUDA_LIB_DIR = join(CUDA_DIR, 'lib', 'x64')
+        else:
+            CUDA_LIB_DIR = join(CUDA_DIR, 'lib')
     else:
-        CUDA_LIB_DIR = join(CUDA_DIR, 'lib')
+        if sys.platform == 'win32':
+            CUDA_LIB_DIR = join(CUDA_DIR, 'lib', 'Win32')
+        else:
+            CUDA_LIB_DIR = join(CUDA_DIR, 'lib')
 
     ext = CythonExtension(
         name = "numbapro._cudadispatch",
