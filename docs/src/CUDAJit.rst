@@ -26,7 +26,7 @@ A CUDA kernel is a special function that executes on a CUDA-enabled GPU device. 
 
 ::
 
-	cuda.jit(argtypes=[f4[:], f4[:], f4[:]])
+	@cuda.jit(argtypes=[f4[:], f4[:], f4[:]])
 	def cuda_sum(a, b, c):
 		tid = cuda.threadIdx.x
 		blkid = cuda.blockIdx.x
