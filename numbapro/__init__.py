@@ -5,6 +5,7 @@ from . import _internal
 def test(verbosity=2, failfast=False):
     import unittest
     import pkgutil
+    import sys
 
     test_package_names = ['numbapro.tests.basic_vectorize',
                           'numbapro.tests.llvm_cbuilder_tests',
@@ -22,7 +23,8 @@ def test(verbosity=2, failfast=False):
                            __import__(name, fromlist=['']).__path__)])
 
     suite = loader.loadTestsFromNames(test_module_names)
-    runner = unittest.TextTestRunner(verbosity=verbosity, failfast=True)
+    # The default stream doesn't work in Windows IPython qtconsole
+    runner = unittest.TextTestRunner(verbosity=verbosity, failfast=True, stream=sys.stdout)
     return runner.run(suite)
 
 def drop_in_gdb(addr=None, type='int'):
