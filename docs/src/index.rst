@@ -4,16 +4,18 @@
    contain the root `toctree` directive.
 
 
-NumaPro
-=========
-NumbaPro is an enhanced version of Numba.  With NumbaPro python developers can define NumPy ufuncs, in python, which are compiled and loaded on the fly.  Additionally, NumbaPro offers developers the ability to target mutlicore architecture for maximum efficiency.
+NumbaPro
+========= 
+NumbaPro is an enhanced version of Numba.  With
+NumbaPro python developers can define NumPy ufuncs, in python, which
+are compiled and loaded on the fly.  Additionally, NumbaPro offers
+developers the ability to target mutlicore architecture for maximum
+efficiency.
 
 *NumbaPro can also target NVIDIA GPUs. While this functionality is being actively developed; it is, however, at the moment still in the experimental stages.*
 
 Current Features
 ----------------
-
-
 There are several versions of vectorize for building native ufunc kernels from python functions.
 Users can also build generalized ufuncs, in which user-defined kernels can operate on sub-arrays
 and not just scalars, using `GUFuncVectorize`.
