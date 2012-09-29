@@ -136,11 +136,11 @@ cuda_load(PyObject *ptx_str, CUmodule *cu_module)
     int bufsize = BUFSIZE;
     char cu_errors[BUFSIZE];
 
-    cu_errors[0] = '\0';
-
     /* Capture error log */
     CUjit_option options[2];
     void *values[2];
+
+    cu_errors[0] = '\0';
 
     if (!PyBytes_Check(ptx_str)) {
         PyErr_SetString(PyExc_TypeError, "Expected byte string PTX assembly");
@@ -356,7 +356,11 @@ error:
     The wrapper fills out the data, shape and strides pointers on the GPU.
     The strides pointers are located at &shape[ndim].
 */
+#ifdef _WIN32
+static __inline int
+#else
 static inline int
+#endif
 _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
                  PyObject **arrays)
 {
@@ -368,19 +372,8 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
     CUresult cu_result;
     cudaError_t error_code;
 
-    /*
-    TODO: Use multiple streams to divide up the work since the order does not
-    matter.
-    */
-    error_code = cudaStreamCreate(&stream);
-    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
-
-    int dim_count = 0;
-    int total_size = 0;
-    for (i=0; i<info->nops; ++i){
-        dim_count += ((ndarray*)arrays[i])->nd;
-        total_size += steps[i] * dimensions[0];
-    }
+    int dim_count;
+    int total_size;
 
     void *device_args, *device_dims, *device_steps, *device_arylen;
     const npy_intp device_count = dimensions[0];
@@ -388,6 +381,31 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
     void* temp_args[MAXARGS] = {NULL};
     void* temp_dims[MAXARGS] = {NULL};
     void* temp_steps[MAXARGS] = {NULL};
+
+    void * kernel_args[] = {&device_args, &device_dims, &device_steps,
+                            &device_arylen, &device_count};
+
+    int thread_per_block = dimensions[0];
+	int block_per_grid = 1;
+
+	/* XXX: assume a smaller thread limit to prevent CC support problem
+	        and out of register problem */
+	const int MAX_THREAD = 128;
+
+    /*
+    TODO: Use multiple streams to divide up the work since the order does not
+    matter.
+    */
+    error_code = cudaStreamCreate(&stream);
+    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
+
+    dim_count = 0;
+    total_size = 0;
+    for (i=0; i<info->nops; ++i){
+        dim_count += ((ndarray*)arrays[i])->nd;
+        total_size += steps[i] * dimensions[0];
+    }
+
     // arguments
     for (i = 0; i < info->nops; ++i){
         if( alloc_and_copy(args[i], steps[i] * dimensions[0],
@@ -428,18 +446,10 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
                        &device_arylen, stream) < 0 )
         goto error;
 
-    void * kernel_args[] = {&device_args, &device_dims, &device_steps,
-                            &device_arylen, &device_count};
-
 
 	/* Launch kernel & check result */
 	/* TODO: use multiple thread blocks */
-    int thread_per_block = dimensions[0];
-	int block_per_grid = 1;
 
-	/* XXX: assume a smaller thread limit to prevent CC support problem
-	        and out of register problem */
-	const int MAX_THREAD = 128;
 	if (thread_per_block >= MAX_THREAD) {
 	    block_per_grid = thread_per_block / MAX_THREAD;
 	    block_per_grid += thread_per_block % MAX_THREAD ? 1 : 0;
@@ -515,8 +525,6 @@ int cuda_numba_function(PyListObject *args, void *func,
     CUresult cu_result;
     cudaError_t error_code;
     cudaStream_t stream = NULL;
-    error_code = cudaStreamCreate(&stream);
-    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
 
     const long nargs = PyList_GET_SIZE(args);
 
@@ -525,6 +533,9 @@ int cuda_numba_function(PyListObject *args, void *func,
     void* device_pointers[MAXARGS] = {NULL};
     void* host_pointers[MAXARGS] = {NULL};
     void * kernel_args[MAXARGS] = {NULL};
+
+    error_code = cudaStreamCreate(&stream);
+    CHECK_CUDA_ERROR("Creating a CUDA stream", error_code);
 
     /* Prepare arguments */
     for (i=0; i<nargs; ++i){
