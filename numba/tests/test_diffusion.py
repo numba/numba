@@ -18,6 +18,7 @@ def diffusionObstacleStep(u,tempU,iterNum):
                 else:
                     tempU[i,j] = u[i,j] + mu * (u[i+1,j]-2*u[i,j]+u[i-1,j] +\
                                                 u[i,j+1]-2*u[i,j]+u[i,j-1] )
+        # Should support copying of arrays 
         for i in range(Lx-1):
             for j in range(Ly-1):
                 u[i,j] = tempU[i,j]
