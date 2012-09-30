@@ -89,6 +89,6 @@ setup(
                 'numbapro.tests.llvm_cbuilder_tests',
                 'numbapro.tests.parallel_vectorize',
                 'numbapro.tests.stream_vectorize'],
-    version = "0.5",
+    version = "0.6",
     cmdclass={'build_ext': build_ext},
 )
