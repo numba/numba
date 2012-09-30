@@ -9,7 +9,7 @@ def sum2d(arr):
             result += arr[i,j]
     return result
 
-csum2d = jit(ret_type=d, arg_types=[d[:,:]])(sum2d)
+csum2d = jit(restype=d, argtypes=[d[:,:]])(sum2d)
 
 from numpy import random
 arr = random.randn(100,100)
