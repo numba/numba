@@ -1,4 +1,4 @@
-from numba import d
+from numba import double
 from numba.decorators import jit as jit
 
 def sum2d(arr):
@@ -9,7 +9,7 @@ def sum2d(arr):
             result += arr[i,j]
     return result
 
-csum2d = jit(restype=d, argtypes=[d[:,:]])(sum2d)
+csum2d = jit(restype=double, argtypes=[double[:,:]])(sum2d)
 
 from numpy import random
 arr = random.randn(100,100)
