@@ -64,12 +64,12 @@ def test_gufunc():
     _test_gufunc('ast', 'cpu')
 
 def test_cuda_gufunc():
-    _test_gufunc('bytecode', 'gpu')
+#    _test_gufunc('bytecode', 'gpu')
     _test_gufunc('ast', 'gpu')
 
 def main():
-    test_numba()
-    test_gufunc()
+#    test_numba()
+#    test_gufunc()
     try:
         from numbapro import _cudadispatch
     except ImportError:

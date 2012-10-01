@@ -300,8 +300,7 @@ class CudaVectorize(cuda.CudaVectorize):
         self.cuda_wrappers = []
 
     def _build_caller(self, lfunc):
-        assert self.module is lfunc.module, (repr(self.module), repr(lfunc.module))
-
+        assert self.module is lfunc.module
         lfunc.calling_convention = llvm.core.CC_PTX_DEVICE
         lfunc.linkage = llvm.core.LINKAGE_INTERNAL # do not emit device function
         lcaller_def = create_kernel_wrapper(lfunc)
@@ -313,7 +312,9 @@ class CudaVectorize(cuda.CudaVectorize):
         return lcaller
 
 class CudaASTVectorize(_common.ASTVectorizeMixin, CudaVectorize):
-    pass
+    def __init__(self, *args, **kwargs):
+        super(CudaASTVectorize, self).__init__(*args, **kwargs)
+        self.mod = self.module
 
 class CudaGUFuncVectorize(GUFuncVectorize):
     """
@@ -322,14 +323,20 @@ class CudaGUFuncVectorize(GUFuncVectorize):
 
     def __init__(self, func, sig):
         super(CudaGUFuncVectorize, self).__init__(func, sig)
-        self.cuda_vectorizer = CudaVectorize(func)
+        self.init_llvm(func, sig)
+        self.init_vectorizer(func, sig)
+        self.gufunc_from_func = _GeneralizedCUDAUFuncFromFunc(
+                                        self.llvm_module, sig)
+
+    def init_llvm(self, func, sig):
         self.llvm_module = llvm.core.Module.new('default_module')
         self.llvm_ee = llvm.ee.EngineBuilder.new(
                     self.llvm_module).force_jit().opt(3).create()
-        self.gufunc_from_func = _GeneralizedCUDAUFuncFromFunc(
-                                            self.llvm_module, sig)
         # self.llvm_fpm = llvm.passes.FunctionPassManager.new(self.llvm_module)
         # self.llvm_fpm.initialize()
+
+    def init_vectorizer(self, func, sig):
+        self.cuda_vectorizer = CudaVectorize(func)
 
     def add(self, argtypes):
         self.cuda_vectorizer.add(restype=void, argtypes=argtypes)
@@ -355,9 +362,9 @@ class CudaGUFuncVectorize(GUFuncVectorize):
             vectorizer=self, cuda_dispatcher=dispatcher, use_cuda=True)
 
 class CudaGUFuncASTVectorize(CudaGUFuncVectorize):
-    def __init__(self, func, sig):
-        super(CudaGUFuncASTVectorize, self).__init__(func, sig)
+    def init_vectorizer(self, func, sig):
         self.cuda_vectorizer = CudaASTVectorize(func)
+
 
 wrapper_count = 0
 def create_kernel_wrapper(kernel):
