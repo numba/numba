@@ -26,7 +26,7 @@ and not just scalars, using `GUFuncVectorize`.
    :maxdepth: 1
 
    ufuncs
-   generalized\_ufuncs
+   generalizedufuncs
 
 
 ..   BasicVectorize
