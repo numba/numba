@@ -99,61 +99,70 @@ class NumbaFunction(object):
             return self.wrapper(*args, **kwargs)
 
 
-def _autojit2(f):
-    """
-    Defines a numba function, that, when called, specializes on the input
-    types. Uses the AST translator backend. For the bytecode translator,
-    use @autojit.
-    """
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
-        types = tuple(context.typemapper.from_python(value)
-                          for value in arguments)
-        ctypes_func = jit2(argtypes=types)(f)
-        return ctypes_func(*args, **kwargs)
+# TODO: make these two implementations the same
+def _autojit2(target):
+    def _autojit2_decorator(f):
+        """
+        Defines a numba function, that, when called, specializes on the input
+        types. Uses the AST translator backend. For the bytecode translator,
+        use @autojit.
+        """
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
+            types = tuple(context.typemapper.from_python(value)
+                              for value in arguments)
+            ctypes_func = jit2(argtypes=types, target=target)(f)
+            return ctypes_func(*args, **kwargs)
 
-    f.live_objects = []
-    return NumbaFunction(f, wrapper=wrapper)
+        f.live_objects = []
+        return NumbaFunction(f, wrapper=wrapper)
+
+    return _autojit2_decorator
 
 _func_cache = {}
-def _autojit(f):
-    """
-    Defines a numba function, that, when called, specializes on the input
-    types. Uses the bytecode translator backend. For the AST backend use
-    @autojit2
-    """
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        # Infer argument types
-        arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
-        types = tuple(context.typemapper.from_python(value)
-                          for value in arguments)
-        if types in _func_cache:
-            ctypes_func = _func_cache[types]
-        else:
-            # Infer the return type
-            func_signature, symtab, ast = functions._infer_types(
-                                        context, f, argtypes=types)
 
-            decorator = jit(restype=func_signature.return_type, argtypes=types)
-            ctypes_func = decorator(f)
-            _func_cache[types] = ctypes_func
+def _autojit(target):
+    def _autojit_decorator(f):
+        """
+        Defines a numba function, that, when called, specializes on the input
+        types. Uses the bytecode translator backend. For the AST backend use
+        @autojit2
+        """
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            # Infer argument types
+            arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
+            types = tuple(context.typemapper.from_python(value)
+                              for value in arguments)
+            if types in _func_cache:
+                ctypes_func = _func_cache[types]
+            else:
+                # Infer the return type
+                func_signature, symtab, ast = functions._infer_types(
+                                            context, f, argtypes=types)
 
-        return ctypes_func(*args, **kwargs)
+                decorator = jit(restype=func_signature.return_type,
+                                argtypes=types, target=target)
+                ctypes_func = decorator(f)
+                _func_cache[types] = ctypes_func
 
-    f.live_objects = []
-    return NumbaFunction(f, wrapper=wrapper)
+            return ctypes_func(*args, **kwargs)
 
-def autojit(backend='bytecode'):
+        f.live_objects = []
+        return NumbaFunction(f, wrapper=wrapper)
+
+    return _autojit_decorator
+
+def autojit(backend='bytecode', target='cpu'):
     if backend not in ('bytecode', 'ast'):
         raise Exception("The autojit decorator should be called: "
                         "@autojit(backend='bytecode|ast')")
 
     if backend == 'bytecode':
-        return _autojit
+        return _autojit(target)
     else:
-        return _autojit2
+        return _autojit2(target)
 
 def _jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None):
     assert argtypes is not None
