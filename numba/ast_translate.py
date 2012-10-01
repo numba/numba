@@ -162,7 +162,15 @@ class LLVMContextManager(object):
             mod = name_or_mod
         else:
             mod = name_or_mod
-        return self._fpass[mod]
+
+        if mod in self._fpass:
+            fpm = self._fpass[mod]
+        else:
+            fpm = lp.FunctionPassManager.new(mod)
+            self._fpass[mod] = fpm
+            fpm.initialize()
+
+        return fpm
 
     def get_module(self, name):
         return self._mods[name]
