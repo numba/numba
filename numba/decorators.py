@@ -94,9 +94,12 @@ class NumbaFunction(object):
 
     def __call__(self, *args, **kwargs):
         if self.ctypes_func:
-            return self.ctypes_func(*args, **kwargs)
+            return self.invoke_compiled(self.ctypes_func, *args, **kwargs)
         else:
             return self.wrapper(*args, **kwargs)
+
+    def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
+        return compiled_numba_func(*args, **kwargs)
 
 
 # TODO: make these two implementations the same
@@ -112,11 +115,12 @@ def _autojit2(target):
             arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
             types = tuple(context.typemapper.from_python(value)
                               for value in arguments)
-            ctypes_func = jit2(argtypes=types, target=target)(f)
-            return ctypes_func(*args, **kwargs)
+            compiled_numba_func = jit2(argtypes=types, target=target)(f)
+            return numba_func.invoke_compiled(compiled_numba_func, *args, **kwargs)
 
         f.live_objects = []
-        return NumbaFunction(f, wrapper=wrapper)
+        numba_func = numba_function_autojit_targets[target](f, wrapper=wrapper)
+        return numba_func
 
     return _autojit2_decorator
 
@@ -136,7 +140,7 @@ def _autojit(target):
             types = tuple(context.typemapper.from_python(value)
                               for value in arguments)
             if types in _func_cache:
-                ctypes_func = _func_cache[types]
+                compiled_numba_func = _func_cache[types]
             else:
                 # Infer the return type
                 func_signature, symtab, ast = functions._infer_types(
@@ -144,13 +148,14 @@ def _autojit(target):
 
                 decorator = jit(restype=func_signature.return_type,
                                 argtypes=types, target=target)
-                ctypes_func = decorator(f)
-                _func_cache[types] = ctypes_func
+                compiled_numba_func = decorator(f)
+                _func_cache[types] = compiled_numba_func
 
-            return ctypes_func(*args, **kwargs)
+            return numba_func.invoke_compiled(compiled_numba_func, *args, **kwargs)
 
         f.live_objects = []
-        return NumbaFunction(f, wrapper=wrapper)
+        numba_func = numba_function_autojit_targets[target](f, wrapper=wrapper)
+        return numba_func
 
     return _autojit_decorator
 
@@ -208,7 +213,8 @@ def _jit(restype=double, argtypes=[double], backend='bytecode', **kws):
             t.translate()
             # print t.lfunc
             __tr_map__[func] = t
-            return t.get_ctypes_func(llvm)
+            ctypes_func = t.get_ctypes_func(llvm)
+            return NumbaFunction(func, ctypes_func=ctypes_func, lfunc=t.lfunc)
 
     return _jit
 
@@ -218,6 +224,10 @@ jit_targets = {
 
 jit2_targets = {
     'cpu': _jit2,
+}
+
+numba_function_autojit_targets = {
+    'cpu': NumbaFunction,
 }
 
 def jit(restype=None, argtypes=None, backend='bytecode', target='cpu',
