@@ -151,6 +151,7 @@ class ASTVectorizeMixin(object):
         self.mod = self.llvm_context.get_default_module()
         self.ee = self.llvm_context.get_execution_engine()
         self.args_restypes = getattr(self, 'args_restypes', [])
+        self.signatures = []
 
     def _get_ee(self):
         return self.ee
@@ -160,6 +161,7 @@ class ASTVectorizeMixin(object):
         numba_func = dec(self.pyfunc)
         self.args_restypes.append(numba_func.signature.args +
                                    [numba_func.signature.return_type])
+        self.signatures.append((restype, argtypes, {}))
         self.translates.append(numba_func)
 
     def get_argtypes(self, numba_func):

@@ -300,7 +300,7 @@ class CudaVectorize(cuda.CudaVectorize):
         self.cuda_wrappers = []
 
     def _build_caller(self, lfunc):
-        assert self.module is lfunc.module
+        assert self.module is lfunc.module, (repr(self.module), repr(lfunc.module))
 
         lfunc.calling_convention = llvm.core.CC_PTX_DEVICE
         lfunc.linkage = llvm.core.LINKAGE_INTERNAL # do not emit device function
@@ -357,7 +357,7 @@ class CudaGUFuncVectorize(GUFuncVectorize):
 class CudaGUFuncASTVectorize(CudaGUFuncVectorize):
     def __init__(self, func, sig):
         super(CudaGUFuncASTVectorize, self).__init__(func, sig)
-        self.cuda_vectorizer = CudaASTVectorize
+        self.cuda_vectorizer = CudaASTVectorize(func)
 
 wrapper_count = 0
 def create_kernel_wrapper(kernel):
