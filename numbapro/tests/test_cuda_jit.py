@@ -64,7 +64,7 @@ def test_array_scale():
 
 
 def main():
-    test_array_copy()
+#    test_array_copy()
     test_array_copy_autojit()
     test_array_scale()
 

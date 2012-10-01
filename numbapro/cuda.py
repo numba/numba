@@ -76,9 +76,7 @@ _SPECIAL_VALUES = {
 _ATTRIBUTABLES = set([threadIdx, blockIdx, blockDim, gridDim, _THIS_MODULE])
 
 # decorators
-
-__tr_map__ = {}
-
+cached = {}
 def jit(restype=void, argtypes=None, backend='bytecode'):
     '''JIT python function into a CUDA kernel.
 
@@ -97,10 +95,6 @@ def jit(restype=void, argtypes=None, backend='bytecode'):
     restype = int32
 
     def _jit(func):
-        global __tr_map__
-        if func in __tr_map__:
-            logger.warning("Warning: Previously compiled version of %r may be "
-                           "garbage collected!" % (func,))
         #use_ast = False
         #if backend == 'ast':
         #    use_ast = True
@@ -114,14 +108,19 @@ def jit(restype=void, argtypes=None, backend='bytecode'):
         #    return jit2(argtypes=argtypes)(func)
         #else:
 
-        # NOTE: This will use bytecode translate path
-        t = CudaTranslate(func, restype=restype, argtypes=argtypes,
-                          module=_lc.Module.new("ptx_%s" % str(func)))
-        t.translate()
+        key = func, tuple(argtypes)
+        if key in cached:
+            cnf = cached[key]
+        else:
+            # NOTE: This will use bytecode translate path
+            t = CudaTranslate(func, restype=restype, argtypes=argtypes,
+                              module=_lc.Module.new("ptx_%s" % str(func)))
+            t.translate()
 
-        cnf = CudaNumbaFunction(func, lfunc=t.lfunc)
+            cnf = CudaNumbaFunction(func, lfunc=t.lfunc)
 
-        __tr_map__[func] = cnf
+            cached[key] = cnf
+
         return cnf
 
     return _jit
@@ -276,9 +275,7 @@ class CudaNumbaFunction(CudaBaseFunction):
 class CudaAutoJitNumbaFunction(CudaBaseFunction):
 
     def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
-        compiled_func = CudaNumbaFunction(self.py_func,
-                                          lfunc=compiled_numba_func.lfunc)
-        return compiled_func[self._griddim, self._blockdim](*args, **kwargs)
+        return compiled_numba_func[self._griddim, self._blockdim](*args, **kwargs)
 
 
 class CudaTranslate(_Translate):
