@@ -96,7 +96,7 @@ class NumbaFunction(object):
         if self.ctypes_func:
             return self.invoke_compiled(self.ctypes_func, *args, **kwargs)
         else:
-            return self.wrapper(*args, **kwargs)
+            return self.wrapper(self, *args, **kwargs)
 
     def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
         return compiled_numba_func(*args, **kwargs)
@@ -111,7 +111,7 @@ def _autojit2(target):
         use @autojit.
         """
         @functools.wraps(f)
-        def wrapper(*args, **kwargs):
+        def wrapper(numba_func, *args, **kwargs):
             arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
             types = tuple(context.typemapper.from_python(value)
                               for value in arguments)
@@ -134,7 +134,7 @@ def _autojit(target):
         @autojit2
         """
         @functools.wraps(f)
-        def wrapper(*args, **kwargs):
+        def wrapper(numba_func, *args, **kwargs):
             # Infer argument types
             arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
             types = tuple(context.typemapper.from_python(value)
