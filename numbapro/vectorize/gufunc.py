@@ -356,7 +356,7 @@ class CudaGUFuncVectorize(GUFuncVectorize):
 
 class CudaGUFuncASTVectorize(CudaGUFuncVectorize):
     def __init__(self, func, sig):
-        super(CudaGUFunctASTVectorize, self).__init__(func, sig)
+        super(CudaGUFuncASTVectorize, self).__init__(func, sig)
         self.cuda_vectorizer = CudaASTVectorize
 
 wrapper_count = 0
@@ -375,7 +375,7 @@ def create_kernel_wrapper(kernel):
                     ('steps',      C.pointer(C.pointer(C.intp))),
                     ('arylens',     C.pointer(C.intp)),
                     ('count',      C.intp),]
-       
+
         def body(self, args, dimensions, steps, arylens, count):
             # get current thread index
             tid_x = self.get_intrinsic(llvm.core.INTR_PTX_READ_TID_X, [])
@@ -385,9 +385,9 @@ def create_kernel_wrapper(kernel):
             tid = self.var_copy(tid_x())
             blkdim = self.var_copy(ntid_x())
             blkid = self.var_copy(ctaid_x())
-            
+
             id = (tid + blkdim * blkid).cast(C.intp)
-            
+
             # Escape condition
             with self.ifelse(id >= count) as ifelse:
                 with ifelse.then():
@@ -401,7 +401,7 @@ def create_kernel_wrapper(kernel):
                 ary.data.assign(args[i][id * arylens[i]:])
                 ary.dimensions.assign(dimensions[i])
                 ary.strides.assign(steps[i])
-            
+
             self.builder.call(kernel, [x.handle for x in pyarys])
             self.ret()
 
