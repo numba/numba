@@ -119,7 +119,7 @@ def jit(restype=void, argtypes=None, backend='bytecode'):
                           module=_lc.Module.new("ptx_%s" % str(func)))
         t.translate()
 
-        cnf = CudaNumbaFunction(t.lfunc)
+        cnf = CudaNumbaFunction(func, lfunc=t.lfunc)
 
         __tr_map__[func] = cnf
         return cnf
@@ -276,7 +276,8 @@ class CudaNumbaFunction(CudaBaseFunction):
 class CudaAutoJitNumbaFunction(CudaBaseFunction):
 
     def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
-        compiled_func = CudaNumbaFunction(compiled_numba_func.lfunc)
+        compiled_func = CudaNumbaFunction(self.py_func,
+                                          lfunc=compiled_numba_func.lfunc)
         return compiled_func[self._griddim, self._blockdim](*args, **kwargs)
 
 
