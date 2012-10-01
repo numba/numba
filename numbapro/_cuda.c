@@ -7,6 +7,11 @@
 #include "_cuda.h"
 #include "_internal.h"
 
+/* process wide globals */
+static CUcontext global_context = NULL;
+static CUdevice  *global_device  = NULL;
+
+
 /* prototypes */
 static const char *curesult_to_str(CUresult e);
 
@@ -57,10 +62,10 @@ dealloc(CUmodule cu_module, CUcontext cu_context)
         cu_result = cuModuleUnload(cu_module);
         CHECK_CUDA_RESULT(cu_result)
     }
-    if (cu_context) {
-        cu_result = cuCtxDestroy(cu_context);
-        CHECK_CUDA_RESULT(cu_result)
-    }
+//    if (cu_context) {
+//        cu_result = cuCtxDestroy(cu_context);
+//        CHECK_CUDA_RESULT(cu_result)
+//    }
     return 0;
 }
 
@@ -70,7 +75,7 @@ get_device(CUdevice *cu_device, CUcontext *cu_context, int device_number)
     CUresult cu_result;
     cudaError_t cu_error;
 
-    if (device_number < 0) {
+    if (device_number < 0 && !global_device) {
         int i, device_count;
 
         cu_error = cudaGetDeviceCount(&device_count);
@@ -89,13 +94,23 @@ get_device(CUdevice *cu_device, CUcontext *cu_context, int device_number)
         }
     }
     /* cu_result = cuCtxGetDevice(&cu_device); */
-    cu_result = cuDeviceGet(cu_device, device_number);
-    CHECK_CUDA_RESULT(cu_result)
-
-    if (cu_context) {
-        cuCtxCreate(cu_context, 0, *cu_device);
+    if (!global_device) {
+        global_device = malloc(sizeof(CUdevice));
+        cu_result = cuDeviceGet(global_device, device_number);
         CHECK_CUDA_RESULT(cu_result)
     }
+    if (cu_device) {
+        *cu_device = *global_device;
+    }
+
+    if (!global_context) {
+        cu_result = cuCtxCreate(&global_context, 0, *global_device);
+        CHECK_CUDA_RESULT(cu_result)
+    }
+    if (cu_context) {
+        *cu_context = global_context;
+    }
+
     return 0;
 }
 
