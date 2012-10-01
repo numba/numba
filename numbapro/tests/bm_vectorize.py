@@ -1,9 +1,8 @@
 import numpy as np
 import numexpr as ne
 from numba import *
-from numbapro.vectorize.basic import BasicVectorize
-from numbapro.vectorize.stream import StreamVectorize
-from numbapro.vectorize.parallel import ParallelVectorize
+from numbapro.vectorize import Vectorize
+
 from time import time
 from math import sin
 
@@ -74,7 +73,7 @@ class Benchmark:
         return np.min(times), np.average(times), np.max(times)
 
     def build_basic_vectorize(self):
-        pv = BasicVectorize(polynomial)
+        pv = Vectorize(polynomial, target='basic')
         # pv.add(restype=int32, argtypes=[int32, int32])
         pv.add(restype=f, argtypes=[f, f])
         pv.add(restype=d, argtypes=[d, d])
@@ -82,7 +81,7 @@ class Benchmark:
         return ufunc
 
     def build_parallel_vectorize(self):
-        pv = ParallelVectorize(polynomial)
+        pv = Vectorize(polynomial, target='parallel')
         # pv.add(restype=int32, argtypes=[int32, int32])
         pv.add(restype=f, argtypes=[f, f])
         pv.add(restype=d, argtypes=[d, d])
@@ -90,7 +89,7 @@ class Benchmark:
         return ufunc
 
     def build_stream_vectorize(self):
-        pv = StreamVectorize(polynomial)
+        pv = Vectorize(polynomial, target='stream')
         # pv.add(restype=int32, argtypes=[int32, int32])
         pv.add(restype=f, argtypes=[f, f])
         pv.add(restype=d, argtypes=[d, d])

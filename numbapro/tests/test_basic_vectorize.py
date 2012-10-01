@@ -1,15 +1,15 @@
 import numpy as np
 from numba import *
 f, d = f4, f8
-from numbapro.vectorize.basic import BasicVectorize
+from numbapro.vectorize import Vectorize
 from time import time
 
 def vector_add(a, b):
     return a + b
 
-def main():
+def main(backend):
     # build basic native code ufunc
-    bv = BasicVectorize(vector_add)
+    bv = Vectorize(vector_add, backend=backend)
     bv.add(restype=int32, argtypes=[int32, int32])
     bv.add(restype=uint32, argtypes=[uint32, uint32])
     bv.add(restype=f, argtypes=[f, f])
@@ -53,5 +53,7 @@ def main():
     print('All good')
 
 if __name__ == '__main__':
-    main()
+    main('bytecode')
+    main('ast')
+    main('mini')
 

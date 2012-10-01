@@ -1,15 +1,15 @@
 import numpy as np
 from numba import *
 f, d = f4, f8
-from numbapro.vectorize.parallel import ParallelVectorize
+from numbapro.vectorize import Vectorize
 from time import time
 
 def vector_add(a, b):
     return a + b
 
-def main():
+def main(backend):
     # build parallel native code ufunc
-    pv = ParallelVectorize(vector_add)
+    pv = Vectorize(vector_add, target='parallel', backend=backend)
     pv.add(restype=int32, argtypes=[int32, int32])
     pv.add(restype=uint32, argtypes=[uint32, uint32])
     pv.add(restype=f, argtypes=[f, f])
@@ -53,4 +53,6 @@ def main():
     print('All good')
 
 if __name__ == '__main__':
-    main()
+    main('bytecode')
+    main('ast')
+    main('mini')

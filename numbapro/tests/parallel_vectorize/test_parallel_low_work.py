@@ -5,7 +5,7 @@ There was a deadlock problem when work count is smaller than number of threads.
 import numpy as np
 from numba import *
 f, d = f4, f8
-from numbapro.vectorize.parallel import ParallelVectorize
+from numbapro.vectorize import Vectorize
 from time import time
 import unittest
 
@@ -15,7 +15,7 @@ def vector_add(a, b):
 class TestParallelLowWorkCount(unittest.TestCase):
     def test_low_workcount(self):
         # build parallel native code ufunc
-        pv = ParallelVectorize(vector_add)
+        pv = Vectorize(vector_add, target='parallel')
         pv.add(restype=int32, argtypes=[int32, int32])
         pv.add(restype=uint32, argtypes=[uint32, uint32])
         pv.add(restype=f, argtypes=[f, f])

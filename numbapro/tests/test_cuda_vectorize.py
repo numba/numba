@@ -1,13 +1,13 @@
 import numpy as np
 from numba import *
-from numbapro.vectorize import CudaVectorize
+from numbapro.vectorize import Vectorize
 from time import time
 
 def vector_add(a, b):
     return a + b
 
 # build cuda code ufunc
-pv = CudaVectorize(vector_add)
+pv = Vectorize(vector_add, target='gpu')
 pv.add(restype=int32, argtypes=[int32, int32])
 pv.add(restype=f4, argtypes=[f4, f4])
 #pv.add(restype=d, argtypes=[d, d])

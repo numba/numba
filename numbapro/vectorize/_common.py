@@ -195,4 +195,3 @@ def post_vectorize_optimize(func):
     pmb.populate(pm)
 
     pm.run(func.module)
-

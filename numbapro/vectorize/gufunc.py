@@ -313,13 +313,13 @@ class CudaVectorize(cuda.CudaVectorize):
         return lcaller
 
 
-class CUDAGUFuncVectorize(GUFuncVectorize):
+class CudaGUFuncVectorize(GUFuncVectorize):
     """
     Generalized ufunc vectorizer. Executes generalized ufuncs on the GPU.
     """
 
     def __init__(self, func, sig):
-        super(CUDAGUFuncVectorize, self).__init__(func, sig)
+        super(CudaGUFuncVectorize, self).__init__(func, sig)
         self.cuda_vectorizer = CudaVectorize(func)
         self.llvm_module = llvm.core.Module.new('default_module')
         self.llvm_ee = llvm.ee.EngineBuilder.new(

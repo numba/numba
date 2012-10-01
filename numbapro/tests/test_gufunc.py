@@ -2,7 +2,7 @@ from numba.decorators import jit
 from numba import *
 import numpy as np
 import numpy.core.umath_tests as ut
-from numbapro.vectorize.gufunc import GUFuncVectorize, CUDAGUFuncVectorize
+from numbapro.vectorize.gufunc import GUFuncVectorize, CudaGUFuncVectorize
 
 f = float_
 
@@ -62,7 +62,7 @@ def test_gufunc():
     _test_gufunc(GUFuncVectorize)
 
 def test_cuda_gufunc():
-    _test_gufunc(CUDAGUFuncVectorize)
+    _test_gufunc(CudaGUFuncVectorize)
 
 def main():
 #    test_numba()
