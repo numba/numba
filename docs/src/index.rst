@@ -5,25 +5,31 @@
 
 
 NumbaPro
-========= 
+=========
 NumbaPro is an enhanced version of Numba.  With
-NumbaPro python developers can define NumPy ufuncs, in python, which
-are compiled and loaded on the fly.  Additionally, NumbaPro offers
-developers the ability to target mutlicore architecture for maximum
-efficiency.
+NumbaPro Python developers can define NumPy ufuncs and generalized ufuncs
+in Python, which are compiled and loaded on the fly.  Additionally, NumbaPro
+offers developers the ability to target mutlicore and GPU architectures.
 
+NumbaPro can also compile Numba functions (with a few restrictions) to the
+GPU, where the function can perform computations based on the thread and block
+identities.
 *NumbaPro can also target NVIDIA GPUs. While this functionality is being actively developed; it is, however, at the moment still in the experimental stages.*
 
 Current Features
 ----------------
-There are several versions of vectorize for building native ufunc kernels from python functions.
+There are several versions of vectorize for building native ufunc kernels from Python functions.
 Users can also build generalized ufuncs, in which user-defined kernels can operate on sub-arrays
 and not just scalars, using `GUFuncVectorize`.
 
 .. toctree::
    :maxdepth: 1
 
-   BasicVectorize
+   ufuncs
+   generalized\_ufuncs
+
+
+..   BasicVectorize
    ParallelVectorize
    CUDAVectorize
    StreamVectorize

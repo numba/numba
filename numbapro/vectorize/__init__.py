@@ -1,4 +1,5 @@
 __all__ = [
+    'Vectorize',
     'BasicVectorize',
     'ParallelVectorize',
     'StreamVectorize',
