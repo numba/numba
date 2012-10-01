@@ -79,7 +79,7 @@ _ATTRIBUTABLES = set([threadIdx, blockIdx, blockDim, gridDim, _THIS_MODULE])
 
 __tr_map__ = {}
 
-def jit(restype=int32, argtypes=None, backend='bytecode'):
+def jit(restype=void, argtypes=None, backend='bytecode'):
     '''JIT python function into a CUDA kernel.
 
     A CUDA kernel does not return any value.
@@ -90,9 +90,11 @@ def jit(restype=int32, argtypes=None, backend='bytecode'):
 
     Support for double-precision floats depends on your CUDA device.
     '''
-    assert restype == int32, restype
+    assert restype == void, restype
     assert argtypes is not None
     assert backend == 'bytecode'
+
+    restype = int32
 
     def _jit(func):
         global __tr_map__
@@ -124,12 +126,42 @@ def jit(restype=int32, argtypes=None, backend='bytecode'):
 
     return _jit
 
-numba.decorators.jit_targets['gpu'] = jit
 
-class CudaNumbaFunction(object):
+class CudaBaseFunction(object):
 
     _griddim = 1, 1, 1      # default grid dimension
     _blockdim = 1, 1, 1     # default block dimension
+
+    def configure(self, griddim, blockdim):
+        '''Returns a new instance that is configured with the
+        specified kernel grid dimension and block dimension.
+
+        griddim, blockdim -- Triples of at most 3 integers. Missing dimensions
+                             are automatically filled with `1`.
+
+        '''
+        import copy
+        inst = copy.copy(self) # clone the object
+
+        inst._griddim = griddim
+        inst._blockdim = blockdim
+
+        while len(inst._griddim) < 3:
+            inst._griddim += (1,)
+
+        while len(inst._blockdim) < 3:
+            inst._blockdim += (1,)
+
+        return inst
+
+    def __getitem__(self, args):
+        '''Shorthand for self.configure()
+        '''
+        griddim, blockdim = args
+        return self.configure(griddim, blockdim)
+
+
+class CudaNumbaFunction(CudaBaseFunction):
 
     def __init__(self, lfunc):
         self.module = lfunc.module
@@ -199,34 +231,6 @@ class CudaNumbaFunction(object):
                                                                 device_number,
                                                                 typemap_string)
 
-    def configure(self, griddim, blockdim):
-        '''Returns a new instance that is configured with the
-        specified kernel grid dimension and block dimension.
-
-        griddim, blockdim -- Triples of at most 3 integers. Missing dimensions
-                             are automatically filled with `1`.
-
-        '''
-        import copy
-        inst = copy.copy(self) # clone the object
-
-        inst._griddim = griddim
-        inst._blockdim = blockdim
-
-        while len(inst._griddim) < 3:
-            inst._griddim += (1,)
-
-        while len(inst._blockdim) < 3:
-            inst._blockdim += (1,)
-
-        return inst
-
-    def __getitem__(self, args):
-        '''Shorthand for self.configure()
-        '''
-        griddim, blockdim = args
-        return self.configure(griddim, blockdim)
-
     def __call__(self, *args):
         '''Call the CUDA kernel.
 
@@ -265,6 +269,12 @@ class CudaNumbaFunction(object):
         '''
         return self._ptxasm
 
+class CudaAutoJitNumbaFunction(numba.decorators.NumbaFunction,
+                               CudaBaseFunction):
+    def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
+        compiled_func = CudaNumbaFunction(compiled_numba_func.lfunc)
+        return compiled_func[self._griddim, self._blockdim](*args, **kwargs)
+
 class CudaTranslate(_Translate):
      def op_LOAD_ATTR(self, i, op, arg):
         '''Add cuda intrinsics lookup.
@@ -282,3 +292,6 @@ class CudaTranslate(_Translate):
             # fall back to default implementation
             super(CudaTranslate, self).op_LOAD_ATTR(i, op, arg)
 
+# Patch numba
+numba.decorators.jit_targets['gpu'] = jit
+numba.decorators.numba_function_autojit_targets['gpu'] = CudaAutoJitNumbaFunction

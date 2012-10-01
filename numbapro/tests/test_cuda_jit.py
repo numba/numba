@@ -39,6 +39,16 @@ def test_array_copy():
 
     assert (src == dst).all()
 
+def test_array_copy_autojit():
+    N = 2 * 333
+    src = np.arange(N, dtype=np.float32)
+    dst = np.empty_like(src)
+
+    cudafunc = autojit(target='gpu')(array_copy)
+    cudafunc[(2,), (333,)](src, dst, N)
+
+    assert (src == dst).all()
+
 def test_array_scale():
     N = 333 * 3
     scale = 3.14
@@ -55,6 +65,7 @@ def test_array_scale():
 
 def main():
     test_array_copy()
+    test_array_copy_autojit()
     test_array_scale()
 
 if __name__ == '__main__':
