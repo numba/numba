@@ -6,7 +6,7 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import error
+from numba import error, transforms
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
 from .symtab import Variable
@@ -54,17 +54,17 @@ class Pipeline(object):
         return ast
 
     def transform_for(self, ast):
-        transform = TransformForIterable(self.context, self.func, ast,
-                                         self.symtab)
+        transform = transforms.TransformForIterable(self.context, self.func,
+                                                    ast, self.symtab)
         return transform.visit(ast)
 
     def specialize(self, ast):
-        specializer = ASTSpecializer(self.context, self.func, ast,
-                                     self.func_signature)
+        specializer = transforms.ASTSpecializer(self.context, self.func, ast,
+                                                self.func_signature)
         return specializer.visit(ast)
 
     def late_specializer(self, ast):
-        return LateSpecializer(self.context, self.func, ast).visit(ast)
+        return transforms.LateSpecializer(self.context, self.func, ast).visit(ast)
 
     def insert_specializer(self, name, after):
         self.order.insert(self.order.index(after), name)
