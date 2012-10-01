@@ -112,7 +112,7 @@ class GUFuncVectorize(object):
             lfunclist, tyslist, self.signature, engine,
             vectorizer=self, use_cuda=use_cuda)
 
-class ASTGUFuncVectorize(_common.ASTVectorizeMixin, GUFuncVectorize):
+class GUFuncASTVectorize(_common.ASTVectorizeMixin, GUFuncVectorize):
     "Use the AST numba backend to compile the gufunc"
 
     def get_argtypes(self, numba_func):
@@ -312,6 +312,8 @@ class CudaVectorize(cuda.CudaVectorize):
         # print lcaller
         return lcaller
 
+class CudaASTVectorize(_common.ASTVectorizeMixin, CudaVectorize):
+    pass
 
 class CudaGUFuncVectorize(GUFuncVectorize):
     """
@@ -352,6 +354,10 @@ class CudaGUFuncVectorize(GUFuncVectorize):
             lfunclist, tyslist, self.signature, engine=self.llvm_ee,
             vectorizer=self, cuda_dispatcher=dispatcher, use_cuda=True)
 
+class CudaGUFuncASTVectorize(CudaGUFuncVectorize):
+    def __init__(self, func, sig):
+        super(CudaGUFunctASTVectorize, self).__init__(func, sig)
+        self.cuda_vectorizer = CudaASTVectorize
 
 wrapper_count = 0
 def create_kernel_wrapper(kernel):

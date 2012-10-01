@@ -2,7 +2,7 @@ from numba.decorators import jit
 from numba import *
 import numpy as np
 import numpy.core.umath_tests as ut
-from numbapro.vectorize.gufunc import GUFuncVectorize, CudaGUFuncVectorize
+from numbapro.vectorize import GUVectorize
 
 f = float_
 
@@ -31,8 +31,9 @@ def test_numba():
     if (C != Gold).any():
         raise ValueError
 
-def _test_gufunc(vectorizer):
-    gufunc = vectorizer(matmulcore, '(m,n),(n,p)->(m,p)')
+def _test_gufunc(backend, target):
+    gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', backend=backend,
+                                                           target=target)
     gufunc.add(argtypes=[f4[:,:], f4[:,:], f4[:,:]])
     gufunc = gufunc.build_ufunc()
 
@@ -59,14 +60,16 @@ def _test_gufunc(vectorizer):
 
 
 def test_gufunc():
-    _test_gufunc(GUFuncVectorize)
+    _test_gufunc('bytecode', 'basic')
+    _test_gufunc('ast', 'basic')
 
 def test_cuda_gufunc():
-    _test_gufunc(CudaGUFuncVectorize)
+    _test_gufunc('bytecode', 'gpu')
+    _test_gufunc('ast', 'gpu')
 
 def main():
-#    test_numba()
-#    test_gufunc()
+    test_numba()
+    test_gufunc()
     try:
         from numbapro import _cudadispatch
     except ImportError:

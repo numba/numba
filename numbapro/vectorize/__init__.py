@@ -3,7 +3,7 @@ __all__ = [
     'ParallelVectorize',
     'StreamVectorize',
     'GUFuncVectorize',
-    'ASTGUFuncVectorize',
+    'GUFuncASTVectorize',
     'CudaVectorize',
     'CudaGUFuncVectorize',
     'MiniVectorize',
@@ -14,14 +14,16 @@ from .basic import BasicVectorize, BasicASTVectorize
 from .parallel import ParallelVectorize, ParallelASTVectorize
 from .stream import StreamVectorize, StreamASTVectorize
 
-from .gufunc import GUFuncVectorize, ASTGUFuncVectorize
+from .gufunc import GUFuncVectorize, GUFuncASTVectorize
 
 try:
     from .cuda import  CudaVectorize
-    from .gufunc import CudaGUFuncVectorize
+    from .gufunc import CudaGUFuncVectorize, CudaGUFuncASTVectorize
 except ImportError, e:
+    logging.warning("Cuda vectorizers not available, using fallbacks")
     CudaVectorize = BasicVectorize
     CUDAGUFuncVectorize = GUFuncVectorize
+    CudaGUFuncASTVectorize = GUFuncASTVectorize
 
 from .minivectorize import MiniVectorize, ParallelMiniVectorize
 
@@ -67,3 +69,24 @@ def Vectorize(func, backend='bytecode', target='basic'):
     else:
         # Use the default bytecode backend
         return vectorizers[target](func)
+
+guvectorizers = {
+    'basic': GUFuncVectorize,
+    'gpu': CudaGUFuncVectorize,
+}
+
+ast_guvectorizers = {
+    'basic': GUFuncASTVectorize,
+    'gpu': CudaGUFuncASTVectorize,
+}
+
+def GUVectorize(func, signature, backend='bytecode', target='basic'):
+    assert backend in ('bytecode', 'ast')
+    assert target in ('basic', 'gpu')
+
+    if backend == 'bytecode':
+        vs = guvectorizers
+    else:
+        vs = ast_guvectorizers
+
+    return vs[target](func, signature)

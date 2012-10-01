@@ -1,6 +1,5 @@
 import numbapro
-from numbapro.vectorize import GUFuncVectorize
-from numbapro.vectorize.gufunc import ASTGUFuncVectorize
+from numbapro.vectorize import GUVectorize
 from numba import *
 from numba.decorators import autojit
 
@@ -62,7 +61,7 @@ def array_expr_gufunc(A, B, C):
             C[i, j] = result
 
 def test_gufunc_array_expressions():
-    gufunc = ASTGUFuncVectorize(array_expr_gufunc, '(m,n),(n,p)->(m,p)')
+    gufunc = GUVectorize(array_expr_gufunc, '(m,n),(n,p)->(m,p)', backend='ast')
     gufunc.add(argtypes=[f[:,:], f[:,:], f[:,:]])
     gufunc = gufunc.build_ufunc()
 
