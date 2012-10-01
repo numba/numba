@@ -1,4 +1,4 @@
-__all__ = ['autojit', 'jit2', 'jit']
+__all__ = ['autojit', 'jit2', 'jit', 'export']
 
 import functools
 import logging

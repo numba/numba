@@ -74,7 +74,7 @@ functions).
 
 Examples
 ========
-For get a better feel of what numba can do, see :ref:`Examples`.
+For get a better feel of what numba can do, see :ref:`Examples <examples>`.
 
 .. toctree::
    :maxdepth: 1

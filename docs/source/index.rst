@@ -13,6 +13,7 @@ Contents:
 
    doc/userguide.rst
    doc/examples.rst
+   doc/pycc.rst
 
 
 Indices and tables

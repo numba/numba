@@ -1,5 +1,6 @@
 Examples
 ==============
+.. _examples:
 
 A Simple Function
 -----------------
