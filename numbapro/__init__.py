@@ -67,5 +67,9 @@ def drop_in_gdb(addr=None, type='int'):
         print 'watch *(%s *) %s' % (type, hex(addr))
     os.kill(os.getpid(), signal.SIGINT)
 
+
 import numbapro.array_expressions
-import numbapro.cuda
+try:
+    import numbapro.cuda
+except ImportError:
+    pass
