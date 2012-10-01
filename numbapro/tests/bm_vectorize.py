@@ -73,7 +73,7 @@ class Benchmark:
         return np.min(times), np.average(times), np.max(times)
 
     def build_basic_vectorize(self):
-        pv = Vectorize(polynomial, target='basic')
+        pv = Vectorize(polynomial, target='cpu')
         # pv.add(restype=int32, argtypes=[int32, int32])
         pv.add(restype=f, argtypes=[f, f])
         pv.add(restype=d, argtypes=[d, d])

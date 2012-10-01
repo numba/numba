@@ -6,8 +6,12 @@ from llvm import core as _lc
 from llvm import ee as _le
 from llvm import passes as _lp
 from llvm_cbuilder import shortnames as _llvm_cbuilder_types
-from numbapro.translate import Translate as _Translate
+
+from numba import *
+import numba.decorators
 from numba.translate import Variable as _Variable
+
+from numbapro.translate import Translate as _Translate
 from numbapro import _cudadispatch
 
 _THIS_MODULE = sys.modules[__name__]
@@ -75,7 +79,7 @@ _ATTRIBUTABLES = set([threadIdx, blockIdx, blockDim, gridDim, _THIS_MODULE])
 
 __tr_map__ = {}
 
-def jit(argtypes=[]):
+def jit(restype=int32, argtypes=None, backend='bytecode'):
     '''JIT python function into a CUDA kernel.
 
     A CUDA kernel does not return any value.
@@ -86,7 +90,10 @@ def jit(argtypes=[]):
 
     Support for double-precision floats depends on your CUDA device.
     '''
-    restype='int32' # no return value for CUDA kernel
+    assert restype == int32, restype
+    assert argtypes is not None
+    assert backend == 'bytecode'
+
     def _jit(func):
         global __tr_map__
         if func in __tr_map__:
@@ -114,8 +121,10 @@ def jit(argtypes=[]):
 
         __tr_map__[func] = cnf
         return cnf
+
     return _jit
 
+numba.decorators.jit_targets['gpu'] = jit
 
 class CudaNumbaFunction(object):
 

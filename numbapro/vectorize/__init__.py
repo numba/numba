@@ -28,20 +28,20 @@ except ImportError, e:
 from .minivectorize import MiniVectorize, ParallelMiniVectorize
 
 vectorizers = {
-    'basic': BasicVectorize,
+    'cpu': BasicVectorize,
     'parallel': ParallelVectorize,
     'stream': StreamVectorize,
     'gpu': CudaVectorize,
 }
 
 ast_vectorizers = {
-    'basic': BasicASTVectorize,
+    'cpu': BasicASTVectorize,
     'parallel': ParallelASTVectorize,
     'stream': StreamASTVectorize,
 }
 
 mini_vectorizers = {
-    'basic': MiniVectorize,
+    'cpu': MiniVectorize,
     'parallel': ParallelMiniVectorize,
 }
 
@@ -51,7 +51,7 @@ backends = {
     'mini': mini_vectorizers,
 }
 
-def Vectorize(func, backend='bytecode', target='basic'):
+def Vectorize(func, backend='bytecode', target='cpu'):
     """
     Instantiate a vectorizer given the backend and target.
 
@@ -71,18 +71,18 @@ def Vectorize(func, backend='bytecode', target='basic'):
         return vectorizers[target](func)
 
 guvectorizers = {
-    'basic': GUFuncVectorize,
+    'cpu': GUFuncVectorize,
     'gpu': CudaGUFuncVectorize,
 }
 
 ast_guvectorizers = {
-    'basic': GUFuncASTVectorize,
+    'cpu': GUFuncASTVectorize,
     'gpu': CudaGUFuncASTVectorize,
 }
 
-def GUVectorize(func, signature, backend='bytecode', target='basic'):
+def GUVectorize(func, signature, backend='bytecode', target='cpu'):
     assert backend in ('bytecode', 'ast')
-    assert target in ('basic', 'gpu')
+    assert target in ('cpu', 'gpu')
 
     if backend == 'bytecode':
         vs = guvectorizers
