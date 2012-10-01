@@ -155,10 +155,7 @@ def autojit(backend='bytecode'):
     else:
         return _autojit2
 
-def jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None):
-    """
-    Use the AST translator to translate the function.
-    """
+def _jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None):
     assert argtypes is not None
 
     def _jit(func):
@@ -175,12 +172,7 @@ def jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None):
 
     return _jit
 
-def jit(restype=double, argtypes=[double], backend='bytecode', **kws):
-    """
-    Compile a function given the input and return types. If backend='bytecode'
-    the bytecode translator is used, if backend='ast' the AST translator is
-    used.
-    """
+def _jit(restype=double, argtypes=[double], backend='bytecode', **kws):
     assert 'arg_types' not in kws
     assert 'ret_type' not in kws
     def _jit(func):
@@ -210,3 +202,33 @@ def jit(restype=double, argtypes=[double], backend='bytecode', **kws):
             return t.get_ctypes_func(llvm)
 
     return _jit
+
+jit_targets = {
+    'cpu': _jit,
+}
+
+jit2_targets = {
+    'cpu': _jit2,
+}
+
+def jit(restype=None, argtypes=None, backend='bytecode', target='cpu',
+        **kws):
+    """
+    Compile a function given the input and return types. If backend='bytecode'
+    the bytecode translator is used, if backend='ast' the AST translator is
+    used.
+    """
+    if restype is not None:
+        kws['restype'] = restype
+    if argtypes is not None:
+        kws['argtypes'] = argtypes
+
+    kws['backend'] = backend
+    return jit_targets[target](**kws)
+
+def jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None,
+          target='cpu'):
+    """
+    Use the AST translator to translate the function.
+    """
+    return jit2_targets[target](restype, argtypes, _llvm_module, _llvm_ee)
