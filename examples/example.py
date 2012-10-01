@@ -6,7 +6,7 @@ import numpy
 from numba.decorators import jit
 from numba import int32
 
-@jit(arg_types=[int32[:,:], int32[:,:]], ret_type=int32[:,:])
+@jit(argtypes=[int32[:,:], int32[:,:]], restype=int32[:,:])
 def filter2d(image, filt):
     M, N = image.shape
     Mf, Nf = filt.shape

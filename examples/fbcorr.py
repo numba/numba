@@ -6,7 +6,7 @@ import numba
 from numba.decorators import jit
 nd4type = numba.double[:,:,:,:]
 
-@jit(arg_types=(nd4type, nd4type, nd4type))
+@jit(argtypes=(nd4type, nd4type, nd4type))
 def fbcorr(imgs, filters, output):
     n_imgs, n_rows, n_cols, n_channels = imgs.shape
     n_filters, height, width, n_ch2 = filters.shape

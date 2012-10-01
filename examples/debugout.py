@@ -30,7 +30,7 @@ def demo_function (min_x, max_x, min_y, out_arr):
 
 def main (*args, **kws):
     compiled_demo_function = jit(
-        arg_types = ['d', 'd', 'd', [[['d']]]])(demo_function)
+        argtypes = ['d', 'd', 'd', [[['d']]]])(demo_function)
     control_arr = numpy.zeros((5, 5, 2))
     demo_function(-1., 1., -1., control_arr)
     test_arr = numpy.zeros_like(control_arr)
