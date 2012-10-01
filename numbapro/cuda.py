@@ -75,6 +75,15 @@ _SPECIAL_VALUES = {
 
 _ATTRIBUTABLES = set([threadIdx, blockIdx, blockDim, gridDim, _THIS_MODULE])
 
+def get_strided_arrays(argtypes):
+    result = []
+    for argtype in argtypes:
+        if argtype.is_array:
+            argtype = argtype.strided
+        result.append(argtype)
+
+    return result
+
 # decorators
 cached = {}
 def jit(restype=void, argtypes=None, backend='bytecode'):
@@ -108,7 +117,7 @@ def jit(restype=void, argtypes=None, backend='bytecode'):
         #    return jit2(argtypes=argtypes)(func)
         #else:
 
-        key = func, tuple(argtypes)
+        key = func, tuple(get_strided_arrays(argtypes))
         if key in cached:
             cnf = cached[key]
         else:
@@ -117,8 +126,7 @@ def jit(restype=void, argtypes=None, backend='bytecode'):
                               module=_lc.Module.new("ptx_%s" % str(func)))
             t.translate()
 
-            cnf = CudaNumbaFunction(func, lfunc=t.lfunc)
-
+            cnf = CudaNumbaFunction(func, lfunc=t.lfunc, extra=t)
             cached[key] = cnf
 
         return cnf
@@ -163,11 +171,12 @@ class CudaBaseFunction(numba.decorators.NumbaFunction):
 class CudaNumbaFunction(CudaBaseFunction):
 
     def __init__(self, py_func, wrapper=None, ctypes_func=None,
-                 signature=None, lfunc=None):
+                 signature=None, lfunc=None, extra=None):
         super(CudaNumbaFunction, self).__init__(py_func, wrapper, ctypes_func,
                                                 signature, lfunc)
-
+        # print 'translating...'
         self.module = lfunc.module
+        self.extra = extra
 
         def apply_typemap(ty):
             if isinstance(ty, _lc.IntegerType):
@@ -251,7 +260,6 @@ class CudaNumbaFunction(CudaBaseFunction):
                 return val
 
         args = [convert(ty, val) for ty, val in zip(self.typemap, args)]
-
         self.dispatcher(args, self._griddim, self._blockdim)
 
     @property
@@ -274,9 +282,8 @@ class CudaNumbaFunction(CudaBaseFunction):
 
 class CudaAutoJitNumbaFunction(CudaBaseFunction):
 
-    def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
-        return compiled_numba_func[self._griddim, self._blockdim](*args, **kwargs)
-
+    def invoke_compiled(self, compiled_cuda_func, *args, **kwargs):
+        return compiled_cuda_func[self._griddim, self._blockdim](*args, **kwargs)
 
 class CudaTranslate(_Translate):
      def op_LOAD_ATTR(self, i, op, arg):

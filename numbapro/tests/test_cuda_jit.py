@@ -64,10 +64,12 @@ def test_array_scale():
 
 
 def main():
-#    test_array_copy()
+    test_array_copy()
     test_array_copy_autojit()
     test_array_scale()
 
 if __name__ == '__main__':
+#    main()
     for i in range(100):
+        #print cuda.cached
         main()
