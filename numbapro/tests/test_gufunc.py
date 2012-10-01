@@ -60,8 +60,8 @@ def _test_gufunc(backend, target):
 
 
 def test_gufunc():
-    _test_gufunc('bytecode', 'basic')
-    _test_gufunc('ast', 'basic')
+    _test_gufunc('bytecode', 'cpu')
+    _test_gufunc('ast', 'cpu')
 
 def test_cuda_gufunc():
     _test_gufunc('bytecode', 'gpu')
