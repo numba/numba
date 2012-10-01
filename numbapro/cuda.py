@@ -127,7 +127,7 @@ def jit(restype=void, argtypes=None, backend='bytecode'):
     return _jit
 
 
-class CudaBaseFunction(object):
+class CudaBaseFunction(numba.decorators.NumbaFunction):
 
     _griddim = 1, 1, 1      # default grid dimension
     _blockdim = 1, 1, 1     # default block dimension
@@ -163,7 +163,11 @@ class CudaBaseFunction(object):
 
 class CudaNumbaFunction(CudaBaseFunction):
 
-    def __init__(self, lfunc):
+    def __init__(self, py_func, wrapper=None, ctypes_func=None,
+                 signature=None, lfunc=None):
+        super(CudaNumbaFunction, self).__init__(py_func, wrapper, ctypes_func,
+                                                signature, lfunc)
+
         self.module = lfunc.module
 
         def apply_typemap(ty):
@@ -269,11 +273,12 @@ class CudaNumbaFunction(CudaBaseFunction):
         '''
         return self._ptxasm
 
-class CudaAutoJitNumbaFunction(numba.decorators.NumbaFunction,
-                               CudaBaseFunction):
+class CudaAutoJitNumbaFunction(CudaBaseFunction):
+
     def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
         compiled_func = CudaNumbaFunction(compiled_numba_func.lfunc)
         return compiled_func[self._griddim, self._blockdim](*args, **kwargs)
+
 
 class CudaTranslate(_Translate):
      def op_LOAD_ATTR(self, i, op, arg):
