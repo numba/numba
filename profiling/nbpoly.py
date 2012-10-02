@@ -2,7 +2,7 @@ from numba.decorators import jit
 from numba import *
 from math import sqrt
 
-@jit(argtypes=[d[:], d[:], d[:], d[:]])
+@jit(argtypes=[double[:], double[:], double[:], double[:]])
 def poly_d(A, B, C, D):
     N = A.shape[0]
     for i in range(N):

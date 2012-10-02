@@ -1,6 +1,7 @@
 from numbapro.vectorize import basic, parallel, stream
 from numba import *
 from math import sqrt
+f, d = f4, f8
 
 def poly(a, b, c):
     return sqrt(b**2 + 4 * a * c)
