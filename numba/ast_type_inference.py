@@ -8,7 +8,7 @@ import numba
 from numba import *
 from numba import error, transforms
 from .minivect import minierror, minitypes
-from . import translate, utils, _numba_types as _types
+from . import translate, utils, _numba_types as numba_types
 from .symtab import Variable
 from . import visitors, nodes, error
 from numba import stdio_util
@@ -90,7 +90,7 @@ class ASTBuilder(object):
         else:
             ctx = ast.Store()
 
-        index = ast.Index(nodes.ConstNode(constant_index, _types.int_))
+        index = ast.Index(nodes.ConstNode(constant_index, numba_types.int_))
         return ast.Subscript(value=node, slice=index, ctx=ctx)
 
 class BuiltinResolverMixin(object):
@@ -99,7 +99,7 @@ class BuiltinResolverMixin(object):
     """
 
     def _resolve_range(self, node, arg_type):
-        result = Variable(_types.RangeType())
+        result = Variable(numba_types.RangeType())
         args = self.visitlist(node.args)
 
         if not args:
@@ -129,7 +129,7 @@ class BuiltinResolverMixin(object):
             # Simplify to ndarray.shape[0]
             assert len(node.args) == 1
             shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
-            index = ast.Index(nodes.ConstNode(0, _types.int_))
+            index = ast.Index(nodes.ConstNode(0, numba_types.int_))
             new_node = ast.Subscript(value=shape_attr, slice=index,
                                      ctx=ast.Load())
             new_node.variable = Variable(shape_attr.type.base_type)
@@ -156,7 +156,7 @@ class NumpyMixin(object):
     def _is_newaxis(self, node):
         v = node.variable
         return (self._is_constant_index(node) and
-                node.value.pyval is None) or v.type.is_newaxis
+                node.value.pyval is None) or v.type.is_newaxis or v.type.is_none
 
     def _is_ellipsis(self, node):
         return (self._is_constant_index(node) and
@@ -242,9 +242,9 @@ class NumpyMixin(object):
         if dtype.is_numpy_attribute:
             numpy_attr = getattr(dtype.module, dtype.attr, None)
             if isinstance(numpy_attr, numpy.dtype):
-                return _types.NumpyDtypeType(dtype=numpy_attr)
+                return numba_types.NumpyDtypeType(dtype=numpy_attr)
             elif issubclass(numpy_attr, numpy.generic):
-                return _types.NumpyDtypeType(dtype=numpy.dtype(numpy_attr))
+                return numba_types.NumpyDtypeType(dtype=numpy.dtype(numpy_attr))
 
     def _get_dtype(self, node, args, dtype=None):
         "Get the dtype keyword argument from a call to a numpy attribute."
@@ -287,7 +287,7 @@ class NumpyMixin(object):
 
     def _resolve_arange(self, node):
         "Resolve a call to np.arange()"
-        dtype = self._get_dtype(node, node.args, _types.NumpyDtypeType(
+        dtype = self._get_dtype(node, node.args, numba_types.NumpyDtypeType(
             dtype=numpy.dtype(numpy.int64)))
         if dtype is not None:
             # return a 1D array type of the given dtype
@@ -353,17 +353,17 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
         # or (numpy) module
         if (global_name not in globals and
                 getattr(builtins, global_name, None)):
-            type = _types.BuiltinType(name=global_name)
+            type = numba_types.BuiltinType(name=global_name)
         else:
             # FIXME: analyse the bytecode of the entire module, to determine
             # overriding of builtins
             if isinstance(globals.get(global_name), types.ModuleType):
-                type = _types.ModuleType()
+                type = numba_types.ModuleType()
                 type.is_numpy_module = globals[global_name] is numpy
                 if type.is_numpy_module:
                     type.module = numpy
             else:
-                type = _types.GlobalType(name=global_name)
+                type = numba_types.GlobalType(name=global_name)
 
         variable = Variable(type, name=global_name)
         self.symtab[global_name] = variable
@@ -378,7 +378,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
         for varname in self.varnames[len(arg_types):]:
             self.symtab[varname] = Variable(None, is_local=True, name=varname)
 
-        self.symtab['None'] = Variable(minitypes.object_, is_constant=True,
+        self.symtab['None'] = Variable(numba_types.none, is_constant=True,
                                        constant_value=None)
 
     def promote_types(self, t1, t2):
@@ -481,7 +481,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
             else:
                 base_type = iterator_type.dtype
         elif iterator_type.is_range:
-            base_type = _types.Py_ssize_t
+            base_type = numba_types.Py_ssize_t
         else:
             raise NotImplementedError("Unknown type: %s" % (iterator_type,))
 
@@ -644,17 +644,17 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
         type = variable.type
         if (type.is_object and variable.is_constant and
                 variable.constant_value is None):
-            type = _types.NewAxisType()
+            type = numba_types.NewAxisType()
 
         node.variable = Variable(type)
         return node
 
     def visit_Ellipsis(self, node):
-        return nodes.ConstNode(Ellipsis, _types.EllipsisType())
+        return nodes.ConstNode(Ellipsis, numba_types.EllipsisType())
 
     def visit_Slice(self, node):
         self.generic_visit(node)
-        type = _types.SliceType()
+        type = numba_types.SliceType()
 
         values = [node.lower, node.upper, node.step]
         constants = []
@@ -701,7 +701,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
         constant_value = self._get_constant_list(node)
         if constant_value is not None:
             constant_value = tuple(constant_value)
-        type = _types.TupleType(size=len(node.elts),
+        type = numba_types.TupleType(size=len(node.elts),
                                 is_constant=constant_value is not None,
                                 constant_value=constant_value)
         node.variable = Variable(type)
@@ -710,7 +710,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
     def visit_List(self, node):
         self.visitlist(node.elts)
         constant_value = self._get_constant_list(node)
-        type = _types.ListType(size=len(node.elts),
+        type = numba_types.ListType(size=len(node.elts),
                                is_constant=constant_result is not None,
                                constant_value=constant_value)
         node.variable = Variable(type)
@@ -777,9 +777,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
         "Resolve attributes of the numpy module or a submodule"
         attribute = getattr(type.module, node.attr)
         if attribute is numpy.newaxis:
-            result_type = _types.NewAxisType()
+            result_type = numba_types.NewAxisType()
         else:
-            result_type = _types.NumpyAttributeType(module=type.module,
+            result_type = numba_types.NumpyAttributeType(module=type.module,
                                                     attr=node.attr)
         return result_type
 
@@ -962,15 +962,15 @@ class TransformForIterable(visitors.NumbaTransformer):
 
             # replace node.iter
             call_func = ast.Name(id='range', ctx=ast.Load())
-            call_func.variable = Variable(_types.RangeType())
-            shape_index = ast.Index(nodes.ConstNode(0, _types.Py_ssize_t))
+            call_func.variable = Variable(numba_types.RangeType())
+            shape_index = ast.Index(nodes.ConstNode(0, numba_types.Py_ssize_t))
             stop = ast.Subscript(value=nodes.ShapeAttributeNode(orig_iter),
                                  slice=shape_index,
                                  ctx=ast.Load())
-            stop.type = _types.intp
-            call_args = [nodes.ConstNode(0, _types.Py_ssize_t),
-                         nodes.CoercionNode(stop, _types.Py_ssize_t),
-                         nodes.ConstNode(1, _types.Py_ssize_t),]
+            stop.type = numba_types.intp
+            call_args = [nodes.ConstNode(0, numba_types.Py_ssize_t),
+                         nodes.CoercionNode(stop, numba_types.Py_ssize_t),
+                         nodes.ConstNode(1, numba_types.Py_ssize_t),]
 
             node.iter = ast.Call(func=call_func, args=call_args)
             node.iter.type = call_func.variable.type
@@ -998,7 +998,7 @@ class LateSpecializer(visitors.NumbaTransformer):
         n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
         args = [n] + objs
         new_node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
-        new_node.type = _types.TupleType(size=len(node.elts))
+        new_node.type = numba_types.TupleType(size=len(node.elts))
         return nodes.ObjectTempNode(new_node)
 
     def visit_Dict(self, node):

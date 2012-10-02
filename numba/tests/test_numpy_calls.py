@@ -17,7 +17,7 @@ def np_copy(a):
     return a.copy(order='F')
 
 @autojit(backend='ast')
-def test_attributes(a):
+def attributes(a):
     return (a.T,
             a.T.T,
             a.copy(),
@@ -29,8 +29,8 @@ def test_numpy_attrs():
     assert np.all(result == np_result)
     assert np_copy(a).strides == a.copy(order='F').strides
     assert all(np.all(result1 == result2)
-                   for result1, result2 in zip(test_attributes(a),
-                                               test_attributes.py_func(a)))
+                   for result1, result2 in zip(attributes(a),
+                                               attributes.py_func(a)))
 
 if __name__ == "__main__":
     test_numpy_attrs()

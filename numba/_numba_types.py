@@ -130,9 +130,16 @@ class ModuleAttributeType(NumbaType, minitypes.ObjectType):
 class RangeType(NumbaType):
     is_range = True
 
+class NoneType(NumbaType, minitypes.ObjectType):
+    is_none = True
+
+    def __str__(self):
+        return "None Type"
+
 tuple_ = TupleType()
 phi = PHIType()
 module_type = ModuleType()
+none = NoneType()
 
 intp = minitypes.npy_intp
 

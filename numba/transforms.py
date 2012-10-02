@@ -182,7 +182,8 @@ class LateSpecializer(visitors.NumbaTransformer):
         if ((node.type.is_object or node.type.is_array) and
                 isinstance(node.slice, ast.ExtSlice)):
             node.value = self.visit(node.value)
-            node.slice = self.visit_ExtSlice(node.slice, object_slice=True)
+            slice = self.visit(node.slice)
+            node.slice = self.visit_ExtSlice(slice, object_slice=True)
         else:
             self.generic_visit(node)
 

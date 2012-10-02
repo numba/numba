@@ -35,7 +35,8 @@ class CoercionNode(Node):
     _fields = ['node']
 
     def __new__(cls, node, dst_type, name=''):
-        if node.variable.type == dst_type:
+        type = getattr(node, 'type', None) or node.variable.type
+        if type == dst_type:
             return node
         return super(CoercionNode, cls).__new__(cls, node, dst_type, name=name)
 
