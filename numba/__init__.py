@@ -5,8 +5,8 @@ import logging
 #   https://github.com/numba/numba/issues/31
 # A good work around is to make your tests handle a debug flag, per
 # numba.tests.test_support.main().
-logging.basicConfig(level=logging.DEBUG,
-                    format="\n\033[1m%(levelname)s -- %(module)s:%(lineno)d:%(funcName)s\033[0m\n%(message)s")
+#logging.basicConfig(level=logging.DEBUG,
+#                    format="\n\033[1m%(levelname)s -- %(module)s:%(lineno)d:%(funcName)s\033[0m\n%(message)s")
 
 try:
     from . import minivect
