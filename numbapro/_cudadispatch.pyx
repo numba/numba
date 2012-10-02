@@ -107,7 +107,9 @@ cdef class CudaUFuncDispatcher(object): #cutils.UFuncDispatcher):
         return broadcast_arrays
 
     def allocate_output(self, broadcast_arrays, result_dtype):
-        return np.empty_like(broadcast_arrays[0], dtype=result_dtype)
+        # return np.empty_like(broadcast_arrays[0], dtype=result_dtype)
+        # for numpy1.5
+        return np.empty(broadcast_arrays[0].shape, dtype=result_dtype)
 
     def __call__(self, cnp.ufunc ufunc, *args):
         cdef CudaFunction cuda_func

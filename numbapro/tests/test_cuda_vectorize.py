@@ -61,7 +61,7 @@ def test_nd():
         data[data != data] = 2.4
         data[data == float('inf')] = 3.8
         data[data == float('-inf')] = -3.8
-        data2 = data.T.copy(order=order)
+        data2 = np.array(data.T, order=order) #.copy(order=order)
 
         result = data + data2
         our_result = cuda_ufunc(data, data2)
