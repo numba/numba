@@ -152,5 +152,5 @@ class TestTypeInference(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    TestTypeInference('test_none_newaxis').debug()
-#    unittest.main()
+#    TestTypeInference('test_slicing').debug()
+    unittest.main()

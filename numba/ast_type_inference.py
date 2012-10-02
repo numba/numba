@@ -193,6 +193,7 @@ class NumpyMixin(object):
         n_indices = len(slices) - len(newaxes)
 
         full_slice = ast.Slice(lower=None, upper=None, step=None)
+        full_slice.variable = Variable(numba_types.SliceType())
         ast.copy_location(full_slice, slices[0])
 
         # process ellipses and count integer indices

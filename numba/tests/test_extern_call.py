@@ -56,7 +56,8 @@ class TestASTExternCall(test_support.ASTTestCase, TestExternCall):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    unittest.main()
+    TestASTExternCall('test_call_zeros_like').debug()
+#    unittest.main()
 
 # ______________________________________________________________________
 # End of test_extern_call.py

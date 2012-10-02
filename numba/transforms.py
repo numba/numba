@@ -273,5 +273,6 @@ class LateSpecializer(visitors.NumbaTransformer):
 
     def visit_Return(self, node):
         return_type = self.func_signature.return_type
-        node.value = self.visit(nodes.CoercionNode(node.value, return_type))
+        if node.value is not None:
+            node.value = self.visit(nodes.CoercionNode(node.value, return_type))
         return node
