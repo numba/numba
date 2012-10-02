@@ -826,9 +826,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         largs = self.visitlist(node.args)
         return self.builder.call(node.llvm_func, largs, name=node.name)
 
+    def alloca(self, type, name='', change_bb=True):
+        return self.llvm_alloca(self.to_llvm(node.type), name, change_bb)
+
+    def llvm_alloca(self, ltype, name='', change_bb=True):
+        return llvm_alloca(self.lfunc, self.builder, ltype, name, change_bb)
+
     def visit_TempNode(self, node):
         if node.llvm_temp is None:
-            value = self.builder.alloca(self.to_llvm(node.type))
+            value = self.alloca(node.type)
             node.llvm_temp = value
 
         return node.llvm_temp
@@ -847,8 +853,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         # Initialize temp to NULL at beginning of function
         self.builder.position_at_beginning(self.lfunc.get_entry_basic_block())
         name = getattr(node.node, 'name', 'object') + '_temp'
-        lhs = self.builder.alloca(llvm_types._pyobject_head_struct_p,
-                                  name=name)
+        lhs = self.llvm_alloca(llvm_types._pyobject_head_struct_p,
+                               name=name, change_bb=False)
         self.generate_assign(self.visit(nodes.NULL_obj), lhs)
         node.llvm_temp = lhs
 
@@ -909,6 +915,15 @@ class DisposalVisitor(visitors.NumbaVisitor):
         self.visit(node.node)
         lfunc = self.function_cache.function_by_name('Py_DecRef')
         self.builder.call(lfunc, node.llvm_temp)
+
+def llvm_alloca(lfunc, builder, ltype, name='', change_bb=True):
+    if change_bb:
+        bb = builder.basic_block
+    builder.position_at_beginning(lfunc.get_entry_basic_block())
+    lstackvar = builder.alloca(ltype, name)
+    if change_bb:
+        builder.position_at_end(bb)
+    return lstackvar
 
 def if_badval(translator, llvm_result, badval, callback, cmp=llvm.core.ICMP_EQ):
     # Use llvm_cbuilder :(
@@ -1050,8 +1065,9 @@ class ObjectCoercer(object):
     def parse_tuple(self, lstr, llvm_tuple, types, name=''):
         lresults = []
         for i, type in enumerate(types):
-            var = self.builder.alloca(type.to_llvm(self.context),
-                                       name=name and "%s%d" % (name, i))
+            var = llvm_alloca(self.translator.lfunc, self.builder,
+                              type.to_llvm(self.context),
+                              name=name and "%s%d" % (name, i))
             lresults.append(var)
 
         largs = [llvm_tuple, lstr] + lresults
