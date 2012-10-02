@@ -717,6 +717,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         elif valid_type and op == ast.Pow:
             return self._handle_pow(node, lhs, rhs)
         else:
+            logging.debug(ast.dump(node))
             raise Exception(op, node.type, lhs, rhs)
 
         return result

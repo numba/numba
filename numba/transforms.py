@@ -171,6 +171,10 @@ class LateSpecializer(visitors.NumbaTransformer):
     def visit_CoercionNode(self, node, visitchildren=True):
         if visitchildren:
             self.generic_visit(node)
+        elif not isinstance(node, nodes.CoercionNode):
+            # CoercionNode.__new__ returns the node to be coerced if it doesn't
+            # need coercion
+            return node
 
         node_type = node.node.type
         if node.dst_type.is_object and not node_type.is_object:
