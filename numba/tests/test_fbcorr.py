@@ -37,11 +37,11 @@ class TestFbcorr(unittest.TestCase):
     def test_vectorized_fbcorr(self):
         ufbcorr = jit(argtypes=(nd4type, nd4type, nd4type))(fbcorr)
 
-        imgs = np.random.randn(10, 64, 64, 3)
+        imgs = np.random.randn(10, 16, 16, 3)
         filt = np.random.randn(6, 5, 5, 3)
-        old_output = np.zeros((10, 6, 60, 60))
+        old_output = np.zeros((10, 6, 15, 15))
         fbcorr(imgs, filt, old_output)
-        new_output = np.zeros((10, 6, 60, 60))
+        new_output = np.zeros((10, 6, 15, 15))
         ufbcorr(imgs, filt, new_output)
 
         self.assertTrue((abs(old_output - new_output) < 1e-9).all())
