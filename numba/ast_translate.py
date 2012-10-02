@@ -31,7 +31,7 @@ from numba import *
 from . import visitors, nodes, llvm_types
 from .minivect import minitypes
 from numba.pymothoa import compiler_errors
-from numba import ndarray_helpers, translate
+from numba import ndarray_helpers, translate, error
 
 import logging
 logger = logging.getLogger(__name__)
@@ -274,8 +274,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
                 var.lvalue = stackspace
 
         # TODO: Put current function into symbol table for recursive call
-
         self.setup_return()
+
+        self.loop_beginnings = []
+        self.loop_exits = []
 
         # Control FLow
         # Not needed for now.
@@ -316,7 +318,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         # Done code generation
         del self.builder  # release the builder to make GC happy
 
-        logger.debug(self.lfunc)
+        logger.debug("ast translated function: %s", self.lfunc)
         # Verify code generation
         self.lfunc.verify()
         if self.optimize:
@@ -592,19 +594,27 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         instructions = self.builder.basic_block.instructions
         return instructions and instructions[-1].is_terminator
 
+    def setup_loop(self, bb_cond, bb_exit):
+        self.loop_beginnings.append(bb_cond)
+        self.loop_exits.append(bb_exit)
+
+    def teardown_loop(self):
+        self.loop_beginnings.pop()
+        self.loop_exits.pop()
+
     def generate_for_range(self, for_node, target, iternode, body):
         '''
         Implements simple for loops with iternode as range, xrange
         '''
         # assert isinstance(target.ctx, ast.Store)
-        target = self.visit(target)
-
-        start, stop, step = self.visitlist(iternode.args)
-
         bb_cond = self.append_basic_block('for.cond')
         bb_incr = self.append_basic_block('for.incr')
         bb_body = self.append_basic_block('for.body')
         bb_exit = self.append_basic_block('for.exit')
+        self.setup_loop(bb_cond, bb_exit)
+
+        target = self.visit(target)
+        start, stop, step = self.visitlist(iternode.args)
 
         # generate initializer
         self.generate_assign(start, target)
@@ -634,11 +644,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
         # move to exit block
         self.builder.position_at_end(bb_exit)
+        self.teardown_loop()
 
     def visit_While(self, node):
         bb_cond = self.append_basic_block('while.cond')
         bb_body = self.append_basic_block('while.body')
         bb_exit = self.append_basic_block('while.exit')
+        self.setup_loop(bb_cond, bb_exit)
 
         self.builder.branch(bb_cond)
 
@@ -654,6 +666,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         # loop or exit
         self.builder.branch(bb_cond)
         self.builder.position_at_end(bb_exit)
+        self.teardown_loop()
+
+    def visit_Continue(self, node):
+        assert self.loop_beginnings # Python syntax should ensure this
+        self.builder.branch(self.loop_beginnings[-1])
+
+    def visit_Break(self, node):
+        assert self.loop_exits # Python syntax should ensure this
+        self.builder.branch(self.loop_exits[-1])
 
     def visit_Suite(self, node):
         self.visitlist(node.body)

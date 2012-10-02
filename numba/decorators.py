@@ -180,7 +180,6 @@ def _jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None):
                                                  llvm_module=_llvm_module,
                                                  llvm_ee=_llvm_ee)
         signature, lfunc, ctypes_func = result
-        logging.debug("Jitted function:\n%s", lfunc)
         return NumbaFunction(func, ctypes_func=ctypes_func,
                              signature=signature, lfunc=lfunc)
 

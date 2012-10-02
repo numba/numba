@@ -23,6 +23,9 @@ from .minivect import minitypes
 
 import logging
 logger = logging.getLogger()
+# Uncomment the line below to get logging messages from this module
+logger.setLevel(logging.WARNING)
+
 
 if __debug__:
     import pprint
