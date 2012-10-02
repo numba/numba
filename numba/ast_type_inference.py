@@ -45,7 +45,8 @@ class Pipeline(object):
                                    func_signature=self.func_signature)
         type_inferer.infer_types()
         self.func_signature = type_inferer.func_signature
-        logger.debug("signature: %s" % self.func_signature)
+        logger.debug("signature for %s: %s" % (self.func.func_name,
+                                               self.func_signature))
         self.symtab = type_inferer.symtab
         return ast
 
@@ -618,7 +619,12 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
                 slices = list(node.slice.elts)
 
             if slices is None:
-                result_type = minitypes.object_
+                if slice_type.is_tuple:
+                    # Array tuple index. Get the result type by slicing the
+                    # ArrayType
+                    result_type = value_type[slice_type.size:]
+                else:
+                    result_type = minitypes.object_
             else:
                 result_type, node.value = self._unellipsify(
                                     node.value, slices, node)
@@ -869,6 +875,16 @@ class TypeSettingVisitor(visitors.NumbaVisitor):
             node.type = node.variable.type
         super(TypeSettingVisitor, self).visit(node)
 
+    def visit_ExtSlice(self, node):
+        self.generic_visit(node)
+        types = [n.type for n in node.dims]
+        if all(type.is_int for type in types):
+            node.type = reduce(self.context.promote_types, types)
+        else:
+            node.type = object_
+
+        return node
+
 class ASTSpecializer(visitors.NumbaTransformer):
 
     def __init__(self, context, func, ast, func_signature):
@@ -919,8 +935,8 @@ class ASTSpecializer(visitors.NumbaTransformer):
         if isinstance(node.value, nodes.ArrayAttributeNode):
             if node.value.is_read_only and isinstance(node.ctx, ast.Store):
                 raise error.NumbaError("Attempt to load read-only attribute")
-        elif node.value.type.is_array and not node.type.is_array:
-            node.value = nodes.DataPointerNode(node.value)
+        #elif node.value.type.is_array and not node.type.is_array:
+        #    node = nodes.DataPointerNode(node.value, node.slice)
         return node
 
     def visit_DeferredCoercionNode(self, node):

@@ -557,8 +557,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         if node.value is not None:
             assert not self.is_void_return
             retval = self.visit(node.value)
-            retval = self.builder.bitcast(retval,
-                                          self.return_value.type.pointee)
+            #retval = self.builder.bitcast(retval,
+            #                              self.return_value.type.pointee)
+            print retval.type, self.return_value.type
             self.builder.store(retval, self.return_value)
 
             ret_type = self.func_signature.return_type
@@ -720,25 +721,26 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
                                              name=node.name)
 
     def visit_Subscript(self, node):
-        if (node.value.type.is_array and
-                isinstance(node.value, nodes.DataPointerNode)):
-            # Indexing
-            assert not node.type.is_array
-            value = self.visit(node.value.node)
-            lptr = node.value.subscript(self, value, self.visit(node.slice))
-        elif node.type.is_array or node.type.is_object:
+        if node.type.is_array or node.type.is_object:
             raise NotImplementedError("This node should have been replaced")
-        elif node.value.type.is_carray:
-            value = self.visit(node.value)
-            lptr = self.builder.gep(value, [self.visit(node.slice)])
 
-        if isinstance(node.ctx, ast.Load): # load the value
+        assert node.value.type.is_carray
+        value = self.visit(node.value)
+        lptr = self.builder.gep(value, [self.visit(node.slice)])
+        return self._handle_ctx(node, lptr)
+
+    def _handle_ctx(self, node, lptr):
+        if isinstance(node.ctx, ast.Load):
             return self.builder.load(lptr)
-        elif isinstance(node.ctx, ast.Store): # return a pointer for storing
-            return lptr
         else:
-            # unreachable
-            raise AssertionError("Unknown subscript context: %s" % node.ctx)
+            return lptr
+
+    def visit_DataPointerNode(self, node):
+        assert node.type.is_array
+        lvalue = self.visit(node.node)
+        lindices = self.visit(node.slice)
+        lptr = node.subscript(self, lvalue, lindices)
+        return self._handle_ctx(node, lptr)
 
     def visit_Index(self, node):
         return self.visit(node.value)

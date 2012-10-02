@@ -63,8 +63,9 @@ class ASTSpecializer(visitors.NumbaTransformer):
         if isinstance(node.value, nodes.ArrayAttributeNode):
             if node.value.is_read_only and isinstance(node.ctx, ast.Store):
                 raise error.NumbaError("Attempt to load read-only attribute")
-        elif node.value.type.is_array and not node.type.is_array:
-            node.value = nodes.DataPointerNode(node.value)
+        elif (node.value.type.is_array and not node.type.is_array and not
+                  node.slice.type.is_object):
+            node = nodes.DataPointerNode(node.value, node.slice, node.ctx)
         return node
 
     def visit_DeferredCoercionNode(self, node):
@@ -163,8 +164,10 @@ class LateSpecializer(visitors.NumbaTransformer):
         node.kwargs_dict = self.visit(node.kwargs_dict)
         return nodes.ObjectTempNode(node)
 
-    def visit_CoercionNode(self, node):
-        self.generic_visit(node)
+    def visit_CoercionNode(self, node, visitchildren=True):
+        if visitchildren:
+            self.generic_visit(node)
+
         node_type = node.node.type
         if node.dst_type.is_object and not node_type.is_object:
             return nodes.ObjectTempNode(nodes.CoerceToObject(
@@ -179,29 +182,26 @@ class LateSpecializer(visitors.NumbaTransformer):
 
     def visit_Subscript(self, node):
         logging.debug(ast.dump(node))
-        if ((node.type.is_object or node.type.is_array) and
-                isinstance(node.slice, ast.ExtSlice)):
-            node.value = self.visit(node.value)
-            slice = self.visit(node.slice)
-            node.slice = self.visit_ExtSlice(slice, object_slice=True)
-        else:
-            self.generic_visit(node)
+        self.generic_visit(node)
 
-        if node.type.is_array or node.type.is_object:
+        node_type = node.value.type
+        if node_type.is_object or (node_type.is_array and
+                                   node.slice.type.is_object):
             # Array or object slicing
             if isinstance(node.ctx, ast.Load):
                 result = self.function_cache.call('PyObject_GetItem',
                                                   node.value, node.slice)
                 # print ast.dump(result)
-                return result
+                node = nodes.CoercionNode(result, dst_type=node.type)
+                node = self.visit_CoercionNode(node, visitchildren=False)
             else:
                 # This is handled in visit_Assign
                 pass
 
         return node
 
-    def visit_ExtSlice(self, node, object_slice=False):
-        if object_slice:
+    def visit_ExtSlice(self, node):
+        if node.type.is_object:
             return self.visit(ast.Tuple(elts=node.dims, ctx=ast.Load()))
         else:
             self.generic_visit(node)

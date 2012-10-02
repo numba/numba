@@ -274,12 +274,14 @@ class TempStoreNode(Node):
 
 class DataPointerNode(Node):
 
-    _fields = ['node']
+    _fields = ['node', 'index']
 
-    def __init__(self, node):
+    def __init__(self, node, slice, ctx):
         self.node = node
+        self.slice = slice
         self.variable = Variable(node.type)
         self.type = node.type
+        self.ctx = ctx
 
     @property
     def ndim(self):

@@ -22,13 +22,14 @@ def tuple_fn_0 (inarr):
     k = 3
     internal_tuple = (i, j, k)
     return inarr[internal_tuple]
+#    return inarr[1,2,3]
 
 # ______________________________________________________________________
 
 class TestTuple (test_support.ByteCodeTestCase):
     def test_tuple_fn_0 (self):
         test_arr = numpy.zeros((4,4,4))
-        compiled_fn = self.jit(argtypes = [double[:]])(tuple_fn_0)
+        compiled_fn = self.jit(argtypes = [double[:,:,:]])(tuple_fn_0)
         self.assertEqual(compiled_fn(test_arr), 0.)
 
 class TestASTTuple(test_support.ASTTestCase, TestTuple):
