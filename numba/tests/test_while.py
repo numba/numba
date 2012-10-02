@@ -4,7 +4,7 @@
 from numba import double, long_
 
 import numpy
-import py.test
+from nose.tools import nottest
 
 from numba.tests import test_support
 from numba.utils import debugout
@@ -177,8 +177,8 @@ class TestWhile(test_support.ByteCodeTestCase):
 # ______________________________________________________________________
 
 class TestASTWhile(test_support.ASTTestCase, TestWhile):
-    #@test_support.checkSkipFlag("Test fails due to problem in Meta.")
-    @py.test.skip("Test fails due to problem in Meta.")
+    @test_support.checkSkipFlag("Test fails due to problem in Meta.")
+    @nottest
     def test_while_loop_fn_7(self, *args, **kws):
         return super(TestASTWhile, self).test_while_loop_fn_7(*args, **kws)
 

@@ -1,7 +1,7 @@
 import numpy as np
 
-import py.test
-docutils = py.test.importorskip("theano")
+#docutils = py.test.importorskip("theano")
+import theano
 from numba.ad import Watcher
 
 

@@ -6,7 +6,8 @@ Test the sum2d() example.
 '''
 # ______________________________________________________________________
 
-import py.test
+#import py.test
+from nose.tools import nottest
 import numpy
 
 from numba import *
@@ -57,7 +58,7 @@ class TestSum2d(test_support.ByteCodeTestCase):
 
 class TestASTSum2d(test_support.ASTTestCase, TestSum2d):
 
-    @py.test.skip("Meta problem")
+    @nottest
     def test_bad_sum2d(self):
         super(TestASTSum2d, self).test_bad_sum2d()
 

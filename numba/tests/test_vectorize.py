@@ -6,7 +6,7 @@ from math import sin, pi
 from numba.decorators import vectorize
 from numba.translate import Translate
 
-import py.test
+from nose.tools import nottest
 from numpy import array, linspace
 
 import sys
@@ -36,7 +36,7 @@ class TestVectorize(unittest.TestCase):
         super(TestVectorize, self).__init__(*args, **kws)
 
     #@unittest.skipUnless(__debug__, 'Requires implementation of make_ufunc().')
-    @py.test.skip('Requires implementation of make_ufunc().')
+    @nottest
     def test_manual_vectorization(self):
         x = linspace(-5,5,1001)
         t = Translate(sinc)
