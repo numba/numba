@@ -137,6 +137,10 @@ class TransformForIterable(visitors.NumbaTransformer):
 
 class LateSpecializer(visitors.NumbaTransformer):
 
+    def __init__(self, context, func, ast, func_signature):
+        super(LateSpecializer, self).__init__(context, func, ast)
+        self.func_signature = func_signature
+
     def visit_Tuple(self, node):
         sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
         objs = self.visitlist(nodes.CoercionNode.coerce(node.elts, object_))
@@ -265,4 +269,9 @@ class LateSpecializer(visitors.NumbaTransformer):
             obj = getattr(builtins, node.name)
             return nodes.ObjectInjectNode(obj, node.type)
 
+        return node
+
+    def visit_Return(self, node):
+        return_type = self.func_signature.return_type
+        node.value = self.visit(nodes.CoercionNode(node.value, return_type))
         return node

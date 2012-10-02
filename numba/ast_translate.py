@@ -557,9 +557,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         if node.value is not None:
             assert not self.is_void_return
             retval = self.visit(node.value)
-            #retval = self.builder.bitcast(retval,
-            #                              self.return_value.type.pointee)
-            print retval.type, self.return_value.type
+            rettype = self.func_signature.return_type
+            if rettype.is_object or rettype.is_pointer:
+                retval = self.builder.bitcast(retval,
+                                              self.return_value.type.pointee)
+
+            if not retval.type == self.return_value.type.pointee:
+                print retval.type
+                print self.return_value.type
+                print ast.dump(node)
+                assert False
+
             self.builder.store(retval, self.return_value)
 
             ret_type = self.func_signature.return_type

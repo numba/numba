@@ -65,7 +65,8 @@ class Pipeline(object):
         return specializer.visit(ast)
 
     def late_specializer(self, ast):
-        return transforms.LateSpecializer(self.context, self.func, ast).visit(ast)
+        return transforms.LateSpecializer(self.context, self.func, ast,
+                                          self.func_signature).visit(ast)
 
     def insert_specializer(self, name, after):
         self.order.insert(self.order.index(after), name)
@@ -828,7 +829,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
 
         assert type is not None
 
-        if value.variable.is_constant and value.variable.constant_value is None:
+        if type.is_none:
             # When returning None, set the return type to void.
             # That way, we don't have to due with the PyObject reference.
             self.return_variable.type = minitypes.VoidType()
