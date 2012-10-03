@@ -182,7 +182,7 @@ class LateSpecializer(visitors.NumbaTransformer):
             if node.value.is_read_only and isinstance(node.ctx, ast.Store):
                 raise error.NumbaError("Attempt to load read-only attribute")
 
-        logging.debug(ast.dump(node))
+        # logging.debug(ast.dump(node))
         self.generic_visit(node)
 
         node_type = node.value.type
@@ -266,7 +266,6 @@ class LateSpecializer(visitors.NumbaTransformer):
         return new_node
 
     def visit_Name(self, node):
-        logger.debug(ast.dump(node))
         if node.type.is_builtin:
             obj = getattr(builtins, node.name)
             return nodes.ObjectInjectNode(obj, node.type)

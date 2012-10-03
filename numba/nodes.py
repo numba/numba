@@ -189,6 +189,9 @@ class NativeCallNode(FunctionCallNode):
 class LLVMIntrinsicNode(NativeCallNode):
     "Call an llvm intrinsic function"
 
+class MathCallNode(NativeCallNode):
+    "Call a math function"
+
 class ObjectCallNode(FunctionCallNode):
     _fields = ['function', 'args_tuple', 'kwargs_dict']
 

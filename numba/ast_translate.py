@@ -724,6 +724,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
     def visit_CoercionNode(self, node):
         val = self.visit(node.node)
+
+        if node.type == node.node.type:
+            return val
+
         # logger.debug('Coerce %s --> %s', node.node.type, node.dst_type)
         node_type = node.node.type
         dst_type = node.dst_type
@@ -837,6 +841,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         node.llvm_func = llvm.core.Function.intrinsic(
                 self.mod, intr, [larg.type for larg in largs])
         return self.visit_NativeCallNode(node, largs=largs)
+
+    def visit_MathCallNode(self, node):
+        try:
+            lfunc = self.mod.get_function_named(node.name)
+        except llvm.LLVMException:
+            lfunc_type = node.signature.to_llvm(self.context)
+            lfunc = self.mod.add_function(lfunc_type, node.name)
+
+        node.llvm_func = lfunc
+        return self.visit_NativeCallNode(node)
 
     def alloca(self, type, name='', change_bb=True):
         return self.llvm_alloca(self.to_llvm(type), name, change_bb)

@@ -151,6 +151,74 @@ class BuiltinResolverMixin(object):
             return nodes.ObjectCallNode(None, func, node.args)
 
 
+class MathMixin(object):
+    """
+    Resolve calls to math functions.
+    """
+
+    # sin(double), sinf(float), sinl(long double)
+    libc_math_funcs = [
+        'sin',
+        'cos',
+        'tan',
+        'acos',
+        'asin',
+        'atan',
+        'atan2',
+        'sinh',
+        'cosh',
+        'tanh',
+        'expm1',
+        'log2',
+        'fabs',
+        'pow',
+        'erfc',
+        'ceil',
+        'rint',
+        'round',
+    ]
+
+    def _is_intrinsic(self, py_func):
+        "Whether the math function is available as an llvm intrinsic"
+        intrinsic_name = 'INTR_' + py_func.__name__.upper()
+        is_intrinsic = hasattr(llvm.core, intrinsic_name)
+        return is_intrinsic
+
+    def _is_math_function(self, func_args, py_func):
+        if len(func_args) > 1 or py_func is None:
+            return False
+
+        numeric = func_args[0].variable.type.is_float
+        is_intrinsic = self._is_intrinsic(py_func)
+        is_math = py_func.__name__ in self.libc_math_funcs
+
+        return numeric and (is_intrinsic or is_math)
+
+    def _resolve_intrinsic(self, call_node, py_func, signature):
+        return nodes.LLVMIntrinsicNode(signature, call_node.args, None, py_func)
+
+    def _resolve_libc_math(self, call_node, py_func, signature, type):
+        name = py_func.__name__
+
+        if type.itemsize == 4:
+            name += 'f' # sinf(float)
+        elif type.itemsize == 16:
+            name += 'l' # sinl(long double)
+
+        return nodes.MathCallNode(signature, call_node.args, llvm_func=None,
+                                  py_func=py_func, name=name)
+
+    def _resolve_math_call(self, call_node, py_func, signature):
+        "Resolve calls to math functions to llvm.log.f32() etc"
+        # signature is a generic signature, build a correct one
+        type = call_node.args[0].variable.type
+        signature = minitypes.FunctionType(return_type=type, args=[type])
+        if self._is_intrinsic(py_func):
+            return self._resolve_intrinsic(call_node, py_func, signature)
+
+        return self._resolve_libc_math(call_node, py_func, signature, type)
+
+
 class NumpyMixin(object):
     def _is_constant_index(self, node):
         return (isinstance(node, ast.Index) and
@@ -297,21 +365,6 @@ class NumpyMixin(object):
             # return a 1D array type of the given dtype
             return dtype.resolve()[:]
 
-    def _is_math_function(self, func_args, py_func):
-        if len(func_args) > 1:
-            return False
-
-        numeric = func_args[0].variable.type.is_float
-        intrinsic_name = 'INTR_' + py_func.__name__.upper()
-        return numeric and hasattr(llvm.core, intrinsic_name)
-
-    def _resolve_math_call(self, call_node, py_func, signature):
-        "Resolve calls to math functions to llvm.log.f32() etc"
-        # signature is a generic signature, build a correct one
-        type = call_node.args[0].variable.type
-        signature = minitypes.FunctionType(return_type=type, args=[type])
-        return nodes.LLVMIntrinsicNode(signature, call_node.args, None, py_func)
-
     def _resolve_numpy_call(self, func_type, node):
         """
         Resolve a call of some numpy attribute or sub-attribute.
@@ -327,7 +380,8 @@ class NumpyMixin(object):
 
         return result_type
 
-class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
+class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
+                  NumpyMixin, MathMixin):
     """
     Type inference. Initialize with a minivect context, a Python ast,
     and a function type with a given or absent, return type.
@@ -483,6 +537,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
             lhs_var.type = rhs_var.type
         elif lhs_var.type != rhs_var.type:
             self.assert_assignable(lhs_var.type, rhs_var.type)
+            lhs_var.type = self.promote_types(lhs_var.type, rhs_var.type)
             return nodes.CoercionNode(rhs_node, lhs_var.type)
 
         return rhs_node

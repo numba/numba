@@ -130,10 +130,16 @@ class _LLVMCaster(object):
     CAST_MAP = {
         lc.TYPE_POINTER : build_pointer_cast,
         lc.TYPE_INTEGER: build_int_cast,
+
         (lc.TYPE_FLOAT, lc.TYPE_DOUBLE) : build_float_ext,
+        (lc.TYPE_DOUBLE, lc.TYPE_FP128) : build_float_ext,
+
         (lc.TYPE_DOUBLE, lc.TYPE_FLOAT) : build_float_trunc,
+        (lc.TYPE_FP128, lc.TYPE_DOUBLE) : build_float_trunc,
+
         (lc.TYPE_INTEGER, lc.TYPE_FLOAT) : build_int_to_float_cast,
         (lc.TYPE_INTEGER, lc.TYPE_DOUBLE) : build_int_to_float_cast,
+
         (lc.TYPE_FLOAT, lc.TYPE_INTEGER) : build_float_to_int_cast,
         (lc.TYPE_DOUBLE, lc.TYPE_INTEGER) : build_float_to_int_cast,
 
