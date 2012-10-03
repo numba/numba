@@ -354,6 +354,11 @@ class PyObject_Call(ExternalFunction):
     arg_types = [object_, object_, object_]
     return_type = object_
 
+class PyObject_CallMethod(ExternalFunction):
+    arg_types = [object_, c_string_type, c_string_type]
+    return_type = object_
+    is_vararg = True
+
 class PyObject_Type(ExternalFunction):
     '''
     Added to aid debugging
@@ -379,6 +384,10 @@ class PyArg_ParseTuple(ExternalFunction):
 class PyObject_Print(ExternalFunction):
     arg_types = [object_, void.pointer(), int_]
     return_type = int_
+
+class PyObject_Str(ExternalFunction):
+    arg_types = [object_]
+    return_type = object_
 
 class PyObject_GetAttrString(ExternalFunction):
     arg_types = [object_, c_string_type]

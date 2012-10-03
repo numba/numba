@@ -106,24 +106,29 @@ class LateSpecializer(visitors.NumbaTransformer):
         node.error_return = ast.Return(value=value)
         return node
 
-    def visit_Print(self, node):
-        # TDDO: handle 'dest' and 'nl' attributes
+    def _print(self, value, dest=None):
         stdin, stdout, stderr = stdio_util.get_stdio_streams()
         stdout = stdio_util.get_stream_as_node(stdout)
 
         signature, lfunc = self.function_cache.function_by_name(
-            'PyObject_Print')
-        Py_PRINT_RAW = nodes.ConstNode(1, int_)
+                                                'PyObject_CallMethod')
+        if dest is None:
+            dest = nodes.ObjectInjectNode(sys.stdout)
+
+        value = self.function_cache.call("PyObject_Str", value)
+        args = [dest, nodes.ConstNode("write"), nodes.ConstNode("O"), value]
+        return nodes.NativeCallNode(signature, args, lfunc)
+
+    def visit_Print(self, node):
         result = []
         for value in node.values:
-            args = [value, stdout, Py_PRINT_RAW]
-            result.append(
-                nodes.NativeCallNode(signature, args, lfunc))
+            value = nodes.CoercionNode(value, object_, name="print_arg")
+            result.append(self._print(value, node.dest))
 
-        puts_call = self.function_cache.call("puts", nodes.ConstNode(""))
-        result.append(puts_call)
-        # result = ast.Suite(body=[result, puts_call])
-        return result
+        if node.nl:
+            result.append(self._print(nodes.ObjectInjectNode("\n"), node.dest))
+
+        return self.visitlist(result)
 
     def visit_Tuple(self, node):
         sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
