@@ -22,7 +22,7 @@ from .multiarray_api import MultiarrayAPI
 from .minivect import minitypes
 
 import logging
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 if __debug__:

@@ -13,65 +13,7 @@ from .symtab import Variable
 from . import visitors, nodes, error
 from numba import stdio_util
 
-class ASTSpecializer(visitors.NumbaTransformer):
-
-    def __init__(self, context, func, ast, func_signature):
-        super(ASTSpecializer, self).__init__(context, func, ast)
-        self.func_signature = func_signature
-
-    def visit_FunctionDef(self, node):
-        self.generic_visit(node)
-
-        ret_type = self.func_signature.return_type
-        if ret_type.is_object or ret_type.is_array:
-            value = nodes.NULL_obj
-        elif ret_type.is_void:
-            value = None
-        elif ret_type.is_float:
-            value = nodes.ConstNode(float('nan'), type=ret_type)
-        elif ret_type.is_int or ret_type.is_complex:
-            value = nodes.ConstNode(0xbadbadbad, type=ret_type)
-        else:
-            value = None
-
-        if value is not None:
-            value = nodes.CoercionNode(value, dst_type=ret_type)
-
-        node.error_return = ast.Return(value=value)
-        return node
-
-    def visit_Print(self, node):
-        # TDDO: handle 'dest' and 'nl' attributes
-        stdin, stdout, stderr = stdio_util.get_stdio_streams()
-        stdout = stdio_util.get_stream_as_node(stdout)
-
-        signature, lfunc = self.function_cache.function_by_name(
-                                                    'PyObject_Print')
-        Py_PRINT_RAW = nodes.ConstNode(1, int_)
-        result = []
-        for value in node.values:
-            args = [value, stdout, Py_PRINT_RAW]
-            result.append(
-                nodes.NativeCallNode(signature, args, lfunc))
-
-        puts_call = self.function_cache.call("puts", nodes.ConstNode(""))
-        result.append(puts_call)
-        # result = ast.Suite(body=[result, puts_call])
-        return result
-
-    def visit_Subscript(self, node):
-        if isinstance(node.value, nodes.ArrayAttributeNode):
-            if node.value.is_read_only and isinstance(node.ctx, ast.Store):
-                raise error.NumbaError("Attempt to load read-only attribute")
-        elif (node.value.type.is_array and not node.type.is_array and not
-                  node.slice.type.is_object):
-            node = nodes.DataPointerNode(node.value, node.slice, node.ctx)
-        return node
-
-    def visit_DeferredCoercionNode(self, node):
-        "Resolve deferred coercions"
-        self.generic_visit(node)
-        return nodes.CoercionNode(node.node, node.variable.type)
+logger = logging.getLogger(__name__)
 
 
 class TransformForIterable(visitors.NumbaTransformer):
@@ -107,8 +49,9 @@ class TransformForIterable(visitors.NumbaTransformer):
 
             # replace node.iter
             call_func = ast.Name(id='range', ctx=ast.Load())
-            call_func.variable = Variable(_types.RangeType())
+            call_func.type = _types.RangeType()
             shape_index = ast.Index(nodes.ConstNode(0, _types.Py_ssize_t))
+            shape_index.type = _types.npy_intp
             stop = ast.Subscript(value=nodes.ShapeAttributeNode(orig_iter),
                                  slice=shape_index,
                                  ctx=ast.Load())
@@ -118,14 +61,15 @@ class TransformForIterable(visitors.NumbaTransformer):
                          nodes.ConstNode(1, _types.Py_ssize_t),]
 
             node.iter = ast.Call(func=call_func, args=call_args)
-            node.iter.type = call_func.variable.type
+            node.iter.type = call_func.type
 
             node.index = target_temp.load()
             # add assignment to new target variable at the start of the body
             index = ast.Index(value=node.index)
-            index.variable = target_temp.variable
+            index.type = target_temp.type
             subscript = ast.Subscript(value=orig_iter,
                                       slice=index, ctx=ast.Load())
+            subscript.type = orig_iter.variable.type.dtype
             coercion = nodes.CoercionNode(subscript, orig_target.type)
             assign = ast.Assign(targets=[orig_target], value=subscript)
 
@@ -140,6 +84,46 @@ class LateSpecializer(visitors.NumbaTransformer):
     def __init__(self, context, func, ast, func_signature):
         super(LateSpecializer, self).__init__(context, func, ast)
         self.func_signature = func_signature
+
+    def visit_FunctionDef(self, node):
+        self.generic_visit(node)
+
+        ret_type = self.func_signature.return_type
+        if ret_type.is_object or ret_type.is_array:
+            value = nodes.NULL_obj
+        elif ret_type.is_void:
+            value = None
+        elif ret_type.is_float:
+            value = nodes.ConstNode(float('nan'), type=ret_type)
+        elif ret_type.is_int or ret_type.is_complex:
+            value = nodes.ConstNode(0xbadbadbad, type=ret_type)
+        else:
+            value = None
+
+        if value is not None:
+            value = nodes.CoercionNode(value, dst_type=ret_type)
+
+        node.error_return = ast.Return(value=value)
+        return node
+
+    def visit_Print(self, node):
+        # TDDO: handle 'dest' and 'nl' attributes
+        stdin, stdout, stderr = stdio_util.get_stdio_streams()
+        stdout = stdio_util.get_stream_as_node(stdout)
+
+        signature, lfunc = self.function_cache.function_by_name(
+            'PyObject_Print')
+        Py_PRINT_RAW = nodes.ConstNode(1, int_)
+        result = []
+        for value in node.values:
+            args = [value, stdout, Py_PRINT_RAW]
+            result.append(
+                nodes.NativeCallNode(signature, args, lfunc))
+
+        puts_call = self.function_cache.call("puts", nodes.ConstNode(""))
+        result.append(puts_call)
+        # result = ast.Suite(body=[result, puts_call])
+        return result
 
     def visit_Tuple(self, node):
         sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
@@ -189,6 +173,10 @@ class LateSpecializer(visitors.NumbaTransformer):
         return node
 
     def visit_Subscript(self, node):
+        if isinstance(node.value, nodes.ArrayAttributeNode):
+            if node.value.is_read_only and isinstance(node.ctx, ast.Store):
+                raise error.NumbaError("Attempt to load read-only attribute")
+
         logging.debug(ast.dump(node))
         self.generic_visit(node)
 
@@ -205,6 +193,10 @@ class LateSpecializer(visitors.NumbaTransformer):
             else:
                 # This is handled in visit_Assign
                 pass
+        elif (node.value.type.is_array and not node.type.is_array and
+                  node.slice.type.is_int):
+            # Array index with integer indices
+            node = nodes.DataPointerNode(node.value, node.slice, node.ctx)
 
         return node
 
@@ -269,6 +261,7 @@ class LateSpecializer(visitors.NumbaTransformer):
         return new_node
 
     def visit_Name(self, node):
+        logger.debug(ast.dump(node))
         if node.type.is_builtin:
             obj = getattr(builtins, node.name)
             return nodes.ObjectInjectNode(obj, node.type)

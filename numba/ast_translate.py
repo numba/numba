@@ -751,10 +751,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
                                              name=node.name)
 
     def visit_Subscript(self, node):
-        if node.type.is_array or node.type.is_object:
-            raise NotImplementedError("This node should have been replaced")
+#        if node.value.type.is_array or node.value.type.is_object:
+#            raise NotImplementedError("This node should have been replaced")
 
-        assert node.value.type.is_carray
+        assert node.value.type.is_carray, node.value.type
         value = self.visit(node.value)
         lptr = self.builder.gep(value, [self.visit(node.slice)])
         return self._handle_ctx(node, lptr)
@@ -827,7 +827,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         return self.builder.call(node.llvm_func, largs, name=node.name)
 
     def alloca(self, type, name='', change_bb=True):
-        return self.llvm_alloca(self.to_llvm(node.type), name, change_bb)
+        return self.llvm_alloca(self.to_llvm(type), name, change_bb)
 
     def llvm_alloca(self, ltype, name='', change_bb=True):
         return llvm_alloca(self.lfunc, self.builder, ltype, name, change_bb)
