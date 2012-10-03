@@ -186,6 +186,8 @@ class NativeCallNode(FunctionCallNode):
             self.args[i] = CoercionNode(self.args[i], dst_type,
                                         name='func_%s_arg%d' % (self.name, i))
 
+class LLVMIntrinsicNode(NativeCallNode):
+    "Call an llvm intrinsic function"
 
 class ObjectCallNode(FunctionCallNode):
     _fields = ['function', 'args_tuple', 'kwargs_dict']

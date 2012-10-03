@@ -826,9 +826,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         res = self.builder.call(pyobject_call, largs, name=node.name)
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
 
-    def visit_NativeCallNode(self, node):
-        largs = self.visitlist(node.args)
+    def visit_NativeCallNode(self, node, largs=None):
+        if largs is None:
+            largs = self.visitlist(node.args)
         return self.builder.call(node.llvm_func, largs, name=node.name)
+
+    def visit_LLVMIntrinsicNode(self, node):
+        intr = getattr(llvm.core, 'INTR_' + node.py_func.__name__.upper())
+        largs = self.visitlist(node.args)
+        node.llvm_func = llvm.core.Function.intrinsic(
+                self.mod, intr, [larg.type for larg in largs])
+        return self.visit_NativeCallNode(node, largs=largs)
 
     def alloca(self, type, name='', change_bb=True):
         return self.llvm_alloca(self.to_llvm(type), name, change_bb)

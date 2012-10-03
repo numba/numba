@@ -35,7 +35,7 @@ def _infer_types(context, func, restype=None, argtypes=None):
     ast = _get_ast(func)
     func_signature = minitypes.FunctionType(return_type=restype,
                                             args=argtypes)
-    return type_inference._infer_types(context, func, ast, func_signature)
+    return type_inference.run_pipeline(context, func, ast, func_signature)
 
 
 def _compile(context, func, restype=None, argtypes=None, **kwds):

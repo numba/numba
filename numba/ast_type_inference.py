@@ -4,6 +4,7 @@ import opcode
 import types
 import __builtin__ as builtins
 
+import llvm.core
 import numba
 from numba import *
 from numba import error, transforms
@@ -76,9 +77,9 @@ class Pipeline(object):
 
         return self.func_signature, self.symtab, ast
 
-def _infer_types(context, func, ast, func_signature):
+def run_pipeline(context, func, ast, func_signature):
     """
-    Run type inference on the given ast.
+    Run a bunch of AST transformers and visitors on the AST.
     """
     pipeline = context.numba_pipeline(context, func, ast, func_signature)
     return pipeline.run_pipeline()
@@ -148,6 +149,7 @@ class BuiltinResolverMixin(object):
             #     "Unsupported call to built-in function %s" % func.__name__)
             func = nodes.ObjectInjectNode(func)
             return nodes.ObjectCallNode(None, func, node.args)
+
 
 class NumpyMixin(object):
     def _is_constant_index(self, node):
@@ -294,6 +296,21 @@ class NumpyMixin(object):
         if dtype is not None:
             # return a 1D array type of the given dtype
             return dtype.resolve()[:]
+
+    def _is_math_function(self, func_args, py_func):
+        if len(func_args) > 1:
+            return False
+
+        numeric = func_args[0].variable.type.is_float
+        intrinsic_name = 'INTR_' + py_func.__name__.upper()
+        return numeric and hasattr(llvm.core, intrinsic_name)
+
+    def _resolve_math_call(self, call_node, py_func, signature):
+        "Resolve calls to math functions to llvm.log.f32() etc"
+        # signature is a generic signature, build a correct one
+        type = call_node.args[0].variable.type
+        signature = minitypes.FunctionType(return_type=type, args=[type])
+        return nodes.LLVMIntrinsicNode(signature, call_node.args, None, py_func)
 
     def _resolve_numpy_call(self, func_type, node):
         """
@@ -639,7 +656,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
             if not isinstance(node.slice, ast.Index):
                 self.error(node.slice, "Expected index")
 
-            node.slice = node.slice.value
+            # node.slice = node.slice.value
             result_type = value_type.base_type
         else:
             result_type = self._get_index_type(node.value.variable.type,
@@ -750,12 +767,19 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
         if llvm_func is not None:
             return nodes.NativeCallNode(signature, call_node.args,
                                         llvm_func, py_func)
+        elif not call_node.keywords and self._is_math_function(
+                                        call_node.args, py_func):
+            return self._resolve_math_call(call_node, py_func, signature)
+        else:
+            return nodes.ObjectCallNode(signature, call_node.func,
+                                        call_node.args, call_node.keywords,
+                                        py_func)
 
-        return nodes.ObjectCallNode(signature, call_node.func,
-                                    call_node.args, call_node.keywords,
-                                    py_func)
 
     def visit_Call(self, node):
+        if node.starargs or node.kwargs:
+            raise error.NumbaError("star or keyword arguments not implemented")
+
         node.func = self.visit(node.func)
         self.visitlist(node.args)
         self.visitlist(node.keywords)
@@ -776,7 +800,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
             arg_types = [a.variable.type for a in node.args]
             new_node = self._resolve_external_call(node, func, arg_types)
 
-            if func_type.is_numpy_attribute:
+            if new_node.type.is_object and func_type.is_numpy_attribute:
                 result_type = self._resolve_numpy_call(func_type, node)
                 if result_type is None:
                     result_type = minitypes.object_

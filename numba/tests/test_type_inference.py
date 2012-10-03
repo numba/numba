@@ -89,7 +89,7 @@ def infer(func, argtypes):
     sig = minitypes.FunctionType(return_type=None, args=argtypes)
     ast = functions._get_ast(func)
 
-    sig, symtab, ast = ast_type_inference._infer_types(
+    sig, symtab, ast = ast_type_inference.run_pipeline(
                                 decorators.context, func, ast, sig)
     return sig, symtab
 

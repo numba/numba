@@ -86,7 +86,6 @@ class MultiarrayAPI (object):
         return _load_symbol
 
     def __init__ (self, include_source_path = None):
-        global get_include, process_source
         if include_source_path is None:
             include_source_path = get_include()
         self.api_map = process_source(include_source_path)
