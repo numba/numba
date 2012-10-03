@@ -197,14 +197,15 @@ class MathMixin(object):
     def _resolve_intrinsic(self, call_node, py_func, signature):
         return nodes.LLVMIntrinsicNode(signature, call_node.args, None, py_func)
 
-    def _resolve_libc_math(self, call_node, py_func, signature, type):
-        name = py_func.__name__
-
+    def math_suffix(self, name, type):
         if type.itemsize == 4:
             name += 'f' # sinf(float)
         elif type.itemsize == 16:
             name += 'l' # sinl(long double)
+        return name
 
+    def _resolve_libc_math(self, call_node, py_func, signature, type):
+        name = self.math_suffix(py_func.__name__, type)
         return nodes.MathCallNode(signature, call_node.args, llvm_func=None,
                                   py_func=py_func, name=name)
 
@@ -218,6 +219,22 @@ class MathMixin(object):
 
         return self._resolve_libc_math(call_node, py_func, signature, type)
 
+    def pow(self, node, power, name='pow'):
+        node_type = node.variable.type
+        power_type = power.variable.type
+        if node_type.is_numeric and power_type.is_numeric:
+            itemsize = min(4, max(node_type.itemsize, power_type.itemsize))
+        else:
+            itemsize = 8
+
+        pow_type = [float_, double, longdouble][itemsize / 4 - 1]
+        signature = minitypes.FunctionType(return_type=pow_type,
+                                           args=[pow_type, pow_type])
+        return nodes.MathCallNode(signature, [node, power], llvm_func=None,
+                                  name=self.math_suffix(name, pow_type))
+
+    def mod(self, x, y):
+        return self.pow(x, y, name='fmod')
 
 class NumpyMixin(object):
     def _is_constant_index(self, node):
@@ -622,6 +639,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         # TODO: handle floor devision
         node.left = self.visit(node.left)
         node.right = self.visit(node.right)
+
+        if isinstance(node.op, ast.Pow):
+            node = self.pow(node.left, node.right)
+            return self.visit(node)
+        elif isinstance(node.op, ast.Mod):
+            node = self.mod(node.left, node.right)
+            return self.visit(node)
+
         promotion_type = self.promote(node.left.variable,
                                       node.right.variable)
         node.left, node.right = nodes.CoercionNode.coerce(

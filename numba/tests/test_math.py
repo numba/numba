@@ -39,5 +39,23 @@ def test_numpy_math():
         result = numpy_math2(array)
         assert np.allclose(result, expected2(array))
 
+@autojit(backend='ast')
+def power(x, y):
+    return x ** y
+
+def test_power():
+    assert power(5.0, 2.0) == 25.0
+    assert power(5, 2) == 25
+
+@autojit(backend='ast')
+def modulo(x, y):
+    return x % y
+
+def test_modulo():
+    assert np.allclose(modulo(22.5, 0.2), 0.1)
+    assert modulo(5, 2) == 1
+
 if __name__ == "__main__":
     test_numpy_math()
+    test_power()
+    test_modulo()
