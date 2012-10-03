@@ -90,7 +90,7 @@ class ASTBuilder(object):
         else:
             ctx = ast.Store()
 
-        index = ast.Index(nodes.ConstNode(constant_index, numba_types.int_))
+        index = ast.Index(nodes.ConstNode(constant_index, int_))
         return ast.Subscript(value=node, slice=index, ctx=ctx)
 
 class BuiltinResolverMixin(object):
@@ -129,7 +129,8 @@ class BuiltinResolverMixin(object):
             # Simplify to ndarray.shape[0]
             assert len(node.args) == 1
             shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
-            index = ast.Index(nodes.ConstNode(0, numba_types.int_))
+            index = ast.Index(nodes.ConstNode(0, int_))
+            index.type = int_
             new_node = ast.Subscript(value=shape_attr, slice=index,
                                      ctx=ast.Load())
             new_node.variable = Variable(shape_attr.type.base_type)
@@ -588,14 +589,18 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin, NumpyMixin):
 
     def _get_index_type(self, type, index_type):
         if type.is_pointer:
-            assert index_type.is_int_like
+            assert index_type.is_int
             return type.base_type
         elif type.is_object:
-            return minitypes.object_
+            return object_
         elif type.is_carray:
+            assert index_type.is_int
             return type.base_type
-        else:
-            raise NotImplementedError
+        elif type.is_c_string and index_type.is_int:
+            return char
+
+        op = ('slicing', 'indexing')[index_type.is_int]
+        raise NotImplementedError("%s of type %s" % (op, type))
 
     def visit_Subscript(self, node):
         node.value = self.visit(node.value)

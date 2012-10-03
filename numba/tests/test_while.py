@@ -186,6 +186,7 @@ class TestASTWhile(test_support.ASTTestCase, TestWhile):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+    #TestASTWhile("test_while_loop_fn_1").debug()
     test_support.main()
 
 # ______________________________________________________________________

@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
 
+from numba import *
 from numba import c_string_type as cstring, int_
 
 from numba.tests import test_support
@@ -31,8 +32,7 @@ class TestBytecodeCString(test_support.ByteCodeTestCase, CStringTests):
 # ______________________________________________________________________
 
 class TestASTCString(test_support.ASTTestCase, CStringTests):
-    @test_support.checkSkipFlag("Name error in type inference method "
-                                "visit_Slice().")
+    @test_support.checkSkipFlag("Not implemented yet.")
     def test_convert(self, *args, **kws):
         return super(TestASTCString, self).test_convert(*args, **kws)
 

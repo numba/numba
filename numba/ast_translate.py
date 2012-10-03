@@ -754,10 +754,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 #        if node.value.type.is_array or node.value.type.is_object:
 #            raise NotImplementedError("This node should have been replaced")
 
-        assert node.value.type.is_carray, node.value.type
+        assert node.value.type.is_carray or node.value.type.is_c_string, \
+                                                        node.value.type
         value = self.visit(node.value)
         lptr = self.builder.gep(value, [self.visit(node.slice)])
-        return self._handle_ctx(node, lptr)
+        if node.slice.type.is_int:
+            lptr = self._handle_ctx(node, lptr)
+
+        return lptr
 
     def _handle_ctx(self, node, lptr):
         if isinstance(node.ctx, ast.Load):
