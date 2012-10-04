@@ -12,6 +12,7 @@ from numba import llvm_types
 from numba.minivect.minitypes import *
 from numba.minivect import miniast, minitypes
 from numba.minivect.ctypes_conversion import convert_to_ctypes
+from numba.minivect.complex_support import Complex64, Complex128, Complex256
 
 __all__ = minitypes.__all__ + [
     'O', 'b1', 'i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8',
@@ -90,6 +91,18 @@ class NumpyAttributeType(NumbaType, minitypes.ObjectType):
     @property
     def value(self):
         return getattr(self.module, self.attr)
+
+class MethodType(NumbaType, minitypes.ObjectType):
+    """
+    Method of something
+    """
+
+    is_method = True
+
+    def __init__(self, base_type, attr_name, **kwds):
+        super(MethodType, self).__init__(**kwds)
+        self.base_type = base_type
+        self.attr_name = attr_name
 
 class NumpyDtypeType(NumbaType, minitypes.ObjectType):
     is_numpy_dtype = True
@@ -178,7 +191,8 @@ class NumbaTypeMapper(minitypes.TypeMapper):
         if type.is_array:
             return llvm_types._numpy_array
         elif type.is_complex:
-            return llvm.core.Type.struct([type.base_type, type.base_type])
+            lbase_type = type.base_type.to_llvm(self.context)
+            return llvm.core.Type.struct([lbase_type, lbase_type])
         elif type.is_py_ssize_t:
             return llvm_types._llvm_py_ssize_t
         elif type.is_object:
@@ -257,58 +271,6 @@ def _map_dtype(dtype):
 
     raise NotImplementedError("dtype %s not supported" % (dtype,))
 
-
-# NOTE: The following ctypes structures were inspired by Joseph
-# Heller's response to python-list question about ctypes complex
-# support.  In that response, he said these were only suitable for
-# Linux.  Might our milage vary?
-
-class ComplexMixin (object):
-    def _get (self):
-        # FIXME: Ensure there will not be a loss of precision here!
-        return self._numpy_ty_(self.real + (self.imag * 1j))
-
-    def _set (self, value):
-        self.real = value.real
-        self.imag = value.imag
-
-    value = property(_get, _set)
-
-    @classmethod
-    def from_param(cls, param):
-        ret_val = cls()
-        ret_val.value = param
-        return ret_val
-
-    @classmethod
-    def make_ctypes_prototype_wrapper(cls, ctypes_prototype):
-        '''This is a hack so that functions that return a complex type
-        will construct a new Python value from the result, making the
-        Numba compiled function a drop-in replacement for a Python
-        function.'''
-        # FIXME: See if there is some way of avoiding this additional
-        # wrapper layer.
-        def _make_complex_result_wrapper(in_func):
-            ctypes_function = ctypes_prototype(in_func)
-            def _complex_result_wrapper(*args, **kws):
-                # Return the value property, not the ComplexMixin
-                # instance built by ctypes.
-                return ctypes_function(*args, **kws).value
-            return _complex_result_wrapper
-        return _make_complex_result_wrapper
-
-class Complex64 (ctypes.Structure, ComplexMixin):
-    _fields_ = [('real', ctypes.c_float), ('imag', ctypes.c_float)]
-    _numpy_ty_ = complex64
-
-class Complex128 (ctypes.Structure, ComplexMixin):
-    _fields_ = [('real', ctypes.c_double), ('imag', ctypes.c_double)]
-    _numpy_ty_ = complex128
-
-# TODO: What if sizeof(long double) != 16?
-class Complex256 (ctypes.Structure, ComplexMixin):
-    _fields_ = [('real', ctypes.c_longdouble), ('imag', ctypes.c_longdouble)]
-    _numpy_ty_ = complex128
 
 if __name__ == '__main__':
     import doctest

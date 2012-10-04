@@ -123,9 +123,10 @@ class ConstNode(Node):
         elif type.is_int:
             lvalue = llvm.core.Constant.int(ltype, constant)
         elif type.is_complex:
-            base_ltype = self.to_llvm(type.base_type)
-            lvalue = llvm.core.Constant.struct([(base_ltype, constant.real),
-                                                (base_ltype, constant.imag)])
+            real = ConstNode(constant.real, type.base_type)
+            imag = ConstNode(constant.imag, type.base_type)
+            lvalue = llvm.core.Constant.struct([real.value(translator),
+                                                imag.value(translator)])
         elif type.is_pointer:
             addr_int = translator.visit(ConstNode(self.pyval, type=Py_ssize_t))
             lvalue = translator.builder.inttoptr(addr_int, ltype)
@@ -222,6 +223,16 @@ class ObjectCallNode(FunctionCallNode):
             self.kwargs_dict = NULL_obj
 
         self.type = signature.return_type
+
+
+class ComplexConjugateNode(Node):
+    "mycomplex.conjugate()"
+
+    _fields = ['complex_node']
+
+    def __init__(self, complex_node, **kwargs):
+        super(ComplexConjugateNode, self).__init__(**kwargs)
+        self.complex_node = complex_node
 
 
 class ObjectInjectNode(Node):

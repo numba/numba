@@ -852,6 +852,20 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)
 
+    def visit_ComplexConjugateNode(self, node):
+        lcomplex = self.visit(node.complex_node)
+
+        elem_ltyp = node.type.base_type.to_llvm(self.context)
+        zero = llvm.core.Constant.real(elem_ltyp, 0)
+        imag = self.builder.extract_value(lcomplex, 1)
+        new_imag_lval = self.builder.fsub(zero, imag)
+
+        assert hasattr(self.builder, 'insert_value'), (
+            "llvm-py support for LLVMBuildInsertValue() required to build "
+            "code for complex conjugates.")
+
+        return self.builder.insert_value(lcomplex, new_imag_lval, 1)
+
     def alloca(self, type, name='', change_bb=True):
         return self.llvm_alloca(self.to_llvm(type), name, change_bb)
 

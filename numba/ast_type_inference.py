@@ -856,6 +856,20 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                         py_func)
 
 
+    def _resolve_method_calls(self, func_type, new_node, node):
+        "Resolve special method calls"
+        if (func_type.base_type.is_complex and
+            func_type.attr_name == 'conjugate'):
+            assert isinstance(node.func, ast.Attribute)
+            if node.args or node.keywords:
+                raise error.NumbaError(
+                        "conjugate method of complex number does not "
+                        "take arguments")
+            new_node = nodes.ComplexConjugateNode(node.func.value)
+            new_node.variable = Variable(func_type.base_type)
+
+        return new_node
+
     def visit_Call(self, node):
         if node.starargs or node.kwargs:
             raise error.NumbaError("star or keyword arguments not implemented")
@@ -868,15 +882,26 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         func_type = func_variable.type
 
         func = self._resolve_function(func_type, func_variable.name)
-        new_node = node
 
+        new_node = None
         if func_type.is_builtin:
+            # Call to Python built-in function
             new_node = self._resolve_builtin_call(node, func,
                                                   func_variable, func_type)
         elif func_type.is_function:
+            # Native function call
             new_node = nodes.NativeCallNode(func_variable.type, node.args,
                                             func_variable.value)
-        else:
+        elif func_type.is_method:
+            # Call to special object method
+            new_node = self._resolve_method_calls(func_type, new_node, node)
+
+        if new_node is None:
+            # All other type of calls:
+            # 1) call to compiled/autojitting numba function
+            # 2) call to some math or numpy math function (np.sin, etc)
+            # 3) call to special numpy functions (np.empty, etc)
+            # 4) generic call using PyObject_Call
             arg_types = [a.variable.type for a in node.args]
             new_node = self._resolve_external_call(node, func, arg_types)
 
@@ -914,6 +939,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     raise TypeError("Cannot assign to the %s attribute of "
                                     "complex numbers" % node.attr)
                 result_type = type.base_type
+            elif node.attr == 'conjugate':
+                result_type = numba_types.MethodType(type, 'conjugate')
             else:
                 raise AttributeError("'%s' of complex type" % node.attr)
         elif type.is_numpy_module and hasattr(type.module, node.attr):

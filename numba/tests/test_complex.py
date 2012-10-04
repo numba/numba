@@ -94,9 +94,9 @@ class TestComplex (test_support.ByteCodeTestCase):
             self.assertEqual(prod_sum_fn(a, x, b),
                              compiled_prod_sum_fn(a, x, b))
 
-# TODO: AST complex support
-#class TestASTComplex(test_support.ASTTestCase, TestComplex):
-#    pass
+# TODO: some more complex support
+class TestASTComplex(test_support.ASTTestCase, TestComplex):
+    pass
 
 
 # ______________________________________________________________________
