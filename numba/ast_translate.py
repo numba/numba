@@ -178,7 +178,46 @@ class LLVMContextManager(object):
     def get_execution_engine(self):
         return self._ee
 
-class LLVMCodeGenerator(visitors.NumbaVisitor):
+class ComplexSupportMixin(object):
+    "Support for complex numbers"
+
+    def _generate_complex_op(self, op, arg1, arg2):
+        rres, ires = op(self.builder.extract_value(arg1, 0),
+                        self.builder.extract_value(arg1, 1),
+                        self.builder.extract_value(arg2, 0),
+                        self.builder.extract_value(arg2, 1))
+        ret_val = self.builder.insert_value(
+            self.builder.insert_value(lc.Constant.undef(arg1.type), rres, 0),
+            ires, 1)
+        return ret_val
+
+    def _complex_add(self, arg1r, arg1i, arg2r, arg2i):
+        return (self.builder.fadd(arg1r, arg2r),
+                self.builder.fadd(arg1i, arg2i))
+
+    def _complex_sub(self, arg1r, arg1i, arg2r, arg2i):
+        return (self.builder.fsub(arg1r, arg2r),
+                self.builder.fsub(arg1i, arg2i))
+
+    def _complex_mul(self, arg1r, arg1i, arg2r, arg2i):
+        return (self.builder.fsub(self.builder.fmul(arg1r, arg2r),
+                                  self.builder.fmul(arg1i, arg2i)),
+                self.builder.fadd(self.builder.fmul(arg1i, arg2r),
+                                  self.builder.fmul(arg1r, arg2i)))
+
+    def _complex_div(self, arg1r, arg1i, arg2r, arg2i):
+        divisor = self.builder.fadd(self.builder.fmul(arg2r, arg2r),
+                                    self.builder.fmul(arg2i, arg2i))
+        return (self.builder.fdiv(
+                        self.builder.fadd(self.builder.fmul(arg1r, arg2r),
+                                          self.builder.fmul(arg1i, arg2i)),
+                        divisor),
+                self.builder.fdiv(
+                        self.builder.fsub(self.builder.fmul(arg1i, arg2r),
+                                          self.builder.fmul(arg1i, arg2r)),
+                        divisor))
+
+class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
     """
     Translate a Python AST to LLVM. Each visit_* method should directly
     return an LLVM value.
@@ -434,10 +473,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
 
     def visit_Attribute(self, node):
         result = self.visit(node.value)
-        if isinstance(node.ctx, ast.Load):
-            return self.generate_load_attribute(node, result)
-        else:
-            self.generate_store_attribute(node, result)
+        if node.value.type.is_complex:
+            if node.attr == 'real':
+                return self.builder.extract_value(result, 0)
+            elif node.attr == 'imag':
+                return self.builder.extract_value(result, 1)
+
+        raise error.NumbaError("This node should have been replaced")
 
     def visit_Assign(self, node):
         ast.dump(node)
@@ -692,6 +734,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         # TODO: reuse previously implemented modulo
     }
 
+    _opnames = {
+        ast.Mult: 'mul',
+    }
+
+    def opname(self, op):
+        if op in self._opnames:
+            return self._opnames[op]
+        else:
+            return op.__name__.lower()
+
     def _handle_pow(self, node, lhs, rhs):
         assert node.right.type.is_int
         ltype = node.type.to_llvm(self.context)
@@ -704,8 +756,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
         rhs = self.visit(node.right)
         op = type(node.op)
 
-        valid_type = node.type.is_int or node.type.is_float
-        if valid_type and op in self._binops:
+        if node.type.is_int or node.type.is_float and op in self._binops:
             llvm_method_name = self._binops[op][node.type.is_int]
             if node.type.is_int:
                 llvm_method_name = llvm_method_name[node.type.signed]
@@ -714,8 +765,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor):
                 print ast.dump(node)
                 assert False
             result = meth(lhs, rhs)
-        elif valid_type and op == ast.Pow:
+        elif node.type.is_int or node.type.is_float and op == ast.Pow:
             return self._handle_pow(node, lhs, rhs)
+        elif node.type.is_complex:
+            opname = self.opname(op)
+            if opname in ('add', 'sub', 'mul', 'div'):
+                m = getattr(self, '_complex_' + opname)
+                result = self._generate_complex_op(m, lhs, rhs)
+            else:
+                raise error.NumbaError("Unsupported binary operation "
+                                       "for complex numbers: %s" % opname)
         else:
             logging.debug(ast.dump(node))
             raise Exception(op, node.type, lhs, rhs)

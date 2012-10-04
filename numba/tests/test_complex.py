@@ -39,6 +39,18 @@ def prod_sum_fn (coeff, inval, ofs):
     #debugout('prod_sum_fn() ==> ', ret_val)
     return ret_val
 
+def add(a, b):
+    return a + b
+
+def sub(a, b):
+    return a - b
+
+def mul(a, b):
+    return a * b
+
+def div(a, b):
+    return a / b
+
 # ______________________________________________________________________
 
 class TestComplex (test_support.ByteCodeTestCase):
@@ -94,6 +106,13 @@ class TestComplex (test_support.ByteCodeTestCase):
             self.assertEqual(prod_sum_fn(a, x, b),
                              compiled_prod_sum_fn(a, x, b))
 
+    def test_arithmetic(self):
+        m, n = 0.4 + 1.2j, 5.1 - 0.6j
+        self.assertAlmostEqual(self.autojit(add)(m, n), add(m, n))
+        self.assertAlmostEqual(self.autojit(sub)(m, n), sub(m, n))
+        self.assertAlmostEqual(self.autojit(mul)(m, n), mul(m, n))
+        self.assertAlmostEqual(self.autojit(div)(m, n), div(m, n))
+
 # TODO: some more complex support
 class TestASTComplex(test_support.ASTTestCase, TestComplex):
     pass
@@ -103,6 +122,7 @@ class TestASTComplex(test_support.ASTTestCase, TestComplex):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 # ______________________________________________________________________
 # End of test_complex.py

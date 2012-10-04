@@ -258,12 +258,13 @@ class LateSpecializer(visitors.NumbaTransformer):
     def visit_Attribute(self, node):
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
+        elif node.type.is_object:
+            node = self.function_cache.call(
+                                'PyObject_GetAttrString', node.value,
+                                nodes.ConstNode(node.attr))
 
-        new_node = self.function_cache.call(
-                            'PyObject_GetAttrString', node.value,
-                            nodes.ConstNode(node.attr))
-        self.generic_visit(new_node)
-        return new_node
+        self.generic_visit(node)
+        return node
 
     def visit_Name(self, node):
         if node.type.is_builtin:

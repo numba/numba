@@ -19,9 +19,13 @@ def checkSkipFlag(reason):
 
 class ByteCodeTestCase(unittest.TestCase):
     jit = staticmethod(jit_)
+    backend = 'bytecode'
+    autojit = staticmethod(autojit(backend=backend))
 
 class ASTTestCase(ByteCodeTestCase):
     jit = staticmethod(lambda *args, **kw: jit_(*args, **dict(kw, backend='ast')))
+    backend = 'ast'
+    autojit = staticmethod(autojit(backend=backend))
 
 def main():
     import sys, logging
