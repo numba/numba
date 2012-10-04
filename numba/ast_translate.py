@@ -214,7 +214,7 @@ class ComplexSupportMixin(object):
                         divisor),
                 self.builder.fdiv(
                         self.builder.fsub(self.builder.fmul(arg1i, arg2r),
-                                          self.builder.fmul(arg1i, arg2r)),
+                                          self.builder.fmul(arg1r, arg2i)),
                         divisor))
 
 class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
