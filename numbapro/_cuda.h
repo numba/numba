@@ -25,6 +25,7 @@ typedef struct {
     int nops;
 } CudaFunctionAndData;
 
+extern int init_cuda_api(void);
 extern int init_cuda_exc_type(void);
 extern int get_device(CUdevice *cu_device, CUcontext *cu_context,
                       int device_number);

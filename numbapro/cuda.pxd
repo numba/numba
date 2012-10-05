@@ -28,6 +28,7 @@ cdef extern from "_cuda.h": # external utilities from _cuda.c
         CUfunction cu_func
         int nops
 
+    int init_cuda_api() except -1
     int init_cuda_exc_type() except -1
 
     int get_device(CUdevice *cu_device, CUcontext *cu_context,

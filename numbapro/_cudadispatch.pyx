@@ -36,6 +36,8 @@ cdef cuda.CUdevice get_device(int device_number) except *:
     """
     cdef cuda.CUdevice result
 
+    cuda.init_cuda_api()
+
     device_number = get_device_number(device_number)
     cuda.get_device(&result, NULL, device_number)
     return result
