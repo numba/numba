@@ -28,6 +28,7 @@ and not just scalars, using `GUFuncVectorize`.
    ufuncs
    generalizedufuncs
    CUDAJit
+   CUDASupport
 
 
 ..   BasicVectorize
