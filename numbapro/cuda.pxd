@@ -27,8 +27,31 @@ cdef extern from "_cuda.h": # external utilities from _cuda.c
     ctypedef struct CudaFunctionAndData:
         CUfunction cu_func
         int nops
+        
+    ctypedef struct CudaAPI:
+        void * Init
+        void * DeviceGetCount
+        void * DeviceGet
+        void * DeviceGetAttribute
+        void * DeviceComputeCapability
+        void * CtxCreate
+        void * ModuleLoadDataEx
+        void * ModuleUnload
+        void * ModuleGetFunction
+        void * MemAlloc
+        void * MemcpyHtoD
+        void * MemcpyHtoDAsync
+        void * MemcpyDtoH
+        void * MemcpyDtoHAsync
+        void * MemFree
+        void * StreamCreate
+        void * StreamDestroy
+        void * StreamSynchronize
+        void * LaunchKernel
 
-    int init_cuda_api() except -1
+    int is_cuda_api_initialized()
+    void set_cuda_api_initialized()
+    CudaAPI* get_cuda_api_ref()
     int init_cuda_exc_type() except -1
 
     int get_device(CUdevice *cu_device, CUcontext *cu_context,

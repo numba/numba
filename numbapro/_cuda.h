@@ -25,7 +25,43 @@ typedef struct {
     int nops;
 } CudaFunctionAndData;
 
-extern int init_cuda_api(void);
+typedef struct {
+    CUresult (*Init)(unsigned int Flags);
+    CUresult (*DeviceGetCount)(int *count);
+    CUresult (*DeviceGet)(CUdevice *device, int ordinal);
+    CUresult (*DeviceGetAttribute)(int *pi, CUdevice_attribute attrib, CUdevice dev);
+    CUresult (*DeviceComputeCapability)(int *major, int *minor, CUdevice dev);
+    CUresult (*CtxCreate)(CUcontext *pctx, unsigned int flags, CUdevice dev);
+    CUresult (*ModuleLoadDataEx)(CUmodule *module, const void *image,
+                                 unsigned int numOptions, CUjit_option *options,
+                                 void **optionValues);
+    CUresult (*ModuleUnload)(CUmodule hmod);
+    CUresult (*ModuleGetFunction)(CUfunction *hfunc, CUmodule hmod,
+                                    const char *name);
+    CUresult (*MemAlloc)(CUdeviceptr *dptr, size_t bytesize);
+    CUresult (*MemcpyHtoD)(CUdeviceptr dstDevice, const void *srcHost,
+                             size_t ByteCount);
+    CUresult (*MemcpyHtoDAsync)(CUdeviceptr dstDevice, const void *srcHost,
+                                  size_t ByteCount, CUstream hStream);
+    CUresult (*MemcpyDtoH)(void *dstHost, CUdeviceptr srcDevice,
+                             unsigned int ByteCount);
+    CUresult (*MemcpyDtoHAsync)(void *dstHost, CUdeviceptr srcDevice,
+                                  unsigned int ByteCount, CUstream hStream);
+    CUresult (*MemFree)(CUdeviceptr dptr);
+    CUresult (*StreamCreate)(CUstream *phStream, unsigned int Flags);
+    CUresult (*StreamDestroy)(CUstream hStream);
+    CUresult (*StreamSynchronize)(CUstream hStream);
+    CUresult (*LaunchKernel)(CUfunction f, unsigned int gridDimX,
+                             unsigned int gridDimY, unsigned int gridDimZ,
+                             unsigned int blockDimX, unsigned int blockDimY,
+                             unsigned int blockDimZ, unsigned int sharedMemBytes,
+                             CUstream hStream, void **kernelParams, void **extra);
+
+} CudaAPI;
+
+extern int is_cuda_api_initialized(void);
+void set_cuda_api_initialized(void);
+extern CudaAPI * get_cuda_api_ref(void);
 extern int init_cuda_exc_type(void);
 extern int get_device(CUdevice *cu_device, CUcontext *cu_context,
                       int device_number);

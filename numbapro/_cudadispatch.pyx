@@ -3,9 +3,11 @@ cimport dispatch
 cimport cuda
 cimport numpy as cnp
 
+import sys
 import os
 import math
 import logging
+import ctypes
 
 import numpy as np
 
@@ -29,6 +31,68 @@ cdef int get_device_number(int device_number):
 
     return device_number
 
+cdef void* addressof(x):
+    cdef long addr
+    addr = ctypes.cast(x, ctypes.c_void_p).value
+    return <void *>addr
+
+cdef init_cuda_api():
+    cdef cuda.CudaAPI * cuda_api
+
+    if not cuda.is_cuda_api_initialized():
+
+        # Determine platform and path of cuda driver
+        if sys.platform == 'win32':
+            dlloader = ctypes.WinDLL
+            path = '\\windows\\system32\\nvcuda.dll'
+        else:
+            dlloader = ctypes.CDLL
+            path = '/usr/lib/libcuda.so'
+        path = os.environ.get('NUMBAPRO_CUDA_DRIVER', path)
+
+        # Load the driver
+        driver = dlloader(path)
+
+        # Begin to populate the CUDA API function table
+        api = cuda.get_cuda_api_ref()
+
+        api.Init = addressof(driver.cuInit)
+
+        api.DeviceGetCount = addressof(driver.cuDeviceGetCount)
+        api.DeviceGet = addressof(driver.cuDeviceGet)
+        api.DeviceGetAttribute = addressof(driver.cuDeviceGetAttribute)
+        api.DeviceComputeCapability = addressof(driver.cuDeviceComputeCapability)
+
+        api.ModuleLoadDataEx = addressof(driver.cuModuleLoadDataEx)
+        api.ModuleUnload = addressof(driver.cuModuleUnload)
+        api.ModuleGetFunction = addressof(driver.cuModuleGetFunction)
+
+        api.StreamCreate = addressof(driver.cuStreamCreate)
+        api.StreamSynchronize = addressof(driver.cuStreamSynchronize)
+
+        api.LaunchKernel = addressof(driver.cuLaunchKernel)
+
+        try:
+            api.CtxCreate = addressof(driver.cuCtxCreate_v2)
+            api.MemAlloc = addressof(driver.cuMemAlloc_v2)
+            api.MemcpyHtoD = addressof(driver.cuMemcpyHtoD_v2)
+            api.MemcpyHtoDAsync = addressof(driver.cuMemcpyHtoDAsync_v2)
+            api.MemcpyDtoH = addressof(driver.cuMemcpyDtoH_v2)
+            api.MemcpyDtoHAsync = addressof(driver.cuMemcpyDtoHAsync_v2)
+            api.MemFree = addressof(driver.cuMemFree_v2)
+            api.StreamDestroy = addressof(driver.cuStreamDestroy_v2)
+        except AttributeError:
+            api.CtxCreate = addressof(driver.cuCtxCreate)
+            api.MemAlloc = addressof(driver.cuMemAlloc)
+            api.MemcpyHtoD = addressof(driver.cuMemcpyHtoD)
+            api.MemcpyHtoDAsync = addressof(driver.cuMemcpyHtoDAsync)
+            api.MemcpyDtoH = addressof(driver.cuMemcpyDtoH)
+            api.MemcpyDtoHAsync = addressof(driver.cuMemcpyDtoHAsync)
+            api.MemFree = addressof(driver.cuMemFree)
+            api.StreamDestroy = addressof(driver.cuStreamDestroy)
+
+        cuda.set_cuda_api_initialized()
+
 cdef cuda.CUdevice get_device(int device_number) except *:
     """
     Get the cuda device from a device number. Provide -1 to get the
@@ -36,7 +100,7 @@ cdef cuda.CUdevice get_device(int device_number) except *:
     """
     cdef cuda.CUdevice result
 
-    cuda.init_cuda_api()
+    init_cuda_api()
 
     device_number = get_device_number(device_number)
     cuda.get_device(&result, NULL, device_number)

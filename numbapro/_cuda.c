@@ -10,40 +10,8 @@
 static CUcontext global_context = NULL;
 static CUdevice  *global_device  = NULL;
 
-static struct {
-    CUresult (*Init)(unsigned int Flags);
-    CUresult (*DeviceGetCount)(int *count);
-    CUresult (*DeviceGet)(CUdevice *device, int ordinal);
-    CUresult (*DeviceGetAttribute)(int *pi, CUdevice_attribute attrib, CUdevice dev);
-    CUresult (*DeviceComputeCapability)(int *major, int *minor, CUdevice dev);
-    CUresult (*CtxCreate)(CUcontext *pctx, unsigned int flags, CUdevice dev);
-    CUresult (*ModuleLoadDataEx)(CUmodule *module, const void *image,
-                                 unsigned int numOptions, CUjit_option *options,
-                                 void **optionValues);
-    CUresult (*ModuleUnload)(CUmodule hmod);
-    CUresult (*ModuleGetFunction)(CUfunction *hfunc, CUmodule hmod,
-                                    const char *name);
-    CUresult (*MemAlloc)(CUdeviceptr *dptr, size_t bytesize);
-    CUresult (*MemcpyHtoD)(CUdeviceptr dstDevice, const void *srcHost,
-                             size_t ByteCount);
-    CUresult (*MemcpyHtoDAsync)(CUdeviceptr dstDevice, const void *srcHost,
-                                  size_t ByteCount, CUstream hStream);
-    CUresult (*MemcpyDtoH)(void *dstHost, CUdeviceptr srcDevice,
-                             unsigned int ByteCount);
-    CUresult (*MemcpyDtoHAsync)(void *dstHost, CUdeviceptr srcDevice,
-                                  unsigned int ByteCount, CUstream hStream);
-    CUresult (*MemFree)(CUdeviceptr dptr);
-    CUresult (*StreamCreate)(CUstream *phStream, unsigned int Flags);
-    CUresult (*StreamDestroy)(CUstream hStream);
-    CUresult (*StreamSynchronize)(CUstream hStream);
-    CUresult (*LaunchKernel)(CUfunction f, unsigned int gridDimX,
-                             unsigned int gridDimY, unsigned int gridDimZ,
-                             unsigned int blockDimX, unsigned int blockDimY,
-                             unsigned int blockDimZ, unsigned int sharedMemBytes,
-                             CUstream hStream, void **kernelParams, void **extra);
-
-} cuda_api;
-
+static CudaAPI cuda_api;
+static int cuda_api_initialized = 0;
 
 /* prototypes */
 static const char *curesult_to_str(CUresult e);
@@ -80,6 +48,20 @@ import_numpy_array(void)
     import_array();
 }
 
+
+int
+is_cuda_api_initialized(void)
+{
+    return cuda_api_initialized;
+}
+
+void
+set_cuda_api_initialized(void)
+{
+    cuda_api_initialized = 1;
+}
+
+/* A dummy implementation
 int
 init_cuda_api(void)
 {
@@ -104,6 +86,12 @@ init_cuda_api(void)
     cuda_api.LaunchKernel = &cuLaunchKernel;
 
     return 0;
+}
+*/
+
+CudaAPI* get_cuda_api_ref(void){
+    //init_cuda_api();
+    return &cuda_api;
 }
 
 int
