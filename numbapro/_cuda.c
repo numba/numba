@@ -89,7 +89,7 @@ get_device(CUdevice *cu_device, CUcontext *cu_context, int device_number)
         cu_result = cuDeviceGetCount(&device_count);
         CHECK_CUDA_RESULT_MSG("get CUDA device count", cu_result)
 
-        global_device = malloc(sizeof(CUdevice));
+        global_device = malloc(sizeof(CUdevice)); // never freed
 
         for (i = 0; i < device_count; i++) {
             cu_result = cuDeviceGet(global_device, i);
@@ -243,7 +243,7 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
         npy_intp size = PyArray_NBYTES(array);
 
         /* Allocate memory on device for array */
-        cu_result = cuMemAlloc((void **) &device_pointers[i], size);
+        cu_result = cuMemAlloc(&device_pointers[i], size);
         CHECK_CUDA_MEM_ERR("allocation")
         args[i] = &device_pointers[i];
 
@@ -369,12 +369,12 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
     int dim_count;
     int total_size;
 
-    void *device_args, *device_dims, *device_steps, *device_arylen;
+    CUdeviceptr device_args, device_dims, device_steps, device_arylen;
     const npy_intp device_count = dimensions[0];
 
-    void* temp_args[MAXARGS] = {NULL};
-    void* temp_dims[MAXARGS] = {NULL};
-    void* temp_steps[MAXARGS] = {NULL};
+    CUdeviceptr temp_args[MAXARGS] = {0};
+    CUdeviceptr temp_dims[MAXARGS] = {0};
+    CUdeviceptr temp_steps[MAXARGS] = {0};
 
     void * kernel_args[] = {&device_args, &device_dims, &device_steps,
                             &device_arylen, &device_count};
@@ -523,9 +523,9 @@ int cuda_numba_function(PyListObject *args, void *func,
     ndarray *arrays[MAXARGS] = {NULL};
     ndarray tmparys[MAXARGS];
     memset(tmparys, 0, sizeof(tmparys));
-    void* device_pointers[MAXARGS] = {NULL};
+    CUdeviceptr device_pointers[MAXARGS] = {NULL};
     void* host_pointers[MAXARGS] = {NULL};
-    void * kernel_args[MAXARGS] = {NULL};
+    void* kernel_args[MAXARGS] = {NULL};
 
     cu_result = cuStreamCreate(&stream, 0);
     CHECK_CUDA_RESULT_MSG("Creating a CUDA stream", cu_result);
