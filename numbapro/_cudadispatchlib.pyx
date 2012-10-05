@@ -36,7 +36,7 @@ cdef void* addressof(x):
     addr = ctypes.cast(x, ctypes.c_void_p).value
     return <void *>addr
 
-cdef init_cuda_api():
+cdef int _init_cuda_api() except *:
     cdef cuda.CudaAPI * cuda_api
 
     if not cuda.is_cuda_api_initialized():
@@ -56,9 +56,11 @@ cdef init_cuda_api():
         try:
             driver = dlloader(path)
         except OSError:
-            raise ImportError("CUDA is not supported or the library cannot be found. "
-                              "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
-                              "with the path of the CUDA driver shared library.")
+            raise ImportError(
+                      "CUDA is not supported or the library cannot be found. "
+                      "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
+                      "with the path of the CUDA driver shared library.")
+
 
         # Begin to populate the CUDA API function table
         api = cuda.get_cuda_api_ref()
@@ -99,6 +101,10 @@ cdef init_cuda_api():
             api.StreamDestroy = addressof(driver.cuStreamDestroy)
 
         cuda.set_cuda_api_initialized()
+
+
+def init_cuda_api():
+    _init_cuda_api()
 
 cdef cuda.CUdevice get_device(int device_number) except *:
     """
@@ -304,9 +310,4 @@ cdef class CudaNumbaFuncDispatcher(object): #cutils.UFuncDispatcher):
 
     def __dealloc__(self):
         cuda.dealloc(self.cu_module, self.cu_context)
-
-
-# Initialize CUDA driver during import
-init_cuda_api()
-
 
