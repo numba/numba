@@ -1,6 +1,8 @@
 # as _internal contains the license checking code, we import it here
 from . import _internal
 
+__version __ = '0.6.0'
+
 def test(verbosity=2, failfast=False):
     import unittest
     import pkgutil
