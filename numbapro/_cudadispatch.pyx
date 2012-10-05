@@ -48,10 +48,17 @@ cdef init_cuda_api():
         else:
             dlloader = ctypes.CDLL
             path = '/usr/lib/libcuda.so'
+
+        # Environment variable always overide if present
         path = os.environ.get('NUMBAPRO_CUDA_DRIVER', path)
 
         # Load the driver
-        driver = dlloader(path)
+        try:
+            driver = dlloader(path)
+        except OSError:
+            raise ImportError("CUDA is not supported or the library cannot be found. "
+                              "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
+                              "with the path of the CUDA driver shared library.")
 
         # Begin to populate the CUDA API function table
         api = cuda.get_cuda_api_ref()
