@@ -11,10 +11,12 @@ static CUcontext global_context = NULL;
 static CUdevice  *global_device  = NULL;
 
 static struct {
+    CUresult (*Init)(unsigned int Flags);
     CUresult (*DeviceGetCount)(int *count);
     CUresult (*DeviceGet)(CUdevice *device, int ordinal);
     CUresult (*DeviceGetAttribute)(int *pi, CUdevice_attribute attrib, CUdevice dev);
     CUresult (*DeviceComputeCapability)(int *major, int *minor, CUdevice dev);
+    CUresult (*CtxCreate)(CUcontext *pctx, unsigned int flags, CUdevice dev);
     CUresult (*ModuleLoadDataEx)(CUmodule *module, const void *image,
                                  unsigned int numOptions, CUjit_option *options,
                                  void **optionValues);
@@ -81,10 +83,12 @@ import_numpy_array(void)
 int
 init_cuda_api(void)
 {
+    cuda_api.Init = &cuInit;
     cuda_api.DeviceGetCount = &cuDeviceGetCount;
     cuda_api.DeviceGet = &cuDeviceGet;
     cuda_api.DeviceGetAttribute = &cuDeviceGetAttribute;
     cuda_api.DeviceComputeCapability = &cuDeviceComputeCapability;
+    cuda_api.CtxCreate = &cuCtxCreate;
     cuda_api.ModuleLoadDataEx = &cuModuleLoadDataEx;
     cuda_api.ModuleUnload = &cuModuleUnload;
     cuda_api.ModuleGetFunction = &cuModuleGetFunction;
@@ -123,7 +127,7 @@ dealloc(CUmodule cu_module, CUcontext cu_context)
     CUresult cu_result;
 
     if (cu_module) {
-        cu_result = cuModuleUnload(cu_module);
+        cu_result = cuda_api.ModuleUnload(cu_module);
         CHECK_CUDA_RESULT(cu_result)
     }
 //    if (cu_context) {
@@ -141,15 +145,15 @@ get_device(CUdevice *cu_device, CUcontext *cu_context, int device_number)
     if (device_number < 0 && !global_device) {
         int i, device_count;
 
-        cuInit(0); //initialize the driver api
+        cuda_api.Init(0); //initialize the driver api
 
-        cu_result = cuDeviceGetCount(&device_count);
+        cu_result = cuda_api.DeviceGetCount(&device_count);
         CHECK_CUDA_RESULT_MSG("get CUDA device count", cu_result)
 
         global_device = malloc(sizeof(CUdevice)); // never freed
 
         for (i = 0; i < device_count; i++) {
-            cu_result = cuDeviceGet(global_device, i);
+            cu_result = cuda_api.DeviceGet(global_device, i);
             if (cu_result == CUDA_SUCCESS) {
                 device_number = i;
                 break;
@@ -166,7 +170,7 @@ get_device(CUdevice *cu_device, CUcontext *cu_context, int device_number)
     }
 
     if (!global_context) {
-        cu_result = cuCtxCreate(&global_context, 0, *global_device);
+        cu_result = cuda_api.CtxCreate(&global_context, 0, *global_device);
         CHECK_CUDA_RESULT(cu_result)
     }
     if (cu_context) {
@@ -183,7 +187,7 @@ init_attributes(CUdevice cu_device, CudaDeviceAttrs *attrs)
     CudaDeviceAttrs out;
 
 #define _GETATTR(value, attr) \
-        cu_result = cuDeviceGetAttribute(&out.value, attr, cu_device); \
+        cu_result = cuda_api.DeviceGetAttribute(&out.value, attr, cu_device); \
         CHECK_CUDA_RESULT(cu_result);
 
     _GETATTR(MAX_THREADS_PER_BLOCK, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK)
@@ -194,7 +198,7 @@ init_attributes(CUdevice cu_device, CudaDeviceAttrs *attrs)
     _GETATTR(MAX_BLOCK_DIM_Y, CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y)
     _GETATTR(MAX_BLOCK_DIM_Z, CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z)
     _GETATTR(MAX_SHARED_MEMORY, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK)
-    cu_result = cuDeviceComputeCapability(&out.COMPUTE_CAPABILITY_MAJOR,
+    cu_result = cuda_api.DeviceComputeCapability(&out.COMPUTE_CAPABILITY_MAJOR,
                                           &out.COMPUTE_CAPABILITY_MINOR,
                                           cu_device);
     CHECK_CUDA_RESULT(cu_result)
@@ -231,7 +235,7 @@ cuda_load(PyObject *ptx_str, CUmodule *cu_module)
     values[0] = &cu_errors[0];
     values[1] = &bufsize;
 
-    cu_result = cuModuleLoadDataEx(cu_module, ptx, 2, options, values);
+    cu_result = cuda_api.ModuleLoadDataEx(cu_module, ptx, 2, options, values);
 
 /*    cu_result = cuModuleLoadData(cu_module, ptx); */
     if (cu_result != CUDA_SUCCESS) {
@@ -247,7 +251,7 @@ int
 cuda_getfunc(CUmodule cu_module, CUfunction *cu_func, char *funcname)
 {
     CUresult cu_result;
-    cu_result = cuModuleGetFunction(cu_func, cu_module, funcname);
+    cu_result = cuda_api.ModuleGetFunction(cu_func, cu_module, funcname);
     CHECK_CUDA_RESULT(cu_result);
     return 0;
 }
@@ -300,13 +304,13 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
         npy_intp size = PyArray_NBYTES(array);
 
         /* Allocate memory on device for array */
-        cu_result = cuMemAlloc(&device_pointers[i], size);
+        cu_result = cuda_api.MemAlloc(&device_pointers[i], size);
         CHECK_CUDA_MEM_ERR("allocation")
         args[i] = &device_pointers[i];
 
         if (i != ufunc->nin || copy_in) {
             /* Copy array to device, skip 'out' unless 'copy_in' is true */
-            cu_result = cuMemcpyHtoD(device_pointers[i], data, size);
+            cu_result = cuda_api.MemcpyHtoD(device_pointers[i], data, size);
             CHECK_CUDA_MEM_ERR("copy to device")
         }
     }
@@ -314,7 +318,7 @@ invoke_cuda_ufunc(PyUFuncObject *ufunc, CudaDeviceAttrs *device_attrs,
     args[ufunc->nin + 1] = &total_count;
 
     /* Launch kernel & check result */
-    cu_result = cuLaunchKernel(cu_func, griddimx, griddimy, griddimz,
+    cu_result = cuda_api.LaunchKernel(cu_func, griddimx, griddimy, griddimz,
                                blockdimx, blockdimy, blockdimz,
                                0 /* sharedMemBytes */, 0 /* hStream */,
                                args, 0);
@@ -342,10 +346,10 @@ cleanup:
         if (args[i] == NULL)
             break;
 
-        cu_result = cuMemcpyDtoH(data, device_pointers[i], size);
+        cu_result = cuda_api.MemcpyDtoH(data, device_pointers[i], size);
         CHECK_CUDA_MEM_ERR("copy to host")
 
-        cu_result = cuMemFree(device_pointers[i]);
+        cu_result = cuda_api.MemFree(device_pointers[i]);
         CHECK_CUDA_MEM_ERR("free")
     }
     /* Deallocate packed arguments */
@@ -380,13 +384,13 @@ alloc_and_copy(void *data, size_t size, void **result, CUstream stream)
 
     /* printf("Allocating chunk of %d bytes\n", (int) size); */
 
-	cu_result = cuMemAlloc(&p, size);
+	cu_result = cuda_api.MemAlloc(&p, size);
 	CHECK_CUDA_MEM_ERR("allocation")
 
     if (stream)
-        cu_result = cuMemcpyHtoDAsync(p, data, size, stream);
+        cu_result = cuda_api.MemcpyHtoDAsync(p, data, size, stream);
     else
-	    cu_result = cuMemcpyHtoD(p, data, size);
+	    cu_result = cuda_api.MemcpyHtoD(p, data, size);
 
 	CHECK_CUDA_MEM_ERR("copy to device")
 
@@ -447,7 +451,7 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
     TODO: Use multiple streams to divide up the work since the order does not
     matter.
     */
-    cu_result = cuStreamCreate(&stream, 0);
+    cu_result = cuda_api.StreamCreate(&stream, 0);
     CHECK_CUDA_RESULT_MSG("Creating a CUDA stream", cu_result)
 
     dim_count = 0;
@@ -507,7 +511,7 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
 	    thread_per_block = MAX_THREAD;
 	}
 
-	cu_result = cuLaunchKernel(info->cu_func,
+	cu_result = cuda_api.LaunchKernel(info->cu_func,
 	                           block_per_grid, 1, 1,
 							   thread_per_block, 1, 1,
 							   0 /* sharedMemBytes */ , stream,
@@ -526,13 +530,13 @@ _cuda_outer_loop(char **args, npy_intp *dimensions, npy_intp *steps, void *data,
 
     /* Copy the output array */
     /* TODO: error handling */
-    cu_result = cuMemcpyDtoHAsync(args[info->nops - 1],
+    cu_result = cuda_api.MemcpyDtoHAsync(args[info->nops - 1],
                                   temp_args[info->nops - 1],
                                   steps[info->nops - 1] * dimensions[0],
                                   stream);
     CHECK_CUDA_MEM_ERR("retrieve result")
 
-    cu_result = cuStreamSynchronize(stream);
+    cu_result = cuda_api.StreamSynchronize(stream);
     CHECK_CUDA_RESULT_MSG("stream synchronize", cu_result)
 
     goto cleanup;
@@ -543,16 +547,16 @@ cleanup:
     /* TODO: error handling */
 
     for(i = 0; i < info->nops; ++i ){
-        cuMemFree(temp_args[i]);
-        cuMemFree(temp_dims[i]);
+        cuda_api.MemFree(temp_args[i]);
+        cuda_api.MemFree(temp_dims[i]);
     }
 
-    cuMemFree(device_args);
-    cuMemFree(device_dims);
-    cuMemFree(device_steps);
-    cuMemFree(device_arylen);
+    cuda_api.MemFree(device_args);
+    cuda_api.MemFree(device_dims);
+    cuda_api.MemFree(device_steps);
+    cuda_api.MemFree(device_arylen);
 
-	(void) cuStreamDestroy(stream);
+	(void) cuda_api.StreamDestroy(stream);
 	return result;
 }
 
@@ -584,7 +588,7 @@ int cuda_numba_function(PyListObject *args, void *func,
     void* host_pointers[MAXARGS] = {NULL};
     void* kernel_args[MAXARGS] = {NULL};
 
-    cu_result = cuStreamCreate(&stream, 0);
+    cu_result = cuda_api.StreamCreate(&stream, 0);
     CHECK_CUDA_RESULT_MSG("Creating a CUDA stream", cu_result);
 
     /* Prepare arguments */
@@ -647,7 +651,7 @@ int cuda_numba_function(PyListObject *args, void *func,
         }
     }
 
-    cu_result = cuLaunchKernel(func,
+    cu_result = cuda_api.LaunchKernel(func,
 	                           griddimx, griddimy, griddimz,
 							   blockdimx, blockdimy, blockdimz,
 							   0 /* sharedMemBytes */ , stream,
@@ -664,24 +668,24 @@ int cuda_numba_function(PyListObject *args, void *func,
         if (ary) {
             ndarray *tmpary = &tmparys[i];
 
-            cu_result = cuMemcpyDtoHAsync(ary->data, tmpary->data,
+            cu_result = cuda_api.MemcpyDtoHAsync(ary->data, tmpary->data,
                                           ary->strides[0] * ary->dimensions[0],
                                           stream);
             CHECK_CUDA_MEM_ERR("retrieve data")
 
-            cu_result = cuMemcpyDtoHAsync(ary->dimensions, tmpary->dimensions,
+            cu_result = cuda_api.MemcpyDtoHAsync(ary->dimensions, tmpary->dimensions,
                                           sizeof(npy_intp) * ary->nd,
                                           stream);
             CHECK_CUDA_MEM_ERR("retrieve dimension")
 
-            cu_result = cuMemcpyDtoHAsync(ary->strides, tmpary->strides,
+            cu_result = cuda_api.MemcpyDtoHAsync(ary->strides, tmpary->strides,
                                           sizeof(npy_intp) * ary->nd,
                                           stream);
             CHECK_CUDA_MEM_ERR("retrieve strides")
         }
     }
 
-    cu_result = cuStreamSynchronize(stream);
+    cu_result = cuda_api.StreamSynchronize(stream);
     CHECK_CUDA_RESULT_MSG("stream synchronize", cu_result)
 
     goto cleanup;
@@ -691,15 +695,15 @@ error:
 cleanup:
     for (i=0; i<nargs; ++i){
         if (arrays[i]) {
-            cuMemFree(tmparys[i].data);
-            cuMemFree(tmparys[i].dimensions);
-            cuMemFree(tmparys[i].strides);
-            cuMemFree(device_pointers[i]);
+            cuda_api.MemFree(tmparys[i].data);
+            cuda_api.MemFree(tmparys[i].dimensions);
+            cuda_api.MemFree(tmparys[i].strides);
+            cuda_api.MemFree(device_pointers[i]);
         } else {
             free(host_pointers[i]);
         }
     }
-    cuStreamDestroy(stream);
+    cuda_api.StreamDestroy(stream);
     return result;
 }
 
