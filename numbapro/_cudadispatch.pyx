@@ -106,9 +106,6 @@ cdef cuda.CUdevice get_device(int device_number) except *:
     first working device.
     """
     cdef cuda.CUdevice result
-
-    init_cuda_api()
-
     device_number = get_device_number(device_number)
     cuda.get_device(&result, NULL, device_number)
     return result
@@ -307,5 +304,9 @@ cdef class CudaNumbaFuncDispatcher(object): #cutils.UFuncDispatcher):
 
     def __dealloc__(self):
         cuda.dealloc(self.cu_module, self.cu_context)
+
+
+# Initialize CUDA driver during import
+init_cuda_api()
 
 
