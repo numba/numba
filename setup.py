@@ -44,36 +44,16 @@ ext_modules = [
         cython_include_dirs = [minivect.get_include()],
         cython_gdb=True,
     ),
-]
 
-CUDA_DIR = os.environ.get('CUDA_DIR', os.environ.get('CUDA_PATH', '/usr/local/cuda'))
-if os.path.exists(CUDA_DIR):
-    CUDA_INCLUDE = join(CUDA_DIR, 'include')
-    if platform.architecture()[0] == '64bit':
-        if sys.platform == 'linux2':
-            CUDA_LIB_DIR = join(CUDA_DIR, 'lib64')
-        elif sys.platform == 'win32':
-            CUDA_LIB_DIR = join(CUDA_DIR, 'lib', 'x64')
-        else:
-            CUDA_LIB_DIR = join(CUDA_DIR, 'lib')
-    else:
-        if sys.platform == 'win32':
-            CUDA_LIB_DIR = join(CUDA_DIR, 'lib', 'Win32')
-        else:
-            CUDA_LIB_DIR = join(CUDA_DIR, 'lib')
-
-    ext = CythonExtension(
+    CythonExtension(
         name = "numbapro._cudadispatch",
         sources = ["numbapro/_cudadispatch.pyx", "numbapro/_cuda.c"],
-        include_dirs = [numpy.get_include(), CUDA_INCLUDE],
-        # extra_objects = ["numbapro/_cuda.o"],
-        #library_dirs = [CUDA_LIB_DIR],
-        #libraries = ["cuda"],
+        include_dirs = [numpy.get_include(), "cuda_toolkit"],
         depends = ["numbapro/_cuda.h", "numbapro/cuda.pxd",
-                   "numbapro/dispatch.pxd"],
+                   "numbapro/dispatch.pxd",],
         cython_gdb=True,
     )
-    ext_modules.append(ext)
+]
 
 setup(
     name = "numbapro",
