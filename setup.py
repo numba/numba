@@ -68,7 +68,7 @@ if os.path.exists(CUDA_DIR):
         include_dirs = [numpy.get_include(), CUDA_INCLUDE],
         # extra_objects = ["numbapro/_cuda.o"],
         library_dirs = [CUDA_LIB_DIR],
-        libraries = ["cuda", "cudart"],
+        libraries = ["cuda"],
         depends = ["numbapro/_cuda.h", "numbapro/cuda.pxd",
                    "numbapro/dispatch.pxd"],
         cython_gdb=True,
