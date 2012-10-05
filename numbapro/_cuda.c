@@ -571,10 +571,11 @@ int cuda_numba_function(PyListObject *args, void *func,
 
     ndarray *arrays[MAXARGS] = {NULL};
     ndarray tmparys[MAXARGS];
-    memset(tmparys, 0, sizeof(tmparys));
     CUdeviceptr device_pointers[MAXARGS] = {NULL};
     void* host_pointers[MAXARGS] = {NULL};
     void* kernel_args[MAXARGS] = {NULL};
+
+    memset(tmparys, 0, sizeof(tmparys));
 
     cu_result = cuda_api.StreamCreate(&stream, 0);
     CHECK_CUDA_RESULT_MSG("Creating a CUDA stream", cu_result);
