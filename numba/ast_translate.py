@@ -182,14 +182,32 @@ class ComplexSupportMixin(object):
     "Support for complex numbers"
 
     def _generate_complex_op(self, op, arg1, arg2):
-        rres, ires = op(self.builder.extract_value(arg1, 0),
-                        self.builder.extract_value(arg1, 1),
-                        self.builder.extract_value(arg2, 0),
-                        self.builder.extract_value(arg2, 1))
-        ret_val = self.builder.insert_value(
-            self.builder.insert_value(lc.Constant.undef(arg1.type), rres, 0),
-            ires, 1)
-        return ret_val
+        (r1, i1), (r2, i2) = self._extract(arg1), self._extract(arg2)
+        real, imag = op(r1, i1, r2, i2)
+        return self._create_complex(real, imag)
+
+    def _extract(self, value):
+        "Extract the real and imaginary parts of the complex value"
+        return (self.builder.extract_value(value, 0),
+                self.builder.extract_value(value, 1))
+
+    def _create_complex(self, real, imag):
+        assert real.type == imag.type
+        complex = lc.Constant.undef(llvm.core.Type.struct([real.type, real.type]))
+        complex = self.builder.insert_value(complex, real, 0)
+        complex = self.builder.insert_value(complex, imag, 1)
+        return complex
+
+    def _promote_complex(self, src_type, dst_type, value):
+        "Promote a complex value to value with a larger or smaller complex type"
+        real, imag = self._extract(value)
+
+        src_ltype = src_type.to_llvm(self.context)
+        dst_ltype = dst_type.to_llvm(self.context)
+
+        real = self.caster.cast(real, dst_ltype)
+        imag = self.caster.cast(imag, dst_ltype)
+        return self._create_complex(real, imag)
 
     def _complex_add(self, arg1r, arg1i, arg2r, arg2i):
         return (self.builder.fadd(arg1r, arg2r),
@@ -781,8 +799,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
 
         return result
 
-    def visit_CoercionNode(self, node):
-        val = self.visit(node.node)
+    def visit_CoercionNode(self, node, val=None):
+        if val is None:
+            val = self.visit(node.node)
 
         if node.type == node.node.type:
             return val
@@ -795,6 +814,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
             val = self.builder.ptrtoint(val, ldst_type)
         elif node_type.is_int and dst_type.is_pointer:
             val = self.builder.inttoptr(val, ldst_type)
+        elif dst_type.is_complex and node_type.is_complex:
+            val = self._promote_complex(node_type, dst_type, val)
+        elif dst_type.is_complex and node_type.is_numeric:
+            ldst_base_type = dst_type.base_type.to_llvm(self.context)
+            real = val
+            if node_type != dst_type.base_type:
+                real = self.caster.cast(real, ldst_base_type)
+            imag = llvm.core.Constant.real(ldst_base_type, 0.0)
+            val = self._create_complex(real, imag)
         else:
             val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
 

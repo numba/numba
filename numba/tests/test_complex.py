@@ -106,16 +106,24 @@ class TestComplex (test_support.ByteCodeTestCase):
             self.assertEqual(prod_sum_fn(a, x, b),
                              compiled_prod_sum_fn(a, x, b))
 
-    def test_arithmetic(self):
-        m, n = 0.4 + 1.2j, 5.1 - 0.6j
+    def arithmetic(self, m, n):
         self.assertAlmostEqual(self.autojit(add)(m, n), add(m, n))
         self.assertAlmostEqual(self.autojit(sub)(m, n), sub(m, n))
         self.assertAlmostEqual(self.autojit(mul)(m, n), mul(m, n))
         self.assertAlmostEqual(self.autojit(div)(m, n), div(m, n))
 
-# TODO: some more complex support
+    def test_arithmetic_complex(self):
+        m, n = 0.4 + 1.2j, 5.1 - 0.6j
+        self.arithmetic(m, n)
+
+
 class TestASTComplex(test_support.ASTTestCase, TestComplex):
-    pass
+
+    def test_arithmetic_mixed(self):
+        m, n = 0.4 + 1.2j, 10.0
+        self.arithmetic(m, n)
+        m, n = 0.4 + 1.2j, 10
+        self.arithmetic(m, n)
 
 
 # ______________________________________________________________________
