@@ -32,7 +32,7 @@ cdef int get_device_number(int device_number):
     return device_number
 
 cdef void* addressof(x):
-    cdef long addr
+    cdef unsigned long long addr
     addr = ctypes.cast(x, ctypes.c_void_p).value
     return <void *>addr
 
