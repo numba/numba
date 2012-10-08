@@ -8,8 +8,17 @@ cu_context = c_void_p # an opaque handle
 cu_module = c_void_p # an opaque handle
 cu_jit_option = c_int # enum
 cu_function = c_void_p  # an opaque handle
-cu_device_ptr = c_void_p # defined as unsigned int on 32-bit and unsigned long long on 64-bit machine
+cu_device_ptr = c_size_t # defined as unsigned int on 32-bit and unsigned long long on 64-bit machine
 cu_stream = c_int
+
+CUDA_SUCCESS = 0
+
+class DriverError(Exception):
+    pass
+
+def _check_error(error, msg):
+    if error != CUDA_SUCCESS:
+        raise DriverError(msg, error)
 
 class Driver(object):
     '''Facade to the CUDA Driver API.
@@ -24,7 +33,7 @@ class Driver(object):
         'cuInit' :              (c_int, c_uint),
 
         # CUresult cuDeviceGetCount(int *count);
-        'cuDeviceGetCount':     (c_int, c_int),
+        'cuDeviceGetCount':     (c_int, POINTER(c_int)),
 
         # CUresult cuDeviceGet(CUdevice *device, int ordinal);
         'cuDeviceGet':          (c_int, POINTER(cu_device), c_int),
@@ -43,6 +52,9 @@ class Driver(object):
         #                      CUdevice dev);
         'cuCtxCreate':          (c_int, POINTER(cu_context), c_uint, cu_device),
 
+        # CUresult cuCtxDestroy(CUcontext pctx);
+        'cuCtxDestroy':         (c_int, cu_context),
+
         # CUresult cuModuleLoadDataEx(CUmodule *module, const void *image,
         #                             unsigned int numOptions,
         #                             CUjit_option *options,
@@ -58,7 +70,7 @@ class Driver(object):
         'cuModuleGetFunction':  (c_int, cu_function, cu_module, c_char_p),
 
         # CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize);
-        'cuMemcpyHtoD':         (c_int, cu_device_ptr, c_size_t),
+        'cuMemAlloc':         (c_int, POINTER(cu_device_ptr), c_size_t),
 
         # CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost,
         #                       size_t ByteCount);
@@ -186,4 +198,278 @@ class Driver(object):
             return getattr(self.driver, '%s_v2' % symbol)
         except AttributeError:
             return getattr(self.driver, symbol)
+
+    def get_device_count(self):
+        count = c_int()
+        error = self.cuDeviceGetCount(byref(count))
+        _check_error(error, 'Failed to get number of device')
+        return count.value
+
+CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1
+CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2
+CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y = 3
+CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z = 4
+CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X = 5
+CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y = 6
+CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z = 7
+CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK = 8
+
+class Device(object):
+
+    ATTRIBUTES = {
+      'MAX_THREADS_PER_BLOCK': CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK,
+      'MAX_GRID_DIM_X':        CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X,
+      'MAX_GRID_DIM_Y':        CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y,
+      'MAX_GRID_DIM_Z':        CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z,
+      'MAX_BLOCK_DIM_X':       CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X,
+      'MAX_BLOCK_DIM_Y':       CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y,
+      'MAX_BLOCK_DIM_Z':       CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z,
+      'MAX_SHARED_MEMORY':     CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK,
+    }
+
+    def __init__(self, driver, device_id):
+        got_device = c_int()
+        error = driver.cuDeviceGet(byref(got_device), device_id)
+        _check_error(error, 'Failed to get device %d')
+        assert device_id == got_device.value
+        self.driver = driver
+        self.id = got_device.value
+        self._read_attributes()
+
+    def __str__(self):
+        return "CUDA device %d" % self.id
+
+    def _read_attributes(self):
+        got_value = c_int()
+        for name, num in self.ATTRIBUTES.items():
+            error = self.driver.cuDeviceGetAttribute(byref(got_value), num,
+                                                     self.id)
+            _check_error(error, 'Failed to read attribute "%s" from %s' % (name, self))
+            setattr(self, name, got_value.value)
+
+        got_major = c_int()
+        got_minor = c_int()
+        error = self.driver.cuDeviceComputeCapability(byref(got_major),
+                                                      byref(got_minor),
+                                                      self.id);
+        _check_error(error, 'Failed to read compute capability from %s' % self)
+
+        setattr(self, 'COMPUTE_CAPABILITY', (got_major.value, got_minor.value))
+
+    @property
+    def attributes(self):
+        '''Returns all attributes as a dictionary
+        '''
+        keys = list(self.ATTRIBUTES.keys())
+        keys += ['COMPUTE_CAPABILITY']
+        return dict((k, getattr(self, k)) for k in keys)
+
+
+class Context(object):
+    def __init__(self, device):
+        self.device = device
+        self._handle = cu_context()
+        error = self.driver.cuCtxCreate(byref(self._handle), 0, self.device.id)
+        _check_error(error, 'Failed to create context on %s' % self.device)
+
+    def __del__(self):
+        error = self.driver.cuCtxDestroy(self._handle)
+        _check_error(error, 'Failed to destroy context on %s' % self.device)
+
+    @property
+    def driver(self):
+        return self.device.driver
+
+class DeviceMemory(object):
+    def __init__(self, context, bytesize):
+        self.context = context
+        self._handle = cu_device_ptr()
+        error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
+        _check_error(error, 'Failed to allocate memory')
+
+    def __del__(self):
+        error = self.driver.cuMemFree(self._handle)
+        _check_error(error, 'Failed to free memory')
+
+    def to_device_raw(self, src, size, stream=0):
+        if stream:
+            self.driver.cuMemcpyHtoD(self._handle, src, size, stream)
+        else:
+            self.driver.cuMemcpyHtoD(self._handle, src, size)
+
+    def from_device_raw(self, dst, size, stream=0):
+        if stream:
+            self.driver.cuMemcpyDtoH(dst, self._handle, size, stream)
+        else:
+            self.driver.cuMemcpyDtoH(dst, self._handle, size)
+
+    @property
+    def driver(self):
+        return self.device.driver
+
+    @property
+    def device(self):
+        return self.context.device
+
+
+CU_JIT_INFO_LOG_BUFFER = 3
+CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES = 4
+
+class Module(object):
+    def __init__(self, context, ptx):
+        self.context = context
+        self.ptx = ptx
+
+        self._handle = cu_module()
+        ptx = c_char_p(self.ptx)
+
+        info_log_n = 256
+        c_info_log_n = c_int(info_log_n)
+        c_info_log_buffer = (c_char * info_log_n)()
+
+        option_keys = [CU_JIT_INFO_LOG_BUFFER, CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES]
+        option_vals = [cast(c_info_log_buffer, c_void_p), addressof(c_info_log_n)]
+        option_n = len(option_keys)
+        c_option_keys = (c_int * option_n)(*option_keys)
+        c_option_vals = (c_void_p * option_n)(*option_vals)
+
+        error = self.driver.cuModuleLoadDataEx(byref(self._handle), ptx,
+                                               option_n, c_option_keys,
+                                               c_option_vals)
+        _check_error(error, 'Failed to load module')
+
+        self.info_log = c_info_log_buffer
+
+    def __del__(self):
+        error =  self.driver.cuModuleUnload(self._handle)
+        _check_error(error, 'Failed to unload module')
+
+    @property
+    def driver(self):
+        return self.device.driver
+
+    @property
+    def device(self):
+        return self.context.device
+
+
+class Function(object):
+
+    griddim = 1, 1, 1
+    blockdim = 1, 1, 1
+    stream = 0
+    sharedmem = 0
+
+    def __init__(self, module, name):
+        self.module = module
+        self.name = name
+        self._handle = cu_function()
+        error = self.driver.cuModuleGetFunction(byref(self._handle),
+                                                self.module._handle,
+                                                name);
+        _check_error(error, 'Failed to get function "%s" from module' % name)
+
+    @property
+    def driver(self):
+        return self.device.driver
+
+    @property
+    def device(self):
+        return self.context.device
+
+    @property
+    def context(self):
+        return self.module.context
+
+    def __str__(self):
+        return 'CUDA kernel %s' % self.name
+
+    def configure(self, griddim, blockdim, sharedmem=0, stream=0):
+        import copy
+
+        while len(griddim) < 3:
+            griddim += (1,)
+
+        while len(blockdim) < 3:
+            blockdim += (1,)
+
+        inst = copy.copy(self) # shallow clone the object
+        inst.griddim = griddim
+        inst.blockdim = blockdim
+        inst.sharedmem = sharedmem
+        inst.stream = stream
+        return inst
+
+    def __call__(self, *args):
+        '''
+        *args -- Must be either ctype objects of DevicePointer instances.
+        '''
+        if self.driver.old_api:
+            error = self.driver.cuFuncSetBlockShape(self._handle,  *self.blockdim)
+            _check_error(error, "Failed to set block shape.")
+
+            error = self.driver.cuFuncSetSharedSize(self._handle, self.sharedmem)
+            _check_error(error, "Failed to set shared memory size.")
+
+            # count parameter byte size
+            bytesize = 0
+            for arg in args:
+                if isinstance(arg, DeviceMemory):
+                    size = sizeof(arg._handle)
+                else:
+                    size = sizeof(arg)
+                bytesize += size
+
+            error = self.driver.cuParamSetSize(self._handle, bytesize)
+            _check_error(error, 'Failed to set parameter size (%d)' % bytesize)
+
+            offset = 0
+            for i, arg in enumerate(args):
+                if isinstance(arg, DeviceMemory):
+                    size = sizeof(arg._handle)
+                    error = self.driver.cuParamSetv(self._handle, offset,
+                                                    addressof(arg._handle),
+                                                    size)
+                else:
+                    size = sizeof(arg)
+                    error = self.driver.cuParamSetv(arg, offset, addressof(arg),
+                                                    size)
+                _check_error(error, 'Failed to set parameter %d' % i)
+                offset += size
+
+
+            gx, gy, _ = self.griddim
+            if self.stream:
+                error = self.driver.cuLaunchGrid(self._handle, gx, gy, stream)
+            else:
+                error = self.driver.cuLaunchGrid(self._handle, gx, gy)
+
+            _check_error(error, 'Failed to launch kernel')
+
+        else:
+
+            gx, gy, gz = self.griddim
+            bx, by, bz = self.blockdim
+
+            param_vals = []
+            for arg in args:
+                if isinstance(arg, DeviceMemory):
+                    param_vals.append(addressof(arg._handle))
+                else:
+                    param_vals.append(addressof(arg))
+            params = (c_void_p * len(param_vals))(*param_vals)
+
+            error = self.driver.cuLaunchKernel(
+                        self._handle,
+                        gx, gy, gz,
+                        bx, by, bz,
+                        self.sharedmem, self.stream,
+                        # XXX: Why does the following line cannot be changed
+                        #      to a variable of the same value in 64-bit Linux?
+                        #      A python bug?
+                        cast(addressof(params), POINTER(c_void_p)),
+                        None)
+
+            _check_error(error, "Failed to launch kernel")
+
 
