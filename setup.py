@@ -64,6 +64,7 @@ setup(
     description = "compile Python code",
     ext_modules = ext_modules,
     packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize',
+                'numbapro._cuda',
                 'numbapro.tests',
                 'numbapro.tests.basic_vectorize',
                 'numbapro.tests.llvm_cbuilder_tests',

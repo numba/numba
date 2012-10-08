@@ -72,8 +72,8 @@ def drop_in_gdb(addr=None, type='int'):
     os.kill(os.getpid(), signal.SIGINT)
 
 
-import numbapro.array_expressions
-try:
-    import numbapro.cuda
-except ImportError:
-    pass
+#import numbapro.array_expressions
+#try:
+#    import numbapro.cuda
+#except ImportError:
+#    pass
