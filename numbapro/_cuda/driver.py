@@ -406,15 +406,17 @@ class DeviceMemory(object):
 
     def to_device_raw(self, src, size, stream=0):
         if stream:
-            self.driver.cuMemcpyHtoDAsync(self._handle, src, size, stream)
+            error = self.driver.cuMemcpyHtoDAsync(self._handle, src, size, stream)
         else:
-            self.driver.cuMemcpyHtoD(self._handle, src, size)
+            error = self.driver.cuMemcpyHtoD(self._handle, src, size)
+        _check_error(error, "Failed to copy memory H->D")
 
     def from_device_raw(self, dst, size, stream=0):
         if stream:
-            self.driver.cuMemcpyDtoHAsync(dst, self._handle, size, stream)
+            error = self.driver.cuMemcpyDtoHAsync(dst, self._handle, size, stream)
         else:
-            self.driver.cuMemcpyDtoH(dst, self._handle, size)
+            error = self.driver.cuMemcpyDtoH(dst, self._handle, size)
+        _check_error(error, "Failed to copy memory D->H")
 
     @property
     def driver(self):
@@ -423,7 +425,6 @@ class DeviceMemory(object):
     @property
     def device(self):
         return self.context.device
-
 
 CU_JIT_INFO_LOG_BUFFER = 3
 CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES = 4
