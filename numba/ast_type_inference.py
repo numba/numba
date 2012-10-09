@@ -468,8 +468,22 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.symtab['None'] = Variable(numba_types.none, is_constant=True,
                                        constant_value=None)
 
+    def is_object(self, type):
+        return type.is_object or type.is_array
+
     def promote_types(self, t1, t2):
         return self.context.promote_types(t1, t2)
+
+    def promote_types_numeric(self, t1, t2):
+        "Type promotion but demote objects to numeric types"
+        if (t1.is_numeric or t2.is_numeric) and (self.is_object(t1) or
+                                                 self.is_object(t2)):
+            if t1.is_numeric:
+                return t1
+            else:
+                return t2
+        else:
+            return self.promote_types(t1, t2)
 
     def promote(self, v1, v2):
         return self.promote_types(v1.type, v2.type)
@@ -595,6 +609,23 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.test = nodes.CoercionNode(self.visit(node.test), minitypes.bool_)
         node.body = self.visitlist(node.body)
         return node
+
+    def visit_With(self, node):
+        if (not isinstance(node.context_expr, ast.Name) or
+                node.context_expr.id not in ('python', 'nopython')):
+            raise error.NumbaError(
+                node, "only 'with nopython' and 'with python' is supported "
+                      "in with statements")
+
+        body = self.visitlist(node.body)
+        if (node.body and isinstance(node.body[0], ast.Expr) and
+                node.body[0].value == 'WITH_BLOCK'):
+            body = body[1:]
+
+        if node.context_expr.id == 'nopython':
+            return nodes.WithNoPythonNode(body=body)
+        else:
+            return nodes.WithPythonNode(body=body)
 
     def visit_Name(self, node):
         from numba import functions
@@ -983,14 +1014,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if type.is_none:
             # When returning None, set the return type to void.
             # That way, we don't have to due with the PyObject reference.
-            self.return_variable.type = minitypes.VoidType()
+            if self.return_variable.type is None:
+                self.return_variable.type = minitypes.VoidType()
             node.value = None
         elif self.return_variable.type is None:
             self.return_variable.type = type
             node.value = value
         else:
             # todo: in case of unpromotable types, return object?
-            self.return_variable.type = self.promote_types(
+            self.return_variable.type = self.promote_types_numeric(
                                     self.return_variable.type, type)
             node.value = nodes.DeferredCoercionNode(value, self.return_variable)
 

@@ -81,15 +81,20 @@ class TransformForIterable(visitors.NumbaTransformer):
 
 class LateSpecializer(visitors.NumbaTransformer):
 
-    def __init__(self, context, func, ast, func_signature):
+    def __init__(self, context, func, ast, func_signature, nopython=0):
         super(LateSpecializer, self).__init__(context, func, ast)
         self.func_signature = func_signature
+        self.nopython = 0
 
     def visit_FunctionDef(self, node):
         self.generic_visit(node)
 
         ret_type = self.func_signature.return_type
         if ret_type.is_object or ret_type.is_array:
+            if self.nopython:
+                raise error.NumbaError(
+                        node, "Function cannot return object in "
+                              "nopython context")
             value = nodes.NULL_obj
         elif ret_type.is_void:
             value = None
@@ -106,6 +111,11 @@ class LateSpecializer(visitors.NumbaTransformer):
         node.error_return = ast.Return(value=value)
         return node
 
+    def check_context(self, node):
+        if self.nopython:
+            raise error.NumbaError(node, "Cannot construct object in "
+                                         "nopython context")
+
     def _print(self, value, dest=None):
         stdin, stdout, stderr = stdio_util.get_stdio_streams()
         stdout = stdio_util.get_stream_as_node(stdout)
@@ -120,6 +130,9 @@ class LateSpecializer(visitors.NumbaTransformer):
         return nodes.NativeCallNode(signature, args, lfunc)
 
     def visit_Print(self, node):
+        if self.nopython:
+            raise error.NumbaError(node, "Cannot use print statement in "
+                                         "nopython context")
         result = []
         for value in node.values:
             value = nodes.CoercionNode(value, object_, name="print_arg")
@@ -131,6 +144,8 @@ class LateSpecializer(visitors.NumbaTransformer):
         return self.visitlist(result)
 
     def visit_Tuple(self, node):
+        self.check_context(node)
+
         sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
         objs = self.visitlist(nodes.CoercionNode.coerce(node.elts, object_))
         n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
@@ -140,18 +155,28 @@ class LateSpecializer(visitors.NumbaTransformer):
         return nodes.ObjectTempNode(new_node)
 
     def visit_Dict(self, node):
+        self.check_context(node)
         self.generic_visit(node)
         return nodes.ObjectTempNode(node)
 
     def visit_NativeCallNode(self, node):
         self.generic_visit(node)
         if node.signature.return_type.is_object:
+            if self.nopython:
+                raise error.NumbaError(
+                        node, "Cannot call function returning object in "
+                              "nopython context")
             node = nodes.ObjectTempNode(node)
         return node
 
     def visit_ObjectCallNode(self, node):
         # self.generic_visit(node)
         assert node.function
+
+        if self.nopython:
+            raise error.NumbaError(node, "Cannot use object call in "
+                                         "nopython context")
+
         node.function = self.visit(node.function)
         node.args_tuple = self.visit(node.args_tuple)
         node.kwargs_dict = self.visit(node.kwargs_dict)
@@ -166,6 +191,11 @@ class LateSpecializer(visitors.NumbaTransformer):
             return node
 
         node_type = node.node.type
+
+        if self.nopython and (node_type.is_object or node.type.is_object):
+            raise error.NumbaError(node, "Cannot coerce to or from object in "
+                                         "nopython context")
+
         if node.dst_type.is_object and not node_type.is_object:
             return nodes.ObjectTempNode(nodes.CoerceToObject(
                     node.node, node.dst_type, name=node.name))
@@ -175,6 +205,7 @@ class LateSpecializer(visitors.NumbaTransformer):
             tup = ast.Tuple(elts=[node.node], ctx=ast.Load())
             tup = self.visit(tup)
             return nodes.CoerceToNative(tup, node.dst_type, name=node.name)
+
         return node
 
     def visit_Subscript(self, node):
@@ -237,6 +268,9 @@ class LateSpecializer(visitors.NumbaTransformer):
         """
         slice_values = [node.lower, node.upper, node.step]
 
+        if self.nopython:
+            raise error.NumbaError(node, "Cannot slice in nopython context")
+
         if all(isinstance(node, nodes.ConstNode) for node in slice_values):
             get_const = lambda node: None if node is None else node.pyval
             value = slice(get_const(node.lower), get_const(node.upper),
@@ -256,6 +290,10 @@ class LateSpecializer(visitors.NumbaTransformer):
         # return nodes.ObjectTempNode(new_slice)
 
     def visit_Attribute(self, node):
+        if self.nopython:
+            raise error.NumbaError(
+                    node, "Cannot access Python attribute in nopython context")
+
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif node.type.is_object:
@@ -279,3 +317,23 @@ class LateSpecializer(visitors.NumbaTransformer):
         if node.value is not None:
             node.value = self.visit(nodes.CoercionNode(node.value, return_type))
         return node
+
+    def visit_WithPythonNode(self, node):
+        if not self.nopython:
+            raise error.NumbaError(node, "Not in 'with nopython' context")
+
+        self.nopython -= 1
+        result = self.visitlist(node.body)
+        self.nopython += 1
+
+        return ast.Suite(body=result)
+
+    def visit_WithNoPythonNode(self, node):
+        if self.nopython:
+            raise error.NumbaError(node, "Not in 'with python' context")
+
+        self.nopython += 1
+        result = self.visitlist(node.body)
+        self.nopython -= 1
+
+        return ast.Suite(body=result)

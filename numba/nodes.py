@@ -91,6 +91,8 @@ class DeferredCoercionNode(CoercionNode):
     _fields = ['node']
 
     def __init__(self, node, variable):
+        if node is self:
+            return
         self.node = node
         self.variable = variable
 
@@ -392,3 +394,10 @@ class ShapeAttributeNode(ArrayAttributeNode):
                                          array.variable.type.ndim)
         self.variable = Variable(self.type)
 
+class WithPythonNode(Node):
+    "with python: ..."
+
+    _fields = ['body']
+
+class WithNoPythonNode(WithPythonNode):
+    "with nopython: ..."
