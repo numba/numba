@@ -7,6 +7,7 @@ import types
 from numba import *
 from . import utils, functions, ast_translate as translate, ast_type_inference
 from numba import translate as bytecode_translate
+from numba import error
 from .minivect import minitypes
 from numba.utils import debugout
 
@@ -96,6 +97,13 @@ class NumbaFunction(object):
         if self.ctypes_func:
             return self.invoke_compiled(self.ctypes_func, *args, **kwargs)
         else:
+            if kwargs:
+                raise error.NumbaError("Cannot handle keyword arguments yet")
+
+            nargs = self.py_func.func_code.co_argcount
+            if len(args) != nargs:
+                raise error.NumbaError("Expected %d arguments, got %d" % (
+                                                        len(args), nargs))
             return self.wrapper(self, *args, **kwargs)
 
     def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
@@ -103,7 +111,7 @@ class NumbaFunction(object):
 
 
 # TODO: make these two implementations the same
-def _autojit2(target, nopython):
+def _autojit2(target, nopython, **translator_kwargs):
     def _autojit2_decorator(f):
         """
         Defines a numba function, that, when called, specializes on the input
@@ -115,7 +123,8 @@ def _autojit2(target, nopython):
             arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
             types = tuple(context.typemapper.from_python(value)
                               for value in arguments)
-            dec = jit2(argtypes=types, target=target, nopython=nopython)
+            dec = jit2(argtypes=types, target=target, nopython=nopython,
+                       **translator_kwargs)
             compiled_numba_func = dec(f)
             return numba_func.invoke_compiled(compiled_numba_func, *args, **kwargs)
 
@@ -160,7 +169,7 @@ def _autojit(target, nopython):
 
     return _autojit_decorator
 
-def autojit(backend='bytecode', target='cpu', nopython=False):
+def autojit(backend='bytecode', target='cpu', nopython=False, locals=None):
     if backend not in ('bytecode', 'ast'):
         raise Exception("The autojit decorator should be called: "
                         "@autojit(backend='bytecode|ast')")
@@ -168,10 +177,10 @@ def autojit(backend='bytecode', target='cpu', nopython=False):
     if backend == 'bytecode':
         return _autojit(target, nopython)
     else:
-        return _autojit2(target, nopython)
+        return _autojit2(target, nopython, locals=locals)
 
 def _jit2(restype=None, argtypes=None, nopython=False,
-          _llvm_module=None, _llvm_ee=None):
+          _llvm_module=None, _llvm_ee=None, **kwargs):
     assert argtypes is not None
 
     def _jit2_decorator(func):
@@ -181,7 +190,8 @@ def _jit2(restype=None, argtypes=None, nopython=False,
         result = function_cache.compile_function(func, argtypes,
                                                  nopython=nopython,
                                                  llvm_module=_llvm_module,
-                                                 llvm_ee=_llvm_ee)
+                                                 llvm_ee=_llvm_ee,
+                                                 **kwargs)
         signature, lfunc, ctypes_func = result
         return NumbaFunction(func, ctypes_func=ctypes_func,
                              signature=signature, lfunc=lfunc)
@@ -248,9 +258,10 @@ def jit(restype=None, argtypes=None, backend='bytecode', target='cpu',
     return jit_targets[target](**kws)
 
 def jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None,
-          target='cpu', nopython=False):
+          target='cpu', nopython=False, **kwargs):
     """
     Use the AST translator to translate the function.
     """
     return jit2_targets[target](restype, argtypes, nopython=nopython,
-                                _llvm_module=_llvm_module, _llvm_ee=_llvm_ee)
+                                _llvm_module=_llvm_module, _llvm_ee=_llvm_ee,
+                                **kwargs)

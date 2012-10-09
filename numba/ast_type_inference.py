@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 class Pipeline(object):
     def __init__(self, context, func, ast, func_signature,
-                 nopython=False, **kwargs):
+                 nopython=False, locals=None, **kwargs):
         self.context = context
         self.func = func
         self.ast = ast
@@ -35,6 +35,7 @@ class Pipeline(object):
         self.symtab = None
 
         self.nopython = nopython
+        self.locals = locals
         self.kwargs = kwargs
 
         self.order = [
@@ -47,7 +48,8 @@ class Pipeline(object):
 
     def type_infer(self, ast):
         type_inferer = TypeInferer(self.context, self.func, ast,
-                                   func_signature=self.func_signature)
+                                   func_signature=self.func_signature,
+                                   locals=self.locals)
         type_inferer.infer_types()
         self.func_signature = type_inferer.func_signature
         logger.debug("signature for %s: %s" % (self.func.func_name,
@@ -413,10 +415,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     Infers and checks types and inserts type coercion nodes.
     """
 
-    def __init__(self, context, func, ast, func_signature):
+    def __init__(self, context, func, ast, func_signature, locals):
         super(TypeInferer, self).__init__(context, func, ast)
         # Name -> Variable
         self.symtab = {}
+
+        self.locals = locals or {}
+        for local in self.locals:
+            if local not in self.local_names:
+                raise error.NumbaError("Not a local variable: %r" % (local,))
 
         self.func_signature = func_signature
         self.given_return_type = func_signature.return_type
@@ -474,6 +481,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         self.symtab['None'] = Variable(numba_types.none, is_constant=True,
                                        constant_value=None)
+
+        for local_name, local_type in self.locals.iteritems():
+            variable = self.symtab[local_name]
+            variable.type = local_type
+            variable.promotable_type = True
 
     def is_object(self, type):
         return type.is_object or type.is_array
@@ -573,7 +585,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             lhs_var.type = rhs_var.type
         elif lhs_var.type != rhs_var.type:
             self.assert_assignable(lhs_var.type, rhs_var.type)
-            if lhs_var.type.is_numeric and rhs_var.type.is_numeric:
+            if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
+                    lhs_var.promotable_type):
                 lhs_var.type = self.promote_types(lhs_var.type, rhs_var.type)
             return nodes.CoercionNode(rhs_node, lhs_var.type)
 

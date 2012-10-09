@@ -14,12 +14,14 @@ class Variable(object):
     """
 
     def __init__(self, type, is_constant=False, is_local=False,
-                 name=None, lvalue=None, constant_value=None):
+                 name=None, lvalue=None, constant_value=None,
+                 promotable_type=True):
         self.name = name
         self.type = type
         self.is_constant = is_constant
         self.constant_value = constant_value
         self.lvalue = lvalue
+        self.promotable_type = promotable_type
 
     @classmethod
     def from_variable(cls, variable, **kwds):
