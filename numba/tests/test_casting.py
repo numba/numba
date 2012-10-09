@@ -31,10 +31,10 @@ def cast_as_numba_type_attribute():
     return numba.int32(value)
 
 def test_casts():
-#    assert cast_int() == 1
-#    assert cast_complex() == 1.2 + 0j
-#    assert cast_float() == 5.0
-#    assert np.all(cast_object(double[:]) == np.arange(10))
+    assert cast_int() == 1
+    assert cast_complex() == 1.2 + 0j
+    assert cast_float() == 5.0
+    assert np.all(cast_object(double[:]) == np.arange(10))
     assert cast_as_numba_type_attribute() == 4
 
 if __name__ == "__main__":
