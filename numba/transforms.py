@@ -84,17 +84,20 @@ class LateSpecializer(visitors.NumbaTransformer):
     def __init__(self, context, func, ast, func_signature, nopython=0):
         super(LateSpecializer, self).__init__(context, func, ast)
         self.func_signature = func_signature
-        self.nopython = 0
+        self.nopython = nopython
 
     def visit_FunctionDef(self, node):
         self.generic_visit(node)
 
         ret_type = self.func_signature.return_type
         if ret_type.is_object or ret_type.is_array:
-            if self.nopython:
-                raise error.NumbaError(
-                        node, "Function cannot return object in "
-                              "nopython context")
+            # This will require some increfs, but allow it if people
+            # use 'with python' later on. If 'with python' isn't used, a
+            # return will issue the error
+            #if self.nopython:
+            #    raise error.NumbaError(
+            #            node, "Function cannot return object in "
+            #                  "nopython context")
             value = nodes.NULL_obj
         elif ret_type.is_void:
             value = None

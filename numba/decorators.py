@@ -103,7 +103,7 @@ class NumbaFunction(object):
 
 
 # TODO: make these two implementations the same
-def _autojit2(target):
+def _autojit2(target, nopython):
     def _autojit2_decorator(f):
         """
         Defines a numba function, that, when called, specializes on the input
@@ -115,7 +115,8 @@ def _autojit2(target):
             arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
             types = tuple(context.typemapper.from_python(value)
                               for value in arguments)
-            compiled_numba_func = jit2(argtypes=types, target=target)(f)
+            dec = jit2(argtypes=types, target=target, nopython=nopython)
+            compiled_numba_func = dec(f)
             return numba_func.invoke_compiled(compiled_numba_func, *args, **kwargs)
 
         f.live_objects = []
@@ -126,7 +127,7 @@ def _autojit2(target):
 
 _func_cache = {}
 
-def _autojit(target):
+def _autojit(target, nopython):
     def _autojit_decorator(f):
         """
         Defines a numba function, that, when called, specializes on the input
@@ -159,17 +160,18 @@ def _autojit(target):
 
     return _autojit_decorator
 
-def autojit(backend='bytecode', target='cpu'):
+def autojit(backend='bytecode', target='cpu', nopython=False):
     if backend not in ('bytecode', 'ast'):
         raise Exception("The autojit decorator should be called: "
                         "@autojit(backend='bytecode|ast')")
 
     if backend == 'bytecode':
-        return _autojit(target)
+        return _autojit(target, nopython)
     else:
-        return _autojit2(target)
+        return _autojit2(target, nopython)
 
-def _jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None):
+def _jit2(restype=None, argtypes=None, nopython=False,
+          _llvm_module=None, _llvm_ee=None):
     assert argtypes is not None
 
     def _jit2_decorator(func):
@@ -177,6 +179,7 @@ def _jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None):
             func.live_objects = []
         func._is_numba_func = True
         result = function_cache.compile_function(func, argtypes,
+                                                 nopython=nopython,
                                                  llvm_module=_llvm_module,
                                                  llvm_ee=_llvm_ee)
         signature, lfunc, ctypes_func = result
@@ -245,8 +248,9 @@ def jit(restype=None, argtypes=None, backend='bytecode', target='cpu',
     return jit_targets[target](**kws)
 
 def jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None,
-          target='cpu'):
+          target='cpu', nopython=False):
     """
     Use the AST translator to translate the function.
     """
-    return jit2_targets[target](restype, argtypes, _llvm_module, _llvm_ee)
+    return jit2_targets[target](restype, argtypes, nopython=nopython,
+                                _llvm_module=_llvm_module, _llvm_ee=_llvm_ee)
