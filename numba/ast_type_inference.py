@@ -896,6 +896,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # Call to special object method
             new_node = self._resolve_method_calls(func_type, new_node, node)
 
+        elif func_type.is_ctypes_function:
+            new_node = nodes.CTypesCallNode(
+                    func_type.signature, node.args, func_type,
+                    py_func=func_type.ctypes_func)
+
         if new_node is None:
             # All other type of calls:
             # 1) call to compiled/autojitting numba function

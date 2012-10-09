@@ -476,6 +476,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
 
     # __________________________________________________________________________
 
+    def visit_Expr(self, node):
+        return self.visit(node.value)
+
     def visit_ConstNode(self, node):
         return node.value(self)
 
@@ -939,6 +942,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)
 
+    def visit_CTypesCallNode(self, node):
+        node.llvm_func = self.visit(node.function)
+        return self.visit_NativeCallNode(node)
+
     def visit_ComplexConjugateNode(self, node):
         lcomplex = self.visit(node.complex_node)
 
@@ -1031,19 +1038,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
         # hurgh, no dispatch on superclasses?
         return self.visit_ArrayAttributeNode(node)
 
-class DisposalVisitor(visitors.NumbaVisitor):
-    # TODO: handle errors, check for NULL before calling DECREF
-
-    def __init__(self, context, func, ast, builder):
-        super(DisposalVisitor, self).__init__(context, func, ast)
-        self.builder = builder
-
-    def visit_TempNode(self, node):
-        self.visit(node.node)
-        lfunc = self.function_cache.function_by_name('Py_DecRef')
-        self.builder.call(lfunc, node.llvm_temp)
 
 def llvm_alloca(lfunc, builder, ltype, name='', change_bb=True):
+    "Use alloca only at the entry bock of the function"
     if change_bb:
         bb = builder.basic_block
     builder.position_at_beginning(lfunc.get_entry_basic_block())
@@ -1131,6 +1128,7 @@ class ObjectCoercer(object):
                   callback=lambda b, *args: b.branch(self.translator.error_label))
 
     def lstr(self, types, fmt=None):
+        "Get an llvm format string for the given types"
         typestrs = []
         for type in types:
             if type.is_array:
@@ -1190,6 +1188,7 @@ class ObjectCoercer(object):
         return self.buildvalue(lstr, *largs, name='dict')
 
     def parse_tuple(self, lstr, llvm_tuple, types, name=''):
+        "Unpack a Python tuple into typed llvm variables"
         lresults = []
         for i, type in enumerate(types):
             var = llvm_alloca(self.translator.lfunc, self.builder,

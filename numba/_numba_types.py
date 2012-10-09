@@ -1,7 +1,7 @@
 import math
 import copy
 import types
-import ctypes
+import ctypes.util
 
 import llvm.core
 import numpy as np
@@ -11,7 +11,7 @@ from numpy import ctypeslib
 from numba import llvm_types
 from numba.minivect.minitypes import *
 from numba.minivect import miniast, minitypes
-from numba.minivect.ctypes_conversion import convert_to_ctypes
+from numba.minivect.ctypes_conversion import convert_to_ctypes, convert_from_ctypes
 from numba.minivect.complex_support import Complex64, Complex128, Complex256
 
 __all__ = minitypes.__all__ + [
@@ -156,6 +156,19 @@ class NoneType(NumbaType, minitypes.ObjectType):
     def __str__(self):
         return "None Type"
 
+class CTypesFunctionType(NumbaType, minitypes.ObjectType):
+    is_ctypes_function = True
+
+    def __init__(self, ctypes_func, restype, argtypes, **kwds):
+        super(CTypesFunctionType, self).__init__(**kwds)
+        self.ctypes_func = ctypes_func
+        self.signature = minitypes.FunctionType(return_type=restype,
+                                                args=argtypes)
+
+    def __str__(self):
+        return "<ctypes function %s>" % (self.signature,)
+
+
 tuple_ = TupleType()
 phi = PHIType()
 module_type = ModuleType()
@@ -187,6 +200,14 @@ c16 = complex128
 c32 = complex256
 
 class NumbaTypeMapper(minitypes.TypeMapper):
+
+
+    def __init__(self, context):
+        super(NumbaTypeMapper, self).__init__(context)
+        # self.ctypes_func_type = type(ctypes.CFUNCTYPE(ctypes.c_int))
+        # libc = ctypes.CDLL(ctypes.util.find_library('c'))
+        # self.ctypes_func_type2 = type(libc.printf)
+
     def to_llvm(self, type):
         if type.is_array:
             return llvm_types._numpy_array
@@ -210,6 +231,15 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return tuple_
         elif isinstance(value, types.ModuleType):
             return module_type
+        # elif isinstance(value, (self.ctypes_func_type, self.ctypes_func_type2)):
+        elif hasattr(value, 'errcheck'):
+            # ugh, ctypes
+            if value.argtypes is None:
+                return object_
+
+            restype = convert_from_ctypes(value.restype)
+            argtypes = map(convert_from_ctypes, value.argtypes)
+            return CTypesFunctionType(value, restype, argtypes)
         else:
             return super(NumbaTypeMapper, self).from_python(value)
 

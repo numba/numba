@@ -1,4 +1,5 @@
 import ast
+import ctypes
 import collections
 
 import numba
@@ -192,6 +193,19 @@ class LLVMIntrinsicNode(NativeCallNode):
 
 class MathCallNode(NativeCallNode):
     "Call a math function"
+
+class CTypesCallNode(NativeCallNode):
+    "Call a ctypes function"
+
+    _fields = NativeCallNode._fields + ['function']
+
+    def __init__(self, signature, args, ctypes_func_type, py_func=None, **kw):
+        super(CTypesCallNode, self).__init__(signature, args, None,
+                                             py_func, **kw)
+        self.pointer = ctypes.cast(py_func, ctypes.c_void_p).value
+        # self.pointer = ctypes.addressof(ctypes_func_type)
+        self.function = ConstNode(self.pointer, signature.pointer())
+
 
 class ObjectCallNode(FunctionCallNode):
     _fields = ['function', 'args_tuple', 'kwargs_dict']
