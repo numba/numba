@@ -901,6 +901,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     func_type.signature, node.args, func_type,
                     py_func=func_type.ctypes_func)
 
+        elif func_type.is_cast:
+            if node.keywords:
+                raise error.NumbaError("Cast function %s does not take "
+                                       "keyword arguments" % func_type.dst_type)
+            new_node = nodes.CoercionNode(node.args[0], func_type.dst_type,
+                                          name="cast")
+
         if new_node is None:
             # All other type of calls:
             # 1) call to compiled/autojitting numba function

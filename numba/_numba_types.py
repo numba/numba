@@ -168,6 +168,14 @@ class CTypesFunctionType(NumbaType, minitypes.ObjectType):
     def __str__(self):
         return "<ctypes function %s>" % (self.signature,)
 
+class CastType(NumbaType, minitypes.ObjectType):
+
+    is_cast = True
+
+    def __init__(self, dst_type, **kwds):
+        super(CastType, self).__init__(**kwds)
+        self.dst_type = dst_type
+
 
 tuple_ = TupleType()
 phi = PHIType()
@@ -240,6 +248,8 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             restype = convert_from_ctypes(value.restype)
             argtypes = map(convert_from_ctypes, value.argtypes)
             return CTypesFunctionType(value, restype, argtypes)
+        elif isinstance(value, minitypes.Type):
+            return CastType(dst_type=value)
         else:
             return super(NumbaTypeMapper, self).from_python(value)
 

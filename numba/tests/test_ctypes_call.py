@@ -1,17 +1,41 @@
+import os
 import ctypes
 
 from numba import *
 
 @autojit(backend='ast')
-def call_ctypes(func):
-    return func("Hello %s\n", "World!")
+def call_ctypes_func(func, value):
+    return func(value)
+
 
 def test_ctypes_calls():
     libc = ctypes.CDLL(ctypes.util.find_library('c'))
-    printf = libc.printf
-    printf.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-    #printf("hello %d\n", 10)
-    print call_ctypes(printf)
+    puts = libc.puts
+    puts.argtypes = [ctypes.c_char_p]
+    assert call_ctypes_func(puts, "Hello World!")
+
+    libm = ctypes.CDLL(ctypes.util.find_library('c'))
+    ceil = libm.ceil
+    ceil.argtypes = [ctypes.c_double]
+    ceil.restype = ctypes.c_double
+    assert call_ctypes_func(ceil, 10.1) == 11.0
+
+def test_str_return():
+    try:
+        import errno
+    except ImportError:
+        return
+
+    libc = ctypes.CDLL(ctypes.util.find_library('c'))
+
+    strerror = libc.strerror
+    strerror.argtypes = [ctypes.c_int]
+    strerror.restype = ctypes.c_char_p
+
+    expected = os.strerror(errno.EACCES)
+    got = call_ctypes_func(strerror, errno.EACCES)
+    assert expected == got
 
 if __name__ == "__main__":
     test_ctypes_calls()
+    test_str_return()
