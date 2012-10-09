@@ -11,19 +11,75 @@ cu_function = c_void_p  # an opaque handle
 cu_device_ptr = c_size_t # defined as unsigned int on 32-bit and unsigned long long on 64-bit machine
 cu_stream = c_int
 
-CUDA_SUCCESS = 0
+CUDA_SUCCESS                              = 0
+CUDA_ERROR_INVALID_VALUE                  = 1
+CUDA_ERROR_OUT_OF_MEMORY                  = 2
+CUDA_ERROR_NOT_INITIALIZED                = 3
+CUDA_ERROR_DEINITIALIZED                  = 4
+CUDA_ERROR_PROFILER_DISABLED              = 5
+CUDA_ERROR_PROFILER_NOT_INITIALIZED       = 6
+CUDA_ERROR_PROFILER_ALREADY_STARTED       = 7
+CUDA_ERROR_PROFILER_ALREADY_STOPPED       = 8
+CUDA_ERROR_NO_DEVICE                      = 100
+CUDA_ERROR_INVALID_DEVICE                 = 101
+CUDA_ERROR_INVALID_IMAGE                  = 200
+CUDA_ERROR_INVALID_CONTEXT                = 201
+CUDA_ERROR_CONTEXT_ALREADY_CURRENT        = 202
+CUDA_ERROR_MAP_FAILED                     = 205
+CUDA_ERROR_UNMAP_FAILED                   = 206
+CUDA_ERROR_ARRAY_IS_MAPPED                = 207
+CUDA_ERROR_ALREADY_MAPPED                 = 208
+CUDA_ERROR_NO_BINARY_FOR_GPU              = 209
+CUDA_ERROR_ALREADY_ACQUIRED               = 210
+CUDA_ERROR_NOT_MAPPED                     = 211
+CUDA_ERROR_NOT_MAPPED_AS_ARRAY            = 212
+CUDA_ERROR_NOT_MAPPED_AS_POINTER          = 213
+CUDA_ERROR_ECC_UNCORRECTABLE              = 214
+CUDA_ERROR_UNSUPPORTED_LIMIT              = 215
+CUDA_ERROR_CONTEXT_ALREADY_IN_USE         = 216
+CUDA_ERROR_INVALID_SOURCE                 = 300
+CUDA_ERROR_FILE_NOT_FOUND                 = 301
+CUDA_ERROR_SHARED_OBJECT_SYMBOL_NOT_FOUND = 302
+CUDA_ERROR_SHARED_OBJECT_INIT_FAILED      = 303
+CUDA_ERROR_OPERATING_SYSTEM               = 304
+CUDA_ERROR_INVALID_HANDLE                 = 400
+CUDA_ERROR_NOT_FOUND                      = 500
+CUDA_ERROR_NOT_READY                      = 600
+CUDA_ERROR_LAUNCH_FAILED                  = 700
+CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES        = 701
+CUDA_ERROR_LAUNCH_TIMEOUT                 = 702
+CUDA_ERROR_LAUNCH_INCOMPATIBLE_TEXTURING  = 703
+CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED    = 704
+CUDA_ERROR_PEER_ACCESS_NOT_ENABLED        = 705
+CUDA_ERROR_PRIMARY_CONTEXT_ACTIVE         = 708
+CUDA_ERROR_CONTEXT_IS_DESTROYED           = 709
+CUDA_ERROR_ASSERT                         = 710
+CUDA_ERROR_TOO_MANY_PEERS                 = 711
+CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED = 712
+CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED     = 713
+CUDA_ERROR_UNKNOWN                        = 999
+
+
+
+def _build_reverse_error_map():
+    import sys
+    prefix = 'CUDA_ERROR'
+    module = sys.modules[__name__]
+    return dict((getattr(module, i), i)
+                for i in filter(lambda x: x.startswith(prefix), globals()))
+
+_REVERSE_ERROR_MAP = _build_reverse_error_map()
 
 class DriverError(Exception):
     pass
 
 def _check_error(error, msg):
     if error != CUDA_SUCCESS:
-        raise DriverError(msg, error)
+        raise DriverError(msg, _REVERSE_ERROR_MAP[error])
 
 class Driver(object):
     '''Facade to the CUDA Driver API.
     '''
-
 
     '''
     Only the ones that we use are listed.
@@ -143,16 +199,17 @@ class Driver(object):
     def __init__(self, overide_path=None):
         self.old_api = False
 
-        if not overide_path: # Try to discover cuda driver automatically
-            # Determine platform and path of cuda driver
-            if sys.platform == 'win32':
-                dlloader = WinDLL
-                path = '\\windows\\system32\\nvcuda.dll'
-            else:
-                dlloader = CDLL
-                path = '/usr/lib/libcuda.so'
+        # Determine DLL type
+        if sys.platform == 'win32':
+            dlloader = WinDLL
+            path = '\\windows\\system32\\nvcuda.dll'
+        else:
+            dlloader = CDLL
+            path = '/usr/lib/libcuda.so'
 
+        if not overide_path: # Try to discover cuda driver automatically
             # Environment variable always overide if present
+            # and overide_path is not defined.
             path = os.environ.get('NUMBAPRO_CUDA_DRIVER', path)
         else:
             path = overide_path
@@ -191,7 +248,8 @@ class Driver(object):
                 setattr(self, func, ct_func)
 
         # initialize the API
-        self.cuInit(0)
+        error = self.cuInit(0)
+        _check_error(error, "Failed to initialize CUDA driver")
 
     def _cu_symbol_newer(self, symbol):
         try:
