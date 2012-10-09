@@ -1,18 +1,31 @@
+import unittest
 from numbapro._cuda.driver import *
 
-driver = Driver()
-print driver.get_device_count()
+ptx1 = '''
+	.version 1.4
+	.target sm_10, map_f64_to_f32
 
-device = Device(driver, 0)
-print device
-print device.attributes
+	.entry _Z10helloworldPi (
+		.param .u64 __cudaparm__Z10helloworldPi_A)
+	{
+	.reg .u32 %r<3>;
+	.reg .u64 %rd<6>;
+	.loc	14	4	0
+$LDWbegin__Z10helloworldPi:
+	.loc	14	6	0
+	cvt.s32.u16 	%r1, %tid.x;
+	ld.param.u64 	%rd1, [__cudaparm__Z10helloworldPi_A];
+	cvt.u64.u16 	%rd2, %tid.x;
+	mul.lo.u64 	%rd3, %rd2, 4;
+	add.u64 	%rd4, %rd1, %rd3;
+	st.global.s32 	[%rd4+0], %r1;
+	.loc	14	7	0
+	exit;
+$LDWend__Z10helloworldPi:
+	} // _Z10helloworldPi
+'''
 
-context = Context(device)
-print context
-
-ptx = '''
-
-
+ptx2 = '''
 .version 3.0
 .target sm_20
 .address_size 64
@@ -38,29 +51,66 @@ ptx = '''
 	.loc 2 7 2
 	ret;
 }
-
-
-
-
 '''
 
-module = Module(context, ptx)
-print
+class TestCudaDriver(unittest.TestCase):
+    def setUp(self):
+        driver = Driver()
+        self.assertTrue(driver.get_device_count())
+        self.device = device = Device(driver, 0)
+        self.assertIn('COMPUTE_CAPABILITY', device.attributes)
+        self.assertIn('MAX_THREADS_PER_BLOCK', device.attributes)
 
-function = Function(module, '_Z10helloworldPi')
-print function
+        ccmajor, _ = device.COMPUTE_CAPABILITY
+        if ccmajor >= 2:
+            self.ptx = ptx2
+        else:
+            self.ptx = ptx1
 
-array = (c_int * 100)()
-memory = DeviceMemory(context, sizeof(array))
-memory.to_device_raw(array, sizeof(array))
+    def test_cuda_driver_basic(self):
+        context = Context(self.device)
+        module = Module(context, self.ptx)
+        print module.info_log
+        function = Function(module, '_Z10helloworldPi')
 
-print memory
+        array = (c_int * 100)()
+        memory = DeviceMemory(context, sizeof(array))
+        memory.to_device_raw(array, sizeof(array))
 
-function = function.configure((1,), (100,))
-function(memory)
+        function = function.configure((1,), (100,))
+        function(memory)
 
-memory.from_device_raw(array, sizeof(array))
-for i, v in enumerate(array):
-    assert i == v
+        memory.from_device_raw(array, sizeof(array))
+        for i, v in enumerate(array):
+            self.assertEqual(i, v)
 
-print 'ok'
+    def test_cuda_driver_stream(self):
+        if self.device.driver.path.endswith('libocelot.so'):
+            # Ocelot does not implement streaming memory transfer
+            print 'SKIPPED'
+            return
+
+        context = Context(self.device)
+        module = Module(context, self.ptx)
+        print module.info_log
+        function = Function(module, '_Z10helloworldPi')
+
+        array = (c_int * 100)()
+
+        with Stream(context) as stream:
+
+            memory = DeviceMemory(context, sizeof(array))
+            memory.to_device_raw(array, sizeof(array), stream)
+
+            function = function.configure((1,), (100,), stream=stream)
+            function(memory)
+
+            memory.from_device_raw(array, sizeof(array), stream)
+
+        for i, v in enumerate(array):
+            self.assertEqual(i, v)
+
+
+if __name__ == '__main__':
+    unittest.main()
+
