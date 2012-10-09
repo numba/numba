@@ -20,9 +20,9 @@ from numbapro.vectorize import basic
 import numpy
 
 class NumbaproPipeline(ast_type_inference.Pipeline):
-    def __init__(self, context, func, ast, func_signature):
+    def __init__(self, context, func, ast, func_signature, **kwargs):
         super(NumbaproPipeline, self).__init__(context, func, ast,
-                                               func_signature)
+                                               func_signature, **kwargs)
         self.insert_specializer('rewrite_array_expressions',
                                 after='specialize')
 
