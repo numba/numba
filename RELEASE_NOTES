@@ -1,7 +1,10 @@
 
+Version 0.3
+===========
+* Changed default compilation approach to ast
+
 Version 0.2
 ============
-
 * Added an ast approach to compilation
 * Removed d, f, i, b from numba namespace (use f8, f4, i4, b1)
 * Changed function to autojit2
