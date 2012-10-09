@@ -1,3 +1,8 @@
+'''
+This is more-or-less a object-oriented interface to the CUDA driver API.
+It properly has a lot of resemblence with PyCUDA.
+'''
+
 import sys, os
 from ctypes import *
 
@@ -78,7 +83,9 @@ def _check_error(error, msg):
         raise DriverError(msg, _REVERSE_ERROR_MAP[error])
 
 class Driver(object):
-    '''Facade to the CUDA Driver API.
+    '''Facade to the CUDA Driver API.  A singleton class.  It is safe to
+    construct new instance.  The constructor (__new__) will only create a new
+    driver object if none exist already.
     '''
 
     '''
@@ -150,7 +157,7 @@ class Driver(object):
         'cuMemFree':            (c_int, cu_device_ptr),
 
         # CUresult cuStreamCreate(CUstream *phStream, unsigned int Flags);
-        'cuStreamCreate':       (c_int, cu_stream, c_uint),
+        'cuStreamCreate':       (c_int, POINTER(cu_stream), c_uint),
 
         # CUresult cuStreamDestroy(CUstream hStream);
         'cuStreamDestroy':      (c_int, cu_stream),
@@ -196,60 +203,66 @@ class Driver(object):
 
     NOT_IN_OLD_API = ['cuLaunchKernel']
 
-    def __init__(self, overide_path=None):
-        self.old_api = False
+    __INSTANCE = None
 
-        # Determine DLL type
-        if sys.platform == 'win32':
-            dlloader = WinDLL
-            path = '\\windows\\system32\\nvcuda.dll'
-        else:
-            dlloader = CDLL
-            path = '/usr/lib/libcuda.so'
+    def __new__(cls, overide_path=None):
+        if cls.__INSTANCE is None:
+            cls.__INSTANCE = inst = object.__new__(Driver)
+            inst.old_api = False
 
-        if not overide_path: # Try to discover cuda driver automatically
-            # Environment variable always overide if present
-            # and overide_path is not defined.
-            path = os.environ.get('NUMBAPRO_CUDA_DRIVER', path)
-        else:
-            path = overide_path
-
-        # Load the driver
-        try:
-            self.driver = dlloader(path)
-        except OSError:
-            raise ImportError(
-                      "CUDA is not supported or the library cannot be found. "
-                      "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
-                      "with the path of the CUDA driver shared library.")
-
-        # Obtain function pointers
-        for func, prototype in self.API_PROTOTYPES.items():
-            restype = prototype[0]
-            argtypes = prototype[1:]
-            try:
-                ct_func = self._cu_symbol_newer(func)
-            except AttributeError:
-                if func in self.NOT_IN_OLD_API:
-                    self.old_api = True
+            # Determine DLL type
+            if sys.platform == 'win32':
+                dlloader = WinDLL
+                path = '\\windows\\system32\\nvcuda.dll'
             else:
-                ct_func.restype = restype
-                ct_func.argtypes = argtypes
-                setattr(self, func, ct_func)
+                dlloader = CDLL
+                path = '/usr/lib/libcuda.so'
 
-        if self.old_api:
-            # Old API, primiarily in Ocelot
-            for func, prototype in self.OLD_API_PROTOTYPES.items():
+            if not overide_path: # Try to discover cuda driver automatically
+                # Environment variable always overide if present
+                # and overide_path is not defined.
+                path = os.environ.get('NUMBAPRO_CUDA_DRIVER', path)
+            else:
+                path = overide_path
+
+            # Load the driver
+            try:
+                inst.driver = dlloader(path)
+                inst.path = path
+            except OSError:
+                raise ImportError(
+                          "CUDA is not supported or the library cannot be found. "
+                          "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
+                          "with the path of the CUDA driver shared library.")
+
+            # Obtain function pointers
+            for func, prototype in inst.API_PROTOTYPES.items():
                 restype = prototype[0]
                 argtypes = prototype[1:]
-                ct_func = self._cu_symbol_newer(func)
-                ct_func.restype = restype
-                ct_func.argtypes = argtypes
-                setattr(self, func, ct_func)
+                try:
+                    ct_func = inst._cu_symbol_newer(func)
+                except AttributeError:
+                    if func in inst.NOT_IN_OLD_API:
+                        inst.old_api = True
+                else:
+                    ct_func.restype = restype
+                    ct_func.argtypes = argtypes
+                    setattr(inst, func, ct_func)
 
-        # initialize the API
-        error = self.cuInit(0)
-        _check_error(error, "Failed to initialize CUDA driver")
+            if inst.old_api:
+                # Old API, primiarily in Ocelot
+                for func, prototype in inst.OLD_API_PROTOTYPES.items():
+                    restype = prototype[0]
+                    argtypes = prototype[1:]
+                    ct_func = inst._cu_symbol_newer(func)
+                    ct_func.restype = restype
+                    ct_func.argtypes = argtypes
+                    setattr(inst, func, ct_func)
+
+            # initialize the API
+            error = inst.cuInit(0)
+            _check_error(error, "Failed to initialize CUDA driver")
+        return cls.__INSTANCE
 
     def _cu_symbol_newer(self, symbol):
         try:
@@ -338,7 +351,49 @@ class Context(object):
     def driver(self):
         return self.device.driver
 
+    def __str__(self):
+        return 'Context %s on %s' % (id(self), self.device)
+
+class Stream(object):
+    def __init__(self, context):
+        self.context = context
+        self._handle = cu_stream()
+        error = self.driver.cuStreamCreate(byref(self._handle), 0)
+        _check_error(error, 'Failed to create stream on %s' % self.context)
+
+    def __del__(self):
+        error = self.driver.cuStreamDestroy(self._handle)
+        _check_error(error, 'Failed to destory stream %s' % self)
+
+    def __str__(self):
+        return 'Stream %d on %s' % (self, self.context)
+
+    def __int__(self):
+        return self._handle.value
+
+    def synchronize(self):
+        self.driver.cuStreamSynchronize(self._handle)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.synchronize()
+
+    @property
+    def driver(self):
+        return self.device.driver
+
+    @property
+    def device(self):
+        return self.context.device
+
 class DeviceMemory(object):
+    '''Memory on the GPU deivce.
+
+    The lifetime of the object is tied to the GPU memory handle; that is the
+    memory is released when this object is released.
+    '''
     def __init__(self, context, bytesize):
         self.context = context
         self._handle = cu_device_ptr()
@@ -351,13 +406,13 @@ class DeviceMemory(object):
 
     def to_device_raw(self, src, size, stream=0):
         if stream:
-            self.driver.cuMemcpyHtoD(self._handle, src, size, stream)
+            self.driver.cuMemcpyHtoDAsync(self._handle, src, size, stream)
         else:
             self.driver.cuMemcpyHtoD(self._handle, src, size)
 
     def from_device_raw(self, dst, size, stream=0):
         if stream:
-            self.driver.cuMemcpyDtoH(dst, self._handle, size, stream)
+            self.driver.cuMemcpyDtoHAsync(dst, self._handle, size, stream)
         else:
             self.driver.cuMemcpyDtoH(dst, self._handle, size)
 
@@ -396,7 +451,7 @@ class Module(object):
                                                c_option_vals)
         _check_error(error, 'Failed to load module')
 
-        self.info_log = c_info_log_buffer
+        self.info_log = c_info_log_buffer.value
 
     def __del__(self):
         error =  self.driver.cuModuleUnload(self._handle)
@@ -440,7 +495,7 @@ class Function(object):
         return self.module.context
 
     def __str__(self):
-        return 'CUDA kernel %s' % self.name
+        return 'CUDA kernel %s on %s' % (self.name, self)
 
     def configure(self, griddim, blockdim, sharedmem=0, stream=0):
         import copy
