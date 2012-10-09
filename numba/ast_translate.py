@@ -1053,8 +1053,8 @@ def if_badval(translator, llvm_result, badval, callback, cmp=llvm.core.ICMP_EQ):
     # Use llvm_cbuilder :(
     b = translator.builder
 
-    bb_true = translator.append_basic_block('if.true')
-    bb_endif = translator.append_basic_block('if.end')
+    bb_true = translator.append_basic_block('cleanup.if.true')
+    bb_endif = translator.append_basic_block('cleanup.if.end')
 
     test = b.icmp(cmp, llvm_result, badval)
     b.cbranch(test, bb_true, bb_endif)

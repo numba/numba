@@ -448,10 +448,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # FIXME: analyse the bytecode of the entire module, to determine
             # overriding of builtins
             if isinstance(globals.get(global_name), types.ModuleType):
-                type = numba_types.ModuleType()
-                type.is_numpy_module = globals[global_name] is numpy
-                if type.is_numpy_module:
-                    type.module = numpy
+                type = numba_types.ModuleType(globals.get(global_name))
             else:
                 type = numba_types.GlobalType(name=global_name)
 
@@ -925,14 +922,19 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return new_node
 
-    def _resolve_numpy_attribute(self, node, type):
+    def _resolve_attribute(self, node, type):
         "Resolve attributes of the numpy module or a submodule"
         attribute = getattr(type.module, node.attr)
         if attribute is numpy.newaxis:
             result_type = numba_types.NewAxisType()
-        else:
+        elif type.is_numpy_module or type.is_numpy_attribute:
             result_type = numba_types.NumpyAttributeType(module=type.module,
-                                                    attr=node.attr)
+                                                         attr=node.attr)
+        elif type.is_numba_module:
+            result_type = self.context.typemapper.from_python(attribute)
+        else:
+            result_type = object_
+
         return result_type
 
     def _resolve_ndarray_attribute(self, array_node, array_attr):
@@ -955,8 +957,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 result_type = numba_types.MethodType(type, 'conjugate')
             else:
                 raise AttributeError("'%s' of complex type" % node.attr)
-        elif type.is_numpy_module and hasattr(type.module, node.attr):
-            result_type = self._resolve_numpy_attribute(node, type)
+        elif type.is_module and hasattr(type.module, node.attr):
+            result_type = self._resolve_attribute(node, type)
         elif type.is_object:
             result_type = type
         elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):

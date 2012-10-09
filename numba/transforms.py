@@ -262,6 +262,7 @@ class LateSpecializer(visitors.NumbaTransformer):
             node = self.function_cache.call(
                                 'PyObject_GetAttrString', node.value,
                                 nodes.ConstNode(node.attr))
+            return self.visit(node)
 
         self.generic_visit(node)
         return node

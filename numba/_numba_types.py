@@ -8,6 +8,7 @@ import numpy as np
 from numpy import ctypeslib
 # from numpy.ctypeslib import _typecodes
 
+import numba
 from numba import llvm_types
 from numba.minivect.minitypes import *
 from numba.minivect import miniast, minitypes
@@ -63,9 +64,15 @@ class ModuleType(NumbaType, minitypes.ObjectType):
         is_numpy_module: whether the module is the numpy module
         module: in case of numpy, the numpy module or a submodule
     """
+
     is_module = True
     is_numpy_module = False
-    module = None
+
+    def __init__(self, module, **kwds):
+        super(ModuleType, self).__init__(**kwds)
+        self.module = module
+        self.is_numpy_module = module is np
+        self.is_numba_module = module is numba
 
     def __repr__(self):
         if self.is_numpy_module:
@@ -179,7 +186,6 @@ class CastType(NumbaType, minitypes.ObjectType):
 
 tuple_ = TupleType()
 phi = PHIType()
-module_type = ModuleType()
 none = NoneType()
 
 intp = minitypes.npy_intp
@@ -238,7 +244,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
         elif isinstance(value, tuple):
             return tuple_
         elif isinstance(value, types.ModuleType):
-            return module_type
+            return ModuleType(value)
         # elif isinstance(value, (self.ctypes_func_type, self.ctypes_func_type2)):
         elif hasattr(value, 'errcheck'):
             # ugh, ctypes
