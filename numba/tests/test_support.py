@@ -1,3 +1,5 @@
+import sys
+import StringIO
 import unittest
 import functools
 
@@ -33,3 +35,12 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
         sys.argv.remove('-d')
     unittest.main()
+
+class StdoutReplacer(object):
+    def __enter__(self, *args):
+        self.out = sys.stdout
+        sys.stdout = StringIO.StringIO()
+        return sys.stdout
+
+    def __exit__(self, *args):
+        sys.stdout = self.out

@@ -241,6 +241,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
     return an LLVM value.
     """
 
+    in_loop = 0
+
     def __init__(self, context, func, ast, func_signature, symtab,
                  optimize=True, func_name=None,
                  llvm_module=None, llvm_ee=None, **kwds):
@@ -503,10 +505,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
         raise error.NumbaError("This node should have been replaced")
 
     def visit_Assign(self, node):
-        ast.dump(node)
-        target = self.visit(node.targets[0])
+        target_node = node.targets[0]
+
+        target = self.visit(target_node)
         value = self.visit(node.value)
-        return self.generate_assign(value, target)
+
+        object = target_node.type.is_object or target_node.type.is_array
+        return self.generate_assign(value, target,
+                                    object=object and self.in_loop)
 
     def visit_Num(self, node):
         if node.type.is_int:
@@ -608,13 +614,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
         self.blocks[idx]=bb
         return bb
 
-    def generate_assign(self, lvalue, ltarget):
+    def generate_assign(self, lvalue, ltarget, object=False):
         '''
         Generate assignment operation and automatically cast value to
         match the target type.
         '''
         if lvalue.type != ltarget.type.pointee:
             lvalue = self.caster.cast(lvalue, ltarget.type.pointee)
+
+        if object:
+            # Py_XDECREF any previous object
+            self.decref_temp(ltarget)
 
         self.builder.store(lvalue, ltarget)
 
@@ -660,10 +670,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
     def setup_loop(self, bb_cond, bb_exit):
         self.loop_beginnings.append(bb_cond)
         self.loop_exits.append(bb_exit)
+        self.in_loop += 1
 
     def teardown_loop(self):
         self.loop_beginnings.pop()
         self.loop_exits.pop()
+        self.in_loop -= 1
 
     def generate_for_range(self, for_node, target, iternode, body):
         '''
@@ -995,18 +1007,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
         # Assign value
         self.builder.position_at_end(bb)
         rhs = self.visit(node.node)
-        self.generate_assign(rhs, lhs)
+        self.generate_assign(rhs, lhs, object=True)
 
         # goto error if NULL
         self.object_coercer.check_err(rhs)
 
         # Generate Py_XDECREF(temp) (call Py_DecRef only if not NULL)
-        self.decref_temp(lhs)
+        self.decref_temp_cleanup(lhs)
         return self.builder.load(lhs, name=name + '_load')
 
     def decref_temp(self, temp, func='Py_DecRef'):
-        bb = self.builder.basic_block
-        self.builder.position_at_end(self.current_cleanup_bb)
         sig, py_decref = self.function_cache.function_by_name(func)
 
         def cleanup(b, bb_true, bb_endif):
@@ -1017,12 +1027,18 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
         self.object_coercer.check_err(self.builder.load(temp),
                                       callback=cleanup,
                                       cmp=llvm.core.ICMP_NE)
-        self.current_cleanup_bb = self.builder.basic_block
-
-        self.builder.position_at_end(bb)
 
     def incref_temp(self, temp):
         return self.decref_temp(temp, func='Py_IncRef')
+
+    def decref_temp_cleanup(self, temp):
+        bb = self.builder.basic_block
+
+        self.builder.position_at_end(self.current_cleanup_bb)
+        self.decref_temp(temp)
+        self.current_cleanup_bb = self.builder.basic_block
+
+        self.builder.position_at_end(bb)
 
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)
@@ -1049,12 +1065,13 @@ def llvm_alloca(lfunc, builder, ltype, name='', change_bb=True):
         builder.position_at_end(bb)
     return lstackvar
 
-def if_badval(translator, llvm_result, badval, callback, cmp=llvm.core.ICMP_EQ):
+def if_badval(translator, llvm_result, badval, callback,
+              cmp=llvm.core.ICMP_EQ, name='cleanup'):
     # Use llvm_cbuilder :(
     b = translator.builder
 
-    bb_true = translator.append_basic_block('cleanup.if.true')
-    bb_endif = translator.append_basic_block('cleanup.if.end')
+    bb_true = translator.append_basic_block('%s.if.true' % name)
+    bb_endif = translator.append_basic_block('%s.if.end' % name)
 
     test = b.icmp(cmp, llvm_result, badval)
     b.cbranch(test, bb_true, bb_endif)

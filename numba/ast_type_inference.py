@@ -483,7 +483,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit(self, node):
         if node is Ellipsis:
             node = ast.Ellipsis()
-        return super(TypeInferer, self).visit(node)
+        result = super(TypeInferer, self).visit(node)
+        return result
 
     def visit_AugAssign(self, node):
         "Inplace assignment"
@@ -551,7 +552,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             lhs_var.type = rhs_var.type
         elif lhs_var.type != rhs_var.type:
             self.assert_assignable(lhs_var.type, rhs_var.type)
-            lhs_var.type = self.promote_types(lhs_var.type, rhs_var.type)
+            if lhs_var.type.is_numeric and rhs_var.type.is_numeric:
+                lhs_var.type = self.promote_types(lhs_var.type, rhs_var.type)
             return nodes.CoercionNode(rhs_node, lhs_var.type)
 
         return rhs_node
