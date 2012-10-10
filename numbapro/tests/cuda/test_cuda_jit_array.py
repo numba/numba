@@ -3,7 +3,7 @@ import numpy as np
 from numba import *
 from numbapro import cuda
 
-@jit(argtypes=[i4[:]], target='gpu')
+@jit(argtypes=[f4[:]], target='gpu')
 def cu_array_double(dst):
     tid = cuda.threadIdx.x
     blkid = cuda.blockIdx.x
@@ -22,7 +22,7 @@ def cu_array_scalar_assign(dst, scalar):
 
 class TestCudaJitArray(unittest.TestCase):
     def test_array_double(self):
-        A = np.array(np.random.random(256), dtype=np.int32)
+        A = np.array(np.random.random(256), dtype=np.float32)
         Gold = A * 2
 
         cu_array_double[(A.shape[0],), (1,)](A)
