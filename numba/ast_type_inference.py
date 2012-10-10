@@ -421,9 +421,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.symtab = {}
 
         self.locals = locals or {}
-        for local in self.locals:
-            if local not in self.local_names:
-                raise error.NumbaError("Not a local variable: %r" % (local,))
+        #for local in self.locals:
+        #    if local not in self.local_names:
+        #        raise error.NumbaError("Not a local variable: %r" % (local,))
 
         self.func_signature = func_signature
         self.given_return_type = func_signature.return_type
@@ -483,9 +483,12 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                        constant_value=None)
 
         for local_name, local_type in self.locals.iteritems():
+            if local_name not in self.symtab:
+                self.symtab[local_name] = Variable(local_type, is_local=True,
+                                                   name=local_name)
             variable = self.symtab[local_name]
             variable.type = local_type
-            variable.promotable_type = True
+            variable.promotable_type = False
 
     def is_object(self, type):
         return type.is_object or type.is_array
@@ -1011,6 +1014,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 result_type = numba_types.MethodType(type, 'conjugate')
             else:
                 raise AttributeError("'%s' of complex type" % node.attr)
+        elif type.is_struct:
+            if not node.attr in type.fielddict:
+                raise error.NumbaError(
+                        node, "Struct %s has no field %r" % (type, attr))
+            result_type = type.fielddict[node.attr]
         elif type.is_module and hasattr(type.module, node.attr):
             result_type = self._resolve_attribute(node, type)
         elif type.is_object:

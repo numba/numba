@@ -468,7 +468,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
     def generate_load_symbol(self, name):
         var = self.symtab[name]
         if var.is_local:
-            return self.builder.load(var.lvalue, name='load_' + name)
+            if var.type.is_struct:
+                return var.lvalue
+            else:
+                return self.builder.load(var.lvalue, name='load_' + name)
         else:
             raise NotImplementedError("global variables:", var)
 
@@ -482,6 +485,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
                 return self.builder.extract_value(result, 0)
             elif node.attr == 'imag':
                 return self.builder.extract_value(result, 1)
+        elif node.value.type.is_struct:
+            attr_type = node.value.type.fielddict[node.attr]
+            field_idx = node.value.type.fields.index((node.attr, attr_type))
+            result = self.builder.gep(result, [llvm_types.constant_int(0),
+                                               llvm_types.constant_int(field_idx)])
+            if isinstance(node.ctx, ast.Load):
+                result = self.builder.load(result)
+
+            return result
 
         raise error.NumbaError("This node should have been replaced")
 
@@ -1087,6 +1099,7 @@ class ObjectCoercer(object):
         object_: "O",
         bool_: "p",
         c_string_type: "s",
+        char.pointer() : "s",
     }
 
     def __init__(self, translator):

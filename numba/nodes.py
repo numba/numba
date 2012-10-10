@@ -39,6 +39,11 @@ class CoercionNode(Node):
         type = getattr(node, 'type', None) or node.variable.type
         if type == dst_type:
             return node
+
+        if isinstance(node, ConstNode) and dst_type.is_numeric:
+            node.cast(dst_type)
+            return node
+
         return super(CoercionNode, cls).__new__(cls, node, dst_type, name=name)
 
     def __init__(self, node, dst_type, name=''):
@@ -153,6 +158,19 @@ class ConstNode(Node):
 
         return lvalue
 
+    def cast(self, dst_type):
+        if dst_type.is_int:
+            caster = int
+        elif dst_type.is_float:
+            caster = float
+        elif dst_type.is_complex:
+            caster = complex
+        else:
+            raise NotImplementedError(dst_type)
+
+        self.pyval = caster(self.pyval)
+        self.type = dst_type
+        self.variable.type = dst_type
 
 _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)

@@ -76,6 +76,9 @@ _numpy_array_field_ofs = {
     'descr' : _BASE_ARRAY_FIELD_OFS + 5,
 }
 
+def constant_int(value, type=_int32):
+    return lc.Constant.int(type, value)
+
 # ______________________________________________________________________
 
 class _LLVMCaster(object):
