@@ -24,30 +24,26 @@ class CudaNumbaFuncDispatcher(object):
     def __call__(self, args, griddim, blkdim):
         kernel_args = []
 
-        #stream = _cuda.Stream(self.cu_function.context)
-        stream = 0
-        retrievers = []
-        def ndarray_gpu(x):
-            retriever, device_memory = ndarray_to_device_memory(x, stream=stream)
-            retrievers.append(retriever)
-            return device_memory
+        with _cuda.Stream(self.cu_function.context) as stream:
+            retrievers = []
+            def ndarray_gpu(x):
+                retriever, device_memory = ndarray_to_device_memory(x, stream=stream)
+                retrievers.append(retriever)
+                return device_memory
 
-        _typemapper = {'f': c_float,
-                       'd': c_double,
-                       'i': c_int,
-                       '_': ndarray_gpu}
+            _typemapper = {'f': c_float,
+                           'd': c_double,
+                           'i': c_int,
+                           '_': ndarray_gpu}
 
-#        with stream:
-        for ty, arg in zip(self.typemap, args):
-            kernel_args.append(_typemapper[ty](arg))
 
-        print kernel_args
+            for ty, arg in zip(self.typemap, args):
+                kernel_args.append(_typemapper[ty](arg))
 
-        print griddim, blkdim
-        cu_func = self.cu_function.configure(griddim, blkdim, stream=stream)
-        cu_func(*kernel_args)
+            cu_func = self.cu_function.configure(griddim, blkdim, stream=stream)
+            cu_func(*kernel_args)
 
-        for r in retrievers:
-            r()
+            for r in retrievers:
+                r()
 
 
