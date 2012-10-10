@@ -69,7 +69,8 @@ setup(
                 'numbapro.tests.basic_vectorize',
                 'numbapro.tests.llvm_cbuilder_tests',
                 'numbapro.tests.parallel_vectorize',
-                'numbapro.tests.stream_vectorize'],
+                'numbapro.tests.stream_vectorize',
+                'numbapro.tests.cuda', 'numbapro.tests.cuda.fail'],
     version = "0.6",
     cmdclass={'build_ext': build_ext},
 )
