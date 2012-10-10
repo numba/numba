@@ -578,7 +578,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                                                   ast.Tuple)):
             return self._handle_unpacking(node)
 
-        target = self.visit(node.targets[0])
+        target = node.targets[0] = self.visit(node.targets[0])
         node.value = self.assign(target.variable, node.value.variable,
                                  node.value)
         return node
@@ -752,6 +752,31 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         op = ('slicing', 'indexing')[index_type.is_int]
         raise NotImplementedError("%s of type %s" % (op, type))
 
+    def _handle_struct_index(self, node, value_type):
+        slice_type = node.slice.variable.type
+
+        if not isinstance(node.slice, ast.Index) or not (
+                slice_type.is_int or slice_type.is_c_string):
+            raise error.NumbaError(node.slice,
+                                   "Struct index must be a single string "
+                                   "or integer")
+
+        if not isinstance(node.slice.value, nodes.ConstNode):
+            raise error.NumbaError(node.slice,
+                                   "Struct index must be constant")
+
+        field_idx = node.slice.value.pyval
+        if slice_type.is_int:
+            if field_idx > len(value_type.fields):
+                raise error.NumbaError(node.slice,
+                                       "Struct field index too large")
+
+            field_name, field_type = value_type.fields[field_idx]
+        else:
+            field_name = field_idx
+
+        return ast.Attribute(value=node.value, attr=field_name, ctx=node.ctx)
+
     def visit_Subscript(self, node):
         node.value = self.visit(node.value)
         node.slice = self.visit(node.slice)
@@ -791,6 +816,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
             # node.slice = node.slice.value
             result_type = value_type.base_type
+        elif value_type.is_struct:
+            node = self._handle_struct_index(node, value_type)
+            return self.visit(node)
         else:
             result_type = self._get_index_type(node.value.variable.type,
                                                node.slice.variable.type)

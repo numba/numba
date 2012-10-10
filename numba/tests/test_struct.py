@@ -12,8 +12,23 @@ def struct_local():
     return value.a, value.b
 
 def test_struct_locals():
-    print struct_local()
     assert struct_local() == ("foo", 10)
+
+@autojit(backend='ast', locals=dict(value=struct(a=char.pointer(), b=int_)))
+def struct_indexing_strings():
+    value['a'] = "foo"
+    value['b'] = 10
+    return value['a'], value['b']
+
+@autojit(backend='ast', locals=dict(value=struct(a=char.pointer(), b=int_)))
+def struct_indexing_ints():
+    value[0] = "foo"
+    value[1] = 10
+    return value[0], value[1]
+
+def test_struct_indexing():
+    assert struct_indexing_strings() == ("foo", 10)
+    assert struct_indexing_ints() == ("foo", 10)
 
 # ----------------
 
@@ -48,3 +63,4 @@ if __name__ == "__main__":
     test_struct_locals()
     test_record_array()
     test_coerce_to_obj()
+    test_struct_indexing()
