@@ -330,7 +330,7 @@ class DataPointerNode(Node):
         self.node = node
         self.slice = slice
         self.variable = Variable(node.type)
-        self.type = node.type
+        self.type = node.type.dtype
         self.ctx = ctx
 
     @property
@@ -353,6 +353,11 @@ class DataPointerNode(Node):
         context = translator.context
 
         dptr, strides = self.data_descriptors(llvm_value, builder)
+#        data_ty = self.type.to_llvm(context)
+#        data_ptr_ty = llvm.core.Type.pointer(data_ty)
+#        ptr = builder.bitcast(dptr, data_ptr_ty)
+#        return ptr
+
         ndim = self.ndim
 
         offset = _const_int(0)
@@ -368,7 +373,7 @@ class DataPointerNode(Node):
             offset = caster.cast(offset, stride.type)
             offset = builder.add(offset, builder.mul(index, stride))
 
-        data_ty = self.variable.type.dtype.to_llvm(context)
+        data_ty = self.type.to_llvm(context)
         data_ptr_ty = llvm.core.Type.pointer(data_ty)
 
         dptr_plus_offset = builder.gep(dptr, [offset])

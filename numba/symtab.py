@@ -22,16 +22,13 @@ class Variable(object):
         self.constant_value = constant_value
         self.lvalue = lvalue
         self.promotable_type = promotable_type
+        self.is_local = is_local
 
     @classmethod
     def from_variable(cls, variable, **kwds):
         result = cls(variable.type)
         vars(result).update(kwds)
         return result
-
-    @property
-    def is_local(self):
-        return not self.is_global
 
     @property
     def is_global(self):

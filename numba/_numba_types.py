@@ -9,7 +9,8 @@ import numpy as np
 import numba
 from numba import llvm_types
 from numba.minivect.minitypes import *
-from numba.minivect import  minitypes
+from numba.minivect.minitypes import map_dtype
+from numba.minivect import minitypes
 from numba.minivect.ctypes_conversion import (convert_from_ctypes,
                                               convert_to_ctypes)
 
@@ -114,7 +115,7 @@ class NumpyDtypeType(NumbaType, minitypes.ObjectType):
     dtype = None
 
     def resolve(self):
-        return _map_dtype(self.dtype)
+        return map_dtype(self.dtype)
 
 class EllipsisType(NumbaType, minitypes.ObjectType):
     is_ellipsis = True
@@ -235,7 +236,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
 
     def from_python(self, value):
         if isinstance(value, np.ndarray):
-            dtype = _map_dtype(value.dtype)
+            dtype = map_dtype(value.dtype)
             return minitypes.ArrayType(dtype, value.ndim,
                                        is_c_contig=value.flags['C_CONTIGUOUS'],
                                        is_f_contig=value.flags['F_CONTIGUOUS'])
@@ -272,48 +273,6 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return type
 
         return super(NumbaTypeMapper, self).promote_types(type1, type2)
-
-
-def _map_dtype(dtype):
-    """
-    >>> _map_dtype(np.dtype(np.int32))
-    int32
-    >>> _map_dtype(np.dtype(np.int64))
-    int64
-    >>> _map_dtype(np.dtype(np.object))
-    PyObject *
-    >>> _map_dtype(np.dtype(np.float64))
-    double
-    >>> _map_dtype(np.dtype(np.complex128))
-    complex128
-    """
-    item_idx = int(math.log(dtype.itemsize, 2))
-    if dtype.kind == 'i':
-        return [i1, i2, i4, i8][item_idx]
-    elif dtype.kind == 'u':
-        return [u1, u2, u4, u8][item_idx]
-    elif dtype.kind == 'f':
-        if dtype.itemsize == 2:
-            pass # half floats not supported yet
-        elif dtype.itemsize == 4:
-            return f4
-        elif dtype.itemsize == 8:
-            return f8
-        elif dtype.itemsize == 16:
-            return f16
-    elif dtype.kind == 'b':
-        return i1
-    elif dtype.kind == 'c':
-        if dtype.itemsize == 8:
-            return c8
-        elif dtype.itemsize == 16:
-            return c16
-        elif dtype.itemsize == 32:
-            return c32
-    elif dtype.kind == 'O':
-        return O
-
-    raise NotImplementedError("dtype %s not supported" % (dtype,))
 
 
 if __name__ == '__main__':

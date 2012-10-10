@@ -476,7 +476,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             varname = self.local_names[i]
             self.symtab[varname] = Variable(arg_type, is_local=True, name=varname)
 
-        for varname in self.varnames[len(arg_types):]:
+        for varname in self.local_names[len(arg_types):]:
             self.symtab[varname] = Variable(None, is_local=True, name=varname)
 
         self.symtab['None'] = Variable(numba_types.none, is_constant=True,

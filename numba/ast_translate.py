@@ -216,13 +216,53 @@ class ComplexSupportMixin(object):
                                           self.builder.fmul(arg1r, arg2i)),
                         divisor))
 
-class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
+
+class RefcountingMixin(object):
+
+    def decref(self, value, func='Py_DecRef'):
+        "Py_DECREF a value"
+        object_ltype = object_.to_llvm(self.context)
+        sig, py_decref = self.function_cache.function_by_name(func)
+        b = self.builder
+        return b.call(py_decref, [b.bitcast(value, object_ltype)])
+
+    def incref(self, value):
+        "Py_INCREF a value"
+        return self.decref(value, func='Py_IncRef')
+
+    def xdecref_temp(self, temp, decref=None):
+        "Py_XDECREF a temporary"
+        decref = decref or self.decref
+
+        def cleanup(b, bb_true, bb_endif):
+            decref(b.load(temp))
+            b.branch(bb_endif)
+
+        self.object_coercer.check_err(self.builder.load(temp),
+                                      callback=cleanup,
+                                      cmp=llvm.core.ICMP_NE)
+
+    def xincref_temp(self, temp):
+        "Py_XINCREF a temporary"
+        return self.xdecref_temp(temp, decref=self.incref)
+
+    def xdecref_temp_cleanup(self, temp):
+        "Cleanup a temp at the end of the function"
+        bb = self.builder.basic_block
+
+        self.builder.position_at_end(self.current_cleanup_bb)
+        self.xdecref_temp(temp)
+        self.current_cleanup_bb = self.builder.basic_block
+
+        self.builder.position_at_end(bb)
+
+
+class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
+                        RefcountingMixin):
     """
     Translate a Python AST to LLVM. Each visit_* method should directly
     return an LLVM value.
     """
-
-    in_loop = 0
 
     def __init__(self, context, func, ast, func_signature, symtab,
                  optimize=True, func_name=None,
@@ -304,18 +344,20 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
 
         for name, var in self.symtab.items():
             # FIXME: 'None' should be handled as a special case (probably).
-            if (name not in self.argnames and
-                not isinstance(var.type, BuiltinType) and
-                var.is_local):
+            if name not in self.argnames and var.is_local:
                 # Not argument and not builtin type.
                 # Allocate storage for all variables.
-                stackspace = self.builder.alloca(var.ltype)
-                stackspace.name = 'var_%s' % var.name
+                name = 'var_%s' % var.name
+                if var.type.is_object:
+                    stackspace = self._null_obj_temp(name)
+                else:
+                    stackspace = self.builder.alloca(var.ltype, name=name)
                 var.lvalue = stackspace
 
         # TODO: Put current function into symbol table for recursive call
         self.setup_return()
 
+        self.in_loop = 0
         self.loop_beginnings = []
         self.loop_exits = []
 
@@ -394,6 +436,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
         else:
             return prototype(self.func)
 
+    def _null_obj_temp(self, name):
+        lhs = self.llvm_alloca(llvm_types._pyobject_head_struct_p,
+                               name=name, change_bb=False)
+        self.generate_assign(self.visit(nodes.NULL_obj), lhs)
+        return lhs
+
     def build_call_to_translated_function(self, target_translator, args):
         # FIXME: At some point, I assume we'll actually want to index
         # by argument types, so this will grab the best suited
@@ -451,6 +499,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
 
     def terminate_cleanup_blocks(self):
         self.builder.position_at_end(self.current_cleanup_bb)
+
+        # Decref local variables
+        for name, var in self.symtab.iteritems():
+            if name not in self.argnames and var.is_local and (
+                        var.type.is_object or var.type.is_array):
+                self.xdecref_temp(var.lvalue)
+
         if self.is_void_return:
             self.builder.ret_void()
         else:
@@ -465,19 +520,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
     def visit_ConstNode(self, node):
         return node.value(self)
 
-    def generate_load_symbol(self, name):
-        var = self.symtab[name]
-        if var.is_local:
-            if var.type.is_struct:
-                return var.lvalue
-            else:
-                return self.builder.load(var.lvalue, name='load_' + name)
-        else:
-            raise NotImplementedError("global variables:", var)
-
-    def generate_store_symbol(self, name):
-        return self.symtab[name].lvalue
-
     def visit_Attribute(self, node):
         result = self.visit(node.value)
         if node.value.type.is_complex:
@@ -490,8 +532,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
             field_idx = node.value.type.fields.index((node.attr, attr_type))
             result = self.builder.gep(result, [llvm_types.constant_int(0),
                                                llvm_types.constant_int(field_idx)])
-            if isinstance(node.ctx, ast.Load):
-                result = self.builder.load(result)
+            result = self._handle_ctx(node, result)
 
             return result
 
@@ -504,8 +545,23 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
         value = self.visit(node.value)
 
         object = target_node.type.is_object or target_node.type.is_array
-        return self.generate_assign(value, target,
-                                    object=object and self.in_loop)
+        self.generate_assign(value, target, decref=object)
+        if object:
+            self.incref(value)
+
+    def generate_assign(self, lvalue, ltarget, decref=False):
+        '''
+        Generate assignment operation and automatically cast value to
+        match the target type.
+        '''
+        if lvalue.type != ltarget.type.pointee:
+            lvalue = self.caster.cast(lvalue, ltarget.type.pointee)
+
+        if decref:
+            # Py_XDECREF any previous object
+            self.xdecref_temp(ltarget)
+
+        self.builder.store(lvalue, ltarget)
 
     def visit_Num(self, node):
         if node.type.is_int:
@@ -517,12 +573,20 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
             return self.generate_constant_complex(node.n)
 
     def visit_Name(self, node):
-        if isinstance(node.ctx, ast.Load): # load
-            return self.generate_load_symbol(node.id)
-        elif isinstance(node.ctx, ast.Store): # store
-            return self.generate_store_symbol(node.id)
-            # unreachable
-        raise AssertionError('unreachable')
+        if not node.variable.is_local:
+            raise NotImplementedError("global variables:", var)
+
+        lvalue = self.symtab[node.id].lvalue
+        return self._handle_ctx(node, lvalue)
+
+    def _handle_ctx(self, node, lptr, name=''):
+        if isinstance(node.ctx, ast.Load):
+            if node.type.is_struct:
+                return lptr
+            else:
+                return self.builder.load(lptr, name=name and 'load_' + name)
+        else:
+            return lptr
 
     def visit_For(self, node):
         if node.orelse:
@@ -607,20 +671,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
         self.blocks[idx]=bb
         return bb
 
-    def generate_assign(self, lvalue, ltarget, object=False):
-        '''
-        Generate assignment operation and automatically cast value to
-        match the target type.
-        '''
-        if lvalue.type != ltarget.type.pointee:
-            lvalue = self.caster.cast(lvalue, ltarget.type.pointee)
-
-        if object:
-            # Py_XDECREF any previous object
-            self.decref_temp(ltarget)
-
-        self.builder.store(lvalue, ltarget)
-
     def visit_Return(self, node):
         if node.value is not None:
             assert not self.is_void_return
@@ -640,10 +690,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
 
             ret_type = self.func_signature.return_type
             if ret_type.is_object or ret_type.is_array:
-                sig, lfunc = self.function_cache.function_by_name('Py_IncRef')
-                ltype_obj = object_.to_llvm(self.context)
-                self.builder.call(lfunc, [self.builder.bitcast(retval,
-                                                               ltype_obj)])
+                self.xincref_temp(self.return_value)
 
         self.builder.branch(self.cleanup_label)
 
@@ -862,14 +909,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
 
         return lptr
 
-    def _handle_ctx(self, node, lptr):
-        if isinstance(node.ctx, ast.Load):
-            return self.builder.load(lptr)
-        else:
-            return lptr
-
     def visit_DataPointerNode(self, node):
-        assert node.type.is_array
+        assert node.node.type.is_array
         lvalue = self.visit(node.node)
         lindices = self.visit(node.slice)
         lptr = node.subscript(self, lvalue, lindices)
@@ -992,46 +1033,20 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin):
         # Initialize temp to NULL at beginning of function
         self.builder.position_at_beginning(self.lfunc.get_entry_basic_block())
         name = getattr(node.node, 'name', 'object') + '_temp'
-        lhs = self.llvm_alloca(llvm_types._pyobject_head_struct_p,
-                               name=name, change_bb=False)
-        self.generate_assign(self.visit(nodes.NULL_obj), lhs)
+        lhs = self._null_obj_temp(name)
         node.llvm_temp = lhs
 
         # Assign value
         self.builder.position_at_end(bb)
         rhs = self.visit(node.node)
-        self.generate_assign(rhs, lhs, object=True)
+        self.generate_assign(rhs, lhs, decref=self.in_loop)
 
         # goto error if NULL
         self.object_coercer.check_err(rhs)
 
         # Generate Py_XDECREF(temp) (call Py_DecRef only if not NULL)
-        self.decref_temp_cleanup(lhs)
+        self.xdecref_temp_cleanup(lhs)
         return self.builder.load(lhs, name=name + '_load')
-
-    def decref_temp(self, temp, func='Py_DecRef'):
-        sig, py_decref = self.function_cache.function_by_name(func)
-
-        def cleanup(b, bb_true, bb_endif):
-            object_ltype = object_.to_llvm(self.context)
-            b.call(py_decref, [b.bitcast(b.load(temp), object_ltype)])
-            b.branch(bb_endif)
-
-        self.object_coercer.check_err(self.builder.load(temp),
-                                      callback=cleanup,
-                                      cmp=llvm.core.ICMP_NE)
-
-    def incref_temp(self, temp):
-        return self.decref_temp(temp, func='Py_IncRef')
-
-    def decref_temp_cleanup(self, temp):
-        bb = self.builder.basic_block
-
-        self.builder.position_at_end(self.current_cleanup_bb)
-        self.decref_temp(temp)
-        self.current_cleanup_bb = self.builder.basic_block
-
-        self.builder.position_at_end(bb)
 
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)
@@ -1118,6 +1133,7 @@ class ObjectCoercer(object):
         Check for errors. If the result is NULL, and error should have been set
         Jumps to translator.error_label if an exception occurred.
         """
+        assert llvm_result.type.kind == llvm.core.TYPE_POINTER
         int_result = self.translator.builder.ptrtoint(llvm_result,
                                                        llvm_types._intp)
         NULL = llvm.core.Constant.int(int_result.type, 0)

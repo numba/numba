@@ -299,7 +299,7 @@ class LateSpecializer(visitors.NumbaTransformer):
 
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
-        elif node.type.is_object:
+        elif node.value.type.is_object:
             node = self.function_cache.call(
                                 'PyObject_GetAttrString', node.value,
                                 nodes.ConstNode(node.attr))
