@@ -1154,6 +1154,9 @@ class ObjectCoercer(object):
         if_badval(self.translator, llvm_result, llvm_badval,
                   callback=lambda b, *args: b.branch(self.translator.error_label))
 
+    def _create_llvm_string(self, str):
+        return self.translator.visit(nodes.ConstNode(str, c_string_type))
+
     def lstr(self, types, fmt=None):
         "Get an llvm format string for the given types"
         typestrs = []
@@ -1166,7 +1169,7 @@ class ObjectCoercer(object):
         if fmt is not None:
             str = fmt % str
 
-        return self.translator.visit(nodes.ConstNode(str, c_string_type))
+        return self._create_llvm_string(str)
 
     def buildvalue(self, *largs, **kwds):
         # The caller should check for errors using check_err or by wrapping
@@ -1191,9 +1194,24 @@ class ObjectCoercer(object):
 
         return llvm_result, type
 
+    def convert_single_struct(self, llvm_result, type):
+        types = []
+        largs = []
+        for i, (field_name, field_type) in enumerate(type.fields):
+            types.extend((c_string_type, field_type))
+            largs.append(self._create_llvm_string(field_name))
+            struct_attr = self.builder.gep(llvm_result,
+                                           [llvm_types.constant_int(i)])
+            largs.append(self.builder.load(struct_attr))
+        lstr = self.lstr(types, fmt="{%s}")
+        return self.buildvalue(lstr, *largs, name='struct')
+
     def convert_single(self, type, llvm_result, name=''):
         "Generate code to convert an LLVM value to a Python object"
         llvm_result, type = self.npy_intp_to_py_ssize_t(llvm_result, type)
+        if type.is_struct:
+            return self.convert_single_struct(llvm_result, type)
+
         lstr = self.lstr([type])
         return self.buildvalue(lstr, llvm_result, name=name)
 
