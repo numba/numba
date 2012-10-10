@@ -1,43 +1,24 @@
-import opcode
-import sys
-import types
-import __builtin__
-import functools
-from contextlib import contextmanager
 import ast
 
-import numpy as np
-
 import llvm
-from llvm import _ObjectCache, WeakValueDictionary
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 
-from utils import itercode, debugout
 #from ._ext import make_ufunc
-from .cfg import ControlFlowGraph
-from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
-    _void_star, _float, _double, _complex64, _complex128, _pyobject_head, \
-    _trace_refs_, _head_len, _numpy_struct,  _numpy_array, \
-    _numpy_array_field_ofs, _LLVMCaster
+from .llvm_types import    _int32, _intp, _LLVMCaster
 #from .multiarray_api import MultiarrayAPI # not used
 from .symtab import Variable
 from . import _numba_types as _types
-from ._numba_types import Complex64, Complex128, BuiltinType
+from ._numba_types import BuiltinType
 
-import numba
 from numba import *
 from . import visitors, nodes, llvm_types
 from .minivect import minitypes
-from numba.pymothoa import compiler_errors
 from numba import ndarray_helpers, translate, error
 
 import logging
 logger = logging.getLogger(__name__)
-
-if __debug__:
-    import pprint
 
 _int32_zero = lc.Constant.int(_int32, 0)
 

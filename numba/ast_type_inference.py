@@ -1001,6 +1001,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.value = self.visit(node.value)
         type = node.value.variable.type
         if type.is_complex:
+            # TODO: make conplex a struct type
             if node.attr in ('real', 'imag'):
                 if self.is_store(node.ctx):
                     raise TypeError("Cannot assign to the %s attribute of "

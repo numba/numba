@@ -1,10 +1,7 @@
 import opcode
-import ctypes
 
-from numpy import complex64, complex128
-
+from .minivect.complex_support import Complex64, Complex128, Complex256
 from .minivect import miniast, minitypes
-from .minivect.complex_support import Complex64, Complex128
 from . import _numba_types
 
 def itercode(code):

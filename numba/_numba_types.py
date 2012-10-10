@@ -1,19 +1,17 @@
 import math
 import copy
 import types
-import ctypes.util
 
 import llvm.core
 import numpy as np
-from numpy import ctypeslib
 # from numpy.ctypeslib import _typecodes
 
 import numba
 from numba import llvm_types
 from numba.minivect.minitypes import *
-from numba.minivect import miniast, minitypes
-from numba.minivect.ctypes_conversion import convert_to_ctypes, convert_from_ctypes
-from numba.minivect.complex_support import Complex64, Complex128, Complex256
+from numba.minivect import  minitypes
+from numba.minivect.ctypes_conversion import (convert_from_ctypes,
+                                              convert_to_ctypes)
 
 __all__ = minitypes.__all__ + [
     'O', 'b1', 'i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8',
