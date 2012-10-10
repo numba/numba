@@ -102,10 +102,6 @@ cdef int _init_cuda_api() except *:
 
         cuda.set_cuda_api_initialized()
 
-
-def init_cuda_api():
-    _init_cuda_api()
-
 cdef cuda.CUdevice get_device(int device_number) except *:
     """
     Get the cuda device from a device number. Provide -1 to get the
@@ -115,15 +111,6 @@ cdef cuda.CUdevice get_device(int device_number) except *:
     device_number = get_device_number(device_number)
     cuda.get_device(&result, NULL, device_number)
     return result
-
-def compute_capability(int device_number):
-    "Get the CUDA compute capability of the device"
-    cdef cuda.CudaDeviceAttrs device_attrs
-    cdef cuda.CUdevice cu_device = get_device(device_number)
-
-    cuda.init_attributes(cu_device, &device_attrs)
-    return (device_attrs.COMPUTE_CAPABILITY_MAJOR,
-            device_attrs.COMPUTE_CAPABILITY_MINOR)
 
 cdef class CudaFunction(dispatch.Function):
     "Wrap a compiled CUDA function"
@@ -280,34 +267,34 @@ cdef class CudaGeneralizedUFuncDispatcher(CudaUFuncDispatcher):
 #                         True)
 
 
-cdef class CudaNumbaFuncDispatcher(object): #cutils.UFuncDispatcher):
-    """
-    Invoke the CUDA ufunc specialization for the given inputs.
-    """
+#cdef class CudaNumbaFuncDispatcher(object): #cutils.UFuncDispatcher):
+#    """
+#    Invoke the CUDA ufunc specialization for the given inputs.
+#    """
 
-    cdef cuda.CudaDeviceAttrs device_attrs
+#    cdef cuda.CudaDeviceAttrs device_attrs
 
-    cdef cuda.CUdevice cu_device
-    cdef cuda.CUcontext cu_context
-    cdef cuda.CUmodule cu_module
-    cdef cuda.CUfunction cu_function
+#    cdef cuda.CUdevice cu_device
+#    cdef cuda.CUcontext cu_context
+#    cdef cuda.CUmodule cu_module
+#    cdef cuda.CUfunction cu_function
 
-    cdef char* typemap
+#    cdef char* typemap
 
-    def __init__(self, ptx_code, func_name, device_number, typemap):
-        cuda.get_device(&self.cu_device, &self.cu_context, device_number)
-        cuda.init_attributes(self.cu_device, &self.device_attrs)
-        cuda.cuda_load(ptx_code, &self.cu_module)
-        cuda.cuda_getfunc(self.cu_module, &self.cu_function, func_name)
-        self.typemap = typemap
+#    def __init__(self, ptx_code, func_name, device_number, typemap):
+#        cuda.get_device(&self.cu_device, &self.cu_context, device_number)
+#        cuda.init_attributes(self.cu_device, &self.device_attrs)
+#        cuda.cuda_load(ptx_code, &self.cu_module)
+#        cuda.cuda_getfunc(self.cu_module, &self.cu_function, func_name)
+#        self.typemap = typemap
 
-    def __call__(self, args, griddim, blkdim):
-        gx, gy, gz = griddim
-        bx, by, bz = blkdim
-        cuda.cuda_numba_function(list(args), self.cu_function,
-                                 gx, gy, gz, bx, by, bz,
-                                 self.typemap)
+#    def __call__(self, args, griddim, blkdim):
+#        gx, gy, gz = griddim
+#        bx, by, bz = blkdim
+#        cuda.cuda_numba_function(list(args), self.cu_function,
+#                                 gx, gy, gz, bx, by, bz,
+#                                 self.typemap)
 
-    def __dealloc__(self):
-        cuda.dealloc(self.cu_module, self.cu_context)
+#    def __dealloc__(self):
+#        cuda.dealloc(self.cu_module, self.cu_context)
 

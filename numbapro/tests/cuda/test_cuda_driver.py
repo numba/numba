@@ -85,11 +85,6 @@ class TestCudaDriver(unittest.TestCase):
             self.assertEqual(i, v)
 
     def test_cuda_driver_stream(self):
-        if self.device.driver.path.endswith('libocelot.so'):
-            # Ocelot does not implement streaming memory transfer
-            print 'SKIPPED'
-            return
-
         context = Context(self.device)
         module = Module(context, self.ptx)
         print module.info_log

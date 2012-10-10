@@ -13,6 +13,7 @@ from numba.translate import Variable as _Variable
 
 from numbapro.translate import Translate as _Translate
 from numbapro import _cudadispatch
+from numbapro._cuda.default import device as _cuda_device
 
 _THIS_MODULE = sys.modules[__name__]
 
@@ -219,7 +220,7 @@ class CudaNumbaFunction(CudaBaseFunction):
 
         device_number = -1
         # TODO: Too be refacted. Copied from numbapro.vectorize.cuda
-        cc = 'sm_%d%d' % _cudadispatch.compute_capability(device_number)
+        cc = 'sm_%d%d' % _cuda_device.COMPUTE_CAPABILITY
         self._cc = cc
 
         if _lc.HAS_PTX:

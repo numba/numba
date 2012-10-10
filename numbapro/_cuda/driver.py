@@ -546,7 +546,7 @@ class Function(object):
                                                     size)
                 else:
                     size = sizeof(arg)
-                    error = self.driver.cuParamSetv(arg, offset, addressof(arg),
+                    error = self.driver.cuParamSetv(self._handle, offset, addressof(arg),
                                                     size)
                 _check_error(error, 'Failed to set parameter %d' % i)
                 offset += size
