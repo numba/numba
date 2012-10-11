@@ -121,7 +121,7 @@ class BuiltinResolverMixin(object):
         if len(node.args) not in n:
             raise error.NumbaError(node,
                                    "builtin %s expects %s arguments" %
-                                   (func.__name__, " or ".join(n)))
+                                   (func.__name__, " or ".join(map(str, n))))
 
     def _resolve_range(self, node, argtype):
         arg_type = minitypes.Py_ssize_t
@@ -163,9 +163,14 @@ class BuiltinResolverMixin(object):
 
     def _resolve_int(self, func, node, argtype):
         # Resolve int(x) and float(x) to an equivalent cast
-        self._expect_n_args(func, node, 1)
-        dst_types = {int: numba.int_, float: numba.double}
-        return nodes.CoercionNode(node.args[0], dst_type=dst_types[func])
+        self._expect_n_args(func, node, (0, 1, 2))
+        dst_type = {int: numba.int_, float: numba.double}[func]
+        if len(node.args) == 0:
+            return nodes.ConstNode(0, dst_type)
+        elif len(node.args) == 1:
+            return nodes.CoercionNode(node.args[0], dst_type=dst_type)
+        else:
+            return None
 
     _resolve_float = _resolve_int
 
@@ -1010,13 +1015,17 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def _resolve_method_calls(self, func_type, new_node, node):
         "Resolve special method calls"
-        if (func_type.base_type.is_complex and
+        if ((func_type.base_type.is_complex or
+             func_type.base_type.is_float) and
             func_type.attr_name == 'conjugate'):
             assert isinstance(node.func, ast.Attribute)
             if node.args or node.keywords:
                 raise error.NumbaError(
                         "conjugate method of complex number does not "
                         "take arguments")
+            if func_type.base_type.is_float:
+                return node.func.value
+
             new_node = nodes.ComplexConjugateNode(node.func.value)
             new_node.variable = Variable(func_type.base_type)
 
@@ -1101,15 +1110,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_Attribute(self, node):
         node.value = self.visit(node.value)
         type = node.value.variable.type
-        if type.is_complex:
+        if node.attr == 'conjugate' and (type.is_complex or type.is_float):
+            result_type = numba_types.MethodType(type, 'conjugate')
+        elif type.is_complex:
             # TODO: make conplex a struct type
             if node.attr in ('real', 'imag'):
                 if self.is_store(node.ctx):
                     raise TypeError("Cannot assign to the %s attribute of "
                                     "complex numbers" % node.attr)
                 result_type = type.base_type
-            elif node.attr == 'conjugate':
-                result_type = numba_types.MethodType(type, 'conjugate')
             else:
                 raise AttributeError("'%s' of complex type" % node.attr)
         elif type.is_struct:
