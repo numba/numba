@@ -212,6 +212,14 @@ class BuiltinResolverMixin(object):
         self._expect_n_args(func, node, (2, 3))
         return self.pow(*node.args)
 
+    def _resolve_globals(self, func, node, argtype):
+        self._expect_n_args(func, node, 0)
+        return nodes.ObjectInjectNode(self.func.func_globals)
+
+    def _resolve_locals(self, func, node, argtype):
+        self._expect_n_args(func, node, 0)
+        raise error.NumbaError("locals() is not supported in numba functions")
+
     def _resolve_builtin_call(self, node, func):
         resolver = getattr(self, '_resolve_' + func.__name__, None)
         if resolver is not None:

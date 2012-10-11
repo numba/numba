@@ -192,12 +192,13 @@ class LateSpecializer(visitors.NumbaTransformer):
         return nodes.ObjectTempNode(node)
 
     def visit_CoercionNode(self, node, visitchildren=True):
-        if visitchildren:
-            self.generic_visit(node)
-        elif not isinstance(node, nodes.CoercionNode):
+        if not isinstance(node, nodes.CoercionNode):
             # CoercionNode.__new__ returns the node to be coerced if it doesn't
             # need coercion
             return node
+
+        if visitchildren:
+            self.generic_visit(node)
 
         node_type = node.node.type
 
@@ -234,7 +235,7 @@ class LateSpecializer(visitors.NumbaTransformer):
                                                   node.value, node.slice)
                 # print ast.dump(result)
                 node = nodes.CoercionNode(result, dst_type=node.type)
-                node = self.visit_CoercionNode(node, visitchildren=False)
+                node = self.visit(node)
             else:
                 # This is handled in visit_Assign
                 pass
@@ -251,6 +252,9 @@ class LateSpecializer(visitors.NumbaTransformer):
         else:
             self.generic_visit(node)
             return node
+
+    def visit_Index(self, node):
+        return self.visit(node.value)
 
     def visit_Assign(self, node):
         target = node.targets[0]

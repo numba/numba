@@ -921,8 +921,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         lptr = node.subscript(self, lvalue, lindices)
         return self._handle_ctx(node, lptr)
 
-    def visit_Index(self, node):
-        return self.visit(node.value)
+    #def visit_Index(self, node):
+    #    return self.visit(node.value)
 
     def visit_ExtSlice(self, node):
         return self.visitlist(node.dims)
