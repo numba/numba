@@ -123,7 +123,7 @@ class BuiltinResolverMixin(object):
                                    "builtin %s expects %s arguments" %
                                    (func.__name__, " or ".join(map(str, n))))
 
-    def _resolve_range(self, node, argtype):
+    def _resolve_range(self, func, node, argtype):
         arg_type = minitypes.Py_ssize_t
         node.variable = Variable(numba_types.RangeType())
         args = self.visitlist(node.args)
@@ -143,7 +143,7 @@ class BuiltinResolverMixin(object):
 
         node.args = nodes.CoercionNode.coerce([start, stop, step],
                                               dst_type=minitypes.Py_ssize_t)
-        return result
+        return node
 
     _resolve_xrange = _resolve_range
 
@@ -724,6 +724,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.target = self.assign(node.target.variable, Variable(base_type),
                                   node.target)
         self.visitlist(node.body)
+
+        if node.iter.variable.type.is_range:
+            node.index = self.visit(ast.Name(id=node.target.id, ctx=ast.Load()))
+            node.index.type = node.index.variable.type
+
         return node
 
     def visit_While(self, node):

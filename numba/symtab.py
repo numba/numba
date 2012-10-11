@@ -27,7 +27,7 @@ class Variable(object):
     @classmethod
     def from_variable(cls, variable, **kwds):
         result = cls(variable.type)
-        vars(result).update(kwds)
+        vars(result).update(dict(kwds, **vars(variable)))
         return result
 
     @property

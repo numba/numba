@@ -574,7 +574,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_Name(self, node):
         if not node.variable.is_local:
-            raise NotImplementedError("global variables:", var)
+            raise NotImplementedError("global variables:", node.id)
 
         lvalue = self.symtab[node.id].lvalue
         return self._handle_ctx(node, lvalue)

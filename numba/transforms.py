@@ -26,14 +26,7 @@ class TransformForIterable(visitors.NumbaTransformer):
             self.error(node.target,
                        "Only assignment to target names is supported.")
 
-        # NOTE: this would be easier to do during type inference, since you
-        #       can rewrite the AST and run the type inferer on the rewrite.
-        #       This way, you won't have to create variables and types manually.
-        #       This will also take care of proper coercions.
         if node.iter.type.is_range:
-            # make sure to analyse children, in case of nested loops
-            self.generic_visit(node)
-            node.index = ast.Name(id=node.target.id, ctx=ast.Load())
             return node
         elif node.iter.type.is_array and node.iter.type.ndim == 1:
             # Convert 1D array iteration to for-range and indexing
