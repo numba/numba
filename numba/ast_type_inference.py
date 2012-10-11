@@ -104,18 +104,26 @@ class ASTBuilder(object):
         index = ast.Index(nodes.ConstNode(constant_index, int_))
         return ast.Subscript(value=node, slice=index, ctx=ctx)
 
+    def call_pyfunc(self, py_func, args):
+        # Fall back to object call
+        func = nodes.ObjectInjectNode(py_func)
+        return nodes.ObjectCallNode(None, func, args)
+
 class BuiltinResolverMixin(object):
     """
     Resolve builtin calls for type inference.
     """
 
     def _expect_n_args(self, func, node, n):
-        if len(node.args) > n:
-            raise error.NumbaError(node,
-                                   "Only a single argument is supported to builtin %s" %
-                                   func.__name__)
+        if not isinstance(n, tuple):
+            n = (n,)
 
-    def _resolve_range(self, node, func_type, argtype):
+        if len(node.args) not in n:
+            raise error.NumbaError(node,
+                                   "builtin %s expects %s arguments" %
+                                   (func.__name__, " or ".join(n)))
+
+    def _resolve_range(self, node, argtype):
         arg_type = minitypes.Py_ssize_t
         node.variable = Variable(numba_types.RangeType())
         args = self.visitlist(node.args)
@@ -139,7 +147,7 @@ class BuiltinResolverMixin(object):
 
     _resolve_xrange = _resolve_range
 
-    def _resolve_len(self, func, node, func_type, argtype):
+    def _resolve_len(self, func, node, argtype):
         # Simplify len(array) to ndarray.shape[0]
         self._expect_n_args(func, node, 1)
         if argtype.is_array:
@@ -153,7 +161,7 @@ class BuiltinResolverMixin(object):
 
         return None
 
-    def _resolve_int(self, func, node, func_type, argtype):
+    def _resolve_int(self, func, node, argtype):
         # Resolve int(x) and float(x) to an equivalent cast
         self._expect_n_args(func, node, 1)
         dst_types = {int: numba.int_, float: numba.double}
@@ -161,7 +169,7 @@ class BuiltinResolverMixin(object):
 
     _resolve_float = _resolve_int
 
-    def _resolve_abs(self, func, node, func_type, argtype):
+    def _resolve_abs(self, func, node, argtype):
         self._expect_n_args(func, node, 1)
         if argtype.is_float:
             return self._resolve_math_call(node, abs)
@@ -169,7 +177,7 @@ class BuiltinResolverMixin(object):
         # TODO: generate efficient inline code
         return None
 
-    def _resolve_round(self, func, node, func_type, argtype):
+    def _resolve_round(self, func, node, argtype):
         self._expect_n_args(func, node, 1)
         if argtype.is_float:
             return self._resolve_math_call(node, round)
@@ -177,7 +185,11 @@ class BuiltinResolverMixin(object):
         # TODO: generate efficient inline code
         return None
 
-    def _resolve_builtin_call(self, node, func, func_variable, func_type):
+    def _resolve_pow(self, func, node, argtype):
+        self._expect_n_args(func, node, (2, 3))
+        return self.pow(*node.args)
+
+    def _resolve_builtin_call(self, node, func):
         resolver = getattr(self, '_resolve_' + func.__name__, None)
         if resolver is not None:
             # Pass in the first argument type
@@ -185,13 +197,11 @@ class BuiltinResolverMixin(object):
             if len(node.args) >= 1:
                 argtype = node.args[0].variable.type
 
-            result = resolver(func, node, func_type, argtype)
+            result = resolver(func, node, argtype)
             if result is not None:
                 return result
 
-        # Fall back to object call
-        func = nodes.ObjectInjectNode(func)
-        return nodes.ObjectCallNode(None, func, node.args)
+        return self.astbuilder.call_pyfunc(func, node.args)
 
 
 class MathMixin(object):
@@ -245,8 +255,8 @@ class MathMixin(object):
 
         return numeric and (is_intrinsic or is_math)
 
-    def _resolve_intrinsic(self, call_node, py_func, signature):
-        return nodes.LLVMIntrinsicNode(signature, call_node.args, None, py_func)
+    def _resolve_intrinsic(self, args, py_func, signature):
+        return nodes.LLVMIntrinsicNode(signature, args, None, py_func)
 
     def math_suffix(self, name, type):
         if name == 'abs':
@@ -269,23 +279,30 @@ class MathMixin(object):
         type = call_node.args[0].variable.type
         signature = minitypes.FunctionType(return_type=type, args=[type])
         if self._is_intrinsic(py_func):
-            return self._resolve_intrinsic(call_node, py_func, signature)
+            return self._resolve_intrinsic(call_node.args, py_func, signature)
 
         return self._resolve_libc_math(call_node, py_func, signature, type)
 
-    def pow(self, node, power, name='pow'):
+    def pow(self, node, power, mod=None, name='pow'):
+        # TODO: pow(x, y, z) == x ** y % z
         node_type = node.variable.type
         power_type = power.variable.type
-        if node_type.is_numeric and power_type.is_numeric:
-            itemsize = min(4, max(node_type.itemsize, power_type.itemsize))
-        else:
-            itemsize = 8
-
-        pow_type = [float_, double, longdouble][itemsize / 4 - 1]
+        promoted_type = pow_type = self.promote_types(node_type, power_type)
+        if pow_type.is_int:
+            pow_type = double
         signature = minitypes.FunctionType(return_type=pow_type,
                                            args=[pow_type, pow_type])
-        return nodes.MathCallNode(signature, [node, power], llvm_func=None,
-                                  name=self.math_suffix(name, pow_type))
+        args = [node, power]
+        if pow_type.is_float and mod is None:
+            result = self._resolve_intrinsic(args, pow, signature)
+            return nodes.CoercionNode(result, promoted_type)
+        #elif pow_type.is_int:
+        #    return nodes.MathCallNode(signature, args, llvm_func=None,
+        #                              name=self.math_suffix(name, pow_type))
+        else:
+            if mod is not None:
+                args.append(mod)
+            return self.astbuilder.call_pyfunc(pow, args)
 
     def mod(self, x, y):
         return self.pow(x, y, name='fmod')
@@ -1012,8 +1029,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         new_node = None
         if func_type.is_builtin:
             # Call to Python built-in function
-            new_node = self._resolve_builtin_call(node, func,
-                                                  func_variable, func_type)
+            new_node = self._resolve_builtin_call(node, func)
         elif func_type.is_function:
             # Native function call
             new_node = nodes.NativeCallNode(func_variable.type, node.args,

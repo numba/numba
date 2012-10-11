@@ -136,10 +136,16 @@ class LateSpecializer(visitors.NumbaTransformer):
         if self.nopython:
             raise error.NumbaError(node, "Cannot use print statement in "
                                          "nopython context")
+
+        print_space = self._print(nodes.ObjectInjectNode(" "), node.dest)
+
         result = []
         for value in node.values:
             value = nodes.CoercionNode(value, object_, name="print_arg")
             result.append(self._print(value, node.dest))
+            result.append(print_space)
+
+        result.pop() # pop last space
 
         if node.nl:
             result.append(self._print(nodes.ObjectInjectNode("\n"), node.dest))

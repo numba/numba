@@ -1,5 +1,3 @@
-# adapted from cython/tests/run/builtin_pow.pyx
-
 """
 >>> pow3(2,3,5)
 3
@@ -16,7 +14,17 @@
 
 >>> pow2_const()
 8
+
+>>> c1, c2 = 1.2 + 4.1j, 0.6 + 0.5j
+>>> pow2(c1, c2), pow(c1, c2)
+True
+
+>>> d1, d2 = 4.2, 5.1
+>>> pow2(d1, d2) == pow(d1, d2)
+True
 """
+
+from numba import *
 
 @autojit(backend='ast')
 def pow3(a,b,c):
@@ -35,5 +43,7 @@ def pow2_const():
     return pow(2,3)
 
 if __name__ == '__main__':
+#    c1, c2 = 1.2 + 4.1j, 0.6 + 0.5j
+#    print pow2(c1, c2)
     import doctest
     doctest.testmod()
