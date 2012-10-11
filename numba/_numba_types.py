@@ -38,6 +38,14 @@ class ListType(NumbaType, minitypes.ObjectType):
     def __str__(self):
         return "list(%s)" % ", ".join(["..."] * self.size)
 
+class DictType(NumbaType, minitypes.ObjectType):
+    is_dict = True
+    name = "dict"
+    size = 0
+
+    def __str__(self):
+        return "dict(%s)" % ", ".join(["..."] * self.size)
+
 class IteratorType(NumbaType, minitypes.ObjectType):
     is_iterator = True
     subtypes = ['base_type']

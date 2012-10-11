@@ -1,6 +1,6 @@
 """
 >>> int()
-0.0
+0
 >>> convert_int(2.5)
 2
 >>> convert_to_int('FF', 16)

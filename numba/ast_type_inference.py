@@ -971,38 +971,53 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_Str(self, node):
         return nodes.ConstNode(node.s)
 
-    def _get_constant_list(self, node):
-        if not isinstance(node.ctx, ast.Load):
-            return None
-
+    def _get_constants(self, nodes):
         items = []
         constant_value = None
-        for item_node in node.elts:
+        for item_node in nodes:
             if item_node.variable.is_constant:
                 items.append(item_node.variable.constant_value)
             else:
                 return None
-
         return items
+
+    def _get_constant_list(self, node):
+        if not isinstance(node.ctx, ast.Load):
+            return None
+
+        return self._get_constants(node.elts)
 
     def visit_Tuple(self, node):
         self.visitlist(node.elts)
         constant_value = self._get_constant_list(node)
         if constant_value is not None:
             constant_value = tuple(constant_value)
-        type = numba_types.TupleType(size=len(node.elts),
-                                is_constant=constant_value is not None,
-                                constant_value=constant_value)
-        node.variable = Variable(type)
+        type = numba_types.TupleType(size=len(node.elts))
+        node.variable = Variable(type, is_constant=constant_value is not None,
+                                 constant_value=constant_value)
         return node
 
     def visit_List(self, node):
-        self.visitlist(node.elts)
+        node.elts = self.visitlist(node.elts)
         constant_value = self._get_constant_list(node)
-        type = numba_types.ListType(size=len(node.elts),
-                               is_constant=constant_result is not None,
-                               constant_value=constant_value)
-        node.variable = Variable(type)
+        type = numba_types.ListType(size=len(node.elts))
+        node.variable = Variable(type, is_constant=constant_value is not None,
+                                 constant_value=constant_value)
+        return node
+
+    def visit_Dict(self, node):
+        self.generic_visit(node)
+        constant_keys = self._get_constants(node.keys)
+        constant_values = self._get_constants(node.values)
+        type = numba_types.DictType(size=len(node.keys))
+        if constant_keys and constant_values:
+            variable = Variable(type, is_constant=True,
+                                constant_value=dict(zip(constant_keys,
+                                                        constant_values)))
+        else:
+            variable = Variable(type)
+
+        node.variable = variable
         return node
 
     def _resolve_function(self, func_type, func_name):

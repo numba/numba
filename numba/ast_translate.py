@@ -930,6 +930,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_Call(self, node):
         raise Exception("This node should have been replaced")
 
+    def visit_List(self, node):
+        types = [n.type for n in node.elts]
+        largs = self.visitlist(node.elts)
+        return self.object_coercer.build_list(types, largs)
+
     def visit_Tuple(self, node):
         raise NotImplementedError("This node should have been replaced")
         assert isinstance(node.ctx, ast.Load)
@@ -1231,6 +1236,12 @@ class ObjectCoercer(object):
         assert len(types) == len(llvm_values)
         lstr = self.lstr(types, fmt="(%s)")
         return self.buildvalue(lstr, *llvm_values, name='tuple')
+
+    def build_list(self, types, llvm_values):
+        "Build a tuple from a bunch of LLVM values"
+        assert len(types) == len(llvm_values)
+        lstr = self.lstr(types, fmt="[%s]")
+        return self.buildvalue(lstr, *llvm_values, name='list')
 
     def build_dict(self, key_types, value_types, llvm_keys, llvm_values):
         "Build a dict from a bunch of LLVM values"
