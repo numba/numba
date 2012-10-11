@@ -178,9 +178,11 @@ class BuiltinResolverMixin(object):
         return None
 
     def _resolve_round(self, func, node, argtype):
-        self._expect_n_args(func, node, 1)
-        if argtype.is_float:
-            return self._resolve_math_call(node, round)
+        self._expect_n_args(func, node, (1, 2))
+        if self._is_math_function(node.args, round):
+            # round() always returns a float
+            return self._resolve_math_call(node, round,
+                                           coerce_to_input_type=False)
 
         # TODO: generate efficient inline code
         return None
@@ -249,11 +251,11 @@ class MathMixin(object):
         if len(func_args) > 1 or py_func is None:
             return False
 
-        numeric = func_args[0].variable.type.is_float
+        type = func_args[0].variable.type
         is_intrinsic = self._is_intrinsic(py_func)
         is_math = self.get_funcname(py_func) in self.libc_math_funcs
 
-        return numeric and (is_intrinsic or is_math)
+        return (type.is_float or type.is_int) and (is_intrinsic or is_math)
 
     def _resolve_intrinsic(self, args, py_func, signature):
         return nodes.LLVMIntrinsicNode(signature, args, None, py_func)
@@ -273,15 +275,22 @@ class MathMixin(object):
         return nodes.MathCallNode(signature, call_node.args, llvm_func=None,
                                   py_func=py_func, name=name)
 
-    def _resolve_math_call(self, call_node, py_func):
+    def _resolve_math_call(self, call_node, py_func, coerce_to_input_type=True):
         "Resolve calls to math functions to llvm.log.f32() etc"
         # signature is a generic signature, build a correct one
-        type = call_node.args[0].variable.type
+        orig_type = type = call_node.args[0].variable.type
+        if not type.is_float:
+            type = double
         signature = minitypes.FunctionType(return_type=type, args=[type])
         if self._is_intrinsic(py_func):
-            return self._resolve_intrinsic(call_node.args, py_func, signature)
+            result = self._resolve_intrinsic(call_node.args, py_func, signature)
+        else:
+            result = self._resolve_libc_math(call_node, py_func, signature, type)
 
-        return self._resolve_libc_math(call_node, py_func, signature, type)
+        if coerce_to_input_type:
+            return nodes.CoercionNode(result, orig_type)
+        else:
+            return result
 
     def pow(self, node, power, mod=None, name='pow'):
         # TODO: pow(x, y, z) == x ** y % z
