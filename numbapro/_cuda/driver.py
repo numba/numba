@@ -64,8 +64,6 @@ CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED = 712
 CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED     = 713
 CUDA_ERROR_UNKNOWN                        = 999
 
-
-
 def _build_reverse_error_map():
     import sys
     prefix = 'CUDA_ERROR'
@@ -73,14 +71,8 @@ def _build_reverse_error_map():
     return dict((getattr(module, i), i)
                 for i in filter(lambda x: x.startswith(prefix), globals()))
 
-_REVERSE_ERROR_MAP = _build_reverse_error_map()
-
 class DriverError(Exception):
     pass
-
-def _check_error(error, msg):
-    if error != CUDA_SUCCESS:
-        raise DriverError(msg, _REVERSE_ERROR_MAP[error])
 
 class Driver(object):
     '''Facade to the CUDA Driver API.  A singleton class.  It is safe to
@@ -203,6 +195,8 @@ class Driver(object):
 
     NOT_IN_OLD_API = ['cuLaunchKernel']
 
+    _REVERSE_ERROR_MAP = _build_reverse_error_map()
+
     __INSTANCE = None
 
     def __new__(cls, overide_path=None):
@@ -261,7 +255,7 @@ class Driver(object):
 
             # initialize the API
             error = inst.cuInit(0)
-            _check_error(error, "Failed to initialize CUDA driver")
+            inst.check_error(error, "Failed to initialize CUDA driver")
         return cls.__INSTANCE
 
     def _cu_symbol_newer(self, symbol):
@@ -273,8 +267,12 @@ class Driver(object):
     def get_device_count(self):
         count = c_int()
         error = self.cuDeviceGetCount(byref(count))
-        _check_error(error, 'Failed to get number of device')
+        self.check_error(error, 'Failed to get number of device')
         return count.value
+
+    def check_error(self, error, msg):
+        if error != CUDA_SUCCESS:
+            raise DriverError(msg, self._REVERSE_ERROR_MAP[error])
 
 CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1
 CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2
@@ -299,11 +297,11 @@ class Device(object):
     }
 
     def __init__(self, driver, device_id):
-        got_device = c_int()
-        error = driver.cuDeviceGet(byref(got_device), device_id)
-        _check_error(error, 'Failed to get device %d')
-        assert device_id == got_device.value
         self.driver = driver
+        got_device = c_int()
+        error = self.driver.cuDeviceGet(byref(got_device), device_id)
+        self.driver.check_error(error, 'Failed to get device %d')
+        assert device_id == got_device.value
         self.id = got_device.value
         self._read_attributes()
 
@@ -315,7 +313,7 @@ class Device(object):
         for name, num in self.ATTRIBUTES.items():
             error = self.driver.cuDeviceGetAttribute(byref(got_value), num,
                                                      self.id)
-            _check_error(error, 'Failed to read attribute "%s" from %s' % (name, self))
+            self.driver.check_error(error, 'Failed to read attribute "%s" from %s' % (name, self))
             setattr(self, name, got_value.value)
 
         got_major = c_int()
@@ -323,7 +321,7 @@ class Device(object):
         error = self.driver.cuDeviceComputeCapability(byref(got_major),
                                                       byref(got_minor),
                                                       self.id);
-        _check_error(error, 'Failed to read compute capability from %s' % self)
+        self.driver.check_error(error, 'Failed to read compute capability from %s' % self)
 
         setattr(self, 'COMPUTE_CAPABILITY', (got_major.value, got_minor.value))
 
@@ -335,17 +333,16 @@ class Device(object):
         keys += ['COMPUTE_CAPABILITY']
         return dict((k, getattr(self, k)) for k in keys)
 
-
 class Context(object):
     def __init__(self, device):
         self.device = device
         self._handle = cu_context()
         error = self.driver.cuCtxCreate(byref(self._handle), 0, self.device.id)
-        _check_error(error, 'Failed to create context on %s' % self.device)
+        self.driver.check_error(error, 'Failed to create context on %s' % self.device)
 
     def __del__(self):
         error = self.driver.cuCtxDestroy(self._handle)
-        _check_error(error, 'Failed to destroy context on %s' % self.device)
+        self.driver.check_error(error, 'Failed to destroy context on %s' % self.device)
 
     @property
     def driver(self):
@@ -359,11 +356,11 @@ class Stream(object):
         self.context = context
         self._handle = cu_stream()
         error = self.driver.cuStreamCreate(byref(self._handle), 0)
-        _check_error(error, 'Failed to create stream on %s' % self.context)
+        self.driver.check_error(error, 'Failed to create stream on %s' % self.context)
 
     def __del__(self):
         error = self.driver.cuStreamDestroy(self._handle)
-        _check_error(error, 'Failed to destory stream %s' % self)
+        self.driver.check_error(error, 'Failed to destory stream %s' % self)
 
     def __str__(self):
         return 'Stream %d on %s' % (self, self.context)
@@ -398,25 +395,25 @@ class DeviceMemory(object):
         self.context = context
         self._handle = cu_device_ptr()
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
-        _check_error(error, 'Failed to allocate memory')
+        self.driver.check_error(error, 'Failed to allocate memory')
 
     def __del__(self):
         error = self.driver.cuMemFree(self._handle)
-        _check_error(error, 'Failed to free memory')
+        self.driver.check_error(error, 'Failed to free memory')
 
     def to_device_raw(self, src, size, stream=0):
         if stream:
             error = self.driver.cuMemcpyHtoDAsync(self._handle, src, size, stream)
         else:
             error = self.driver.cuMemcpyHtoD(self._handle, src, size)
-        _check_error(error, "Failed to copy memory H->D")
+        self.driver.check_error(error, "Failed to copy memory H->D")
 
     def from_device_raw(self, dst, size, stream=0):
         if stream:
             error = self.driver.cuMemcpyDtoHAsync(dst, self._handle, size, stream)
         else:
             error = self.driver.cuMemcpyDtoH(dst, self._handle, size)
-        _check_error(error, "Failed to copy memory D->H")
+        self.driver.check_error(error, "Failed to copy memory D->H")
 
     @property
     def driver(self):
@@ -450,13 +447,13 @@ class Module(object):
         error = self.driver.cuModuleLoadDataEx(byref(self._handle), ptx,
                                                option_n, c_option_keys,
                                                c_option_vals)
-        _check_error(error, 'Failed to load module')
+        self.driver.check_error(error, 'Failed to load module')
 
         self.info_log = c_info_log_buffer.value
 
     def __del__(self):
         error =  self.driver.cuModuleUnload(self._handle)
-        _check_error(error, 'Failed to unload module')
+        self.driver.check_error(error, 'Failed to unload module')
 
     @property
     def driver(self):
@@ -481,7 +478,7 @@ class Function(object):
         error = self.driver.cuModuleGetFunction(byref(self._handle),
                                                 self.module._handle,
                                                 name);
-        _check_error(error, 'Failed to get function "%s" from module' % name)
+        self.driver.check_error(error, 'Failed to get function "%s" from module' % name)
 
     @property
     def driver(self):
@@ -520,10 +517,10 @@ class Function(object):
         '''
         if self.driver.old_api:
             error = self.driver.cuFuncSetBlockShape(self._handle,  *self.blockdim)
-            _check_error(error, "Failed to set block shape.")
+            self.driver.check_error(error, "Failed to set block shape.")
 
             error = self.driver.cuFuncSetSharedSize(self._handle, self.sharedmem)
-            _check_error(error, "Failed to set shared memory size.")
+            self.driver.check_error(error, "Failed to set shared memory size.")
 
             # count parameter byte size
             bytesize = 0
@@ -535,7 +532,7 @@ class Function(object):
                 bytesize += size
 
             error = self.driver.cuParamSetSize(self._handle, bytesize)
-            _check_error(error, 'Failed to set parameter size (%d)' % bytesize)
+            self.driver.check_error(error, 'Failed to set parameter size (%d)' % bytesize)
 
             offset = 0
             for i, arg in enumerate(args):
@@ -548,7 +545,7 @@ class Function(object):
                     size = sizeof(arg)
                     error = self.driver.cuParamSetv(self._handle, offset, addressof(arg),
                                                     size)
-                _check_error(error, 'Failed to set parameter %d' % i)
+                self.driver.check_error(error, 'Failed to set parameter %d' % i)
                 offset += size
 
 
@@ -558,10 +555,8 @@ class Function(object):
             else:
                 error = self.driver.cuLaunchGrid(self._handle, gx, gy)
 
-            _check_error(error, 'Failed to launch kernel')
-
+            self.driver.check_error(error, 'Failed to launch kernel')
         else:
-
             gx, gy, gz = self.griddim
             bx, by, bz = self.blockdim
 
@@ -584,6 +579,6 @@ class Function(object):
                         cast(addressof(params), POINTER(c_void_p)),
                         None)
 
-            _check_error(error, "Failed to launch kernel")
+            self.driver.check_error(error, "Failed to launch kernel")
 
 
