@@ -21,6 +21,7 @@ from numba import stdio_util
 #stderr = nodes.ConstNode(stderr, void.pointer())
 
 import numpy
+import numpy as np
 
 import logging
 logger = logging.getLogger(__name__)
@@ -108,8 +109,15 @@ class BuiltinResolverMixin(object):
     Resolve builtin calls for type inference.
     """
 
-    def _resolve_range(self, node, arg_type):
-        result = Variable(numba_types.RangeType())
+    def _expect_n_args(self, func, node, n):
+        if len(node.args) > n:
+            raise error.NumbaError(node,
+                                   "Only a single argument is supported to builtin %s" %
+                                   func.__name__)
+
+    def _resolve_range(self, node, func_type, argtype):
+        arg_type = minitypes.Py_ssize_t
+        node.variable = Variable(numba_types.RangeType())
         args = self.visitlist(node.args)
 
         if not args:
@@ -129,15 +137,12 @@ class BuiltinResolverMixin(object):
                                               dst_type=minitypes.Py_ssize_t)
         return result
 
-    def _resolve_builtin_call(self, node, func, func_variable, func_type):
+    _resolve_xrange = _resolve_range
 
-        if func in (range, xrange):
-            arg_type = minitypes.Py_ssize_t
-            node.variable = self._resolve_range(node, arg_type)
-            return node
-        elif func is len and node.args[0].variable.type.is_array:
-            # Simplify to ndarray.shape[0]
-            assert len(node.args) == 1
+    def _resolve_len(self, func, node, func_type, argtype):
+        # Simplify len(array) to ndarray.shape[0]
+        self._expect_n_args(func, node, 1)
+        if argtype.is_array:
             shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
             index = ast.Index(nodes.ConstNode(0, int_))
             index.type = int_
@@ -146,18 +151,47 @@ class BuiltinResolverMixin(object):
             new_node.variable = Variable(shape_attr.type.base_type)
             return new_node
 
-        elif func in (int, float):
-            if len(node.args) > 1:
-                raise error.NumbaError(
-                    "Only a single argument is supported to builtin %s" %
-                                                            func.__name__)
-            dst_types = { int : numba.int32, float : numba.float32 }
-            return nodes.CoercionNode(node.args[0], dst_type=dst_types[func])
-        else:
-            # raise error.NumbaError(
-            #     "Unsupported call to built-in function %s" % func.__name__)
-            func = nodes.ObjectInjectNode(func)
-            return nodes.ObjectCallNode(None, func, node.args)
+        return None
+
+    def _resolve_int(self, func, node, func_type, argtype):
+        # Resolve int(x) and float(x) to an equivalent cast
+        self._expect_n_args(func, node, 1)
+        dst_types = {int: numba.int_, float: numba.double}
+        return nodes.CoercionNode(node.args[0], dst_type=dst_types[func])
+
+    _resolve_float = _resolve_int
+
+    def _resolve_abs(self, func, node, func_type, argtype):
+        self._expect_n_args(func, node, 1)
+        if argtype.is_float:
+            return self._resolve_math_call(node, abs)
+
+        # TODO: generate efficient inline code
+        return None
+
+    def _resolve_round(self, func, node, func_type, argtype):
+        self._expect_n_args(func, node, 1)
+        if argtype.is_float:
+            return self._resolve_math_call(node, round)
+
+        # TODO: generate efficient inline code
+        return None
+
+    def _resolve_builtin_call(self, node, func, func_variable, func_type):
+        resolver = getattr(self, '_resolve_' + func.__name__, None)
+        if resolver is not None:
+            # Pass in the first argument type
+            argtype = None
+            if len(node.args) >= 1:
+                argtype = node.args[0].variable.type
+
+            result = resolver(func, node, func_type, argtype)
+            if result is not None:
+                return result
+
+        # Fall back to object call
+        func = nodes.ObjectInjectNode(func)
+        return nodes.ObjectCallNode(None, func, node.args)
 
 
 class MathMixin(object):
@@ -187,9 +221,17 @@ class MathMixin(object):
         'round',
     ]
 
+    def get_funcname(self, py_func):
+        if py_func is np.abs:
+            return 'abs'
+        elif py_func is np.round:
+            return 'round'
+
+        return py_func.__name__
+
     def _is_intrinsic(self, py_func):
         "Whether the math function is available as an llvm intrinsic"
-        intrinsic_name = 'INTR_' + py_func.__name__.upper()
+        intrinsic_name = 'INTR_' + self.get_funcname(py_func).upper()
         is_intrinsic = hasattr(llvm.core, intrinsic_name)
         return is_intrinsic
 
@@ -199,7 +241,7 @@ class MathMixin(object):
 
         numeric = func_args[0].variable.type.is_float
         is_intrinsic = self._is_intrinsic(py_func)
-        is_math = py_func.__name__ in self.libc_math_funcs
+        is_math = self.get_funcname(py_func) in self.libc_math_funcs
 
         return numeric and (is_intrinsic or is_math)
 
@@ -207,6 +249,9 @@ class MathMixin(object):
         return nodes.LLVMIntrinsicNode(signature, call_node.args, None, py_func)
 
     def math_suffix(self, name, type):
+        if name == 'abs':
+            name = 'fabs'
+
         if type.itemsize == 4:
             name += 'f' # sinf(float)
         elif type.itemsize == 16:
@@ -214,11 +259,11 @@ class MathMixin(object):
         return name
 
     def _resolve_libc_math(self, call_node, py_func, signature, type):
-        name = self.math_suffix(py_func.__name__, type)
+        name = self.math_suffix(self.get_funcname(py_func), type)
         return nodes.MathCallNode(signature, call_node.args, llvm_func=None,
                                   py_func=py_func, name=name)
 
-    def _resolve_math_call(self, call_node, py_func, signature):
+    def _resolve_math_call(self, call_node, py_func):
         "Resolve calls to math functions to llvm.log.f32() etc"
         # signature is a generic signature, build a correct one
         type = call_node.args[0].variable.type
@@ -930,7 +975,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                         llvm_func, py_func)
         elif not call_node.keywords and self._is_math_function(
                                         call_node.args, py_func):
-            return self._resolve_math_call(call_node, py_func, signature)
+            return self._resolve_math_call(call_node, py_func)
         else:
             return nodes.ObjectCallNode(signature, call_node.func,
                                         call_node.args, call_node.keywords,

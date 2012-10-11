@@ -309,7 +309,7 @@ class LateSpecializer(visitors.NumbaTransformer):
         return node
 
     def visit_Name(self, node):
-        if node.type.is_builtin:
+        if node.type.is_builtin and not node.variable.is_local:
             obj = getattr(builtins, node.name)
             return nodes.ObjectInjectNode(obj, node.type)
 

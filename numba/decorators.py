@@ -78,8 +78,9 @@ class NumbaFunction(object):
         self.signature = signature
         self.lfunc = lfunc
 
-        self.__name__ = py_func.__name__
-        self.__doc__ = py_func.__doc__
+        self.func_name = self.__name__ = py_func.__name__
+        self.func_doc = self.__doc__ = py_func.__doc__
+        self.__module__ = py_func.__module__
 
         if ctypes_func is None:
             self._is_numba_func = True
@@ -181,13 +182,17 @@ def autojit(backend='bytecode', target='cpu', nopython=False, locals=None):
 
 def _jit2(restype=None, argtypes=None, nopython=False,
           _llvm_module=None, _llvm_ee=None, **kwargs):
-    assert argtypes is not None
-
     def _jit2_decorator(func):
+        argtys = argtypes
+        if func.func_code.co_argcount == 0 and argtys is None:
+            argtys = []
+
+        assert argtys is not None
+
         if not hasattr(func, 'live_objects'):
             func.live_objects = []
         func._is_numba_func = True
-        result = function_cache.compile_function(func, argtypes,
+        result = function_cache.compile_function(func, argtys,
                                                  nopython=nopython,
                                                  llvm_module=_llvm_module,
                                                  llvm_ee=_llvm_ee,
@@ -198,11 +203,12 @@ def _jit2(restype=None, argtypes=None, nopython=False,
 
     return _jit2_decorator
 
-def _jit(restype=double, argtypes=[double], backend='bytecode', **kws):
+def _jit(restype=None, argtypes=None, backend='bytecode', **kws):
     assert 'arg_types' not in kws
     assert 'ret_type' not in kws
     def _jit(func):
         global __tr_map__
+
         llvm = kws.pop('llvm', True)
         if func in __tr_map__:
             logger.warning("Warning: Previously compiled version of %r may be "
@@ -211,17 +217,18 @@ def _jit(restype=double, argtypes=[double], backend='bytecode', **kws):
         use_ast = False
         if backend == 'ast':
             use_ast = True
-            for arg_type in list(argtypes) + [restype]:
-                if not isinstance(arg_type, minitypes.Type):
-                    use_ast = False
-                    debugout("String type specified, using bytecode translator...")
-                    break
+            if argtypes and restype:
+                for arg_type in list(argtypes) + [restype]:
+                    if not isinstance(arg_type, minitypes.Type):
+                        use_ast = False
+                        debugout("String type specified, using bytecode translator...")
+                        break
 
         if use_ast:
             return jit2(argtypes=argtypes)(func)
         else:
-            t = bytecode_translate.Translate(func, restype=restype,
-                                             argtypes=argtypes, **kws)
+            t = bytecode_translate.Translate(func, restype=restype or double,
+                                             argtypes=argtypes or [double], **kws)
             t.translate()
             # print t.lfunc
             __tr_map__[func] = t
