@@ -161,18 +161,34 @@ class BuiltinResolverMixin(object):
 
         return None
 
+    dst_types = {
+        int: numba.int_,
+        float: numba.double,
+        complex: numba.complex128
+    }
+
     def _resolve_int(self, func, node, argtype):
         # Resolve int(x) and float(x) to an equivalent cast
         self._expect_n_args(func, node, (0, 1, 2))
-        dst_type = {int: numba.int_, float: numba.double}[func]
+        dst_type = self.dst_types[func]
+
         if len(node.args) == 0:
-            return nodes.ConstNode(0, dst_type)
+            return nodes.ConstNode(func(0), dst_type)
         elif len(node.args) == 1:
             return nodes.CoercionNode(node.args[0], dst_type=dst_type)
         else:
             return None
 
     _resolve_float = _resolve_int
+
+    def _resolve_complex(self, func, node, argtype):
+        if len(node.args) == 2:
+            args = nodes.CoercionNode.coerce(node.args, double)
+            result = nodes.ComplexNode(real=args[0], imag=args[1])
+        else:
+            result = self._resolve_int(func, node, argtype)
+
+        return result
 
     def _resolve_abs(self, func, node, argtype):
         self._expect_n_args(func, node, 1)

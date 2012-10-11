@@ -434,6 +434,11 @@ class ShapeAttributeNode(ArrayAttributeNode):
                                          array.variable.type.ndim)
         self.variable = Variable(self.type)
 
+class ComplexNode(Node):
+    _fields = ['real', 'imag']
+    type = complex128
+    variable = Variable(type)
+
 class WithPythonNode(Node):
     "with python: ..."
 

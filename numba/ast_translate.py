@@ -896,6 +896,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return self.object_coercer.to_native(node.dst_type, val,
                                              name=node.name)
 
+    def visit_ComplexNode(self, node):
+        real = self.visit(node.real)
+        imag = self.visit(node.imag)
+        return self._create_complex(real, imag)
+
     def visit_Subscript(self, node):
 #        if node.value.type.is_array or node.value.type.is_object:
 #            raise NotImplementedError("This node should have been replaced")
