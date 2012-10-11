@@ -1211,6 +1211,12 @@ class ObjectCoercer(object):
         llvm_result, type = self.npy_intp_to_py_ssize_t(llvm_result, type)
         if type.is_struct:
             return self.convert_single_struct(llvm_result, type)
+        elif type.is_complex:
+            # We have a Py_complex value, construct a Py_complex * temporary
+            new_result = llvm_alloca(self.translator.lfunc, self.builder,
+                                     llvm_result.type, name='complex_temp')
+            self.builder.store(llvm_result, new_result)
+            llvm_result = new_result
 
         lstr = self.lstr([type])
         return self.buildvalue(lstr, llvm_result, name=name)

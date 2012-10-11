@@ -13,10 +13,10 @@ class TestConversion(unittest.TestCase):
     def test_conversion(self):
         assert convert(object(), 10.2) == 10.2
         assert convert(object(), 10) == 10
-        assert convert(object(), "foo") == "foo"
-        obj = object()
-        assert convert(object(), obj) == obj
+#        assert convert(object(), "foo") == "foo"
+#        obj = object()
+#        assert convert(object(), obj) == obj
+        assert convert(object(), 10.2 + 5j) == 10.2 + 5j
 
 if __name__ == "__main__":
-    convert(object(), 10.2) == 10.2
-#    unittest.main()
+    unittest.main()
