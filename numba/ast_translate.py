@@ -574,7 +574,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_Name(self, node):
         if not node.variable.is_local:
-            raise NotImplementedError("global variables:", node.id)
+            raise error.NumbaError(node, "global variables:", node.id)
 
         lvalue = self.symtab[node.id].lvalue
         return self._handle_ctx(node, lvalue)
@@ -591,22 +591,22 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_For(self, node):
         if node.orelse:
             # FIXME
-            raise NotImplementedError('Else in for-loop is not implemented.')
+            raise error.NumbaError(node, 'Else in for-loop is not implemented.')
 
         if node.iter.type.is_range:
             self.generate_for_range(node, node.target, node.iter, node.body)
         else:
-            raise NotImplementedError(ast.dump(node))
+            raise error.NumbaError(node, "Looping over iterables")
 
     def visit_BoolOp(self, node):
         assert len(node.values) == 2
-        raise NotImplementedError
+        raise error.NumbaError(node, "and/or expressions")
 
     def visit_UnaryOp(self, node):
         operand = self.visit(node.operand)
         if isinstance(node.op, ast.Not):
             return self.generate_not(operand)
-        raise NotImplementedError(ast.dump(node))
+        raise error.NumbaError(node, "Unary operator %s" % node.op)
 
     def visit_Compare(self, node):
         lhs, rhs = node.left, node.right
@@ -629,7 +629,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         elif lhs.type.is_int_like and rhs.type.is_int_like:
             lfunc = self.builder.icmp
             # FIXME
-            assert lhs.type.signed, 'Unsigned comparator has not been implemented'
+            if not lhs.type.signed:
+                error.NumbaError(
+                        node, 'Unsigned comparison has not been implemented')
             lop = _compare_mapping_sint[op]
         else:
             raise TypeError(lhs.type)
@@ -902,11 +904,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return self._create_complex(real, imag)
 
     def visit_Subscript(self, node):
-#        if node.value.type.is_array or node.value.type.is_object:
-#            raise NotImplementedError("This node should have been replaced")
-
-        assert node.value.type.is_carray or node.value.type.is_c_string, \
-                                                        node.value.type
+        if not (node.value.type.is_carray or node.value.type.is_c_string):
+            raise error.InternalError(node, "Unsupported type", node.type)
         value = self.visit(node.value)
         lptr = self.builder.gep(value, [self.visit(node.slice)])
         if node.slice.type.is_int:
@@ -928,7 +927,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return self.visitlist(node.dims)
 
     def visit_Call(self, node):
-        raise Exception("This node should have been replaced")
+        raise error.InternalError(node, "This node should have been replaced")
 
     def visit_List(self, node):
         types = [n.type for n in node.elts]
@@ -936,11 +935,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return self.object_coercer.build_list(types, largs)
 
     def visit_Tuple(self, node):
-        raise NotImplementedError("This node should have been replaced")
-        assert isinstance(node.ctx, ast.Load)
-        types = [n.type for n in node.elts]
-        largs = self.visitlist(node.elts)
-        return self.object_coercer.build_tuple(types, largs)
+        raise error.InternalError(node, "This node should have been replaced")
 
     def visit_Dict(self, node):
         key_types = [k.type for k in node.keys]

@@ -1,8 +1,8 @@
 """
->>> boom()
+>>> error()
 Traceback (most recent call last):
     ...
-ValueError: invalid literal for int() with base 10: 'boom'
+NumbaError: 17:0: object of type int cannot be sliced
 """
 
 import sys
@@ -12,8 +12,9 @@ from numba import *
 import numpy as np
 
 @autojit(backend='ast')
-def boom():
-    return int('boom')
+def error():
+    i = 10
+    i[:]
 
 if __name__ == "__main__":
     import doctest

@@ -478,8 +478,6 @@ class NumpyMixin(object):
                 return type
             else:
                 if not dtype.is_numpy_dtype:
-                    # We have a dtype that cannot be inferred
-                    # raise NotImplementedError("Uninferred dtype")
                     return None
                 return minitypes.ArrayType(dtype.resolve(), type.ndim)
 
@@ -710,13 +708,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif iterator_type.is_range:
             base_type = numba_types.Py_ssize_t
         else:
-            raise NotImplementedError("Unknown type: %s" % (iterator_type,))
+            raise error.NumbaError(
+                node, "Cannot iterate over object of type %s" % (iterator_type,))
 
         return base_type
 
     def visit_For(self, node):
         if node.orelse:
-            raise NotImplementedError('Else in for-loop is not implemented.')
+            raise error.NumbaError(node.orelse,
+                                   'Else in for-loop is not implemented.')
 
         node.target = self.visit(node.target)
         node.iter = self.visit(node.iter)
@@ -733,7 +733,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def visit_While(self, node):
         if node.orelse:
-            raise NotImplementedError('Else in for-loop is not implemented.')
+            raise error.NumbaError(node.orelse,
+                                   'Else in for-loop is not implemented.')
         node.test = nodes.CoercionNode(self.visit(node.test), minitypes.bool_)
         node.body = self.visitlist(node.body)
         return node
@@ -823,10 +824,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def visit_Compare(self, node):
         if len(node.ops) != 1:
-            raise NotImplementedError('Multiple operators not supported')
-
-        if len(node.comparators) != 1:
-            raise NotImplementedError('Multiple comparators not supported')
+            raise error.NumbaError(
+                node, 'Multiple comparison operators not supported')
 
         self.generic_visit(node)
 
@@ -842,7 +841,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.variable = Variable(minitypes.bool_)
         return node
 
-    def _get_index_type(self, type, index_type):
+    def _get_index_type(self, node, type, index_type):
         if type.is_pointer:
             assert index_type.is_int
             return type.base_type
@@ -854,8 +853,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif type.is_c_string and index_type.is_int:
             return char
 
-        op = ('slicing', 'indexing')[index_type.is_int]
-        raise NotImplementedError("%s of type %s" % (op, type))
+        op = ('sliced', 'indexed')[index_type.is_int]
+        raise error.NumbaError(node, "object of type %s cannot be %s" % (type, op))
 
     def _handle_struct_index(self, node, value_type):
         slice_type = node.slice.variable.type
@@ -925,7 +924,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             node = self._handle_struct_index(node, value_type)
             return self.visit(node)
         else:
-            result_type = self._get_index_type(node.value.variable.type,
+            result_type = self._get_index_type(node,
+                                               node.value.variable.type,
                                                node.slice.variable.type)
 
         node.variable = Variable(result_type)
@@ -1213,7 +1213,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     #
 
     def visit_Global(self, node):
-        raise NotImplementedError("Global keyword")
+        raise error.NumbaError(node, "Global keyword")
 
 class Store2Load(visitors.NumbaVisitor):
 
