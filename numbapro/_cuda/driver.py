@@ -3,18 +3,18 @@ This is more-or-less a object-oriented interface to the CUDA driver API.
 It properly has a lot of resemblence with PyCUDA.
 '''
 
-import sys, os
+import sys, os, atexit
 from ctypes import *
 
 # CUDA specific typedefs
 cu_device = c_int
-cu_device_attribute = c_int # enum
-cu_context = c_void_p # an opaque handle
-cu_module = c_void_p # an opaque handle
-cu_jit_option = c_int # enum
-cu_function = c_void_p  # an opaque handle
-cu_device_ptr = c_size_t # defined as unsigned int on 32-bit and unsigned long long on 64-bit machine
-cu_stream = c_int
+cu_device_attribute = c_int     # enum
+cu_context = c_void_p           # an opaque handle
+cu_module = c_void_p            # an opaque handle
+cu_jit_option = c_int           # enum
+cu_function = c_void_p          # an opaque handle
+cu_device_ptr = c_size_t        # defined as unsigned int on 32-bit and unsigned long long on 64-bit machine
+cu_stream = c_void_p            # an opaque handle
 
 CUDA_SUCCESS                              = 0
 CUDA_ERROR_INVALID_VALUE                  = 1
@@ -199,10 +199,15 @@ class Driver(object):
 
     __INSTANCE = None
 
+    __TEARDOWN = False
+
     def __new__(cls, overide_path=None):
         if cls.__INSTANCE is None:
             cls.__INSTANCE = inst = object.__new__(Driver)
             inst.old_api = False
+
+            # Install exit handlers
+            atexit.register(inst._atexit)
 
             # Determine DLL type
             if sys.platform == 'win32':
@@ -256,7 +261,15 @@ class Driver(object):
             # initialize the API
             error = inst.cuInit(0)
             inst.check_error(error, "Failed to initialize CUDA driver")
+
         return cls.__INSTANCE
+
+    def _atexit(self):
+        '''
+        This will run before any object is released.  We will mark a teardown
+        flag to redirect error caught in __del__
+        '''
+        self.__TEARDOWN = True
 
     def _cu_symbol_newer(self, symbol):
         try:
@@ -270,9 +283,18 @@ class Driver(object):
         self.check_error(error, 'Failed to get number of device')
         return count.value
 
-    def check_error(self, error, msg):
-        if error != CUDA_SUCCESS:
-            raise DriverError(msg, self._REVERSE_ERROR_MAP[error])
+    def check_error(self, error, msg, exit=False):
+        if error:
+            if self.__TEARDOWN:
+                print 'Error during teardown'
+                print error, msg
+            else:
+                exc = DriverError(msg, self._REVERSE_ERROR_MAP[error])
+                if exit:
+                    print exc
+                    sys.exit(1)
+                else:
+                    raise exc
 
 CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1
 CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2
@@ -342,7 +364,7 @@ class Context(object):
 
     def __del__(self):
         error = self.driver.cuCtxDestroy(self._handle)
-        self.driver.check_error(error, 'Failed to destroy context on %s' % self.device)
+        self.driver.check_error(error, 'Failed to destroy context on %s' % self.device, exit=True)
 
     @property
     def driver(self):
@@ -360,7 +382,7 @@ class Stream(object):
 
     def __del__(self):
         error = self.driver.cuStreamDestroy(self._handle)
-        self.driver.check_error(error, 'Failed to destory stream %s' % self)
+        self.driver.check_error(error, 'Failed to destory stream %s' % self, exit=True)
 
     def __str__(self):
         return 'Stream %d on %s' % (self, self.context)
@@ -399,18 +421,18 @@ class DeviceMemory(object):
 
     def __del__(self):
         error = self.driver.cuMemFree(self._handle)
-        self.driver.check_error(error, 'Failed to free memory')
+        self.driver.check_error(error, 'Failed to free memory', exit=True)
 
-    def to_device_raw(self, src, size, stream=0):
+    def to_device_raw(self, src, size, stream=None):
         if stream:
-            error = self.driver.cuMemcpyHtoDAsync(self._handle, src, size, stream)
+            error = self.driver.cuMemcpyHtoDAsync(self._handle, src, size, stream._handle)
         else:
             error = self.driver.cuMemcpyHtoD(self._handle, src, size)
         self.driver.check_error(error, "Failed to copy memory H->D")
 
-    def from_device_raw(self, dst, size, stream=0):
+    def from_device_raw(self, dst, size, stream=None):
         if stream:
-            error = self.driver.cuMemcpyDtoHAsync(dst, self._handle, size, stream)
+            error = self.driver.cuMemcpyDtoHAsync(dst, self._handle, size, stream._handle)
         else:
             error = self.driver.cuMemcpyDtoH(dst, self._handle, size)
         self.driver.check_error(error, "Failed to copy memory D->H")
@@ -453,7 +475,7 @@ class Module(object):
 
     def __del__(self):
         error =  self.driver.cuModuleUnload(self._handle)
-        self.driver.check_error(error, 'Failed to unload module')
+        self.driver.check_error(error, 'Failed to unload module', exit=True)
 
     @property
     def driver(self):
@@ -495,7 +517,7 @@ class Function(object):
     def __str__(self):
         return 'CUDA kernel %s on %s' % (self.name, self)
 
-    def configure(self, griddim, blockdim, sharedmem=0, stream=0):
+    def configure(self, griddim, blockdim, sharedmem=0, stream=None):
         import copy
 
         while len(griddim) < 3:
@@ -508,7 +530,10 @@ class Function(object):
         inst.griddim = griddim
         inst.blockdim = blockdim
         inst.sharedmem = sharedmem
-        inst.stream = stream
+        if stream:
+            inst.stream = stream._handle
+        else:
+            inst.stream = None
         return inst
 
     def __call__(self, *args):
@@ -566,17 +591,16 @@ class Function(object):
                     param_vals.append(addressof(arg._handle))
                 else:
                     param_vals.append(addressof(arg))
+
             params = (c_void_p * len(param_vals))(*param_vals)
 
             error = self.driver.cuLaunchKernel(
                         self._handle,
                         gx, gy, gz,
                         bx, by, bz,
-                        self.sharedmem, self.stream,
-                        # XXX: Why does the following line cannot be changed
-                        #      to a variable of the same value in 64-bit Linux?
-                        #      A python bug?
-                        cast(addressof(params), POINTER(c_void_p)),
+                        self.sharedmem,
+                        self.stream,
+                        params,
                         None)
 
             self.driver.check_error(error, "Failed to launch kernel")
