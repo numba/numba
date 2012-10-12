@@ -30,6 +30,8 @@ class ASTTestCase(ByteCodeTestCase):
     backend = 'ast'
     autojit = staticmethod(autojit(backend=backend))
 
+#ASTTestCase = ByteCodeTestCase
+
 def main():
     import sys, logging
     if '-d' in sys.argv:

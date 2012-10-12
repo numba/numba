@@ -339,6 +339,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             variable.lvalue = stackspace
 
             self.builder.store(ltype, stackspace) # store arg value
+            if variable.type.is_object or variable.type.is_array:
+                self.incref(self.builder.load(stackspace))
 
             self._locals[i] = variable
 
@@ -502,8 +504,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # Decref local variables
         for name, var in self.symtab.iteritems():
-            if name not in self.argnames and var.is_local and (
-                        var.type.is_object or var.type.is_array):
+            if var.is_local and (var.type.is_object or var.type.is_array):
                 self.xdecref_temp(var.lvalue)
 
         if self.is_void_return:
@@ -545,11 +546,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         value = self.visit(node.value)
 
         object = target_node.type.is_object or target_node.type.is_array
-        self.generate_assign(value, target, decref=object)
+        self.generate_assign(value, target, decref=object, incref=object)
         if object:
             self.incref(value)
 
-    def generate_assign(self, lvalue, ltarget, decref=False):
+    def generate_assign(self, lvalue, ltarget, decref=False, incref=False):
         '''
         Generate assignment operation and automatically cast value to
         match the target type.

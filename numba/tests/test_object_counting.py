@@ -33,6 +33,14 @@ deleting...
 ...
 >>> sys.getrefcount(obj)
 2
+
+>>> obj1, obj2 = object(), object()
+>>> sys.getrefcount(obj1), sys.getrefcount(obj2)
+(2, 2)
+>>> x, y = count_arguments(obj1, obj2)
+>>> assert x is y is obj2
+>>> sys.getrefcount(x)
+4
 """
 
 import sys
@@ -95,6 +103,14 @@ def attr_count(obj):
 def exc(obj):
     x = obj
     return int('boom')
+
+@autojit(backend='ast')
+def count_arguments(x, y):
+    x = y
+    y = x
+    a = x
+    b = y
+    return x, y
 
 if __name__ == "__main__":
     import doctest

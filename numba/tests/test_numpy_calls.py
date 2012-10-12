@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import *
 from numba.decorators import jit, autojit
-from numba.tests import test_support
+#from numba.tests import test_support
 
 a = np.arange(80).reshape(8, 10)
 

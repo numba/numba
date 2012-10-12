@@ -52,6 +52,9 @@ class NumbaContext(miniast.LLVMContext):
         self.astbuilder = self.astbuilder_cls(self)
         self.typemapper = _numba_types.NumbaTypeMapper(self)
 
+    def is_object(self, type):
+        return super(NumbaContext, self).is_object() or type.is_array
+
 def get_minivect_context():
     return NumbaContext()
 

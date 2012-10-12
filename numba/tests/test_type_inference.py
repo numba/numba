@@ -107,7 +107,7 @@ class TestTypeInference(unittest.TestCase):
 
     def test_type_infer_for_loop(self):
         sig, symtab = infer(_for_loop, [int_, int_, int_])
-        self.assertEqual(symtab['acc'].type, int_)
+        self.assertTrue(symtab['acc'].type.is_int)
         self.assertEqual(symtab['value'].type, Py_ssize_t)
         self.assertEqual(sig.return_type, int_)
 
