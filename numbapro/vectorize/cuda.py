@@ -9,9 +9,10 @@ from ._common import _llvm_ty_to_numpy
 
 from numba.minivect import minitypes
 
+from numbapro._cuda.error import CudaSupportError
 try:
     from numbapro import _cudadispatch
-except ImportError: # ignore missing cuda dependency
+except CudaSupportError: # ignore missing cuda dependency
     pass
 
 from numbapro.translate import Translate

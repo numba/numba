@@ -10,9 +10,11 @@ from llvm_cbuilder import shortnames as C
 from llvm_cbuilder import builder
 from numbapro.translate import Translate
 from numbapro import _internal
+
+from numbapro._cuda.error import CudaSupportError
 try:
     from numbapro import _cudadispatch
-except ImportError: # ignore missing cuda dependency
+except CudaSupportError: # ignore missing cuda dependency
     pass
 
 from numbapro.vectorize import cuda

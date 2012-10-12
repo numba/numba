@@ -2,12 +2,12 @@
 
 import numpy as np
 from ctypes import *
-from _cudadispatchlib import *
 from numbapro._cuda import driver as _cuda
 from numbapro._cuda import default as _cudadefaults
 from numbapro._cuda.ndarray import ndarray_to_device_memory, \
                                    ndarray_data_to_device_memory, \
                                    NumpyStructure
+import math
 
 def compute_capability():
     "Get the CUDA compute capability of the device"

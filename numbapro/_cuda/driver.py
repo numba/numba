@@ -5,7 +5,7 @@ It properly has a lot of resemblence with PyCUDA.
 
 import sys, os, atexit
 from ctypes import *
-
+from .error import *
 # CUDA specific typedefs
 cu_device = c_int
 cu_device_attribute = c_int     # enum
@@ -71,8 +71,6 @@ def _build_reverse_error_map():
     return dict((getattr(module, i), i)
                 for i in filter(lambda x: x.startswith(prefix), globals()))
 
-class DriverError(Exception):
-    pass
 
 class Driver(object):
     '''Facade to the CUDA Driver API.  A singleton class.  It is safe to
@@ -241,10 +239,10 @@ class Driver(object):
                 inst.driver = dlloader(path)
                 inst.path = path
             except OSError:
-                raise ImportError(
-                          "CUDA is not supported or the library cannot be found. "
-                          "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
-                          "with the path of the CUDA driver shared library.")
+                raise CudaSupportError(
+                      "CUDA is not supported or the library cannot be found. "
+                      "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
+                      "with the path of the CUDA driver shared library.")
 
             # Obtain function pointers
             for func, prototype in inst.API_PROTOTYPES.items():
@@ -301,7 +299,7 @@ class Driver(object):
                 print 'Error during teardown'
                 print error, msg, self._REVERSE_ERROR_MAP[error]
             else:
-                exc = DriverError(msg, self._REVERSE_ERROR_MAP[error])
+                exc = CudaDriverError(msg, self._REVERSE_ERROR_MAP[error])
                 if exit:
                     print exc
                     sys.exit(1)
@@ -654,4 +652,6 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, stream_handle, ar
 
         driver.check_error(error, "Failed to launch kernel")
 
+# auto initialize CUDA driver when import
+Driver()
 

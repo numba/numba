@@ -45,14 +45,14 @@ ext_modules = [
         cython_gdb=True,
     ),
 
-    CythonExtension(
-        name = "numbapro._cudadispatchlib",
-        sources = ["numbapro/_cudadispatchlib.pyx", "numbapro/_cuda.c"],
-        include_dirs = [numpy.get_include(), "cuda_toolkit"],
-        depends = ["numbapro/_cuda.h", "numbapro/cuda.pxd",
-                   "numbapro/dispatch.pxd",],
-        cython_gdb=True,
-    )
+#    CythonExtension(
+#        name = "numbapro._cudadispatchlib",
+#        sources = ["numbapro/_cudadispatchlib.pyx", "numbapro/_cuda.c"],
+#        include_dirs = [numpy.get_include(), "cuda_toolkit"],
+#        depends = ["numbapro/_cuda.h", "numbapro/cuda.pxd",
+#                   "numbapro/dispatch.pxd",],
+#        cython_gdb=True,
+#    )
 ]
 
 setup(
