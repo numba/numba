@@ -44,6 +44,8 @@ def _test_gufunc(backend, target):
     C = gufunc(A, B)
     Gold = ut.matrix_multiply(A, B)
 
+    # print(A)
+    # print(B)
     # print(C)
     # print(Gold)
 
@@ -54,7 +56,7 @@ def _test_gufunc(backend, target):
         compute the relative error and expect that to be no greater than
         a certain threshold (1e-6 in this test).
         '''
-        error = (got - expect) / expect
+        error = abs(got - expect) / expect
         if error > 1e-6:
             raise ValueError(i, got, expect)
 
@@ -81,7 +83,7 @@ def main():
         for i in range(100):
             test_gufunc()
             test_cuda_gufunc()
-    print 'All good!'
+    print 'ok'
 
 if __name__ == '__main__':
     main()

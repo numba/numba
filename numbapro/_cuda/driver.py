@@ -130,6 +130,13 @@ class Driver(object):
         # CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize);
         'cuMemAlloc':         (c_int, POINTER(cu_device_ptr), c_size_t),
 
+        # CUresult cuMemsetD8(CUdeviceptr dstDevice, unsigned char uc, size_t N);
+        'cuMemsetD8':         (c_int, cu_device_ptr, c_uint8, c_size_t),
+
+        # CUresult cuMemsetD8Async(CUdeviceptr dstDevice, unsigned char uc,
+        #                          size_t N, CUstream hStream);
+        'cuMemsetD8Async':    (c_int, cu_device_ptr, c_uint8, c_size_t, cu_stream),
+
         # CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost,
         #                       size_t ByteCount);
         'cuMemcpyHtoD':         (c_int, cu_device_ptr, c_void_p, c_size_t),
@@ -466,6 +473,13 @@ class DeviceMemory(object):
             error = self.driver.cuMemcpyDtoH(dst, self._handle, size)
         self.driver.check_error(error, "Failed to copy memory D->H")
 
+    def memset(self, val, size, stream=None):
+        if stream:
+            error = self.driver.cuMemsetD8Async(self._handle, val, size, stream._handle)
+        else:
+            error = self.driver.cuMemsetD8(self._handle, val, size)
+        self.driver.check_error(error, "Failed to set memory")
+
     def add_dependencies(self, *args):
         self._depends.extend(args)
 
@@ -522,7 +536,7 @@ class Function(object):
 
     griddim = 1, 1, 1
     blockdim = 1, 1, 1
-    stream = 0
+    stream = None
     sharedmem = 0
 
     def __init__(self, module, name):
@@ -572,72 +586,72 @@ class Function(object):
         '''
         *args -- Must be either ctype objects of DevicePointer instances.
         '''
-
         assert self.driver.current_context() is self.context
+        launch_kernel(self._handle, self.griddim, self.blockdim,
+                      0, self.stream, args)
 
-        if self.driver.old_api:
-            error = self.driver.cuFuncSetBlockShape(self._handle,  *self.blockdim)
-            self.driver.check_error(error, "Failed to set block shape.")
+def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, stream_handle, args):
+    driver = Driver()
+    if driver.old_api:
+        error = driver.cuFuncSetBlockShape(cufunc_handle,  *blockdim)
+        driver.check_error(error, "Failed to set block shape.")
 
-            error = self.driver.cuFuncSetSharedSize(self._handle, self.sharedmem)
-            self.driver.check_error(error, "Failed to set shared memory size.")
+        error = driver.cuFuncSetSharedSize(cufunc_handle, sharedmem)
+        driver.check_error(error, "Failed to set shared memory size.")
 
-            # count parameter byte size
-            bytesize = 0
-            for arg in args:
-                if isinstance(arg, DeviceMemory):
-                    size = sizeof(arg._handle)
-                else:
-                    size = sizeof(arg)
-                bytesize += size
-
-            error = self.driver.cuParamSetSize(self._handle, bytesize)
-            self.driver.check_error(error, 'Failed to set parameter size (%d)' % bytesize)
-
-            offset = 0
-            for i, arg in enumerate(args):
-                if isinstance(arg, DeviceMemory):
-                    size = sizeof(arg._handle)
-                    error = self.driver.cuParamSetv(self._handle, offset,
-                                                    addressof(arg._handle),
-                                                    size)
-                else:
-                    size = sizeof(arg)
-                    error = self.driver.cuParamSetv(self._handle, offset, addressof(arg),
-                                                    size)
-                self.driver.check_error(error, 'Failed to set parameter %d' % i)
-                offset += size
-
-
-            gx, gy, _ = self.griddim
-            if self.stream:
-                error = self.driver.cuLaunchGrid(self._handle, gx, gy, stream)
+        # count parameter byte size
+        bytesize = 0
+        for arg in args:
+            if isinstance(arg, DeviceMemory):
+                size = sizeof(arg._handle)
             else:
-                error = self.driver.cuLaunchGrid(self._handle, gx, gy)
+                size = sizeof(arg)
+            bytesize += size
 
-            self.driver.check_error(error, 'Failed to launch kernel')
-        else:
-            gx, gy, gz = self.griddim
-            bx, by, bz = self.blockdim
+        error = driver.cuParamSetSize(cufunc_handle, bytesize)
+        driver.check_error(error, 'Failed to set parameter size (%d)' % bytesize)
 
-            param_vals = []
-            for arg in args:
-                if isinstance(arg, DeviceMemory):
-                    param_vals.append(addressof(arg._handle))
-                else:
-                    param_vals.append(addressof(arg))
+        offset = 0
+        for i, arg in enumerate(args):
+            if isinstance(arg, DeviceMemory):
+                size = sizeof(arg._handle)
+                error = driver.cuParamSetv(cufunc_handle, offset,
+                                           addressof(arg._handle),
+                                           size)
+            else:
+                size = sizeof(arg)
+                error = driver.cuParamSetv(cufunc_handle, offset, addressof(arg),
+                                                size)
+            driver.check_error(error, 'Failed to set parameter %d' % i)
+            offset += size
 
-            params = (c_void_p * len(param_vals))(*param_vals)
 
-            error = self.driver.cuLaunchKernel(
-                        self._handle,
-                        gx, gy, gz,
-                        bx, by, bz,
-                        self.sharedmem,
-                        self.stream,
-                        params,
-                        None)
+        gx, gy, _ = griddim
+        error = driver.cuLaunchGridAsync(cufunc_handle, gx, gy, stream_handle)
 
-            self.driver.check_error(error, "Failed to launch kernel")
+        driver.check_error(error, 'Failed to launch kernel')
+    else:
+        gx, gy, gz = griddim
+        bx, by, bz = blockdim
+
+        param_vals = []
+        for arg in args:
+            if isinstance(arg, DeviceMemory):
+                param_vals.append(addressof(arg._handle))
+            else:
+                param_vals.append(addressof(arg))
+
+        params = (c_void_p * len(param_vals))(*param_vals)
+
+        error = driver.cuLaunchKernel(
+                    cufunc_handle,
+                    gx, gy, gz,
+                    bx, by, bz,
+                    sharedmem,
+                    stream_handle,
+                    params,
+                    None)
+
+        driver.check_error(error, "Failed to launch kernel")
 
 
