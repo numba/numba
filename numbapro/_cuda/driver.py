@@ -513,9 +513,10 @@ class Module(object):
         error = self.driver.cuModuleLoadDataEx(byref(self._handle), ptx,
                                                option_n, c_option_keys,
                                                c_option_vals)
+
         self.driver.check_error(error, 'Failed to load module')
 
-        self.info_log = c_info_log_buffer.value
+        self.info_log = c_info_log_buffer[:c_info_log_n.value]
 
     def __del__(self):
         error =  self.driver.cuModuleUnload(self._handle)
