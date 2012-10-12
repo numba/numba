@@ -349,7 +349,12 @@ class TempNode(Node): #, ast.Name):
 class TempLoadNode(Node):
     _fields = ['temp']
 
-class TempStoreNode(Node):
+    def __init__(self, temp):
+        self.temp = temp
+        self.type = temp.type
+        self.variable = Variable(self.type)
+
+class TempStoreNode(TempLoadNode):
     _fields = ['temp']
 
 class DataPointerNode(Node):

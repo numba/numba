@@ -49,6 +49,7 @@ class TransformForIterable(visitors.NumbaTransformer):
                                  slice=shape_index,
                                  ctx=ast.Load())
             stop.type = _types.intp
+            stop.variable = Variable(stop.type)
             call_args = [nodes.ConstNode(0, _types.Py_ssize_t),
                          nodes.CoercionNode(stop, _types.Py_ssize_t),
                          nodes.ConstNode(1, _types.Py_ssize_t),]
@@ -63,6 +64,7 @@ class TransformForIterable(visitors.NumbaTransformer):
             subscript = ast.Subscript(value=orig_iter,
                                       slice=index, ctx=ast.Load())
             subscript.type = orig_iter.variable.type.dtype
+            subscript.variable = Variable(subscript.type)
             coercion = nodes.CoercionNode(subscript, orig_target.type)
             assign = ast.Assign(targets=[orig_target], value=subscript)
 
