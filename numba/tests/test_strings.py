@@ -39,6 +39,10 @@ def temp_string3():
         s = c_string_type(get_string(i))
         print s
 
+@autojit(backend='ast')
+def test():
+    return object()
+
 if __name__ == '__main__':
     import doctest
     doctest.testmod()

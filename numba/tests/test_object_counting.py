@@ -1,3 +1,28 @@
+"""
+>>> test_refcounting()
+True
+True
+>>> sys.getrefcount(object())
+1
+>>> sys.getrefcount(fresh_obj())
+1
+>>> sys.getrefcount(fresh_obj2())
+1
+>>> sys.getrefcount(fresh_obj3())
+1
+>>> sys.getrefcount(index_count([object()]))
+1
+>>> class C(object):
+...     def __init__(self, value):
+...         self.value = value
+...     def __del__(self):
+...         print 'deleting...'
+...
+>>> sys.getrefcount(attr_count(C(object())))
+deleting...
+1
+"""
+
 import sys
 import ctypes
 
@@ -26,8 +51,34 @@ def test_refcounting():
         use_objects(L)
 
     expected = "\n".join("Unique(%d)" % i for i in range(10)) + '\n'
-    assert out.getvalue() == expected
-    assert all(sys.getrefcount(obj) == 3 for obj in L)
+    print out.getvalue() == expected
+    print all(sys.getrefcount(obj) == 3 for obj in L)
+
+@autojit(backend='ast')
+def fresh_obj():
+    x = object()
+    return x
+
+@autojit(backend='ast')
+def fresh_obj2():
+    return object()
+
+@autojit(backend='ast')
+def fresh_obj3():
+    x = object()
+    y = x
+    return y
+
+@autojit(backend='ast')
+def index_count(L):
+    x = L[0]
+    return x
+
+@autojit(backend='ast')
+def attr_count(obj):
+    x = obj.value
+    return x
 
 if __name__ == "__main__":
-    test_refcounting()
+    import doctest
+    doctest.testmod()
