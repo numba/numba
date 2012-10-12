@@ -820,19 +820,21 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             return op.__name__.lower()
 
-    def _handle_pow(self, node, lhs, rhs):
-        assert node.right.type.is_int
-        ltype = node.type.to_llvm(self.context)
-        restype = translate.llvmtype_to_strtype(ltype)
-        func = self.module_utils.get_py_int_pow(self.mod, restype)
-        return self.builder.call(func, (lhs, rhs))
+    def _handle_mod(self, node, lhs, rhs):
+        if node.type.is_float:
+            return self.builder.frem(lhs, rhs)
+        else:
+            ltype = node.type.to_llvm(self.context)
+            restype = translate.llvmtype_to_strtype(ltype)
+            func = self.module_utils.get_py_modulo(self.mod, restype)
+            return self.builder.call(func, (lhs, rhs))
 
     def visit_BinOp(self, node):
         lhs = self.visit(node.left)
         rhs = self.visit(node.right)
         op = type(node.op)
 
-        if node.type.is_int or node.type.is_float and op in self._binops:
+        if (node.type.is_int or node.type.is_float) and op in self._binops:
             llvm_method_name = self._binops[op][node.type.is_int]
             if node.type.is_int:
                 llvm_method_name = llvm_method_name[node.type.signed]
@@ -841,8 +843,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 print ast.dump(node)
                 assert False
             result = meth(lhs, rhs)
-        elif node.type.is_int or node.type.is_float and op == ast.Pow:
-            return self._handle_pow(node, lhs, rhs)
+        elif (node.type.is_int or node.type.is_float) and op == ast.Mod:
+            return self._handle_mod(node, lhs, rhs)
         elif node.type.is_complex:
             opname = self.opname(op)
             if opname in ('add', 'sub', 'mul', 'div'):

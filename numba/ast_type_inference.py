@@ -321,29 +321,29 @@ class MathMixin(object):
         else:
             return result
 
-    def pow(self, node, power, mod=None, name='pow'):
-        # TODO: pow(x, y, z) == x ** y % z
-        node_type = node.variable.type
-        power_type = power.variable.type
-        promoted_type = pow_type = self.promote_types(node_type, power_type)
-        if pow_type.is_int:
-            pow_type = double
-        signature = minitypes.FunctionType(return_type=pow_type,
-                                           args=[pow_type, pow_type])
+    def _binop_type(self, x, y):
+        x_type = x.variable.type
+        y_type = y.variable.type
+        dst_type = self.promote_types(x_type, y_type)
+        type = dst_type
+        if type.is_int:
+            type = double
+
+        signature = minitypes.FunctionType(return_type=type, args=[type, type])
+        return dst_type, type, signature
+
+    def pow(self, node, power, mod=None):
+        name = 'pow'
+        dst_type, pow_type, signature = self._binop_type(node, power)
         args = [node, power]
         if pow_type.is_float and mod is None:
             result = self._resolve_intrinsic(args, pow, signature)
-            return nodes.CoercionNode(result, promoted_type)
-        #elif pow_type.is_int:
-        #    return nodes.MathCallNode(signature, args, llvm_func=None,
-        #                              name=self.math_suffix(name, pow_type))
+            return nodes.CoercionNode(result, dst_type)
         else:
             if mod is not None:
                 args.append(mod)
             return self.astbuilder.call_pyfunc(pow, args)
 
-    def mod(self, x, y):
-        return self.pow(x, y, name='fmod')
 
 class NumpyMixin(object):
     def _is_constant_index(self, node):
@@ -801,9 +801,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if isinstance(node.op, ast.Pow):
             node = self.pow(node.left, node.right)
-            return self.visit(node)
-        elif isinstance(node.op, ast.Mod):
-            node = self.mod(node.left, node.right)
             return self.visit(node)
 
         promotion_type = self.promote(node.left.variable,
