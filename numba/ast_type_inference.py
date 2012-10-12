@@ -1126,6 +1126,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 if result_type is None:
                     result_type = minitypes.object_
                 new_node.variable = Variable(result_type)
+            elif not func_type.is_object:
+                raise error.NumbaError(
+                        node, "Cannot call object of type %s" % (func_type,))
 
         return new_node
 

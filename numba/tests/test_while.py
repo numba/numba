@@ -159,17 +159,17 @@ class TestWhile(test_support.ByteCodeTestCase):
         self.assertEqual(compiled_result, 18.)
 
     def test_while_loop_fn_6(self):
-        compiled_fn = self.jit()(while_loop_fn_6)
+        compiled_fn = self.jit(restype=double, argtypes=[double])(while_loop_fn_6)
         self.assertEqual(while_loop_fn_6(4.), compiled_fn(4.))
         self.assertEqual(while_loop_fn_6(5.), compiled_fn(5.))
 
     def test_while_loop_fn_7(self):
-        compiled_fn = self.jit()(while_loop_fn_7)
+        compiled_fn = self.jit(restype=double, argtypes=[double])(while_loop_fn_7)
         self.assertEqual(while_loop_fn_7(4.), compiled_fn(4.))
         self.assertEqual(while_loop_fn_7(5.), compiled_fn(5.))
 
     def test_while_loop_fn_8(self):
-        compiled_fn = self.jit()(while_loop_fn_8)
+        compiled_fn = self.jit(restype=double, argtypes=[double])(while_loop_fn_8)
         self.assertEqual(while_loop_fn_8(3.), compiled_fn(3.))
         self.assertEqual(while_loop_fn_8(4.), compiled_fn(4.))
         self.assertEqual(while_loop_fn_8(5.), compiled_fn(5.))

@@ -4,6 +4,7 @@ import unittest
 import functools
 
 from nose.tools import nottest
+import nose.plugins.skip
 from numba.decorators import jit as jit_, autojit
 
 import __builtin__
