@@ -21,6 +21,18 @@ True
 >>> sys.getrefcount(attr_count(C(object())))
 deleting...
 1
+
+>>> obj = object()
+>>> sys.getrefcount(obj)
+2
+>>> try:
+...     exc(obj)
+... except ValueError, e:
+...     del e
+...     sys.exc_clear()
+...
+>>> sys.getrefcount(obj)
+2
 """
 
 import sys
@@ -78,6 +90,11 @@ def index_count(L):
 def attr_count(obj):
     x = obj.value
     return x
+
+@autojit(backend='ast')
+def exc(obj):
+    x = obj
+    return int('boom')
 
 if __name__ == "__main__":
     import doctest
