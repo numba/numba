@@ -325,6 +325,18 @@ class ObjectTempRefNode(Node):
         super(ObjectTempRefNode, self).__init__(**kwargs)
         self.obj_temp_node = obj_temp_node
 
+class LLVMValueRefNode(Node):
+    """
+    Wrap an LLVM value.
+    """
+
+    _fields = []
+
+    def __init__(self, type, llvm_value):
+        self.type = type
+        self.variable = Variable(type)
+        self.llvm_value = llvm_value
+
 
 class TempNode(Node): #, ast.Name):
     """
@@ -464,3 +476,18 @@ class WithPythonNode(Node):
 
 class WithNoPythonNode(WithPythonNode):
     "with nopython: ..."
+
+class FunctionWrapperNode(Node):
+    """
+    This code is a wrapper function callable from Python using PyCFunction:
+
+        PyObject *(*)(PyObject *self, PyObject *args)
+
+    It unpacks the tuple to native types, calls the wrapped function, and
+    coerces the return type back to an object.
+    """
+
+    def __init__(self, wrapped_function, signature, orig_py_func):
+        self.wrapped_function = wrapped_function
+        self.signature = signature
+        self.orig_py_func = orig_py_func

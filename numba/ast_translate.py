@@ -1,4 +1,5 @@
 import ast
+import ctypes
 
 import llvm
 import llvm.core as lc
@@ -50,6 +51,36 @@ class DelayedObj(object):
 
     def get_stop(self):
         return self.args[0 if (len(self.args) == 1) else 1]
+
+def pycfunction_new(py_func, func_pointer):
+    # struct PyMethodDef {
+    #     const char  *ml_name;   /* The name of the built-in function/method */
+    #     PyCFunction  ml_meth;   /* The C function that implements it */
+    #     int      ml_flags;      /* Combination of METH_xxx flags, which mostly
+    #                                describe the args expected by the C func */
+    #     const char  *ml_doc;    /* The __doc__ attribute, or NULL */
+    # };
+    PyMethodDef = struct([('name', c_string_type),
+                          ('method', void.pointer()),
+                          ('flags', int_),
+                          ('doc', c_string_type)])
+    c_PyMethodDef = PyMethodDef.to_ctypes()
+
+    PyCFunction_NewEx = ctypes.pythonapi.PyCFunction_NewEx
+    PyCFunction_NewEx.argtypes = [ctypes.POINTER(c_PyMethodDef),
+                                  ctypes.c_void_p,
+                                  ctypes.c_void_p]
+    PyCFunction_NewEx.restype = ctypes.py_object
+
+    methoddef = c_PyMethodDef()
+    methoddef.name = py_func.__name__
+    methoddef.doc = py_func.__doc__
+    methoddef.method = ctypes.c_void_p(func_pointer)
+    methoddef.flags = 1 # METH_VARARGS
+
+    methoddef_p = ctypes.byref(methoddef)
+    result = PyCFunction_NewEx(methoddef_p, None, None)
+    return result
 
 class MethodReference(object):
     def __init__(self, object_var, py_method):
@@ -378,24 +409,25 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def translate(self):
         self.setup_func()
 
-        assert isinstance(self.ast, ast.FunctionDef)
+        if isinstance(self.ast, ast.FunctionDef):
+            # Handle the doc string for the function
+            # FIXME: Ignoring it for now
+            if (isinstance(self.ast.body[0], ast.Expr) and
+                isinstance(self.ast.body[0].value, ast.Str)):
+                # Python doc string
+                logger.info('Ignoring python doc string.')
+                statements = self.ast.body[1:]
+            else:
+                statements = self.ast.body
 
-        # Handle the doc string for the function
-        # FIXME: Ignoring it for now
-        if (isinstance(self.ast.body[0], ast.Expr) and
-            isinstance(self.ast.body[0].value, ast.Str)):
-            # Python doc string
-            logger.info('Ignoring python doc string.')
-            statements = self.ast.body[1:]
+            for node in statements: # do codegen for each statement
+                self.visit(node)
         else:
-            statements = self.ast.body
+            self.visit(self.ast)
 
-        for node in statements: # do codegen for each statement
-            self.visit(node)
-        else:
-            if not self.is_block_terminated():
-                # self.builder.ret_void()
-                self.builder.branch(self.cleanup_label)
+        if not self.is_block_terminated():
+            # self.builder.ret_void()
+            self.builder.branch(self.cleanup_label)
 
         self.terminate_cleanup_blocks()
 
@@ -410,6 +442,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             fp.run(self.lfunc)
 
     def get_ctypes_func(self, llvm=True):
+        # return self.build_wrapper_function()
+
         ee = self.ee
         import ctypes
         sig = self.func_signature
@@ -429,6 +463,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # See numba.utils.ComplexMixin for an example of
             # make_ctypes_prototype_wrapper().
             prototype = restype.make_ctypes_prototype_wrapper(prototype)
+
         if llvm:
             # July 10, 2012: PY_CALL_TO_LLVM_CALL_MAP is removed recent commit.
             #
@@ -438,46 +473,54 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             return prototype(self.func)
 
+    def build_wrapper_function(self):
+        # PyObject *(*)(PyObject *self, PyObject *args)
+        def func(self, args):
+            pass
+
+        # Create wrapper code generator and wrapper AST
+        func.__name__ = '__numba_wrapper_%s' % self.func_name
+        signature = minitypes.FunctionType(return_type=object_,
+                                           args=[object_, object_])
+        symtab = dict(self=Variable(object_, is_local=True),
+                      args=Variable(object_, is_local=True))
+        wrapper_call = nodes.FunctionWrapperNode(self.lfunc,
+                                                 self.func_signature,
+                                                 self.func)
+        error_return = ast.Return(nodes.CoercionNode(nodes.NULL_obj,
+                                                     object_))
+        wrapper_call.error_return = error_return
+        t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
+                              symtab, llvm_module=self.mod, llvm_ee=self.ee)
+        t.translate()
+
+        # Return a PyCFunctionObject holding the wrapper
+        func_pointer = self.ee.get_pointer_to_function(t.lfunc)
+        return pycfunction_new(self.func, func_pointer)
+
+    def visit_FunctionWrapperNode(self, node):
+        args_tuple = self.lfunc.args[1]
+        arg_types = node.signature.args
+
+        if arg_types:
+            # Unpack tuple into arguments
+            lstr = self.object_coercer.lstr(arg_types)
+            largs = self.object_coercer.parse_tuple(lstr, args_tuple, arg_types)
+        else:
+            largs = []
+
+        # Call wrapped function and return coerced result
+        lresult = self.builder.call(node.wrapped_function, largs)
+        result_node = nodes.LLVMValueRefNode(node.signature.return_type,
+                                             lresult)
+        return_ = ast.Return(value=nodes.CoerceToObject(result_node, object_))
+        self.visit(return_)
+
     def _null_obj_temp(self, name):
         lhs = self.llvm_alloca(llvm_types._pyobject_head_struct_p,
                                name=name, change_bb=False)
         self.generate_assign(self.visit(nodes.NULL_obj), lhs)
         return lhs
-
-    def build_call_to_translated_function(self, target_translator, args):
-        # FIXME: At some point, I assume we'll actually want to index
-        # by argument types, so this will grab the best suited
-        # translation of a function based on the caller circumstance.
-        if len(args) != len(self.arg_types):
-            raise TypeError("Mismatched argument count in call to translated "
-                            "function (%r)." % (self.func))
-        ee = LLVMContextManager().get_execution_engine()
-        func_name = '%s_%d' % (self.func.__name__, id(self))
-        try:
-            lfunc_ptr_ptr = target_translator.mod.get_global_variable_named(
-                func_name)
-        except:
-            # FIXME: This is linkage at its grossest (and least
-            # dynamic - what if the called function is recompiled at
-            # some point?).  See if there is some way to link this up
-            # using symbols and module linkage settings.
-            lfunc_ptr_ty = self.lfunc.type
-            lfunc_ptr_ptr = target_translator.mod.add_global_variable(
-                lfunc_ptr_ty, func_name)
-            lfunc_ptr_ptr.initializer = lc.Constant.inttoptr(
-                lc.Constant.int(_intp, ee.get_pointer_to_function(self.lfunc)),
-                lfunc_ptr_ty)
-            lfunc_ptr_ptr.linkage = lc.LINKAGE_INTERNAL
-        lfunc = target_translator.builder.load(lfunc_ptr_ptr)
-        if __debug__:
-            print "build_call_to_translated_function():", str(lfunc)
-
-        largs = [arg.llvm(convert_to_strtype(param_typ),
-                          builder = target_translator.builder)
-                 for arg, param_typ in zip(args, self.arg_types)]
-        res = target_translator.builder.call(lfunc, largs)
-        res_typ = convert_to_strtype(self.ret_type)
-        return res, res_typ
 
     def setup_return(self):
         # Assign to this value which will be returned
@@ -670,8 +713,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def append_basic_block(self, name='unamed'):
         idx = len(self.blocks)
-        bb = self.lfunc.append_basic_block('%s_%d'%(name, idx))
-        self.blocks[idx]=bb
+        #bb = self.lfunc.append_basic_block('%s_%d'%(name, idx))
+        bb = self.lfunc.append_basic_block(name)
+        self.blocks[idx] = bb
         return bb
 
     def visit_Return(self, node):
@@ -890,7 +934,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_CoerceToObject(self, node):
         result = self.visit(node.node)
-        if not node.node.type == minitypes.object_:
+        if not node.node.type.is_object or node.node.type.is_array:
             result = self.object_coercer.convert_single(node.node.type, result,
                                                         name=node.name)
         return result
@@ -1061,6 +1105,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_ObjectTempRefNode(self, node):
         return node.obj_temp_node.llvm_temp
+
+    def visit_LLVMValueRefNode(self, node):
+        return node.llvm_value
 
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)

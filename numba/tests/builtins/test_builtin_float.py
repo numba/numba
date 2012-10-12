@@ -10,8 +10,8 @@ import sys
 from numba import *
 
 @autojit(backend='ast')
-def empty_float():
-    x = float()
+def empty_float(y):
+    x = float(y)
     return x
 
 @autojit(backend='ast')

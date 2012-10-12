@@ -62,9 +62,9 @@ class FunctionCache(object):
     """
     Cache for compiler functions, declared external functions and constants.
     """
-    def __init__(self, context):
+    def __init__(self, context, module=None):
         self.context = context
-        self.module = context.llvm_context.get_default_module()
+        self.module = module or context.llvm_context.get_default_module()
 
         # All numba-compiled functions
         # (py_func, arg_types) -> (signature, llvm_func, ctypes_func)
