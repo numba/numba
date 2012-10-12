@@ -34,11 +34,7 @@ class NumpyStructure(Structure):
     _fields_ = _numpy_fields
 
 def ndarray_to_device_memory(ary, stream=0):
-    dataptr = ary.ctypes.data_as(c_void_p)
-    datasize = ary.shape[0] * ary.strides[0]
-
-    gpu_data = _cuda.DeviceMemory(_cuglobals.context, datasize)
-    gpu_data.to_device_raw(dataptr, datasize, stream=stream)
+    retriever, gpu_data = ndarray_data_to_device_memory(ary, stream=stream)
 
     dims = ary.ctypes.shape
     gpu_dims = _cuda.DeviceMemory(_cuglobals.context, sizeof(dims))
@@ -59,8 +55,20 @@ def ndarray_to_device_memory(ary, stream=0):
     gpu_struct = _cuda.DeviceMemory(_cuglobals.context, sizeof(struct))
     gpu_struct.to_device_raw(addressof(struct), sizeof(struct))
 
-    def retriever():
-        gpu_data.from_device_raw(dataptr, datasize)
+    # NOTE: Do not free gpu_data, gpu_dims and gpu_strides before
+    #       freeing gpu_struct.
+    gpu_struct.add_dependencies(gpu_data, gpu_dims, gpu_strides)
 
     return retriever, gpu_struct
 
+def ndarray_data_to_device_memory(ary, stream=0):
+    dataptr = ary.ctypes.data_as(c_void_p)
+    datasize = ary.shape[0] * ary.strides[0]
+
+    gpu_data = _cuda.DeviceMemory(_cuglobals.context, datasize)
+    gpu_data.to_device_raw(dataptr, datasize, stream=stream)
+
+    def retriever():
+        gpu_data.from_device_raw(dataptr, datasize)
+
+    return retriever, gpu_data

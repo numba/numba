@@ -296,6 +296,15 @@ class Driver(object):
                 else:
                     raise exc
 
+#    def get_device(self, device_id=0):
+#        return Device(self, device_id)
+
+#    def get_context(self, device=None):
+#        if device is None:
+#            device = self.get_device()
+#        Device(self, device_id)
+
+
 CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1
 CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2
 CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y = 3
@@ -414,6 +423,7 @@ class DeviceMemory(object):
     memory is released when this object is released.
     '''
     def __init__(self, context, bytesize):
+        self._depends = []
         self.context = context
         self._handle = cu_device_ptr()
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
@@ -436,6 +446,9 @@ class DeviceMemory(object):
         else:
             error = self.driver.cuMemcpyDtoH(dst, self._handle, size)
         self.driver.check_error(error, "Failed to copy memory D->H")
+
+    def add_dependencies(self, *args):
+        self._depends.extend(args)
 
     @property
     def driver(self):
