@@ -7,7 +7,8 @@ As of LLVM3.1, PTX backend cannot handle truncation of 64-bit integer into
 is removed.
 
 '''
-
+import unittest
+from nose.exc import SkipTest
 from llvm.core import *
 from llvm.ee import *
 
@@ -44,11 +45,17 @@ entry:
 
 '''
 
-module = Module.from_assembly(llvmir)
-print module
+class TestCuda64bitTruncation(unittest.TestCase):
+    def test_cuda_64_bit_trunc(self):
+        raise SkipTest("Problem in LLVM 3.1")
+        module = Module.from_assembly(llvmir)
+        print module
 
-cc = 'sm_%d%d' % (2, 1)
-arch = 'ptx64'
-ptxtm = TargetMachine.lookup(arch, cpu=cc, opt=3)
-ptxasm = ptxtm.emit_assembly(module)
+        cc = 'sm_%d%d' % (2, 1)
+        arch = 'ptx64'
+        ptxtm = TargetMachine.lookup(arch, cpu=cc, opt=3)
+        ptxasm = ptxtm.emit_assembly(module)
+
+if __name__ == '__main__':
+    unittest.main()
 
