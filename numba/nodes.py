@@ -305,12 +305,25 @@ class ObjectTempNode(Node):
 
     _fields = ['node']
 
-    def __init__(self, node):
+    def __init__(self, node, incref=False):
         assert not isinstance(node, ObjectTempNode)
         self.node = node
         self.llvm_temp = None
         self.type = getattr(node, 'type', node.variable.type)
         self.variable = Variable(self.type)
+        self.incref = incref
+
+class ObjectTempRefNode(Node):
+    """
+    Reference an ObjectTempNode, without evaluating its subexpressions.
+    The ObjectTempNode must already have been evaluated.
+    """
+
+    _fields = []
+
+    def __init__(self, obj_temp_node, **kwargs):
+        super(ObjectTempRefNode, self).__init__(**kwargs)
+        self.obj_temp_node = obj_temp_node
 
 
 class TempNode(Node): #, ast.Name):

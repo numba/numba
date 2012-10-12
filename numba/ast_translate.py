@@ -1054,9 +1054,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # goto error if NULL
         self.object_coercer.check_err(rhs)
 
-        # Generate Py_XDECREF(temp) (call Py_DecRef only if not NULL)
+        if node.incref:
+            self.incref(self.builder.load(lhs))
+
+        # Generate Py_XDECREF(temp) at end-of-function cleanup path
         self.xdecref_temp_cleanup(lhs)
         return self.builder.load(lhs, name=name + '_load')
+
+    def visit_ObjectTempRefNode(self, node):
+        return node.obj_temp_node.llvm_temp
 
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)
