@@ -8,10 +8,12 @@ from . import _common
 from ._common import _llvm_ty_to_numpy
 
 from numba.minivect import minitypes
+
 try:
     from numbapro import _cudadispatch
 except ImportError: # ignore missing cuda dependency
     pass
+
 from numbapro.translate import Translate
 from numbapro.vectorize import minivectorize, basic
 
@@ -135,7 +137,7 @@ class CudaVectorize(_common.GenericVectorize):
         # Note. Oddly, the llvm ptx backend does not have compute capacility
         #       beyound 2.0, but it has the streaming-multiprocessor,
         #       which is the same.
-        cc = 'sm_%d%d' % _cudadispatch.compute_capability(device_number)
+        cc = 'sm_%d%d' % _cudadispatch.compute_capability()
         if HAS_PTX:
             arch = 'ptx%d' % C.intp.width # select by host pointer size
         elif HAS_NVPTX:
