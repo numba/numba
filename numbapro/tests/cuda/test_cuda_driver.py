@@ -57,7 +57,7 @@ class TestCudaDriver(unittest.TestCase):
     def setUp(self):
         driver = Driver()
         self.assertTrue(driver.get_device_count())
-        self.device = device = Device(driver, 0)
+        device = Device(0)
         self.assertIn('COMPUTE_CAPABILITY', device.attributes)
         self.assertIn('MAX_THREADS_PER_BLOCK', device.attributes)
 
@@ -67,14 +67,15 @@ class TestCudaDriver(unittest.TestCase):
         else:
             self.ptx = ptx1
 
+        driver.get_or_create_context(device)
+
     def test_cuda_driver_basic(self):
-        context = Context(self.device)
-        module = Module(context, self.ptx)
+        module = Module(self.ptx)
         print module.info_log
         function = Function(module, '_Z10helloworldPi')
 
         array = (c_int * 100)()
-        memory = DeviceMemory(context, sizeof(array))
+        memory = DeviceMemory(sizeof(array))
         memory.to_device_raw(array, sizeof(array))
 
         function = function.configure((1,), (100,))
@@ -85,16 +86,15 @@ class TestCudaDriver(unittest.TestCase):
             self.assertEqual(i, v)
 
     def test_cuda_driver_stream(self):
-        context = Context(self.device)
-        module = Module(context, self.ptx)
+        module = Module(self.ptx)
         print module.info_log
         function = Function(module, '_Z10helloworldPi')
 
         array = (c_int * 100)()
 
-        with Stream(context) as stream:
+        with Stream() as stream:
 
-            memory = DeviceMemory(context, sizeof(array))
+            memory = DeviceMemory(sizeof(array))
             memory.to_device_raw(array, sizeof(array), stream)
 
             function = function.configure((1,), (100,), stream=stream)

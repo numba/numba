@@ -1,4 +1,4 @@
-from .driver import Driver, Device, Context
+from .driver import Driver, Device
 import logging, os
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ else:
     except ValueError:
         logger.error("Failed to parse ~/.cuda_device: %s" % n)
 
-device = Device(driver, device_number)
-context = Context(device)
+device = Device(device_number)
+driver.create_context(device)
 
 

@@ -107,6 +107,9 @@ class Driver(object):
         #                      CUdevice dev);
         'cuCtxCreate':          (c_int, POINTER(cu_context), c_uint, cu_device),
 
+        # CUresult cuCtxGetCurrent	(CUcontext *pctx);
+        'cuCtxGetCurrent':      (c_int, POINTER(cu_context)),
+
         # CUresult cuCtxDestroy(CUcontext pctx);
         'cuCtxDestroy':         (c_int, cu_context),
 
@@ -201,6 +204,8 @@ class Driver(object):
 
     __TEARDOWN = False
 
+    _CONTEXTS = {}
+
     def __new__(cls, overide_path=None):
         if cls.__INSTANCE is None:
             cls.__INSTANCE = inst = object.__new__(Driver)
@@ -287,7 +292,7 @@ class Driver(object):
         if error:
             if self.__TEARDOWN:
                 print 'Error during teardown'
-                print error, msg
+                print error, msg, self._REVERSE_ERROR_MAP[error]
             else:
                 exc = DriverError(msg, self._REVERSE_ERROR_MAP[error])
                 if exit:
@@ -296,14 +301,28 @@ class Driver(object):
                 else:
                     raise exc
 
-#    def get_device(self, device_id=0):
-#        return Device(self, device_id)
+    def create_context(self, device=None):
+        if device is None:
+            device = Device(0)
+        ctxt = _Context(device)
+        self._CONTEXTS[ctxt._handle.value] = ctxt
 
-#    def get_context(self, device=None):
-#        if device is None:
-#            device = self.get_device()
-#        Device(self, device_id)
+    def current_context(self):
+        handle = cu_context()
+        error = self.cuCtxGetCurrent(byref(handle))
+        self.check_error(error, "Fail to get current context.")
+        return self._CONTEXTS[handle.value]
 
+    def get_or_create_context(self, device=None):
+        '''Returns the current context if exists, or get create a new one.
+        '''
+        try:
+            return self.current_context()
+        except KeyError:
+            return self.create_context(device)
+
+    def release_context(self, context):
+        del self._CONTEXTS[context._handle.value]
 
 CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1
 CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2
@@ -327,8 +346,8 @@ class Device(object):
       'MAX_SHARED_MEMORY':     CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK,
     }
 
-    def __init__(self, driver, device_id):
-        self.driver = driver
+    def __init__(self, device_id):
+        self.driver = Driver()
         got_device = c_int()
         error = self.driver.cuDeviceGet(byref(got_device), device_id)
         self.driver.check_error(error, 'Failed to get device %d')
@@ -364,7 +383,7 @@ class Device(object):
         keys += ['COMPUTE_CAPABILITY']
         return dict((k, getattr(self, k)) for k in keys)
 
-class Context(object):
+class _Context(object):
     def __init__(self, device):
         self.device = device
         self._handle = cu_context()
@@ -383,8 +402,8 @@ class Context(object):
         return 'Context %s on %s' % (id(self), self.device)
 
 class Stream(object):
-    def __init__(self, context):
-        self.context = context
+    def __init__(self):
+        self.context = Driver().current_context()
         self._handle = cu_stream()
         error = self.driver.cuStreamCreate(byref(self._handle), 0)
         self.driver.check_error(error, 'Failed to create stream on %s' % self.context)
@@ -422,9 +441,9 @@ class DeviceMemory(object):
     The lifetime of the object is tied to the GPU memory handle; that is the
     memory is released when this object is released.
     '''
-    def __init__(self, context, bytesize):
+    def __init__(self, bytesize):
         self._depends = []
-        self.context = context
+        self.context = Driver().current_context()
         self._handle = cu_device_ptr()
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
         self.driver.check_error(error, 'Failed to allocate memory')
@@ -462,8 +481,8 @@ CU_JIT_INFO_LOG_BUFFER = 3
 CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES = 4
 
 class Module(object):
-    def __init__(self, context, ptx):
-        self.context = context
+    def __init__(self, ptx):
+        self.context = Driver().current_context()
         self.ptx = ptx
 
         self._handle = cu_module()
@@ -553,6 +572,9 @@ class Function(object):
         '''
         *args -- Must be either ctype objects of DevicePointer instances.
         '''
+
+        assert self.driver.current_context() is self.context
+
         if self.driver.old_api:
             error = self.driver.cuFuncSetBlockShape(self._handle,  *self.blockdim)
             self.driver.check_error(error, "Failed to set block shape.")

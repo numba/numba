@@ -3,8 +3,6 @@ from ctypes import *
 import numpy as np
 from numpy.ctypeslib import c_intp
 from numbapro._cuda import driver as _cuda
-from numbapro._cuda import default as _cuglobals
-
 
 _pyobject_head_fields = [('pyhead1', c_size_t),
                          ('pyhead2', c_void_p),]
@@ -37,11 +35,11 @@ def ndarray_to_device_memory(ary, stream=0):
     retriever, gpu_data = ndarray_data_to_device_memory(ary, stream=stream)
 
     dims = ary.ctypes.shape
-    gpu_dims = _cuda.DeviceMemory(_cuglobals.context, sizeof(dims))
+    gpu_dims = _cuda.DeviceMemory(sizeof(dims))
     gpu_dims.to_device_raw(addressof(dims), sizeof(dims), stream=stream)
 
     strides = ary.ctypes.strides
-    gpu_strides = _cuda.DeviceMemory(_cuglobals.context, sizeof(strides))
+    gpu_strides = _cuda.DeviceMemory(sizeof(strides))
     gpu_strides.to_device_raw(addressof(strides), sizeof(strides), stream=stream)
 
     fields = {
@@ -52,7 +50,7 @@ def ndarray_to_device_memory(ary, stream=0):
     }
     struct = NumpyStructure(**fields)
 
-    gpu_struct = _cuda.DeviceMemory(_cuglobals.context, sizeof(struct))
+    gpu_struct = _cuda.DeviceMemory(sizeof(struct))
     gpu_struct.to_device_raw(addressof(struct), sizeof(struct))
 
     # NOTE: Do not free gpu_data, gpu_dims and gpu_strides before
@@ -65,7 +63,7 @@ def ndarray_data_to_device_memory(ary, stream=0):
     dataptr = ary.ctypes.data_as(c_void_p)
     datasize = ary.shape[0] * ary.strides[0]
 
-    gpu_data = _cuda.DeviceMemory(_cuglobals.context, datasize)
+    gpu_data = _cuda.DeviceMemory(datasize)
     gpu_data.to_device_raw(dataptr, datasize, stream=stream)
 
     def retriever():
