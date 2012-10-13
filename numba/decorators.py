@@ -170,7 +170,7 @@ def _autojit(target, nopython):
 
     return _autojit_decorator
 
-def autojit(backend='bytecode', target='cpu', nopython=False, locals=None):
+def autojit(backend='ast', target='cpu', nopython=False, locals=None):
     if backend not in ('bytecode', 'ast'):
         if callable(backend):
            return _autojit(target, nopython)(backend)
