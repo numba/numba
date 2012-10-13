@@ -910,7 +910,8 @@ uint64 = IntType(name="uint64", rank=8.5, signed=False, itemsize=8)
 
 float32 = float_ = FloatType(name="float", rank=10, itemsize=4)
 float64 = double = FloatType(name="double", rank=12, itemsize=8)
-float128 = longdouble = FloatType(name="long double", rank=14,itemsize=16)
+float128 = longdouble = FloatType(name="long double", rank=14,
+                                  itemsize=16)
 
 complex64 = ComplexType(name="complex64", base_type=float32,
                         rank=16, itemsize=8)
