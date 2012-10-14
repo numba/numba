@@ -576,6 +576,8 @@ class NamedType(Type):
     def __eq__(self, other):
         return isinstance(other, NamedType) and self.name == other.name
 
+    __hash__ = Type.__hash__ # !@#$ py3k
+
     def __repr__(self):
         if self.qualifiers:
             return "%s %s" % (self.name, " ".join(self.qualifiers))
