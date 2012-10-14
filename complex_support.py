@@ -1,6 +1,4 @@
-import ctypes
-import numpy as np
-
+from miniutils import ctypes
 from minitypes import *
 
 ### Taken from Numba ###
@@ -45,19 +43,24 @@ class ComplexMixin (object):
             return _complex_result_wrapper
         return _make_complex_result_wrapper
 
-class Complex64(ctypes.Structure, ComplexMixin):
-    _fields_ = [('real', ctypes.c_float), ('imag', ctypes.c_float)]
-    _numpy_ty_ = np.complex64
-
-class Complex128(ctypes.Structure, ComplexMixin):
-    _fields_ = [('real', ctypes.c_double), ('imag', ctypes.c_double)]
-    _numpy_ty_ = np.complex128
-
-if hasattr(np, 'complex256'):
-    class Complex256(ctypes.Structure, ComplexMixin):
-        _fields_ = [('real', ctypes.c_longdouble), ('imag', ctypes.c_longdouble)]
-        _numpy_ty_ = np.complex256
+try:
+    import numpy as np
+except ImportError:
+    pass
 else:
-    Complex256 = None
+    class Complex64(ctypes.Structure, ComplexMixin):
+        _fields_ = [('real', ctypes.c_float), ('imag', ctypes.c_float)]
+        _numpy_ty_ = np.complex64
+
+    class Complex128(ctypes.Structure, ComplexMixin):
+        _fields_ = [('real', ctypes.c_double), ('imag', ctypes.c_double)]
+        _numpy_ty_ = np.complex128
+
+    if hasattr(np, 'complex256'):
+        class Complex256(ctypes.Structure, ComplexMixin):
+            _fields_ = [('real', ctypes.c_longdouble), ('imag', ctypes.c_longdouble)]
+            _numpy_ty_ = np.complex256
+    else:
+        Complex256 = None
 
 ### End Taken from Numba ###
