@@ -31,8 +31,6 @@ except ImportError:
     lc = UnavailableImport("llvm.core")
 
 import treepath
-import xmldumper
-from xmldumper import etree, tostring
 
 #
 ### Convenience utilities

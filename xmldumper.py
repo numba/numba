@@ -3,6 +3,8 @@ Convert a miniast to an XML document using ElementTree. This allows us to
 write XPath unit tests, or just serialize the AST.
 """
 
+__all__ = ['etree', 'tostring', 'XMLDumper']
+
 import miniutils
 
 try:
