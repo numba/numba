@@ -2,10 +2,35 @@
 Miscellaneous (convenience) utilities.
 """
 
+__all__ = ['ctypes', 'np', 'llvm', 'lc', 'MiniFunction']
+
 import __builtin__
 
+class UnavailableImport(object):
+    def __init__(self, import_name):
+        self.import_name = import_name
+
+    def __getattr__(self, attr):
+        __import__(self.import_name)
+
+try:
+    import ctypes
+except ImportError:
+    ctypes = UnavailableImport("ctypes")
+
+try:
+    import numpy as np
+except ImportError:
+    np = UnavailableImport("np")
+
+try:
+    import llvm.core
+    from llvm import core as lc
+except ImportError:
+    llvm = UnavailableImport("llvm")
+    lc = UnavailableImport("llvm.core")
+
 import treepath
-from ctypes_conversion import get_data_pointer
 import xmldumper
 from xmldumper import etree, tostring
 
@@ -40,6 +65,8 @@ class MiniFunction(object):
                                         context, specializer, self.minifunc)
 
     def get_ctypes_func_and_args(self, arrays):
+        from ctypes_conversion import get_data_pointer
+
         fist_array = arrays[0]
         shape = fist_array.shape
         for variable, array in zip(self.variables, arrays):
@@ -106,13 +133,13 @@ def max(it, key=None):
     if key is not None:
         k, value = max((key(value), value) for value in it)
         return value
-    return max(it)
+    return __builtin__.max(it)
 
 def min(it, key=None):
     if key is not None:
         k, value = min((key(value), value) for value in it)
         return value
-    return min(it)
+    return __builtin__.min(it)
 
 class ComparableObjectMixin(object):
     "Make sure subclasses implement comparison and hashing methods"

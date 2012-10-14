@@ -11,7 +11,13 @@ https://github.com/markflorisson88/cython/blob/_array_expressions/Cython/Utility
 
 import sys
 import copy
-import functools
+try:
+    from functools import wraps
+except ImportError:
+    def wraps(wrapped):
+        def decorator(wrapper):
+            return wrapper
+        return decorator
 
 import minivisitor
 import miniutils
@@ -908,7 +914,7 @@ def visit_if_should_vectorize(func):
     Visits the given method if we are vectorizing, otherwise visit the
     superclass' method of :py:class:`VectorizingSpecialization`
     """
-    @functools.wraps(func)
+    @wraps(func)
     def wrapper(self, node):
         if self.should_vectorize:
             return func(self, node)

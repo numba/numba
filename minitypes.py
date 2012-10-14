@@ -38,17 +38,12 @@ import sys
 import math
 import copy
 import struct as struct_
-import ctypes
 import textwrap
-
-try:
-    import llvm.core
-    from llvm import core as lc
-except ImportError:
-    llvm = None
 
 import miniutils
 import minierror
+
+from miniutils import *
 
 # Check below taken from Numba
 if sys.maxint > 2**33:
@@ -164,13 +159,13 @@ class TypeMapper(object):
 
     def promote_numeric(self, type1, type2):
         "Promote two numeric types"
-        return max([type1, type2], key=lambda type: type.rank)
+        return miniutils.max([type1, type2], key=lambda type: type.rank)
 
     def promote_arrays(self, type1, type2):
         "Promote two array types in an expression to a new array type"
         equal_ndim = type1.ndim == type2.ndim
         return ArrayType(self.promote_types(type1.dtype, type2.dtype),
-                         ndim=max(type1.ndim, type2.ndim),
+                         ndim=miniutils.max(type1.ndim, type2.ndim),
                          is_c_contig=(equal_ndim and type1.is_c_contig and
                                       type2.is_c_contig),
                          is_f_contig=(equal_ndim and type1.is_f_contig and
@@ -691,7 +686,6 @@ class NPyIntp(IntType):
 
     def __init__(self, **kwds):
         super(NPyIntp, self).__init__(**kwds)
-        import numpy as np
         ctypes_array = np.empty(0).ctypes.strides
         self.itemsize = ctypes.sizeof(ctypes_array._type_)
 
@@ -877,7 +871,12 @@ void = VoidType()
 ### Public types
 #
 Py_ssize_t = Py_ssize_t_Type()
-npy_intp = NPyIntp()
+
+try:
+    npy_intp = NPyIntp()
+except ImportError:
+    npy_intp = None
+
 size_t = IntType(name="size_t", rank=8.5, itemsize=8, signed=False)
 char = CharType(name="char")
 short = IntType(name="short", rank=2, itemsize=struct_.calcsize('h'))

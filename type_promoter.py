@@ -6,7 +6,6 @@ operations.
 
 import sys
 import copy
-import functools
 
 import minivisitor
 import miniutils

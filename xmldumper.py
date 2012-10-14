@@ -3,6 +3,8 @@ Convert a miniast to an XML document using ElementTree. This allows us to
 write XPath unit tests, or just serialize the AST.
 """
 
+import miniutils
+
 try:
     from lxml import etree
     have_lxml = True
@@ -20,8 +22,11 @@ except ImportError:
                 # normal cElementTree install
                 import cElementTree as etree
             except ImportError:
-                # normal ElementTree install
-                import elementtree.ElementTree as etree
+                try:
+                    # normal ElementTree install
+                    import elementtree.ElementTree as etree
+                except ImportError:
+                    etree = miniutils.UnavailableImport("elementtree")
 
 import minivisitor
 
