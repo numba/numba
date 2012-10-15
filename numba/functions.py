@@ -4,7 +4,6 @@ from numba import *
 from . import naming
 from .minivect import minitypes
 import numba.ast_translate as translate
-import numba.ast_type_inference as type_inference
 from numba import nodes
 
 import meta.decompiler
@@ -32,6 +31,8 @@ def _get_ast(func):
     return meta.decompiler.decompile_func(func)
 
 def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
+    import numba.ast_type_inference as type_inference
+
     ast = _get_ast(func)
     func_signature = minitypes.FunctionType(return_type=restype,
                                             args=argtypes)
@@ -433,3 +434,55 @@ class PyModulo(InternalFunction):
         res.add_incoming(different_sign_res, different_sign_block)
         builder.ret(res)
         return ret_val
+
+#
+### Object conversions to native types
+#
+def create_func(name, restype, argtype, d):
+    class PyLong_FromLong(ExternalFunction):
+        arg_types = [argtype]
+        return_type = restype
+
+    PyLong_FromLong.__name__ = name
+    if restype.is_object:
+        type = argtype
+    else:
+        type = restype
+
+    d[type] = PyLong_FromLong
+    globals()[name] = PyLong_FromLong
+
+_as_long = {}
+def as_long(name, type):
+    create_func(name, type, object_, _as_long)
+
+as_long('PyLong_AsLong', long_)
+as_long('PyLong_AsUnsignedLong', ulong)
+as_long('PyLong_AsLongLong', longlong)
+as_long('PyLong_AsUnsignedLongLong', ulonglong)
+as_long('PyLong_AsSize_t', size_t)
+as_long('PyLong_AsSsize_t', Py_ssize_t)
+
+class PyFloat_FromDouble(ExternalFunction):
+    arg_types = [double]
+    return_type = object_
+
+#
+### Conversion of native types to object
+#
+_from_long = {}
+def from_long(name, type):
+    create_func(name, object_, type, _from_long)
+
+
+from_long('PyLong_FromLong', long_)
+from_long('PyLong_FromUnsignedLong', ulong)
+from_long('PyLong_FromLongLong', longlong)
+from_long('PyLong_FromUnsignedLongLong', ulonglong)
+from_long('PyLong_FromSize_t', size_t)
+from_long('PyLong_FromSsize_t', Py_ssize_t)
+
+class PyFloat_AsDouble(ExternalFunction):
+    arg_types = [object_]
+    return_type = double
+

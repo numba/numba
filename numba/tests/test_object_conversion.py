@@ -26,4 +26,6 @@ class TestConversion(unittest.TestCase):
         assert convert_float(10.5) == 10.5
 
 if __name__ == "__main__":
+#    print convert_float(10.2)
+#    print convert(object(), 10.0)
     unittest.main()

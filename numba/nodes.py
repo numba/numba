@@ -104,6 +104,7 @@ class CoerceToObject(CoercionNode):
 class CoerceToNative(CoercionNode):
     "Coerce objects to native values"
 
+
 class DeferredCoercionNode(CoercionNode):
     """
     Coerce to the type of the given variable. The type of the variable may

@@ -10,7 +10,7 @@ from numba import error
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as _types
 from .symtab import Variable
-from . import visitors, nodes, error
+from . import visitors, nodes, error, functions
 from numba import stdio_util
 
 logger = logging.getLogger(__name__)
@@ -192,9 +192,6 @@ class LateSpecializer(visitors.NumbaTransformer):
             # need coercion
             return node
 
-        if visitchildren:
-            self.generic_visit(node)
-
         node_type = node.node.type
 
         if self.nopython and (node_type.is_object or node.type.is_object):
@@ -202,16 +199,68 @@ class LateSpecializer(visitors.NumbaTransformer):
                                          "nopython context")
 
         if node.dst_type.is_object and not node_type.is_object:
-            return nodes.ObjectTempNode(nodes.CoerceToObject(
+            node = nodes.ObjectTempNode(nodes.CoerceToObject(
                     node.node, node.dst_type, name=node.name))
+            node = self.visit(node)
+            visitchildren = False
         elif node_type.is_object and not node.dst_type.is_object:
-            # Create a tuple for PyArg_ParseTuple
-            # TODO: efficient conversions
-            tup = ast.Tuple(elts=[node.node], ctx=ast.Load())
-            tup = self.visit(tup)
-            return nodes.CoerceToNative(tup, node.dst_type, name=node.name)
+            node = nodes.CoerceToNative(node.node, node.dst_type,
+                                        name=node.name)
+            node = self.visit(node)
+            visitchildren = False
+
+        if visitchildren:
+            self.generic_visit(node)
 
         return node
+
+    def visit_CoerceToObject(self, node):
+        new_node = node
+
+        node_type = node.node.type
+        if node_type.is_numeric:
+            cls = None
+            if node_type.is_int:
+                type = self.context.promote_types(node_type, long_)
+                cls = functions._from_long[type]
+            elif node_type.is_float:
+                cls = functions.PyFloat_FromDouble
+
+            if cls:
+                new_node = self.function_cache.call(cls.__name__, node.node)
+
+        self.generic_visit(new_node)
+        return new_node
+
+    def visit_CoerceToNative(self, node):
+        """
+        Try to perform fast coercion using e.g. PyLong_AsLong(), with a
+        fallback to PyArg_ParseTuple().
+        """
+        new_node = None
+
+        if node.type.is_numeric:
+            cls = None
+            if node.type.is_int:
+                type = self.context.promote_types(node.type, long_)
+                cls = functions._as_long[type]
+            elif node.type.is_float:
+                cls = functions.PyFloat_AsDouble
+
+            if cls:
+                # TODO: error checking!
+                new_node = self.function_cache.call(cls.__name__, node.node)
+
+        if new_node is None:
+            # Create a tuple for PyArg_ParseTuple
+            new_node = node
+            new_node.node = ast.Tuple(elts=[node.node], ctx=ast.Load())
+        else:
+            # Fast coercion
+            new_node = nodes.CoercionNode(new_node, node.type)
+
+        self.generic_visit(new_node)
+        return new_node
 
     def visit_Subscript(self, node):
         if isinstance(node.value, nodes.ArrayAttributeNode):
