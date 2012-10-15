@@ -9,7 +9,7 @@ def convert(obj_var, native_var):
     native_var = obj_var
     return native_var
 
-@jit2(restype=object_, argtypes=[object_])
+@autojit(locals=dict(obj=object_))
 def convert_float(obj):
     var = float_(obj)
     return object_(var)

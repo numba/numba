@@ -614,6 +614,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.symtab['None'] = Variable(numba_types.none, is_constant=True,
                                        constant_value=None)
 
+        arg_types = list(arg_types)
         for local_name, local_type in self.locals.iteritems():
             if local_name not in self.symtab:
                 self.symtab[local_name] = Variable(local_type, is_local=True,
@@ -621,6 +622,12 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             variable = self.symtab[local_name]
             variable.type = local_type
             variable.promotable_type = False
+
+            if local_name in self.argnames:
+                idx = self.argnames.index(local_name)
+                arg_types[idx] = local_type
+
+        self.func_signature.args = tuple(arg_types)
 
     def is_object(self, type):
         return type.is_object or type.is_array
