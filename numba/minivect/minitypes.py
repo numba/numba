@@ -212,7 +212,7 @@ def map_dtype(dtype):
     """
     import numpy as np
 
-    if dtype.byteorder not in ('=', nbo) and dtype.kind in ('iufbc'):
+    if dtype.byteorder not in ('=', nbo, '|') and dtype.kind in ('iufbc'):
         raise minierror.UnmappableTypeError(
                 "Only native byteorder is supported", dtype)
 
