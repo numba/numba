@@ -244,18 +244,22 @@ class LateSpecializer(visitors.NumbaTransformer):
         """
         new_node = None
 
-        if node.type.is_numeric:
+        node_type = node.type
+        if node_type.is_numeric:
             cls = None
-            if node.type.is_int and not node.type == size_t:
-                type = self.context.promote_types(node.type, long_)
+            if node_type == size_t:
+                node_type = ulonglong
+
+            if node_type.is_int: # and not
+                type = self.context.promote_types(node_type, long_)
                 cls = functions._as_long[type]
-                if not node.type.signed or node.type == Py_ssize_t:
+                if not node_type.signed or node_type == Py_ssize_t:
                     # PyLong_AsLong calls __int__, but
                     # PyLong_AsUnsignedLong doesn't...
                     node.node = self.astbuilder.call_pyfunc(long, [node.node])
-            elif node.type.is_float:
+            elif node_type.is_float:
                 cls = functions.PyFloat_AsDouble
-            elif node.type.is_complex:
+            elif node_type.is_complex:
                 cls = functions.PyComplex_AsCComplex
 
             if cls:

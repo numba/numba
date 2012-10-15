@@ -37,7 +37,7 @@ class TestConversion(unittest.TestCase):
             longlong,
             ulong,
             Py_ssize_t,
-            # size_t,
+            size_t,
             float_,
             double,
 #            longdouble,
@@ -58,5 +58,5 @@ class TestConversion(unittest.TestCase):
 if __name__ == "__main__":
 #    print convert_float(10.2)
 #    print convert(object(), 10.0)
-#    print convert_numeric(2.5, complex64)
+#    print convert_numeric(2.5, size_t)
     unittest.main()
