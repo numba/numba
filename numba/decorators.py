@@ -173,10 +173,12 @@ def _autojit(target, nopython):
 def autojit(backend='ast', target='cpu', nopython=False, locals=None):
     if backend not in ('bytecode', 'ast'):
         if callable(backend):
-           return _autojit(target, nopython)(backend)
+            func = backend
+            return autojit(backend='ast', target=target,
+                           nopython=nopython, locals=locals)(func)
         else:
-           raise Exception("The autojit decorator should be called: "
-                           "@autojit(backend='bytecode|ast')")
+            raise Exception("The autojit decorator should be called: "
+                            "@autojit(backend='bytecode|ast')")
 
     if backend == 'bytecode':
         return _autojit(target, nopython)

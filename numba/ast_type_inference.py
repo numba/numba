@@ -457,6 +457,22 @@ class NumpyMixin(object):
 
         return dtype
 
+    def _parse_args(self, call_node, arg_names):
+        result = dict.fromkeys(arg_names)
+
+        # parse positional arguments
+        for i, (arg_name, arg) in enumerate(zip(arg_names, call_node.args)):
+            result[arg_name] = arg
+
+        arg_names = arg_names[i:]
+        if arg_names:
+            # parse keyword arguments
+            for keyword in call_node.keywords:
+                if keyword.arg in result:
+                    result[keyword.arg] = keyword.value
+
+        return result
+
     def _resolve_empty_like(self, node):
         "Parse the result type for np.empty_like calls"
         args = node.args
@@ -489,6 +505,22 @@ class NumpyMixin(object):
             # return a 1D array type of the given dtype
             return dtype.resolve()[:]
 
+    def _resolve_empty(self, node):
+        args = self._parse_args(node, ['shape', 'dtype', 'order'])
+        if not args['shape'] or not args['dtype']:
+            return None
+
+        dtype = self._resolve_attribute_dtype(args['dtype'].variable.type)
+        if dtype is None:
+            return None
+
+        shape_type = args['shape'].variable.type
+        if not shape_type.is_tuple:
+            return None
+
+        ndim = shape_type.size
+        return minitypes.ArrayType(dtype.resolve(), ndim)
+
     def _resolve_numpy_call(self, func_type, node):
         """
         Resolve a call of some numpy attribute or sub-attribute.
@@ -499,6 +531,8 @@ class NumpyMixin(object):
             result_type = self._resolve_empty_like(node)
         elif numpy_func is numpy.arange:
             result_type = self._resolve_arange(node)
+        elif numpy_func in (numpy.empty, numpy.zeros, numpy.ones):
+            result_type = self._resolve_empty(node)
         else:
             result_type = None
 
@@ -1168,7 +1202,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif type.is_struct:
             if not node.attr in type.fielddict:
                 raise error.NumbaError(
-                        node, "Struct %s has no field %r" % (type, attr))
+                        node, "Struct %s has no field %r" % (type, node.attr))
             result_type = type.fielddict[node.attr]
         elif type.is_module and hasattr(type.module, node.attr):
             result_type = self._resolve_attribute(node, type)
@@ -1204,7 +1238,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # todo: in case of unpromotable types, return object?
             self.return_variable.type = self.promote_types_numeric(
                                     self.return_variable.type, type)
-            node.value = nodes.DeferredCoercionNode(value, self.return_variable)
+            node.value = nodes.DeferredCoercionNode(
+                    value, self.return_variable.type)
 
         return node
 
