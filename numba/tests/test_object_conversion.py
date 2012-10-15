@@ -46,7 +46,7 @@ class TestConversion(unittest.TestCase):
         ]
         value = 2.5
         for dst_type in types:
-            print dst_type
+            #print dst_type
             if dst_type.is_int:
                 expected = 2
             else:
@@ -58,5 +58,5 @@ class TestConversion(unittest.TestCase):
 if __name__ == "__main__":
 #    print convert_float(10.2)
 #    print convert(object(), 10.0)
-    print convert_numeric(2.5, longdouble)
-#    unittest.main()
+#    print convert_numeric(2.5, complex64)
+    unittest.main()

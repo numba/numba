@@ -467,6 +467,10 @@ class PyFloat_FromDouble(ExternalFunction):
     arg_types = [double]
     return_type = object_
 
+class PyComplex_FromCComplex(ExternalFunction):
+    arg_types = [complex128]
+    return_type = object_
+
 #
 ### Conversion of native types to object
 #
@@ -486,3 +490,6 @@ class PyFloat_AsDouble(ExternalFunction):
     arg_types = [object_]
     return_type = double
 
+class PyComplex_AsCComplex(ExternalFunction):
+    arg_types = [object_]
+    return_type = complex128

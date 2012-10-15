@@ -226,8 +226,10 @@ class LateSpecializer(visitors.NumbaTransformer):
             if node_type.is_int:
                 type = self.context.promote_types(node_type, long_)
                 cls = functions._from_long[type]
-            if node_type.is_float:
+            elif node_type.is_float:
                 cls = functions.PyFloat_FromDouble
+            elif node_type.is_complex:
+                cls = functions.PyComplex_FromCComplex
 
             if cls:
                 new_node = self.function_cache.call(cls.__name__, node.node)
@@ -251,8 +253,10 @@ class LateSpecializer(visitors.NumbaTransformer):
                     # PyLong_AsLong calls __int__, but
                     # PyLong_AsUnsignedLong doesn't...
                     node.node = self.astbuilder.call_pyfunc(long, [node.node])
-            if node.type.is_float:
+            elif node.type.is_float:
                 cls = functions.PyFloat_AsDouble
+            elif node.type.is_complex:
+                cls = functions.PyComplex_AsCComplex
 
             if cls:
                 # TODO: error checking!
