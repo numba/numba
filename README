@@ -40,10 +40,6 @@ python setup.py install
 git clone https://github.com/numba/Meta.git
 python setup.py install
 
-* Be sure to initialize the minivect submodule (in numba top-level dir)
-git submodule init
-git submodule update
-
 * Build Numba
 python setup.py install
 
