@@ -81,6 +81,9 @@ class LateSpecializer(visitors.NumbaTransformer):
         self.func_signature = func_signature
         self.nopython = nopython
 
+        import ast_type_inference
+        self.astbuilder = ast_type_inference.ASTBuilder()
+
     def visit_FunctionDef(self, node):
         self.generic_visit(node)
 
@@ -223,7 +226,7 @@ class LateSpecializer(visitors.NumbaTransformer):
             if node_type.is_int:
                 type = self.context.promote_types(node_type, long_)
                 cls = functions._from_long[type]
-            elif node_type.is_float:
+            if node_type.is_float:
                 cls = functions.PyFloat_FromDouble
 
             if cls:
@@ -241,10 +244,14 @@ class LateSpecializer(visitors.NumbaTransformer):
 
         if node.type.is_numeric:
             cls = None
-            if node.type.is_int:
+            if node.type.is_int and not node.type == size_t:
                 type = self.context.promote_types(node.type, long_)
                 cls = functions._as_long[type]
-            elif node.type.is_float:
+                if not node.type.signed or node.type == Py_ssize_t:
+                    # PyLong_AsLong calls __int__, but
+                    # PyLong_AsUnsignedLong doesn't...
+                    node.node = self.astbuilder.call_pyfunc(long, [node.node])
+            if node.type.is_float:
                 cls = functions.PyFloat_AsDouble
 
             if cls:

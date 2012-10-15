@@ -460,7 +460,7 @@ as_long('PyLong_AsLong', long_)
 as_long('PyLong_AsUnsignedLong', ulong)
 as_long('PyLong_AsLongLong', longlong)
 as_long('PyLong_AsUnsignedLongLong', ulonglong)
-as_long('PyLong_AsSize_t', size_t)
+#as_long('PyLong_AsSize_t', size_t) # new in py3k
 as_long('PyLong_AsSsize_t', Py_ssize_t)
 
 class PyFloat_FromDouble(ExternalFunction):
@@ -479,7 +479,7 @@ from_long('PyLong_FromLong', long_)
 from_long('PyLong_FromUnsignedLong', ulong)
 from_long('PyLong_FromLongLong', longlong)
 from_long('PyLong_FromUnsignedLongLong', ulonglong)
-from_long('PyLong_FromSize_t', size_t)
+from_long('PyLong_FromSize_t', size_t) # new in 2.6
 from_long('PyLong_FromSsize_t', Py_ssize_t)
 
 class PyFloat_AsDouble(ExternalFunction):

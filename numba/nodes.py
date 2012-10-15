@@ -53,13 +53,12 @@ class CoercionNode(Node):
             # in __init__ being called
             return
 
-        self.node = node
         self.dst_type = dst_type
         self.variable = Variable(dst_type)
         self.type = dst_type
         self.name = name
 
-        self._check_supported_conversion(dst_type, node)
+        self.node = self.verify_conversion(dst_type, node)
 
         if (dst_type.is_object and not node.variable.type.is_object and
                 isinstance(node, ArrayAttributeNode)):
@@ -83,19 +82,18 @@ class CoercionNode(Node):
             return [cls(node, dst_type) for node in node_or_nodes]
         return cls(node_or_nodes, dst_type)
 
-    def _check_supported_conversion(self, dst_type, node):
+    def verify_conversion(self, dst_type, node):
         if ((node.variable.type.is_complex or dst_type.is_complex) and
             (node.variable.type.is_object or dst_type.is_object)):
             if dst_type.is_complex:
                 complex_type = dst_type
-                to = 'to'
             else:
                 complex_type = node.variable.type
-                to = 'from'
 
-            if complex_type.base_type != double:
-                raise error.NumbaError(
-                    node, "Cannot convert %s %s object" % (complex_type, to))
+            if not complex_type == complex128:
+                node = CoercionNode(node, complex128)
+
+        return node
 
 
 class CoerceToObject(CoercionNode):
