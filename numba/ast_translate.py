@@ -214,7 +214,8 @@ class ComplexSupportMixin(object):
         "Promote a complex value to value with a larger or smaller complex type"
         real, imag = self._extract(value)
 
-        src_ltype = src_type.to_llvm(self.context)
+        if dst_type.is_complex:
+            dst_type = dst_type.base_type
         dst_ltype = dst_type.to_llvm(self.context)
 
         real = self.caster.cast(real, dst_ltype)

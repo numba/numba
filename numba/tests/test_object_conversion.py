@@ -40,8 +40,8 @@ class TestConversion(unittest.TestCase):
             # size_t,
             float_,
             double,
-            # longdouble,
-            # complex64,
+#            longdouble,
+            complex64,
             complex128
         ]
         value = 2.5
@@ -58,5 +58,5 @@ class TestConversion(unittest.TestCase):
 if __name__ == "__main__":
 #    print convert_float(10.2)
 #    print convert(object(), 10.0)
-#    print convert_numeric(2.5, ulonglong)
-    unittest.main()
+    print convert_numeric(2.5, longdouble)
+#    unittest.main()
