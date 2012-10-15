@@ -1268,9 +1268,12 @@ class NodeWrapper(ExprNode):
     def __deepcopy__(self, memo):
         kwds = dict(vars(self))
         kwds.pop('opaque_node')
+        kwds.pop('specialize_node_callback')
         kwds = copy.deepcopy(kwds, memo)
         opaque_node = self.specialize_node_callback(self, memo)
-        return type(self)(opaque_node=opaque_node, **kwds)
+        return type(self)(opaque_node=opaque_node,
+                          specialize_node_callback=self.specialize_node_callback,
+                          **kwds)
 
 class BinaryOperationNode(ExprNode):
     "Base class for binary operations"

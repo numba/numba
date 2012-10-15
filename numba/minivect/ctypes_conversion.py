@@ -4,7 +4,17 @@ ctypes function.
 """
 
 import math
-import ctypes
+
+from miniutils import ctypes
+from minitypes import *
+
+try:
+    from ctypes import *
+    _ctypes_func_type = type(ctypes.CFUNCTYPE(ctypes.c_int))
+    _ctypes_pointer_type = type(ctypes.POINTER(ctypes.c_int))
+    _ctypes_array_type = type(ctypes.c_int * 2)
+except ImportError:
+    pass
 
 def convert_to_ctypes(type):
     """
@@ -87,16 +97,11 @@ def convert_to_ctypes(type):
     else:
         raise NotImplementedError(type)
 
-_ctypes_func_type = type(ctypes.CFUNCTYPE(ctypes.c_int))
-_ctypes_pointer_type = type(ctypes.POINTER(ctypes.c_int))
-_ctypes_array_type = type(ctypes.c_int * 2)
-
 def convert_from_ctypes(type):
     """
     Convert a ctypes type to a minitype
     """
-    from minitypes import *
-    from ctypes import *
+    import ctypes
 
     ctypes_map = {
         c_char : char,

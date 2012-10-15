@@ -14,6 +14,7 @@ import treepath
 
 from minitypes import *
 from miniutils import *
+from xmldumper import *
 from specializers import specializers as sps
 from ctypes_conversion import get_data_pointer, convert_to_ctypes
 

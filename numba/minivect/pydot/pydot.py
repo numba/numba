@@ -569,7 +569,7 @@ def find_graphviz():
     return None
 
 
-class Common:
+class Common(object):
     """Common information to several classes.
 
     Should not be directly used, several classes are derived from
@@ -718,7 +718,7 @@ class InvocationException(Exception):
 
 
 
-class Node(object, Common):
+class Node(Common):
     """A graph node.
 
     This class represents a graph's node with all its attributes.
@@ -835,7 +835,7 @@ class Node(object, Common):
 
 
 
-class Edge(object,  Common ):
+class Edge(Common):
     """A graph edge.
 
     This class represents a graph's edge with all its attributes.
@@ -1026,7 +1026,7 @@ class Edge(object,  Common ):
 
 
 
-class Graph(object, Common):
+class Graph(Common):
     """Class representing a graph in Graphviz's dot language.
 
     This class implements the methods to work on a representation
