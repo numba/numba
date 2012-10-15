@@ -10,6 +10,19 @@ import opcode_util
 # ______________________________________________________________________
 
 class BytecodeFlowBuilder (BytecodeIterVisitor):
+    '''Transforms a bytecode vector into a bytecode "flow tree".
+
+    The flow tree is a Python dictionary, described loosely by the
+    following set of productions:
+
+      * `flow_tree` ``:=`` ``{`` `blocks` ``*`` ``}``
+      * `blocks` ``:=`` `block_index` ``:`` ``[`` `bytecode_tree` ``*`` ``]``
+      * `bytecode_tree` ``:=`` ``(`` `opcode_index` ``,`` `opcode` ``,``
+          `opname` ``,`` `arg` ``,`` ``[`` `bytecode_tree` ``*`` ``]`` ``)``
+
+    The primary purpose of this transformation is to simulate the
+    value stack, removing it and any stack-specific opcodes.'''
+
     def __init__ (self, *args, **kws):
         super(BytecodeFlowBuilder, self).__init__(*args, **kws)
         om_items = opcode_util.OPCODE_MAP.items()
@@ -195,6 +208,8 @@ class BytecodeFlowBuilder (BytecodeIterVisitor):
 # ______________________________________________________________________
 
 def build_flow (func):
+    '''Given a Python function, return a bytecode flow tree for that
+    function.'''
     return BytecodeFlowBuilder().visit(opcode_util.get_code_object(func))
 
 # ______________________________________________________________________

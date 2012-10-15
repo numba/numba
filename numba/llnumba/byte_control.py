@@ -11,7 +11,17 @@ from control_flow import ControlFlowGraph
 # ______________________________________________________________________
 
 class ControlFlowBuilder (BenignBytecodeVisitorMixin, BytecodeFlowVisitor):
+    '''Visitor responsible for traversing a bytecode flow object and
+    building a control flow graph (CFG).
+
+    The primary purpose of this transformation is to create a CFG,
+    which is used by later transformers for dataflow analysis.
+    '''
     def visit (self, flow, nargs = 0, *args, **kws):
+        '''Given a bytecode flow, and an optional number of arguments,
+        return a :py:class:`numba.llnumba.control_flow.ControlFlowGraph`
+        instance describing the full control flow of the bytecode
+        flow.'''
         self.nargs = nargs
         ret_val = super(ControlFlowBuilder, self).visit(flow, *args, **kws)
         del self.nargs
@@ -73,6 +83,8 @@ class ControlFlowBuilder (BenignBytecodeVisitorMixin, BytecodeFlowVisitor):
 # ______________________________________________________________________
 
 def build_cfg (func):
+    '''Given a Python function, create a bytecode flow, visit the flow
+    object, and return a control flow graph.'''
     import byte_flow
     return ControlFlowBuilder().visit(
         byte_flow.build_flow(func),

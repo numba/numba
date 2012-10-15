@@ -1,5 +1,8 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
+'''Defines a bytecode based LLVM translator for llnumba code.
+'''
+# ______________________________________________________________________
 # Module imports
 
 import opcode
@@ -113,7 +116,17 @@ class LLVMCaster (object):
 # Class definitions
 
 class LLVMTranslator (BytecodeFlowVisitor):
+    '''Transformer responsible for visiting a set of bytecode flow
+    trees, emitting LLVM code.
+
+    Unlike other translators in :py:mod:`numba.llnumba`, this
+    incorporates the full transformation chain, starting with
+    :py:class:`numba.llnumba.byte_flow.BytecodeFlowBuilder`, then
+    :py:class:`numba.llnumba.byte_control.ControlFlowBuilder`, and
+    then :py:class:`numba.llnumba.phi_injector.PhiInjector`.'''
+
     def __init__ (self, llvm_module = None, *args, **kws):
+        '''Constructor for LLVMTranslator.'''
         super(LLVMTranslator, self).__init__(*args, **kws)
         if llvm_module is None:
             llvm_module = lc.Module.new('Translated_Module_%d' % (id(self),))
@@ -123,6 +136,13 @@ class LLVMTranslator (BytecodeFlowVisitor):
         self.phi_injector = PhiInjector()
 
     def translate (self, function, llvm_type = None, env = None):
+        '''Translate a function to the given LLVM function type.
+
+        If no type is given, then assume the function is of LLVM type
+        "void ()".
+
+        The optional env parameter allows extension of the global
+        environment.'''
         if llvm_type is None:
             llvm_type = lc.Type.function(lvoid, ())
         if env is None:
@@ -495,6 +515,8 @@ class LLVMTranslator (BytecodeFlowVisitor):
 # ______________________________________________________________________
 
 def translate_function (func, lltype, llvm_module = None, **kws):
+    '''Given a function and an LLVM function type, emit LLVM code for
+    that function using a new LLVMTranslator instance.'''
     translator = LLVMTranslator(llvm_module)
     translator.translate(func, lltype, kws)
     return translator

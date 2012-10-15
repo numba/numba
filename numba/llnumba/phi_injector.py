@@ -23,6 +23,23 @@ REF_DEF = def_synth_op('REF_DEF')
 # ______________________________________________________________________
 
 class PhiInjector (BenignBytecodeVisitorMixin, BytecodeFlowVisitor):
+    '''Transformer responsible for modifying a bytecode flow, removing
+    LOAD_FAST and STORE_FAST opcodes, and replacing them with a static
+    single assignment (SSA) representation.
+
+    In order to support SSA, PhiInjector adds the following synthetic
+    opcodes to transformed flows:
+
+      * REF_ARG: Specifically reference an incomming argument value.
+
+      * BUILD_PHI: Build a phi node to disambiguate between several
+        possible definitions at a control flow join.
+
+      * DEFINITION: Unique value definition indexed by the "arg" field
+        in the tuple.
+
+      * REF_DEF: Reference a specific value definition.'''
+
     def visit_cfg (self, cfg, nargs = 0, *args, **kws):
         self.cfg = cfg
         ret_val = self.visit(cfg.blocks, nargs)
@@ -105,6 +122,8 @@ class PhiInjector (BenignBytecodeVisitorMixin, BytecodeFlowVisitor):
 # ______________________________________________________________________
 
 def inject_phis (func):
+    '''Given a Python function, return a bytecode flow object that has
+    been transformed by a fresh PhiInjector instance.'''
     import byte_control
     argcount = byte_control.opcode_util.get_code_object(func).co_argcount
     cfg = byte_control.build_cfg(func)
