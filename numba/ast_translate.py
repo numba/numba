@@ -79,8 +79,9 @@ def pycfunction_new(py_func, func_pointer):
     methoddef.flags = 1 # METH_VARARGS
 
     methoddef_p = ctypes.byref(methoddef)
-    result = PyCFunction_NewEx(methoddef_p, None, None)
-    return result
+    NULL = ctypes.c_void_p()
+    result = PyCFunction_NewEx(methoddef_p, NULL, NULL)
+    return (result, methoddef)
 
 class MethodReference(object):
     def __init__(self, object_var, py_method):
@@ -443,7 +444,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             fp.run(self.lfunc)
 
     def get_ctypes_func(self, llvm=True):
-        # return self.build_wrapper_function()
+        return self.build_wrapper_function()
 
         ee = self.ee
         import ctypes
@@ -496,8 +497,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         t.translate()
 
         # Return a PyCFunctionObject holding the wrapper
-        func_pointer = self.ee.get_pointer_to_function(t.lfunc)
-        return pycfunction_new(self.func, func_pointer)
+        func_pointer = t.ee.get_pointer_to_function(t.lfunc)
+        result, methoddef = pycfunction_new(self.func, func_pointer)
+        return result, methoddef
 
     def visit_FunctionWrapperNode(self, node):
         args_tuple = self.lfunc.args[1]
@@ -522,6 +524,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                name=name, change_bb=False)
         self.generate_assign(self.visit(nodes.NULL_obj), lhs)
         return lhs
+
+    def puts(self, msg):
+        const = nodes.ConstNode(msg, c_string_type)
+        self.visit(self.function_cache.call('puts', const))
 
     def setup_return(self):
         # Assign to this value which will be returned
@@ -1224,7 +1230,7 @@ class ObjectCoercer(object):
         "Get an llvm format string for the given types"
         typestrs = []
         for type in types:
-            if type.is_array:
+            if type.is_array or type.is_object:
                 type = object_
             typestrs.append(self.type_to_buildvalue_str[type])
 

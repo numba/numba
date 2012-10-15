@@ -50,7 +50,7 @@ def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
                                        func_signature, **kwargs)
 
 
-def _compile(context, func, restype=None, argtypes=None, **kwds):
+def _compile(context, func, restype=None, argtypes=None, ctypes=True, **kwds):
     """
     Compile a numba annotated function.
 
@@ -67,7 +67,11 @@ def _compile(context, func, restype=None, argtypes=None, **kwds):
         func_name=func_name, symtab=symtab, **kwds)
     t.translate()
 
-    return func_signature, t.lfunc, t.get_ctypes_func(kwds.get('llvm', True))
+    if ctypes:
+        return func_signature, t.lfunc, t.get_ctypes_func(
+                                        kwds.get('llvm', True))
+    else:
+        return func_signature, t.lfunc, t.build_wrapper_function()
 
 class FunctionCache(object):
     """
@@ -99,7 +103,8 @@ class FunctionCache(object):
 
         return result
 
-    def compile_function(self, func, argtypes, restype=None, **kwds):
+    def compile_function(self, func, argtypes, restype=None,
+                         ctypes=True, **kwds):
         """
         Compile a python function given the argument types. Compile only
         if not compiled already, and only if an annotated numba function
@@ -119,7 +124,8 @@ class FunctionCache(object):
                 func = getattr(func, '_numba_func', func)
                 # numba function, compile
                 func_signature, lfunc, ctypes_func = _compile(
-                                self.context, func, restype, argtypes, **kwds)
+                                self.context, func, restype, argtypes,
+                                ctypes=ctypes, **kwds)
                 self.compiled_functions[func, tuple(func_signature.args)] = (
                                             func_signature, lfunc, ctypes_func)
                 return func_signature, lfunc, ctypes_func

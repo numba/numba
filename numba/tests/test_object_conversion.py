@@ -58,5 +58,5 @@ class TestConversion(unittest.TestCase):
 if __name__ == "__main__":
 #    print convert_float(10.2)
 #    print convert(object(), 10.0)
-#    print convert_numeric(2.5, size_t)
+#    print convert_numeric(2.5, int_)
     unittest.main()

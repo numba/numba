@@ -70,13 +70,26 @@ context.numba_pipeline = ast_type_inference.Pipeline
 function_cache = context.function_cache = functions.FunctionCache(context)
 
 class NumbaFunction(object):
+    """
+    Numba function.
+
+        py_func: original Python function
+        ctypes_func: LLVM function wrapper, callable from Python
+        signature: minitype FunctionType signature
+        lfunc: LLVM function
+        methoddef: PyMethodDef ctypes structure for the wrapper function
+    """
+
     def __init__(self, py_func, wrapper=None, ctypes_func=None, signature=None,
-                 lfunc=None):
+                 lfunc=None, methoddef=None):
         self.py_func = py_func
         self.wrapper = wrapper
         self.ctypes_func = ctypes_func
         self.signature = signature
         self.lfunc = lfunc
+
+        # This attribute must not be reset or deleted!
+        self.__methoddef = methoddef
 
         self.func_name = self.__name__ = py_func.__name__
         self.func_doc = self.__doc__ = py_func.__doc__
@@ -199,11 +212,13 @@ def _jit2(restype=None, argtypes=None, nopython=False,
         func._is_numba_func = True
         result = function_cache.compile_function(func, argtys,
                                                  nopython=nopython,
+                                                 ctypes=False,
                                                  llvm_module=_llvm_module,
                                                  llvm_ee=_llvm_ee,
                                                  **kwargs)
-        signature, lfunc, ctypes_func = result
-        return NumbaFunction(func, ctypes_func=ctypes_func,
+        signature, lfunc, (wrapper_func, methoddef) = result
+        return NumbaFunction(func, ctypes_func=wrapper_func,
+                             methoddef=methoddef,
                              signature=signature, lfunc=lfunc)
 
     return _jit2_decorator
