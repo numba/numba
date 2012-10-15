@@ -1152,6 +1152,7 @@ def if_badval(translator, llvm_result, badval, callback,
 
     return llvm_result
 
+
 class ObjectCoercer(object):
     type_to_buildvalue_str = {
         char: "b",
@@ -1230,7 +1231,8 @@ class ObjectCoercer(object):
         if fmt is not None:
             str = fmt % str
 
-        return self._create_llvm_string(str)
+        result = self._create_llvm_string(str)
+        return result
 
     def buildvalue(self, *largs, **kwds):
         # The caller should check for errors using check_err or by wrapping
@@ -1255,6 +1257,14 @@ class ObjectCoercer(object):
 
         return llvm_result, type
 
+    def float_to_double(self, llvm_result, type):
+        if type == minitypes.float_:
+            ldouble = minitypes.double.to_llvm(self.context)
+            llvm_result = self.translator.caster.cast(llvm_result, ldouble)
+            type = minitypes.double
+
+        return llvm_result, type
+
     def convert_single_struct(self, llvm_result, type):
         types = []
         largs = []
@@ -1270,6 +1280,7 @@ class ObjectCoercer(object):
     def convert_single(self, type, llvm_result, name=''):
         "Generate code to convert an LLVM value to a Python object"
         llvm_result, type = self.npy_intp_to_py_ssize_t(llvm_result, type)
+        llvm_result, type = self.float_to_double(llvm_result, type)
         if type.is_struct:
             return self.convert_single_struct(llvm_result, type)
         elif type.is_complex:
