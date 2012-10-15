@@ -161,13 +161,13 @@ class ASTVectorizeMixin(object):
                               _llvm_module=self.mod,
                               _llvm_ee=self.ee)
         numba_func = dec(self.pyfunc)
-        self.args_restypes.append(numba_func.signature.args +
+        self.args_restypes.append(list(numba_func.signature.args) +
                                    [numba_func.signature.return_type])
         self.signatures.append((restype, argtypes, {}))
         self.translates.append(numba_func)
 
     def get_argtypes(self, numba_func):
-        return numba_func.signature.args + [numba_func.signature.return_type]
+        return list(numba_func.signature.args) + [numba_func.signature.return_type]
 
     def _get_tys_list(self):
         types_lists = []
