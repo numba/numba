@@ -312,6 +312,14 @@ class ObjectTempNode(Node):
         self.variable = Variable(self.type)
         self.incref = incref
 
+class NoneNode(Node):
+    """
+    Return None.
+    """
+
+    type = numba_types.NoneType()
+    variable = Variable(type)
+
 class ObjectTempRefNode(Node):
     """
     Reference an ObjectTempNode, without evaluating its subexpressions.

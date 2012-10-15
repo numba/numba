@@ -479,6 +479,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # PyObject *(*)(PyObject *self, PyObject *args)
         def func(self, args):
             pass
+        func.live_objects = self.func.live_objects
 
         # Create wrapper code generator and wrapper AST
         func.__name__ = '__numba_wrapper_%s' % self.func_name
@@ -514,9 +515,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # Call wrapped function and return coerced result
         lresult = self.builder.call(node.wrapped_function, largs)
-        result_node = nodes.LLVMValueRefNode(node.signature.return_type,
-                                             lresult)
-        return_ = ast.Return(value=nodes.CoerceToObject(result_node, object_))
+        if node.signature.return_type.is_void:
+            # result_node = nodes.NoneNode()
+            result_node = nodes.ObjectInjectNode(None)
+        else:
+            result_node = nodes.LLVMValueRefNode(node.signature.return_type,
+                                                 lresult)
+
+        return_ = ast.Return(
+            value=nodes.CoerceToObject(result_node, object_))
         self.visit(return_)
 
     def _null_obj_temp(self, name):
@@ -1024,6 +1031,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         res = self.builder.call(pyobject_call, largs, name=node.name)
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
+
+    def visit_NoneNode(self, node):
+        try:
+            self.mod.add_global_variable(object_.to_llvm(self.context),
+                                         "Py_None")
+        except llvm.LLVMException:
+            pass
+
+        return self.mod.get_global_variable_named("Py_None")
 
     def visit_NativeCallNode(self, node, largs=None):
         if largs is None:
