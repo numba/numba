@@ -10,6 +10,7 @@ from ._common import _llvm_ty_to_numpy
 from numba.minivect import minitypes
 
 from numbapro._cuda.error import CudaSupportError
+from numbapro._cuda import nvvm
 try:
     from numbapro import _cudadispatch
 except CudaSupportError: # ignore missing cuda dependency
@@ -18,6 +19,7 @@ except CudaSupportError: # ignore missing cuda dependency
 from numbapro.translate import Translate
 from numbapro.vectorize import minivectorize, basic
 
+
 class _CudaStagingCaller(CDefinition):
     def body(self, *args, **kwargs):
         worker = self.depends(self.WorkerDef)
@@ -25,9 +27,16 @@ class _CudaStagingCaller(CDefinition):
         output, ct = args[-2:]
 
         # get current thread index
-        tid_x = self.get_intrinsic(INTR_PTX_READ_TID_X, [])
-        ntid_x = self.get_intrinsic(INTR_PTX_READ_NTID_X, [])
-        ctaid_x = self.get_intrinsic(INTR_PTX_READ_CTAID_X, [])
+        fty_sreg = Type.function(Type.int(), [])
+        def get_ptx_sreg(name):
+            m = self.function.module
+            prefix = 'llvm.nvvm.read.ptx.sreg.'
+            return CFunc(self, m.get_or_insert_function(fty_sreg,
+                                                        name=prefix + name))
+
+        tid_x = get_ptx_sreg('tid.x')
+        ntid_x = get_ptx_sreg('ntid.x')
+        ctaid_x = get_ptx_sreg('ctaid.x')
 
         tid = self.var_copy(tid_x())
         blkdim = self.var_copy(ntid_x())
@@ -38,8 +47,8 @@ class _CudaStagingCaller(CDefinition):
             with ifelse.then():
                 self.ret()
 
-        res = worker(*map(lambda x: x[i], inputs))
-        res.value.calling_convention = CC_PTX_DEVICE
+        res = worker(*map(lambda x: x[i], inputs), inline=True)
+        # res.value.calling_convention = CC_PTX_DEVICE
         output[i].assign(res)
 
         self.ret()
@@ -114,12 +123,14 @@ class CudaVectorize(_common.GenericVectorize):
 
         types_to_name = {}
 
+        lcaller_list = []
         for (restype, argtypes, _), lfunc in zip(self.signatures, lfunclist):
             ret_dtype, arg_dtypes = get_dtypes(restype, argtypes)
             # generate a caller for all functions
             lcaller = self._build_caller(lfunc)
             assert lcaller.module is lfunc.module
             fpm.run(lcaller)    # run the optimizer
+            lcaller_list.append(lcaller)
 
             # unicode problem?
             fname = lcaller.name
@@ -128,28 +139,37 @@ class CudaVectorize(_common.GenericVectorize):
 
             types_to_name[arg_dtypes] = ret_dtype, fname
 
-        # force inlining & trim internal functions
-        pm = PassManager.new()
-        pm.add(PASS_INLINE)
-        pm.run(self.module)
+        #        # force inlining & trim internal functions
+        #        pm = PassManager.new()
+        #        pm.add(PASS_INLINE)
+        #        pm.run(self.module)
 
-        # generate ptx asm for all functions
+        #        # generate ptx asm for all functions
 
-        # Note. Oddly, the llvm ptx backend does not have compute capacility
-        #       beyound 2.0, but it has the streaming-multiprocessor,
-        #       which is the same.
-        cc = 'sm_%d%d' % _cudadispatch.compute_capability()
-        if HAS_PTX:
-            arch = 'ptx%d' % C.intp.width # select by host pointer size
-        elif HAS_NVPTX:
-            arch = {32: 'nvptx', 64: 'nvptx64'}[C.intp.width]
-        else:
-            raise Exception("llvmpy does not have PTX/NVPTX support")
+        #        # Note. Oddly, the llvm ptx backend does not have compute capacility
+        #        #       beyound 2.0, but it has the streaming-multiprocessor,
+        #        #       which is the same.
+        #        cc = 'sm_%d%d' % _cudadispatch.compute_capability()
+        #        if HAS_PTX:
+        #            arch = 'ptx%d' % C.intp.width # select by host pointer size
+        #        elif HAS_NVPTX:
+        #            arch = {32: 'nvptx', 64: 'nvptx64'}[C.intp.width]
+        #        else:
+        #            raise Exception("llvmpy does not have PTX/NVPTX support")
 
-        assert C.intp.width in [32, 64]
-        ptxtm = TargetMachine.lookup(arch, cpu=cc, opt=3) # TODO: ptx64 option
-        ptxasm = ptxtm.emit_assembly(self.module)
+        #        assert C.intp.width in [32, 64]
+        #        ptxtm = TargetMachine.lookup(arch, cpu=cc, opt=3) # TODO: ptx64 option
+        #        ptxasm = ptxtm.emit_assembly(self.module)
 
+
+        nvvm.fix_data_layout(self.module)
+        for lfunc in lcaller_list:
+            nvvm.set_cuda_kernel(lfunc)
+
+        for lfunc in lfunclist:
+            lfunc.delete()
+
+        ptxasm = nvvm.llvm_to_ptx(str(self.module))
         dispatcher = _cudadispatch.CudaUFuncDispatcher(ptxasm, types_to_name,
                                                        device_number)
         return dispatcher
@@ -163,9 +183,9 @@ class CudaVectorize(_common.GenericVectorize):
 
 
     def _build_caller(self, lfunc):
-        lfunc.calling_convention = CC_PTX_DEVICE
-        lfunc.linkage = LINKAGE_INTERNAL       # do not emit device function
+        #lfunc.calling_convention = CC_PTX_DEVICE
+        #lfunc.linkage = LINKAGE_INTERNAL       # do not emit device function
         lcaller_def = _CudaStagingCaller(CFuncRef(lfunc), lfunc.type.pointee)
         lcaller = lcaller_def(self.module)
-        lcaller.calling_convention = CC_PTX_KERNEL
+        #lcaller.calling_convention = CC_PTX_KERNEL
         return lcaller
