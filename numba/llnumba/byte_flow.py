@@ -31,7 +31,8 @@ class BytecodeFlowBuilder (BytecodeIterVisitor):
                           if opname in opcode.opmap)
 
     def _visit_op (self, i, op, arg, opname, pops, pushes, appends):
-        assert pops is not None
+        assert pops is not None, ('%s not well defined in opcode_util.'
+                                  'OPCODE_MAP' % opname)
         if pops:
             if pops < 0:
                 pops = arg - pops - 1
