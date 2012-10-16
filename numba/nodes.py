@@ -494,7 +494,7 @@ class FunctionWrapperNode(Node):
     coerces the return type back to an object.
     """
 
-    _fields = ['return_result']
+    _fields = ['body', 'return_result']
 
     def __init__(self, wrapped_function, signature, orig_py_func, fake_pyfunc):
         self.wrapped_function = wrapped_function

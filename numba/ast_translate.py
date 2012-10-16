@@ -299,7 +299,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def __init__(self, context, func, ast, func_signature, symtab,
                  optimize=True, func_name=None,
-                 llvm_module=None, llvm_ee=None, **kwds):
+                 llvm_module=None, llvm_ee=None,
+                 refcount_args=True, **kwds):
         super(LLVMCodeGenerator, self).__init__(context, func, ast)
 
         self.func_name = func_name or func.__name__
@@ -313,6 +314,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.mod = llvm_module or LLVMContextManager().get_default_module()
         self.ee = llvm_ee or LLVMContextManager().get_execution_engine()
         self.module_utils = translate._LLVMModuleUtils()
+
+        self.refcount_args = refcount_args
 
         import ast_type_inference
         self.astbuilder = ast_type_inference.ASTBuilder()
@@ -351,35 +354,28 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     # __________________________________________________________________________
 
-    def setup_func(self):
-        self.lfunc_type = self.to_llvm(self.func_signature)
-        self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
-        self.nlocals = len(self.fco.co_varnames)
-        # Local variables with LLVM types
-        self._locals = [None] * self.nlocals
-
-        # Add entry block for alloca.
-        entry = self.append_basic_block('entry')
-        self.builder = lc.Builder.new(entry)
-        self.caster = _LLVMCaster(self.builder)
-        self.object_coercer = ObjectCoercer(self)
-
-        for i, (ltype, argname) in enumerate(zip(self.lfunc.args, self.argnames)):
-            ltype.name = argname
+    def _refcount_args(self):
+        for i, (larg, argname) in enumerate(zip(self.lfunc.args,
+                                                 self.argnames)):
+            larg.name = argname
             # Store away arguments in locals
 
             variable = self.symtab[argname]
 
-            stackspace = self.builder.alloca(ltype.type)    # allocate on stack
+            stackspace = self.builder.alloca(larg.type) # allocate on stack
             stackspace.name = 'arg_%s' % argname
             variable.lvalue = stackspace
 
-            self.builder.store(ltype, stackspace) # store arg value
+            self.builder.store(larg, stackspace) # store arg value
             if variable.type.is_object or variable.type.is_array:
                 self.incref(self.builder.load(stackspace))
 
-            self._locals[i] = variable
+    def _init_unrefcount_args(self):
+        for i, (larg, argname) in enumerate(zip(self.lfunc.args,
+                                                 self.argnames)):
+            self.symtab[argname].lvalue = larg
 
+    def _allocate_locals(self):
         for name, var in self.symtab.items():
             # FIXME: 'None' should be handled as a special case (probably).
             if name not in self.argnames and var.is_local:
@@ -391,6 +387,23 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 else:
                     stackspace = self.builder.alloca(var.ltype, name=name)
                 var.lvalue = stackspace
+
+    def setup_func(self):
+        self.lfunc_type = self.to_llvm(self.func_signature)
+        self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
+
+        # Add entry block for alloca.
+        entry = self.append_basic_block('entry')
+        self.builder = lc.Builder.new(entry)
+        self.caster = _LLVMCaster(self.builder)
+        self.object_coercer = ObjectCoercer(self)
+
+        if self.refcount_args:
+            self._refcount_args()
+        else:
+            self._init_unrefcount_args()
+
+        self._allocate_locals()
 
         # TODO: Put current function into symbol table for recursive call
         self.setup_return()
@@ -500,7 +513,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                                      object_))
         wrapper_call.error_return = error_return
         t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
-                              symtab, llvm_module=self.mod, llvm_ee=self.ee)
+                              symtab, llvm_module=self.mod, llvm_ee=self.ee,
+                              refcount_args=False)
         t.translate()
 
         # Return a PyCFunctionObject holding the wrapper
@@ -529,8 +543,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # Coerce and return result
         if node.signature.return_type.is_void:
+            node.body = func_call
             result_node = nodes.ObjectInjectNode(None)
         else:
+            node.body = None
             result_node = func_call
 
         node.return_result = ast.Return(
@@ -583,7 +599,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # Decref local variables
         for name, var in self.symtab.iteritems():
             if var.is_local and (var.type.is_object or var.type.is_array):
-                self.xdecref_temp(var.lvalue)
+                if self.refcount_args or not name in self.argnames:
+                    self.xdecref_temp(var.lvalue)
 
         if self.is_void_return:
             self.builder.ret_void()
