@@ -247,3 +247,9 @@ class CompilationUnit(object):
         self.log = ''
 
         return ptxbuf[:]
+
+def llvm_to_ptx(llvmir, **opts):
+    cu = CompilationUnit()
+    cu.add_module(llvmir)
+    return cu.compile(**opts)
+
