@@ -100,10 +100,10 @@ class NVVM(object):
                 inst.driver = dlloader(path)
                 inst.path = path
             except OSError:
-                raise CudaSupportError(
-                      "CUDA is not supported or the library cannot be found. "
-                      "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
-                      "with the path of the CUDA driver shared library.")
+                raise NvvmSupportError(
+                      "libNVVM cannot be found. "
+                      "Try setting environment variable NUMBAPRO_NVVM "
+                      "with the path of the libNVVM shared library.")
 
             for name, proto in inst._PROTOTYPES.items():
                 func = getattr(inst.driver, name)
