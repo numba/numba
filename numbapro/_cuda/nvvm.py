@@ -248,8 +248,27 @@ class CompilationUnit(object):
 
         return ptxbuf[:]
 
+data_layout = {32 : 'e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64',
+64: 'e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64'}
+
+default_data_layout = data_layout[sizeof(c_void_p) * 8]
+
+
 def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
     cu.add_module(llvmir)
     return cu.compile(**opts)
+
+def set_cuda_kernel(lfunc):
+    from llvm.core import MetaData, MetaDataString, Constant, Type
+    m = lfunc.module
+
+    ops = lfunc, MetaDataString.get(m, "kernel"), Constant.int(Type.int(), 1)
+    md = MetaData.get(m, ops)
+
+    nmd = m.get_or_insert_named_metadata('nvvm.annotations')
+    nmd.add(md)
+
+def fix_data_layout(module):
+    module.data_layout = default_data_layout
 
