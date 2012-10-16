@@ -56,6 +56,30 @@ def sqrt(a, b):
     result = a**2 + b**2
     return cmath.sqrt(result) + 1.6j
 
+def log(a, b):
+    result = a**2 + b**2
+    return cmath.log(result) + 1.6j
+
+def log10(a, b):
+    result = a**2 + b**2
+    return cmath.log10(result) + 1.6j
+
+def exp(a, b):
+    result = a**2 + b**2
+    return cmath.exp(result) + 1.6j
+
+def sin(a, b):
+    result = a**2 + b**2
+    return cmath.sin(result) + 1.6j
+
+def cos(a, b):
+    result = a**2 + b**2
+    return cmath.cos(result) + 1.6j
+
+def atan(a, b):
+    result = a**2 + b**2
+    return cmath.atan(result) + 1.6j
+
 # ______________________________________________________________________
 
 m, n = 0.4 + 1.2j, 5.1 - 0.6j
@@ -133,6 +157,12 @@ class TestASTComplex(test_support.ASTTestCase, TestComplex):
 
     def test_complex_math(self):
         self.assertAlmostEqual(self.autojit(sqrt)(m, n), sqrt(m, n))
+        self.assertAlmostEqual(self.autojit(log)(m, n), log(m, n))
+        self.assertAlmostEqual(self.autojit(log10)(m, n), log10(m, n))
+        self.assertAlmostEqual(self.autojit(exp)(m, n), exp(m, n))
+        self.assertAlmostEqual(self.autojit(sin)(m, n), sin(m, n))
+        self.assertAlmostEqual(self.autojit(cos)(m, n), cos(m, n))
+        self.assertAlmostEqual(self.autojit(atan)(m, n), atan(m, n))
 
 
 # ______________________________________________________________________

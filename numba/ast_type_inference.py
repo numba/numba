@@ -1125,6 +1125,17 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return new_node
 
+    def _infer_complex_math(self, func_type, new_node, node, result_type):
+        "Infer types for cmath.somefunc()"
+        # Check for cmath.{sqrt,sin,etc}
+        args = [nodes.const(1.0, float_)]
+        is_math = self._is_math_function(args, func_type.value)
+        if len(node.args) == 1 and is_math:
+            new_node = nodes.CoercionNode(new_node, complex128)
+            result_type = complex128
+
+        return new_node, result_type
+
     def _resolve_return_type(self, func_type, new_node, node):
         """
         We are performing a call through PyObject_Call, but we may be able
@@ -1134,10 +1145,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if func_type.is_numpy_attribute:
             result_type = self._resolve_numpy_call(func_type, node)
         elif func_type.is_module_attribute and func_type.module is cmath:
-            args = [nodes.const(1.0, float_)]
-            if len(node.args) == 1 and self._is_math_function(args, func_type.value):
-                new_node = nodes.CoercionNode(new_node, complex128)
-                result_type = complex128
+            new_node, result_type = self._infer_complex_math(
+                func_type, new_node , node, result_type)
 
         if result_type is None:
             result_type = object_
