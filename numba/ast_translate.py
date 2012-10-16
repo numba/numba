@@ -314,6 +314,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.ee = llvm_ee or LLVMContextManager().get_execution_engine()
         self.module_utils = translate._LLVMModuleUtils()
 
+        import ast_type_inference
+        self.astbuilder = ast_type_inference.ASTBuilder()
+
         # self.ma_obj = None # What is this?
         self.optimize = optimize
         self.flags = kwds
@@ -444,8 +447,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             fp.run(self.lfunc)
 
     def get_ctypes_func(self, llvm=True):
-        return self.build_wrapper_function()
-
         ee = self.ee
         import ctypes
         sig = self.func_signature
@@ -475,6 +476,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             return prototype(self.func)
 
+    def _build_wrapper_function_ast(self, fake_pyfunc):
+        wrapper_call = nodes.FunctionWrapperNode(self.lfunc,
+                                                 self.func_signature,
+                                                 self.func,
+                                                 fake_pyfunc)
+        return wrapper_call
+
     def build_wrapper_function(self):
         # PyObject *(*)(PyObject *self, PyObject *args)
         def func(self, args):
@@ -487,9 +495,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                            args=[object_, object_])
         symtab = dict(self=Variable(object_, is_local=True),
                       args=Variable(object_, is_local=True))
-        wrapper_call = nodes.FunctionWrapperNode(self.lfunc,
-                                                 self.func_signature,
-                                                 self.func)
+        wrapper_call = self._build_wrapper_function_ast(func)
         error_return = ast.Return(nodes.CoercionNode(nodes.NULL_obj,
                                                      object_))
         wrapper_call.error_return = error_return
@@ -503,6 +509,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return result, methoddef
 
     def visit_FunctionWrapperNode(self, node):
+        import ast_type_inference
+
         args_tuple = self.lfunc.args[1]
         arg_types = node.signature.args
 
@@ -513,8 +521,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             largs = []
 
-        # Call wrapped function and return coerced result
+        # Call wrapped function
         lresult = self.builder.call(node.wrapped_function, largs)
+
+        # Coerce and return result
         if node.signature.return_type.is_void:
             # result_node = nodes.NoneNode()
             result_node = nodes.ObjectInjectNode(None)
@@ -522,9 +532,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             result_node = nodes.LLVMValueRefNode(node.signature.return_type,
                                                  lresult)
 
-        return_ = ast.Return(
-            value=nodes.CoerceToObject(result_node, object_))
-        self.visit(return_)
+        node.return_result = ast.Return(
+                    value=nodes.CoerceToObject(result_node, object_))
+
+        # We need to specialize the return statement, since it may be a
+        # non-trivial coercion (e.g. call a ctypes pointer type for pointer
+        # return types, etc)
+        pipeline = ast_type_inference.Pipeline(self.context, node.fake_pyfunc,
+                                               node, self.func_signature,
+                                               order=['late_specializer'])
+        sig, symtab, return_stmt_ast = pipeline.run_pipeline()
+        self.generic_visit(return_stmt_ast)
 
     def _null_obj_temp(self, name):
         lhs = self.llvm_alloca(llvm_types._pyobject_head_struct_p,
@@ -947,9 +965,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return val
 
     def visit_CoerceToObject(self, node):
+        from_type = node.node.type
         result = self.visit(node.node)
-        if not node.node.type.is_object or node.node.type.is_array:
-            result = self.object_coercer.convert_single(node.node.type, result,
+        if not (from_type.is_object or from_type.is_array):
+            result = self.object_coercer.convert_single(from_type, result,
                                                         name=node.name)
         return result
 

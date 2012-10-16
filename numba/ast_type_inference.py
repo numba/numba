@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 class Pipeline(object):
     def __init__(self, context, func, ast, func_signature,
-                 nopython=False, locals=None, **kwargs):
+                 nopython=False, locals=None, order=None, **kwargs):
         self.context = context
         self.func = func
         self.ast = ast
@@ -39,7 +39,7 @@ class Pipeline(object):
         self.locals = locals
         self.kwargs = kwargs
 
-        self.order = [
+        self.order = order or [
             'type_infer',
             'type_set',
             'transform_for',
@@ -86,12 +86,13 @@ class Pipeline(object):
 
         return self.func_signature, self.symtab, ast
 
-def run_pipeline(context, func, ast, func_signature, **kwargs):
+def run_pipeline(context, func, ast, func_signature,
+                 pipeline=None, **kwargs):
     """
     Run a bunch of AST transformers and visitors on the AST.
     """
-    pipeline = context.numba_pipeline(context, func, ast, func_signature,
-                                      **kwargs)
+    pipeline = pipeline or context.numba_pipeline(context, func, ast,
+                                                  func_signature, **kwargs)
     return pipeline.run_pipeline()
 
 class ASTBuilder(object):

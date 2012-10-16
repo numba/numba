@@ -2,6 +2,7 @@ import ast
 import copy
 import opcode
 import types
+import ctypes
 import __builtin__ as builtins
 
 import numba
@@ -217,6 +218,18 @@ class LateSpecializer(visitors.NumbaTransformer):
 
         return node
 
+    def _get_int_conversion_func(self, type, funcs_dict):
+        type = self.context.promote_types(type, long_)
+        if type in funcs_dict:
+            return funcs_dict[type]
+
+        if type.itemsize == long_.itemsize:
+            types = [ulong, long_]
+        else:
+            types = [ulonglong, longlong]
+
+        return self._get_int_conversion_func(types[type.signed], funcs_dict)
+
     def visit_CoerceToObject(self, node):
         new_node = node
 
@@ -224,8 +237,8 @@ class LateSpecializer(visitors.NumbaTransformer):
         if node_type.is_numeric:
             cls = None
             if node_type.is_int:
-                type = self.context.promote_types(node_type, long_)
-                cls = functions._from_long[type]
+                cls = self._get_int_conversion_func(node_type,
+                                                    functions._from_long)
             elif node_type.is_float:
                 cls = functions.PyFloat_FromDouble
             elif node_type.is_complex:
@@ -233,6 +246,12 @@ class LateSpecializer(visitors.NumbaTransformer):
 
             if cls:
                 new_node = self.function_cache.call(cls.__name__, node.node)
+        elif node_type.is_pointer:
+            # Create ctypes pointer object
+            ctypes_pointer_type = node_type.to_ctypes()
+            args = [nodes.CoercionNode(node.node, int64),
+                    nodes.ObjectInjectNode(ctypes_pointer_type, object_)]
+            new_node = self.astbuilder.call_pyfunc(ctypes.cast, args)
 
         self.generic_visit(new_node)
         return new_node
@@ -251,8 +270,8 @@ class LateSpecializer(visitors.NumbaTransformer):
                 node_type = ulonglong
 
             if node_type.is_int: # and not
-                type = self.context.promote_types(node_type, long_)
-                cls = functions._as_long[type]
+                cls = self._get_int_conversion_func(node_type,
+                                                    functions._as_long)
                 if not node_type.signed or node_type == Py_ssize_t:
                     # PyLong_AsLong calls __int__, but
                     # PyLong_AsUnsignedLong doesn't...
