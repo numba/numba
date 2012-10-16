@@ -6,6 +6,7 @@ Test Numba's ability to generate code that supports complex numbers.
 '''
 # ______________________________________________________________________
 
+import cmath
 import unittest
 
 from numba import *
@@ -51,9 +52,15 @@ def mul(a, b):
 def div(a, b):
     return a / b
 
+def sqrt(a, b):
+    result = a**2 + b**2
+    return cmath.sqrt(result) + 1.6j
+
 # ______________________________________________________________________
 
-class TestComplex (test_support.ByteCodeTestCase):
+m, n = 0.4 + 1.2j, 5.1 - 0.6j
+
+class TestComplex(test_support.ByteCodeTestCase):
     def test_get_real_fn (self):
         num0 = 3 + 2j
         num1 = numpy.complex128(num0)
@@ -106,16 +113,6 @@ class TestComplex (test_support.ByteCodeTestCase):
             self.assertEqual(prod_sum_fn(a, x, b),
                              compiled_prod_sum_fn(a, x, b))
 
-    def arithmetic(self, m, n):
-        self.assertAlmostEqual(self.autojit(add)(m, n), add(m, n))
-        self.assertAlmostEqual(self.autojit(sub)(m, n), sub(m, n))
-        self.assertAlmostEqual(self.autojit(mul)(m, n), mul(m, n))
-        self.assertAlmostEqual(self.autojit(div)(m, n), div(m, n))
-
-    def test_arithmetic_complex(self):
-        m, n = 0.4 + 1.2j, 5.1 - 0.6j
-        self.arithmetic(m, n)
-
 
 class TestASTComplex(test_support.ASTTestCase, TestComplex):
 
@@ -125,10 +122,23 @@ class TestASTComplex(test_support.ASTTestCase, TestComplex):
         m, n = 0.4 + 1.2j, 10
         self.arithmetic(m, n)
 
+    def arithmetic(self, m, n):
+        self.assertAlmostEqual(self.autojit(add)(m, n), add(m, n))
+        self.assertAlmostEqual(self.autojit(sub)(m, n), sub(m, n))
+        self.assertAlmostEqual(self.autojit(mul)(m, n), mul(m, n))
+        self.assertAlmostEqual(self.autojit(div)(m, n), div(m, n))
+
+    def test_arithmetic_complex(self):
+        self.arithmetic(m, n)
+
+    def test_complex_math(self):
+        self.assertAlmostEqual(self.autojit(sqrt)(m, n), sqrt(m, n))
+
 
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+#    TestASTComplex('test_complex_math').debug()
     unittest.main()
 
 

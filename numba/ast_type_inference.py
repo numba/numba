@@ -1,4 +1,6 @@
 import ast
+import math
+import cmath
 import copy
 import opcode
 import types
@@ -339,11 +341,12 @@ class MathMixin(object):
         args = [node, power]
         if pow_type.is_float and mod is None:
             result = self._resolve_intrinsic(args, pow, signature)
-            return nodes.CoercionNode(result, dst_type)
         else:
             if mod is not None:
                 args.append(mod)
-            return self.astbuilder.call_pyfunc(pow, args)
+            result = self.astbuilder.call_pyfunc(pow, args)
+
+        return nodes.CoercionNode(result, dst_type)
 
 
 class NumpyMixin(object):
@@ -820,7 +823,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             variable = self.init_global(node.id)
 
         if variable.type:
-            if variable.type.is_global:
+            if variable.type.is_global or variable.type.is_module:
                 # TODO: look up globals in dict at call time
                 obj = self.func.func_globals[node.name]
                 if not functions.is_numba_func(obj):
@@ -1079,7 +1082,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             func = getattr(builtins, func_name)
         elif func_type.is_global:
             func = self.func.__globals__[func_name]
-        elif func_type.is_numpy_attribute:
+        elif func_type.is_module_attribute:
             func = getattr(func_type.module, func_type.attr)
 
         return func
@@ -1120,6 +1123,26 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             new_node = nodes.ComplexConjugateNode(node.func.value)
             new_node.variable = Variable(func_type.base_type)
 
+        return new_node
+
+    def _resolve_return_type(self, func_type, new_node, node):
+        """
+        We are performing a call through PyObject_Call, but we may be able
+        to infer a more specific return value than 'object'.
+        """
+        result_type = None
+        if func_type.is_numpy_attribute:
+            result_type = self._resolve_numpy_call(func_type, node)
+        elif func_type.is_module_attribute and func_type.module is cmath:
+            args = [nodes.const(1.0, float_)]
+            if len(node.args) == 1 and self._is_math_function(args, func_type.value):
+                new_node = nodes.CoercionNode(new_node, complex128)
+                result_type = complex128
+
+        if result_type is None:
+            result_type = object_
+
+        new_node.variable = Variable(result_type)
         return new_node
 
     def visit_Call(self, node):
@@ -1168,14 +1191,12 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             arg_types = [a.variable.type for a in node.args]
             new_node = self._resolve_external_call(node, func, arg_types)
 
-            if new_node.type.is_object and func_type.is_numpy_attribute:
-                result_type = self._resolve_numpy_call(func_type, node)
-                if result_type is None:
-                    result_type = minitypes.object_
-                new_node.variable = Variable(result_type)
-            elif not func_type.is_object:
+            if not func_type.is_object:
                 raise error.NumbaError(
-                        node, "Cannot call object of type %s" % (func_type,))
+                    node, "Cannot call object of type %s" % (func_type,))
+
+            if new_node.type.is_object:
+                new_node = self._resolve_return_type(func_type, new_node, node)
 
         return new_node
 
@@ -1190,7 +1211,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif type.is_numba_module:
             result_type = self.context.typemapper.from_python(attribute)
         else:
-            result_type = object_
+            result_type = numba_types.ModuleAttributeType(module=type.module,
+                                                          attr=node.attr)
 
         return result_type
 

@@ -247,8 +247,12 @@ def _jit(restype=None, argtypes=None, backend='bytecode', **kws):
         if use_ast:
             return jit2(argtypes=argtypes)(func)
         else:
+            if argtypes is None:
+                argtyps = [double]
+            else:
+                argtyps = argtypes
             t = bytecode_translate.Translate(func, restype=restype or double,
-                                             argtypes=argtypes or [double], **kws)
+                                             argtypes=argtyps, **kws)
             t.translate()
             # print t.lfunc
             __tr_map__[func] = t

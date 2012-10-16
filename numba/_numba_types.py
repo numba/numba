@@ -87,15 +87,9 @@ class ModuleType(NumbaType, minitypes.ObjectType):
         else:
             return 'ModuleType'
 
-class NumpyAttributeType(NumbaType, minitypes.ObjectType):
-    """
-    Type for attributes of a numpy (sub)module.
+class ModuleAttributeType(NumbaType, minitypes.ObjectType):
+    is_module_attribute = True
 
-    Attributes:
-        module: the numpy (sub)module
-        attr: the attribute name (str)
-    """
-    is_numpy_attribute = True
     module = None
     attr = None
 
@@ -105,6 +99,17 @@ class NumpyAttributeType(NumbaType, minitypes.ObjectType):
     @property
     def value(self):
         return getattr(self.module, self.attr)
+
+class NumpyAttributeType(NumbaType, minitypes.ObjectType):
+    """
+    Type for attributes of a numpy (sub)module.
+
+    Attributes:
+        module: the numpy (sub)module
+        attr: the attribute name (str)
+    """
+
+    is_numpy_attribute = True
 
 class MethodType(NumbaType, minitypes.ObjectType):
     """
@@ -157,9 +162,6 @@ class GlobalType(NumbaType, minitypes.ObjectType):
 
 class BuiltinType(NumbaType, minitypes.ObjectType):
     is_builtin = True
-
-class ModuleAttributeType(NumbaType, minitypes.ObjectType):
-    is_module_attr = True
 
 class RangeType(NumbaType):
     is_range = True
