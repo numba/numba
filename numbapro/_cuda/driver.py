@@ -211,7 +211,7 @@ class Driver(object):
 
     _CONTEXTS = {}
 
-    def __new__(cls, overide_path=None):
+    def __new__(cls, override_path=None):
         if cls.__INSTANCE is None:
             cls.__INSTANCE = inst = object.__new__(Driver)
             inst.old_api = False
@@ -227,12 +227,12 @@ class Driver(object):
                 dlloader = CDLL
                 path = '/usr/lib/libcuda.so'
 
-            if not overide_path: # Try to discover cuda driver automatically
-                # Environment variable always overide if present
-                # and overide_path is not defined.
+            if not override_path: # Try to discover cuda driver automatically
+                # Environment variable always override if present
+                # and override_path is not defined.
                 path = os.environ.get('NUMBAPRO_CUDA_DRIVER', path)
             else:
-                path = overide_path
+                path = override_path
 
             # Load the driver
             try:
