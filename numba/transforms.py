@@ -284,6 +284,9 @@ class LateSpecializer(visitors.NumbaTransformer):
             if cls:
                 # TODO: error checking!
                 new_node = self.function_cache.call(cls.__name__, node.node)
+        elif node_type.is_pointer:
+            raise error.NumbaError(
+                    "Obtaining pointers from objects is not yet supported")
 
         if new_node is None:
             # Create a tuple for PyArg_ParseTuple
