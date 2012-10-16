@@ -15,6 +15,7 @@ Contents:
    doc/examples.rst
    doc/pycc.rst
    doc/reference.rst
+   doc/articles.rst
 
 
 Indices and tables
