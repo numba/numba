@@ -14,6 +14,8 @@ from numba.translate import Variable as _Variable
 from numbapro.translate import Translate as _Translate
 from numbapro import _cudadispatch
 from numbapro._cuda.default import device as _cuda_device
+from numbapro._cuda import nvvm
+
 
 _THIS_MODULE = sys.modules[__name__]
 
@@ -57,21 +59,43 @@ class gridDim:
     x = _gridDim_x
     y = _gridDim_y
 
+### The Old way with LLVM PTX and NVPTX
+#_SPECIAL_VALUES = {
+#    _threadIdx_x: _lc.INTR_PTX_READ_TID_X,
+#    _threadIdx_y: _lc.INTR_PTX_READ_TID_Y,
+#    _threadIdx_z: _lc.INTR_PTX_READ_TID_Z,
+
+#    _blockDim_x: _lc.INTR_PTX_READ_NTID_X,
+#    _blockDim_y: _lc.INTR_PTX_READ_NTID_Y,
+#    _blockDim_z: _lc.INTR_PTX_READ_NTID_Z,
+
+#    _blockIdx_x: _lc.INTR_PTX_READ_CTAID_X,
+#    _blockIdx_y: _lc.INTR_PTX_READ_CTAID_Y,
+
+#    _gridDim_x: _lc.INTR_PTX_READ_NCTAID_X,
+#    _gridDim_y: _lc.INTR_PTX_READ_NCTAID_Y,
+#}
+
+def _sreg(name):
+    def wrap(module):
+        fty_sreg =_lc.Type.function(_lc.Type.int(), [])
+        return module.get_or_insert_function(fty_sreg, name=name)
+    return wrap
 
 _SPECIAL_VALUES = {
-    _threadIdx_x: _lc.INTR_PTX_READ_TID_X,
-    _threadIdx_y: _lc.INTR_PTX_READ_TID_Y,
-    _threadIdx_z: _lc.INTR_PTX_READ_TID_Z,
+    _threadIdx_x: _sreg('llvm.nvvm.read.ptx.sreg.tid.x'),
+    _threadIdx_y: _sreg('llvm.nvvm.read.ptx.sreg.tid.y'),
+    _threadIdx_z: _sreg('llvm.nvvm.read.ptx.sreg.tid.z'),
 
-    _blockDim_x: _lc.INTR_PTX_READ_NTID_X,
-    _blockDim_y: _lc.INTR_PTX_READ_NTID_Y,
-    _blockDim_z: _lc.INTR_PTX_READ_NTID_Z,
+    _blockDim_x: _sreg('llvm.nvvm.read.ptx.sreg.ntid.x'),
+    _blockDim_y: _sreg('llvm.nvvm.read.ptx.sreg.ntid.y'),
+    _blockDim_z: _sreg('llvm.nvvm.read.ptx.sreg.ntid.z'),
 
-    _blockIdx_x: _lc.INTR_PTX_READ_CTAID_X,
-    _blockIdx_y: _lc.INTR_PTX_READ_CTAID_Y,
+    _blockIdx_x: _sreg('llvm.nvvm.read.ptx.sreg.ctaid.x'),
+    _blockIdx_y: _sreg('llvm.nvvm.read.ptx.sreg.ctaid.y'),
 
-    _gridDim_x: _lc.INTR_PTX_READ_NCTAID_X,
-    _gridDim_y: _lc.INTR_PTX_READ_NCTAID_Y,
+    _gridDim_x: _sreg('llvm.nvvm.read.ptx.sreg.nctaid.x'),
+    _gridDim_y: _sreg('llvm.nvvm.read.ptx.sreg.nctaid.y'),
 }
 
 _ATTRIBUTABLES = set([threadIdx, blockIdx, blockDim, gridDim, _THIS_MODULE])
@@ -208,38 +232,43 @@ class CudaNumbaFunction(CudaBaseFunction):
         # then remove it
         lfunc.delete()
 
-        wrapper.calling_convention = _lc.CC_PTX_KERNEL
+        #### The Old Way that uses LLVM PTX and NVPTX
+        #    wrapper.calling_convention = _lc.CC_PTX_KERNEL
 
-        # optimize
-        pmb = _lp.PassManagerBuilder.new()
-        pmb.opt_level = 3
+        #    # optimize
+        #    pmb = _lp.PassManagerBuilder.new()
+        #    pmb.opt_level = 3
 
-        pm = _lp.PassManager.new()
+        #    pm = _lp.PassManager.new()
 
-        pm.run(self.module)
+        #    pm.run(self.module)
 
-        device_number = -1
-        # TODO: Too be refacted. Copied from numbapro.vectorize.cuda
-        cc = 'sm_%d%d' % _cuda_device.COMPUTE_CAPABILITY
-        self._cc = cc
+        #    device_number = -1
+        #    # TODO: Too be refacted. Copied from numbapro.vectorize.cuda
+        #    cc = 'sm_%d%d' % _cuda_device.COMPUTE_CAPABILITY
+        #    self._cc = cc
 
-        if _lc.HAS_PTX:
-            arch = 'ptx%d' % _llvm_cbuilder_types.intp.width # select by host pointer size
-        elif _lc.HAS_NVPTX:
-            arch = {32: 'nvptx', 64: 'nvptx64'}[C.intp.width]
-        else:
-            raise Exception("llvmpy does not have PTX/NVPTX support")
+        #    if _lc.HAS_PTX:
+        #        arch = 'ptx%d' % _llvm_cbuilder_types.intp.width # select by host pointer size
+        #    elif _lc.HAS_NVPTX:
+        #        arch = {32: 'nvptx', 64: 'nvptx64'}[C.intp.width]
+        #    else:
+        #        raise Exception("llvmpy does not have PTX/NVPTX support")
 
-        self._arch = arch
+        #    self._arch = arch
 
-        assert _llvm_cbuilder_types.intp.width in [32, 64]
+        #    assert _llvm_cbuilder_types.intp.width in [32, 64]
 
-        # generate PTX
-        ptxtm = _le.TargetMachine.lookup(arch, cpu=cc, opt=3)
-        ptxasm = ptxtm.emit_assembly(self.module)
-        self._ptxasm = ptxasm
+        #    # generate PTX
+        #    ptxtm = _le.TargetMachine.lookup(arch, cpu=cc, opt=3)
+        #    ptxasm = ptxtm.emit_assembly(self.module)
+        #    self._ptxasm = ptxasm
 
-        self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(ptxasm,
+        nvvm.fix_data_layout(self.module)
+        nvvm.set_cuda_kernel(wrapper)
+        self._ptxasm = nvvm.llvm_to_ptx(str(self.module))
+        device_number = -1 # XXX: remove this argument
+        self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(self._ptxasm,
                                                                 func_name,
                                                                 device_number,
                                                                 typemap_string)
@@ -295,8 +324,8 @@ class CudaTranslate(_Translate):
             objarg = self.stack.pop(-1)
             res = getattr(objarg.val, self.names[arg])
             if res in _SPECIAL_VALUES:
-                intr_name = _SPECIAL_VALUES[res]
-                intr = _lc.Function.intrinsic(self.mod, intr_name, [])
+                intr_func_bldr = _SPECIAL_VALUES[res]
+                intr = intr_func_bldr(self.mod)
                 res = self.builder.call(intr, [])
             self.stack.append(_Variable(res))
         else:
