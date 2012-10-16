@@ -581,8 +581,16 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             self.assert_assignable(ret_type, self.return_type)
             self.return_type = self.promote_types(ret_type, self.return_type)
 
-        self.func_signature = minitypes.FunctionType(
-                return_type=self.return_type, args=self.func_signature.args)
+        restype, argtypes = self.return_type, self.func_signature.args
+        self.func_signature = minitypes.FunctionType(return_type=restype,
+                                                     args=argtypes)
+        if restype.is_struct or restype.is_complex:
+            # Change signatures returning complex numbers or structs to
+            # signatures taking a pointer argument to a complex number
+            # or struct
+            #argtypes += (restype,)
+            #restype = void
+            self.func_signature.struct_return = True
 
     def init_global(self, global_name):
         globals = self.func.__globals__

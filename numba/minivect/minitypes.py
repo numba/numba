@@ -726,9 +726,19 @@ class FunctionType(Type):
     subtypes = ['return_type', 'args']
     is_function = True
     is_vararg = False
+    struct_return = False
+
+    def __init__(self, return_type, args, **kwds):
+        super(FunctionType, self).__init__(**kwds)
+        self.return_type = return_type
+        self.args = args
 
     def to_llvm(self, context):
         assert self.return_type is not None
+        if self.struct_return:
+            sig = FunctionType(void, self.args + (self.struct_return_type,))
+            return sig.to_llvm(context)
+
         return lc.Type.function(self.return_type.to_llvm(context),
                                 [arg_type.to_llvm(context)
                                     for arg_type in self.args],
@@ -740,6 +750,13 @@ class FunctionType(Type):
             args.append("...")
 
         return "%s (*)(%s)" % (self.return_type, ", ".join(args))
+
+    @property
+    def struct_return_type(self):
+        # Function returns a struct. This is not properly supported for
+        # different calling conventions in LLVM, so we take an extra argument
+        # pointing to a caller-allocated struct value.
+        return self.return_type.pointer()
 
 class VectorType(Type):
     subtypes = ['element_type']

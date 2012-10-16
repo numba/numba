@@ -49,6 +49,7 @@ class TestExternCall(test_support.ByteCodeTestCase):
 
     def test_numba_calls_numba(self):
         self.assertEqual(func2(3), 8)
+        self.assertEqual(func2(2+3j), (3+3j)*2)
 
 class TestASTExternCall(test_support.ASTTestCase, TestExternCall):
     pass
@@ -56,7 +57,7 @@ class TestASTExternCall(test_support.ASTTestCase, TestExternCall):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    TestASTExternCall('test_call_zeros_like').debug()
+    # TestASTExternCall('test_numba_calls_numba').debug()
     unittest.main()
 
 # ______________________________________________________________________

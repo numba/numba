@@ -522,15 +522,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             largs = []
 
         # Call wrapped function
-        lresult = self.builder.call(node.wrapped_function, largs)
+        args = [nodes.LLVMValueRefNode(arg_type, larg)
+                    for arg_type, larg in zip(arg_types, largs)]
+        func_call = nodes.NativeCallNode(node.signature, args,
+                                         node.wrapped_function)
 
         # Coerce and return result
         if node.signature.return_type.is_void:
-            # result_node = nodes.NoneNode()
             result_node = nodes.ObjectInjectNode(None)
         else:
-            result_node = nodes.LLVMValueRefNode(node.signature.return_type,
-                                                 lresult)
+            result_node = func_call
 
         node.return_result = ast.Return(
                     value=nodes.CoerceToObject(result_node, object_))
@@ -557,7 +558,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def setup_return(self):
         # Assign to this value which will be returned
         self.is_void_return = self.func_signature.return_type.is_void
-        if not self.is_void_return:
+        if self.func_signature.struct_return:
+            self.return_value = self.lfunc.args[-1]
+        elif not self.is_void_return:
             llvm_ret_type = self.func_signature.return_type.to_llvm(self.context)
             self.return_value = self.builder.alloca(llvm_ret_type,
                                                     "return_value")
@@ -752,9 +755,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_Return(self, node):
         if node.value is not None:
-            assert not self.is_void_return
-            retval = self.visit(node.value)
+            value_type = node.value.type
             rettype = self.func_signature.return_type
+
+            retval = self.visit(node.value)
             if rettype.is_object or rettype.is_array or rettype.is_pointer:
                 retval = self.builder.bitcast(retval,
                                               self.return_value.type.pointee)
@@ -1063,7 +1067,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_NativeCallNode(self, node, largs=None):
         if largs is None:
             largs = self.visitlist(node.args)
-        return self.builder.call(node.llvm_func, largs, name=node.name)
+
+        if node.signature.struct_return:
+            return_value = self.alloca(node.signature.return_type)
+            largs.append(return_value)
+
+        result = self.builder.call(node.llvm_func, largs, name=node.name)
+
+        if node.signature.struct_return:
+            result = self.builder.load(return_value)
+
+        return result
 
     def visit_LLVMIntrinsicNode(self, node):
         intr = getattr(llvm.core, 'INTR_' + node.py_func.__name__.upper())
