@@ -6,6 +6,7 @@
 # Module imports
 
 import opcode
+import types
 
 import llvm.core as lc
 
@@ -68,6 +69,9 @@ class LLVMCaster (object):
             ret_val = builder.sitofp(lval1, lty2)
         return ret_val
 
+    def build_int_to_ptr_cast(_, builder, lval1, lty2):
+        return builder.inttoptr(lval1, lty2)
+
     def build_float_to_int_cast(_, builder, lval1, lty2, unsigned = False):
         ret_val = None
         if unsigned:
@@ -83,6 +87,7 @@ class LLVMCaster (object):
         (lc.TYPE_DOUBLE, lc.TYPE_FLOAT) : build_float_trunc,
         (lc.TYPE_INTEGER, lc.TYPE_FLOAT) : build_int_to_float_cast,
         (lc.TYPE_INTEGER, lc.TYPE_DOUBLE) : build_int_to_float_cast,
+        (lc.TYPE_INTEGER, lc.TYPE_POINTER) : build_int_to_ptr_cast,
         (lc.TYPE_FLOAT, lc.TYPE_INTEGER) : build_float_to_int_cast,
         (lc.TYPE_DOUBLE, lc.TYPE_INTEGER) : build_float_to_int_cast,
 
@@ -156,6 +161,8 @@ class LLVMTranslator (BytecodeFlowVisitor):
                    if not name.startswith('_'))
         self.loop_stack = []
         self.llvm_type = llvm_type
+        self.target_function_name = env.get('target_function_name',
+                                            function.__name__)
         self.function = function
         self.code_obj = opcode_util.get_code_object(function)
         func_globals = getattr(function, 'func_globals',
@@ -170,6 +177,7 @@ class LLVMTranslator (BytecodeFlowVisitor):
         del self.cfg
         del self.globals
         del self.code_obj
+        del self.target_function_name
         del self.function
         del self.llvm_type
         del self.loop_stack
@@ -178,7 +186,7 @@ class LLVMTranslator (BytecodeFlowVisitor):
     def enter_flow_object (self, flow):
         super(LLVMTranslator, self).enter_flow_object(flow)
         self.llvm_function = self.llvm_module.add_function(
-            self.llvm_type, self.function.__name__)
+            self.llvm_type, self.target_function_name)
         self.llvm_blocks = {}
         self.llvm_definitions = {}
         self.pending_phis = {}
@@ -195,6 +203,7 @@ class LLVMTranslator (BytecodeFlowVisitor):
         del self.llvm_definitions
         del self.llvm_blocks
         del self.llvm_function
+        if __debug__: print(ret_val)
         return ret_val
 
     def enter_block (self, block):
@@ -353,19 +362,21 @@ class LLVMTranslator (BytecodeFlowVisitor):
         fn = args[0]
         args = args[1:]
         fn_name = getattr(fn, '__name__', None)
-        if isinstance(fn, lc.Type):
+        if isinstance(fn, (types.FunctionType, types.MethodType)):
+            ret_val = [fn(self.builder, *args)]
+        elif isinstance(fn, lc.Value):
+            ret_val = [self.builder.call(fn, args)]
+        elif isinstance(fn, lc.Type):
             if isinstance(fn, lc.FunctionType):
                 ret_val = [self.builder.call(
-                    self.llvm_module.get_or_insert_function(fn, fn_name),
-                    args)]
+                        self.llvm_module.get_or_insert_function(fn, fn_name),
+                        args)]
             else:
                 assert len(args) == 1
                 ret_val = [LLVMCaster.build_cast(self.builder, args[0], fn)]
-        elif fn_name in lc.Builder.__dict__:
-            ret_val = [fn(self.builder, *args)]
         else:
-            raise NotImplementedError("Don't know how to call %s() (%r)!" %
-                                      (fn_name, fn))
+            raise NotImplementedError("Don't know how to call %s() (%r @ %d)!"
+                                      % (fn_name, fn, i))
         return ret_val
 
     def op_CALL_FUNCTION_KW (self, i, op, arg, *args, **kws):
@@ -456,9 +467,15 @@ class LLVMTranslator (BytecodeFlowVisitor):
                                       (py_val,))
         return ret_val
 
+    def op_LOAD_DEREF (self, i, op, arg, *args, **kws):
+        ret_val = self.globals[self.code_obj.co_freevars[arg]]
+        if isinstance(ret_val, lc.Type) and not hasattr(ret_val, '__name__'):
+            ret_val.__name__ = self.code_obj.co_names[arg]
+        return [ret_val]
+
     def op_LOAD_GLOBAL (self, i, op, arg, *args, **kws):
         ret_val = self.globals[self.code_obj.co_names[arg]]
-        if isinstance(fn, lc.Type) and not hasattr(ret_val, '__name__'):
+        if isinstance(ret_val, lc.Type) and not hasattr(ret_val, '__name__'):
             ret_val.__name__ = self.code_obj.co_names[arg]
         return [ret_val]
 
@@ -522,8 +539,8 @@ def translate_function (func, lltype, llvm_module = None, **kws):
     '''Given a function and an LLVM function type, emit LLVM code for
     that function using a new LLVMTranslator instance.'''
     translator = LLVMTranslator(llvm_module)
-    translator.translate(func, lltype, kws)
-    return translator
+    ret_val = translator.translate(func, lltype, kws)
+    return ret_val
 
 # ______________________________________________________________________
 

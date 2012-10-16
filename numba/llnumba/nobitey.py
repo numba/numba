@@ -11,7 +11,7 @@ import llvm.core as lc
 import llvm.ee as le
 
 import bytetype
-
+import byte_translator
 from pyaddfunc import pyaddfunc
 
 LLVM_TO_INT_PARSE_STR_MAP = {
@@ -80,80 +80,54 @@ class NoBitey (object):
         return result
 
     def build_wrapper_function (self, llvm_function, engine = None):
-        manual_linkage = False
-        if self.target_module != llvm_function.module:
-            manual_linkage = True
-            assert engine, ("Execution engine argument currently required for "
-                            "linkage to separate LLVM module.")
-            llvm_function_ptr = self.target_module.add_global_variable(
-                llvm_function.type, llvm_function.name)
-            llvm_function_ptr.initializer = lc.Constant.inttoptr(
-                lc.Constant.int(bytetype.liptr,
-                                engine.get_pointer_to_function(llvm_function)),
-                llvm_function.type)
-            llvm_function_ptr.linkage = lc.LINKAGE_INTERNAL
-        # __________________________________________________
-        _pyobj_p = bytetype.l_pyobject_head_struct_p
-        _void_p = _char_p = bytetype.li8_ptr
-        self.crnt_function = self.target_module.add_function(
-            lc.Type.function(_pyobj_p, (_pyobj_p, _pyobj_p)),
-            llvm_function.name + "_wrapper")
-        entry_block = self.crnt_function.append_basic_block('entry')
-        args_ok_block = self.crnt_function.append_basic_block('args_ok')
-        exit_block = self.crnt_function.append_basic_block('exit')
-        _int32_zero = lc.Constant.int(bytetype.li32, 0)
-        _Py_BuildValue = self.target_module.get_or_insert_function(
-            lc.Type.function(_pyobj_p, [_char_p], True), 'Py_BuildValue')
-        _PyArg_ParseTuple = self.target_module.get_or_insert_function(
-            lc.Type.function(bytetype.lc_int, [_pyobj_p, _char_p], True),
-            'PyArg_ParseTuple')
-        _PyEval_SaveThread = self.target_module.get_or_insert_function(
-            lc.Type.function(_void_p, []), 'PyEval_SaveThread')
-        _PyEval_RestoreThread = self.target_module.get_or_insert_function(
-            lc.Type.function(lc.Type.void(), [_void_p]),
-            'PyEval_RestoreThread')
-        # __________________________________________________
-        # entry:
-        builder = lc.Builder.new(entry_block)
         arg_types = llvm_function.type.pointee.args
-        parse_str = builder.gep(
-            get_string_constant(
-                self.target_module,
-                self.build_parse_string(arg_types)),
-            [_int32_zero, _int32_zero])
-        parse_args = [builder.alloca(arg_ty) for arg_ty in arg_types]
-        parse_args.insert(0, parse_str)
-        parse_args.insert(0, self.crnt_function.args[1])
-        parse_result = builder.call(_PyArg_ParseTuple, parse_args)
-        builder.cbranch(builder.icmp(lc.ICMP_NE, parse_result, _int32_zero),
-                        args_ok_block, exit_block)
+        return_type = llvm_function.type.pointee.return_type
+        li32_0 = lc.Constant.int(bytetype.li32, 0)
+        def get_llvm_function (builder):
+            if self.target_module != llvm_function.module:
+                llvm_function_ptr = self.target_module.add_global_variable(
+                    llvm_function.type, llvm_function.name)
+                llvm_function_ptr.initializer = lc.Constant.inttoptr(
+                    lc.Constant.int(
+                        bytetype.liptr,
+                        engine.get_pointer_to_function(llvm_function)),
+                    llvm_function.type)
+                llvm_function_ptr.linkage = lc.LINKAGE_INTERNAL
+                ret_val = builder.load(llvm_function_ptr)
+            else:
+                ret_val = llvm_function
+            return ret_val
+        def build_parse_args (builder):
+            return [builder.alloca(arg_type) for arg_type in arg_types]
+        def build_parse_string (builder):
+            parse_str = get_string_constant(
+                self.target_module, self.build_parse_string(arg_types))
+            return builder.gep(parse_str, (li32_0, li32_0))
+        def load_target_args (builder, args):
+            return [builder.load(arg) for arg in args]
+        def build_build_string (builder):
+            build_str = get_string_constant(
+                self.target_module, self._build_parse_string(return_type))
+            return builder.gep(build_str, (li32_0, li32_0))
+        handle_abi_casts = self.handle_abi_casts
+        target_function_name = llvm_function.name + "_wrapper"
         # __________________________________________________
-        # args_ok:
-        builder = lc.Builder.new(args_ok_block)
-        thread_state = builder.call(_PyEval_SaveThread, ())
-        target_args = [builder.load(parse_arg) for parse_arg in parse_args[2:]]
-        if manual_linkage:
-            result = builder.call(builder.load(llvm_function_ptr), target_args)
-        else:
-            result = builder.call(llvm_function, target_args)
-        result_cast = self.handle_abi_casts(builder, result)
-        builder.call(_PyEval_RestoreThread, (thread_state,))
-        build_str = builder.gep(
-            get_string_constant(
-                self.target_module,
-                self._build_parse_string(result.type)),
-            [_int32_zero, _int32_zero])
-        py_result = builder.call(_Py_BuildValue, [build_str, result_cast])
-        builder.branch(exit_block)
+        @byte_translator.llnumba(bytetype.l_pyfunc, self.target_module,
+                                 **locals())
+        def _wrapper (self, args):
+            ret_val = l_pyobj_p(0)
+            parse_args = build_parse_args()
+            parse_result = PyArg_ParseTuple(args, build_parse_string(),
+                                            *parse_args)
+            if parse_result != li32(0):
+                thread_state = PyEval_SaveThread()
+                target_args = load_target_args(parse_args)
+                llresult = handle_abi_casts(get_llvm_function()(*target_args))
+                PyEval_RestoreThread(thread_state)
+                ret_val = Py_BuildValue(build_build_string(), llresult)
+            return ret_val
         # __________________________________________________
-        # exit:
-        builder = lc.Builder.new(exit_block)
-        rval = builder.phi(bytetype.l_pyobject_head_struct_p)
-        rval.add_incoming(lc.Constant.null(bytetype.l_pyobject_head_struct_p),
-                          entry_block)
-        rval.add_incoming(py_result, args_ok_block)
-        builder.ret(rval)
-        return self.crnt_function
+        return _wrapper
 
     def wrap_llvm_module (self, llvm_module, engine = None, py_module = None):
         '''
@@ -167,6 +141,7 @@ class NoBitey (object):
             engine = le.ExecutionEngine.new(llvm_module)
         wrappers = [self.build_wrapper_function(func, engine)
                     for func in functions]
+        if __debug__: print(self.target_module)
         if self.target_module != llvm_module:
             engine.add_module(self.target_module)
         py_wrappers = [pyaddfunc(wrapper.name,
@@ -360,11 +335,13 @@ def build_test_module ():
 
 # ______________________________________________________________________
 
-def main (*args):
+def test_wrap_module (arg = None):
     # Build up a module.
     m = build_test_module()
-    wrap_module = NoBitey().wrap_llvm_module_in_python(m)
-    print(m)
+    if arg and arg.lower() == 'separated':
+        wrap_module = NoBitey().wrap_llvm_module_in_python(m)
+    else:
+        wrap_module = NoBitey(m).wrap_llvm_module_in_python(m)
     # Now try running the generated wrappers.
     for py_wf_name in ('add_42_i32', 'add_42_i64', 'add_42_float',
                        'add_42_double'):
@@ -375,6 +352,15 @@ def main (*args):
             assert result == expected, "%r != %r in %r" % (
                 result, expected, py_wf)
     return wrap_module
+
+# ______________________________________________________________________
+
+def main (*args):
+    if args:
+        for arg in args:
+            test_wrap_module(arg)
+    else:
+        test_wrap_module()
 
 if __name__ == "__main__":
     main(*sys.argv[1:])
