@@ -79,7 +79,20 @@ class NoBitey (object):
             result = builder.fpext(result, bytetype.ldouble)
         return result
 
-    def build_wrapper_function (self, llvm_function):
+    def build_wrapper_function (self, llvm_function, engine = None):
+        manual_linkage = False
+        if self.target_module != llvm_function.module:
+            manual_linkage = True
+            assert engine, ("Execution engine argument currently required for "
+                            "linkage to separate LLVM module.")
+            llvm_function_ptr = self.target_module.add_global_variable(
+                llvm_function.type, llvm_function.name)
+            llvm_function_ptr.initializer = lc.Constant.inttoptr(
+                lc.Constant.int(bytetype.liptr,
+                                engine.get_pointer_to_function(llvm_function)),
+                llvm_function.type)
+            llvm_function_ptr.linkage = lc.LINKAGE_INTERNAL
+        # __________________________________________________
         _pyobj_p = bytetype.l_pyobject_head_struct_p
         _void_p = _char_p = bytetype.li8_ptr
         self.crnt_function = self.target_module.add_function(
@@ -119,7 +132,10 @@ class NoBitey (object):
         builder = lc.Builder.new(args_ok_block)
         thread_state = builder.call(_PyEval_SaveThread, ())
         target_args = [builder.load(parse_arg) for parse_arg in parse_args[2:]]
-        result = builder.call(llvm_function, target_args)
+        if manual_linkage:
+            result = builder.call(builder.load(llvm_function_ptr), target_args)
+        else:
+            result = builder.call(llvm_function, target_args)
         result_cast = self.handle_abi_casts(builder, result)
         builder.call(_PyEval_RestoreThread, (thread_state,))
         build_str = builder.gep(
@@ -147,9 +163,10 @@ class NoBitey (object):
                      if not func.name.startswith("_")
                      and not func.is_declaration
                      and func.linkage == lc.LINKAGE_EXTERNAL]
-        wrappers = [self.build_wrapper_function(func) for func in functions]
         if engine is None:
             engine = le.ExecutionEngine.new(llvm_module)
+        wrappers = [self.build_wrapper_function(func, engine)
+                    for func in functions]
         if self.target_module != llvm_module:
             engine.add_module(self.target_module)
         py_wrappers = [pyaddfunc(wrapper.name,
@@ -346,8 +363,8 @@ def build_test_module ():
 def main (*args):
     # Build up a module.
     m = build_test_module()
-    print(m)
     wrap_module = NoBitey().wrap_llvm_module_in_python(m)
+    print(m)
     # Now try running the generated wrappers.
     for py_wf_name in ('add_42_i32', 'add_42_i64', 'add_42_float',
                        'add_42_double'):

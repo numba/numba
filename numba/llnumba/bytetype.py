@@ -13,6 +13,7 @@ li8 = lc.Type.int(8)
 li16 = lc.Type.int(16)
 li32 = lc.Type.int(32)
 li64 = lc.Type.int(64)
+liptr = lc.Type.int(ctypes.sizeof(ctypes.c_void_p) * 8)
 lc_size_t = lc.Type.int(ctypes.sizeof(
         getattr(ctypes, 'c_ssize_t', getattr(ctypes, 'c_size_t'))) * 8)
 lfloat = lc.Type.float()
@@ -25,6 +26,7 @@ lc_long = lc.Type.int(ctypes.sizeof(ctypes.c_long) * 8)
 l_pyobject_head = [lc_size_t, lc.Type.pointer(li32)]
 l_pyobject_head_struct = lc.Type.struct(l_pyobject_head)
 l_pyobj_p = l_pyobject_head_struct_p = lc.Type.pointer(l_pyobject_head_struct)
+l_pyfunc = lc.Type.function(l_pyobj_p, (l_pyobj_p, l_pyobj_p))
 
 strlen = lc.Type.function(lc_size_t, (li8_ptr,))
 strncpy = lc.Type.function(li8_ptr, (li8_ptr, li8_ptr, lc_size_t))

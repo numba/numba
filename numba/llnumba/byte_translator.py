@@ -10,7 +10,6 @@ import opcode
 import llvm.core as lc
 
 import opcode_util
-
 import bytetype
 from bytecode_visitor import BytecodeFlowVisitor
 from byte_flow import BytecodeFlowBuilder
@@ -353,25 +352,30 @@ class LLVMTranslator (BytecodeFlowVisitor):
     def op_CALL_FUNCTION (self, i, op, arg, *args, **kws):
         fn = args[0]
         args = args[1:]
+        fn_name = getattr(fn, '__name__', None)
         if isinstance(fn, lc.Type):
             if isinstance(fn, lc.FunctionType):
                 ret_val = [self.builder.call(
-                    self.llvm_module.get_or_insert_function(fn, fn.__name__),
+                    self.llvm_module.get_or_insert_function(fn, fn_name),
                     args)]
             else:
                 assert len(args) == 1
                 ret_val = [LLVMCaster.build_cast(self.builder, args[0], fn)]
-        elif fn.__name__ in lc.Builder.__dict__:
+        elif fn_name in lc.Builder.__dict__:
             ret_val = [fn(self.builder, *args)]
         else:
-            raise NotImplementedError("Don't know how to call %r!" % (fn,))
+            raise NotImplementedError("Don't know how to call %s() (%r)!" %
+                                      (fn_name, fn))
         return ret_val
 
     def op_CALL_FUNCTION_KW (self, i, op, arg, *args, **kws):
         raise NotImplementedError("LLVMTranslator.op_CALL_FUNCTION_KW")
 
     def op_CALL_FUNCTION_VAR (self, i, op, arg, *args, **kws):
-        raise NotImplementedError("LLVMTranslator.op_CALL_FUNCTION_VAR")
+        args = list(args)
+        var_args = list(args.pop())
+        args.extend(var_args)
+        return self.op_CALL_FUNCTION(i, op, arg, *args, **kws)
 
     def op_CALL_FUNCTION_VAR_KW (self, i, op, arg, *args, **kws):
         raise NotImplementedError("LLVMTranslator.op_CALL_FUNCTION_VAR_KW")
@@ -454,7 +458,7 @@ class LLVMTranslator (BytecodeFlowVisitor):
 
     def op_LOAD_GLOBAL (self, i, op, arg, *args, **kws):
         ret_val = self.globals[self.code_obj.co_names[arg]]
-        if not hasattr(ret_val, '__name__'):
+        if isinstance(fn, lc.Type) and not hasattr(ret_val, '__name__'):
             ret_val.__name__ = self.code_obj.co_names[arg]
         return [ret_val]
 
@@ -520,6 +524,14 @@ def translate_function (func, lltype, llvm_module = None, **kws):
     translator = LLVMTranslator(llvm_module)
     translator.translate(func, lltype, kws)
     return translator
+
+# ______________________________________________________________________
+
+def llnumba (lltype, llvm_module = None, **kws):
+    '''Decorator version of translate_function().'''
+    def _llnumba (func):
+        return translate_function(func, lltype, llvm_module, **kws)
+    return _llnumba
 
 # ______________________________________________________________________
 # Main (self-test) routine

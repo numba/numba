@@ -94,7 +94,7 @@ OPCODE_MAP = {
     'LOAD_LOCALS': (None, None, None),
     'LOAD_NAME': (0, 1, None),
     'MAKE_CLOSURE': (None, None, None),
-    'MAKE_FUNCTION': (None, None, None),
+    'MAKE_FUNCTION': (-2, 1, None),
     'MAP_ADD': (None, None, None),
     'NOP': (0, None, None),
     'POP_BLOCK': (0, None, 1),
