@@ -72,8 +72,19 @@ def drop_in_gdb(addr=None, type='int'):
     os.kill(os.getpid(), signal.SIGINT)
 
 
-#import numbapro.array_expressions
-#try:
-#    import numbapro.cuda
-#except ImportError:
-#    pass
+#
+# This import will modify numba ast translation pipeline and enables
+# array expression on it.
+#
+import numbapro.array_expressions
+
+#
+# This import will modify ast translation pipeline and
+# enables gpu target on it.
+#
+#
+try:
+    import numbapro.cuda
+except ImportError:
+    pass
+
