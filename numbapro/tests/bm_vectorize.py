@@ -3,7 +3,7 @@ import numexpr as ne
 from numba import *
 from numbapro.vectorize import Vectorize
 
-from time import time
+from timing import time
 from math import sin
 
 REPEAT = 60

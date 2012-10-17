@@ -1,7 +1,7 @@
 import numpy as np
 from numba import *
 from numbapro.vectorize.minivectorize import MiniVectorize as Vectorize
-from time import time
+from timing import time
 
 def vector_add(a, b):
     return a + b
