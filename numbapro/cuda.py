@@ -267,10 +267,8 @@ class CudaNumbaFunction(CudaBaseFunction):
         nvvm.fix_data_layout(self.module)
         nvvm.set_cuda_kernel(wrapper)
         self._ptxasm = nvvm.llvm_to_ptx(str(self.module))
-        device_number = -1 # XXX: remove this argument
         self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(self._ptxasm,
                                                                 func_name,
-                                                                device_number,
                                                                 typemap_string)
 
     def __call__(self, *args):

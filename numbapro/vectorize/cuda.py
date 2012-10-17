@@ -48,7 +48,6 @@ class _CudaStagingCaller(CDefinition):
                 self.ret()
 
         res = worker(*map(lambda x: x[i], inputs), inline=True)
-        # res.value.calling_convention = CC_PTX_DEVICE
         output[i].assign(res)
 
         self.ret()
@@ -105,16 +104,9 @@ class CudaVectorize(_common.GenericVectorize):
         self.translates.append(t)
         self.args_restypes.append(argtypes + [restype])
 
-    def _build_ufunc(self, device_number):
-        # quick & dirty tryout
-        # PyCuda should be optional
-        # from pycuda import driver as cudriver
-        # from pycuda.autoinit import device, context # use default
-        # from math import ceil
-
+    def _build_ufunc(self):
         lfunclist = self._get_lfunc_list()
 
-        str(lfunclist[0])
         # setup optimizer for the staging caller
         fpm = FunctionPassManager.new(self.module)
         pmbldr = PassManagerBuilder.new()
@@ -170,12 +162,11 @@ class CudaVectorize(_common.GenericVectorize):
             lfunc.delete()
 
         ptxasm = nvvm.llvm_to_ptx(str(self.module))
-        dispatcher = _cudadispatch.CudaUFuncDispatcher(ptxasm, types_to_name,
-                                                       device_number)
+        dispatcher = _cudadispatch.CudaUFuncDispatcher(ptxasm, types_to_name)
         return dispatcher
 
-    def build_ufunc(self, device_number=-1):
-        dispatcher = self._build_ufunc(device_number)
+    def build_ufunc(self):
+        dispatcher = self._build_ufunc()
         ufunc, lfuncs = minivectorize.fallback_vectorize(
                     basic.BasicVectorize, self.pyfunc, self.signatures,
                     minivect_dispatcher=None, cuda_dispatcher=dispatcher)
@@ -183,9 +174,6 @@ class CudaVectorize(_common.GenericVectorize):
 
 
     def _build_caller(self, lfunc):
-        #lfunc.calling_convention = CC_PTX_DEVICE
-        #lfunc.linkage = LINKAGE_INTERNAL       # do not emit device function
         lcaller_def = _CudaStagingCaller(CFuncRef(lfunc), lfunc.type.pointee)
         lcaller = lcaller_def(self.module)
-        #lcaller.calling_convention = CC_PTX_KERNEL
         return lcaller

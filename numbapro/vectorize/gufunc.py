@@ -354,11 +354,11 @@ class CudaGUFuncVectorize(GUFuncVectorize):
 
         return types
 
-    def build_ufunc(self, device_number=-1):
+    def build_ufunc(self):
         n_funcs = len(self.cuda_vectorizer.signatures)
         lfunclist = [None] * n_funcs # [self.gufunc_from_func.wrapper] * n_funcs
         tyslist = self._get_tys_list()
-        dispatcher = self.cuda_vectorizer._build_ufunc(device_number)
+        dispatcher = self.cuda_vectorizer._build_ufunc()
         self.gufunc_from_func.cuda_kernels = self.cuda_vectorizer.cuda_wrappers
         return self.gufunc_from_func(
             lfunclist, tyslist, self.signature, engine=self.llvm_ee,

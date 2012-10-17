@@ -18,7 +18,7 @@ class CudaUFuncDispatcher(object):
     """
     Invoke the CUDA ufunc specialization for the given inputs.
     """
-    def __init__(self, ptx_code, types_to_name, device_number):
+    def __init__(self, ptx_code, types_to_name):
         cu_module = _cuda.Module(ptx_code)
 
         self.functions = {}
@@ -222,7 +222,7 @@ class CudaNumbaFuncDispatcher(object):
     Invoke the CUDA ufunc specialization for the given inputs.
     """
 
-    def __init__(self, ptx_code, func_name, device_number, typemap):
+    def __init__(self, ptx_code, func_name, typemap):
         cu_module = _cuda.Module(ptx_code)
         self.cu_function = _cuda.Function(cu_module, func_name)
         self.typemap = typemap
