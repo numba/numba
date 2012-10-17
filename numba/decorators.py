@@ -287,9 +287,10 @@ def jit(restype=None, argtypes=None, backend='bytecode', target='cpu',
             raise TypeError, "Cannot use both calling syntax and argtypes keyword"
         argtypes = restype['argtypes']
         restype = restype['restype']
-    elif isinstance(restype, str):
+    elif isinstance(restype, str) and backend != 'bytecode':
         loc = {}
-        signature = eval(restype, loc, globals())
+        types_dict = dict(globals(), d=double)
+        signature = eval(restype, loc, types_dict)
         argtypes = signature['argtypes']
         restype = signature['restype']
     if restype is not None:
