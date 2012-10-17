@@ -109,7 +109,7 @@ class TestTypeInference(unittest.TestCase):
         sig, symtab = infer(_for_loop, [int_, int_, int_])
         self.assertTrue(symtab['acc'].type.is_int)
         self.assertEqual(symtab['value'].type, Py_ssize_t)
-        self.assertEqual(sig.return_type, int_)
+        self.assertEqual(sig.return_type, Py_ssize_t)
 
     def test_type_infer_arange(self):
         sig, symtab = infer(arange, [])

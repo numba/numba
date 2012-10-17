@@ -14,14 +14,14 @@ import unittest
 
 # ______________________________________________________________________
 
-def test_int(arg):
+def if1(arg): # stupid nosetests
     if arg > 0:
         result = 22
     else:
         result = 42
     return result
 
-def test_long(arg):
+def if2(arg):
     if arg > 0:
         result = 22
     else:
@@ -33,13 +33,13 @@ def test_long(arg):
 class TestIf(test_support.ByteCodeTestCase):
     def test_int(self):
         func = self.jit(restype=numba.int_,
-                                 argtypes=[numba.int_])(test_int)
+                                 argtypes=[numba.int_])(if1)
         self.assertEqual(func(-1), 42)
         self.assertEqual(func(1), 22)
 
     def test_long(self):
         func = self.jit(restype=numba.long_,
-                                 argtypes=[numba.long_])(test_long)
+                                 argtypes=[numba.long_])(if2)
         self.assertEqual(func(-1), 42)
         self.assertEqual(func(1), 22)
 # ______________________________________________________________________

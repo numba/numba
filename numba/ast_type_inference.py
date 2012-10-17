@@ -94,6 +94,7 @@ def run_pipeline(context, func, ast, func_signature,
     """
     Run a bunch of AST transformers and visitors on the AST.
     """
+    # print __import__('ast').dump(ast)
     pipeline = pipeline or context.numba_pipeline(context, func, ast,
                                                   func_signature, **kwargs)
     return pipeline.run_pipeline()

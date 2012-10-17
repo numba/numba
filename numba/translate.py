@@ -95,8 +95,8 @@ def pythontype_to_strtype(typ):
 def map_to_strtype(type):
     "Map a minitype or str type to a str type"
     if isinstance(type, minitypes.Type):
-        if __debug__:
-            logger.debug('CONVERTING %r' % (type,))
+#        if __debug__:
+#            logger.debug('CONVERTING %r' % (type,))
         if type.is_float:
             if type.itemsize == 4:
                 return 'float32'
@@ -131,8 +131,8 @@ def map_to_strtype(type):
             type = 'S'
         else:
             raise NotImplementedError(type)
-        if __debug__:
-            logger.debug(repr(type))
+#        if __debug__:
+#            logger.debug(repr(type))
 
     return type
 
@@ -1005,8 +1005,8 @@ class Translate(object):
         """
         self.cfg = LLVMControlFlowGraph.build_cfg(self.fco, self)
         self.cfg.compute_dataflow()
-        if __debug__:
-            logger.debug(self.cfg.pformat())
+#        if __debug__:
+#            logger.debug(self.cfg.pformat())
         is_dead_code = False
         # Filter out the OPNAME+x opcodes, assuming the handler knows
         # what it is doing based on the actual opcode.

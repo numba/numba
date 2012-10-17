@@ -1,7 +1,13 @@
+import os
 from ctypes import *
-from numba.pycc import find_shared_ending
+import subprocess
 
-lib = CDLL('./compile_with_pycc' + find_shared_ending())
+from numba.pycc import find_shared_ending
+from numba.pycc import pycc
+
+modulename = os.path.join(os.path.dirname(__file__), 'compile_with_pycc')
+pycc.main(args=[modulename + '.py'])
+lib = CDLL(modulename + find_shared_ending())
 
 lib.mult.argtypes = [c_double, c_double]
 lib.mult.restype = c_double

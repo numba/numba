@@ -953,7 +953,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                        "for complex numbers: %s" % opname)
         else:
             logging.debug(ast.dump(node))
-            raise Exception(op, node.type, lhs, rhs)
+            raise error.NumbaError(node, op, node.type, lhs, rhs)
 
         return result
 

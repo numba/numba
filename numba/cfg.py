@@ -299,8 +299,8 @@ class ControlFlowGraph (object):
         ret_val = {}
         for local in definition_map.iterkeys():
             ret_val[local] = len(definition_map[local])
-        if __debug__:
-            logger.debug(pprint.pformat(ret_val))
+#        if __debug__:
+#            logger.debug(pprint.pformat(ret_val))
         return ret_val
 
     def phi_needed (self, join):
