@@ -560,7 +560,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # return types, etc)
         pipeline = ast_type_inference.Pipeline(self.context, node.fake_pyfunc,
                                                node, self.func_signature,
-                                               order=['late_specializer'])
+                                               order=['late_specializer',
+                                                      'resolve_coercions'])
         sig, symtab, return_stmt_ast = pipeline.run_pipeline()
         self.generic_visit(return_stmt_ast)
 

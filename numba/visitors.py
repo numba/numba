@@ -69,3 +69,13 @@ class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
 
 class NumbaTransformer(ast.NodeTransformer, NumbaVisitorMixin):
     "Mutating visitor"
+
+class NumbaTransformerAndSignature(NumbaTransformer):
+
+    def __init__(self, context, func, ast, func_signature, nopython=0):
+        super(NumbaTransformerAndSignature, self).__init__(context, func, ast)
+        self.func_signature = func_signature
+        self.nopython = nopython
+
+        import ast_type_inference
+        self.astbuilder = ast_type_inference.ASTBuilder()

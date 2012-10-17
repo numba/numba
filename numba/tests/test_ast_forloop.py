@@ -90,7 +90,8 @@ class TestForLoop(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    unittest.main()
+    for_loop_fn_2(10)
+#    unittest.main()
 
 # ______________________________________________________________________
 # End of test_forloop.py

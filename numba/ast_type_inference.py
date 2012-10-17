@@ -6,7 +6,6 @@ import opcode
 import types
 import __builtin__ as builtins
 
-import llvm.core
 import numba
 from numba import *
 from numba import error, transforms
@@ -16,13 +15,14 @@ from .symtab import Variable
 from . import visitors, nodes, error
 from numba import stdio_util
 from numba._numba_types import is_obj, promote_closest
-# from . import _ext
 
 #stdin, stdout, stderr = _ext.get_libc_file_addrs()
 #stdin = nodes.ConstNode(stdin, void.pointer())
 #stdout = nodes.ConstNode(stdout, void.pointer())
 #stderr = nodes.ConstNode(stderr, void.pointer())
 
+
+import llvm.core
 import numpy
 import numpy as np
 
@@ -48,6 +48,7 @@ class Pipeline(object):
             'transform_for',
             'specialize',
             'late_specializer',
+            'resolve_coercions',
         ]
 
     def type_infer(self, ast):
@@ -77,6 +78,12 @@ class Pipeline(object):
         specializer = transforms.LateSpecializer(self.context, self.func, ast,
                                                  self.func_signature,
                                                  nopython=self.nopython)
+        return specializer.visit(ast)
+
+    def resolve_coercions(self, ast):
+        specializer = transforms.ResolveCoercions(self.context, self.func, ast,
+                                                  self.func_signature,
+                                                  nopython=self.nopython)
         return specializer.visit(ast)
 
     def insert_specializer(self, name, after):
@@ -114,19 +121,12 @@ class ASTBuilder(object):
         func = nodes.ObjectInjectNode(py_func)
         return nodes.ObjectCallNode(None, func, args)
 
-class BuiltinResolverMixin(object):
-    """
-    Resolve builtin calls for type inference.
-    """
 
-    def _expect_n_args(self, func, node, n):
-        if not isinstance(n, tuple):
-            n = (n,)
-
-        if len(node.args) not in n:
-            raise error.NumbaError(node,
-                                   "builtin %s expects %s arguments" %
-                                   (func.__name__, " or ".join(map(str, n))))
+class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
+    """
+    Resolve builtin calls for type inference. Only applies high-level
+    transformations such as type coercions.
+    """
 
     def _resolve_range(self, func, node, argtype):
         arg_type = minitypes.Py_ssize_t
@@ -197,36 +197,26 @@ class BuiltinResolverMixin(object):
 
     def _resolve_abs(self, func, node, argtype):
         self._expect_n_args(func, node, 1)
-        if argtype.is_float:
-            return self._resolve_math_call(node, abs)
-        elif argtype.is_int:
-            if argtype.signed:
-                type = promote_closest(self.context, argtype, [long_, longlong])
-                funcs = {long_: 'labs', longlong: 'llabs'}
-                result = self.function_cache.call(funcs[type], node.args[0])
-                return nodes.CoercionNode(result, argtype)
-            else:
-                return node.args[0]
-        elif argtype.is_complex:
-            result = self.astbuilder.call_pyfunc(func, node.args)
-            return nodes.CoercionNode(result, double)
+        if argtype.is_complex:
+            dst_type = double
+        else:
+            dst_type = argtype
 
-        # TODO: generate efficient inline code
-        return None
+        node.variable = Variable(argtype)
+        return nodes.CoercionNode(node, dst_type)
 
     def _resolve_round(self, func, node, argtype):
         self._expect_n_args(func, node, (1, 2))
-        if self._is_math_function(node.args, round):
-            # round() always returns a float
-            return self._resolve_math_call(node, round,
-                                           coerce_to_input_type=False)
+        if argtype.is_float:
+            dst_type = argtype
+        elif argtype.is_int and (len(node.args) == 1 or
+                                    self._is_math_function(node.args, round)):
+            dst_type = argtype
+        else:
+            dst_type = object_
 
-        # TODO: generate efficient inline code
-        return None
-
-    def _resolve_pow(self, func, node, argtype):
-        self._expect_n_args(func, node, (2, 3))
-        return self.pow(*node.args)
+        node.variable = Variable(dst_type)
+        return nodes.CoercionNode(node, double)
 
     def _resolve_globals(self, func, node, argtype):
         self._expect_n_args(func, node, 0)
@@ -235,134 +225,6 @@ class BuiltinResolverMixin(object):
     def _resolve_locals(self, func, node, argtype):
         self._expect_n_args(func, node, 0)
         raise error.NumbaError("locals() is not supported in numba functions")
-
-    def _resolve_builtin_call(self, node, func):
-        resolver = getattr(self, '_resolve_' + func.__name__, None)
-        if resolver is not None:
-            # Pass in the first argument type
-            argtype = None
-            if len(node.args) >= 1:
-                argtype = node.args[0].variable.type
-
-            result = resolver(func, node, argtype)
-            if result is not None:
-                return result
-
-        return self.astbuilder.call_pyfunc(func, node.args)
-
-
-class MathMixin(object):
-    """
-    Resolve calls to math functions.
-    """
-
-    # sin(double), sinf(float), sinl(long double)
-    libc_math_funcs = [
-        'sin',
-        'cos',
-        'tan',
-        'acos',
-        'asin',
-        'atan',
-        'atan2',
-        'sinh',
-        'cosh',
-        'tanh',
-        'asinh',
-        'acosh',
-        'atanh',
-        'expm1',
-        'log2',
-        'fabs',
-        'pow',
-        'erfc',
-        'ceil',
-        'rint',
-        'round',
-    ]
-
-    def get_funcname(self, py_func):
-        if py_func is np.abs:
-            return 'abs'
-        elif py_func is np.round:
-            return 'round'
-
-        return py_func.__name__
-
-    def _is_intrinsic(self, py_func):
-        "Whether the math function is available as an llvm intrinsic"
-        intrinsic_name = 'INTR_' + self.get_funcname(py_func).upper()
-        is_intrinsic = hasattr(llvm.core, intrinsic_name)
-        return is_intrinsic
-
-    def _is_math_function(self, func_args, py_func):
-        if len(func_args) > 1 or py_func is None:
-            return False
-
-        type = func_args[0].variable.type
-        is_intrinsic = self._is_intrinsic(py_func)
-        is_math = self.get_funcname(py_func) in self.libc_math_funcs
-
-        return (type.is_float or type.is_int) and (is_intrinsic or is_math)
-
-    def _resolve_intrinsic(self, args, py_func, signature):
-        return nodes.LLVMIntrinsicNode(signature, args, None, py_func)
-
-    def math_suffix(self, name, type):
-        if name == 'abs':
-            name = 'fabs'
-
-        if type.itemsize == 4:
-            name += 'f' # sinf(float)
-        elif type.itemsize == 16:
-            name += 'l' # sinl(long double)
-        return name
-
-    def _resolve_libc_math(self, call_node, py_func, signature, type):
-        name = self.math_suffix(self.get_funcname(py_func), type)
-        return nodes.MathCallNode(signature, call_node.args, llvm_func=None,
-                                  py_func=py_func, name=name)
-
-    def _resolve_math_call(self, call_node, py_func, coerce_to_input_type=True):
-        "Resolve calls to math functions to llvm.log.f32() etc"
-        # signature is a generic signature, build a correct one
-        orig_type = type = call_node.args[0].variable.type
-        if not type.is_float:
-            type = double
-        signature = minitypes.FunctionType(return_type=type, args=[type])
-        if self._is_intrinsic(py_func):
-            result = self._resolve_intrinsic(call_node.args, py_func, signature)
-        else:
-            result = self._resolve_libc_math(call_node, py_func, signature, type)
-
-        if coerce_to_input_type:
-            return nodes.CoercionNode(result, orig_type)
-        else:
-            return result
-
-    def _binop_type(self, x, y):
-        x_type = x.variable.type
-        y_type = y.variable.type
-        dst_type = self.promote_types(x_type, y_type)
-        type = dst_type
-        if type.is_int:
-            type = double
-
-        signature = minitypes.FunctionType(return_type=type, args=[type, type])
-        return dst_type, type, signature
-
-    def pow(self, node, power, mod=None):
-        name = 'pow'
-        dst_type, pow_type, signature = self._binop_type(node, power)
-        args = [node, power]
-        if pow_type.is_float and mod is None:
-            result = self._resolve_intrinsic(args, pow, signature)
-        else:
-            if mod is not None:
-                args.append(mod)
-            result = self.astbuilder.call_pyfunc(pow, args)
-
-        return nodes.CoercionNode(result, dst_type)
 
 
 class NumpyMixin(object):
@@ -559,7 +421,7 @@ class NumpyMixin(object):
         return result_type
 
 class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
-                  NumpyMixin, MathMixin):
+                  NumpyMixin, transforms.MathMixin):
     """
     Type inference. Initialize with a minivect context, a Python ast,
     and a function type with a given or absent, return type.
@@ -1130,7 +992,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                         call_node.args, call_node.keywords,
                                         py_func)
 
-
     def _resolve_method_calls(self, func_type, new_node, node):
         "Resolve special method calls"
         if ((func_type.base_type.is_complex or
@@ -1194,7 +1055,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         new_node = None
         if func_type.is_builtin:
             # Call to Python built-in function
+            node.variable = Variable(object_)
             new_node = self._resolve_builtin_call(node, func)
+            if new_node is None:
+                new_node = node
         elif func_type.is_function:
             # Native function call
             new_node = nodes.NativeCallNode(func_variable.type, node.args,
@@ -1204,11 +1068,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             new_node = self._resolve_method_calls(func_type, new_node, node)
 
         elif func_type.is_ctypes_function:
+            # Call to ctypes function
             new_node = nodes.CTypesCallNode(
                     func_type.signature, node.args, func_type,
                     py_func=func_type.ctypes_func)
 
         elif func_type.is_cast:
+            # Call of a numba type, like double(value)
             if node.keywords:
                 raise error.NumbaError("Cast function %s does not take "
                                        "keyword arguments" % func_type.dst_type)

@@ -1,3 +1,4 @@
+import __builtin__
 import math
 import copy
 import types
@@ -176,6 +177,11 @@ class GlobalType(NumbaType, minitypes.ObjectType):
 
 class BuiltinType(NumbaType, minitypes.ObjectType):
     is_builtin = True
+
+    def __init__(self, name, **kwds):
+        super(BuiltinType, self).__init__(**kwds)
+        self.name = name
+        self.func = getattr(__builtin__, name)
 
 class RangeType(NumbaType):
     is_range = True

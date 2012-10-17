@@ -37,8 +37,8 @@ class CoercionNode(Node):
 
     def __new__(cls, node, dst_type, name=''):
         type = getattr(node, 'type', None) or node.variable.type
-        if type == dst_type:
-            return node
+        #if type == dst_type:
+        #    return node
 
         if isinstance(node, ConstNode) and dst_type.is_numeric:
             node.cast(dst_type)
@@ -224,11 +224,23 @@ class NativeCallNode(FunctionCallNode):
             self.args[i] = CoercionNode(self.args[i], dst_type,
                                         name='func_%s_arg%d' % (self.name, i))
 
+class MathNode(Node):
+    """
+    Represents a high-level call to a math function.
+    """
+
+    def __init__(self, py_func, signature, arg, **kwargs):
+        super(MathNode, self).__init__(**kwargs)
+        self.py_func = py_func
+        self.signature = signature
+        self.arg = arg
+
+
 class LLVMIntrinsicNode(NativeCallNode):
     "Call an llvm intrinsic function"
 
 class MathCallNode(NativeCallNode):
-    "Call a math function"
+    "Low level call a libc math function"
 
 class CTypesCallNode(NativeCallNode):
     "Call a ctypes function"
