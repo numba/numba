@@ -362,6 +362,9 @@ class Type(miniutils.ComparableObjectMixin):
     def comparison_type_list(self):
         return self.subtype_list
 
+    def _is_object(self, context):
+        return context.is_object(self)
+
     def __eq__(self, other):
         # Don't use isinstance here, compare on exact type to be consistent
         # with __hash__. Override where sensible

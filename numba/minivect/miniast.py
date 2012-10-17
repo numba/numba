@@ -304,6 +304,9 @@ class Context(object):
         graphviz_graph = visitor.visit(node)
         return graphviz_graph.to_string()
 
+    def is_object(self, type):
+        return isinstance(type, minitypes.ObjectType)
+
 class CContext(Context):
     "Set defaults for C code generation."
 
