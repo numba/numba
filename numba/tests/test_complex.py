@@ -92,6 +92,16 @@ def absolute(a, b):
     result = a**2 + b**2
     return abs(result) + 1.6j
 
+def mandel(x, y, max_iters):
+    i = 0
+    z = 0.0j
+    for i in range(max_iters):
+        z = z**2 + (x + y*1j)
+        if abs(z**2) >= 4:
+            return i
+
+    return 255
+
 # ______________________________________________________________________
 
 m, n = 0.4 + 1.2j, 5.1 - 0.6j
@@ -179,11 +189,13 @@ class TestASTComplex(test_support.ASTTestCase, TestComplex):
         self.assertAlmostEqual(self.autojit(asinh)(m, n), asinh(m, n))
         self.assertAlmostEqual(self.autojit(absolute)(m, n), absolute(m, n))
 
+    def test_mandel(self):
+        self.assertEqual(self.autojit(mandel)(-1, -1, 20), 2)
+        self.assertEqual(mandel(-1, -1, 20), 2)
 
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    TestASTComplex('test_complex_math').debug()
     unittest.main()
 
 
