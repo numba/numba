@@ -5,6 +5,7 @@ from numba import llvm_types
 import numba.decorators
 from numba.minivect import minitypes
 
+from llvm.core import Type, inline_function
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm_cbuilder import builder
@@ -303,12 +304,12 @@ class CudaVectorize(cuda.CudaVectorize):
 
     def _build_caller(self, lfunc):
         assert self.module is lfunc.module
-        lfunc.calling_convention = llvm.core.CC_PTX_DEVICE
-        lfunc.linkage = llvm.core.LINKAGE_INTERNAL # do not emit device function
+        # lfunc.calling_convention = llvm.core.CC_PTX_DEVICE
+        # lfunc.linkage = llvm.core.LINKAGE_INTERNAL # do not emit device function
         lcaller_def = create_kernel_wrapper(lfunc)
         lcaller = lcaller_def(self.module)
         lcaller.verify()
-        lcaller.calling_convention = llvm.core.CC_PTX_KERNEL
+        # lcaller.calling_convention = llvm.core.CC_PTX_KERNEL
         self.cuda_wrappers.append(lcaller)
         # print lcaller
         return lcaller
@@ -387,9 +388,16 @@ def create_kernel_wrapper(kernel):
 
         def body(self, args, dimensions, steps, arylens, count):
             # get current thread index
-            tid_x = self.get_intrinsic(llvm.core.INTR_PTX_READ_TID_X, [])
-            ntid_x = self.get_intrinsic(llvm.core.INTR_PTX_READ_NTID_X, [])
-            ctaid_x = self.get_intrinsic(llvm.core.INTR_PTX_READ_CTAID_X, [])
+            fty_sreg = Type.function(Type.int(), [])
+            def get_ptx_sreg(name):
+                m = self.function.module
+                prefix = 'llvm.nvvm.read.ptx.sreg.'
+                return CFunc(self, m.get_or_insert_function(fty_sreg,
+                                                            name=prefix + name))
+
+            tid_x = get_ptx_sreg('tid.x')
+            ntid_x = get_ptx_sreg('ntid.x')
+            ctaid_x = get_ptx_sreg('ctaid.x')
 
             tid = self.var_copy(tid_x())
             blkdim = self.var_copy(ntid_x())
@@ -411,8 +419,9 @@ def create_kernel_wrapper(kernel):
                 ary.dimensions.assign(dimensions[i])
                 ary.strides.assign(steps[i])
 
-            self.builder.call(kernel, [x.handle for x in pyarys])
+            kerncall = self.builder.call(kernel, [x.handle for x in pyarys])
             self.ret()
+            inline_function(kerncall)
 
         @classmethod
         def specialize(cls):
