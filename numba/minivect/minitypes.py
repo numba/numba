@@ -626,8 +626,15 @@ class IntType(NumericType):
     signed = True
     rank = 4
     itemsize = 4
+    typecode = None
 
     kind = INT_KIND
+
+    def __init__(self, typecode=None, **kwds):
+        super(IntType, self).__init__(**kwds)
+        self.typecode = typecode
+        if typecode is not None:
+            self.itemsize = struct_.calcsize(typecode)
 
     def to_llvm(self, context):
         if self.itemsize == 1:
@@ -800,8 +807,8 @@ class VectorType(Type):
             else:
                 raise NotImplementedError
 
-def _sort_key(keyvalue):
-    field_name, field_type = keyvalue
+
+def _sort_types_key(field_type):
     if field_type.is_complex:
         return field_type.base_type.rank * 2
     elif field_type.is_numeric or field_type.is_struct:
@@ -814,6 +821,10 @@ def _sort_key(keyvalue):
         return 8
     else:
         return 1
+
+def _sort_key(keyvalue):
+    field_name, field_type = keyvalue
+    return _sort_types_key(field_type)
 
 def sort_types(types_dict):
     # reverse sort on rank, forward sort on name
@@ -905,21 +916,19 @@ except ImportError:
     npy_intp = None
 
 size_t = IntType(name="size_t", rank=8.5, itemsize=8, signed=False)
-char = CharType(name="char")
-short = IntType(name="short", rank=2, itemsize=struct_.calcsize('h'))
-int_ = IntType(name="int", rank=4, itemsize=struct_.calcsize('i'))
-long_ = IntType(name="long", rank=5, itemsize=struct_.calcsize('l'))
-longlong = IntType(name="PY_LONG_LONG", rank=8, itemsize=struct_.calcsize('q'))
+char = CharType(name="char", typecode='b')
+short = IntType(name="short", rank=2, typecode='h')
+int_ = IntType(name="int", rank=4, typecode='i')
+long_ = IntType(name="long", rank=5, typecode='l')
+longlong = IntType(name="PY_LONG_LONG", rank=8, typecode='q')
 
-uchar = CharType(name="unsigned char", signed=False)
+uchar = CharType(name="unsigned char", signed=False, typecode='B')
 ushort = IntType(name="unsigned short", rank=2.5,
-                 itemsize=struct_.calcsize('H'), signed=False)
-uint = IntType(name="unsigned int", rank=4.5,
-               itemsize=struct_.calcsize('I'), signed=False)
-ulong = IntType(name="unsigned long", rank=5.5,
-                itemsize=struct_.calcsize('L'), signed=False)
+                 typecode='H', signed=False)
+uint = IntType(name="unsigned int", rank=4.5, typecode='I', signed=False)
+ulong = IntType(name="unsigned long", rank=5.5, typecode='L', signed=False)
 ulonglong = IntType(name="unsigned PY_LONG_LONG", rank=8.5,
-                    itemsize=struct_.calcsize('Q'), signed=False)
+                    typecode='Q', signed=False)
 
 bool_ = BoolType()
 object_ = ObjectType()
@@ -945,6 +954,29 @@ complex128 = ComplexType(name="complex128", base_type=float64,
                          rank=18, itemsize=16)
 complex256 = ComplexType(name="complex256", base_type=float128,
                          rank=20, itemsize=32)
+
+integral = []
+native_integral = []
+floating = []
+complextypes = []
+
+for typename in __all__:
+    minitype = globals()[typename]
+    if minitype.is_int:
+        integral.append(minitype)
+    elif minitype.is_float:
+        floating.append(minitype)
+    elif minitype.is_complex:
+        complextypes.append(minitype)
+
+numeric = integral + floating + complextypes
+native_integral.extend((Py_ssize_t, size_t))
+
+integral.sort(key=_sort_types_key)
+native_integral = [minitype for minitype in integral
+                                if minitype.typecode is not None]
+floating.sort(key=_sort_types_key)
+complextypes.sort(key=_sort_types_key)
 
 def get_utility():
     import numpy
