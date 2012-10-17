@@ -17,6 +17,7 @@ from numba import *
 from . import visitors, nodes, llvm_types
 from .minivect import minitypes
 from numba import ndarray_helpers, translate, error
+from numba._numba_types import is_obj
 
 import logging
 logger = logging.getLogger(__name__)
@@ -505,7 +506,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # Create wrapper code generator and wrapper AST
         func.__name__ = '__numba_wrapper_%s' % self.func_name
         signature = minitypes.FunctionType(return_type=object_,
-                                           args=[object_, object_])
+                                           args=[void.pointer(), object_])
         symtab = dict(self=Variable(object_, is_local=True),
                       args=Variable(object_, is_local=True))
         wrapper_call = self._build_wrapper_function_ast(func)
@@ -550,7 +551,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             result_node = func_call
 
         node.return_result = ast.Return(
-                    value=nodes.CoerceToObject(result_node, object_))
+                    value=nodes.CoercionNode(result_node, object_))
 
         # We need to specialize the return statement, since it may be a
         # non-trivial coercion (e.g. call a ctypes pointer type for pointer

@@ -19,6 +19,9 @@ __all__ = minitypes.__all__ + [
     'f4', 'f8', 'f16', 'c8', 'c16', 'c32' 
 ]
 
+def is_obj(type):
+    return type.is_object or type.is_array
+
 class NumbaType(minitypes.Type):
     is_numba_type = True
 
@@ -100,7 +103,7 @@ class ModuleAttributeType(NumbaType, minitypes.ObjectType):
     def value(self):
         return getattr(self.module, self.attr)
 
-class NumpyAttributeType(NumbaType, minitypes.ObjectType):
+class NumpyAttributeType(ModuleAttributeType):
     """
     Type for attributes of a numpy (sub)module.
 

@@ -6,6 +6,7 @@ Unit tests checking on Numba's code generation for Python/Numpy C-API calls.
 '''
 # ______________________________________________________________________
 
+import sys
 import unittest
 
 from numba import *
@@ -39,7 +40,11 @@ class TestExternCall(test_support.ByteCodeTestCase):
         testarr = numpy.array([1., 2, 3, 4, 5], dtype=numpy.double)
         testfn = self.jit(argtypes = [double[:]], restype = double[:])(
             call_zeros_like)
-        self.assertTrue((testfn(testarr) == numpy.zeros_like(testarr)).all())
+        print sys.getrefcount(testarr)
+        result = testfn(testarr)
+        print sys.getrefcount(testarr)
+        print sys.getrefcount(result)
+        self.assertTrue((result == numpy.zeros_like(testarr)).all())
 
     def test_call_len(self):
         testarr = numpy.arange(10.)
@@ -57,7 +62,7 @@ class TestASTExternCall(test_support.ASTTestCase, TestExternCall):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    # TestASTExternCall('test_numba_calls_numba').debug()
+#    TestASTExternCall('test_call_zeros_like').debug()
     unittest.main()
 
 # ______________________________________________________________________

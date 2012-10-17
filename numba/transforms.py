@@ -9,10 +9,11 @@ import numba
 from numba import *
 from numba import error
 from .minivect import minierror, minitypes
-from . import translate, utils, _numba_types as _types
+from . import translate, utils, _numba_types as numba_types
 from .symtab import Variable
 from . import visitors, nodes, error, functions
 from numba import stdio_util
+from numba._numba_types import is_obj
 
 logger = logging.getLogger(__name__)
 
@@ -43,17 +44,17 @@ class TransformForIterable(visitors.NumbaTransformer):
 
             # replace node.iter
             call_func = ast.Name(id='range', ctx=ast.Load())
-            call_func.type = _types.RangeType()
-            shape_index = ast.Index(nodes.ConstNode(0, _types.Py_ssize_t))
-            shape_index.type = _types.npy_intp
+            call_func.type = numba_types.RangeType()
+            shape_index = ast.Index(nodes.ConstNode(0, numba_types.Py_ssize_t))
+            shape_index.type = numba_types.npy_intp
             stop = ast.Subscript(value=nodes.ShapeAttributeNode(orig_iter),
                                  slice=shape_index,
                                  ctx=ast.Load())
-            stop.type = _types.intp
+            stop.type = numba_types.intp
             stop.variable = Variable(stop.type)
-            call_args = [nodes.ConstNode(0, _types.Py_ssize_t),
-                         nodes.CoercionNode(stop, _types.Py_ssize_t),
-                         nodes.ConstNode(1, _types.Py_ssize_t),]
+            call_args = [nodes.ConstNode(0, numba_types.Py_ssize_t),
+                         nodes.CoercionNode(stop, numba_types.Py_ssize_t),
+                         nodes.ConstNode(1, numba_types.Py_ssize_t),]
 
             node.iter = ast.Call(func=call_func, args=call_args)
             node.iter.type = call_func.type
@@ -159,7 +160,7 @@ class LateSpecializer(visitors.NumbaTransformer):
         n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
         args = [n] + objs
         new_node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
-        new_node.type = _types.TupleType(size=len(node.elts))
+        new_node.type = numba_types.TupleType(size=len(node.elts))
         return nodes.ObjectTempNode(new_node)
 
     def visit_Dict(self, node):
@@ -202,12 +203,12 @@ class LateSpecializer(visitors.NumbaTransformer):
             raise error.NumbaError(node, "Cannot coerce to or from object in "
                                          "nopython context")
 
-        if node.dst_type.is_object and not node_type.is_object:
+        if node.dst_type.is_object and not is_obj(node_type):
             node = nodes.ObjectTempNode(nodes.CoerceToObject(
                     node.node, node.dst_type, name=node.name))
             node = self.visit(node)
             visitchildren = False
-        elif node_type.is_object and not node.dst_type.is_object:
+        elif node_type.is_object and not is_obj(node.dst_type):
             node = nodes.CoerceToNative(node.node, node.dst_type,
                                         name=node.name)
             node = self.visit(node)

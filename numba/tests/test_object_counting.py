@@ -34,13 +34,31 @@ deleting...
 >>> sys.getrefcount(obj)
 2
 
->>> obj1, obj2 = object(), object()
+>>> obj1, obj2 = object(), np.arange(10)
 >>> sys.getrefcount(obj1), sys.getrefcount(obj2)
 (2, 2)
 >>> x, y = count_arguments(obj1, obj2)
 >>> assert x is y is obj2
 >>> sys.getrefcount(x)
 4
+
+>>> def test_count_arguments(f, obj):
+...     print sys.getrefcount(obj)
+...     f(obj)
+...     print sys.getrefcount(obj)
+...
+>>> test_count_arguments(count_arguments2, object())
+3
+3
+>>> test_count_arguments(count_arguments2, np.arange(10))
+3
+3
+>>> test_count_arguments(count_arguments3, object())
+3
+3
+>>> test_count_arguments(count_arguments3, np.arange(10))
+3
+3
 """
 
 import sys
@@ -112,6 +130,14 @@ def count_arguments(x, y):
     a = x
     b = y
     return x, y
+
+@autojit(backend='ast')
+def count_arguments2(obj):
+    pass
+
+@autojit(backend='ast')
+def count_arguments3(obj):
+    x = obj
 
 if __name__ == "__main__":
     import doctest
