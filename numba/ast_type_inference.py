@@ -1041,11 +1041,19 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_Str(self, node):
         return nodes.ConstNode(node.s)
 
-    def _get_constants(self, nodes):
+    def visit_long(self, value):
+
+        return nodes.ConstNode(value, long_)
+
+    def _get_constants(self, constants):
         items = []
         constant_value = None
-        for item_node in nodes:
-            if item_node.variable.is_constant:
+        for i, item_node in enumerate(constants):
+            # long constants like 5L are direct values, not Nums!
+            if isinstance(item_node, long):
+                constants[i] = nodes.ConstNode(item_node, long_)
+                items.append(item_node)
+            elif item_node.variable.is_constant:
                 items.append(item_node.variable.constant_value)
             else:
                 return None
