@@ -186,7 +186,7 @@ class UFuncRewriter(ArrayExpressionRewrite):
         # Call ufunc
         signature = minitypes.FunctionType(
                 return_type=result_type,
-                argtypes=[op.type for op in ufunc_builder.operands])
+                args=[op.type for op in ufunc_builder.operands])
 
         args = ufunc_builder.operands
         if lhs is None:
