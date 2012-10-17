@@ -17,7 +17,7 @@ from numba import *
 from . import visitors, nodes, llvm_types
 from .minivect import minitypes
 from numba import ndarray_helpers, translate, error
-from numba._numba_types import is_obj
+from numba._numba_types import is_obj, promote_closest
 
 import logging
 logger = logging.getLogger(__name__)
@@ -527,7 +527,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         import ast_type_inference
 
         args_tuple = self.lfunc.args[1]
-        arg_types = node.signature.args
+        arg_types = [object_] * len(node.signature.args)
 
         if arg_types:
             # Unpack tuple into arguments
@@ -1299,6 +1299,8 @@ class ObjectCoercer(object):
         for type in types:
             if type.is_array or type.is_object:
                 type = object_
+            elif type.is_int:
+                type = promote_closest(self.context, type, minitypes.native_integral)
             typestrs.append(self.type_to_buildvalue_str[type])
 
         str = "".join(typestrs)

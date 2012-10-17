@@ -451,6 +451,14 @@ class PyModulo(InternalFunction):
         builder.ret(res)
         return ret_val
 
+class labs(ExternalFunction):
+    arg_types = [long_]
+    return_type = long_
+
+class llabs(ExternalFunction):
+    arg_types = [longlong]
+    return_type = longlong
+
 #
 ### Object conversions to native types
 #

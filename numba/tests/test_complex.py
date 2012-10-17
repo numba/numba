@@ -88,6 +88,10 @@ def cosh(a, b):
     result = a**2 + b**2
     return cmath.cosh(result) + 1.6j
 
+def absolute(a, b):
+    result = a**2 + b**2
+    return abs(result) + 1.6j
+
 # ______________________________________________________________________
 
 m, n = 0.4 + 1.2j, 5.1 - 0.6j
@@ -173,6 +177,7 @@ class TestASTComplex(test_support.ASTTestCase, TestComplex):
         self.assertAlmostEqual(self.autojit(cosh)(m, n), cosh(m, n))
         self.assertAlmostEqual(self.autojit(atan)(m, n), atan(m, n))
         self.assertAlmostEqual(self.autojit(asinh)(m, n), asinh(m, n))
+        self.assertAlmostEqual(self.autojit(absolute)(m, n), absolute(m, n))
 
 
 # ______________________________________________________________________

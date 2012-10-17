@@ -22,6 +22,17 @@ __all__ = minitypes.__all__ + [
 def is_obj(type):
     return type.is_object or type.is_array
 
+def promote_closest(context, int_type, candidates):
+    """
+    promote_closest(Py_ssize_t, [int_, long_, longlong]) -> longlong
+    """
+    for candidate in candidates:
+        promoted = context.promote_types(int_type, candidate)
+        if promoted == candidate:
+            return candidate
+
+    return candidates[-1]
+
 class NumbaType(minitypes.Type):
     is_numba_type = True
 

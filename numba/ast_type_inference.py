@@ -15,6 +15,7 @@ from . import translate, utils, _numba_types as numba_types
 from .symtab import Variable
 from . import visitors, nodes, error
 from numba import stdio_util
+from numba._numba_types import is_obj, promote_closest
 # from . import _ext
 
 #stdin, stdout, stderr = _ext.get_libc_file_addrs()
@@ -197,6 +198,17 @@ class BuiltinResolverMixin(object):
         self._expect_n_args(func, node, 1)
         if argtype.is_float:
             return self._resolve_math_call(node, abs)
+        elif argtype.is_int:
+            if argtype.signed:
+                type = promote_closest(self.context, argtype, [long_, longlong])
+                funcs = {long_: 'labs', longlong: 'llabs'}
+                result = self.function_cache.call(funcs[type], node.args[0])
+                return nodes.CoercionNode(result, argtype)
+            else:
+                return node.args[0]
+        elif argtype.is_complex:
+            result = self.astbuilder.call_pyfunc(func, node.args)
+            return nodes.CoercionNode(result, double)
 
         # TODO: generate efficient inline code
         return None
