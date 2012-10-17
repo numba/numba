@@ -25,8 +25,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-if __debug__:
-    import pprint
+debug = False
+
+import pprint
 
 _int32_zero = lc.Constant.int(_int32, 0)
 
@@ -95,8 +96,8 @@ def pythontype_to_strtype(typ):
 def map_to_strtype(type):
     "Map a minitype or str type to a str type"
     if isinstance(type, minitypes.Type):
-#        if __debug__:
-#            logger.debug('CONVERTING %r' % (type,))
+        if debug:
+            logger.debug('CONVERTING %r' % (type,))
         if type.is_float:
             if type.itemsize == 4:
                 return 'float32'
@@ -131,8 +132,8 @@ def map_to_strtype(type):
             type = 'S'
         else:
             raise NotImplementedError(type)
-#        if __debug__:
-#            logger.debug(repr(type))
+        if debug:
+            logger.debug(repr(type))
 
     return type
 
@@ -238,7 +239,7 @@ class Variable(object):
 
 # Add complex, unsigned, and bool
 def str_to_llvmtype(str):
-    if __debug__:
+    if debug:
         logger.debug("str_to_llvmtype(): str = %r" % (str,))
     n_pointer = 0
     if str.endswith('*'):
@@ -319,7 +320,7 @@ def convert_to_ctypes(typ):
     if typ.endswith('*'):
         n_pointer = typ.count('*')
         typ = typ[:-n_pointer]
-        if __debug__:
+        if debug:
             logger.debug("convert_to_ctypes(): n_pointer = %d, typ' = %r" %
                          (n_pointer, typ))
     dtype_str = np.dtype(typ).str
@@ -370,7 +371,7 @@ def typ_isa_number(typ):
 # Currently delegates casting to Variable.llvm(), but only in the
 # presence of a builder instance.
 def resolve_type(arg1, arg2, builder = None):
-    if __debug__:
+    if debug:
         logger.debug("arg1 = %r, arg2 = %r, builder = %r" % (arg1, arg2,
                                                              builder))
     typ = None
@@ -422,7 +423,7 @@ def resolve_type(arg1, arg2, builder = None):
         else:
             # Fall-through case: just use the left hand operand's type...
             typ = typ1
-    if __debug__:
+    if debug:
         logger.debug("resolve_type() ==> %r" % (typ,))
     return (typ,
             arg1.llvm(typ, builder = builder),
@@ -634,7 +635,7 @@ class _LLVMModuleUtils(object):
                 cls.get_py_incref(translator.mod),
                 [translator.builder.call(lfunc, largs)]),
             _numpy_array)
-        if __debug__:
+        if debug:
             logger.debug("lfunc = %r\nlargs =%r" % (
                     str(lfunc), [str(arg) for arg in largs]))
         return res, args[0].typ
@@ -802,7 +803,7 @@ class _LLVMModuleUtils(object):
 
     @classmethod
     def build_conj(cls, translator, args):
-        if __debug__:
+        if debug:
             logger.debug(repr(args))
         assert ((len(args) == 1) and (args[0]._llvm is not None) and
                 (args[0]._llvm.type in (_complex64, _complex128)))
@@ -1005,8 +1006,8 @@ class Translate(object):
         """
         self.cfg = LLVMControlFlowGraph.build_cfg(self.fco, self)
         self.cfg.compute_dataflow()
-#        if __debug__:
-#            logger.debug(self.cfg.pformat())
+        if debug:
+            logger.debug(self.cfg.pformat())
         is_dead_code = False
         # Filter out the OPNAME+x opcodes, assuming the handler knows
         # what it is doing based on the actual opcode.
@@ -1048,7 +1049,7 @@ class Translate(object):
             #fpm.run(self.lfunc)
             #fpm.finalize()
 
-        if __debug__:
+        if debug:
             logger.debug(str(self.mod))
 
     def _get_ee(self):
@@ -1081,7 +1082,7 @@ class Translate(object):
                 lfunc_ptr_ty)
             lfunc_ptr_ptr.linkage = lc.LINKAGE_INTERNAL
         lfunc = target_translator.builder.load(lfunc_ptr_ptr)
-        if __debug__:
+        if debug:
             logger.debug(str(lfunc))
         largs = [arg.llvm(convert_to_strtype(param_typ),
                           builder = target_translator.builder)
@@ -1123,7 +1124,7 @@ class Translate(object):
                 raise NotImplementedError(
                     "Not currently supporting back patching casts for phi "
                     "connections.")
-        if __debug__:
+        if debug:
             logger.debug("value = %r, lval = %r, phi.type = %r" %
                          (value, str(lval), str(phi.type)))
         for pred_lblock in pred_lblocks:
@@ -1147,7 +1148,7 @@ class Translate(object):
 
         4. If the predecessor is unreachable, ignore it.
         '''
-        if __debug__:
+        if debug:
             logger.debug("crnt_block=%r, pred=%r, local=%r" %
                          (crnt_block, pred, local))
         if pred in self.blocks_locals and pred not in self.pending_blocks:
@@ -1157,13 +1158,13 @@ class Translate(object):
                 "already been visited.")
             lval = pred_locals[local].llvm(llvmtype_to_strtype(phi.type),
                                            builder = self.builder)
-            if __debug__:
+            if debug:
                 logger.debug("lval = %r, phi.type = %r" % (str(lval),
                                                            str(phi.type)))
             phi.add_incoming(lval, self.blocks[pred])
         elif 0 in self.cfg.blocks_reaching[pred]:
             reaching_defs = self.cfg.get_reaching_definitions(crnt_block)
-            if __debug__:
+            if debug:
                 logger.debug("reaching_defs = %s" %
                              (pprint.pformat(reaching_defs),))
             definition_block = reaching_defs[pred][local]
@@ -1181,11 +1182,11 @@ class Translate(object):
                     local]
                 self.add_pending_phi(definition_index, local, phi,
                                      self.blocks[pred])
-                if __debug__:
+                if debug:
                     logger.debug("self.pending_phis = %r" %
                                  (self.pending_phis,))
         else:
-            if __debug__:
+            if debug:
                 logger.debug("Block %d not reachable from entry." % pred)
 
     def build_phi_nodes(self, crnt_block):
@@ -1344,7 +1345,7 @@ class Translate(object):
         self.builder = lc.Builder.new(self.blocks[block_index])
         self._locals = self.blocks_locals[block_index]
         block = self.blocks[block_index]
-        if __debug__:
+        if debug:
             logger.debug(repr(block.instructions))
         instructions = [instruction for instruction in block.instructions
                         if not isinstance(instruction, lc.PHINode)]
@@ -1372,7 +1373,7 @@ class Translate(object):
         # Because the visitation order here is out of order, we have
         # to recheck for pending phis in the preceeding block, and
         # handle them.
-        if __debug__:
+        if debug:
             logger.debug(pprint.pformat((self._locals, self.pending_phis)))
         for local_index, local_val in enumerate(self._locals):
             if self.has_pending_phi(i - 3, local_index):
@@ -1452,7 +1453,7 @@ class Translate(object):
     def op_BINARY_ADD(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        if __debug__:
+        if debug:
             logger.debug("op_BINARY_ADD(): %r + %r" % (arg1, arg2))
         typ, arg1, arg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'f':
@@ -1557,7 +1558,7 @@ class Translate(object):
     def op_BINARY_POWER(self, i, op, arg):
         arg2 = self.stack.pop(-1)
         arg1 = self.stack.pop(-1)
-        if __debug__:
+        if debug:
             logger.debug("%r ** %r" % (arg1, arg2))
         typ, larg1, larg2 = resolve_type(arg1, arg2, self.builder)
         if typ[0] == 'i':
@@ -1623,7 +1624,7 @@ class Translate(object):
             self.stack = self.stack[:-arg]
         func = self.stack.pop(-1)
         ret_typ = None
-        if __debug__:
+        if debug:
             logger.debug("func = %r" % (func,))
         if func.val in PY_CALL_TO_LLVM_CALL_MAP:
             res, ret_typ = PY_CALL_TO_LLVM_CALL_MAP[func.val](self, args)
@@ -1697,7 +1698,7 @@ class Translate(object):
 
     def op_LOAD_ATTR(self, i, op, arg):
         objarg = self.stack.pop(-1)
-        if __debug__:
+        if debug:
             logger.debug(repr((i, op, self.names[arg], objarg, objarg.typ)))
         if objarg.is_module():
             res = getattr(objarg.val, self.names[arg])
@@ -1706,7 +1707,7 @@ class Translate(object):
             # what typemap was destined to do...)
             objarg_llvm_val = objarg.llvm()
             res = None
-            if __debug__:
+            if debug:
                 logger.debug(str(objarg_llvm_val.type))
             if objarg_llvm_val.type == _numpy_array:
                 field_index = _numpy_array_field_ofs[self.names[arg]]
@@ -1843,19 +1844,19 @@ class Translate(object):
             lval = arr_var._llvm
             ltype = lval.type
             if ltype == _numpy_array:
-                if __debug__:
+                if debug:
                     logger.debug("op_BINARY_SUBSCR(): arr_var.typ = %s" %
                                  (arr_var.typ,))
                 result_val = self.builder.load(
                     self._build_pointer_into_arr_data(arr_var, index_var))
-                if __debug__:
+                if debug:
                     logger.debug(repr(result_val))
             elif ltype.kind == lc.TYPE_POINTER:
                 result_val = self.builder.load(
                     self.builder.gep(lval, [index_var.llvm(
                                 'i32', builder = self.builder)]))
             else:
-                if __debug__:
+                if debug:
                     logger.debug("op_BINARY_SUBSCR(): %r arr_var = %r (%r)\n%s"
                                  % ((i, op, arg), arr_var, str(arr_var._llvm),
                                     self.mod))
@@ -1865,7 +1866,7 @@ class Translate(object):
         elif isinstance(arr_var.val, tuple):
             raise NotImplementedError("FIXME")
         else:
-            if __debug__:
+            if debug:
                 logger.debug("op_BINARY_SUBSCR(): %r arr_var = %r (%r)\n%s" %
                              ((i, op, arg), arr_var, str(arr_var._llvm),
                               self.mod))
@@ -1882,13 +1883,13 @@ class Translate(object):
         index_var = self.stack.pop(-1)
         arr_var = self.stack.pop(-1)
         store_var = self.stack.pop(-1)
-        if __debug__:
+        if debug:
             logger.debug("%r\nop_STORE_SUBSCR(): %r[%r] = %r" % (
                     (i, op, arg), arr_var, index_var, store_var))
         if arr_var._llvm is not None:
             arr_lval = arr_var._llvm
             arr_ltype = arr_lval.type
-            if __debug__:
+            if debug:
                 logger.debug("op_STORE_SUBSCR(): arr_lval = '%s', "
                              "arr_ltype = '%s'" % (arr_lval, arr_ltype))
             if arr_ltype == _numpy_array:
@@ -1940,7 +1941,7 @@ class Translate(object):
         return self.op_BINARY_RSHIFT(i, op, arg)
 
     def op_BREAK_LOOP(self, i, op, arg):
-        if __debug__:
+        if debug:
             logger.debug("i = %r, op = %r, arg = %r, loop_stack = %r" %
                          (i, op, arg, self.loop_stack))
         loop_i, loop_arg = self.loop_stack[-1]
@@ -1963,7 +1964,7 @@ class Translate(object):
 
     def _apply_slice(self, indexable, lower = None, upper = None):
         ret_val = None
-        if __debug__:
+        if debug:
             logger.debug(repr((indexable, lower, upper)))
         if indexable.typ[0] == 'S':
             l_strlen = _LLVMModuleUtils.get_lib_fn(self.mod, 'strlen')
@@ -1996,7 +1997,7 @@ class Translate(object):
         else:
             raise NotImplementedError("Slices unsupported for type %r" %
                                       (indexable.typ,))
-        if __debug__:
+        if debug:
             logger.debug(repr(ret_val))
         return ret_val
 

@@ -177,8 +177,8 @@ class TestWhile(test_support.ByteCodeTestCase):
 # ______________________________________________________________________
 
 class TestASTWhile(test_support.ASTTestCase, TestWhile):
+
     @test_support.checkSkipFlag("Test fails due to problem in Meta.")
-    @nottest
     def test_while_loop_fn_7(self, *args, **kws):
         return super(TestASTWhile, self).test_while_loop_fn_7(*args, **kws)
 

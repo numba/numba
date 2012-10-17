@@ -1,7 +1,13 @@
 import numpy as np
 
 #docutils = py.test.importorskip("theano")
-import theano
+import unittest
+
+try:
+    import theano
+except ImportError:
+    raise unittest.SkipTest
+
 from numba.ad import Watcher
 
 

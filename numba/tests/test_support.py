@@ -13,10 +13,7 @@ def checkSkipFlag(reason):
     def _checkSkipFlag(fn):
         @nottest
         def _checkSkipWrapper(self, *args, **kws):
-            if hasattr(__builtin__, '__noskip__'):
-                return fn(self, *args, **kws)
-            else:
-                self.skipTest(reason)
+            self.skipTest(reason)
         return _checkSkipWrapper
     return _checkSkipFlag
 

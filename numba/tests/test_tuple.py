@@ -27,13 +27,13 @@ def tuple_fn_0 (inarr):
 # ______________________________________________________________________
 
 class TestTuple (test_support.ByteCodeTestCase):
+    "Not properly refcounted in bytecode translator!"
+
+class TestASTTuple(test_support.ASTTestCase, TestTuple):
     def test_tuple_fn_0 (self):
         test_arr = numpy.zeros((4,4,4))
         compiled_fn = self.jit(argtypes = [double[:,:,:]])(tuple_fn_0)
         self.assertEqual(compiled_fn(test_arr), 0.)
-
-class TestASTTuple(test_support.ASTTestCase, TestTuple):
-    pass
 
 # ______________________________________________________________________
 
