@@ -711,8 +711,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         else:
             targets = node.targets
 
-        valid_type = (value_type.is_carray or value_type.is_list or
-                      value_type.is_tuple)
+        valid_type = (value_type.is_carray or value_type.is_sized_pointer or
+                      value_type.is_list or value_type.is_tuple)
 
         if not valid_type:
             self.error(node.value,
@@ -726,7 +726,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         # Generate an assignment for each unpack
         result = []
         for i, target in enumerate(targets):
-            if value_type.is_carray:
+            if value_type.is_carray or value_type.is_sized_pointer:
                 # C array
                 value = self.astbuilder.index(node.value, i)
             else:

@@ -7,7 +7,7 @@ except ImportError:
     # pre-2.6
     numbers = None
 
-from numba.pymothoa import compiler_errors
+from numba import error
 
 class NumbaVisitorMixin(object):
     def __init__(self, context, func, ast):
@@ -34,7 +34,7 @@ class NumbaVisitorMixin(object):
                 self._myglobals[name] = getattr(builtins, name, None)
 
     def error(self, node, msg):
-        raise compiler_errors.CompilerError(node, msg)
+        raise error.NumbaError(node, msg)
 
     def visitlist(self, list):
         newlist = []

@@ -17,7 +17,7 @@ class NumbaError(Exception):
             if self.node is not None and hasattr(self.node, 'lineno'):
                 pos = "%s:%s: " % (self.node.lineno, self.node.col_offset)
 
-            return "%s%s%s" % (pos, self.msg, " ".join(map(str, self.args)))
+            return "%s%s %s" % (pos, self.msg, " ".join(map(str, self.args)))
         except:
             traceback.print_exc()
             return ""

@@ -55,6 +55,7 @@ class TestAvg2DAST(test_support.ASTTestCase, TestAvg2D):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+#    TestAvg2DAST('test_avg2d_w_cast').debug()
     unittest.main()
 
 # ______________________________________________________________________

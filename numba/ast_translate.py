@@ -1006,8 +1006,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return self._create_complex(real, imag)
 
     def visit_Subscript(self, node):
-        if not (node.value.type.is_carray or node.value.type.is_c_string):
-            raise error.InternalError(node, "Unsupported type", node.type)
+        value_type = node.value.type
+        if not (value_type.is_carray or value_type.is_c_string or
+                    value_type.is_sized_pointer):
+            raise error.InternalError(node, "Unsupported type:", node.value.type)
+
         value = self.visit(node.value)
         lptr = self.builder.gep(value, [self.visit(node.slice)])
         if node.slice.type.is_int:

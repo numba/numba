@@ -449,8 +449,8 @@ class ArrayAttributeNode(Node):
         if attribute_name == 'ndim':
             type = minitypes.int_
         elif attribute_name in ('shape', 'strides'):
-            # type = minitypes.CArrayType(numba_types.intp, array_type.ndim)
-            type = minitypes.npy_intp.pointer()
+            type = numba_types.SizedPointerType(numba_types.intp,
+                                                size=array_type.ndim)
         elif attribute_name == 'data':
             type = array_type.dtype.pointer()
         else:

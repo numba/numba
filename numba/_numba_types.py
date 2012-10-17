@@ -198,6 +198,10 @@ class CTypesFunctionType(NumbaType, minitypes.ObjectType):
     def __str__(self):
         return "<ctypes function %s>" % (self.signature,)
 
+class SizedPointerType(NumbaType, minitypes.PointerType):
+    size = None
+    is_sized_pointer = True
+
 class CastType(NumbaType, minitypes.ObjectType):
 
     is_cast = True
