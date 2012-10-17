@@ -304,12 +304,9 @@ class CudaVectorize(cuda.CudaVectorize):
 
     def _build_caller(self, lfunc):
         assert self.module is lfunc.module
-        # lfunc.calling_convention = llvm.core.CC_PTX_DEVICE
-        # lfunc.linkage = llvm.core.LINKAGE_INTERNAL # do not emit device function
         lcaller_def = create_kernel_wrapper(lfunc)
         lcaller = lcaller_def(self.module)
         lcaller.verify()
-        # lcaller.calling_convention = llvm.core.CC_PTX_KERNEL
         self.cuda_wrappers.append(lcaller)
         # print lcaller
         return lcaller
