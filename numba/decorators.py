@@ -5,6 +5,7 @@ import logging
 import types
 
 from numba import *
+from . import _numba_types
 from . import utils, functions, ast_translate as translate, ast_type_inference
 from numba import translate as bytecode_translate
 from numba import error
@@ -280,6 +281,17 @@ def jit(restype=None, argtypes=None, backend='bytecode', target='cpu',
     the bytecode translator is used, if backend='ast' the AST translator is
     used.
     """
+    # Called with f8(f8) syntax which returns a dictionary of argtypes and restype
+    if isinstance(restype, dict) and restype.has_key('argtypes') and restype.has_key('restype'):
+        if argtypes is not None:
+            raise TypeError, "Cannot use both calling syntax and argtypes keyword"
+        argtypes = restype['argtypes']
+        restype = restype['restype']
+    elif isinstance(restype, str):
+        loc = {}
+        signature = eval(restype, loc, globals())
+        argtypes = signature['argtypes']
+        restype = signature['restype']
     if restype is not None:
         kws['restype'] = restype
     if argtypes is not None:

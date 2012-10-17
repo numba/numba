@@ -433,6 +433,11 @@ class Type(miniutils.ComparableObjectMixin):
             return False
         return getattr(type(self), attr)
 
+    def __call__(self, *args):
+        """Return a dictionary of argtypes and restype
+        """
+        return dict(argtypes=args, restype=self)
+
 class ArrayType(Type):
     """
     An array type. ArrayType may be sliced to obtain a subtype:
