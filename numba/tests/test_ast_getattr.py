@@ -43,14 +43,14 @@ class TestGetattr(unittest.TestCase):
         self.assertEqual(result, 2)
 
     def test_getattr_shape(self):
-        # This is broken since the shape is a ctypes array, and the shape array
-        # doesn't hold a reference to the ndarray!
-        result = get_ndarray_shape(np.empty((10,)))
+        a = np.empty((10,))
+        result = get_ndarray_shape(a)
         self.assertEqual(result[0], 10)
 
-        result = get_ndarray_shape(np.empty((10, 20)))
+        a = np.empty((10, 20))
+        result = get_ndarray_shape(a)
         self.assertEqual(result[0], 10)
-        self.assertEqual(result[1], 10)
+        self.assertEqual(result[1], 20)
 
     def test_getattr_shape_unpack(self):
         array = np.empty((1, 2))
@@ -78,7 +78,7 @@ class TestGetattr(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    TestGetattr('test_getattr_data_1').debug()
+    TestGetattr('test_getattr_shape').debug()
 #    unittest.main()
 
 # ______________________________________________________________________
