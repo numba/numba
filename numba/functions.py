@@ -50,7 +50,8 @@ def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
                                        func_signature, **kwargs)
 
 
-def _compile(context, func, restype=None, argtypes=None, ctypes=False, **kwds):
+def _compile(context, func, restype=None, argtypes=None, ctypes=False,
+             compile_only=False, **kwds):
     """
     Compile a numba annotated function.
 
@@ -67,6 +68,8 @@ def _compile(context, func, restype=None, argtypes=None, ctypes=False, **kwds):
         func_name=func_name, symtab=symtab, **kwds)
     t.translate()
 
+    if compile_only:
+        return func_signature, t.lfunc, None
     if ctypes:
         ctypes_func = t.get_ctypes_func(kwds.get('llvm', True))
         return func_signature, t.lfunc, ctypes_func
