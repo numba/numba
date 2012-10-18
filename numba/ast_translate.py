@@ -69,7 +69,7 @@ def pycfunction_new(py_func, func_pointer):
 
     PyCFunction_NewEx = ctypes.pythonapi.PyCFunction_NewEx
     PyCFunction_NewEx.argtypes = [ctypes.POINTER(c_PyMethodDef),
-                                  ctypes.c_void_p,
+                                  ctypes.py_object,
                                   ctypes.c_void_p]
     PyCFunction_NewEx.restype = ctypes.py_object
 
@@ -79,10 +79,12 @@ def pycfunction_new(py_func, func_pointer):
     methoddef.method = ctypes.c_void_p(func_pointer)
     methoddef.flags = 1 # METH_VARARGS
 
+    # Create PyCFunctionObject, pass in the methoddef struct as the m_self
+    # attribute
     methoddef_p = ctypes.byref(methoddef)
     NULL = ctypes.c_void_p()
-    result = PyCFunction_NewEx(methoddef_p, NULL, NULL)
-    return (result, methoddef)
+    result = PyCFunction_NewEx(methoddef_p, methoddef, NULL)
+    return result
 
 class MethodReference(object):
     def __init__(self, object_var, py_method):
@@ -520,8 +522,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # Return a PyCFunctionObject holding the wrapper
         func_pointer = t.ee.get_pointer_to_function(t.lfunc)
-        result, methoddef = pycfunction_new(self.func, func_pointer)
-        return result, methoddef
+        result = pycfunction_new(self.func, func_pointer)
+        return result
 
     def visit_FunctionWrapperNode(self, node):
         import ast_type_inference

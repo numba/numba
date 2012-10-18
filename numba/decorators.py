@@ -82,15 +82,12 @@ class NumbaFunction(object):
     """
 
     def __init__(self, py_func, wrapper=None, ctypes_func=None, signature=None,
-                 lfunc=None, methoddef=None):
+                 lfunc=None):
         self.py_func = py_func
         self.wrapper = wrapper
         self.ctypes_func = ctypes_func
         self.signature = signature
         self.lfunc = lfunc
-
-        # This attribute must not be reset or deleted!
-        self.__methoddef = methoddef
 
         self.func_name = self.__name__ = py_func.__name__
         self.func_doc = self.__doc__ = py_func.__doc__
@@ -217,9 +214,8 @@ def _jit2(restype=None, argtypes=None, nopython=False,
                                                  llvm_module=_llvm_module,
                                                  llvm_ee=_llvm_ee,
                                                  **kwargs)
-        signature, lfunc, (wrapper_func, methoddef) = result
+        signature, lfunc, wrapper_func = result
         return NumbaFunction(func, ctypes_func=wrapper_func,
-                             methoddef=methoddef,
                              signature=signature, lfunc=lfunc)
 
     return _jit2_decorator

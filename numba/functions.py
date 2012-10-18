@@ -69,7 +69,7 @@ def _compile(context, func, restype=None, argtypes=None, ctypes=False, **kwds):
 
     if ctypes:
         ctypes_func = t.get_ctypes_func(kwds.get('llvm', True))
-        return func_signature, t.lfunc, (ctypes_func, None)
+        return func_signature, t.lfunc, ctypes_func
     else:
         return func_signature, t.lfunc, t.build_wrapper_function()
 
