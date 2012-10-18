@@ -1116,8 +1116,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         Resolve a call to a function. If we know about the function,
         generate a native call, otherwise go through PyObject_Call().
         """
-        signature, llvm_func, py_func = \
+        signature, llvm_func, (py_func, keep_alive) = \
                 self.function_cache.compile_function(py_func, arg_types)
+        self.func.live_objects.append(keep_alive)
 
         if llvm_func is not None:
             return nodes.NativeCallNode(signature, call_node.args,
