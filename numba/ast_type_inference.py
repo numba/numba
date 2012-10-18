@@ -701,8 +701,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif type.is_carray:
             assert index_type.is_int
             return type.base_type
-        elif type.is_c_string and index_type.is_int:
-            return char
+        elif type.is_c_string:
+            if index_type.is_int:
+                return char
+            else:
+                return c_string_type
 
         op = ('sliced', 'indexed')[index_type.is_int]
         raise error.NumbaError(node, "object of type %s cannot be %s" % (type, op))

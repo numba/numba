@@ -33,7 +33,7 @@ class TestBytecodeCString(test_support.ByteCodeTestCase, CStringTests):
 # ______________________________________________________________________
 
 class TestASTCString(test_support.ASTTestCase, CStringTests):
-    @test_support.checkSkipFlag("Not implemented yet.")
+    #@test_support.checkSkipFlag("Not implemented yet.")
     def test_convert(self, *args, **kws):
         return super(TestASTCString, self).test_convert(*args, **kws)
 

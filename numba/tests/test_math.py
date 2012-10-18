@@ -52,8 +52,15 @@ def modulo(x, y):
     return x % y
 
 def test_modulo():
-    assert np.allclose(modulo(22.5, 0.2), 0.1)
-    assert modulo(5, 2) == 1
+    for lsign in (1, -1):
+        for rsign in (1, -1):
+            float_lhs = lsign * 22.5
+            float_rhs = rsign * 0.2
+            assert np.allclose(modulo(float_lhs, float_rhs),
+                               float_lhs % float_rhs)
+            int_lhs = lsign * 5
+            int_rhs = rsign * 2
+            assert modulo(int_lhs, int_rhs) == (int_lhs % int_rhs)
 
 if __name__ == "__main__":
     test_numpy_math()

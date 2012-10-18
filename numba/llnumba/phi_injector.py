@@ -84,8 +84,6 @@ class PhiInjector (BenignBytecodeVisitorMixin, BytecodeFlowVisitor):
 
     def enter_block (self, block):
         ret_val = False
-        if self.prev_blocks:
-            prev_block = self.prev_blocks[-1]
         self.block = block
         if block == 0:
             if self.nargs > 0:
@@ -97,7 +95,12 @@ class PhiInjector (BenignBytecodeVisitorMixin, BytecodeFlowVisitor):
                 ret_val = True
         elif 0 in self.cfg.blocks_reaching[block]:
             ret_val = True
-            prev_block_locals = self.blocks_locals[prev_block]
+            prev_block_locals = None
+            for pred_block in self.cfg.blocks_in[block]:
+                if pred_block in self.prev_blocks:
+                    prev_block_locals = self.blocks_locals[pred_block]
+                    break
+            assert prev_block_locals is not None, "Internal translation error"
             self.blocks_locals[block] = prev_block_locals.copy()
             phis_needed = self.cfg.phi_needed(block)
             if phis_needed:

@@ -139,7 +139,8 @@ class LLVMTranslator (BytecodeFlowVisitor):
         self.control_flow_builder = ControlFlowBuilder()
         self.phi_injector = PhiInjector()
 
-    def translate (self, function, llvm_type = None, env = None):
+    def translate (self, function, llvm_type = None, llvm_function = None,
+                   env = None):
         '''Translate a function to the given LLVM function type.
 
         If no type is given, then assume the function is of LLVM type
@@ -148,7 +149,10 @@ class LLVMTranslator (BytecodeFlowVisitor):
         The optional env parameter allows extension of the global
         environment.'''
         if llvm_type is None:
-            llvm_type = lc.Type.function(lvoid, ())
+            if llvm_function is None:
+                llvm_type = lc.Type.function(lvoid, ())
+            else:
+                llvm_type = llvm_function.type.pointee
         if env is None:
             env = {}
         else:
@@ -172,6 +176,7 @@ class LLVMTranslator (BytecodeFlowVisitor):
         nargs = self.code_obj.co_argcount
         self.cfg = self.control_flow_builder.visit(
             self.bytecode_flow_builder.visit(self.code_obj), nargs)
+        self.llvm_function = llvm_function
         flow = self.phi_injector.visit_cfg(self.cfg, nargs)
         ret_val = self.visit(flow)
         del self.cfg
@@ -185,8 +190,9 @@ class LLVMTranslator (BytecodeFlowVisitor):
 
     def enter_flow_object (self, flow):
         super(LLVMTranslator, self).enter_flow_object(flow)
-        self.llvm_function = self.llvm_module.add_function(
-            self.llvm_type, self.target_function_name)
+        if self.llvm_function is None:
+            self.llvm_function = self.llvm_module.add_function(
+                self.llvm_type, self.target_function_name)
         self.llvm_blocks = {}
         self.llvm_definitions = {}
         self.pending_phis = {}
@@ -202,7 +208,6 @@ class LLVMTranslator (BytecodeFlowVisitor):
         del self.pending_phis
         del self.llvm_definitions
         del self.llvm_blocks
-        del self.llvm_function
         if __debug__: print(ret_val)
         return ret_val
 
@@ -468,15 +473,17 @@ class LLVMTranslator (BytecodeFlowVisitor):
         return ret_val
 
     def op_LOAD_DEREF (self, i, op, arg, *args, **kws):
-        ret_val = self.globals[self.code_obj.co_freevars[arg]]
+        name = self.code_obj.co_freevars[arg]
+        ret_val = self.globals[name]
         if isinstance(ret_val, lc.Type) and not hasattr(ret_val, '__name__'):
-            ret_val.__name__ = self.code_obj.co_names[arg]
+            ret_val.__name__ = name
         return [ret_val]
 
     def op_LOAD_GLOBAL (self, i, op, arg, *args, **kws):
-        ret_val = self.globals[self.code_obj.co_names[arg]]
+        name = self.code_obj.co_names[arg]
+        ret_val = self.globals[name]
         if isinstance(ret_val, lc.Type) and not hasattr(ret_val, '__name__'):
-            ret_val.__name__ = self.code_obj.co_names[arg]
+            ret_val.__name__ = name
         return [ret_val]
 
     def op_POP_BLOCK (self, i, op, arg, *args, **kws):
@@ -539,7 +546,15 @@ def translate_function (func, lltype, llvm_module = None, **kws):
     '''Given a function and an LLVM function type, emit LLVM code for
     that function using a new LLVMTranslator instance.'''
     translator = LLVMTranslator(llvm_module)
-    ret_val = translator.translate(func, lltype, kws)
+    ret_val = translator.translate(func, lltype, env = kws)
+    return ret_val
+
+# ______________________________________________________________________
+
+def translate_into_function (py_function, llvm_function, **kws):
+    translator = LLVMTranslator(llvm_function.module)
+    ret_val = translator.translate(py_function, llvm_function = llvm_function,
+                                   env = kws)
     return ret_val
 
 # ______________________________________________________________________
@@ -549,6 +564,13 @@ def llnumba (lltype, llvm_module = None, **kws):
     def _llnumba (func):
         return translate_function(func, lltype, llvm_module, **kws)
     return _llnumba
+
+# ______________________________________________________________________
+
+def llnumba_into (llvm_function, **kws):
+    def _llnumba_into (func):
+        return translate_into_function(llvm_function, func, **kws)
+    return _llnumba_into
 
 # ______________________________________________________________________
 # Main (self-test) routine
