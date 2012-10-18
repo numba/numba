@@ -370,7 +370,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             variable.lvalue = stackspace
 
             self.builder.store(larg, stackspace) # store arg value
-            if variable.type.is_object or variable.type.is_array:
+            if is_obj(variable.type):
                 self.incref(self.builder.load(stackspace))
 
     def _init_unrefcount_args(self):
@@ -385,7 +385,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 # Not argument and not builtin type.
                 # Allocate storage for all variables.
                 name = 'var_%s' % var.name
-                if var.type.is_object:
+                if is_obj(var.type):
                     stackspace = self._null_obj_temp(name)
                 else:
                     stackspace = self.builder.alloca(var.ltype, name=name)

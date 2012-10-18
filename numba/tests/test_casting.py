@@ -1,3 +1,4 @@
+import sys
 import os
 import numpy as np
 import ctypes
@@ -34,7 +35,9 @@ def test_casts():
     assert cast_int() == 1
     assert cast_complex() == 1.2 + 0j
     assert cast_float() == 5.0
-    assert np.all(cast_object(double[:]) == np.arange(10))
+    value = cast_object(double[:])
+    # print sys.getrefcount(value), value, np.arange(10, dtype=np.double)
+    assert np.all(value == np.arange(10, dtype=np.double)), value
     assert cast_as_numba_type_attribute() == 4
 
 if __name__ == "__main__":
