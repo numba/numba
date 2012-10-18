@@ -2,6 +2,8 @@
 Version 0.3
 ===========
 * Changed default compilation approach to ast
+* Added support for cross-module linking
+
 
 Version 0.2
 ============
