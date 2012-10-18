@@ -467,6 +467,11 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
         new_node.type = numba_types.TupleType(size=len(node.elts))
         return nodes.ObjectTempNode(new_node)
 
+    def visit_List(self, node):
+        self.check_context(node)
+        self.generic_visit(node)
+        return nodes.ObjectTempNode(node)
+
     def visit_Dict(self, node):
         self.check_context(node)
         self.generic_visit(node)
