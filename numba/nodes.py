@@ -229,11 +229,15 @@ class MathNode(Node):
     Represents a high-level call to a math function.
     """
 
+    _fields = ['arg']
+
     def __init__(self, py_func, signature, arg, **kwargs):
         super(MathNode, self).__init__(**kwargs)
         self.py_func = py_func
         self.signature = signature
         self.arg = arg
+        self.type = signature.return_type
+        self.variable = Variable(self.type)
 
 
 class LLVMIntrinsicNode(NativeCallNode):

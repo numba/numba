@@ -48,7 +48,6 @@ class Pipeline(object):
             'transform_for',
             'specialize',
             'late_specializer',
-            'resolve_coercions',
         ]
 
     def type_infer(self, ast):
@@ -78,12 +77,6 @@ class Pipeline(object):
         specializer = transforms.LateSpecializer(self.context, self.func, ast,
                                                  self.func_signature,
                                                  nopython=self.nopython)
-        return specializer.visit(ast)
-
-    def resolve_coercions(self, ast):
-        specializer = transforms.ResolveCoercions(self.context, self.func, ast,
-                                                  self.func_signature,
-                                                  nopython=self.nopython)
         return specializer.visit(ast)
 
     def insert_specializer(self, name, after):
@@ -199,10 +192,15 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
         self._expect_n_args(func, node, 1)
         if argtype.is_complex:
             dst_type = double
+            result_type = object_
+        elif argtype.is_int:
+            dst_type = argtype
+            result_type = promote_closest(self.context, argtype, [long_, longlong])
         else:
             dst_type = argtype
+            result_type = argtype
 
-        node.variable = Variable(argtype)
+        node.variable = Variable(result_type)
         return nodes.CoercionNode(node, dst_type)
 
     def _resolve_round(self, func, node, argtype):
@@ -649,16 +647,22 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             raise error.NumbaError(node.orelse,
                                    'Else in for-loop is not implemented.')
 
+        target = node.target
+        if not isinstance(target, ast.Name):
+            self.error(node.target,
+                       "Only assignment to target names is supported.")
+
         node.target = self.visit(node.target)
         node.iter = self.visit(node.iter)
         base_type = self._get_iterator_type(node.iter.variable.type)
         node.target = self.assign(node.target.variable, Variable(base_type),
                                   node.target)
-        self.visitlist(node.body)
 
         if node.iter.variable.type.is_range:
-            node.index = self.visit(ast.Name(id=node.target.id, ctx=ast.Load()))
+            node.index = self.visit(ast.Name(id=target.id, ctx=ast.Load()))
             node.index.type = node.index.variable.type
+
+        self.visitlist(node.body)
 
         return node
 

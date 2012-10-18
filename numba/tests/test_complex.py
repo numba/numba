@@ -196,7 +196,8 @@ class TestASTComplex(test_support.ASTTestCase, TestComplex):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    unittest.main()
+    TestASTComplex('test_mandel').debug()
+#    unittest.main()
 
 
 # ______________________________________________________________________

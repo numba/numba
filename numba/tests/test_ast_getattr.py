@@ -78,8 +78,8 @@ class TestGetattr(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    TestGetattr('test_getattr_shape').debug()
-#    unittest.main()
+#    TestGetattr('test_getattr_shape').debug()
+    unittest.main()
 
 # ______________________________________________________________________
 # End of test_ast_getattr.py

@@ -23,4 +23,5 @@ class TestConversion(unittest.TestCase):
         assert result == 10, result
 
 if __name__ == "__main__":
-    unittest.main()
+    TestConversion('test_builtins').debug()
+#    unittest.main()
