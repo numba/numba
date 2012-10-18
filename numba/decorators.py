@@ -284,7 +284,7 @@ def jit(restype=None, argtypes=None, backend='bytecode', target='cpu',
         argtypes = restype['argtypes']
         restype = restype['restype']
     # Called with a string like 'f8(f8)'
-    elif isinstance(restype, str) and backend != 'bytecode':
+    elif isinstance(restype, str) and argtypes is None:
         loc = {}
         types_dict = dict(globals(), d=double)
         signature = eval(restype, loc, types_dict)
