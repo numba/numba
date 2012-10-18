@@ -16,7 +16,7 @@ from ._numba_types import BuiltinType
 from numba import *
 from . import visitors, nodes, llvm_types
 from .minivect import minitypes
-from numba import ndarray_helpers, translate, error
+from numba import ndarray_helpers, error
 from numba._numba_types import is_obj, promote_closest
 
 import logging
@@ -325,7 +325,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # code generation attributes
         self.mod = llvm_module or LLVMContextManager().get_default_module()
         self.ee = llvm_ee or LLVMContextManager().get_execution_engine()
-        self.module_utils = translate._LLVMModuleUtils()
 
         self.refcount_args = refcount_args
 
@@ -934,13 +933,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return op.__name__.lower()
 
     def _handle_mod(self, node, lhs, rhs):
-        if node.type.is_float:
-            return self.builder.frem(lhs, rhs)
-        else:
-            ltype = node.type.to_llvm(self.context)
-            restype = translate.llvmtype_to_strtype(ltype)
-            func = self.module_utils.get_py_modulo(self.mod, restype)
-            return self.builder.call(func, (lhs, rhs))
+        _, func = self.function_cache.function_by_name(
+            'PyModulo', arg_types = (node.type, node.type),
+            return_type = node.type)
+        return self.builder.call(func, (lhs, rhs))
 
     def visit_BinOp(self, node):
         lhs = self.visit(node.left)

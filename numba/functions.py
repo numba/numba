@@ -5,6 +5,7 @@ from . import naming
 from .minivect import minitypes
 import numba.ast_translate as translate
 from numba import nodes
+from numba.llnumba.byte_translator import LLVMTranslator
 
 import logging
 import traceback
@@ -142,7 +143,7 @@ class FunctionCache(object):
         signature = ofunc(argtypes=ofunc.arg_types * len(argtypes)).signature
         return signature, None, func
 
-    def function_by_name(self, name):
+    def function_by_name(self, name, **kws):
         """
         Return the signature and LLVM function given a name. The function must
         either already be compiled, or it must be defined in this module.
@@ -150,7 +151,7 @@ class FunctionCache(object):
         if name in self.external_functions:
             return self.external_functions[name]
         else:
-            declared_func = globals()[name]()
+            declared_func = globals()[name](**kws)
             lfunc = self.build_function(declared_func)
             return declared_func.signature, lfunc
 
@@ -176,11 +177,9 @@ class FunctionCache(object):
             lfunc = self.module.add_function(lfunc_type, external_function.name)
 
             if external_function.linkage == llvm.core.LINKAGE_INTERNAL:
-                entry = lfunc.append_basic_block('entry')
-                builder = lc.Builder.new(entry)
                 lfunc.linkage = external_function.linkage
                 external_function.implementation(
-                                        self.module, builder, lfunc)
+                                        self.module, lfunc)
 
         return lfunc
 
@@ -188,11 +187,11 @@ class FunctionCache(object):
         if (module, const_str) in self.string_constants:
             ret_val = self.string_constants[(module, const_str)]
         else:
-            lconst_str = lc.Constant.stringz(const_str)
+            lconst_str = llvm.core.Constant.stringz(const_str)
             ret_val = module.add_global_variable(lconst_str.type, "__STR_%d" %
                                                  (len(self.string_constants),))
             ret_val.initializer = lconst_str
-            ret_val.linkage = lc.LINKAGE_INTERNAL
+            ret_val.linkage = llvm.core.LINKAGE_INTERNAL
             self.string_constants[(module, const_str)] = ret_val
 
         return ret_val
@@ -270,7 +269,7 @@ class _LLVMModuleUtils(object):
             res = translator.builder.load(
                 translator.builder.load(
                     translator.builder.gep(args[0]._llvm, [
-                        _int32_zero, lc.Constant.int(_int32, shape_ofs)])))
+                        _int32_zero, llvm.core.Constant.int(_int32, shape_ofs)])))
         else:
             return cls.build_object_len(translator, args)
 
@@ -287,7 +286,7 @@ class _LLVMModuleUtils(object):
         largs = [translator.builder.load(
             translator.builder.gep(larr, [
                 _int32_zero,
-                lc.Constant.int(_int32,
+                llvm.core.Constant.int(_int32,
                                 _numpy_array_field_ofs[field_name])]))
                  for field_name in ('ndim', 'shape', 'descr')]
         largs.append(_int32_zero)
@@ -311,7 +310,7 @@ class _LLVMModuleUtils(object):
         larg = args[0]._llvm
         elem_ltyp = _float if larg.type == _complex64 else _double
         new_imag_lval = translator.builder.fmul(
-            lc.Constant.real(elem_ltyp, -1.),
+            llvm.core.Constant.real(elem_ltyp, -1.),
             translator.builder.extract_value(larg, 1))
         assert hasattr(translator.builder, 'insert_value'), (
             "llvm-py support for LLVMBuildInsertValue() required to build "
@@ -346,7 +345,7 @@ class ExternalFunction(object):
         else:
             return self.func_name
 
-    def implementation(self, module, builder, lfunc):
+    def implementation(self, module, lfunc):
         return None
 
 class InternalFunction(ExternalFunction):
@@ -435,27 +434,24 @@ class PyModulo(InternalFunction):
 
     @property
     def name(self):
-        return naming.specialized_mangle('__py_modulo_%s', self.arg_types)
+        return naming.specialized_mangle('__py_modulo', self.arg_types)
 
-    def implementation(self, module, builder, ret_val):
-        different_sign_block = ret_val.append_basic_block('different_sign')
-        join_block = ret_val.append_basic_block('join')
-        arg2 = ret_val.args[1]
-        srem = builder.srem(ret_val.args[0], arg2)
-        width = int(typ[1:])
-        lbits_shifted = lc.Constant.int(str_to_llvmtype(typ), width - 1)
-        srem_sign = builder.lshr(srem, lbits_shifted)
-        arg2_sign = builder.lshr(arg2, lbits_shifted)
-        same_sign = builder.icmp(lc.ICMP_EQ, srem_sign, arg2_sign)
-        builder.cbranch(same_sign, join_block, different_sign_block)
-        builder.position_at_end(different_sign_block)
-        different_sign_res = builder.add(srem, arg2)
-        builder.branch(join_block)
-        builder.position_at_end(join_block)
-        res = builder.phi(ltyp)
-        res.add_incoming(srem, entry_block)
-        res.add_incoming(different_sign_res, different_sign_block)
-        builder.ret(res)
+    def implementation(self, module, ret_val):
+        _rtype = ret_val.type.pointee.return_type
+        _rem = (llvm.core.Builder.srem
+               if _rtype.kind == llvm.core.TYPE_INTEGER
+               else llvm.core.Builder.frem)
+        def _py_modulo (arg1, arg2):
+            ret_val = rem(arg1, arg2)
+            if ret_val < rtype(0):
+                if arg2 > rtype(0):
+                    ret_val += arg2
+            elif arg2 < rtype(0):
+                ret_val += arg2
+            return ret_val
+        LLVMTranslator(module).translate(
+            _py_modulo, llvm_function = ret_val,
+            env = {'rtype' : _rtype, 'rem' : _rem})
         return ret_val
 
 class labs(ExternalFunction):
