@@ -10,12 +10,8 @@ from llvm_cbuilder import shortnames as _llvm_cbuilder_types
 from numba import *
 import numba.decorators
 from numba.translate import Variable as _Variable
-
+from numba.minivect import minitypes
 from numbapro.translate import Translate as _Translate
-from numbapro import _cudadispatch
-from numbapro._cuda.default import device as _cuda_device
-from numbapro._cuda import nvvm
-
 
 _THIS_MODULE = sys.modules[__name__]
 
@@ -83,19 +79,19 @@ def _sreg(name):
     return wrap
 
 _SPECIAL_VALUES = {
-    _threadIdx_x: _sreg('llvm.nvvm.read.ptx.sreg.tid.x'),
-    _threadIdx_y: _sreg('llvm.nvvm.read.ptx.sreg.tid.y'),
-    _threadIdx_z: _sreg('llvm.nvvm.read.ptx.sreg.tid.z'),
+    _threadIdx_x: 'llvm.nvvm.read.ptx.sreg.tid.x',
+    _threadIdx_y: 'llvm.nvvm.read.ptx.sreg.tid.y',
+    _threadIdx_z: 'llvm.nvvm.read.ptx.sreg.tid.z',
 
-    _blockDim_x: _sreg('llvm.nvvm.read.ptx.sreg.ntid.x'),
-    _blockDim_y: _sreg('llvm.nvvm.read.ptx.sreg.ntid.y'),
-    _blockDim_z: _sreg('llvm.nvvm.read.ptx.sreg.ntid.z'),
+    _blockDim_x: 'llvm.nvvm.read.ptx.sreg.ntid.x',
+    _blockDim_y: 'llvm.nvvm.read.ptx.sreg.ntid.y',
+    _blockDim_z: 'llvm.nvvm.read.ptx.sreg.ntid.z',
 
-    _blockIdx_x: _sreg('llvm.nvvm.read.ptx.sreg.ctaid.x'),
-    _blockIdx_y: _sreg('llvm.nvvm.read.ptx.sreg.ctaid.y'),
+    _blockIdx_x: 'llvm.nvvm.read.ptx.sreg.ctaid.x',
+    _blockIdx_y: 'llvm.nvvm.read.ptx.sreg.ctaid.y',
 
-    _gridDim_x: _sreg('llvm.nvvm.read.ptx.sreg.nctaid.x'),
-    _gridDim_y: _sreg('llvm.nvvm.read.ptx.sreg.nctaid.y'),
+    _gridDim_x: 'llvm.nvvm.read.ptx.sreg.nctaid.x',
+    _gridDim_y: 'llvm.nvvm.read.ptx.sreg.nctaid.y',
 }
 
 _ATTRIBUTABLES = set([threadIdx, blockIdx, blockDim, gridDim, _THIS_MODULE])
@@ -109,7 +105,59 @@ def get_strided_arrays(argtypes):
 
     return result
 
-# decorators
+
+
+# modify numba behavior
+from numba import utils, functions, ast_translate
+from numba import visitors, nodes, error, ast_type_inference
+import ast as _ast
+
+class CudaAttributeNode(nodes.Node):
+    def __init__(self, value):
+        self.value = value
+
+    def resolve(self, name):
+        return type(self)(getattr(self.value, name))
+
+    def __repr__(self):
+        return '<%s value=%s>' % (type(self).__nmae__, self.value)
+
+class CudaSRegRewrite(visitors.NumbaTransformer,
+                             ast_type_inference.NumpyMixin):
+
+    def visit_Attribute(self, ast):
+        this_module = sys.modules[__name__]
+        value = self.visit(ast.value)
+        if isinstance(ast.value, _ast.Name):
+            assert isinstance(value.ctx, _ast.Load)
+            obj = self._myglobals.get(ast.value.id)
+            if obj is this_module:
+                retval = CudaAttributeNode(this_module).resolve(ast.attr)
+        elif isinstance(value, CudaAttributeNode):
+            retval = value.resolve(ast.attr)
+
+        if retval.value in _SPECIAL_VALUES:
+            # replace with a NativeCallNode
+            sig = minitypes.FunctionType(minitypes.uint32, [])
+            fname = _SPECIAL_VALUES[retval.value]
+            retval = nodes.MathCallNode(sig, [], None, name=fname)
+
+        return retval
+
+class NumbaproCudaPipeline(ast_type_inference.Pipeline):
+    def __init__(self, context, func, ast, func_signature, **kwargs):
+        super(NumbaproCudaPipeline, self).__init__(context, func, ast,
+                                               func_signature, **kwargs)
+        self.insert_specializer('rewrite_cuda_sreg', after='type_infer')
+
+    def rewrite_cuda_sreg(self, ast):
+        return CudaSRegRewrite(self.context, self.func, ast).visit(ast)
+
+context = utils.get_minivect_context()  # creates a new NumbaContext
+context.llvm_context = ast_translate.LLVMContextManager()
+context.numba_pipeline = NumbaproCudaPipeline
+function_cache = context.function_cache = functions.FunctionCache(context)
+
 cached = {}
 def jit(restype=void, argtypes=None, backend='bytecode'):
     '''JIT python function into a CUDA kernel.
@@ -124,24 +172,11 @@ def jit(restype=void, argtypes=None, backend='bytecode'):
     '''
     assert restype == void, restype
     assert argtypes is not None
-    assert backend == 'bytecode'
+    assert backend in ('bytecode', 'ast')
 
     restype = int32
 
-    def _jit(func):
-        #use_ast = False
-        #if backend == 'ast':
-        #    use_ast = True
-        #    for arg_type in list(argtypes) + [restype]:
-        #        if not isinstance(arg_type, minitypes.Type):
-        #            use_ast = False
-        #            debugout("String type specified, using bytecode translator...")
-        #            break
-
-        #if use_ast:
-        #    return jit2(argtypes=argtypes)(func)
-        #else:
-
+    if backend=='bytecode':
         key = func, tuple(get_strided_arrays(argtypes))
         if key in cached:
             cnf = cached[key]
@@ -155,9 +190,63 @@ def jit(restype=void, argtypes=None, backend='bytecode'):
             cached[key] = cnf
 
         return cnf
+    else:
+        jit2(restype=restype, argtypes=argtypes)
 
     return _jit
 
+
+def jit2(restype=void, argtypes=None, **kws):
+    assert kws.get('_llvm_ee') is None
+    kws['nopython'] = True # override nopython option
+    def _jit2(func):
+        llvm_module = (kws.get('_llvm_module')
+                       or _lc.Module.new('ptx_%s' % func))
+        if not hasattr(func, '_is_numba_func'):
+            func._is_numba_func = True
+
+        result = function_cache.compile_function(func, argtypes,
+                                                 ctypes=True,
+                                                 llvm_module=llvm_module,
+                                                 llvm_ee=None,
+                                                 compile_only=True,
+                                                 **kws)
+
+
+        signature, lfunc, unused = result
+
+        # XXX: temp fix for PyIncRef and PyDecRef in lfunc.
+
+        def _temp_hack():
+            inlinelist = []
+            fakepy = {}
+
+            for bb in lfunc.basic_blocks:
+                for instr in bb.instructions:
+                    if isinstance(instr, _lc.CallOrInvokeInstruction):
+                        fn = instr.called_function
+                        fname = fn.name
+                        if fname.startswith('Py_'):
+                            inlinelist.append(instr)
+                            fty = instr.called_function.type.pointee
+                            fakepy[fname] = fn
+                            assert fty.return_type == _lc.Type.void(), 'assume no sideeffect'
+
+            for fname, fn in fakepy.items():
+                bldr = _lc.Builder.new(fn.append_basic_block('entry'))
+                bldr.ret_void()
+
+            for call in inlinelist:
+                assert _lc.inline_function(call)
+
+            for fn in fakepy.values():
+                fn.delete()
+
+        _temp_hack()
+
+
+        return CudaNumbaFunction(func, signature=signature, lfunc=lfunc)
+    return _jit2
 
 class CudaBaseFunction(numba.decorators.NumbaFunction):
 
@@ -192,9 +281,7 @@ class CudaBaseFunction(numba.decorators.NumbaFunction):
         griddim, blockdim = args
         return self.configure(griddim, blockdim)
 
-
 class CudaNumbaFunction(CudaBaseFunction):
-
     def __init__(self, py_func, wrapper=None, ctypes_func=None,
                  signature=None, lfunc=None, extra=None):
         super(CudaNumbaFunction, self).__init__(py_func, wrapper, ctypes_func,
@@ -218,19 +305,7 @@ class CudaNumbaFunction(CudaBaseFunction):
 
         self.typemap = typemap_string
 
-        # builder wrapper
-        wrapper_type = _lc.Type.function(_lc.Type.void(), argtys)
-        func_name = 'ptxwrapper_%s' % lfunc.name
-        wrapper = self.module.add_function(wrapper_type, func_name)
-        builder = _lc.Builder.new(wrapper.append_basic_block('entry'))
-
-        inline_me = builder.call(lfunc, wrapper.args) # ignore return value
-        builder.ret_void()
-
-        # force inline of original function
-        _lc.inline_function(inline_me)
-        # then remove it
-        lfunc.delete()
+        func_name = lfunc.name
 
         #### The Old Way that uses LLVM PTX and NVPTX
         #    wrapper.calling_convention = _lc.CC_PTX_KERNEL
@@ -264,9 +339,12 @@ class CudaNumbaFunction(CudaBaseFunction):
         #    ptxasm = ptxtm.emit_assembly(self.module)
         #    self._ptxasm = ptxasm
 
+        from numbapro._cuda import nvvm
         nvvm.fix_data_layout(self.module)
-        nvvm.set_cuda_kernel(wrapper)
+        nvvm.set_cuda_kernel(lfunc)
         self._ptxasm = nvvm.llvm_to_ptx(str(self.module))
+
+        from numbapro import _cudadispatch
         self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(self._ptxasm,
                                                                 func_name,
                                                                 typemap_string)
@@ -290,17 +368,17 @@ class CudaNumbaFunction(CudaBaseFunction):
         args = [convert(ty, val) for ty, val in zip(self.typemap, args)]
         self.dispatcher(args, self._griddim, self._blockdim)
 
-    @property
-    def compute_capability(self):
-        '''The compute_capability of the PTX is generated for.
-        '''
-        return self._cc
+    #    @property
+    #    def compute_capability(self):
+    #        '''The compute_capability of the PTX is generated for.
+    #        '''
+    #        return self._cc
 
-    @property
-    def target_machine(self):
-        '''The LLVM target mcahine backend used to generate the PTX.
-        '''
-        return self._arch
+    #    @property
+    #    def target_machine(self):
+    #        '''The LLVM target mcahine backend used to generate the PTX.
+    #        '''
+    #        return self._arch
 
     @property
     def ptx(self):
@@ -322,7 +400,7 @@ class CudaTranslate(_Translate):
             objarg = self.stack.pop(-1)
             res = getattr(objarg.val, self.names[arg])
             if res in _SPECIAL_VALUES:
-                intr_func_bldr = _SPECIAL_VALUES[res]
+                intr_func_bldr = _sreg(_SPECIAL_VALUES[res])
                 intr = intr_func_bldr(self.mod)
                 res = self.builder.call(intr, [])
             self.stack.append(_Variable(res))
@@ -331,5 +409,6 @@ class CudaTranslate(_Translate):
             super(CudaTranslate, self).op_LOAD_ATTR(i, op, arg)
 
 # Patch numba
-numba.decorators.jit_targets['gpu'] = jit
+#numba.decorators.jit_targets['gpu'] = jit # give up on bytecode path
+numba.decorators.jit2_targets['gpu'] = jit2
 numba.decorators.numba_function_autojit_targets['gpu'] = CudaAutoJitNumbaFunction
