@@ -1,7 +1,7 @@
 import unittest
 
 import numpy as np
-from numba import *
+from numba import autojit 
 
 mu = 0.1
 Lx, Ly = 101, 101
