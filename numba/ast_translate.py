@@ -1312,6 +1312,7 @@ class ObjectCoercer(object):
         if fmt is not None:
             str = fmt % str
 
+        # self.translator.puts("fmt: %s" % str)
         result = self._create_llvm_string(str)
         return result
 
@@ -1319,7 +1320,9 @@ class ObjectCoercer(object):
         # The caller should check for errors using check_err or by wrapping
         # its node in an ObjectTempNode
         name = kwds.get('name', '')
+        # self.translator.puts("building... %s" % name)
         result = self.builder.call(self.py_buildvalue, largs, name=name)
+        # self.translator.puts("done building... %s" % name)
         return result
 
     def npy_intp_to_py_ssize_t(self, llvm_result, type):
@@ -1352,9 +1355,11 @@ class ObjectCoercer(object):
         for i, (field_name, field_type) in enumerate(type.fields):
             types.extend((c_string_type, field_type))
             largs.append(self._create_llvm_string(field_name))
+            zero = llvm_types.constant_int(0)
             struct_attr = self.builder.gep(llvm_result,
-                                           [llvm_types.constant_int(i)])
+                                           [zero, llvm_types.constant_int(i)])
             largs.append(self.builder.load(struct_attr))
+
         lstr = self.lstr(types, fmt="{%s}")
         return self.buildvalue(lstr, *largs, name='struct')
 

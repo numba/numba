@@ -237,7 +237,9 @@ def map_dtype(dtype):
     elif dtype.kind == 'V':
         fields = [(name, map_dtype(dtype.fields[name][0]))
                       for name in dtype.names]
-        return struct(fields, packed=not dtype.isalignedstruct)
+        is_aligned = dtype.alignment != 1
+        return struct(fields, packed=not getattr(dtype, 'isalignedstruct',
+                                                 is_aligned))
     elif dtype.kind == 'O':
         return object_
 

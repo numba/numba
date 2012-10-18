@@ -41,6 +41,7 @@ def prod_sum_fn (coeff, inval, ofs):
     return ret_val
 
 def add(a, b):
+    print 'adding!'
     return a + b
 
 def sub(a, b):
@@ -196,8 +197,8 @@ class TestASTComplex(test_support.ASTTestCase, TestComplex):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    TestASTComplex('test_mandel').debug()
-#    unittest.main()
+#    TestASTComplex('test_arithmetic_complex').debug()
+    unittest.main()
 
 
 # ______________________________________________________________________

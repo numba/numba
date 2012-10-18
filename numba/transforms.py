@@ -327,7 +327,7 @@ class ResolveCoercions(visitors.NumbaTransformerAndSignature):
             elif node_type.is_float:
                 cls = functions.PyFloat_FromDouble
             elif node_type.is_complex:
-                cls = functions.PyComplex_FromCComplex
+                 cls = functions.PyComplex_FromCComplex
 
             if cls:
                 new_node = self.function_cache.call(cls.__name__, node.node)
@@ -363,8 +363,8 @@ class ResolveCoercions(visitors.NumbaTransformerAndSignature):
                     node.node = self.astbuilder.call_pyfunc(long, [node.node])
             elif node_type.is_float:
                 cls = functions.PyFloat_AsDouble
-            elif node_type.is_complex:
-                cls = functions.PyComplex_AsCComplex
+            # elif node_type.is_complex:
+            #     cls = functions.PyComplex_AsCComplex
 
             if cls:
                 # TODO: error checking!
