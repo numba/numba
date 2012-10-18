@@ -14,7 +14,7 @@ def test_ctypes_calls():
     puts.argtypes = [ctypes.c_char_p]
     assert call_ctypes_func(puts, "Hello World!")
 
-    libm = ctypes.CDLL(ctypes.util.find_library('c'))
+    libm = ctypes.CDLL(ctypes.util.find_library('m'))
     ceil = libm.ceil
     ceil.argtypes = [ctypes.c_double]
     ceil.restype = ctypes.c_double

@@ -283,15 +283,15 @@ class ResolveCoercions(visitors.NumbaTransformerAndSignature):
         node_type = node.node.type
         dst_type = node.dst_type
 
-        if self.nopython and (node_type.is_object or node.type.is_object):
+        if self.nopython and is_obj(node_type):
             raise error.NumbaError(node, "Cannot coerce to or from object in "
                                          "nopython context")
 
-        if node.dst_type.is_object and not is_obj(node_type):
+        if is_obj(node.dst_type) and not is_obj(node_type):
             node = nodes.ObjectTempNode(nodes.CoerceToObject(
                     node.node, node.dst_type, name=node.name))
             return self.visit(node)
-        elif node_type.is_object and not is_obj(node.dst_type):
+        elif is_obj(node_type) and not is_obj(node.dst_type):
             node = nodes.CoerceToNative(node.node, node.dst_type,
                                         name=node.name)
             return self.visit(node)
@@ -485,7 +485,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
 
     def visit_NativeCallNode(self, node):
         self.generic_visit(node)
-        if node.signature.return_type.is_object:
+        if is_obj(node.signature.return_type):
             if self.nopython:
                 raise error.NumbaError(
                         node, "Cannot call function returning object in "
@@ -557,8 +557,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
     def visit_Assign(self, node):
         target = node.targets[0]
         if (len(node.targets) == 1 and
-                isinstance(target, ast.Subscript) and
-                (target.type.is_array or target.type.is_object)):
+                isinstance(target, ast.Subscript) and is_obj(target.type)):
             # Slice assignment / index assignment w/ objects
             # TODO: discount array indexing with dtype object
             target = self.visit(target)
@@ -607,7 +606,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
 
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
-        elif node.value.type.is_object or node.value.type.is_array:
+        elif is_obj(node.value.type):
             node = self.function_cache.call(
                                 'PyObject_GetAttrString', node.value,
                                 nodes.ConstNode(node.attr))

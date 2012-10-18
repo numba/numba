@@ -395,10 +395,13 @@ class NumpyMixin(object):
             return None
 
         shape_type = args['shape'].variable.type
-        if not shape_type.is_tuple:
+        if shape_type.is_int:
+            ndim = 1
+        elif shape_type.is_tuple:
+            ndim = shape_type.size
+        else:
             return None
 
-        ndim = shape_type.size
         return minitypes.ArrayType(dtype.resolve(), ndim)
 
     def _resolve_numpy_call(self, func_type, node):

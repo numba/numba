@@ -41,7 +41,6 @@ def prod_sum_fn (coeff, inval, ofs):
     return ret_val
 
 def add(a, b):
-    print 'adding!'
     return a + b
 
 def sub(a, b):
@@ -175,9 +174,6 @@ class TestASTComplex(test_support.ASTTestCase, TestComplex):
         self.assertAlmostEqual(self.autojit(mul)(m, n), mul(m, n))
         self.assertAlmostEqual(self.autojit(div)(m, n), div(m, n))
 
-    def test_arithmetic_complex(self):
-        self.arithmetic(m, n)
-
     def test_complex_math(self):
         self.assertAlmostEqual(self.autojit(sqrt)(m, n), sqrt(m, n))
         self.assertAlmostEqual(self.autojit(log)(m, n), log(m, n))
@@ -197,7 +193,7 @@ class TestASTComplex(test_support.ASTTestCase, TestComplex):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    TestASTComplex('test_arithmetic_complex').debug()
+#    TestASTComplex('test_arithmetic').debug()
     unittest.main()
 
 

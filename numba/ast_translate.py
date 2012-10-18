@@ -601,7 +601,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # Decref local variables
         for name, var in self.symtab.iteritems():
-            if var.is_local and (var.type.is_object or var.type.is_array):
+            if var.is_local and is_obj(var.type):
                 if self.refcount_args or not name in self.argnames:
                     self.xdecref_temp(var.lvalue)
 
@@ -643,7 +643,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         target = self.visit(target_node)
         value = self.visit(node.value)
 
-        object = target_node.type.is_object or target_node.type.is_array
+        object = is_obj(target_node.type)
         self.generate_assign(value, target, decref=object, incref=object)
         if object:
             self.incref(value)
@@ -779,7 +779,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             rettype = self.func_signature.return_type
 
             retval = self.visit(node.value)
-            if rettype.is_object or rettype.is_array or rettype.is_pointer:
+            if is_obj(rettype) or rettype.is_pointer:
                 retval = self.builder.bitcast(retval,
                                               self.return_value.type.pointee)
 
@@ -792,7 +792,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             self.builder.store(retval, self.return_value)
 
             ret_type = self.func_signature.return_type
-            if ret_type.is_object or ret_type.is_array:
+            if is_obj(rettype):
                 self.xincref_temp(self.return_value)
 
         self.builder.branch(self.cleanup_label)
@@ -991,7 +991,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_CoerceToObject(self, node):
         from_type = node.node.type
         result = self.visit(node.node)
-        if not (from_type.is_object or from_type.is_array):
+        if not is_obj(from_type):
             result = self.object_coercer.convert_single(from_type, result,
                                                         name=node.name)
         return result
@@ -1302,7 +1302,7 @@ class ObjectCoercer(object):
         "Get an llvm format string for the given types"
         typestrs = []
         for type in types:
-            if type.is_array or type.is_object:
+            if is_obj(type):
                 type = object_
             elif type.is_int:
                 type = promote_closest(self.context, type, minitypes.native_integral)

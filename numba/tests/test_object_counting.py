@@ -10,6 +10,28 @@ True
 1
 >>> sys.getrefcount(fresh_obj3())
 1
+>>> sys.getrefcount(fresh_obj4())
+1
+>>> sys.getrefcount(fresh_obj5())
+1
+>>> sys.getrefcount(fresh_obj6())
+1
+
+Test list/dict/tuple literals
+
+>>> sys.getrefcount(fresh_obj7())
+1
+>>> sys.getrefcount(fresh_obj7()[0])
+1
+>>> sys.getrefcount(fresh_obj8())
+1
+>>> sys.getrefcount(fresh_obj8()["value"])
+1
+>>> sys.getrefcount(fresh_obj9())
+1
+>>> sys.getrefcount(fresh_obj9()[0])
+1
+
 >>> sys.getrefcount(index_count([object()]))
 1
 >>> class C(object):
@@ -109,6 +131,37 @@ def fresh_obj3():
     return y
 
 @autojit(backend='ast')
+def fresh_obj4():
+    x = np.ones(1, dtype=np.double)
+    y = x
+    return y
+
+@autojit(backend='ast')
+def fresh_obj5():
+    return np.ones(1, dtype=np.double)
+
+@autojit(backend='ast')
+def fresh_obj6():
+    x = np.ones(1, dtype=np.double)
+    y = x
+    return x
+
+@autojit(backend='ast')
+def fresh_obj7():
+    x = np.ones(1, dtype=np.double)
+    return [x]
+
+@autojit(backend='ast')
+def fresh_obj8():
+    x = np.ones(1, dtype=np.double)
+    return {"value": x}
+
+@autojit(backend='ast')
+def fresh_obj9():
+    x = np.ones(1, dtype=np.double)
+    return (x,)
+
+@autojit(backend='ast')
 def index_count(L):
     x = L[0]
     return x
@@ -140,5 +193,6 @@ def count_arguments3(obj):
     x = obj
 
 if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
+    print sys.getrefcount(fresh_obj7())
+#    import doctest
+#    doctest.testmod()
