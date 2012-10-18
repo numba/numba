@@ -287,6 +287,7 @@ def jit(restype=None, argtypes=None, backend='bytecode', target='cpu',
             raise TypeError, "Cannot use both calling syntax and argtypes keyword"
         argtypes = restype['argtypes']
         restype = restype['restype']
+    # Called with a string like 'f8(f8)'
     elif isinstance(restype, str) and backend != 'bytecode':
         loc = {}
         types_dict = dict(globals(), d=double)
