@@ -209,6 +209,7 @@ def jit(restype=void, argtypes=None, backend='ast', **kws):
 
 _device_functions = {}
 def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
+    if restype == None: restype = void
     assert device or restype == void,\
            ("Only device function can have return value %s" % restype)
     assert kws.get('_llvm_ee') is None
