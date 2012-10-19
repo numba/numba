@@ -615,6 +615,34 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
 
         return self.visit(result)
 
+    def _c_string_slice(self, node):
+        ret_val = node
+        logger.debug(node.slice)
+        node_slice = node.slice
+        if isinstance(node_slice, nodes.ObjectInjectNode):
+            node_slice = node.slice.object
+            lower, upper, step = (
+                value if value is None else nodes.const(value, size_t)
+                for value in (node_slice.start, node_slice.stop,
+                              node_slice.step))
+        else:
+            lower, upper, step = (node_slice.lower, node_slice.upper,
+                                  node_slice.step)
+        if step is None:
+            node_value = self.visit(node.value)
+            if lower is None:
+                lower = nodes.const(0, size_t)
+            if upper is None:
+                upper = self.function_cache.call('strlen', node_value)
+            ret_val = self.function_cache.call('CStringSlice2',
+                                               self.visit(node.value),
+                                               self.visit(lower),
+                                               self.visit(upper))
+            logger.debug(ret_val)
+        else:
+            raise NotImplementedError('String slices where step != None.')
+        return ret_val
+
     def visit_Subscript(self, node):
         if isinstance(node.value, nodes.ArrayAttributeNode):
             if node.value.is_read_only and isinstance(node.ctx, ast.Store):
@@ -640,6 +668,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
                   node.slice.type.is_int):
             # Array index with integer indices
             node = nodes.DataPointerNode(node.value, node.slice, node.ctx)
+        elif node.value.type.is_c_string and node.type.is_c_string:
+            node = self._c_string_slice(node)
 
         return node
 

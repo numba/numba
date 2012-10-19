@@ -156,9 +156,9 @@ class FunctionCache(object):
             return declared_func.signature, lfunc
 
     def call(self, name, *args, **kw):
-        temp_name = kw.get('temp_name', '')
+        temp_name = kw.pop('temp_name', '')
         function_cls = globals()[name]
-        sig, lfunc = self.function_by_name(name)
+        sig, lfunc = self.function_by_name(name, **kw)
         return nodes.NativeCallNode(sig, args, lfunc, name=temp_name)
 
     def build_function(self, external_function):
@@ -454,6 +454,31 @@ class PyModulo(InternalFunction):
             env = {'rtype' : _rtype, 'rem' : _rem})
         return ret_val
 
+class CStringSlice2 (InternalFunction):
+    arg_types = [c_string_type, size_t, size_t]
+    return_type = c_string_type
+
+    def implementation(self, module, ret_val):
+        logger.debug((module, str(ret_val)))
+        def _py_c_string_slice (in_string, lower, upper):
+            in_str_len = strlen(in_string)
+            if lower < lc_size_t(0):
+                lower += in_str_len
+            if upper < lc_size_t(0):
+                upper += in_str_len
+            elif upper > in_str_len:
+                upper = in_str_len
+            temp_len = upper - lower
+            if temp_len < lc_size_t(0):
+                temp_len = 0
+            ret_val = alloca_array(li8, temp_len + 1)
+            strncpy(ret_val, in_string + lower, temp_len)
+            ret_val[temp_len] = li8(0)
+            return ret_val
+        LLVMTranslator(module).translate(_py_c_string_slice,
+                                         llvm_function = ret_val)
+        return ret_val
+
 class labs(ExternalFunction):
     arg_types = [long_]
     return_type = long_
@@ -461,6 +486,22 @@ class labs(ExternalFunction):
 class llabs(ExternalFunction):
     arg_types = [longlong]
     return_type = longlong
+
+class atoi(ExternalFunction):
+    arg_types = [c_string_type]
+    return_type = int_
+
+class atol(ExternalFunction):
+    arg_types = [c_string_type]
+    return_type = long_
+
+class atoll(ExternalFunction):
+    arg_types = [c_string_type]
+    return_type = longlong
+
+class atof(ExternalFunction):
+    arg_types = [c_string_type]
+    return_type = double
 
 #
 ### Object conversions to native types

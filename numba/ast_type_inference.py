@@ -76,7 +76,13 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
         if len(node.args) == 0:
             return nodes.ConstNode(func(0), dst_type)
         elif len(node.args) == 1:
-            return nodes.CoercionNode(node.args[0], dst_type=dst_type)
+            arg = node.args[0]
+            arg_type = arg.variable.type
+            if arg_type.is_c_string:
+                converter_function_name = 'atol' if dst_type.is_int else 'atof'
+                return self.function_cache.call(converter_function_name, arg)
+            else:
+                return nodes.CoercionNode(node.args[0], dst_type=dst_type)
         else:
             return None
 

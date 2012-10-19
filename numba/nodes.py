@@ -328,6 +328,8 @@ class ObjectInjectNode(Node):
     Refer to a Python object in the llvm code.
     """
 
+    _attributes = ['object', 'type']
+
     def __init__(self, object, type=None, **kwargs):
         super(ObjectInjectNode, self).__init__(**kwargs)
         self.object = object
