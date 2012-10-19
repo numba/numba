@@ -19,7 +19,7 @@ default_module = _lc.Module.new('default')
 default_prototypes = []
 
 def _internal_export(name=None, restype=double, argtypes=[double], backend='ast', **kws):
-    def _export(func):
+    def _iexport(func):
         if backend == 'bytecode':
             t = bytecode_translate.Translate(func, restype=restype,
                                               argtypes=argtypes,
@@ -31,7 +31,7 @@ def _internal_export(name=None, restype=double, argtypes=[double], backend='ast'
             default_prototypes.append(signature)
         else:
             if func.func_code.co_argcount == 0 and argtypes is None:
-                    argtypes = []
+                argtypes = []
             func.live_objects = []
             func._is_numba_func = True
             result = function_cache.compile_function(func, argtypes,
@@ -42,7 +42,7 @@ def _internal_export(name=None, restype=double, argtypes=[double], backend='ast'
                                                 restype=restype, **kws)
             # For headers if needed
             default_prototypes.append(result[0])
-    return _export
+    return _iexport
 
 def export(signature, **kws):
     """
@@ -61,8 +61,9 @@ def exportmany(signatures, **kws):
     """   
     def _export(func):
         for signature in signatures:
-            export(signature, **kws)(func)
-        return 
+            name, restype, argtypes = _process_sig(signature)
+            tocall = _internal_export(name=name, restype=restype, argtypes=argtypes, **kws)
+            tocall(func)
 
     return _export
 
