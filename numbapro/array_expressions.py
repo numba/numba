@@ -7,7 +7,7 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import error
+from numba import error, pipeline
 from numba.minivect import minierror, minitypes
 from numba import translate, utils, functions, nodes
 from numba.symtab import Variable
@@ -19,7 +19,7 @@ from numbapro.vectorize import basic
 
 import numpy
 
-class NumbaproPipeline(ast_type_inference.Pipeline):
+class NumbaproPipeline(pipeline.Pipeline):
     def __init__(self, context, func, ast, func_signature, **kwargs):
         super(NumbaproPipeline, self).__init__(context, func, ast,
                                                func_signature, **kwargs)

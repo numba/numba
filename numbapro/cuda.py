@@ -110,6 +110,7 @@ def get_strided_arrays(argtypes):
 # modify numba behavior
 from numba import utils, functions, ast_translate
 from numba import visitors, nodes, error, ast_type_inference
+from numba import pipeline
 import ast as _ast
 
 class CudaAttributeNode(nodes.Node):
@@ -144,7 +145,7 @@ class CudaSRegRewrite(visitors.NumbaTransformer,
 
         return retval
 
-class NumbaproCudaPipeline(ast_type_inference.Pipeline):
+class NumbaproCudaPipeline(pipeline.Pipeline):
     def __init__(self, context, func, ast, func_signature, **kwargs):
         super(NumbaproCudaPipeline, self).__init__(context, func, ast,
                                                func_signature, **kwargs)
@@ -343,7 +344,7 @@ class CudaNumbaFunction(CudaBaseFunction):
         nvvm.fix_data_layout(self.module)
         nvvm.set_cuda_kernel(lfunc)
         self._ptxasm = nvvm.llvm_to_ptx(str(self.module))
-
+        print self._ptxasm
         from numbapro import _cudadispatch
         self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(self._ptxasm,
                                                                 func_name,
@@ -409,6 +410,5 @@ class CudaTranslate(_Translate):
             super(CudaTranslate, self).op_LOAD_ATTR(i, op, arg)
 
 # Patch numba
-#numba.decorators.jit_targets['gpu'] = jit # give up on bytecode path
-numba.decorators.jit2_targets['gpu'] = jit2
+numba.decorators.jit_targets[('gpu', 'ast')] = jit2 # give up on bytecode path
 numba.decorators.numba_function_autojit_targets['gpu'] = CudaAutoJitNumbaFunction
