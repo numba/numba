@@ -107,6 +107,9 @@ def mandel(x, y, max_iters):
 m, n = 0.4 + 1.2j, 5.1 - 0.6j
 
 class TestComplex(test_support.ByteCodeTestCase):
+
+    skip = _plat_bits == 64
+
     def test_get_real_fn (self):
         num0 = 3 + 2j
         num1 = numpy.complex128(num0)
@@ -125,9 +128,10 @@ class TestComplex(test_support.ByteCodeTestCase):
         self.assertEqual(compiled_get_imag_fn(num1), -2.)
         self.assertEqual(get_imag_fn(num1), compiled_get_imag_fn(num1))
 
-    @unittest.skipUnless(_plat_bits == 64, 'Complex return values not '
-                         'supported on 32-bit systems.')
     def test_get_conj_fn (self):
+        if self.skip:
+            raise unittest.SkipTest(
+                'Complex return values not supported on 32-bit systems.')
         num0 = 4 - 1.5j
         num1 = numpy.complex128(num0)
         compiled_get_conj_fn = self.jit(argtypes = [complex128],
@@ -137,17 +141,19 @@ class TestComplex(test_support.ByteCodeTestCase):
         self.assertEqual(compiled_get_conj_fn(num1), 4 + 1.5j)
         self.assertEqual(get_conj_fn(num1), compiled_get_conj_fn(num1))
 
-    @unittest.skipUnless(_plat_bits == 64, 'Complex return values not '
-                         'supported on 32-bit systems.')
     def test_get_complex_constant_fn (self):
+        if self.skip:
+            raise unittest.SkipTest(
+                'Complex return values not supported on 32-bit systems.')
         compiled_get_complex_constant_fn = self.jit(
             argtypes = [], restype = complex128)(get_complex_constant_fn)
         self.assertEqual(get_complex_constant_fn(),
                          compiled_get_complex_constant_fn())
 
-    @unittest.skipUnless(_plat_bits == 64, 'Complex return values not '
-                         'supported on 32-bit systems.')
     def test_prod_sum_fn (self):
+        if self.skip:
+            raise unittest.SkipTest(
+                'Complex return values not supported on 32-bit systems.')
         compiled_prod_sum_fn = self.jit(argtypes = [complex128, complex128, complex128],
                                         restype = complex128)(prod_sum_fn)
         rng = numpy.arange(-1., 1.1, 0.5)
@@ -161,6 +167,8 @@ class TestComplex(test_support.ByteCodeTestCase):
 
 
 class TestASTComplex(test_support.ASTTestCase, TestComplex):
+
+    skip = False
 
     def test_arithmetic_mixed(self):
         m, n = 0.4 + 1.2j, 10.0
