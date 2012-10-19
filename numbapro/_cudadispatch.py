@@ -218,24 +218,25 @@ class CudaGeneralizedUFuncDispatcher(CudaUFuncDispatcher):
         arrays = [np.asarray(a) for a in args]
 
 class CudaNumbaFuncDispatcher(object):
-    """
-    Invoke the CUDA ufunc specialization for the given inputs.
-    """
 
     def __init__(self, ptx_code, func_name, typemap):
         cu_module = _cuda.Module(ptx_code)
         self.cu_function = _cuda.Function(cu_module, func_name)
         self.typemap = typemap
 
-    def __call__(self, args, griddim, blkdim):
+    def __call__(self, args, griddim, blkdim, stream=0):
+        from ._cuda.devicearray import DeviceNDArray
         kernel_args = []
 
-        with _cuda.Stream() as stream:
+        def core(stream):
             retrievers = []
             def ndarray_gpu(x):
-                retriever, device_memory = ndarray_to_device_memory(x, stream=stream)
-                retrievers.append(retriever)
-                return device_memory
+                if isinstance(x, DeviceNDArray):
+                    return x.device_memory
+                else:
+                    retriever, device_memory = ndarray_to_device_memory(x, stream=stream)
+                    retrievers.append(retriever)
+                    return device_memory
 
             _typemapper = {'f': c_float,
                            'd': c_double,
@@ -252,4 +253,10 @@ class CudaNumbaFuncDispatcher(object):
             for r in retrievers:
                 r()
 
+        if not stream:
+            with _cuda.Stream() as stream:
+                core(stream)
+        else:
+            core(stream)
 
+        return stream

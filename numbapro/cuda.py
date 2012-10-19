@@ -105,8 +105,6 @@ def get_strided_arrays(argtypes):
 
     return result
 
-
-
 # modify numba behavior
 from numba import utils, functions, ast_translate
 from numba import visitors, nodes, error, ast_type_inference
@@ -301,8 +299,8 @@ class CudaBaseFunction(numba.decorators.NumbaFunction):
 
     _griddim = 1, 1, 1      # default grid dimension
     _blockdim = 1, 1, 1     # default block dimension
-
-    def configure(self, griddim, blockdim):
+    _stream = 0
+    def configure(self, griddim, blockdim, stream=0):
         '''Returns a new instance that is configured with the
         specified kernel grid dimension and block dimension.
 
@@ -322,13 +320,14 @@ class CudaBaseFunction(numba.decorators.NumbaFunction):
         while len(inst._blockdim) < 3:
             inst._blockdim += (1,)
 
+        inst._stream = stream
+
         return inst
 
     def __getitem__(self, args):
         '''Shorthand for self.configure()
         '''
-        griddim, blockdim = args
-        return self.configure(griddim, blockdim)
+        return self.configure(*args)
 
 class CudaNumbaFunction(CudaBaseFunction):
     def __init__(self, py_func, wrapper=None, ctypes_func=None,
@@ -417,7 +416,8 @@ class CudaNumbaFunction(CudaBaseFunction):
                 return val
 
         args = [convert(ty, val) for ty, val in zip(self.typemap, args)]
-        self.dispatcher(args, self._griddim, self._blockdim)
+        return self.dispatcher(args, self._griddim, self._blockdim,
+                               stream=self._stream)
 
     #    @property
     #    def compute_capability(self):
@@ -462,3 +462,18 @@ class CudaTranslate(_Translate):
 # Patch numba
 numba.decorators.jit_targets[('gpu', 'ast')] = jit2 # give up on bytecode path
 numba.decorators.numba_function_autojit_targets['gpu'] = CudaAutoJitNumbaFunction
+
+
+# NDarray device helper
+def to_device(ary, *args, **kws):
+    import numpy as np
+    from numbapro._cuda import devicearray
+    devarray =  devicearray.DeviceNDArray(shape=ary.shape, dtype=ary.dtype,
+                                          buffer=ary)
+    devarray.to_device(*args, **kws)
+    return devarray
+
+def stream():
+    from numbapro._cuda.driver import Stream
+    return Stream()
+
