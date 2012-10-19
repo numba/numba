@@ -388,13 +388,13 @@ class CudaNumbaFunction(CudaBaseFunction):
         #    ptxasm = ptxtm.emit_assembly(self.module)
         #    self._ptxasm = ptxasm
 
-        print self.module
+        # print self.module
 
         from numbapro._cuda import nvvm
         nvvm.fix_data_layout(self.module)
         nvvm.set_cuda_kernel(lfunc)
         self._ptxasm = nvvm.llvm_to_ptx(str(self.module))
-        print self._ptxasm
+        # print self._ptxasm
         from numbapro import _cudadispatch
         self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(self._ptxasm,
                                                                 func_name,
