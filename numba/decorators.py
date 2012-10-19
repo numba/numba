@@ -30,11 +30,14 @@ def _internal_export(name=None, restype=double, argtypes=[double], backend='ast'
             # For headers if needed
             default_prototypes.append(signature)
         else:
-            if func.func_code.co_argcount == 0 and argtypes is None:
-                argtypes = []
+            # to reassign need to setup this variable
+            # with no 'nonlocal'
+            artypes = argtypes
+            if func.func_code.co_argcount == 0 and artypes is None:
+                artypes = []
             func.live_objects = []
             func._is_numba_func = True
-            result = function_cache.compile_function(func, argtypes,
+            result = function_cache.compile_function(func, artypes,
                                                 nopython=True,
                                                 compile_only=True,
                                                 llvm_module=default_module,
