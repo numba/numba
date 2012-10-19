@@ -512,6 +512,22 @@ class ShapeAttributeNode(ArrayAttributeNode):
                                          array.variable.type.ndim)
         self.variable = Variable(self.type)
 
+
+class ExtTypeAttribute(Node):
+
+    _fields = ['value']
+
+    def __init__(self, value, attr, ext_type, **kwargs):
+        super(ExtTypeAttribute, self).__init__(**kwargs)
+        self.value = value
+        self.attr = attr
+        self.variable = ext_type.symtab[attr]
+        self.ext_type = ext_type
+
+
+class ExtTypeAttributeSet(ExtTypeAttribute):
+    pass
+
 class ComplexNode(Node):
     _fields = ['real', 'imag']
     type = complex128

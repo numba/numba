@@ -1041,7 +1041,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return new_node
 
-    def _resolve_attribute(self, node, type):
+    def _resolve_module_attribute(self, node, type):
         "Resolve attributes of the numpy module or a submodule"
         attribute = getattr(type.module, node.attr)
         if attribute is numpy.newaxis:
@@ -1064,6 +1064,24 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def is_store(self, ctx):
         return isinstance(ctx, ast.Store)
 
+    def _resolve_extension_attribute(self, node, type):
+        if attr not in type.symtab:
+            if type.is_resolved or not self.is_store(node.ctx):
+                raise error.NumbaError(
+                    node, "Cannot access attribute %s of type %s" % (
+                                                node.attr, type.ext_name))
+
+            # Create entry in type's symbol table, resolve the actual type
+            # in the parent Assign node
+            type.symtab[attr] = Variable(None)
+
+        if self.is_store(node.ctx):
+            cls = nodes.ExtTypeAttributeSet
+        else:
+            cls = nodes.ExtTypeAttribute
+
+        return cls(node.value, node.attr, type)
+
     def visit_Attribute(self, node):
         node.value = self.visit(node.value)
         type = node.value.variable.type
@@ -1084,12 +1102,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                         node, "Struct %s has no field %r" % (type, node.attr))
             result_type = type.fielddict[node.attr]
         elif type.is_module and hasattr(type.module, node.attr):
-            result_type = self._resolve_attribute(node, type)
+            result_type = self._resolve_module_attribute(node, type)
         elif type.is_object:
             result_type = type
         elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):
             # handle shape/strides/ndim etc
             return nodes.ArrayAttributeNode(node.attr, node.value)
+        elif type.is_extension:
+            return self._resolve_extension_attribute(node, type)
         else:
             # use PyObject_GetAttrString
             result_type = object_

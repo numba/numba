@@ -6,6 +6,8 @@ from distutils.core import setup, Extension
 
 import numpy
 
+from Cython.Distutils import build_ext
+from Cython.Distutils.extension import Extension as CythonExtension
 
 if sys.version_info[:2] < (2, 5):
     raise Exception('numba requires Python 2.5 or greater.')
@@ -53,8 +55,15 @@ setup(
     package_data = {
         'numba.minivect' : ['include/*'],
     },
-    # ext_modules = [Extension(name = "numba._ext",
-    #                          sources = ["numba/_ext.c"],
-    #                          include_dirs=[numpy.get_include()])],
-    version = '0.3'
+    ext_modules = [
+#        Extension(name = "numba._ext",
+#                  sources = ["numba/_ext.c"],
+#                  include_dirs=[numpy.get_include()]),
+        CythonExtension(
+            name = "numba.extension_types",
+            sources = ["numba/extension_types.pyx"],
+            cython_gdb=True),
+    ],
+    version = '0.3',
+    cmdclass={'build_ext': build_ext},
 )
