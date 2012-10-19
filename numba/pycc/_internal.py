@@ -69,8 +69,8 @@ def emit_header(output):
     with open(fname + '.h', 'wb') as fout:
         fout.write(minitypes.get_utility())
         fout.write("\n/* Prototypes */\n")
-        for t, name in decorators.translated:
-            name = name or t.func.func_name
-            restype = t.mini_rettype.declare()
-            args = ", ".join(arg_type.declare() for arg_type in t.mini_argtypes)
+        for signature in decorators.default_prototypes:
+            name = signature.name
+            restype = signature.return_type.declare()
+            args = ", ".join(argtype.declare() for argtype in signature.args)
             fout.write("extern %s %s(%s);\n" % (restype, name, args))

@@ -1,4 +1,4 @@
-__all__ = ['autojit', 'jit2', 'jit', 'export']
+__all__ = ['autojit', 'jit2', 'jit', 'export', 'exportmany']
 
 import functools
 import logging
@@ -12,24 +12,59 @@ from numba import error, pipeline
 from .minivect import minitypes
 from numba.utils import debugout
 
-from numba import double
+from numba import double, int_
 import llvm.core as _lc
 
 default_module = _lc.Module.new('default')
-translated = []
-def export(restype=double, argtypes=[double], backend='bytecode', **kws):
-    def _export(func, name=None):
-        # XXX: need to implement ast backend.
-        t = bytecode_translate.Translate(func, restype=restype,
-                                         argtypes=argtypes,
-                                         module=default_module,
-                                         name=name, **kws)
-        t.translate()
-        t.mini_rettype = restype
-        t.mini_argtypes = argtypes
-        translated.append((t, name))
+default_prototypes = []
+
+def _internal_export(name=None, restype=double, argtypes=[double], backend='ast', **kws):
+    def _export(func):
+        if backend == 'bytecode':
+            t = bytecode_translate.Translate(func, restype=restype,
+                                              argtypes=argtypes,
+                                              module=default_module,
+                                              name=name, **kws)
+            t.translate()
+            signature = minitypes.FunctionType(ires, iargs, name=name)
+            # For headers if needed
+            default_prototypes.append(signature)
+        else:
+            if func.func_code.co_argcount == 0 and argtypes is None:
+                    argtypes = []
+            func.live_objects = []
+            func._is_numba_func = True
+            result = function_cache.compile_function(func, argtypes,
+                                                nopython=True,
+                                                compile_only=True,
+                                                llvm_module=default_module,
+                                                name=name,
+                                                restype=restype, **kws)
+            # For headers if needed
+            default_prototypes.append(result[0])
     return _export
 
+def export(signature, **kws):
+    """
+    Construct a decorator that takes a function and exports one
+
+    A signature is a string with
+
+    name ret_type(arg_type, argtype, ...)
+    """
+    name, restype, argtypes = _process_sig(signature)
+    return _internal_export(name=name, restype=restype, argtypes=argtypes, backend='ast', **kws)   
+
+def exportmany(signatures, **kws):
+    """
+    A Decorator that exports many signatures for a single function
+    """   
+    def _export(func):
+        for signature in signatures:
+            export(signature, **kws)(func)
+        return 
+
+    return _export
 
 logger = logging.getLogger(__name__)
 
@@ -259,50 +294,62 @@ def _jit(restype=None, argtypes=None, backend='bytecode', **kws):
     return _jit
 
 jit_targets = {
-    'cpu': _jit,
-}
-
-jit2_targets = {
-    'cpu': _jit2,
+    ('cpu', 'bytecode') : _jit,
+    ('cpu', 'ast') : _jit2
 }
 
 numba_function_autojit_targets = {
     'cpu': NumbaFunction,
 }
 
-def jit(restype=None, argtypes=None, backend='bytecode', target='cpu',
-        **kws):
+def _process_sig(sigstr, name=None):
+    sigstr = sigstr.replace('*', '.pointer()')    
+    parts = sigstr.split()
+    types_dict = dict(globals(), d=double, i=int_)    
+    loc = {}
+    if len(parts) < 2:
+        signature = eval(sigstr, loc, types_dict)
+        signature.name = None
+    else:
+        signature = eval(' '.join(parts[1:]), loc, types_dict)
+        signature.name = parts[0]
+    if name is not None:
+        signature.name = name
+    return signature.name, signature.return_type, signature.args
+
+def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False,
+        _llvm_module=None, _llvm_ee=None, **kws):
     """
     Compile a function given the input and return types. If backend='bytecode'
     the bytecode translator is used, if backend='ast' the AST translator is
     used.
     """
     # Called with f8(f8) syntax which returns a dictionary of argtypes and restype
-    if isinstance(restype, dict) and restype.has_key('argtypes') and restype.has_key('restype'):
+    if isinstance(restype, minitypes.FunctionType):
         if argtypes is not None:
             raise TypeError, "Cannot use both calling syntax and argtypes keyword"
-        argtypes = restype['argtypes']
-        restype = restype['restype']
+        argtypes = restype.args
+        restype = restype.return_type
     # Called with a string like 'f8(f8)'
     elif isinstance(restype, str) and argtypes is None:
-        loc = {}
-        types_dict = dict(globals(), d=double)
-        signature = eval(restype, loc, types_dict)
-        argtypes = signature['argtypes']
-        restype = signature['restype']
+        name, restype, argtypes = _process_sig(restype, kws.get('name', None))
+        kws['name']=name
     if restype is not None:
         kws['restype'] = restype
     if argtypes is not None:
         kws['argtypes'] = argtypes
 
     kws['backend'] = backend
-    return jit_targets[target](**kws)
+    kws['nopython'] = nopython
+    kws['_llvm_module'] = _llvm_module
+    kws['_llvm_ee'] = _llvm_ee
+    return jit_targets[target, backend](**kws)
 
 def jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None,
           target='cpu', nopython=False, **kwargs):
     """
     Use the AST translator to translate the function.
     """
-    return jit2_targets[target](restype, argtypes, nopython=nopython,
+    return jit_targets[target, 'ast'](restype, argtypes, nopython=nopython,
                                 _llvm_module=_llvm_module, _llvm_ee=_llvm_ee,
                                 **kwargs)

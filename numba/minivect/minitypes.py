@@ -439,9 +439,9 @@ class Type(miniutils.ComparableObjectMixin):
         return getattr(type(self), attr)
 
     def __call__(self, *args):
-        """Return a dictionary of argtypes and restype
+        """Return a FunctionType with return_type and args set
         """
-        return dict(argtypes=args, restype=self)
+        return FunctionType(self, args)
 
 class ArrayType(Type):
     """
@@ -749,10 +749,11 @@ class FunctionType(Type):
 
     struct_by_reference = False
 
-    def __init__(self, return_type, args, **kwds):
+    def __init__(self, return_type, args, name=None, **kwds):
         super(FunctionType, self).__init__(**kwds)
         self.return_type = return_type
         self.args = args
+        self.name = name
 
     def to_llvm(self, context):
         assert self.return_type is not None
@@ -766,8 +767,11 @@ class FunctionType(Type):
         args = map(str, self.args)
         if self.is_vararg:
             args.append("...")
-
-        return "%s (*)(%s)" % (self.return_type, ", ".join(args))
+        if self.name:
+            namestr = self.name + ' '
+        else:
+            namestr = ''
+        return "%s%s (*)(%s)" % (namestr, self.return_type, ", ".join(args))
 
     @property
     def actual_signature(self):

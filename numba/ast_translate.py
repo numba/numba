@@ -301,12 +301,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     """
 
     def __init__(self, context, func, ast, func_signature, symtab,
-                 optimize=True, func_name=None,
+                 optimize=True,
                  llvm_module=None, llvm_ee=None,
                  refcount_args=True, **kwds):
         super(LLVMCodeGenerator, self).__init__(context, func, ast)
 
-        self.func_name = func_name or func.__name__
+        self.func_name = func_signature.name or func.__name__
         self.func_signature = func_signature
 
         self.symtab = symtab

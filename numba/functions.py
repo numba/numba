@@ -40,6 +40,42 @@ def fix_ast_lineno(tree):
 def _get_ast(func):
     return decompile_func(func)
 
+def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
+    import numba.ast_type_inference as type_inference
+
+    ast = _get_ast(func)
+    func_signature = minitypes.FunctionType(return_type=restype,
+                                            args=argtypes)
+    return type_inference.run_pipeline(context, func, ast,
+                                       func_signature, **kwargs)
+
+
+def _compile(context, func, restype=None, argtypes=None, ctypes=False,
+             compile_only=False, name=None, **kwds):
+    """
+    Compile a numba annotated function.
+
+        - decompile function into a Python ast
+        - run type inference using the given input types
+        - compile the function to LLVM
+    """
+    func_signature, symtab, ast = _infer_types(context, func,
+                                               restype, argtypes, **kwds)
+    func_name = name or naming.specialized_mangle(func.__name__, func_signature.args)
+    func_signature.name = func_name
+
+    t = translate.LLVMCodeGenerator(
+        context, func, ast, func_signature=func_signature,
+        symtab=symtab, **kwds)
+    t.translate()
+
+    if compile_only:
+        return func_signature, t.lfunc, None
+    if ctypes:
+        ctypes_func = t.get_ctypes_func(kwds.get('llvm', True))
+        return func_signature, t.lfunc, ctypes_func
+    else:
+        return func_signature, t.lfunc, t.build_wrapper_function()
 
 class FunctionCache(object):
     """

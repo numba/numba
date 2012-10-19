@@ -82,41 +82,41 @@ class TestForLoop(unittest.TestCase):
     def test_compiled_for_loop_fn_0(self):
         test_data = numpy.array([1, 2, 3], dtype = 'l')
         compiled_for_loop_fn = jit(
-            argtypes = [['l']])(for_loop_fn_0)
+            argtypes = [['l']],backend='bytecode')(for_loop_fn_0)
         result = compiled_for_loop_fn(test_data)
         self.assertEqual(result, 6)
         self.assertEqual(result, for_loop_fn_0(testdata))
 
     def test_compiled_for_loop_fn_1(self):
         compiled_for_loop_fn = jit(argtypes = ['i','i','i'],
-                                             restype = 'i')(for_loop_fn_1)
+                                             restype = 'i', backend='bytecode')(for_loop_fn_1)
         result = compiled_for_loop_fn(1, 4, 1)
         self.assertEqual(result, 6)
         self.assertEqual(result, for_loop_fn_1(1, 4, 1))
 
     def test_compiled_for_loop_fn_2(self):
         compiled_for_loop_fn = jit(argtypes = ['i'],
-                                             restype = 'i')(for_loop_fn_2)
+                                             restype = 'i', backend='bytecode')(for_loop_fn_2)
         result = compiled_for_loop_fn(4)
         self.assertEqual(result, 36)
         self.assertEqual(result, for_loop_fn_2(4))
 
     def test_compiled_for_loop_fn_3(self):
         compiled_for_loop_fn = jit(argtypes = ['i'],
-                                             restype = 'i')(for_loop_fn_3)
+                                             restype = 'i', backend='bytecode')(for_loop_fn_3)
         result = compiled_for_loop_fn(3)
         self.assertEqual(result, for_loop_fn_3(3))
         self.assertEqual(result, 81)
 
     def test_compiled_for_loop_w_guard_0(self):
-        compiled_for_loop_w_guard = jit()(for_loop_w_guard_0)
+        compiled_for_loop_w_guard = jit(backend='bytecode')(for_loop_w_guard_0)
         self.assertEqual(compiled_for_loop_w_guard(5.),
                          for_loop_w_guard_0(5.))
         self.assertEqual(compiled_for_loop_w_guard(4.),
                          for_loop_w_guard_0(4.))
 
     def test_compiled_for_loop_w_guard_1(self):
-        compiled_for_loop_w_guard = jit()(for_loop_w_guard_1)
+        compiled_for_loop_w_guard = jit(backend='bytecode')(for_loop_w_guard_1)
         self.assertEqual(compiled_for_loop_w_guard(5.),
                          for_loop_w_guard_1(5.))
         self.assertEqual(compiled_for_loop_w_guard(4.),
