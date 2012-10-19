@@ -743,7 +743,8 @@ class FunctionType(Type):
     subtypes = ['return_type', 'args']
     is_function = True
     is_vararg = False
-    struct_return = False
+
+    struct_by_reference = False
 
     def __init__(self, return_type, args, **kwds):
         super(FunctionType, self).__init__(**kwds)
@@ -752,10 +753,7 @@ class FunctionType(Type):
 
     def to_llvm(self, context):
         assert self.return_type is not None
-        if self.struct_return:
-            sig = FunctionType(void, self.args + (self.struct_return_type,))
-            return sig.to_llvm(context)
-
+        self = self.actual_signature
         return lc.Type.function(self.return_type.to_llvm(context),
                                 [arg_type.to_llvm(context)
                                     for arg_type in self.args],
@@ -768,11 +766,35 @@ class FunctionType(Type):
 
         return "%s (*)(%s)" % (self.return_type, ", ".join(args))
 
+    def pass_by_ref(self, type):
+        return type.is_struct or type.is_complex
+
+    @property
+    def actual_signature(self):
+        """
+        Passing structs by value is not properly supported for different
+        calling conventions in LLVM, so we take an extra argument
+        pointing to a caller-allocated struct value.
+        """
+        if self.struct_by_reference:
+            args = []
+            for arg in self.args:
+                if self.pass_by_ref(arg):
+                    arg = arg.pointer()
+                args.append(arg)
+
+            return_type = self.return_type
+            if self.pass_by_ref(self.return_type):
+                return_type = void
+                args.append(self.return_type.pointer())
+
+            self = FunctionType(return_type, args)
+
+        return self
+
     @property
     def struct_return_type(self):
-        # Function returns a struct. This is not properly supported for
-        # different calling conventions in LLVM, so we take an extra argument
-        # pointing to a caller-allocated struct value.
+        # Function returns a struct.
         return self.return_type.pointer()
 
 class VectorType(Type):
