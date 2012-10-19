@@ -47,7 +47,8 @@ class TestFilter2d(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    unittest.main(*sys.argv[1:])
+    TestFilter2d('test_vectorized_filter2d').debug()
+#    unittest.main(*sys.argv[1:])
 
 # ______________________________________________________________________
 # End of test_filter2d.py

@@ -661,7 +661,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                       node.right.variable)
         node.left, node.right = nodes.CoercionNode.coerce(
                             [node.left, node.right], promotion_type)
+
         node.variable = Variable(promotion_type)
+        if isinstance(node.op, ast.FloorDiv):
+            dst_type = self.promote(node.left.variable, node.right.variable)
+            if dst_type.is_float or dst_type.is_int:
+                node.op = ast.Div()
+                node = nodes.CoercionNode(node, long_)
+                node = nodes.CoercionNode(node, dst_type)
+
         return node
 
     def visit_UnaryOp(self, node):

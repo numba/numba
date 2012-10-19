@@ -252,6 +252,15 @@ class ComplexSupportMixin(object):
                                           self.builder.fmul(arg1r, arg2i)),
                         divisor))
 
+    def _complex_floordiv(self, arg1r, arg1i, arg2r, arg2i):
+        real, imag = self._complex_div(arg1r, arg1i, arg2r, arg2i)
+        long_type = long_.to_llvm(self.context)
+        real = self.caster.cast(real, long_type)
+        imag = self.caster.cast(imag, long_type)
+        real = self.caster.cast(real, arg1r.type)
+        imag = self.caster.cast(imag, arg1r.type)
+        return real, imag
+
 
 class RefcountingMixin(object):
 
@@ -389,7 +398,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 # Allocate storage for all variables.
                 name = 'var_%s' % var.name
                 if is_obj(var.type):
-                    stackspace = self._null_obj_temp(name)
+                    stackspace = self._null_obj_temp(name, type=var.ltype)
                 else:
                     stackspace = self.builder.alloca(var.ltype, name=name)
                 var.lvalue = stackspace
@@ -563,8 +572,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         sig, symtab, return_stmt_ast = pipeline_.run_pipeline()
         self.generic_visit(return_stmt_ast)
 
-    def _null_obj_temp(self, name):
-        lhs = self.llvm_alloca(llvm_types._pyobject_head_struct_p,
+    def _null_obj_temp(self, name, type=None):
+        lhs = self.llvm_alloca(type or llvm_types._pyobject_head_struct_p,
                                name=name, change_bb=False)
         self.generate_assign(self.visit(nodes.NULL_obj), lhs)
         return lhs
@@ -951,7 +960,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return self._handle_mod(node, lhs, rhs)
         elif node.type.is_complex:
             opname = self.opname(op)
-            if opname in ('add', 'sub', 'mul', 'div'):
+            if opname in ('add', 'sub', 'mul', 'div', 'floordiv'):
                 m = getattr(self, '_complex_' + opname)
                 result = self._generate_complex_op(m, lhs, rhs)
             else:

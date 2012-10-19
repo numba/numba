@@ -52,6 +52,9 @@ def mul(a, b):
 def div(a, b):
     return a / b
 
+def floordiv(a, b):
+    return a // b
+
 def sqrt(a, b):
     result = a**2 + b**2
     return cmath.sqrt(result) + 1.6j
@@ -177,10 +180,11 @@ class TestASTComplex(test_support.ASTTestCase, TestComplex):
         self.arithmetic(m, n)
 
     def arithmetic(self, m, n):
-#        self.assertAlmostEqual(self.autojit(add)(m, n), add(m, n))
+        self.assertAlmostEqual(self.autojit(add)(m, n), add(m, n))
         self.assertAlmostEqual(self.autojit(sub)(m, n), sub(m, n))
         self.assertAlmostEqual(self.autojit(mul)(m, n), mul(m, n))
         self.assertAlmostEqual(self.autojit(div)(m, n), div(m, n))
+        self.assertAlmostEqual(self.autojit(floordiv)(m, n), floordiv(m, n))
 
     def test_complex_math(self):
         self.assertAlmostEqual(self.autojit(sqrt)(m, n), sqrt(m, n))

@@ -42,13 +42,13 @@ class TestGetattr(unittest.TestCase):
 
     def test_getattr_shape_1(self):
         test_data = numpy.array([1., 2., 3.])
-        compiled_fn = jit('i%d * (f8[:])' % (_plat_bits // 8))(get_ndarray_shape)
+        compiled_fn = jit('i%d*(f8[:])' % (_plat_bits // 8))(get_ndarray_shape)
         result = compiled_fn(test_data)
         self.assertEqual(result[0], 3)
 
     def test_getattr_shape_2(self):
         test_data2 = numpy.array([[1., 2., 3.], [4., 5., 6.]])
-        compiled_fn2 = jit('i%d * (f8[:])' % (_plat_bits // 8))(get_ndarray_shape)
+        compiled_fn2 = jit('i%d*(f8[:])' % (_plat_bits // 8))(get_ndarray_shape)
         result = compiled_fn2(test_data2)
         self.assertEqual(result[0], 2)
         self.assertEqual(result[1], 3)

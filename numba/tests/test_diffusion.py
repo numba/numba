@@ -35,7 +35,7 @@ def test_diffusion():
     diffusionObstacleStep(u, tempU, iterNum)
 
     tempU_numpy, u_numpy = get_arrays()
-    diffusionObstacleStep.py_func(u, tempU, iterNum)
+    diffusionObstacleStep.py_func(u_numpy, tempU_numpy, iterNum)
 
     print u
     print u_numpy
