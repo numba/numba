@@ -123,8 +123,19 @@ class CudaAttributeNode(nodes.Node):
     def __repr__(self):
         return '<%s value=%s>' % (type(self).__nmae__, self.value)
 
+#class CudaDeviceCallRewrite(visitors.NumbaTransformer,
+#                            ast_type_inference.NumpyMixin):
+#    def visit_MathCallNode(self, ast):
+#        name  = self.resolve_callee_name(ast.func)
+#        func = self._myglobals[name]
+#        return nodes.MathCallNode(func.signature, ast.args, func.lfunc, name=func.lfunc.name)
+
+#    def resolve_callee_name(self, ast):
+#        assert isinstance(ast, _ast.Name)
+#        return ast.id
+
 class CudaSRegRewrite(visitors.NumbaTransformer,
-                             ast_type_inference.NumpyMixin):
+                      ast_type_inference.NumpyMixin):
 
     def visit_Attribute(self, ast):
         this_module = sys.modules[__name__]
@@ -138,18 +149,20 @@ class CudaSRegRewrite(visitors.NumbaTransformer,
             retval = value.resolve(ast.attr)
 
         if retval.value in _SPECIAL_VALUES:
-            # replace with a NativeCallNode
+            # replace with a MathCallNode
             sig = minitypes.FunctionType(minitypes.uint32, [])
             fname = _SPECIAL_VALUES[retval.value]
             retval = nodes.MathCallNode(sig, [], None, name=fname)
 
         return retval
 
+
 class NumbaproCudaPipeline(pipeline.Pipeline):
     def __init__(self, context, func, ast, func_signature, **kwargs):
         super(NumbaproCudaPipeline, self).__init__(context, func, ast,
                                                func_signature, **kwargs)
         self.insert_specializer('rewrite_cuda_sreg', after='type_infer')
+
 
     def rewrite_cuda_sreg(self, ast):
         return CudaSRegRewrite(self.context, self.func, ast).visit(ast)
@@ -160,7 +173,7 @@ context.numba_pipeline = NumbaproCudaPipeline
 function_cache = context.function_cache = functions.FunctionCache(context)
 
 cached = {}
-def jit(restype=void, argtypes=None, backend='bytecode'):
+def jit(restype=void, argtypes=None, backend='ast', **kws):
     '''JIT python function into a CUDA kernel.
 
     A CUDA kernel does not return any value.
@@ -171,53 +184,53 @@ def jit(restype=void, argtypes=None, backend='bytecode'):
 
     Support for double-precision floats depends on your CUDA device.
     '''
-    assert restype == void, restype
+
     assert argtypes is not None
-    assert backend in ('bytecode', 'ast')
+    assert backend == 'ast', 'Bytecode support has dropped'
 
-    restype = int32
+    #    restype = int32
+    #    if backend=='bytecode':
+    #        key = func, tuple(get_strided_arrays(argtypes))
+    #        if key in cached:
+    #            cnf = cached[key]
+    #        else:
+    #            # NOTE: This will use bytecode translate path
+    #            t = CudaTranslate(func, restype=restype, argtypes=argtypes,
+    #                              module=_lc.Module.new("ptx_%s" % str(func)))
+    #            t.translate()
 
-    if backend=='bytecode':
-        key = func, tuple(get_strided_arrays(argtypes))
-        if key in cached:
-            cnf = cached[key]
-        else:
-            # NOTE: This will use bytecode translate path
-            t = CudaTranslate(func, restype=restype, argtypes=argtypes,
-                              module=_lc.Module.new("ptx_%s" % str(func)))
-            t.translate()
+    #            cnf = CudaNumbaFunction(func, lfunc=t.lfunc, extra=t)
+    #            cached[key] = cnf
 
-            cnf = CudaNumbaFunction(func, lfunc=t.lfunc, extra=t)
-            cached[key] = cnf
-
-        return cnf
-    else:
-        jit2(restype=restype, argtypes=argtypes)
-
-    return _jit
+    #        return cnf
+    #    else:
+    return jit2(restype=restype, argtypes=argtypes, **kws)
 
 
-def jit2(restype=void, argtypes=None, **kws):
+_device_functions = {}
+def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
+    assert device or restype == void,\
+           ("Only device function can have return value %s" % restype)
     assert kws.get('_llvm_ee') is None
+    assert not inline or device
     kws['nopython'] = True # override nopython option
     def _jit2(func):
         llvm_module = (kws.get('_llvm_module')
                        or _lc.Module.new('ptx_%s' % func))
         if not hasattr(func, '_is_numba_func'):
             func._is_numba_func = True
+            func._numba_compile_only = True
+        func._numba_inline = inline
 
         result = function_cache.compile_function(func, argtypes,
                                                  ctypes=True,
                                                  llvm_module=llvm_module,
                                                  llvm_ee=None,
-                                                 compile_only=True,
                                                  **kws)
-
 
         signature, lfunc, unused = result
 
         # XXX: temp fix for PyIncRef and PyDecRef in lfunc.
-
         def _temp_hack():
             inlinelist = []
             fakepy = {}
@@ -231,7 +244,8 @@ def jit2(restype=void, argtypes=None, **kws):
                             inlinelist.append(instr)
                             fty = instr.called_function.type.pointee
                             fakepy[fname] = fn
-                            assert fty.return_type == _lc.Type.void(), 'assume no sideeffect'
+                            assert fty.return_type == _lc.Type.void(),\
+                                    'assume no sideeffect'
 
             for fname, fn in fakepy.items():
                 bldr = _lc.Builder.new(fn.append_basic_block('entry'))
@@ -245,9 +259,42 @@ def jit2(restype=void, argtypes=None, **kws):
 
         _temp_hack()
 
-
-        return CudaNumbaFunction(func, signature=signature, lfunc=lfunc)
+        if device:
+            assert lfunc.name not in _device_functions, 'Device function name already used'
+            _device_functions[lfunc.name] = func, lfunc
+            return CudaDeviceFunction(func, signature=signature, lfunc=lfunc)
+        else:
+            _link_device_function(lfunc)
+            return CudaNumbaFunction(func, signature=signature, lfunc=lfunc)
     return _jit2
+
+
+def _link_device_function(lfunc):
+    toinline = []
+    for bb in lfunc.basic_blocks:
+        for instr in bb.instructions:
+            if isinstance(instr, _lc.CallOrInvokeInstruction):
+                fn = instr.called_function
+                bag = _device_functions.get(fn.name)
+                if bag is not None:
+                    pyfunc, linkee =bag
+                    lfunc.module.link_in(linkee.module.clone())
+                    if pyfunc._numba_inline:
+                        toinline.append(instr)
+
+    for call in toinline:
+        callee = call.called_function
+        _lc.inline_function(call)
+
+
+class CudaDeviceFunction(numba.decorators.NumbaFunction):
+    def __init__(self, py_func, wrapper=None, ctypes_func=None,
+                 signature=None, lfunc=None, extra=None):
+        super(CudaDeviceFunction, self).__init__(py_func, wrapper, ctypes_func,
+                                                signature, lfunc)
+
+    def __call__(self, *args, **kws):
+        raise TypeError("")
 
 class CudaBaseFunction(numba.decorators.NumbaFunction):
 
@@ -339,6 +386,8 @@ class CudaNumbaFunction(CudaBaseFunction):
         #    ptxtm = _le.TargetMachine.lookup(arch, cpu=cc, opt=3)
         #    ptxasm = ptxtm.emit_assembly(self.module)
         #    self._ptxasm = ptxasm
+
+        print self.module
 
         from numbapro._cuda import nvvm
         nvvm.fix_data_layout(self.module)
