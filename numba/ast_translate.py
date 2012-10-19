@@ -575,7 +575,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def setup_return(self):
         # Assign to this value which will be returned
-        self.is_void_return = self.func_signature.return_type.is_void
+        self.is_void_return = \
+                self.func_signature.actual_signature.return_type.is_void
         if self.func_signature.struct_by_reference:
             self.return_value = self.lfunc.args[-1]
         elif not self.is_void_return:
