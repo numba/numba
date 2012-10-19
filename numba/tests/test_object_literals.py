@@ -7,6 +7,7 @@
 True
 """
 
+import sys
 from numba import *
 
 myglobal = 20

@@ -420,8 +420,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                     functions._from_long)
             elif node_type.is_float:
                 cls = functions.PyFloat_FromDouble
-            # elif node_type.is_complex:
-            #      cls = functions.PyComplex_FromCComplex
+            elif node_type.is_complex:
+                  cls = functions.PyComplex_FromCComplex
 
             if cls:
                 new_node = self.function_cache.call(cls.__name__, node.node)
@@ -458,7 +458,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
             elif node_type.is_float:
                 cls = functions.PyFloat_AsDouble
             # elif node_type.is_complex:
-            #     cls = functions.PyComplex_AsCComplex
+            #      cls = functions.PyComplex_AsCComplex
 
             if cls:
                 # TODO: error checking!

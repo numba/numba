@@ -532,7 +532,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         if arg_types:
             # Unpack tuple into arguments
-            lstr = self.object_coercer.lstr(arg_types)
+            types, lstr = self.object_coercer.lstr(arg_types)
             largs = self.object_coercer.parse_tuple(lstr, args_tuple, arg_types)
         else:
             largs = []
@@ -571,6 +571,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def puts(self, msg):
         const = nodes.ConstNode(msg, c_string_type)
+        self.visit(self.function_cache.call('puts', const))
+
+    def puts_llvm(self, llvm_string):
+        const = nodes.LLVMValueRefNode(c_string_type, llvm_string)
         self.visit(self.function_cache.call('puts', const))
 
     def setup_return(self):
@@ -1330,11 +1334,15 @@ class ObjectCoercer(object):
     def lstr(self, types, fmt=None):
         "Get an llvm format string for the given types"
         typestrs = []
+        result_types = []
         for type in types:
             if is_obj(type):
                 type = object_
             elif type.is_int:
-                type = promote_closest(self.context, type, minitypes.native_integral)
+                type = promote_closest(self.context, type,
+                                       minitypes.native_integral)
+
+            result_types.append(type)
             typestrs.append(self.type_to_buildvalue_str[type])
 
         str = "".join(typestrs)
@@ -1343,14 +1351,22 @@ class ObjectCoercer(object):
 
         # self.translator.puts("fmt: %s" % str)
         result = self._create_llvm_string(str)
-        return result
+        return result_types, result
 
-    def buildvalue(self, *largs, **kwds):
+    def buildvalue(self, types, *largs, **kwds):
         # The caller should check for errors using check_err or by wrapping
         # its node in an ObjectTempNode
         name = kwds.get('name', '')
+        fmt = kwds.get('fmt', None)
+        types, lstr = self.lstr(types, fmt)
+        largs = (lstr,) + largs
+
         # self.translator.puts("building... %s" % name)
-        result = self.builder.call(self.py_buildvalue, largs, name=name)
+        # func_type = object_(*types).pointer()
+        # py_buildvalue = self.builder.bitcast(
+        #         self.py_buildvalue, func_type.to_llvm(self.context))
+        py_buildvalue = self.py_buildvalue
+        result = self.builder.call(py_buildvalue, largs, name=name)
         # self.translator.puts("done building... %s" % name)
         return result
 
@@ -1370,14 +1386,6 @@ class ObjectCoercer(object):
 
         return llvm_result, type
 
-    def float_to_double(self, llvm_result, type):
-        if type == minitypes.float_:
-            ldouble = minitypes.double.to_llvm(self.context)
-            llvm_result = self.translator.caster.cast(llvm_result, ldouble)
-            type = minitypes.double
-
-        return llvm_result, type
-
     def convert_single_struct(self, llvm_result, type):
         types = []
         largs = []
@@ -1389,13 +1397,11 @@ class ObjectCoercer(object):
                                            [zero, llvm_types.constant_int(i)])
             largs.append(self.builder.load(struct_attr))
 
-        lstr = self.lstr(types, fmt="{%s}")
-        return self.buildvalue(lstr, *largs, name='struct')
+        return self.buildvalue(types, *largs, name='struct', fmt="{%s}")
 
     def convert_single(self, type, llvm_result, name=''):
         "Generate code to convert an LLVM value to a Python object"
         llvm_result, type = self.npy_intp_to_py_ssize_t(llvm_result, type)
-        llvm_result, type = self.float_to_double(llvm_result, type)
         if type.is_struct:
             return self.convert_single_struct(llvm_result, type)
         elif type.is_complex:
@@ -1405,31 +1411,30 @@ class ObjectCoercer(object):
             self.builder.store(llvm_result, new_result)
             llvm_result = new_result
 
-        lstr = self.lstr([type])
-        return self.buildvalue(lstr, llvm_result, name=name)
+        return self.buildvalue([type], llvm_result, name=name)
 
     def build_tuple(self, types, llvm_values):
         "Build a tuple from a bunch of LLVM values"
         assert len(types) == len(llvm_values)
-        lstr = self.lstr(types, fmt="(%s)")
-        return self.buildvalue(lstr, *llvm_values, name='tuple')
+        return self.buildvalue(lstr, *llvm_values, name='tuple', fmt="(%s)")
 
     def build_list(self, types, llvm_values):
         "Build a tuple from a bunch of LLVM values"
         assert len(types) == len(llvm_values)
-        lstr = self.lstr(types, fmt="[%s]")
-        return self.buildvalue(lstr, *llvm_values, name='list')
+        return self.buildvalue(types, *llvm_values, name='list',  fmt="[%s]")
 
     def build_dict(self, key_types, value_types, llvm_keys, llvm_values):
         "Build a dict from a bunch of LLVM values"
         types = []
-        for k, v in zip(key_types, value_types):
+        largs = []
+        for k, v, llvm_key, llvm_value in zip(key_types, value_types,
+                                              llvm_keys, llvm_values):
             types.append(k)
             types.append(v)
+            largs.append(llvm_key)
+            largs.append(llvm_value)
 
-        lstr = self.lstr(types, fmt="{%s}")
-        largs = llvm_keys + llvm_values
-        return self.buildvalue(lstr, *largs, name='dict')
+        return self.buildvalue(types, *largs, name='dict', fmt="{%s}")
 
     def parse_tuple(self, lstr, llvm_tuple, types, name=''):
         "Unpack a Python tuple into typed llvm variables"
@@ -1447,7 +1452,7 @@ class ObjectCoercer(object):
 
     def to_native(self, type, llvm_tuple, name=''):
         "Generate code to convert a Python object to an LLVM value"
-        lstr = self.lstr([type])
+        types, lstr = self.lstr([type])
         lresult, = self.parse_tuple(lstr, llvm_tuple, [type], name=name)
         return lresult
 
