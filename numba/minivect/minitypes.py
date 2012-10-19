@@ -696,7 +696,7 @@ class Py_ssize_t_Type(IntType):
 
     def __init__(self, **kwds):
         super(Py_ssize_t_Type, self).__init__(**kwds)
-        self.itemsize = _plat_bits / 8
+        self.itemsize = ctypes.sizeof(ctypes.c_ssize_t)
 
 class NPyIntp(IntType):
     is_numpy_intp = True
@@ -943,7 +943,8 @@ try:
 except ImportError:
     npy_intp = None
 
-size_t = IntType(name="size_t", rank=8.5, itemsize=8, signed=False)
+size_t = IntType(name="size_t", rank=8.5,
+                 itemsize=ctypes.sizeof(ctypes.c_size_t), signed=False)
 char = CharType(name="char", typecode='b')
 short = IntType(name="short", rank=2, typecode='h')
 int_ = IntType(name="int", rank=4, typecode='i')
