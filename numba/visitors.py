@@ -10,10 +10,17 @@ except ImportError:
 from numba import error
 
 class NumbaVisitorMixin(object):
-    def __init__(self, context, func, ast):
+    def __init__(self, context, func, ast, func_signature=None, nopython=0,
+                 symtab=None):
         self.context = context
         self.ast = ast
         self.function_cache = context.function_cache
+        self.symtab = symtab
+        self.func_signature = func_signature
+        self.nopython = nopython
+
+        import ast_type_inference
+        self.astbuilder = ast_type_inference.ASTBuilder()
 
         self.func = func
         self.fco = func.func_code
@@ -69,13 +76,3 @@ class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
 
 class NumbaTransformer(ast.NodeTransformer, NumbaVisitorMixin):
     "Mutating visitor"
-
-class NumbaTransformerAndSignature(NumbaTransformer):
-
-    def __init__(self, context, func, ast, func_signature, nopython=0):
-        super(NumbaTransformerAndSignature, self).__init__(context, func, ast)
-        self.func_signature = func_signature
-        self.nopython = nopython
-
-        import ast_type_inference
-        self.astbuilder = ast_type_inference.ASTBuilder()

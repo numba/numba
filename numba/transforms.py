@@ -219,8 +219,8 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
 
 
 class TransformForIterable(visitors.NumbaTransformer):
-    def __init__(self, context, func, ast, symtab):
-        super(TransformForIterable, self).__init__(context, func, ast)
+    def __init__(self, context, func, ast, symtab, **kwds):
+        super(TransformForIterable, self).__init__(context, func, ast, **kwds)
         self.symtab = symtab
 
     def visit_For(self, node):
@@ -272,7 +272,7 @@ class TransformForIterable(visitors.NumbaTransformer):
         else:
             raise error.NumbaError("Unsupported for loop pattern")
 
-class ResolveCoercions(visitors.NumbaTransformerAndSignature):
+class ResolveCoercions(visitors.NumbaTransformer):
 
     def visit_CoercionNode(self, node):
         if not isinstance(node, nodes.CoercionNode):

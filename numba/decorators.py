@@ -8,7 +8,7 @@ from numba import *
 from . import _numba_types
 from . import utils, functions, ast_translate as translate, ast_type_inference
 from numba import translate as bytecode_translate
-from numba import error
+from numba import error, pipeline
 from .minivect import minitypes
 from numba.utils import debugout
 
@@ -67,7 +67,7 @@ __tr_map__ = {}
 
 context = utils.get_minivect_context()
 context.llvm_context = translate.LLVMContextManager()
-context.numba_pipeline = ast_type_inference.Pipeline
+context.numba_pipeline = pipeline.Pipeline
 function_cache = context.function_cache = functions.FunctionCache(context)
 
 class NumbaFunction(object):
@@ -165,7 +165,7 @@ def _autojit(target, nopython):
                 compiled_numba_func = _func_cache[types]
             else:
                 # Infer the return type
-                func_signature, symtab, ast = functions._infer_types(
+                func_signature, symtab, ast = pipeline.infer_types(
                                             context, f, argtypes=types)
 
                 decorator = jit(restype=func_signature.return_type,

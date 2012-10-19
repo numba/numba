@@ -16,88 +16,9 @@ from . import visitors, nodes, error
 from numba import stdio_util
 from numba._numba_types import is_obj, promote_closest
 
-#stdin, stdout, stderr = _ext.get_libc_file_addrs()
-#stdin = nodes.ConstNode(stdin, void.pointer())
-#stdout = nodes.ConstNode(stdout, void.pointer())
-#stderr = nodes.ConstNode(stderr, void.pointer())
-
-
 import llvm.core
 import numpy
 import numpy as np
-
-import logging
-logger = logging.getLogger(__name__)
-
-class Pipeline(object):
-    def __init__(self, context, func, ast, func_signature,
-                 nopython=False, locals=None, order=None, **kwargs):
-        self.context = context
-        self.func = func
-        self.ast = ast
-        self.func_signature = func_signature
-        self.symtab = None
-
-        self.nopython = nopython
-        self.locals = locals
-        self.kwargs = kwargs
-
-        self.order = order or [
-            'type_infer',
-            'type_set',
-            'transform_for',
-            'specialize',
-            'late_specializer',
-        ]
-
-    def type_infer(self, ast):
-        type_inferer = TypeInferer(self.context, self.func, ast,
-                                   func_signature=self.func_signature,
-                                   locals=self.locals)
-        type_inferer.infer_types()
-        self.func_signature = type_inferer.func_signature
-        logger.debug("signature for %s: %s" % (self.func.func_name,
-                                               self.func_signature))
-        self.symtab = type_inferer.symtab
-        return ast
-
-    def type_set(self, ast):
-        TypeSettingVisitor(self.context, self.func, ast).visit(ast)
-        return ast
-
-    def transform_for(self, ast):
-        transform = transforms.TransformForIterable(self.context, self.func,
-                                                    ast, self.symtab)
-        return transform.visit(ast)
-
-    def specialize(self, ast):
-        return ast
-
-    def late_specializer(self, ast):
-        specializer = transforms.LateSpecializer(self.context, self.func, ast,
-                                                 self.func_signature,
-                                                 nopython=self.nopython)
-        return specializer.visit(ast)
-
-    def insert_specializer(self, name, after):
-        self.order.insert(self.order.index(after), name)
-
-    def run_pipeline(self):
-        ast = self.ast
-        for method_name in self.order:
-            ast = getattr(self, method_name)(ast)
-
-        return self.func_signature, self.symtab, ast
-
-def run_pipeline(context, func, ast, func_signature,
-                 pipeline=None, **kwargs):
-    """
-    Run a bunch of AST transformers and visitors on the AST.
-    """
-    # print __import__('ast').dump(ast)
-    pipeline = pipeline or context.numba_pipeline(context, func, ast,
-                                                  func_signature, **kwargs)
-    return pipeline.run_pipeline()
 
 class ASTBuilder(object):
     def index(self, node, constant_index, load=True):
@@ -430,18 +351,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     Infers and checks types and inserts type coercion nodes.
     """
 
-    def __init__(self, context, func, ast, func_signature, locals):
-        super(TypeInferer, self).__init__(context, func, ast)
-        # Name -> Variable
-        self.symtab = {}
+    def __init__(self, context, func, ast, locals, **kwds):
+        super(TypeInferer, self).__init__(context, func, ast, **kwds)
 
         self.locals = locals or {}
         #for local in self.locals:
         #    if local not in self.local_names:
         #        raise error.NumbaError("Not a local variable: %r" % (local,))
 
-        self.func_signature = func_signature
-        self.given_return_type = func_signature.return_type
+        self.given_return_type = self.func_signature.return_type
         self.return_variables = []
         self.return_type = None
 

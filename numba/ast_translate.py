@@ -526,7 +526,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return result
 
     def visit_FunctionWrapperNode(self, node):
-        import ast_type_inference
+        from numba import ast_type_inference, pipeline
 
         args_tuple = self.lfunc.args[1]
         arg_types = [object_] * len(node.signature.args)
@@ -558,10 +558,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # We need to specialize the return statement, since it may be a
         # non-trivial coercion (e.g. call a ctypes pointer type for pointer
         # return types, etc)
-        pipeline = ast_type_inference.Pipeline(self.context, node.fake_pyfunc,
-                                               node, self.func_signature,
-                                               order=['late_specializer'])
-        sig, symtab, return_stmt_ast = pipeline.run_pipeline()
+        pipeline_ = pipeline.Pipeline(self.context, node.fake_pyfunc,
+                                      node, self.func_signature,
+                                      order=['late_specializer'])
+        sig, symtab, return_stmt_ast = pipeline_.run_pipeline()
         self.generic_visit(return_stmt_ast)
 
     def _null_obj_temp(self, name):

@@ -40,41 +40,6 @@ def fix_ast_lineno(tree):
 def _get_ast(func):
     return decompile_func(func)
 
-def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
-    import numba.ast_type_inference as type_inference
-
-    ast = _get_ast(func)
-    func_signature = minitypes.FunctionType(return_type=restype,
-                                            args=argtypes)
-    return type_inference.run_pipeline(context, func, ast,
-                                       func_signature, **kwargs)
-
-
-def _compile(context, func, restype=None, argtypes=None, ctypes=False,
-             compile_only=False, **kwds):
-    """
-    Compile a numba annotated function.
-
-        - decompile function into a Python ast
-        - run type inference using the given input types
-        - compile the function to LLVM
-    """
-    func_signature, symtab, ast = _infer_types(context, func,
-                                               restype, argtypes, **kwds)
-    func_name = naming.specialized_mangle(func.__name__, func_signature.args)
-
-    t = translate.LLVMCodeGenerator(
-        context, func, ast, func_signature=func_signature,
-        func_name=func_name, symtab=symtab, **kwds)
-    t.translate()
-
-    if compile_only:
-        return func_signature, t.lfunc, None
-    if ctypes:
-        ctypes_func = t.get_ctypes_func(kwds.get('llvm', True))
-        return func_signature, t.lfunc, ctypes_func
-    else:
-        return func_signature, t.lfunc, t.build_wrapper_function()
 
 class FunctionCache(object):
     """
@@ -124,9 +89,11 @@ class FunctionCache(object):
                 return result
 
             if is_numba_func(func):
+                from numba import pipeline
+
                 func = getattr(func, '_numba_func', func)
                 # numba function, compile
-                func_signature, lfunc, ctypes_func = _compile(
+                func_signature, lfunc, ctypes_func = pipeline.compile(
                                 self.context, func, restype, argtypes,
                                 ctypes=ctypes, **kwds)
                 self.compiled_functions[func, tuple(func_signature.args)] = (
