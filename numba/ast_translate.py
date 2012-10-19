@@ -1134,6 +1134,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             largs = self.visitlist(node.args)
 
         return_value = self._handle_struct_passing(largs, node)
+
+        if getattr(node.llvm_func, 'module', None) != self.mod:
+            lfunc = self.mod.get_or_insert_function(node.llvm_func.type.pointee,
+                                                    node.llvm_func.name)
+        else:
+            lfunc = node.llvm_func
         result = self.builder.call(node.llvm_func, largs, name=node.name)
 
         if node.signature.struct_by_reference:

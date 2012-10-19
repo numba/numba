@@ -128,11 +128,11 @@ class FunctionCache(object):
                 from numba import pipeline
 
                 func = getattr(func, '_numba_func', func)
-                compile_only = getattr(func, '_numba_compile_only', False)
+                kwds['compile_only'] = getattr(func, '_numba_compile_only', False)
                 # numba function, compile
                 func_signature, lfunc, ctypes_func = pipeline.compile(
                                 self.context, func, restype, argtypes,
-                                ctypes=ctypes, compile_only=compile_only, **kwds)
+                                ctypes=ctypes, **kwds)
                 self.compiled_functions[func, tuple(func_signature.args)] = (
                                             func_signature, lfunc, ctypes_func)
                 return func_signature, lfunc, ctypes_func
