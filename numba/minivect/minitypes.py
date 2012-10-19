@@ -739,6 +739,9 @@ class ObjectType(Type):
     def __repr__(self):
         return "PyObject *"
 
+def pass_by_ref(type):
+    return type.is_struct or type.is_complex
+
 class FunctionType(Type):
     subtypes = ['return_type', 'args']
     is_function = True
@@ -766,9 +769,6 @@ class FunctionType(Type):
 
         return "%s (*)(%s)" % (self.return_type, ", ".join(args))
 
-    def pass_by_ref(self, type):
-        return type.is_struct or type.is_complex
-
     @property
     def actual_signature(self):
         """
@@ -779,12 +779,12 @@ class FunctionType(Type):
         if self.struct_by_reference:
             args = []
             for arg in self.args:
-                if self.pass_by_ref(arg):
+                if pass_by_ref(arg):
                     arg = arg.pointer()
                 args.append(arg)
 
             return_type = self.return_type
-            if self.pass_by_ref(self.return_type):
+            if pass_by_ref(self.return_type):
                 return_type = void
                 args.append(self.return_type.pointer())
 

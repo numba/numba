@@ -354,26 +354,32 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     # __________________________________________________________________________
 
-    def _refcount_args(self):
-        for i, (larg, argname) in enumerate(zip(self.lfunc.args,
-                                                 self.argnames)):
+    def _allocate_arg_local(self, name, argtype, larg):
+        """
+        Allocate a local variable on the stack.
+        """
+        stackspace = self.alloca(argtype)
+        stackspace.name = name
+
+        if (minitypes.pass_by_ref(argtype) and
+                self.func_signature.struct_by_reference):
+            larg = self.builder.load(larg)
+
+        self.builder.store(larg, stackspace)
+        return stackspace
+
+    def _init_args(self):
+        for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
+                                          self.func_signature.args):
             larg.name = argname
             # Store away arguments in locals
 
             variable = self.symtab[argname]
-
-            stackspace = self.builder.alloca(larg.type) # allocate on stack
-            stackspace.name = 'arg_%s' % argname
+            stackspace = self._allocate_arg_local(argname, argtype, larg)
             variable.lvalue = stackspace
 
-            self.builder.store(larg, stackspace) # store arg value
-            if is_obj(variable.type):
+            if is_obj(variable.type) and self.refcount_args:
                 self.incref(self.builder.load(stackspace))
-
-    def _init_unrefcount_args(self):
-        for i, (larg, argname) in enumerate(zip(self.lfunc.args,
-                                                 self.argnames)):
-            self.symtab[argname].lvalue = larg
 
     def _allocate_locals(self):
         for name, var in self.symtab.items():
@@ -398,11 +404,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.caster = _LLVMCaster(self.builder)
         self.object_coercer = ObjectCoercer(self)
 
-        if self.refcount_args:
-            self._refcount_args()
-        else:
-            self._init_unrefcount_args()
-
+        self._init_args()
         self._allocate_locals()
 
         # TODO: Put current function into symbol table for recursive call
@@ -1084,18 +1086,47 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return self.mod.get_global_variable_named("Py_None")
 
-    def visit_NativeCallNode(self, node, largs=None):
-        if largs is None:
-            largs = self.visitlist(node.args)
+    def _handle_struct_passing(self, largs, node):
+        """
+        Handle signatures with structs. If signature.struct_by_reference
+        is set, we need to pass in structs by reference, and retrieve
+        struct return values by refererence through an additional argument.
+
+        Structs are always loaded as pointers.
+        Complex numbers are always immediate struct values.
+        """
+        for i, (arg_type, larg) in enumerate(zip(node.signature.args, largs)):
+            if minitypes.pass_by_ref(arg_type):
+                if node.signature.struct_by_reference:
+                    if arg_type.is_complex:
+                        new_arg = self.alloca(arg_type)
+                        self.generate_assign(larg, new_arg)
+                        larg = new_arg
+                else:
+                    if arg_type.is_struct:
+                        larg = self.builder.load(larg)
+
+                largs[i] = larg
 
         if node.signature.struct_by_reference:
             return_value = self.alloca(node.signature.return_type)
             largs.append(return_value)
+            return return_value
 
+        return None
+
+    def visit_NativeCallNode(self, node, largs=None):
+        if largs is None:
+            largs = self.visitlist(node.args)
+
+        return_value = self._handle_struct_passing(largs, node)
         result = self.builder.call(node.llvm_func, largs, name=node.name)
 
         if node.signature.struct_by_reference:
-            result = self.builder.load(return_value)
+            if node.signature.return_type.is_complex:
+                result = self.builder.load(return_value)
+            elif node.signature.return_type.is_struct:
+                result = return_value
 
         return result
 

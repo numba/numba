@@ -388,7 +388,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # or struct
             #argtypes += (restype,)
             #restype = void
-            self.func_signature.struct_return = True
+            self.func_signature.struct_by_reference = True
 
     def init_global(self, global_name):
         globals = self.func.__globals__
