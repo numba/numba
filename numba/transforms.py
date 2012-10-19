@@ -1,3 +1,81 @@
+"""
+This module provides a variety of transforms that transform the AST
+into a final form ready for code generation.
+
+Below follows an explanation and justification of the design of the main
+compilation stages in numba.
+
+We start with a Python AST, compiled from source code or decompiled from
+bytecode using meta. We run the following transformations:
+
+    1) Type inference
+
+        Infer types of all expressions, and fix the types of all local
+        variables. Local variable types are promoted (for instance float
+        to double), but cannot change (e.g. string cannot be assigned to
+        float).
+
+        When the type inferencer cannot determine a type, such as when it
+        calls a Python function or method that is not a Numba function, it
+        assumes type object. Object variables may be coerced to and from
+        most native types.
+
+        The type inferencer inserts CoercionNode nodes that perform such
+        coercions, as well as coercions between promotable native types.
+        It also resolves the return type of many math functions called
+        in the numpy, math and cmath modules.
+
+        Each AST expression node has a Variable that holds the type of
+        the expression, as well as any meta-data such as constant values
+        that have been determined.
+
+    2) Transform for loops
+
+        Provides some transformations of for loops over arrays to loops
+        over a range. Iteration over range/xrange is resolved at
+        compilation time.
+
+        What I would like to see is the generation of a RangeNode holding
+        a ast.Compare and an iteration variable incrementing ast.BinOp.
+
+    3) Low level specializations (LateSpecializer)
+
+        This stage performs low-level specializations. For instance it
+        resolves coercions to and from object into calls such as
+        PyFloat_FromDouble, with a fallback to Py_BuildValue/PyArg_ParseTuple.
+
+        This specializer also has the responsibility to ensure that new
+        references are accounted for by refcounting ObjectTempNode nodes.
+        This node absorbs the references and lets parent nodes borrow the
+        reference. At function cleanup, it decrefs its value. In loops,
+        it also decrefs any previous value, if set. Hence, these temporaries
+        must be initialized to NULL.
+
+        An object temporary is specific to one specific sub-expression, and
+        they are not reused (like in Cython).
+
+        It also rewrites object attribute access and method calls into
+        PyObject_GetAttrString etc.
+
+    4) Code generation
+
+        Generate LLVM code from the transformed AST.
+
+        This should be as minimal as possible, and should *not* contain
+        blobs of code performing complex operations. Instead, complex
+        operations should be broken down by AST transformers into
+        fundamental operations that are already supported by the AST.
+
+        This way we maximize code reuse, and make potential future additions
+        of different code generation backends easier. This can be taken
+        only so far, since low-level transformations must also tailor to
+        limitations of the code generation backend, such as intrinsic LLVM
+        calls or calls into libc. However, code reuse is especially convenient
+        in the face of type coercions, which LLVM does not provide any
+        leniency for.
+"""
+
+
 import ast
 import copy
 import opcode
@@ -23,6 +101,10 @@ logger = logging.getLogger(__name__)
 class MathMixin(object):
     """
     Resolve calls to math functions.
+
+    During type inference this produces MathNode nodes, and during
+    final specialization it produces LLVMIntrinsicNode and MathCallNode
+    nodes.
     """
 
     # sin(double), sinf(float), sinl(long double)
@@ -128,7 +210,7 @@ class MathMixin(object):
         else:
             if mod is not None:
                 args.append(mod)
-            result = self.astbuilder.call_pyfunc(pow, args)
+            result = nodes.call_pyfunc(pow, args)
 
         return nodes.CoercionNode(result, dst_type)
 
@@ -165,7 +247,7 @@ class BuiltinResolverMixinBase(MathMixin):
         """
         result = self._resolve_builtin_call(node, func)
         if result is None:
-            result = self.astbuilder.call_pyfunc(func, node.args)
+            result = nodes.call_pyfunc(func, node.args)
 
         return result
 
@@ -219,6 +301,18 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
 
 
 class TransformForIterable(visitors.NumbaTransformer):
+    """
+    This transforms for loops such as loops over 1D arrays:
+
+            for value in my_array:
+                ...
+
+        into
+
+            for i in my_array.shape[0]:
+                value = my_array[i]
+    """
+
     def __init__(self, context, func, ast, symtab, **kwds):
         super(TransformForIterable, self).__init__(context, func, ast, **kwds)
         self.symtab = symtab
@@ -336,7 +430,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
             ctypes_pointer_type = node_type.to_ctypes()
             args = [nodes.CoercionNode(node.node, int64),
                     nodes.ObjectInjectNode(ctypes_pointer_type, object_)]
-            new_node = self.astbuilder.call_pyfunc(ctypes.cast, args)
+            new_node = nodes.call_pyfunc(ctypes.cast, args)
 
         self.generic_visit(new_node)
         return new_node
@@ -360,7 +454,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 if not node_type.signed or node_type == Py_ssize_t:
                     # PyLong_AsLong calls __int__, but
                     # PyLong_AsUnsignedLong doesn't...
-                    node.node = self.astbuilder.call_pyfunc(long, [node.node])
+                    node.node = nodes.call_pyfunc(long, [node.node])
             elif node_type.is_float:
                 cls = functions.PyFloat_AsDouble
             # elif node_type.is_complex:

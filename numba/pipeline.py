@@ -1,3 +1,8 @@
+"""
+This module contains the Pipeline class which provides a pluggable way to
+define the transformations and the order in which they run on the AST.
+"""
+
 import logging
 import functools
 

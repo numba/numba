@@ -19,9 +19,6 @@ class NumbaVisitorMixin(object):
         self.func_signature = func_signature
         self.nopython = nopython
 
-        import ast_type_inference
-        self.astbuilder = ast_type_inference.ASTBuilder()
-
         self.func = func
         self.fco = func.func_code
         self.names = self.global_names = self.fco.co_names

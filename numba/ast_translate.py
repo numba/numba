@@ -320,9 +320,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         self.refcount_args = refcount_args
 
-        import ast_type_inference
-        self.astbuilder = ast_type_inference.ASTBuilder()
-
         # self.ma_obj = None # What is this?
         self.optimize = optimize
         self.flags = kwds

@@ -20,26 +20,12 @@ import llvm.core
 import numpy
 import numpy as np
 
-class ASTBuilder(object):
-    def index(self, node, constant_index, load=True):
-        if load:
-            ctx = ast.Load()
-        else:
-            ctx = ast.Store()
-
-        index = ast.Index(nodes.ConstNode(constant_index, int_))
-        return ast.Subscript(value=node, slice=index, ctx=ctx)
-
-    def call_pyfunc(self, py_func, args):
-        # Fall back to object call
-        func = nodes.ObjectInjectNode(py_func)
-        return nodes.ObjectCallNode(None, func, args)
-
 
 class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
     """
     Resolve builtin calls for type inference. Only applies high-level
-    transformations such as type coercions.
+    transformations such as type coercions. A subsequent pass in
+    LateSpecializer performs low-level transformations.
     """
 
     def _resolve_range(self, func, node, argtype):
@@ -71,12 +57,8 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
         self._expect_n_args(func, node, 1)
         if argtype.is_array:
             shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
-            index = ast.Index(nodes.ConstNode(0, int_))
-            index.type = int_
-            new_node = ast.Subscript(value=shape_attr, slice=index,
-                                     ctx=ast.Load())
-            new_node.variable = Variable(shape_attr.type.base_type)
-            return new_node
+            new_node = nodes.index(shape_attr, 0)
+            return self.visit(new_node)
 
         return None
 
@@ -147,6 +129,22 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
 
 
 class NumpyMixin(object):
+    """
+    Infer types for NumPy functionality. This includes:
+
+        1) Figuring out dtypes
+
+            e.g. np.double     -> double
+                 np.dtype('d') -> double
+
+        2) Function calls such as np.empty/np.empty_like/np.arange/etc
+        3) Resolve the resulting type of indexing and slicing:
+
+            - normalize ellipses
+            - recognize newaxes
+            - track how contiguity is affected (C or Fortran)
+    """
+
     def _is_constant_index(self, node):
         return (isinstance(node, ast.Index) and
                 isinstance(node.value, nodes.ConstNode))
@@ -349,6 +347,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     and a function type with a given or absent, return type.
 
     Infers and checks types and inserts type coercion nodes.
+
+    See transform.py for an overview of AST transformations.
     """
 
     def __init__(self, context, func, ast, locals, **kwds):
@@ -362,8 +362,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.given_return_type = self.func_signature.return_type
         self.return_variables = []
         self.return_type = None
-
-        self.astbuilder = ASTBuilder()
 
     def infer_types(self):
         """
@@ -510,7 +508,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         for i, target in enumerate(targets):
             if value_type.is_carray or value_type.is_sized_pointer:
                 # C array
-                value = self.astbuilder.index(node.value, i)
+                value = nodes.index(node.value, i)
             else:
                 # list or tuple literal
                 value = node.value.elts[i]

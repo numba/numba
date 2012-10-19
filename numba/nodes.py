@@ -15,9 +15,40 @@ from ndarray_helpers import PyArrayAccessor
 
 context = utils.get_minivect_context()
 
+#
+### Convenience functions
+#
 
 def _const_int(X):
     return llvm.core.Constant.int(llvm.core.Type.int(), X)
+
+def const(obj, type):
+    if type.is_object:
+        node = ObjectInjectNode(obj, type)
+    else:
+        node = ConstNode(obj)
+
+    return node
+
+def call_pyfunc(py_func, args):
+    "Generate an object call for a python function given during compilation time"
+    func = ObjectInjectNode(py_func)
+    return ObjectCallNode(None, func, args)
+
+def index(node, constant_index, load=True, type=int_):
+    if load:
+        ctx = ast.Load()
+    else:
+        ctx = ast.Store()
+
+    index = ast.Index(ConstNode(constant_index, type))
+    index.type = type
+    index.variable = Variable(type)
+    return ast.Subscript(value=node, slice=index, ctx=ctx)
+
+#
+### AST nodes
+#
 
 class Node(ast.AST):
     """
@@ -190,15 +221,6 @@ class ConstNode(Node):
 
 _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)
-
-def const(obj, type):
-    if type.is_object:
-        node = ObjectInjectNode(obj, type)
-    else:
-        node = ConstNode(obj)
-
-    return node
-
 
 class FunctionCallNode(Node):
     def __init__(self, signature, args, name=''):
