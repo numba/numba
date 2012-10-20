@@ -696,7 +696,7 @@ class Py_ssize_t_Type(IntType):
 
     def __init__(self, **kwds):
         super(Py_ssize_t_Type, self).__init__(**kwds)
-        self.itemsize = ctypes.sizeof(ctypes.c_ssize_t)
+        self.itemsize = getsize('c_ssize_t', _plat_bits // 8)
 
 class NPyIntp(IntType):
     is_numpy_intp = True
@@ -927,6 +927,12 @@ class struct(Type):
     def comparison_type_list(self):
         return self.fields
 
+def getsize(ctypes_name, default):
+    try:
+        return ctypes.sizeof(getattr(ctypes, ctypes_name))
+    except ImportError:
+        return default
+
 #
 ### Internal types
 #
@@ -936,15 +942,16 @@ void = VoidType()
 #
 ### Public types
 #
-Py_ssize_t = Py_ssize_t_Type()
-
 try:
     npy_intp = NPyIntp()
 except ImportError:
     npy_intp = None
 
+Py_ssize_t = Py_ssize_t_Type()
+
+
 size_t = IntType(name="size_t", rank=8.5,
-                 itemsize=ctypes.sizeof(ctypes.c_size_t), signed=False)
+                 itemsize=getsize('c_size_t', _plat_bits / 8), signed=False)
 char = CharType(name="char", typecode='b')
 short = IntType(name="short", rank=2, typecode='h')
 int_ = IntType(name="int", rank=4, typecode='i')
