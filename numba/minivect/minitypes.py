@@ -165,7 +165,7 @@ class TypeMapper(object):
         "Promote two array types in an expression to a new array type"
         equal_ndim = type1.ndim == type2.ndim
         return ArrayType(self.promote_types(type1.dtype, type2.dtype),
-                         ndim=miniutils.max(type1.ndim, type2.ndim),
+                         ndim=miniutils.max((type1.ndim, type2.ndim)),
                          is_c_contig=(equal_ndim and type1.is_c_contig and
                                       type2.is_c_contig),
                          is_f_contig=(equal_ndim and type1.is_f_contig and
