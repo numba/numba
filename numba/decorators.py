@@ -21,12 +21,14 @@ default_prototypes = []
 def _internal_export(name=None, restype=double, argtypes=[double], backend='ast', **kws):
     def _iexport(func):
         if backend == 'bytecode':
+            # FIXME:  This is causing segfault when the same module
+            #    is used
             t = bytecode_translate.Translate(func, restype=restype,
                                               argtypes=argtypes,
                                               module=default_module,
                                               name=name, **kws)
             t.translate()
-            signature = minitypes.FunctionType(ires, iargs, name=name)
+            signature = minitypes.FunctionType(restype, argtypes, name=name)
             # For headers if needed
             default_prototypes.append(signature)
         else:
@@ -43,6 +45,7 @@ def _internal_export(name=None, restype=double, argtypes=[double], backend='ast'
                                                 llvm_module=default_module,
                                                 name=name,
                                                 restype=restype, **kws)
+            result[0].name = name
             # For headers if needed
             default_prototypes.append(result[0])
     return _iexport
@@ -56,7 +59,7 @@ def export(signature, **kws):
     name ret_type(arg_type, argtype, ...)
     """
     name, restype, argtypes = _process_sig(signature)
-    return _internal_export(name=name, restype=restype, argtypes=argtypes, backend='ast', **kws)   
+    return _internal_export(name=name, restype=restype, argtypes=argtypes, **kws)   
 
 def exportmany(signatures, **kws):
     """
@@ -128,7 +131,7 @@ class NumbaFunction(object):
         self.signature = signature
         self.lfunc = lfunc
 
-        self.func_name = self.__name__ = py_func.__name__
+        self.func_name = self.__name__ = signature.name or py_func.__name__
         self.func_doc = self.__doc__ = py_func.__doc__
         self.__module__ = py_func.__module__
 

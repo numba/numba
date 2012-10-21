@@ -315,7 +315,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                  refcount_args=True, **kwds):
         super(LLVMCodeGenerator, self).__init__(context, func, ast)
 
-        self.func_name = func_signature.name or func.__name__
+        self.func_name = kwds.get('func_name', func_signature.name 
+                                            or func.__name__)
         self.func_signature = func_signature
 
         self.symtab = symtab
