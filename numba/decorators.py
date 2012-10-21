@@ -131,7 +131,10 @@ class NumbaFunction(object):
         self.signature = signature
         self.lfunc = lfunc
 
-        self.func_name = self.__name__ = signature.name or py_func.__name__
+        name = py_func.__name__
+        if signature is not None:
+            name = signature.name or name
+        self.func_name = self.__name__ = name
         self.func_doc = self.__doc__ = py_func.__doc__
         self.__module__ = py_func.__module__
 
