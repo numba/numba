@@ -154,7 +154,6 @@ class CudaSRegRewrite(visitors.NumbaTransformer,
 
         return retval
 
-
 class NumbaproCudaPipeline(pipeline.Pipeline):
     def __init__(self, context, func, ast, func_signature, **kwargs):
         super(NumbaproCudaPipeline, self).__init__(context, func, ast,
@@ -182,6 +181,16 @@ def jit(restype=void, argtypes=None, backend='ast', **kws):
 
     Support for double-precision floats depends on your CUDA device.
     '''
+    if isinstance(restype, minitypes.FunctionType):
+        if argtypes is not None:
+            raise TypeError, "Cannot use both calling syntax and argtypes keyword"
+        argtypes = restype.args
+        restype = restype.return_type
+        name = restype.name
+    # Called with a string like 'f8(f8)'
+    elif isinstance(restype, str) and argtypes is None:
+        name, restype, argtypes = numba.decorators._process_sig(restype, 
+                                                    kws.get('name', None))
 
     assert argtypes is not None
     assert backend == 'ast', 'Bytecode support has dropped'
@@ -223,6 +232,8 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
 
         result = function_cache.compile_function(func, argtypes,
                                                  ctypes=True,
+                                                 compile_only=True,
+                                                 nopython=True,
                                                  llvm_module=llvm_module,
                                                  llvm_ee=None,
                                                  **kws)
@@ -230,6 +241,7 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
         signature, lfunc, unused = result
 
         # XXX: temp fix for PyIncRef and PyDecRef in lfunc.
+        # IS this still necessary?
         def _temp_hack():
             inlinelist = []
             fakepy = {}
