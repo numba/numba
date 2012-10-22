@@ -1,6 +1,10 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
 
+'''
+Duplicated test for test_ast_getattr.py
+'''
+
 from numba.translate import _plat_bits
 from numba.decorators import jit
 
@@ -55,7 +59,7 @@ class TestGetattr(unittest.TestCase):
 
     def test_getattr_shape_2_unpack(self):
         compiler_fn = jit('i%d(d[:,:])' % (_plat_bits // 8))
-        dim0_fn, dim1_fn = (compiler_fn(fn) 
+        dim0_fn, dim1_fn = (compiler_fn(fn)
                             for fn in (get_ndarray_2_shape_unpack_0,
                                        get_ndarray_2_shape_unpack_1))
         test_data2 = numpy.array([[1., 2., 3.], [4., 5., 6.]])

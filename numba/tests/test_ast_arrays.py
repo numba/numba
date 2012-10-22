@@ -14,8 +14,7 @@ from numba.decorators import autojit
 
 import numpy as np
 
-@autojit(backend='bytecode')
-def matmulcore(A, B, C):
+def _matmulcore(A, B, C):
     m, n = A.shape
     n, p = B.shape
     for i in range(m):
@@ -25,14 +24,17 @@ def matmulcore(A, B, C):
                 C[i, j] += A[i, k] * B[k, j]
 
 
+matmulcore = autojit(backend='ast')(_matmulcore)
+
 class TestASTArrays(unittest.TestCase):
 
     def test_numba(self):
         A = np.arange(16, dtype=np.float32).reshape(4, 4)
         B = np.arange(16, dtype=np.float32).reshape(4, 4)
         C = np.zeros(16, dtype=np.float32).reshape(4, 4)
-        Gold = np.matrix(A) * np.matrix(B)
+        Gold = C.copy()
 
+        _matmulcore(A, B, Gold)          # oracle
         matmulcore(A, B, C)
 
         self.assertTrue(np.all(C == Gold))

@@ -4,7 +4,7 @@
 # ______________________________________________________________________
 import numpy
 
-from numba import f8 as d
+from numba import f8
 from numba.decorators import jit, autojit
 from numba.tests import test_support
 
@@ -12,7 +12,7 @@ import unittest
 import __builtin__
 
 # ______________________________________________________________________
-    
+
 def avg2d(arr, result):
     M, N = arr.shape
     for i in range(M):
@@ -43,13 +43,13 @@ class TestAvg2D(test_support.ByteCodeTestCase):
         self.assertTrue((control_result == test_result).all())
 
     def test_avg2d(self):
-        compiled_fn = self.jit(argtypes = [d[:,:], d[:]])(avg2d)
+        compiled_fn = self.jit(argtypes = [f8[:,:], f8[:]])(avg2d)
         self._do_test(avg2d, compiled_fn)
 
 
 class TestAvg2DAST(test_support.ASTTestCase, TestAvg2D):
     def test_avg2d_w_cast(self):
-        compiled_fn = self.jit(argtypes = [d[:,:], d[:]])(avg2d_w_cast)
+        compiled_fn = self.jit(argtypes = [f8[:,:], f8[:]])(avg2d_w_cast)
         self._do_test(avg2d_w_cast, compiled_fn)
 
 # ______________________________________________________________________
