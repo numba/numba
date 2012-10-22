@@ -228,35 +228,27 @@ class CudaNumbaFuncDispatcher(object):
         from ._cuda.devicearray import DeviceNDArray
         kernel_args = []
 
-        def core(stream):
-            retrievers = []
-            def ndarray_gpu(x):
-                if isinstance(x, DeviceNDArray):
-                    return x.device_memory
-                else:
-                    retriever, device_memory = ndarray_to_device_memory(x, stream=stream)
-                    retrievers.append(retriever)
-                    return device_memory
+        retrievers = []
+        def ndarray_gpu(x):
+            if isinstance(x, DeviceNDArray):
+                return x.device_memory
+            else:
+                retriever, device_memory = ndarray_to_device_memory(x, stream=stream)
+                retrievers.append(retriever)
+                return device_memory
 
-            _typemapper = {'f': c_float,
-                           'd': c_double,
-                           'i': c_int,
-                           '_': ndarray_gpu}
+        _typemapper = {'f': c_float,
+                       'd': c_double,
+                       'i': c_int,
+                       '_': ndarray_gpu}
 
 
-            for ty, arg in zip(self.typemap, args):
-                kernel_args.append(_typemapper[ty](arg))
+        for ty, arg in zip(self.typemap, args):
+            kernel_args.append(_typemapper[ty](arg))
 
-            cu_func = self.cu_function.configure(griddim, blkdim, stream=stream)
-            cu_func(*kernel_args)
+        cu_func = self.cu_function.configure(griddim, blkdim, stream=stream)
+        cu_func(*kernel_args)
 
-            for r in retrievers:
-                r()
+        for r in retrievers:
+            r()
 
-        if not stream:
-            with _cuda.Stream() as stream:
-                core(stream)
-        else:
-            core(stream)
-
-        return stream

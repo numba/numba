@@ -23,10 +23,9 @@ class TestCudaAsync(unittest.TestCase):
             dB = cuda.to_device(B, stream)
             dC = cuda.to_device(C, stream)
 
-            stream = cu_kernel_add[(10,), (10,), stream](dA, dB, dC)
+            cu_kernel_add[(10,), (10,), stream](dA, dB, dC)
 
-            self.assertTrue(orig_stream == stream)
-            self.assertTrue(int(stream) != 0)
+            self.assertFalse((C == A + B).all())
 
             dC.to_host()
         # synchronized here
