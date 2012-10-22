@@ -646,11 +646,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def visit_BoolOp(self, node):
         "and/or expression"
-        if len(node.values) != 2:
-            raise AssertionError
-
-        node.values = self.visit(node.values)
-        node.values[:] = CoercionNode.coerce(node.values, minitypes.bool_)
+        # NOTE: BoolOp.values can have as many items as possible.
+        #       Only meta is doing 2 items.
+        # if len(node.values) != 2:
+        #     raise AssertionError
+        assert node.values >= 2
+        node.values = self.visitlist(node.values)
+        node.values[:] = nodes.CoercionNode.coerce(node.values, minitypes.bool_)
         node.variable = Variable(minitypes.bool_)
         return node
 

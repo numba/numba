@@ -315,7 +315,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                  refcount_args=True, **kwds):
         super(LLVMCodeGenerator, self).__init__(context, func, ast)
 
-        self.func_name = kwds.get('func_name', func_signature.name 
+        self.func_name = kwds.get('func_name', func_signature.name
                                             or func.__name__)
         self.func_signature = func_signature
 
@@ -711,8 +711,59 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             raise error.NumbaError(node, "Looping over iterables")
 
     def visit_BoolOp(self, node):
-        assert len(node.values) == 2
-        raise error.NumbaError(node, "and/or expressions")
+        # NOTE: Can have >2 values
+        assert len(node.values) >= 2
+        assert isinstance(node.op, ast.And) or isinstance(node.op, ast.Or)
+
+        count = len(node.values)
+
+        if isinstance(node.op, ast.And):
+            bb_true = self.append_basic_block('and.true')
+            bb_false = self.append_basic_block('and.false')
+            bb_next = [self.append_basic_block('and.rhs')
+                       for i in range(count - 1)] + [bb_true]
+            bb_done = self.append_basic_block('and.done')
+
+            for i in range(count):
+                value = self.visit(node.values[i])
+                self.builder.cbranch(value, bb_next[i], bb_false)
+                self.builder.position_at_end(bb_next[i])
+
+            assert self.builder.basic_block is bb_true
+            self.builder.branch(bb_done)
+
+            self.builder.position_at_end(bb_false)
+            self.builder.branch(bb_done)
+
+            self.builder.position_at_end(bb_done)
+        elif isinstance(node.op, ast.Or):
+            bb_true = self.append_basic_block('or.true')
+            bb_false = self.append_basic_block('or.false')
+            bb_next = [self.append_basic_block('or.rhs')
+                       for i in range(count - 1)] + [bb_false]
+            bb_done = self.append_basic_block('or.done')
+
+            for i in range(count):
+                value = self.visit(node.values[i])
+                self.builder.cbranch(value, bb_true, bb_next[i])
+                self.builder.position_at_end(bb_next[i])
+
+            assert self.builder.basic_block is bb_false
+            self.builder.branch(bb_done)
+
+            self.builder.position_at_end(bb_true)
+            self.builder.branch(bb_done)
+
+            self.builder.position_at_end(bb_done)
+        else:
+            raise Exception("internal erorr")
+
+        booltype = lc.Type.int(1)
+        phi = self.builder.phi(booltype)
+        phi.add_incoming(lc.Constant.int(booltype, 1), bb_true)
+        phi.add_incoming(lc.Constant.int(booltype, 0), bb_false)
+
+        return phi
 
     def visit_UnaryOp(self, node):
         operand = self.visit(node.operand)

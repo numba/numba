@@ -1,4 +1,4 @@
-import ast
+import ast, inspect, os
 
 from numba import *
 from . import naming
@@ -39,7 +39,20 @@ def fix_ast_lineno(tree):
     return tree
 
 def _get_ast(func):
-    return decompile_func(func)
+    if True or os.environ.get('NUMBA_FORCE_META_AST'):
+        func_def = decompile_func(func)
+        assert isinstance(func_def, ast.FunctionDef)
+        return func_def
+    try:
+        source = inspect.getsource(func)
+    except IOError:
+        return decompile_func(func)
+    else:
+        module_ast = ast.parse(source)
+        assert len(module_ast.body) == 1
+        func_def = module_ast.body[0]
+        assert isinstance(func_def, ast.FunctionDef)
+        return func_def
 
 def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
     import numba.ast_type_inference as type_inference
