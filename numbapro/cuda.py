@@ -189,7 +189,7 @@ def jit(restype=void, argtypes=None, backend='ast', **kws):
         name = restype.name
     # Called with a string like 'f8(f8)'
     elif isinstance(restype, str) and argtypes is None:
-        name, restype, argtypes = numba.decorators._process_sig(restype, 
+        name, restype, argtypes = numba.decorators._process_sig(restype,
                                                     kws.get('name', None))
 
     assert argtypes is not None
@@ -230,18 +230,21 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
             func._numba_compile_only = True
         func._numba_inline = inline
 
+        assert 'nopython' in kws
+        assert func._numba_compile_only
+
         result = function_cache.compile_function(func, argtypes,
                                                  ctypes=True,
-                                                 compile_only=True,
-                                                 nopython=True,
                                                  llvm_module=llvm_module,
                                                  llvm_ee=None,
                                                  **kws)
 
         signature, lfunc, unused = result
+        assert unused is None               # Just to be sure
 
         # XXX: temp fix for PyIncRef and PyDecRef in lfunc.
         # IS this still necessary?
+        # Yes, as of Oct 22 2012
         def _temp_hack():
             inlinelist = []
             fakepy = {}
