@@ -7,6 +7,8 @@
 >>> obj.setvalue(20.0)
 >>> obj.getvalue()
 20.0
+>>> obj.value
+20.0
 """
 
 import sys

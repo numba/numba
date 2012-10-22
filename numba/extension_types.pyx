@@ -20,6 +20,7 @@ cdef extern from *:
 
 
 cdef Py_uintptr_t align(Py_uintptr_t p, size_t alignment) nogil:
+    "Align on a boundary"
     cdef size_t offset
 
     with cython.cdivision(True):
@@ -35,19 +36,27 @@ cdef void *align_pointer(void *memory, size_t alignment) nogil:
     return <void *> align(<Py_uintptr_t> memory, alignment)
 
 def compute_vtab_offset(py_class):
+    "Returns the vtab pointer offset in the object"
     cdef PyTypeObject *type_p = <PyTypeObject *> py_class
     return align(type_p.tp_basicsize, 8)
 
 def compute_attrs_offset(py_class):
+    "Returns the start of the attribute struct"
     return align(compute_vtab_offset(py_class) + sizeof(void *), 8)
 
 def create_new_extension_type(name, bases, dict, struct_type, vtab_type,
                               llvm_methods, method_pointers):
+    """
+    Create an extension type from the given name, bases and dict. Also
+    takes a vtab struct minitype, and a struct_type describing the
+    object attributes.
+    """
     cdef PyTypeObject *ext_type_p
     cdef Py_ssize_t vtab_offset
 
     orig_new = dict.get('__new__', None)
     def new(cls, *args, **kwds):
+        "Create a new object and patch it with a vtab"
         cdef PyObject *obj_p
         cdef void **vtab_location
 
@@ -100,6 +109,7 @@ def create_new_extension_type(name, bases, dict, struct_type, vtab_type,
 
     vtab_ctype = vtab_type.to_ctypes()
     methods = []
+    assert len(method_pointers) == len(vtab_ctype._fields_)
     for method_pointer, (field_name, field_type) in zip(method_pointers,
                                                         vtab_ctype._fields_):
         cmethod = field_type(method_pointer)
