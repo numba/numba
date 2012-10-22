@@ -913,6 +913,7 @@ class LLVMControlFlowGraph (ControlFlowGraph):
 class Translate(object):
     def __init__(self, func, restype='d', argtypes=['d'], **kws):
         self.func = func
+        self.func_name = kws.get('name', self.func.func_name)
         self.fco = func.func_code
         self.names = self.fco.co_names
         self.varnames = self.fco.co_varnames
@@ -944,7 +945,10 @@ class Translate(object):
         global _ObjectCache
         setattr(_ObjectCache, '_ObjectCache__instances', WeakValueDictionary())
 
-        self.mod = lc.Module.new('%s_mod_%x' % (func.__name__, id(self)))
+        if kws.has_key('module'):
+            self.mod = kws['module']
+        else:
+            self.mod = lc.Module.new('%s_mod_%x' % (func.__name__, id(self)))
         assert isinstance(self.mod, lc.Module), (
             "Expected %r from llvm-py, got instance of type %r, however." %
             (lc.Module, type(self.mod)))
@@ -976,7 +980,7 @@ class Translate(object):
         argnames = self.fco.co_varnames[:self.fco.co_argcount]
         self.arg_ltypes = [convert_to_llvmtype(x) for x in self.arg_types]
         ty_func = lc.Type.function(self.ret_ltype, self.arg_ltypes)
-        self.lfunc = self.mod.add_function(ty_func, self.func.func_name)
+        self.lfunc = self.mod.add_function(ty_func, self.func_name)
         assert isinstance(self.lfunc, lc.Function), (
             "Expected %r from llvm-py, got instance of type %r, however." %
             (lc.Function, type(self.lfunc)))

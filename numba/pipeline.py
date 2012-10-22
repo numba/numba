@@ -93,8 +93,9 @@ class Pipeline(object):
         return specializer.visit(ast)
 
     def codegen(self, ast):
-        func_name = naming.specialized_mangle(self.func.__name__,
-                                              self.func_signature.args)
+        func_name = self.kwargs.get('name')
+        func_name = func_name or naming.specialized_mangle(self.func.__name__,
+                                            self.func_signature.args)
 
         self.translator = self.make_specializer(ast_translate.LLVMCodeGenerator,
                                                 ast, func_name=func_name,
