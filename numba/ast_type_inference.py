@@ -1075,12 +1075,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # in the parent Assign node
             type.symtab[node.attr] = Variable(None)
 
-        if self.is_store(node.ctx):
-            cls = nodes.ExtTypeAttributeSet
-        else:
-            cls = nodes.ExtTypeAttribute
-
-        return cls(node.value, node.attr, type)
+        return nodes.ExtTypeAttribute(node.value, node.attr, node.ctx, type)
 
     def visit_Attribute(self, node):
         node.value = self.visit(node.value)
@@ -1100,7 +1095,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if not node.attr in type.fielddict:
                 raise error.NumbaError(
                         node, "Struct %s has no field %r" % (type, node.attr))
-            result_type = type.fielddict[node.attr]
+            if isinstance(node.ctx, ast.Store):
+                if not isinstance(node.value, (ast.Name, ast.Subscript)):
+                    raise error.NumbaError(
+                            node, "Can only assign to struct attributes of "
+                                  "variables or array indices")
+                node.value.ctx = ast.Store()
+
+            return nodes.StructAttribute(node.value, node.attr, node.ctx,
+                                         node.value.variable.type)
         elif type.is_module and hasattr(type.module, node.attr):
             result_type = self._resolve_module_attribute(node, type)
         elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):

@@ -517,16 +517,34 @@ class ExtTypeAttribute(Node):
 
     _fields = ['value']
 
-    def __init__(self, value, attr, ext_type, **kwargs):
+    def __init__(self, value, attr, ctx, ext_type, **kwargs):
         super(ExtTypeAttribute, self).__init__(**kwargs)
         self.value = value
         self.attr = attr
         self.variable = ext_type.symtab[attr]
+        self.ctx = ctx
         self.ext_type = ext_type
 
 
-class ExtTypeAttributeSet(ExtTypeAttribute):
-    pass
+class StructAttribute(ExtTypeAttribute):
+
+    _fields = ['value']
+
+    def __init__(self, value, attr, ctx, struct_type, **kwargs):
+        super(ExtTypeAttribute, self).__init__(**kwargs)
+        self.value = value
+        self.attr = attr
+        self.ctx = ctx
+        self.struct_type = struct_type
+
+        self.attr_type = struct_type.fielddict[attr]
+        self.field_idx = struct_type.fields.index((attr, self.attr_type))
+
+#        if isinstance(ctx, ast.Load):
+        self.type = self.attr_type
+#        else:
+#            self.type = self.struct_type
+        self.variable = Variable(self.type)
 
 class ComplexNode(Node):
     _fields = ['real', 'imag']
@@ -558,3 +576,38 @@ class FunctionWrapperNode(Node):
         self.signature = signature
         self.orig_py_func = orig_py_func
         self.fake_pyfunc = fake_pyfunc
+
+def pointer_add(pointer, offset):
+    assert pointer.type == char.pointer()
+    left = CoercionNode(pointer, Py_ssize_t)
+    result = ast.BinOp(left, ast.Add(), offset)
+    result.type = Py_ssize_t
+    result.variable = Variable(result.type)
+    return CoercionNode(result, char.pointer())
+
+class DereferenceNode(Node):
+    """
+    Dereference a pointer
+    """
+
+    _fields = ['pointer']
+
+    def __init__(self, pointer, **kwargs):
+        super(DereferenceNode, self).__init__(**kwargs)
+        self.pointer = pointer
+        self.type = pointer.type.base_type
+        self.variable = Variable(self.type)
+
+
+class PointerFromObject(Node):
+    """
+    Bitcast objects to void *
+    """
+
+    _fields = ['node']
+    type = void.pointer()
+    variable = Variable(type)
+
+    def __init__(self, node, **kwargs):
+        super(PointerFromObject, self).__init__(**kwargs)
+        self.node = node

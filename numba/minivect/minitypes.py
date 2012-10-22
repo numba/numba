@@ -38,6 +38,7 @@ import sys
 import math
 import copy
 import struct as struct_
+import types
 import textwrap
 
 import miniutils
@@ -742,6 +743,19 @@ class ObjectType(Type):
 def pass_by_ref(type):
     return type.is_struct or type.is_complex
 
+class Function(object):
+    """
+    Function types may be called with Python functions to create a Function
+    object. This may be used to minivect users for their own purposes. e.g.
+
+    @double(double, double)
+    def myfunc(...):
+       ...
+    """
+    def __init__(self, signature, py_func):
+        self.signature = signature
+        self.py_func = py_func
+
 class FunctionType(Type):
     subtypes = ['return_type', 'args']
     is_function = True
@@ -800,6 +814,15 @@ class FunctionType(Type):
     def struct_return_type(self):
         # Function returns a struct.
         return self.return_type.pointer()
+
+    def __call__(self, *args):
+        if len(args) != 1 or not isinstance(args[0], types.FunctionType):
+            return super(FunctionType, self).__call__(*args)
+
+        assert self.return_type is not None
+        assert self.args is not None
+        func, = args
+        return Function(self, func)
 
 class VectorType(Type):
     subtypes = ['element_type']

@@ -34,15 +34,21 @@ cdef void *align_pointer(void *memory, size_t alignment) nogil:
     "Align pointer memory on a given boundary"
     return <void *> align(<Py_uintptr_t> memory, alignment)
 
+def compute_vtab_offset(py_class):
+    cdef PyTypeObject *type_p = <PyTypeObject *> py_class
+    return align(type_p.tp_basicsize, 8)
+
+def compute_attrs_offset(py_class):
+    return align(compute_vtab_offset(py_class) + sizeof(void *), 8)
 
 def create_new_extension_type(name, bases, dict, struct_type, vtab_type,
                               llvm_methods, method_pointers):
     cdef PyTypeObject *ext_type_p
+    cdef Py_ssize_t vtab_offset
 
     orig_new = dict.get('__new__', None)
     def new(cls, *args, **kwds):
         cdef PyObject *obj_p
-        cdef Py_ssize_t vtab_offset
         cdef void **vtab_location
 
         if orig_new is not None:
@@ -57,7 +63,6 @@ def create_new_extension_type(name, bases, dict, struct_type, vtab_type,
 
         # It is our responsibility to set the vtab and the ctypes attributes
         # Other fields are 0/NULL
-        vtab_offset = cls.__numba_vtab_offset
         obj_p = <PyObject *> obj
 
         vtab_location = <void **> ((<char *> obj_p) + vtab_offset)
@@ -79,21 +84,29 @@ def create_new_extension_type(name, bases, dict, struct_type, vtab_type,
     # Object attributes are located at lower + sizeof(void *), and end at
     # upper
     struct_ctype = struct_type.to_ctypes()
-    lower = align(ext_type_p.tp_basicsize, 8)
-    upper = (lower + ctypes.sizeof(ctypes.c_void_p) +
-             ctypes.sizeof(struct_ctype))
+    vtab_offset = compute_vtab_offset(ext_type)
+    attrs_offset = compute_attrs_offset(ext_type)
+    upper = attrs_offset + ctypes.sizeof(struct_ctype)
     upper = align(upper, 8)
 
-    # print 'basicsize/lower/upper', ext_type_p.tp_basicsize, lower, upper
+    # print 'basicsize/vtab_offset/upper', ext_type_p.tp_basicsize, lower, upper
     ext_type_p.tp_basicsize = upper
     if ext_type_p.tp_itemsize:
         raise NotImplementedError("Subclassing variable sized objects")
 
-    ext_type.__numba_vtab_offset = lower
+    ext_type.__numba_vtab_offset = vtab_offset
     ext_type.__numba_obj_end = upper
+    ext_type.__numba_attr_offset = attrs_offset
 
     vtab_ctype = vtab_type.to_ctypes()
-    ext_type.__numba_vtab = vtab_ctype(*method_pointers)
+    methods = []
+    for method_pointer, (field_name, field_type) in zip(method_pointers,
+                                                        vtab_ctype._fields_):
+        cmethod = field_type(method_pointer)
+        methods.append(cmethod)
+
+    vtab = vtab_ctype(*methods)
+    ext_type.__numba_vtab = vtab
     vtab_p = ctypes.byref(ext_type.__numba_vtab)
 
     ext_type.__numba_vtab_p = ctypes.cast(vtab_p, ctypes.c_void_p).value

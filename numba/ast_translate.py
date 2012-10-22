@@ -16,7 +16,7 @@ from ._numba_types import BuiltinType
 from numba import *
 from . import visitors, nodes, llvm_types
 from .minivect import minitypes
-from numba import ndarray_helpers, error
+from numba import ndarray_helpers, translate, error, extension_types
 from numba._numba_types import is_obj, promote_closest
 
 import logging
@@ -646,16 +646,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 return self.builder.extract_value(result, 0)
             elif node.attr == 'imag':
                 return self.builder.extract_value(result, 1)
-        elif node.value.type.is_struct:
-            attr_type = node.value.type.fielddict[node.attr]
-            field_idx = node.value.type.fields.index((node.attr, attr_type))
-            result = self.builder.gep(result, [llvm_types.constant_int(0),
-                                               llvm_types.constant_int(field_idx)])
-            result = self._handle_ctx(node, result)
-
-            return result
 
         raise error.NumbaError("This node should have been replaced")
+
+    def visit_StructAttribute(self, node):
+        result = self.visit(node.value)
+        if isinstance(node.ctx, ast.Load):
+            result = self.builder.extract_value(result, node.field_idx)
+        else:
+            result = self.builder.gep(
+                result, [llvm_types.constant_int(0),
+                         llvm_types.constant_int(node.field_idx)])
+
+        return result
 
     def visit_Assign(self, node):
         target_node = node.targets[0]
@@ -700,10 +703,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def _handle_ctx(self, node, lptr, name=''):
         if isinstance(node.ctx, ast.Load):
-            if node.type.is_struct:
-                return lptr
-            else:
-                return self.builder.load(lptr, name=name and 'load_' + name)
+            return self.builder.load(lptr, name=name and 'load_' + name)
         else:
             return lptr
 
@@ -1070,6 +1070,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return self.object_coercer.to_native(node.dst_type, val,
                                              name=node.name)
 
+    def visit_DereferenceNode(self, node):
+        result = self.visit(node.pointer)
+        return self.builder.load(result)
+
+    def visit_PointerFromObject(self, node):
+        return self.visit(node.node)
+
     def visit_ComplexNode(self, node):
         real = self.visit(node.real)
         imag = self.visit(node.imag)
@@ -1171,9 +1178,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                         new_arg = self.alloca(arg_type)
                         self.generate_assign(larg, new_arg)
                         larg = new_arg
-                else:
-                    if arg_type.is_struct:
-                        larg = self.builder.load(larg)
 
                 largs[i] = larg
 
@@ -1198,10 +1202,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         result = self.builder.call(node.llvm_func, largs, name=node.name)
 
         if node.signature.struct_by_reference:
-            if node.signature.return_type.is_complex:
+            if minitypes.pass_by_ref(node.signature.return_type):
                 result = self.builder.load(return_value)
-            elif node.signature.return_type.is_struct:
-                result = return_value
 
         return result
 
@@ -1462,10 +1464,8 @@ class ObjectCoercer(object):
         for i, (field_name, field_type) in enumerate(type.fields):
             types.extend((c_string_type, field_type))
             largs.append(self._create_llvm_string(field_name))
-            zero = llvm_types.constant_int(0)
-            struct_attr = self.builder.gep(llvm_result,
-                                           [zero, llvm_types.constant_int(i)])
-            largs.append(self.builder.load(struct_attr))
+            struct_attr = self.builder.extract_value(llvm_result, i)
+            largs.append(struct_attr)
 
         return self.buildvalue(types, *largs, name='struct', fmt="{%s}")
 

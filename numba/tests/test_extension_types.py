@@ -4,6 +4,9 @@
 10.0
 >>> obj._numba_attrs.value
 10.0
+>>> obj.setvalue(20.0)
+>>> obj.getvalue()
+20.0
 """
 
 import sys
@@ -44,8 +47,16 @@ def test(struct_type, vtab_type):
 
 @autojit
 class MyExtension(object):
+    @void(double)
     def __init__(self, myfloat):
         self.value = myfloat
+
+    def getvalue(self):
+        return self.value
+
+    @void(double)
+    def setvalue(self, value):
+        self.value = value
 
 if __name__ == '__main__':
     import doctest

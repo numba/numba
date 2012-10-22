@@ -8,7 +8,7 @@ import numpy as np
 # from numpy.ctypeslib import _typecodes
 
 import numba
-from numba import llvm_types
+from numba import llvm_types, extension_types
 from numba.minivect.minitypes import *
 from numba.minivect.minitypes import map_dtype
 from numba.minivect import minitypes
@@ -225,10 +225,16 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
 
     def __init__(self, py_class, **kwds):
         super(ExtensionType, self).__init__(**kwds)
+        assert isinstance(py_class, type), "Must be a new-style class"
         self.name = py_class.__name__
         self.py_class = py_class
         self.symtab = {}  # attr_name -> attr_type
         self.methods = [] # (method_name, py_func)
+
+        self.vtab_offset = extension_types.compute_vtab_offset(py_class)
+        self.attr_offset = extension_types.compute_attrs_offset(py_class)
+        self.attribute_struct = None
+        self.vtab_type = None
 
     def __repr__(self):
         return "<Extension %s>" % self.name

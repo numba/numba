@@ -744,6 +744,23 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
         self.generic_visit(node)
         return node
 
+    def visit_ExtTypeAttribute(self, node):
+        ext_type = node.value.type
+        offset = nodes.ConstNode(ext_type.attr_offset, Py_ssize_t)
+
+        pointer = nodes.PointerFromObject(node.value)
+        pointer = nodes.CoercionNode(pointer, char.pointer())
+        pointer = nodes.pointer_add(pointer, offset)
+
+        struct_pointer = nodes.CoercionNode(
+                    pointer, ext_type.attribute_struct.pointer())
+        if isinstance(node.ctx, ast.Load):
+            struct_pointer = nodes.DereferenceNode(struct_pointer)
+        attr = nodes.StructAttribute(struct_pointer, node.attr, node.ctx,
+                                     ext_type.attribute_struct)
+        attr.type = node.type
+        return self.visit(attr)
+
     def visit_Name(self, node):
         if node.type.is_builtin and not node.variable.is_local:
             obj = getattr(builtins, node.name)

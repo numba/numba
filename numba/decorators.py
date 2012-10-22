@@ -167,18 +167,8 @@ class NumbaFunction(object):
         return compiled_numba_func(*args, **kwargs)
 
 def autojit_extension_class(target, nopython, py_class, translator_kwargs):
-    import extension_types
-    type, method_pointers, wrapper_methods = \
-                ast_type_inference.infer_exttype_types(context, py_class)
-    attrs = dict((name, var.type) for name, var in type.symtab.iteritems())
-    struct_type = struct(**attrs)
-    vtab_type = struct(type.methods)
-
-    extension_type = extension_types.create_new_extension_type(
-            py_class.__name__, py_class.__bases__, dict(vars(py_class)),
-            struct_type, vtab_type,
-            method_pointers, wrapper_methods)
-    return extension_type
+    return ast_type_inference.create_extension(
+                context, py_class, translator_kwargs)
 
 # TODO: make these two implementations the same
 def _autojit2(target, nopython, **translator_kwargs):
