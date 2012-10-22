@@ -4,6 +4,7 @@ It properly has a lot of resemblence with PyCUDA.
 '''
 
 import sys, os, atexit
+import contextlib
 from ctypes import *
 from .error import *
 # CUDA specific typedefs
@@ -426,10 +427,11 @@ class Stream(object):
     def synchronize(self):
         self.driver.cuStreamSynchronize(self._handle)
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, traceback):
+    @contextlib.contextmanager
+    def auto_synchronize(self):
+        '''Use this for create a context that synchronize automatically.
+        '''
+        yield self
         self.synchronize()
 
     @property

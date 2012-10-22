@@ -66,7 +66,7 @@ def ndarray_data_to_device_memory(ary, stream=0):
     gpu_data = _cuda.DeviceMemory(datasize)
     gpu_data.to_device_raw(dataptr, datasize, stream=stream)
 
-    def retriever():
+    def retriever(stream=0):
         gpu_data.from_device_raw(dataptr, datasize, stream=stream)
 
     return retriever, gpu_data

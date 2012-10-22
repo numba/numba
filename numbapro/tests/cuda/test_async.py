@@ -16,9 +16,8 @@ class TestCudaAsync(unittest.TestCase):
         B = A.copy()
         C = np.empty_like(A)
 
-        with cuda.stream() as stream:
-            orig_stream = stream
-
+        stream = cuda.stream()
+        with stream.auto_synchronize():
             dA = cuda.to_device(A, stream)
             dB = cuda.to_device(B, stream)
             dC = cuda.to_device(C, stream)
@@ -27,7 +26,8 @@ class TestCudaAsync(unittest.TestCase):
 
             self.assertFalse((C == A + B).all())
 
-            dC.to_host()
+            dC.to_host(stream)
+
         # synchronized here
         self.assertTrue((C == A + B).all())
 

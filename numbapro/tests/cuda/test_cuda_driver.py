@@ -92,7 +92,8 @@ class TestCudaDriver(unittest.TestCase):
 
         array = (c_int * 100)()
 
-        with Stream() as stream:
+        stream = Stream()
+        with stream.auto_synchronize():
 
             memory = DeviceMemory(sizeof(array))
             memory.to_device_raw(array, sizeof(array), stream)
