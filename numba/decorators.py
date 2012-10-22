@@ -166,6 +166,19 @@ class NumbaFunction(object):
     def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
         return compiled_numba_func(*args, **kwargs)
 
+def autojit_extension_class(target, nopython, py_class, translator_kwargs):
+    import extension_types
+    type, method_pointers, wrapper_methods = \
+                ast_type_inference.infer_exttype_types(context, py_class)
+    attrs = dict((name, var.type) for name, var in type.symtab.iteritems())
+    struct_type = struct(**attrs)
+    vtab_type = struct(type.methods)
+
+    extension_type = extension_types.create_new_extension_type(
+            py_class.__name__, py_class.__bases__, dict(vars(py_class)),
+            struct_type, vtab_type,
+            method_pointers, wrapper_methods)
+    return extension_type
 
 # TODO: make these two implementations the same
 def _autojit2(target, nopython, **translator_kwargs):
@@ -175,6 +188,10 @@ def _autojit2(target, nopython, **translator_kwargs):
         types. Uses the AST translator backend. For the bytecode translator,
         use @autojit.
         """
+        if isinstance(f, type):
+            return autojit_extension_class(target, nopython, f,
+                                           translator_kwargs)
+
         @functools.wraps(f)
         def wrapper(numba_func, *args, **kwargs):
             arguments = args + tuple(kwargs[k] for k in sorted(kwargs))

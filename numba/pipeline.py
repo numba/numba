@@ -125,7 +125,8 @@ def infer_types(context, func, restype=None, argtypes=None, **kwargs):
     Like run_pipeline, but takes restype and argtypes instead of a FunctionType
     """
     pipeline, (sig, symtab, ast) = _infer_types(context, func, restype,
-                                                argtypes, **kwargs)
+                                                argtypes, order=['type_infer'],
+                                                **kwargs)
     return sig, symtab, ast
 
 def compile(context, func, restype=None, argtypes=None, ctypes=False,
@@ -142,10 +143,10 @@ def compile(context, func, restype=None, argtypes=None, ctypes=False,
     t = pipeline.translator
 
     if compile_only:
-        return func_signature, t.lfunc, None
+        return func_signature, t, None
 
     if ctypes:
         ctypes_func = t.get_ctypes_func(kwds.get('llvm', True))
-        return func_signature, t.lfunc, ctypes_func
+        return func_signature, t, ctypes_func
     else:
-        return func_signature, t.lfunc, t.build_wrapper_function()
+        return func_signature, t, t.build_wrapper_function()

@@ -898,11 +898,11 @@ class struct(Type):
         if kwargs:
             fields = sort_types(kwargs)
 
-        self.fields = fields
-        self.rank = sum(_sort_key(field) for field in fields)
+        self.fields = fields or []
+        self.rank = sum(_sort_key(field) for field in self.fields)
         self.name = name
         self.readonly = readonly
-        self.fielddict = dict(fields)
+        self.fielddict = dict(self.fields)
         self.packed = packed
 
     def __repr__(self):

@@ -496,7 +496,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             #
             #    PY_CALL_TO_LLVM_CALL_MAP[self.func] = \
             #        self.build_call_to_translated_function
-            return prototype(ee.get_pointer_to_function(self.lfunc))
+            return prototype(self.lfunc_pointer)
         else:
             return prototype(self.func)
 
@@ -529,7 +529,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         t.translate()
 
         # Return a PyCFunctionObject holding the wrapper
-        func_pointer = t.ee.get_pointer_to_function(t.lfunc)
+        func_pointer = t.lfunc_pointer
         result = pycfunction_new(self.func, func_pointer)
         return result
 
@@ -571,6 +571,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                       order=['late_specializer'])
         sig, symtab, return_stmt_ast = pipeline_.run_pipeline()
         self.generic_visit(return_stmt_ast)
+
+    @property
+    def lfunc_pointer(self):
+        return self.ee.get_pointer_to_function(self.lfunc)
 
     def _null_obj_temp(self, name, type=None):
         lhs = self.llvm_alloca(type or llvm_types._pyobject_head_struct_p,

@@ -201,7 +201,7 @@ class CTypesFunctionType(NumbaType, minitypes.ObjectType):
         self.signature = minitypes.FunctionType(return_type=restype,
                                                 args=argtypes)
 
-    def __str__(self):
+    def __repr__(self):
         return "<ctypes function %s>" % (self.signature,)
 
 class SizedPointerType(NumbaType, minitypes.PointerType):
@@ -215,6 +215,23 @@ class CastType(NumbaType, minitypes.ObjectType):
     def __init__(self, dst_type, **kwds):
         super(CastType, self).__init__(**kwds)
         self.dst_type = dst_type
+
+    def __repr__(self):
+        return "<cast(%s)>" % self.dst_type
+
+class ExtensionType(NumbaType, minitypes.ObjectType):
+
+    is_extension = True
+
+    def __init__(self, py_class, **kwds):
+        super(ExtensionType, self).__init__(**kwds)
+        self.name = py_class.__name__
+        self.py_class = py_class
+        self.symtab = {}  # attr_name -> attr_type
+        self.methods = [] # (method_name, py_func)
+
+    def __repr__(self):
+        return "<Extension %s>" % self.name
 
 
 tuple_ = TupleType()

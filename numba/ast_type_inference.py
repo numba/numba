@@ -1065,7 +1065,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return isinstance(ctx, ast.Store)
 
     def _resolve_extension_attribute(self, node, type):
-        if attr not in type.symtab:
+        if node.attr not in type.symtab:
             if type.is_resolved or not self.is_store(node.ctx):
                 raise error.NumbaError(
                     node, "Cannot access attribute %s of type %s" % (
@@ -1073,7 +1073,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
             # Create entry in type's symbol table, resolve the actual type
             # in the parent Assign node
-            type.symtab[attr] = Variable(None)
+            type.symtab[node.attr] = Variable(None)
 
         if self.is_store(node.ctx):
             cls = nodes.ExtTypeAttributeSet
@@ -1103,8 +1103,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             result_type = type.fielddict[node.attr]
         elif type.is_module and hasattr(type.module, node.attr):
             result_type = self._resolve_module_attribute(node, type)
-        elif type.is_object:
-            result_type = type
         elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):
             # handle shape/strides/ndim etc
             return nodes.ArrayAttributeNode(node.attr, node.value)
@@ -1187,3 +1185,4 @@ class TypeSettingVisitor(visitors.NumbaVisitor):
         "Resolve deferred coercions"
         self.generic_visit(node)
         return nodes.CoercionNode(node.node, node.variable.type)
+
