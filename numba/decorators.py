@@ -8,7 +8,7 @@ from numba import *
 from . import _numba_types
 from . import utils, functions, ast_translate as translate, ast_type_inference
 from numba import translate as bytecode_translate
-from numba import error, pipeline
+from numba import error, pipeline, extension_type_inference
 from .minivect import minitypes
 from numba.utils import debugout
 
@@ -166,6 +166,9 @@ class NumbaFunction(object):
     def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
         return compiled_numba_func(*args, **kwargs)
 
+def autojit_extension_class(target, nopython, py_class, translator_kwargs):
+    return extension_type_inference.create_extension(
+                    context, py_class, translator_kwargs)
 
 # TODO: make these two implementations the same
 def _autojit2(target, nopython, **translator_kwargs):
@@ -175,6 +178,10 @@ def _autojit2(target, nopython, **translator_kwargs):
         types. Uses the AST translator backend. For the bytecode translator,
         use @autojit.
         """
+        if isinstance(f, type):
+            return autojit_extension_class(target, nopython, f,
+                                           translator_kwargs)
+
         @functools.wraps(f)
         def wrapper(numba_func, *args, **kwargs):
             arguments = args + tuple(kwargs[k] for k in sorted(kwargs))

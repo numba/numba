@@ -1006,6 +1006,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         func = self._resolve_function(func_type, func_variable.name)
 
+        def no_keywords():
+            if node.keywords:
+                raise error.NumbaError(
+                    node, "Function call does not support keyword arguments")
+
         new_node = None
         if func_type.is_builtin:
             # Call to Python built-in function
@@ -1015,23 +1020,25 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 new_node = node
         elif func_type.is_function:
             # Native function call
-            new_node = nodes.NativeCallNode(func_variable.type, node.args,
-                                            func_variable.value)
+            no_keywords()
+            new_node = nodes.NativeFunctionCallNode(
+                            func_variable.type, node.func, node.args,
+                            skip_self=True)
         elif func_type.is_method:
             # Call to special object method
+            no_keywords()
             new_node = self._resolve_method_calls(func_type, new_node, node)
 
         elif func_type.is_ctypes_function:
             # Call to ctypes function
+            no_keywords()
             new_node = nodes.CTypesCallNode(
                     func_type.signature, node.args, func_type,
                     py_func=func_type.ctypes_func)
 
         elif func_type.is_cast:
             # Call of a numba type, like double(value)
-            if node.keywords:
-                raise error.NumbaError("Cast function %s does not take "
-                                       "keyword arguments" % func_type.dst_type)
+            no_keywords()
             new_node = nodes.CoercionNode(node.args[0], func_type.dst_type,
                                           name="cast")
 
@@ -1053,7 +1060,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return new_node
 
-    def _resolve_attribute(self, node, type):
+    def _resolve_module_attribute(self, node, type):
         "Resolve attributes of the numpy module or a submodule"
         attribute = getattr(type.module, node.attr)
         if attribute is numpy.newaxis:
@@ -1076,32 +1083,64 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def is_store(self, ctx):
         return isinstance(ctx, ast.Store)
 
+    def _resolve_extension_attribute(self, node, type):
+        if node.attr in type.methoddict:
+            return nodes.ExtensionMethod(node.value, node.attr)
+        if node.attr not in type.symtab:
+            if type.is_resolved or not self.is_store(node.ctx):
+                raise error.NumbaError(
+                    node, "Cannot access attribute %s of type %s" % (
+                                                node.attr, type.name))
+
+            # Create entry in type's symbol table, resolve the actual type
+            # in the parent Assign node
+            type.symtab[node.attr] = Variable(None)
+
+        return nodes.ExtTypeAttribute(node.value, node.attr, node.ctx, type)
+
+    def _resolve_struct_attribute(self, node, type):
+        if not node.attr in type.fielddict:
+            raise error.NumbaError(
+                    node, "Struct %s has no field %r" % (type, node.attr))
+
+        if isinstance(node.ctx, ast.Store):
+            if not isinstance(node.value, (ast.Name, ast.Subscript)):
+                raise error.NumbaError(
+                        node, "Can only assign to struct attributes of "
+                              "variables or array indices")
+            node.value.ctx = ast.Store()
+
+        return nodes.StructAttribute(node.value, node.attr, node.ctx,
+                                     node.value.variable.type)
+
+    def _resolve_complex_attribute(self, node, type):
+        # TODO: make conplex a struct type
+        if node.attr in ('real', 'imag'):
+            if self.is_store(node.ctx):
+                raise TypeError("Cannot assign to the %s attribute of "
+                                "complex numbers" % node.attr)
+            result_type = type.base_type
+        else:
+            raise AttributeError("'%s' of complex type" % node.attr)
+
+        return result_type
+
     def visit_Attribute(self, node):
         node.value = self.visit(node.value)
         type = node.value.variable.type
         if node.attr == 'conjugate' and (type.is_complex or type.is_float):
             result_type = numba_types.MethodType(type, 'conjugate')
         elif type.is_complex:
-            # TODO: make conplex a struct type
-            if node.attr in ('real', 'imag'):
-                if self.is_store(node.ctx):
-                    raise TypeError("Cannot assign to the %s attribute of "
-                                    "complex numbers" % node.attr)
-                result_type = type.base_type
-            else:
-                raise AttributeError("'%s' of complex type" % node.attr)
+            result_type = self._resolve_complex_attribute(node, type)
         elif type.is_struct:
-            if not node.attr in type.fielddict:
-                raise error.NumbaError(
-                        node, "Struct %s has no field %r" % (type, node.attr))
-            result_type = type.fielddict[node.attr]
+            return self._resolve_struct_attribute(node, type)
         elif type.is_module and hasattr(type.module, node.attr):
-            result_type = self._resolve_attribute(node, type)
-        elif type.is_object:
-            result_type = type
+            result_type = self._resolve_module_attribute(node, type)
         elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):
             # handle shape/strides/ndim etc
             return nodes.ArrayAttributeNode(node.attr, node.value)
+        elif type.is_extension:
+            return self._resolve_extension_attribute(node, type)
         else:
             # use PyObject_GetAttrString
             result_type = object_
@@ -1179,3 +1218,4 @@ class TypeSettingVisitor(visitors.NumbaVisitor):
         "Resolve deferred coercions"
         self.generic_visit(node)
         return nodes.CoercionNode(node.node, node.variable.type)
+

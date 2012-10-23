@@ -49,9 +49,11 @@ deleting...
 2
 >>> try:
 ...     exc(obj)
-... except ValueError, e:
+... except TypeError, e:
 ...     del e
 ...     sys.exc_clear()
+... else:
+...     raise Exception("An exception should have been raised")
 ...
 >>> sys.getrefcount(obj)
 2
@@ -109,7 +111,7 @@ def test_refcounting():
     assert all(sys.getrefcount(obj) == 3 for obj in L)
     with test_support.StdoutReplacer() as out:
         use_objects(L)
-    print out.getvalue()
+    # print out.getvalue()
 
     # This fails in nose
     #expected = "\n".join("Unique(%d)" % i for i in range(10)) + '\n'
@@ -175,7 +177,7 @@ def attr_count(obj):
 @autojit(backend='ast')
 def exc(obj):
     x = obj
-    return int('boom')
+    return object()('boom')
 
 @autojit(backend='ast')
 def count_arguments(x, y):
@@ -194,6 +196,7 @@ def count_arguments3(obj):
     x = obj
 
 if __name__ == "__main__":
-    print sys.getrefcount(fresh_obj7())
-#    import doctest
-#    doctest.testmod()
+#    print sys.getrefcount(fresh_obj7())
+#    exc(object())
+    import doctest
+    doctest.testmod()

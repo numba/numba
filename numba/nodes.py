@@ -59,6 +59,17 @@ class Node(ast.AST):
     def __init__(self, **kwargs):
         vars(self).update(kwargs)
 
+    def _variable_get(self):
+        if not hasattr(self, '_variable'):
+            self._variable = Variable(self.type)
+
+        return self._variable
+
+    def _variable_set(self, variable):
+        self._variable = variable
+
+    variable = property(_variable_get, _variable_set)
+
 class CoercionNode(Node):
     """
     Coerce a node to a different type
@@ -85,7 +96,6 @@ class CoercionNode(Node):
             return
 
         self.dst_type = dst_type
-        self.variable = Variable(dst_type)
         self.type = dst_type
         self.name = name
 
@@ -225,26 +235,39 @@ NULL_obj = ConstNode(_NULL, object_)
 class FunctionCallNode(Node):
     def __init__(self, signature, args, name=''):
         self.signature = signature
-        self.variable = Variable(signature.return_type)
+        self.type = signature.return_type
         self.name = name
         self.original_args = args
-
 
 class NativeCallNode(FunctionCallNode):
     _fields = ['args']
 
-    def __init__(self, signature, args, llvm_func, py_func=None, **kw):
+    def __init__(self, signature, args, llvm_func, py_func=None,
+                 skip_self=False, **kw):
         super(NativeCallNode, self).__init__(signature, args, **kw)
         self.llvm_func = llvm_func
         self.py_func = py_func
-        self.coerce_args()
+        self.skip_self = skip_self
         self.type = signature.return_type
+        self.coerce_args()
 
     def coerce_args(self):
         self.args = list(self.original_args)
-        for i, dst_type in enumerate(self.signature.args):
+        for i, dst_type in enumerate(self.signature.args[self.skip_self:]):
             self.args[i] = CoercionNode(self.args[i], dst_type,
                                         name='func_%s_arg%d' % (self.name, i))
+
+class NativeFunctionCallNode(NativeCallNode):
+    """
+    Call a function which is given as a node
+    """
+
+    _fields = ['function', 'args']
+
+    def __init__(self, signature, function_node, args, **kw):
+        super(NativeFunctionCallNode, self).__init__(signature, args, None,
+                                                     None, **kw)
+        self.function = function_node
 
 class MathNode(Node):
     """
@@ -259,8 +282,6 @@ class MathNode(Node):
         self.signature = signature
         self.arg = arg
         self.type = signature.return_type
-        self.variable = Variable(self.type)
-
 
 class LLVMIntrinsicNode(NativeCallNode):
     "Call an llvm intrinsic function"
@@ -334,7 +355,6 @@ class ObjectInjectNode(Node):
         super(ObjectInjectNode, self).__init__(**kwargs)
         self.object = object
         self.type = type or object_
-        self.variable = Variable(self.type)
 
 
 class ObjectTempNode(Node):
@@ -349,7 +369,6 @@ class ObjectTempNode(Node):
         self.node = node
         self.llvm_temp = None
         self.type = getattr(node, 'type', node.variable.type)
-        self.variable = Variable(self.type)
         self.incref = incref
 
 class NoneNode(Node):
@@ -372,6 +391,34 @@ class ObjectTempRefNode(Node):
         super(ObjectTempRefNode, self).__init__(**kwargs)
         self.obj_temp_node = obj_temp_node
 
+class CloneableNode(Node):
+    """
+    Create a node that can be cloned. This allows sub-expressions to be
+    re-used without
+    """
+
+    _fields = ['node']
+
+    def __init__(self, node, **kwargs):
+        super(CloneableNode, self).__init__(**kwargs)
+        self.node = node
+        self.clone_nodes = []
+        self.type = node.type
+
+class CloneNode(Node):
+
+    _fields = ['node']
+
+    def __init__(self, node, **kwargs):
+        super(CloneNode, self).__init__(**kwargs)
+
+        assert isinstance(node, CloneableNode)
+        self.node = node
+        self.type = node.type
+        node.clone_nodes.append(self)
+
+        self.llvm_value = None
+
 class LLVMValueRefNode(Node):
     """
     Wrap an LLVM value.
@@ -381,7 +428,6 @@ class LLVMValueRefNode(Node):
 
     def __init__(self, type, llvm_value):
         self.type = type
-        self.variable = Variable(type)
         self.llvm_value = llvm_value
 
 
@@ -423,8 +469,8 @@ class DataPointerNode(Node):
     def __init__(self, node, slice, ctx):
         self.node = node
         self.slice = slice
-        self.variable = Variable(node.type)
         self.type = node.type.dtype
+        self.variable = Variable(node.type)
         self.ctx = ctx
 
     @property
@@ -497,7 +543,6 @@ class ArrayAttributeNode(Node):
             raise error._UnknownAttribute(attribute_name)
 
         self.type = type
-        self.variable = Variable(type)
 
 class ShapeAttributeNode(ArrayAttributeNode):
     # NOTE: better do this at code generation time, and not depend on
@@ -510,7 +555,36 @@ class ShapeAttributeNode(ArrayAttributeNode):
         self.element_type = numba_types.intp
         self.type = minitypes.CArrayType(self.element_type,
                                          array.variable.type.ndim)
-        self.variable = Variable(self.type)
+
+
+class ExtTypeAttribute(Node):
+
+    _fields = ['value']
+
+    def __init__(self, value, attr, ctx, ext_type, **kwargs):
+        super(ExtTypeAttribute, self).__init__(**kwargs)
+        self.value = value
+        self.attr = attr
+        self.variable = ext_type.symtab[attr]
+        self.ctx = ctx
+        self.ext_type = ext_type
+
+
+class StructAttribute(ExtTypeAttribute):
+
+    _fields = ['value']
+
+    def __init__(self, value, attr, ctx, struct_type, **kwargs):
+        super(ExtTypeAttribute, self).__init__(**kwargs)
+        self.value = value
+        self.attr = attr
+        self.ctx = ctx
+        self.struct_type = struct_type
+
+        self.attr_type = struct_type.fielddict[attr]
+        self.field_idx = struct_type.fields.index((attr, self.attr_type))
+
+        self.type = self.attr_type
 
 class ComplexNode(Node):
     _fields = ['real', 'imag']
@@ -524,6 +598,37 @@ class WithPythonNode(Node):
 
 class WithNoPythonNode(WithPythonNode):
     "with nopython: ..."
+
+class ExtensionMethod(Node):
+
+    _fields = ['value']
+    call_node = None
+
+    def __init__(self, object, attr, **kwargs):
+        super(ExtensionMethod, self).__init__(**kwargs)
+        ext_type = object.variable.type
+        assert ext_type.is_extension
+        self.value = object
+        self.attr = attr
+
+        method_type, self.vtab_index = ext_type.methoddict[attr]
+        self.type = minitypes.FunctionType(return_type=method_type.return_type,
+                                           args=method_type.args,
+                                           is_bound_method=True)
+
+#class ExtensionMethodCall(Node):
+#    """
+#    Low level call that has resolved the virtual method.
+#    """
+#
+#    _fields = ['vmethod', 'args']
+#
+#    def __init__(self, vmethod, self_obj, args, signature, **kwargs):
+#        super(ExtensionMethodCall, self).__init__(**kwargs)
+#        self.vmethod = vmethod
+#        self.args = args
+#        self.signature = signature
+#        self.type = signature
 
 class FunctionWrapperNode(Node):
     """
@@ -542,3 +647,37 @@ class FunctionWrapperNode(Node):
         self.signature = signature
         self.orig_py_func = orig_py_func
         self.fake_pyfunc = fake_pyfunc
+
+def pointer_add(pointer, offset):
+    assert pointer.type == char.pointer()
+    left = CoercionNode(pointer, Py_ssize_t)
+    result = ast.BinOp(left, ast.Add(), offset)
+    result.type = Py_ssize_t
+    result.variable = Variable(result.type)
+    return CoercionNode(result, char.pointer())
+
+class DereferenceNode(Node):
+    """
+    Dereference a pointer
+    """
+
+    _fields = ['pointer']
+
+    def __init__(self, pointer, **kwargs):
+        super(DereferenceNode, self).__init__(**kwargs)
+        self.pointer = pointer
+        self.type = pointer.type.base_type
+
+
+class PointerFromObject(Node):
+    """
+    Bitcast objects to void *
+    """
+
+    _fields = ['node']
+    type = void.pointer()
+    variable = Variable(type)
+
+    def __init__(self, node, **kwargs):
+        super(PointerFromObject, self).__init__(**kwargs)
+        self.node = node

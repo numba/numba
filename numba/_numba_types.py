@@ -8,7 +8,7 @@ import numpy as np
 # from numpy.ctypeslib import _typecodes
 
 import numba
-from numba import llvm_types
+from numba import llvm_types, extension_types
 from numba.minivect.minitypes import *
 from numba.minivect.minitypes import map_dtype
 from numba.minivect import minitypes
@@ -128,7 +128,9 @@ class NumpyAttributeType(ModuleAttributeType):
 
 class MethodType(NumbaType, minitypes.ObjectType):
     """
-    Method of something
+    Method of something.
+
+        base_type: the object type the attribute was accessed on
     """
 
     is_method = True
@@ -201,7 +203,7 @@ class CTypesFunctionType(NumbaType, minitypes.ObjectType):
         self.signature = minitypes.FunctionType(return_type=restype,
                                                 args=argtypes)
 
-    def __str__(self):
+    def __repr__(self):
         return "<ctypes function %s>" % (self.signature,)
 
 class SizedPointerType(NumbaType, minitypes.PointerType):
@@ -215,6 +217,44 @@ class CastType(NumbaType, minitypes.ObjectType):
     def __init__(self, dst_type, **kwds):
         super(CastType, self).__init__(**kwds)
         self.dst_type = dst_type
+
+    def __repr__(self):
+        return "<cast(%s)>" % self.dst_type
+
+class ExtensionType(NumbaType, minitypes.ObjectType):
+
+    is_extension = True
+
+    def __init__(self, py_class, **kwds):
+        super(ExtensionType, self).__init__(**kwds)
+        assert isinstance(py_class, type), "Must be a new-style class"
+        self.name = py_class.__name__
+        self.py_class = py_class
+        self.symtab = {}  # attr_name -> attr_type
+        self.methods = [] # (method_name, func_signature)
+        self.methoddict = {} # method_name -> (func_signature, vtab_index)
+
+        self.vtab_offset = extension_types.compute_vtab_offset(py_class)
+        self.attr_offset = extension_types.compute_attrs_offset(py_class)
+        self.attribute_struct = None
+        self.vtab_type = None
+
+    def add_method(self, method_name, method_signature):
+        if method_name in self.methoddict:
+            # Patch current signature after type inference
+            signature = self.get_signature(method_name)
+            assert method_signature.args == signature.args
+            signature.return_type = method_signature.return_type
+        else:
+            self.methoddict[method_name] = (method_signature, len(self.methods))
+            self.methods.append((method_name, method_signature))
+
+    def get_signature(self, method_name):
+        signature, vtab_offset = self.methoddict[method_name]
+        return signature
+
+    def __repr__(self):
+        return "<Extension %s>" % self.name
 
 
 tuple_ = TupleType()

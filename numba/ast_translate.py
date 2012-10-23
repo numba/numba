@@ -16,7 +16,7 @@ from ._numba_types import BuiltinType
 from numba import *
 from . import visitors, nodes, llvm_types
 from .minivect import minitypes
-from numba import ndarray_helpers, error
+from numba import ndarray_helpers, translate, error, extension_types
 from numba._numba_types import is_obj, promote_closest
 
 import logging
@@ -81,10 +81,11 @@ def pycfunction_new(py_func, func_pointer):
 
     # Create PyCFunctionObject, pass in the methoddef struct as the m_self
     # attribute
-    methoddef_p = ctypes.byref(methoddef)
-    NULL = ctypes.c_void_p()
-    result = PyCFunction_NewEx(methoddef_p, methoddef, NULL)
-    return result
+    #methoddef_p = ctypes.byref(methoddef)
+    #NULL = ctypes.c_void_p()
+    #result = PyCFunction_NewEx(methoddef_p, methoddef, NULL)
+    #return result
+    return extension_types.create_function(methoddef, py_func)
 
 class MethodReference(object):
     def __init__(self, object_var, py_method):
@@ -387,6 +388,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             stackspace = self._allocate_arg_local(argname, argtype, larg)
             variable.lvalue = stackspace
 
+            # TODO: incref objects in structs
             if is_obj(variable.type) and self.refcount_args:
                 self.incref(self.builder.load(stackspace))
 
@@ -401,6 +403,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                     stackspace = self._null_obj_temp(name, type=var.ltype)
                 else:
                     stackspace = self.builder.alloca(var.ltype, name=name)
+
+                if var.type.is_struct:
+                    # TODO: memset struct to 0
+                    pass
+
                 var.lvalue = stackspace
 
     def setup_func(self):
@@ -496,7 +503,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             #
             #    PY_CALL_TO_LLVM_CALL_MAP[self.func] = \
             #        self.build_call_to_translated_function
-            return prototype(ee.get_pointer_to_function(self.lfunc))
+            return prototype(self.lfunc_pointer)
         else:
             return prototype(self.func)
 
@@ -529,7 +536,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         t.translate()
 
         # Return a PyCFunctionObject holding the wrapper
-        func_pointer = t.ee.get_pointer_to_function(t.lfunc)
+        func_pointer = t.lfunc_pointer
         result = pycfunction_new(self.func, func_pointer)
         return result
 
@@ -571,6 +578,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                       order=['late_specializer'])
         sig, symtab, return_stmt_ast = pipeline_.run_pipeline()
         self.generic_visit(return_stmt_ast)
+
+    @property
+    def lfunc_pointer(self):
+        return self.ee.get_pointer_to_function(self.lfunc)
 
     def _null_obj_temp(self, name, type=None):
         lhs = self.llvm_alloca(type or llvm_types._pyobject_head_struct_p,
@@ -642,16 +653,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 return self.builder.extract_value(result, 0)
             elif node.attr == 'imag':
                 return self.builder.extract_value(result, 1)
-        elif node.value.type.is_struct:
-            attr_type = node.value.type.fielddict[node.attr]
-            field_idx = node.value.type.fields.index((node.attr, attr_type))
-            result = self.builder.gep(result, [llvm_types.constant_int(0),
-                                               llvm_types.constant_int(field_idx)])
-            result = self._handle_ctx(node, result)
-
-            return result
 
         raise error.NumbaError("This node should have been replaced")
+
+    def visit_StructAttribute(self, node):
+        result = self.visit(node.value)
+        if isinstance(node.ctx, ast.Load):
+            result = self.builder.extract_value(result, node.field_idx)
+        else:
+            result = self.builder.gep(
+                result, [llvm_types.constant_int(0),
+                         llvm_types.constant_int(node.field_idx)])
+
+        return result
 
     def visit_Assign(self, node):
         target_node = node.targets[0]
@@ -696,10 +710,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def _handle_ctx(self, node, lptr, name=''):
         if isinstance(node.ctx, ast.Load):
-            if node.type.is_struct:
-                return lptr
-            else:
-                return self.builder.load(lptr, name=name and 'load_' + name)
+            return self.builder.load(lptr, name=name and 'load_' + name)
         else:
             return lptr
 
@@ -1066,6 +1077,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return self.object_coercer.to_native(node.dst_type, val,
                                              name=node.name)
 
+    def visit_DereferenceNode(self, node):
+        result = self.visit(node.pointer)
+        return self.builder.load(result)
+
+    def visit_PointerFromObject(self, node):
+        return self.visit(node.node)
+
     def visit_ComplexNode(self, node):
         real = self.visit(node.real)
         imag = self.visit(node.imag)
@@ -1167,9 +1185,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                         new_arg = self.alloca(arg_type)
                         self.generate_assign(larg, new_arg)
                         larg = new_arg
-                else:
-                    if arg_type.is_struct:
-                        larg = self.builder.load(larg)
 
                 largs[i] = larg
 
@@ -1194,12 +1209,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         result = self.builder.call(node.llvm_func, largs, name=node.name)
 
         if node.signature.struct_by_reference:
-            if node.signature.return_type.is_complex:
+            if minitypes.pass_by_ref(node.signature.return_type):
                 result = self.builder.load(return_value)
-            elif node.signature.return_type.is_struct:
-                result = return_value
 
         return result
+
+    def visit_NativeFunctionCallNode(self, node):
+        lfunc = self.visit(node.function)
+        node.llvm_func = lfunc
+        return self.visit_NativeCallNode(node)
 
     def visit_LLVMIntrinsicNode(self, node):
         intr = getattr(llvm.core, 'INTR_' + node.py_func.__name__.upper())
@@ -1286,6 +1304,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_LLVMValueRefNode(self, node):
         return node.llvm_value
+
+    def visit_CloneNode(self, node):
+        return node.llvm_value
+
+    def visit_CloneableNode(self, node):
+        llvm_value = self.visit(node.node)
+        for clone_node in node.clone_nodes:
+            clone_node.llvm_value = llvm_value
+
+        return llvm_value
 
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)
@@ -1458,10 +1486,8 @@ class ObjectCoercer(object):
         for i, (field_name, field_type) in enumerate(type.fields):
             types.extend((c_string_type, field_type))
             largs.append(self._create_llvm_string(field_name))
-            zero = llvm_types.constant_int(0)
-            struct_attr = self.builder.gep(llvm_result,
-                                           [zero, llvm_types.constant_int(i)])
-            largs.append(self.builder.load(struct_attr))
+            struct_attr = self.builder.extract_value(llvm_result, i)
+            largs.append(struct_attr)
 
         return self.buildvalue(types, *largs, name='struct', fmt="{%s}")
 

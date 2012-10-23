@@ -19,6 +19,14 @@ class Pipeline(object):
     Runs a pipeline of transforms.
     """
 
+    order = [
+        'type_infer',
+        'type_set',
+        'transform_for',
+        'specialize',
+        'late_specializer',
+    ]
+
     def __init__(self, context, func, ast, func_signature,
                  nopython=False, locals=None, order=None, codegen=False,
                  symtab=None, **kwargs):
@@ -35,13 +43,7 @@ class Pipeline(object):
         self.kwargs = kwargs
 
         if order is None:
-            self.order = [
-                'type_infer',
-                'type_set',
-                'transform_for',
-                'specialize',
-                'late_specializer',
-            ]
+            self.order = list(Pipeline.order)
             if codegen:
                 self.order.append('codegen')
         else:
@@ -125,8 +127,27 @@ def infer_types(context, func, restype=None, argtypes=None, **kwargs):
     Like run_pipeline, but takes restype and argtypes instead of a FunctionType
     """
     pipeline, (sig, symtab, ast) = _infer_types(context, func, restype,
-                                                argtypes, **kwargs)
+                                                argtypes, order=['type_infer'],
+                                                **kwargs)
     return sig, symtab, ast
+
+def compile_after_type_inference(context, func, func_signature, symtab, ast,
+                                 ctypes=False):
+    """
+    Use this function to compile a type-inferred AST. THis allows one
+    to separate the stages.
+    """
+    order = Pipeline.order[1:]
+    pipeline, (new_signature, symtab, ast) = run_pipeline(
+                        context, func, ast, func_signature, order=order)
+    assert new_signature == func_signature
+    return pipeline.translator, get_wrapper(pipeline.translator, ctypes)
+
+def get_wrapper(translator, ctypes=False):
+    if ctypes:
+        return translator.get_ctypes_func()
+    else:
+        return translator.build_wrapper_function()
 
 def compile(context, func, restype=None, argtypes=None, ctypes=False,
             compile_only=False, **kwds):
@@ -142,10 +163,6 @@ def compile(context, func, restype=None, argtypes=None, ctypes=False,
     t = pipeline.translator
 
     if compile_only:
-        return func_signature, t.lfunc, None
+        return func_signature, t, None
 
-    if ctypes:
-        ctypes_func = t.get_ctypes_func(kwds.get('llvm', True))
-        return func_signature, t.lfunc, ctypes_func
-    else:
-        return func_signature, t.lfunc, t.build_wrapper_function()
+    return func_signature, t, get_wrapper(t, ctypes)
