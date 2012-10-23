@@ -1208,6 +1208,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return result
 
+    def visit_NativeFunctionCallNode(self, node):
+        lfunc = self.visit(node.function)
+        node.llvm_func = lfunc
+        return self.visit_NativeCallNode(node)
+
     def visit_LLVMIntrinsicNode(self, node):
         intr = getattr(llvm.core, 'INTR_' + node.py_func.__name__.upper())
         largs = self.visitlist(node.args)
@@ -1293,6 +1298,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_LLVMValueRefNode(self, node):
         return node.llvm_value
+
+    def visit_CloneNode(self, node):
+        return node.llvm_value
+
+    def visit_CloneableNode(self, node):
+        llvm_value = self.visit(node.node)
+        for clone_node in node.clone_nodes:
+            clone_node.llvm_value = llvm_value
+
+        return llvm_value
 
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)

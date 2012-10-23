@@ -57,6 +57,7 @@ def _type_infer_method(context, ext_type, method, method_name,
     method.live_objects = []
     func_signature, symtab, ast = pipeline.infer_types(
                         context, method, restype, argtypes)
+    ext_type.methoddict[method_name] = (func_signature, len(ext_type.methods))
     ext_type.methods.append((method_name, func_signature))
     return method
 
@@ -94,6 +95,8 @@ def compile_extension_methods(context, py_class, ext_type, class_dict):
         _type_infer_method(context, ext_type, method, method_name, class_dict)
 
     # TODO: patch method call types
+    ext_type.vtab_type = struct([(field_name, field_type.pointer())
+                                    for field_name, field_type in ext_type.methods])
 
     # Compile methods
     for method_name, func_signature in ext_type.methods:
@@ -137,7 +140,8 @@ def build_vtab(vtab_type, method_pointers):
     methods = []
     for method_pointer, (field_name, field_type) in zip(method_pointers,
                                                         vtab_type.fields):
-        cmethod = field_type.to_ctypes()(method_pointer)
+        method_type_p = field_type.to_ctypes()
+        cmethod = ctypes.cast(ctypes.c_void_p(method_pointer), method_type_p)
         methods.append(cmethod)
 
     vtab = vtab_ctype(*methods)
@@ -169,7 +173,6 @@ def create_extension(context, py_class, translator_kwargs):
     class_dict = dict(vars(py_class))
     method_pointers, lmethods = compile_extension_methods(
                                         context, py_class, type, class_dict)
-    type.vtab_type = struct(type.methods)
     inject_descriptors(context, py_class, type, class_dict)
 
     vtab = build_vtab(type.vtab_type, method_pointers)

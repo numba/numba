@@ -128,7 +128,9 @@ class NumpyAttributeType(ModuleAttributeType):
 
 class MethodType(NumbaType, minitypes.ObjectType):
     """
-    Method of something
+    Method of something.
+
+        base_type: the object type the attribute was accessed on
     """
 
     is_method = True
@@ -229,7 +231,8 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
         self.name = py_class.__name__
         self.py_class = py_class
         self.symtab = {}  # attr_name -> attr_type
-        self.methods = [] # (method_name, py_func)
+        self.methods = [] # (method_name, func_signature)
+        self.methoddict = {} # method_name -> (func_signature, vtab_index)
 
         self.vtab_offset = extension_types.compute_vtab_offset(py_class)
         self.attr_offset = extension_types.compute_attrs_offset(py_class)

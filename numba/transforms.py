@@ -592,6 +592,13 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
             node = nodes.ObjectTempNode(node)
         return node
 
+    def visit_NativeFunctionCallNode(self, node):
+        if node.signature.is_bound_method:
+            assert isinstance(node.function, nodes.ExtensionMethod)
+            return self.visit_ExtensionMethod(node.function, node)
+
+        return self.visit_NativeCallNode(node)
+
     def visit_ObjectCallNode(self, node):
         # self.generic_visit(node)
         assert node.function
@@ -744,22 +751,74 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
         self.generic_visit(node)
         return node
 
-    def visit_ExtTypeAttribute(self, node):
-        ext_type = node.value.type
-        offset = nodes.ConstNode(ext_type.attr_offset, Py_ssize_t)
-
+    def lookup_offset_attribute(self, attr, ctx, node, offset, struct_type,
+                                is_pointer=False):
+        """
+        Look up an attribute offset in an object defined by a struct type.
+        """
+        offset = nodes.ConstNode(offset, Py_ssize_t)
         pointer = nodes.PointerFromObject(node.value)
         pointer = nodes.CoercionNode(pointer, char.pointer())
         pointer = nodes.pointer_add(pointer, offset)
+        struct_pointer = nodes.CoercionNode(pointer, struct_type.pointer())
 
-        struct_pointer = nodes.CoercionNode(
-                    pointer, ext_type.attribute_struct.pointer())
-        if isinstance(node.ctx, ast.Load):
+        if isinstance(ctx, ast.Load):
             struct_pointer = nodes.DereferenceNode(struct_pointer)
-        attr = nodes.StructAttribute(struct_pointer, node.attr, node.ctx,
-                                     ext_type.attribute_struct)
+            if is_pointer:
+                struct_pointer = nodes.DereferenceNode(struct_pointer)
+                struct_type = struct_type.base_type
+
+        attr = nodes.StructAttribute(struct_pointer, attr, ctx, struct_type)
         attr.type = node.type
-        return self.visit(attr)
+        result = self.visit(attr)
+        return result
+
+    def visit_ExtTypeAttribute(self, node):
+        """
+        Resolve an extension attribute:
+
+            ((attributes_struct *)
+                 (((char *) obj) + attributes_offset))->attribute
+        """
+        ext_type = node.value.type
+        offset = ext_type.attr_offset
+        struct_type = ext_type.attribute_struct
+        result = self.lookup_offset_attribute(node.attr, node.ctx, node, offset,
+                                              struct_type)
+        return result
+
+    def visit_ExtensionMethod(self, node, call_node=None):
+        """
+        Resolve an extension method:
+
+            typedef {
+                double (*method1)(double);
+                ...
+            } vtab_struct;
+
+            vtab_struct *vtab = *(vtab_struct **) (((char *) obj) + vtab_offset)
+            void *method = vtab[index]
+        """
+        if call_node is None:
+            raise error.NumbaError(node, "Referenced extension method '%s' "
+                                         "must be called" % node.attr)
+
+        # Make the object we call the method on clone-able
+        node.value = nodes.CloneableNode(self.visit(node.value))
+
+        ext_type = node.value.type
+        offset = ext_type.vtab_offset
+        struct_type = ext_type.vtab_type.pointer()
+        vmethod = self.lookup_offset_attribute(node.attr, ast.Load(), node, offset,
+                                               struct_type, is_pointer=True)
+
+        # Visit argument list for call
+        args = self.visitlist(call_node.args)
+        # Insert first argument 'self' in args list
+        args.insert(0, nodes.CloneNode(node.value))
+        result = nodes.NativeFunctionCallNode(node.type, vmethod, args)
+        result.signature.is_bound_method = False
+        return self.visit(result)
 
     def visit_Name(self, node):
         if node.type.is_builtin and not node.variable.is_local:

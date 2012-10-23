@@ -64,6 +64,8 @@ class ObjectAttrExtension(object):
     MyExtension10.0
     >>> obj.getvalue()
     MyExtension10.0
+    >>> obj.method()
+    MyExtension10.0
     >>> obj._numba_attrs._fields_
     [('value2', <class 'ctypes.c_double'>), ('value1', <class 'ctypes.py_object'>)]
     """
@@ -80,6 +82,9 @@ class ObjectAttrExtension(object):
     def setvalue(self, value):
         "Set value"
         self.value1 = value
+
+    def method(self):
+        return self.getvalue()
 
 if __name__ == '__main__':
     import doctest

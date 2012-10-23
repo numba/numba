@@ -242,9 +242,24 @@ class NativeCallNode(FunctionCallNode):
 
     def coerce_args(self):
         self.args = list(self.original_args)
-        for i, dst_type in enumerate(self.signature.args):
+        offset = 0
+        if self.signature.is_bound_method:
+            offset = 1
+        for i, dst_type in enumerate(self.signature.args[offset:]):
             self.args[i] = CoercionNode(self.args[i], dst_type,
                                         name='func_%s_arg%d' % (self.name, i))
+
+class NativeFunctionCallNode(NativeCallNode):
+    """
+    Call a function which is given as a node
+    """
+
+    _fields = ['function', 'args']
+
+    def __init__(self, signature, function_node, args, **kw):
+        super(NativeFunctionCallNode, self).__init__(signature, args, None,
+                                                     None, **kw)
+        self.function = function_node
 
 class MathNode(Node):
     """
@@ -371,6 +386,34 @@ class ObjectTempRefNode(Node):
     def __init__(self, obj_temp_node, **kwargs):
         super(ObjectTempRefNode, self).__init__(**kwargs)
         self.obj_temp_node = obj_temp_node
+
+class CloneableNode(Node):
+    """
+    Create a node that can be cloned. This allows sub-expressions to be
+    re-used without
+    """
+
+    _fields = ['node']
+
+    def __init__(self, node, **kwargs):
+        super(CloneableNode, self).__init__(**kwargs)
+        self.node = node
+        self.clone_nodes = []
+        self.type = node.type
+
+class CloneNode(Node):
+
+    _fields = ['node']
+
+    def __init__(self, node, **kwargs):
+        super(CloneNode, self).__init__(**kwargs)
+
+        assert isinstance(node, CloneableNode)
+        self.node = node
+        self.type = node.type
+        node.clone_nodes.append(self)
+
+        self.llvm_value = None
 
 class LLVMValueRefNode(Node):
     """
@@ -558,6 +601,38 @@ class WithPythonNode(Node):
 
 class WithNoPythonNode(WithPythonNode):
     "with nopython: ..."
+
+class ExtensionMethod(Node):
+
+    _fields = ['value']
+    call_node = None
+
+    def __init__(self, object, attr, **kwargs):
+        super(ExtensionMethod, self).__init__(**kwargs)
+        ext_type = object.variable.type
+        assert ext_type.is_extension
+        self.value = object
+        self.attr = attr
+
+        method_type, self.vtab_index = ext_type.methoddict[attr]
+        self.type = minitypes.FunctionType(return_type=method_type.return_type,
+                                           args=method_type.args,
+                                           is_bound_method=True)
+        self.variable = Variable(self.type)
+
+#class ExtensionMethodCall(Node):
+#    """
+#    Low level call that has resolved the virtual method.
+#    """
+#
+#    _fields = ['vmethod', 'args']
+#
+#    def __init__(self, vmethod, self_obj, args, signature, **kwargs):
+#        super(ExtensionMethodCall, self).__init__(**kwargs)
+#        self.vmethod = vmethod
+#        self.args = args
+#        self.signature = signature
+#        self.type = signature
 
 class FunctionWrapperNode(Node):
     """
