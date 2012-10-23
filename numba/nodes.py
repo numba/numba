@@ -470,6 +470,7 @@ class DataPointerNode(Node):
         self.node = node
         self.slice = slice
         self.type = node.type.dtype
+        self.variable = Variable(node.type)
         self.ctx = ctx
 
     @property
