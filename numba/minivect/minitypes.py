@@ -777,7 +777,7 @@ class FunctionType(Type):
                                     for arg_type in self.args],
                                 self.is_vararg)
 
-    def __str__(self):
+    def __repr__(self):
         args = map(str, self.args)
         if self.is_vararg:
             args.append("...")
@@ -845,7 +845,7 @@ class VectorType(Type):
     def comparison_type_list(self):
         return self.subtype_list + [self.vector_size]
 
-    def __str__(self):
+    def __repr__(self):
         itemsize = self.element_type.itemsize
         if self.element_type.is_float:
             if itemsize == 4:
