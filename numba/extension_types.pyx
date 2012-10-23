@@ -52,7 +52,7 @@ def compute_attrs_offset(py_class):
     "Returns the start of the attribute struct"
     return align(compute_vtab_offset(py_class) + sizeof(void *), 8)
 
-def create_new_extension_type(name, bases, dict, struct_type, vtab, vtab_type,
+def create_new_extension_type(name, bases, dict, ext_numba_type, vtab, vtab_type,
                               llvm_methods, method_pointers):
     """
     Create an extension type from the given name, bases and dict. Also
@@ -101,6 +101,7 @@ def create_new_extension_type(name, bases, dict, struct_type, vtab, vtab_type,
     # Object offset for vtab is lower
     # Object attributes are located at lower + sizeof(void *), and end at
     # upper
+    struct_type = ext_numba_type.attribute_struct
     struct_ctype = struct_type.to_ctypes()
     vtab_offset = compute_vtab_offset(ext_type)
     attrs_offset = compute_attrs_offset(ext_type)
@@ -126,6 +127,7 @@ def create_new_extension_type(name, bases, dict, struct_type, vtab, vtab_type,
     ext_type.__numba_struct_ctype_p = struct_type.pointer().to_ctypes()
     ext_type.__numba_lfuncs = llvm_methods
     ext_type.__numba_method_pointers = method_pointers
+    ext_type.__numba_ext_type = ext_numba_type
 
     return ext_type
 

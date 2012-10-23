@@ -332,6 +332,8 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return CTypesFunctionType(value, restype, argtypes)
         elif isinstance(value, minitypes.Type):
             return CastType(dst_type=value)
+        elif hasattr(type(value), '__numba_ext_type'):
+            return type(value).__numba_ext_type
         else:
             return super(NumbaTypeMapper, self).from_python(value)
 

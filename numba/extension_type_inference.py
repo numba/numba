@@ -276,6 +276,6 @@ def create_extension(context, py_class, translator_kwargs):
 
     extension_type = extension_types.create_new_extension_type(
             py_class.__name__, py_class.__bases__, class_dict,
-            ext_type.attribute_struct, vtab, vtab_type,
+            ext_type, vtab, vtab_type,
             lmethods, method_pointers)
     return extension_type
