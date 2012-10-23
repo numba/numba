@@ -38,12 +38,26 @@ def fix_ast_lineno(tree):
 
     return tree
 
+## Fixme: 
+##  This should be changed to visit the AST and fix-up where a None object
+##  is present as this will likely not work for all AST.
 def _fix_ast(myast):
     import _ast
+
+    # Remove Pass nodes from the end of the ast
+    while isinstance(myast.body[-1], _ast.Pass):
+        del myast.body[-1]
     # Add a return node at the end of the ast if not present
-    if not isinstance(myast.body[-1], _ast.Return):
+    if len(myast.body) < 1 or not isinstance(myast.body[-1], _ast.Return):
         name = _ast.Name(id='None',ctx=_ast.Load(), lineno=0, col_offset=0)
         myast.body.append(ast.Return(name))
+    # remove _decorator list which sometimes confuses ast visitor
+    try:
+        indx = myast._fields.index('decorator_list')
+    except ValueError:
+        return
+    else:
+        myast.decorator_list = []
 
 def _get_ast(func):
     if os.environ.get('NUMBA_FORCE_META_AST'):

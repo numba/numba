@@ -629,6 +629,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_Expr(self, node):
         return self.visit(node.value)
 
+    def visit_Pass(self, node):
+        pass
+
     def visit_ConstNode(self, node):
         return node.value(self)
 
