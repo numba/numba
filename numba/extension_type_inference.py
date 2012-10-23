@@ -1,4 +1,5 @@
 import types
+import ctypes
 
 import numba
 from numba import pipeline
@@ -118,6 +119,28 @@ def inject_descriptors(context, py_class, ext_type, class_dict):
         descriptor = _create_descr(attr_name)
         class_dict[attr_name] = descriptor
 
+def vtab_name(field_name):
+    if field_name.startswith("__") and field_name.endswith("__"):
+        field_name = '__numba_' + field_name.strip("_")
+    return field_name
+
+def build_vtab(vtab_type, method_pointers):
+    assert len(method_pointers) == len(vtab_type.fields)
+
+    vtab_type = numba.struct([(vtab_name(field_name), field_type)
+                                  for field_name, field_type in vtab_type.fields])
+    vtab_ctype = vtab_type.to_ctypes()
+
+    methods = []
+    for method_pointer, (field_name, field_type) in zip(method_pointers,
+                                                        vtab_type.fields):
+        cmethod = field_type.to_ctypes()(method_pointer)
+        methods.append(cmethod)
+
+    vtab = vtab_ctype(*methods)
+    ctypes.byref(vtab)
+    return vtab
+
 def create_extension(context, py_class, translator_kwargs):
     """
     Compile an extension class
@@ -147,8 +170,10 @@ def create_extension(context, py_class, translator_kwargs):
     type.vtab_type = struct(type.methods)
     inject_descriptors(context, py_class, type, class_dict)
 
+    vtab = build_vtab(type.vtab_type, method_pointers)
+
     extension_type = extension_types.create_new_extension_type(
             py_class.__name__, py_class.__bases__, class_dict,
-            type.attribute_struct, type.vtab_type,
+            type.attribute_struct, vtab,
             lmethods, method_pointers)
     return extension_type

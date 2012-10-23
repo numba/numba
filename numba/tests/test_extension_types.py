@@ -9,6 +9,12 @@
 20.0
 >>> obj.value
 20.0
+>>> obj.getvalue.__name__
+'getvalue'
+>>> obj.getvalue.__doc__
+'Return value'
+>>> type(obj.getvalue.im_func)
+<type 'cython_function_or_method'>
 """
 
 import sys
@@ -18,12 +24,14 @@ from numba import *
 
 def test(struct_type, vtab_type):
     """
-    >>> struct_type = struct([('x', int_), ('y', char), ('z', float_)])
-    >>> vtab_type = struct([])
-    >>> obj, attrs = test(struct_type, vtab_type)
+    outdated.
+
+    >> struct_type = struct([('x', int_), ('y', char), ('z', float_)])
+    >> vtab_type = struct([])
+    >> obj, attrs = test(struct_type, vtab_type)
     Test
     hello!
-    >>> attrs.x, attrs.y, attrs.z
+    >> attrs.x, attrs.y, attrs.z
     (0, 0, 0.0)
     """
 
@@ -54,10 +62,12 @@ class MyExtension(object):
         self.value = myfloat
 
     def getvalue(self):
+        "Return value"
         return self.value
 
     @void(double)
     def setvalue(self, value):
+        "Set value"
         self.value = value
 
 if __name__ == '__main__':

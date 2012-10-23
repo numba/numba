@@ -81,10 +81,11 @@ def pycfunction_new(py_func, func_pointer):
 
     # Create PyCFunctionObject, pass in the methoddef struct as the m_self
     # attribute
-    methoddef_p = ctypes.byref(methoddef)
-    NULL = ctypes.c_void_p()
-    result = PyCFunction_NewEx(methoddef_p, methoddef, NULL)
-    return result
+    #methoddef_p = ctypes.byref(methoddef)
+    #NULL = ctypes.c_void_p()
+    #result = PyCFunction_NewEx(methoddef_p, methoddef, NULL)
+    #return result
+    return extension_types.create_function(methoddef, py_func)
 
 class MethodReference(object):
     def __init__(self, object_var, py_method):

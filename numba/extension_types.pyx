@@ -5,9 +5,13 @@ import sys
 import ctypes
 import doctest
 
-from numba import *
+import numba
 
 ctypedef object (*tp_new_func)(PyObject *, PyObject *, PyObject *)
+
+cdef extern int CyFunction_init() except -1
+cdef extern object CyFunction_NewEx(PyMethodDef *ml, int flags, self, module,
+                                    PyObject *code)
 
 cdef extern from *:
     ctypedef unsigned long Py_uintptr_t
@@ -18,6 +22,10 @@ cdef extern from *:
         Py_ssize_t tp_itemsize
         Py_ssize_t tp_basicsize
 
+    ctypedef struct PyMethodDef:
+        pass
+
+CyFunction_init()
 
 cdef Py_uintptr_t align(Py_uintptr_t p, size_t alignment) nogil:
     "Align on a boundary"
@@ -44,7 +52,7 @@ def compute_attrs_offset(py_class):
     "Returns the start of the attribute struct"
     return align(compute_vtab_offset(py_class) + sizeof(void *), 8)
 
-def create_new_extension_type(name, bases, dict, struct_type, vtab_type,
+def create_new_extension_type(name, bases, dict, struct_type, vtab,
                               llvm_methods, method_pointers):
     """
     Create an extension type from the given name, bases and dict. Also
@@ -107,15 +115,6 @@ def create_new_extension_type(name, bases, dict, struct_type, vtab_type,
     ext_type.__numba_obj_end = upper
     ext_type.__numba_attr_offset = attrs_offset
 
-    vtab_ctype = vtab_type.to_ctypes()
-    methods = []
-    assert len(method_pointers) == len(vtab_ctype._fields_)
-    for method_pointer, (field_name, field_type) in zip(method_pointers,
-                                                        vtab_ctype._fields_):
-        cmethod = field_type(method_pointer)
-        methods.append(cmethod)
-
-    vtab = vtab_ctype(*methods)
     ext_type.__numba_vtab = vtab
     vtab_p = ctypes.byref(ext_type.__numba_vtab)
 
@@ -124,5 +123,12 @@ def create_new_extension_type(name, bases, dict, struct_type, vtab_type,
     ext_type.__numba_struct_type = struct_type
     ext_type.__numba_struct_ctype_p = struct_type.pointer().to_ctypes()
     ext_type.__numba_lfuncs = llvm_methods
+    ext_type.__numba_method_pointers = method_pointers
 
     return ext_type
+
+def create_function(methoddef, py_func):
+    cdef Py_uintptr_t methoddef_p = ctypes.cast(ctypes.byref(methoddef),
+                                                ctypes.c_void_p).value
+    cdef PyMethodDef *ml = <PyMethodDef *> methoddef_p
+    return CyFunction_NewEx(ml, 0, methoddef, py_func.__module__, NULL)
