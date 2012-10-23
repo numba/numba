@@ -77,7 +77,7 @@ class TestIf(unittest.TestCase):
 
     def test_if_fn_4(self):
         from meta.decompiler import decompile_func
-        import ast, inspect, astformat
+        import ast, inspect
         if_fn_4c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_4)
 
         oracle = if_fn_4
