@@ -87,9 +87,7 @@ static CYTHON_INLINE void *CyFunction_InitDefaults(PyObject *m,
 static CYTHON_INLINE void CyFunction_SetDefaultsTuple(PyObject *m,
                                                       PyObject *tuple);
 
-
-//////////////////// CythonFunction ////////////////////
-//@substitute: naming
+/* Implementation */
 
 static PyObject *
 CyFunction_get_doc(CyFunctionObject *op, CYTHON_UNUSED void *closure)

@@ -27,6 +27,8 @@ class MyExtension(object):
     'Return value'
     >>> type(obj.getvalue.im_func)
     <type 'cython_function_or_method'>
+    >>> obj._numba_attrs._fields_
+    [('value', <class 'ctypes.c_double'>)]
     """
 
     @void(double)
@@ -48,32 +50,36 @@ class MyExtension(object):
 @autojit
 class ObjectAttrExtension(object):
     """
-    >>> obj = ObjectAttrExtension(10.0)
-    >>> obj.value
+    >>> obj = ObjectAttrExtension(10.0, 'blah')
+    >>> obj.value1
     10.0
-    >>> obj = ObjectAttrExtension('hello')
-    >>> obj.value
+    >>> obj = ObjectAttrExtension('hello', 'world')
+    >>> obj.value1
     'hello'
     >>> obj.setvalue(20.0)
     >>> obj.getvalue()
     20.0
-    >>> obj.value = MyExtension(10.0)
-    >>> obj.value
+    >>> obj.value1 = MyExtension(10.0)
+    >>> obj.value1
     MyExtension10.0
+    >>> obj.getvalue()
+    MyExtension10.0
+    >>> obj._numba_attrs._fields_
+    [('value2', <class 'ctypes.c_double'>), ('value1', <class 'ctypes.py_object'>)]
     """
 
-    @void(object_)
-    def __init__(self, myfloat):
-        self.value = myfloat
+    def __init__(self, value1, value2):
+        self.value1 = object_(value1)
+        self.value2 = double(value2)
 
     def getvalue(self):
         "Return value"
-        return self.value
+        return self.value1
 
     @void(double)
     def setvalue(self, value):
         "Set value"
-        self.value = value
+        self.value1 = value
 
 if __name__ == '__main__':
     import doctest

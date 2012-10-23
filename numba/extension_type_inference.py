@@ -29,7 +29,11 @@ def process_method(ext_type, method, default_signature,
         method = method.py_func
     elif isinstance(method, types.FunctionType):
         validate_method(method, default_signature or object_())
-        restype, argtypes = None, (ext_type,)
+        if default_signature:
+            restype, argtypes = (default_signature.return_type,
+                                 (ext_type,) + default_signature.args)
+        else:
+            restype, argtypes = None, (ext_type,)
     elif isinstance(method, staticmethod):
         return process_method(ext_type, method.__func__,
                               default_signature, is_static=True)
@@ -69,8 +73,7 @@ def compile_extension_methods(context, py_class, ext_type, class_dict):
     initfunc = class_dict.get('__init__', None)
     if initfunc is not None:
         if isinstance(initfunc, types.FunctionType):
-            argtypes = [ext_type]
-            argtypes.extend([object_] * (initfunc.func_code.co_argcount - 1))
+            argtypes = [object_] * (initfunc.func_code.co_argcount - 1)
             default_signature = void(*argtypes)
         else:
             default_signature = None
@@ -138,7 +141,6 @@ def build_vtab(vtab_type, method_pointers):
         methods.append(cmethod)
 
     vtab = vtab_ctype(*methods)
-    ctypes.byref(vtab)
     return vtab
 
 def create_extension(context, py_class, translator_kwargs):
