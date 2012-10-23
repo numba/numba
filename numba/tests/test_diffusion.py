@@ -6,7 +6,7 @@ from numba import autojit
 mu = 0.1
 Lx, Ly = 101, 101
 
-@autojit #(backend='bytecode')
+@autojit 
 def diffusionObstacleStep(u,tempU,iterNum):
     for n in range(iterNum):
         for i in range(1, Lx - 1):

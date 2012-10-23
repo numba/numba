@@ -30,7 +30,7 @@ def if2(arg):
 
 # ______________________________________________________________________
 
-class TestIf(test_support.ByteCodeTestCase):
+class TestASTIf(test_support.ASTTestCase):
     def test_int(self):
         func = self.jit(restype=numba.int_,
                                  argtypes=[numba.int_])(if1)
@@ -44,8 +44,6 @@ class TestIf(test_support.ByteCodeTestCase):
         self.assertEqual(func(1), 22)
 # ______________________________________________________________________
 
-class TestASTIf(test_support.ASTTestCase, TestIf):
-    pass
 
 if __name__ == "__main__":
     unittest.main()

@@ -17,17 +17,10 @@ def checkSkipFlag(reason):
         return _checkSkipWrapper
     return _checkSkipFlag
 
-class ByteCodeTestCase(unittest.TestCase):
-    jit = staticmethod(jit_)
-    backend = 'bytecode'
-    autojit = staticmethod(autojit(backend=backend))
-
-class ASTTestCase(ByteCodeTestCase):
+class ASTTestCase(unittest.TestCase):
     jit = staticmethod(lambda *args, **kw: jit_(*args, **dict(kw, backend='ast')))
     backend = 'ast'
     autojit = staticmethod(autojit(backend=backend))
-
-#ASTTestCase = ByteCodeTestCase
 
 def main():
     import sys, logging

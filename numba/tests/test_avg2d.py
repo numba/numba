@@ -33,7 +33,7 @@ def avg2d_w_cast(arr, result):
 
 # ______________________________________________________________________
 
-class TestAvg2D(test_support.ByteCodeTestCase):
+class TestAvg2DAST(test_support.ASTTestCase):
     def _do_test(self, _avg2d, compiled_fn):
         test_data = numpy.random.random((5,5))
         control_result = numpy.zeros((5,))
@@ -46,8 +46,6 @@ class TestAvg2D(test_support.ByteCodeTestCase):
         compiled_fn = self.jit(argtypes = [f8[:,:], f8[:]])(avg2d)
         self._do_test(avg2d, compiled_fn)
 
-
-class TestAvg2DAST(test_support.ASTTestCase, TestAvg2D):
     def test_avg2d_w_cast(self):
         compiled_fn = self.jit(argtypes = [f8[:,:], f8[:]])(avg2d_w_cast)
         self._do_test(avg2d_w_cast, compiled_fn)

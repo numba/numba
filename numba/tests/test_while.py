@@ -121,7 +121,7 @@ def while_loop_fn_8(test_input):
 
 # ______________________________________________________________________
 
-class TestWhile(test_support.ByteCodeTestCase):
+class TestASTWhile(test_support.ASTTestCase):
     def _do_test(self, function, argtypes, *args, **kws):
         _jit = (self.jit(argtypes = argtypes)
                 if argtypes is not None else self.jit())
@@ -164,7 +164,7 @@ class TestWhile(test_support.ByteCodeTestCase):
         self.assertEqual(while_loop_fn_6(5.), compiled_fn(5.))
 
     def test_while_loop_fn_7(self):
-        compiled_fn = self.jit(restype=double, argtypes=[double], backend='bytecode')(while_loop_fn_7)
+        compiled_fn = self.jit(restype=double, argtypes=[double])(while_loop_fn_7)
         self.assertEqual(while_loop_fn_7(4.), compiled_fn(4.))
         self.assertEqual(while_loop_fn_7(5.), compiled_fn(5.))
 
@@ -174,9 +174,6 @@ class TestWhile(test_support.ByteCodeTestCase):
         self.assertEqual(while_loop_fn_8(4.), compiled_fn(4.))
         self.assertEqual(while_loop_fn_8(5.), compiled_fn(5.))
 
-# ______________________________________________________________________
-
-class TestASTWhile(test_support.ASTTestCase, TestWhile):
 
     @test_support.checkSkipFlag("Test fails due to problem in Meta.")
     def test_while_loop_fn_7(self, *args, **kws):

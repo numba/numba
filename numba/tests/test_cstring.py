@@ -22,14 +22,6 @@ class CStringTests(object):
             test_str = str(10 ** exp)
             self.assertEqual(jit_convert(test_str), convert(test_str))
 
-# ______________________________________________________________________    
-
-class TestBytecodeCString(test_support.ByteCodeTestCase, CStringTests):
-    @test_support.checkSkipFlag("C strings not supported in bytecode "
-                                "translator.")
-    def test_convert(self, *args, **kws):
-        return super(TestBytecodeCString, self).test_convert(*args, **kws)
-
 # ______________________________________________________________________
 
 class TestASTCString(test_support.ASTTestCase, CStringTests):

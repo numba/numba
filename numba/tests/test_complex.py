@@ -109,9 +109,7 @@ def mandel(x, y, max_iters):
 
 m, n = 0.4 + 1.2j, 5.1 - 0.6j
 
-class TestComplex(test_support.ByteCodeTestCase):
-
-    skip = _plat_bits != 64
+class TestASTComplex(test_support.ASTTestCase):
 
     def test_get_real_fn (self):
         num0 = 3 + 2j
@@ -167,9 +165,6 @@ class TestComplex(test_support.ByteCodeTestCase):
             b = numpy.complex128(br + bi * 1j)
             self.assertEqual(prod_sum_fn(a, x, b),
                              compiled_prod_sum_fn(a, x, b))
-
-
-class TestASTComplex(test_support.ASTTestCase, TestComplex):
 
     skip = False
 
