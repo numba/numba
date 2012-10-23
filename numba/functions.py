@@ -38,8 +38,15 @@ def fix_ast_lineno(tree):
 
     return tree
 
+def _fix_ast(myast):
+    import _ast
+    # Add a return node at the end of the ast if not present
+    if not isinstance(myast.body[-1], _ast.Return):
+        name = _ast.Name(id='None',ctx=_ast.Load(), lineno=0, col_offset=0)
+        myast.body.append(ast.Return(name))
+
 def _get_ast(func):
-    if True or os.environ.get('NUMBA_FORCE_META_AST'):
+    if os.environ.get('NUMBA_FORCE_META_AST'):
         func_def = decompile_func(func)
         assert isinstance(func_def, ast.FunctionDef)
         return func_def
@@ -51,6 +58,7 @@ def _get_ast(func):
         module_ast = ast.parse(source)
         assert len(module_ast.body) == 1
         func_def = module_ast.body[0]
+        _fix_ast(func_def)
         assert isinstance(func_def, ast.FunctionDef)
         return func_def
 

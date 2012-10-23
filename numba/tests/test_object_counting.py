@@ -109,6 +109,7 @@ def test_refcounting():
     assert all(sys.getrefcount(obj) == 3 for obj in L)
     with test_support.StdoutReplacer() as out:
         use_objects(L)
+    print out.getvalue()
 
     # This fails in nose
     #expected = "\n".join("Unique(%d)" % i for i in range(10)) + '\n'
