@@ -1,4 +1,5 @@
 import ast, inspect, os
+import textwrap
 
 from numba import *
 from . import naming
@@ -69,6 +70,9 @@ def _get_ast(func):
     except IOError:
         return decompile_func(func)
     else:
+        if source.lstrip().startswith('@'):
+            decorator, sep, source = source.partition('\n')
+        source = textwrap.dedent(source)
         module_ast = ast.parse(source)
         assert len(module_ast.body) == 1
         func_def = module_ast.body[0]

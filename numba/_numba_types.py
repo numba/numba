@@ -239,6 +239,9 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
         self.attribute_struct = None
         self.vtab_type = None
 
+        self.parent_attr_struct = None
+        self.parent_vtab_type = None
+
     def add_method(self, method_name, method_signature):
         if method_name in self.methoddict:
             # Patch current signature after type inference

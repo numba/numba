@@ -1,5 +1,3 @@
-
-
 import sys
 
 from numba import extension_types

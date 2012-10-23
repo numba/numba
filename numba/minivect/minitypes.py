@@ -950,6 +950,10 @@ class struct(Type):
     def comparison_type_list(self):
         return self.fields
 
+    def is_prefix(self, other_struct):
+        other_fields = other_struct.fields[:len(self.fields)]
+        return self.fields == other_fields
+
 def getsize(ctypes_name, default):
     try:
         return ctypes.sizeof(getattr(ctypes, ctypes_name))

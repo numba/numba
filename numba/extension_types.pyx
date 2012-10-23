@@ -52,7 +52,7 @@ def compute_attrs_offset(py_class):
     "Returns the start of the attribute struct"
     return align(compute_vtab_offset(py_class) + sizeof(void *), 8)
 
-def create_new_extension_type(name, bases, dict, struct_type, vtab,
+def create_new_extension_type(name, bases, dict, struct_type, vtab, vtab_type,
                               llvm_methods, method_pointers):
     """
     Create an extension type from the given name, bases and dict. Also
@@ -71,10 +71,11 @@ def create_new_extension_type(name, bases, dict, struct_type, vtab,
         if orig_new is not None:
             obj = orig_new(cls, *args, **kwds)
         else:
-            obj = super(cls, ext_type).__new__(cls, *args, **kwds)
+            assert issubclass(cls, ext_type), (cls, ext_type)
+            obj = super(ext_type, cls).__new__(cls, *args, **kwds)
 
-        if (cls.__numba_vtab is not ext_type.__numba_vtab or not
-                isinstance(obj, cls)):
+        if (#cls.__numba_vtab is not ext_type.__numba_vtab or
+                not isinstance(obj, cls)):
             # Subclass will set the vtab and attributes
             return obj
 
@@ -116,6 +117,7 @@ def create_new_extension_type(name, bases, dict, struct_type, vtab,
     ext_type.__numba_attr_offset = attrs_offset
 
     ext_type.__numba_vtab = vtab
+    ext_type.__numba_vtab_type = vtab_type
     vtab_p = ctypes.byref(ext_type.__numba_vtab)
 
     ext_type.__numba_vtab_p = ctypes.cast(vtab_p, ctypes.c_void_p).value
