@@ -6,6 +6,7 @@ __pycache__
 *.o
 *.bak
 *.pybackup
+numba/extension_types.c
 
 .idea/
 build/
