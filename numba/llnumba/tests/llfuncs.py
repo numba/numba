@@ -3,14 +3,14 @@
 
 def doslice (in_string, lower, upper):
     l = strlen(in_string)
-    if lower < 0:
+    if lower < lc_size_t(0):
         lower += l
-    if upper < 0:
+    if upper < lc_size_t(0):
         upper += l
     temp_len = upper - lower
-    if temp_len < 0:
-        temp_len = 0
-    ret_val = alloca_array(li8, temp_len + 1)
+    if temp_len < lc_size_t(0):
+        temp_len = lc_size_t(0)
+    ret_val = alloca_array(li8, temp_len + lc_size_t(1))
     strncpy(ret_val, in_string + lower, temp_len)
     ret_val[temp_len] = li8(0)
     return ret_val

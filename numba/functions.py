@@ -491,27 +491,49 @@ class PyModulo(InternalFunction):
         return ret_val
 
 class CStringSlice2 (InternalFunction):
-    arg_types = [c_string_type, size_t, size_t]
-    return_type = c_string_type
+    arg_types = [c_string_type, c_string_type, size_t, size_t]
+    return_type = void
 
     def implementation(self, module, ret_val):
-        logger.debug((module, str(ret_val)))
-        def _py_c_string_slice (in_string, lower, upper):
+        # logger.debug((module, str(ret_val)))
+        def _py_c_string_slice(out_string, in_string, lower, upper):
             in_str_len = strlen(in_string)
-            if lower < lc_size_t(0):
+            zero = lc_size_t(0)
+            if lower < zero:
                 lower += in_str_len
-            if upper < lc_size_t(0):
+            if upper < zero:
                 upper += in_str_len
             elif upper > in_str_len:
                 upper = in_str_len
             temp_len = upper - lower
-            if temp_len < lc_size_t(0):
-                temp_len = 0
-            ret_val = alloca_array(li8, temp_len + 1)
-            strncpy(ret_val, in_string + lower, temp_len)
-            ret_val[temp_len] = li8(0)
-            return ret_val
+            if temp_len < zero:
+                temp_len = zero
+            strncpy(out_string, in_string + lower, temp_len)
+            out_string[temp_len] = li8(0)
+            return
         LLVMTranslator(module).translate(_py_c_string_slice,
+                                         llvm_function = ret_val)
+        return ret_val
+
+class CStringSlice2Len(InternalFunction):
+    arg_types = [c_string_type, size_t, size_t]
+    return_type = size_t
+
+    def implementation(self, module, ret_val):
+        def _py_c_string_slice_len(in_string, lower, upper):
+            in_str_len = strlen(in_string)
+            zero = lc_size_t(0)
+            if lower < zero:
+                lower += in_str_len
+            if upper < zero:
+                upper += in_str_len
+            elif upper > in_str_len:
+                upper = in_str_len
+            temp_len = upper - lower
+            if temp_len < zero:
+                temp_len = zero
+            return temp_len + lc_size_t(1)
+        LLVMTranslator(module).translate(_py_c_string_slice_len,
                                          llvm_function = ret_val)
         return ret_val
 
@@ -573,6 +595,14 @@ class PyFloat_FromDouble(ExternalFunction):
 
 class PyComplex_FromCComplex(ExternalFunction):
     arg_types = [complex128]
+    return_type = object_
+
+class PyInt_FromString(ExternalFunction):
+    arg_types = [c_string_type, c_string_type.pointer(), int_]
+    return_type = object_
+
+class PyFloat_FromString(ExternalFunction):
+    arg_types = [object_, c_string_type.pointer()]
     return_type = object_
 
 #

@@ -79,11 +79,23 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
             arg = node.args[0]
             arg_type = arg.variable.type
             if arg_type.is_c_string:
-                converter_function_name = 'atol' if dst_type.is_int else 'atof'
-                return self.function_cache.call(converter_function_name, arg)
+                #converter_function_name = 'atol' if dst_type.is_int else 'atof'
+                #return self.function_cache.call(converter_function_name, arg)
+                if dst_type.is_int:
+                    arg = self.function_cache.call(
+                        'PyInt_FromString', arg, nodes.const(0, Py_ssize_t),
+                        nodes.const(10, int_))
+                else:
+                    arg = self.function_cache.call(
+                        'PyFloat_FromString', arg, nodes.NULL_obj)
             else:
-                return nodes.CoercionNode(node.args[0], dst_type=dst_type)
+                return nodes.CoercionNode(arg, dst_type=dst_type)
         else:
+            arg1, arg2 = node.args
+            if arg1.variable.type.is_c_string:
+                assert dst_type.is_int
+                return self.function_cache.call(
+                    'PyInt_FromString', arg1, nodes.const(0, Py_ssize_t), arg2)
             return None
 
     _resolve_float = _resolve_int

@@ -669,7 +669,11 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
             # Array index with integer indices
             node = nodes.DataPointerNode(node.value, node.slice, node.ctx)
         elif node.value.type.is_c_string and node.type.is_c_string:
-            node = self._c_string_slice(node)
+            # node = self._c_string_slice(node)
+            node.value = nodes.CoercionNode(node.value, dst_type = object_)
+            node.type = object_
+            node = self.visit(nodes.CoercionNode(node,
+                                                 dst_type = c_string_type))
 
         return node
 
