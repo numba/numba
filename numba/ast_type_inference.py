@@ -20,6 +20,8 @@ import llvm.core
 import numpy
 import numpy as np
 
+import logging
+logger = logging.getLogger(__name__)
 
 class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
     """
@@ -79,8 +81,10 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
             arg = node.args[0]
             arg_type = arg.variable.type
             if arg_type.is_c_string:
-                #converter_function_name = 'atol' if dst_type.is_int else 'atof'
-                #return self.function_cache.call(converter_function_name, arg)
+                if self.nopython:
+                    # XXX Switch to strtol() and strtof()?!
+                    converter_fn_name = 'atol' if dst_type.is_int else 'atof'
+                    return self.function_cache.call(converter_fn_name, arg)
                 if dst_type.is_int:
                     arg = nodes.ObjectTempNode(self.function_cache.call(
                         'PyInt_FromString', arg, nodes.const(0, Py_ssize_t),
@@ -93,8 +97,12 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
             arg1, arg2 = node.args
             if arg1.variable.type.is_c_string:
                 assert dst_type.is_int
-                return self.function_cache.call(
-                    'PyInt_FromString', arg1, nodes.const(0, Py_ssize_t), arg2)
+                return nodes.CoercionNode(
+                    nodes.ObjectTempNode(
+                        self.function_cache.call(
+                            'PyInt_FromString', arg1,
+                            nodes.const(0, Py_ssize_t), arg2)),
+                    dst_type=dst_type)
             return None
 
     _resolve_float = _resolve_int
@@ -617,15 +625,20 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 node, "only 'with nopython' and 'with python' is supported "
                       "in with statements")
 
-        body = self.visitlist(node.body)
+        if node.context_expr.id == 'nopython':
+            node = self.visit(nodes.WithNoPythonNode(
+                    body=node.body, lineno=node.lineno,
+                    col_offset=node.col_offset))
+        else:
+            node = self.visit(nodes.WithPythonNode(
+                    body=node.body, lineno=node.lineno,
+                    col_offset=node.col_offset))
+
         if (node.body and isinstance(node.body[0], ast.Expr) and
                 node.body[0].value == 'WITH_BLOCK'):
-            body = body[1:]
+            node.body = node.body[1:]
 
-        if node.context_expr.id == 'nopython':
-            return nodes.WithNoPythonNode(body=body)
-        else:
-            return nodes.WithPythonNode(body=body)
+        return node
 
     def visit_Name(self, node):
         from numba import functions

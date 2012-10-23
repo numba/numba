@@ -842,6 +842,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
             raise error.NumbaError(node, "Not in 'with nopython' context")
 
         self.nopython -= 1
+        # logger.debug((self.nopython, node.lineno, node.col_offset))
         result = self.visitlist(node.body)
         self.nopython += 1
 
@@ -852,6 +853,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
             raise error.NumbaError(node, "Not in 'with python' context")
 
         self.nopython += 1
+        # logger.debug((self.nopython, node.lineno, node.col_offset))
         result = self.visitlist(node.body)
         self.nopython -= 1
 

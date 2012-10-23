@@ -76,6 +76,7 @@ class CoercionNode(Node):
     """
 
     _fields = ['node']
+    _attributes = ['type', 'name']
 
     def __new__(cls, node, dst_type, name=''):
         type = getattr(node, 'type', None) or node.variable.type
@@ -164,6 +165,8 @@ class ConstNode(Node):
     Wrap a constant.
     """
 
+    _attributes = ['type', 'pyval']
+
     def __init__(self, pyval, type=None):
         if type is None:
             type = context.typemapper.from_python(pyval)
@@ -233,6 +236,8 @@ _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)
 
 class FunctionCallNode(Node):
+    _attributes = ['signature', 'name']
+
     def __init__(self, signature, args, name=''):
         self.signature = signature
         self.type = signature.return_type

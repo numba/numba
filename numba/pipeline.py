@@ -5,11 +5,15 @@ define the transformations and the order in which they run on the AST.
 
 import logging
 import functools
+if __debug__:
+    import pprint
 
 from numba import error
 from numba import functions, naming, transforms
 from numba import ast_type_inference as type_inference
 from numba import ast_translate
+if __debug__:
+    from numba import utils
 from numba.minivect import minitypes
 
 logger = logging.getLogger(__name__)
@@ -60,6 +64,9 @@ class Pipeline(object):
     def run_pipeline(self):
         ast = self.ast
         for method_name in self.order:
+            if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
+                stage_tuple = (method_name, utils.ast2tree(ast))
+                logger.debug(pprint.pformat(stage_tuple))
             ast = getattr(self, method_name)(ast)
 
         return self.func_signature, self.symtab, ast

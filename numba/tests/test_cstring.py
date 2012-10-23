@@ -14,28 +14,28 @@ def convert(input_str):
 
 # ______________________________________________________________________
 
-class CStringTests(object):
-    def test_convert(self):
-        jit_convert = self.jit(argtypes = (cstring,), restype = int_)(
+def fast_convert(input_str):
+    with nopython:
+        return int(input_str[0:5])
+    return -1
+
+# ______________________________________________________________________
+
+class CStringTests(test_support.ASTTestCase):
+    def test_convert(self, **kws):
+        jit_convert = self.jit(argtypes = (cstring,), restype = int_, **kws)(
             convert)
         for exp in xrange(10):
             test_str = str(10 ** exp)
             self.assertEqual(jit_convert(test_str), convert(test_str))
 
-# ______________________________________________________________________    
-
-class TestBytecodeCString(test_support.ByteCodeTestCase, CStringTests):
-    @test_support.checkSkipFlag("C strings not supported in bytecode "
-                                "translator.")
-    def test_convert(self, *args, **kws):
-        return super(TestBytecodeCString, self).test_convert(*args, **kws)
-
-# ______________________________________________________________________
-
-class TestASTCString(test_support.ASTTestCase, CStringTests):
     #@test_support.checkSkipFlag("Not implemented yet.")
-    def test_convert(self, *args, **kws):
-        return super(TestASTCString, self).test_convert(*args, **kws)
+    def test_convert_nopython(self, **kws):
+        jit_convert = self.jit(argtypes = (cstring,), restype = int_, **kws)(
+            fast_convert)
+        for exp in xrange(10):
+            test_str = str(10 ** exp)
+            self.assertEqual(jit_convert(test_str), convert(test_str))
 
 # ______________________________________________________________________
 
