@@ -388,6 +388,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             stackspace = self._allocate_arg_local(argname, argtype, larg)
             variable.lvalue = stackspace
 
+            # TODO: incref objects in structs
             if is_obj(variable.type) and self.refcount_args:
                 self.incref(self.builder.load(stackspace))
 
@@ -402,6 +403,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                     stackspace = self._null_obj_temp(name, type=var.ltype)
                 else:
                     stackspace = self.builder.alloca(var.ltype, name=name)
+
+                if var.type.is_struct:
+                    # TODO: memset struct to 0
+                    pass
+
                 var.lvalue = stackspace
 
     def setup_func(self):

@@ -59,6 +59,17 @@ class Node(ast.AST):
     def __init__(self, **kwargs):
         vars(self).update(kwargs)
 
+    def _variable_get(self):
+        if not hasattr(self, '_variable'):
+            self._variable = Variable(self.type)
+
+        return self._variable
+
+    def _variable_set(self, variable):
+        self._variable = variable
+
+    variable = property(_variable_get, _variable_set)
+
 class CoercionNode(Node):
     """
     Coerce a node to a different type
@@ -85,7 +96,6 @@ class CoercionNode(Node):
             return
 
         self.dst_type = dst_type
-        self.variable = Variable(dst_type)
         self.type = dst_type
         self.name = name
 
@@ -225,27 +235,25 @@ NULL_obj = ConstNode(_NULL, object_)
 class FunctionCallNode(Node):
     def __init__(self, signature, args, name=''):
         self.signature = signature
-        self.variable = Variable(signature.return_type)
+        self.type = signature.return_type
         self.name = name
         self.original_args = args
-
 
 class NativeCallNode(FunctionCallNode):
     _fields = ['args']
 
-    def __init__(self, signature, args, llvm_func, py_func=None, **kw):
+    def __init__(self, signature, args, llvm_func, py_func=None,
+                 skip_self=False, **kw):
         super(NativeCallNode, self).__init__(signature, args, **kw)
         self.llvm_func = llvm_func
         self.py_func = py_func
-        self.coerce_args()
+        self.skip_self = skip_self
         self.type = signature.return_type
+        self.coerce_args()
 
     def coerce_args(self):
         self.args = list(self.original_args)
-        offset = 0
-        if self.signature.is_bound_method:
-            offset = 1
-        for i, dst_type in enumerate(self.signature.args[offset:]):
+        for i, dst_type in enumerate(self.signature.args[self.skip_self:]):
             self.args[i] = CoercionNode(self.args[i], dst_type,
                                         name='func_%s_arg%d' % (self.name, i))
 
@@ -274,8 +282,6 @@ class MathNode(Node):
         self.signature = signature
         self.arg = arg
         self.type = signature.return_type
-        self.variable = Variable(self.type)
-
 
 class LLVMIntrinsicNode(NativeCallNode):
     "Call an llvm intrinsic function"
@@ -349,7 +355,6 @@ class ObjectInjectNode(Node):
         super(ObjectInjectNode, self).__init__(**kwargs)
         self.object = object
         self.type = type or object_
-        self.variable = Variable(self.type)
 
 
 class ObjectTempNode(Node):
@@ -364,7 +369,6 @@ class ObjectTempNode(Node):
         self.node = node
         self.llvm_temp = None
         self.type = getattr(node, 'type', node.variable.type)
-        self.variable = Variable(self.type)
         self.incref = incref
 
 class NoneNode(Node):
@@ -424,7 +428,6 @@ class LLVMValueRefNode(Node):
 
     def __init__(self, type, llvm_value):
         self.type = type
-        self.variable = Variable(type)
         self.llvm_value = llvm_value
 
 
@@ -466,7 +469,6 @@ class DataPointerNode(Node):
     def __init__(self, node, slice, ctx):
         self.node = node
         self.slice = slice
-        self.variable = Variable(node.type)
         self.type = node.type.dtype
         self.ctx = ctx
 
@@ -540,7 +542,6 @@ class ArrayAttributeNode(Node):
             raise error._UnknownAttribute(attribute_name)
 
         self.type = type
-        self.variable = Variable(type)
 
 class ShapeAttributeNode(ArrayAttributeNode):
     # NOTE: better do this at code generation time, and not depend on
@@ -553,7 +554,6 @@ class ShapeAttributeNode(ArrayAttributeNode):
         self.element_type = numba_types.intp
         self.type = minitypes.CArrayType(self.element_type,
                                          array.variable.type.ndim)
-        self.variable = Variable(self.type)
 
 
 class ExtTypeAttribute(Node):
@@ -583,11 +583,7 @@ class StructAttribute(ExtTypeAttribute):
         self.attr_type = struct_type.fielddict[attr]
         self.field_idx = struct_type.fields.index((attr, self.attr_type))
 
-#        if isinstance(ctx, ast.Load):
         self.type = self.attr_type
-#        else:
-#            self.type = self.struct_type
-        self.variable = Variable(self.type)
 
 class ComplexNode(Node):
     _fields = ['real', 'imag']
@@ -618,7 +614,6 @@ class ExtensionMethod(Node):
         self.type = minitypes.FunctionType(return_type=method_type.return_type,
                                            args=method_type.args,
                                            is_bound_method=True)
-        self.variable = Variable(self.type)
 
 #class ExtensionMethodCall(Node):
 #    """
@@ -671,7 +666,6 @@ class DereferenceNode(Node):
         super(DereferenceNode, self).__init__(**kwargs)
         self.pointer = pointer
         self.type = pointer.type.base_type
-        self.variable = Variable(self.type)
 
 
 class PointerFromObject(Node):

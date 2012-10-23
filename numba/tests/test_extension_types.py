@@ -35,6 +35,7 @@ class MyExtension(object):
     def __init__(self, myfloat):
         self.value = myfloat
 
+    @double()
     def getvalue(self):
         "Return value"
         return self.value
@@ -44,6 +45,7 @@ class MyExtension(object):
         "Set value"
         self.value = value
 
+    @object_()
     def __repr__(self):
         return format_str('MyExtension%s', self.value)
 
@@ -66,6 +68,8 @@ class ObjectAttrExtension(object):
     MyExtension10.0
     >>> obj.method()
     MyExtension10.0
+    >>> obj.method2(15.0)
+    30.0
     >>> obj._numba_attrs._fields_
     [('value2', <class 'ctypes.c_double'>), ('value1', <class 'ctypes.py_object'>)]
     """
@@ -74,6 +78,7 @@ class ObjectAttrExtension(object):
         self.value1 = object_(value1)
         self.value2 = double(value2)
 
+    @object_()
     def getvalue(self):
         "Return value"
         return self.value1
@@ -83,8 +88,15 @@ class ObjectAttrExtension(object):
         "Set value"
         self.value1 = value
 
+    @object_()
     def method(self):
         return self.getvalue()
+
+    @object_(int32)
+    def method2(self, new_value):
+        self.setvalue(new_value * 2)
+        result = self.method()
+        return result
 
 if __name__ == '__main__':
     import doctest

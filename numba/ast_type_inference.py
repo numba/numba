@@ -1010,7 +1010,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # Native function call
             no_keywords()
             new_node = nodes.NativeFunctionCallNode(
-                            func_variable.type, node.func, node.args)
+                            func_variable.type, node.func, node.args,
+                            skip_self=True)
         elif func_type.is_method:
             # Call to special object method
             no_keywords()
@@ -1077,7 +1078,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if type.is_resolved or not self.is_store(node.ctx):
                 raise error.NumbaError(
                     node, "Cannot access attribute %s of type %s" % (
-                                                node.attr, type.ext_name))
+                                                node.attr, type.name))
 
             # Create entry in type's symbol table, resolve the actual type
             # in the parent Assign node

@@ -239,6 +239,20 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
         self.attribute_struct = None
         self.vtab_type = None
 
+    def add_method(self, method_name, method_signature):
+        if method_name in self.methoddict:
+            # Patch current signature after type inference
+            signature = self.get_signature(method_name)
+            assert method_signature.args == signature.args
+            signature.return_type = method_signature.return_type
+        else:
+            self.methoddict[method_name] = (method_signature, len(self.methods))
+            self.methods.append((method_name, method_signature))
+
+    def get_signature(self, method_name):
+        signature, vtab_offset = self.methoddict[method_name]
+        return signature
+
     def __repr__(self):
         return "<Extension %s>" % self.name
 
