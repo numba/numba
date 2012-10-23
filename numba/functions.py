@@ -46,7 +46,7 @@ def _fix_ast(myast):
     import _ast
 
     # Remove Pass nodes from the end of the ast
-    while isinstance(myast.body[-1], _ast.Pass):
+    while len(myast.body) > 0  and isinstance(myast.body[-1], _ast.Pass):
         del myast.body[-1]
     # Add a return node at the end of the ast if not present
     if len(myast.body) < 1 or not isinstance(myast.body[-1], _ast.Return):
@@ -74,6 +74,12 @@ def _get_ast(func):
             decorator, sep, source = source.partition('\n')
         source = textwrap.dedent(source)
         module_ast = ast.parse(source)
+
+        # fix line numbering
+        lineoffset = func.func_code.co_firstlineno + 1
+        ast.increment_lineno(module_ast, lineoffset)
+
+
         assert len(module_ast.body) == 1
         func_def = module_ast.body[0]
         _fix_ast(func_def)
