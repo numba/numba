@@ -49,7 +49,7 @@ deleting...
 2
 >>> try:
 ...     exc(obj)
-... except ValueError, e:
+... except TypeError, e:
 ...     del e
 ...     sys.exc_clear()
 ... else:
@@ -177,7 +177,7 @@ def attr_count(obj):
 @autojit(backend='ast')
 def exc(obj):
     x = obj
-    return int('boom')
+    return object()('boom')
 
 @autojit(backend='ast')
 def count_arguments(x, y):
