@@ -14,7 +14,7 @@ from . import _numba_types as _types
 from ._numba_types import BuiltinType
 
 from numba import *
-from . import visitors, nodes, llvm_types
+from . import visitors, nodes, llvm_types, utils
 from .minivect import minitypes
 from numba import ndarray_helpers, translate, error, extension_types
 from numba._numba_types import is_obj, promote_closest
@@ -862,10 +862,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                               self.return_value.type.pointee)
 
             if not retval.type == self.return_value.type.pointee:
-                print retval.type
-                print self.return_value.type
-                print ast.dump(node)
-                assert False
+                logger.debug(utils.pformat_ast(node))
+                logger.debug('%s != %s' % (self.return_value.type,
+                                           retval.type))
+                assert False, ('Expected %s type in return, got %s!' %
+                               (self.return_value.type, retval.type))
 
             self.builder.store(retval, self.return_value)
 
@@ -1219,6 +1220,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         lfunc = self.visit(node.function)
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)
+
+    def visit_LLMacroNode (self, node):
+        return node.macro(self.function_cache, self.builder,
+                          *self.visitlist(node.args))
 
     def visit_LLVMIntrinsicNode(self, node):
         intr = getattr(llvm.core, 'INTR_' + node.py_func.__name__.upper())

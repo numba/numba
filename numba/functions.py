@@ -500,13 +500,13 @@ class PyModulo(InternalFunction):
         return ret_val
 
 class CStringSlice2 (InternalFunction):
-    arg_types = [c_string_type, c_string_type, size_t, size_t]
+    arg_types = [c_string_type, c_string_type, size_t, Py_ssize_t, Py_ssize_t]
     return_type = void
 
     def implementation(self, module, ret_val):
         # logger.debug((module, str(ret_val)))
-        def _py_c_string_slice(out_string, in_string, lower, upper):
-            in_str_len = strlen(in_string)
+        def _py_c_string_slice(out_string, in_string, in_str_len, lower,
+                               upper):
             zero = lc_size_t(0)
             if lower < zero:
                 lower += in_str_len
@@ -525,12 +525,11 @@ class CStringSlice2 (InternalFunction):
         return ret_val
 
 class CStringSlice2Len(InternalFunction):
-    arg_types = [c_string_type, size_t, size_t]
+    arg_types = [c_string_type, size_t, Py_ssize_t, Py_ssize_t]
     return_type = size_t
 
     def implementation(self, module, ret_val):
-        def _py_c_string_slice_len(in_string, lower, upper):
-            in_str_len = strlen(in_string)
+        def _py_c_string_slice_len(in_string, in_str_len, lower, upper):
             zero = lc_size_t(0)
             if lower < zero:
                 lower += in_str_len
@@ -569,6 +568,10 @@ class atoll(ExternalFunction):
 class atof(ExternalFunction):
     arg_types = [c_string_type]
     return_type = double
+
+class strlen(ExternalFunction):
+    arg_types = [c_string_type]
+    return_type = size_t
 
 #
 ### Object conversions to native types

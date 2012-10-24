@@ -90,7 +90,7 @@ import numba
 from numba import *
 from numba import error
 from .minivect import minierror, minitypes
-from . import translate, utils, _numba_types as numba_types
+from . import macros, utils, _numba_types as numba_types
 from .symtab import Variable
 from . import visitors, nodes, error, functions
 from numba import stdio_util
@@ -397,8 +397,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
             return self.visit(node)
         elif node_type.is_c_string and dst_type.is_numeric:
             if self.nopython:
-                node = self.function_cache.call(
-                    'atol' if dst_type.is_int else 'atof', node.node)
+                node = nodes.CoercionNode(
+                    self.function_cache.call('atol' if dst_type.is_int
+                                             else 'atof', node.node),
+                    dst_type, name=node.name)
             else:
                 if dst_type.is_int:
                     cvtobj = self.function_cache.call(
@@ -662,11 +664,15 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
             if lower is None:
                 lower = nodes.const(0, size_t)
             if upper is None:
-                upper = self.function_cache.call('strlen', node_value)
-            ret_val = self.function_cache.call('CStringSlice2',
-                                               self.visit(node.value),
-                                               self.visit(lower),
-                                               self.visit(upper))
+                ret_val = nodes.LLMacroNode(
+                    macros.c_string_slice_1.__signature__,
+                    macros.c_string_slice_1, self.visit(node.value),
+                    self.visit(lower))
+            else:
+                ret_val = nodes.LLMacroNode(
+                    macros.c_string_slice_2.__signature__,
+                    macros.c_string_slice_2, self.visit(node.value),
+                    self.visit(lower), self.visit(upper))
             logger.debug(ret_val)
         else:
             raise NotImplementedError('String slices where step != None.')

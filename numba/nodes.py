@@ -236,7 +236,7 @@ _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)
 
 class FunctionCallNode(Node):
-    _attributes = ['signature', 'name']
+    _attributes = ['signature', 'type', 'name']
 
     def __init__(self, signature, args, name=''):
         self.signature = signature
@@ -273,6 +273,25 @@ class NativeFunctionCallNode(NativeCallNode):
         super(NativeFunctionCallNode, self).__init__(signature, args, None,
                                                      None, **kw)
         self.function = function_node
+
+class LLMacroNode (NativeCallNode):
+    '''
+    Inject a low-level macro in the function at the call site.
+
+    Low-level macros are Python functions that take a FunctionCache
+    instance, a LLVM builder instance, and a set of arguments,
+    construct LLVM code, and return some kind of LLVM value result.
+    The passed signature should reflect the Numba types of the
+    expected input parameters, and the type of the resulting value
+    (this does not restrict polymorphism at the LLVM type level in the
+    macro expansion function).
+    '''
+
+    _fields = ['macro', 'args']
+
+    def __init__(self, signature, macro, *args, **kw):
+        super(LLMacroNode, self).__init__(signature, args, None, None, **kw)
+        self.macro = macro
 
 class MathNode(Node):
     """

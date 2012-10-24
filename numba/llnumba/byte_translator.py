@@ -7,6 +7,7 @@
 
 import opcode
 import types
+import logging
 
 import llvm.core as lc
 
@@ -19,6 +20,8 @@ from phi_injector import PhiInjector, synthetic_opname
 
 # ______________________________________________________________________
 # Module data
+
+logger = logging.getLogger(__name__)
 
 # XXX Stolen from numba.translate:
 
@@ -208,7 +211,8 @@ class LLVMTranslator (BytecodeFlowVisitor):
         del self.pending_phis
         del self.llvm_definitions
         del self.llvm_blocks
-        if __debug__: print(ret_val)
+        if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
+            logger.debug(str(ret_val))
         return ret_val
 
     def enter_block (self, block):

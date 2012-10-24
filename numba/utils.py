@@ -1,5 +1,6 @@
 import opcode
 import ast
+import pprint
 
 from .minivect.complex_support import Complex64, Complex128, Complex256
 from .minivect import miniast, minitypes
@@ -78,3 +79,6 @@ def ast2tree (node, include_attrs = True):
     if not isinstance(node, ast.AST):
         raise TypeError('expected AST, got %r' % node.__class__.__name__)
     return _transform(node)
+
+def pformat_ast (node, include_attrs = True):
+    return pprint.pformat(ast2tree(node, include_attrs))
