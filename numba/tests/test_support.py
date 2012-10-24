@@ -37,3 +37,5 @@ class StdoutReplacer(object):
 
     def __exit__(self, *args):
         sys.stdout = self.out
+
+from .bytecode.test_support import ByteCodeTestCase

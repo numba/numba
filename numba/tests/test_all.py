@@ -8,11 +8,10 @@ Grand unified unit test script for Numba.
 
 import unittest
 
-from test_avg2d import TestAvg2D
+from test_avg2d import TestAvg2DAST
 from test_cfg import TestCFG
 #from test_complex import TestComplex
-from test_cstring import TestBytecodeCString, TestASTCString
-from test_extern_call import TestExternCall
+from test_cstring import TestASTCString
 from test_filter2d import TestFilter2d
 from test_forloop import TestForLoop
 from test_getattr import TestGetattr
