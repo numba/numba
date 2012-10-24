@@ -144,7 +144,7 @@ class CoerceToNative(CoercionNode):
     "Coerce objects to native values"
 
 
-class DeferredCoercionNode(CoercionNode):
+class DeferredCoercionNode(Node):
     """
     Coerce to the type of the given variable. The type of the variable may
     change in the meantime (e.g. may be promoted or demoted).
@@ -153,8 +153,6 @@ class DeferredCoercionNode(CoercionNode):
     _fields = ['node']
 
     def __init__(self, node, variable):
-        if node is self:
-            return
         self.node = node
         self.variable = variable
 
