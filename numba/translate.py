@@ -913,7 +913,9 @@ class LLVMControlFlowGraph (ControlFlowGraph):
 class Translate(object):
     def __init__(self, func, restype='d', argtypes=['d'], **kws):
         self.func = func
-        self.func_name = kws.get('name', self.func.func_name)
+        self.func_name = kws.get('name', None)
+        if not self.func_name:
+            self.func_name = self.func.func_name
         self.fco = func.func_code
         self.names = self.fco.co_names
         self.varnames = self.fco.co_varnames

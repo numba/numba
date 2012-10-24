@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 try:
     from meta.decompiler import decompile_func
 except Exception, exn:
-    logger.warn("Could not import Meta - AST translation will not work:\n%s" %
+    logger.warn("Could not import Meta - AST translation will not work "
+                "if the source is not available:\n%s" %
                 traceback.format_exc())
     decompile_func = None
 

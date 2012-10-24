@@ -259,6 +259,7 @@ class RefcountingMixin(object):
 
     def decref(self, value, func='Py_DecRef'):
         "Py_DECREF a value"
+        assert not self.flags.get('nopython')
         object_ltype = object_.to_llvm(self.context)
         sig, py_decref = self.function_cache.function_by_name(func)
         b = self.builder
@@ -266,10 +267,12 @@ class RefcountingMixin(object):
 
     def incref(self, value):
         "Py_INCREF a value"
+        assert not self.flags.get('nopython')
         return self.decref(value, func='Py_IncRef')
 
     def xdecref_temp(self, temp, decref=None):
         "Py_XDECREF a temporary"
+        assert not self.flags.get('nopython')
         decref = decref or self.decref
 
         def cleanup(b, bb_true, bb_endif):
@@ -282,10 +285,13 @@ class RefcountingMixin(object):
 
     def xincref_temp(self, temp):
         "Py_XINCREF a temporary"
+        assert not self.flags.get('nopython')
         return self.xdecref_temp(temp, decref=self.incref)
 
     def xdecref_temp_cleanup(self, temp):
         "Cleanup a temp at the end of the function"
+        
+        assert not self.flags.get('nopython')
         bb = self.builder.basic_block
 
         self.builder.position_at_end(self.current_cleanup_bb)
@@ -381,8 +387,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             variable.lvalue = stackspace
 
             # TODO: incref objects in structs
-            if is_obj(variable.type) and self.refcount_args:
-                self.incref(self.builder.load(stackspace))
+            if not self.flags.get('nopython'):
+                if is_obj(variable.type) and self.refcount_args:
+                    self.incref(self.builder.load(stackspace))
 
     def _allocate_locals(self):
         for name, var in self.symtab.items():
@@ -616,10 +623,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.position_at_end(self.current_cleanup_bb)
 
         # Decref local variables
-        for name, var in self.symtab.iteritems():
-            if var.is_local and is_obj(var.type):
-                if self.refcount_args or not name in self.argnames:
-                    self.xdecref_temp(var.lvalue)
+        if not self.flags.get('nopython'):
+            for name, var in self.symtab.iteritems():
+                if var.is_local and is_obj(var.type):
+                    if self.refcount_args or not name in self.argnames:
+                        self.xdecref_temp(var.lvalue)
 
         if self.is_void_return:
             self.builder.ret_void()
