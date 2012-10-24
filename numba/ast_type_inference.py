@@ -1149,12 +1149,16 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return node
 
     def visit_Return(self, node):
-        value = self.visit(node.value)
-        type = value.variable.type
+        if node.value is not None:
+            value = self.visit(node.value)
+            type = value.variable.type
+            assert type is not None
+        else:
+            # This is possible when we do "return" without any value
+            value = None
 
-        assert type is not None
 
-        if type.is_none:
+        if value is None or type.is_none:
             # When returning None, set the return type to void.
             # That way, we don't have to due with the PyObject reference.
             if self.return_variable.type is None:
