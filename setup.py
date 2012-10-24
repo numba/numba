@@ -10,7 +10,12 @@ import numpy
 from Cython.Distutils import build_ext
 from Cython.Distutils.extension import Extension as CythonExtension
 
-
+# NOTE: On OSX 10.8.2, XCode 4.2 you need -D_FORTIFY_SOURCE=0
+#       http://comments.gmane.org/gmane.comp.compilers.llvm.devel/37989
+#       This is a problem with GCC builtin.
+#       And you need to export CC=gcc, but there is still problem at linkage,
+#       where it uses clang.  I am solving that manually by copying the
+#       the commands and swap out clang with gcc.
 OMP_ARGS = ['-fopenmp']
 OMP_LINK = OMP_ARGS
 
@@ -27,21 +32,21 @@ ext_modules = [
     ),
 
     CythonExtension(
-        name = "numbapro.dispatch",
-        sources = ["numbapro/dispatch.pyx"],
-        include_dirs = [numpy.get_include()],
-        depends = [miniutils_dep, "numbapro/dispatch.pxd"],
-        extra_compile_args = OMP_ARGS,
-        extra_link_args = OMP_LINK,
-        cython_gdb=True,
-    ),
-
-    CythonExtension(
         name = "numbapro._minidispatch",
         sources = ["numbapro/_minidispatch.pyx"],
         depends = [miniutils_dep, "numbapro/dispatch.pxd"],
         include_dirs = [numpy.get_include(), minivect.get_include()],
         cython_include_dirs = [minivect.get_include()],
+        cython_gdb=True,
+    ),
+               
+    CythonExtension(
+        name = "numbapro.dispatch",
+        sources = ["numbapro/dispatch.pyx"],
+        include_dirs = [numpy.get_include()],
+        depends = [miniutils_dep, "numbapro/dispatch.pxd"],
+        extra_compile_args = OMP_ARGS + ['-D_FORTIFY_SOURCE=0'],
+        extra_link_args = OMP_LINK,
         cython_gdb=True,
     ),
 
