@@ -83,6 +83,9 @@ import types
 import ctypes
 import __builtin__ as builtins
 
+if __debug__:
+    import pprint
+
 import numba
 from numba import *
 from numba import error
@@ -376,6 +379,9 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
         node_type = node.node.type
         dst_type = node.dst_type
+        if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
+            logger.debug('coercion: %s --> %s\n%s' % (
+                    node_type, dst_type, pprint.pformat(utils.ast2tree(node))))
 
         if self.nopython and is_obj(node_type):
             raise error.NumbaError(node, "Cannot coerce to or from object in "
@@ -388,6 +394,22 @@ class ResolveCoercions(visitors.NumbaTransformer):
         elif is_obj(node_type) and not is_obj(node.dst_type):
             node = nodes.CoerceToNative(node.node, node.dst_type,
                                         name=node.name)
+            return self.visit(node)
+        elif node_type.is_c_string and dst_type.is_numeric:
+            if self.nopython:
+                node = self.function_cache.call(
+                    'atol' if dst_type.is_int else 'atof', node.node)
+            else:
+                if dst_type.is_int:
+                    cvtobj = self.function_cache.call(
+                        'PyInt_FromString', node.node,
+                        nodes.const(0, Py_ssize_t), nodes.const(10, int_))
+                else:
+                    cvtobj = self.function_cache.call(
+                        'PyFloat_FromString', node.node,
+                        nodes.const(0, Py_ssize_t))
+                node = nodes.CoerceToNative(nodes.ObjectTempNode(cvtobj),
+                                            dst_type, name=node.name)
             return self.visit(node)
 
         if node.node.type == node.type:
