@@ -17,11 +17,10 @@ def convert(input_str):
 def fast_convert(input_str):
     with nopython:
         return int(input_str[0:5])
-    return -1
 
 # ______________________________________________________________________
 
-class CStringTests(test_support.ASTTestCase):
+class TestCString(test_support.ASTTestCase):
     def test_convert(self, **kws):
         jit_convert = self.jit(argtypes = (cstring,), restype = int_, **kws)(
             convert)
@@ -29,7 +28,6 @@ class CStringTests(test_support.ASTTestCase):
             test_str = str(10 ** exp)
             self.assertEqual(jit_convert(test_str), convert(test_str))
 
-    #@test_support.checkSkipFlag("Not implemented yet.")
     def test_convert_nopython(self, **kws):
         jit_convert = self.jit(argtypes = (cstring,), restype = int_, **kws)(
             fast_convert)
