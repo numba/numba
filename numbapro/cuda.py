@@ -230,7 +230,7 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
             func._numba_compile_only = True
         func._numba_inline = inline
 
-        assert 'nopython' in kws
+        assert kws.get('nopython')
         assert func._numba_compile_only
 
         result = function_cache.compile_function(func, argtypes,
