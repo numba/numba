@@ -1207,7 +1207,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                                     node.llvm_func.name)
         else:
             lfunc = node.llvm_func
-        result = self.builder.call(node.llvm_func, largs, name=node.name)
+        result = self.builder.call(lfunc, largs, name=node.name)
 
         if node.signature.struct_by_reference:
             if minitypes.pass_by_ref(node.signature.return_type):
