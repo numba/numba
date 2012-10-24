@@ -80,6 +80,8 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
         elif len(node.args) == 1:
             return nodes.CoercionNode(node.args[0], dst_type=dst_type)
         else:
+            # XXX Moved the unary version to the late specializer,
+            # what about the 2-ary version?
             arg1, arg2 = node.args
             if arg1.variable.type.is_c_string:
                 assert dst_type.is_int
