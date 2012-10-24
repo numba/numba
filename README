@@ -10,7 +10,7 @@ eliminate the "interpreter".  Numba is going to work well first with
 NumPy arrays that are large arrays of typed information.
 
 If you are looking for a full Python compiler to handle all Python syntax,
-look at PyPy, ShedSkin, Nutika, or other projects.
+look at PyPy, ShedSkin, Nuitka, or other projects.
 
 Numba is also not a tracing jit.  It *compiles* your code before it gets
 run either using run-time type information or type information you provide in the decorator.
@@ -53,5 +53,5 @@ Some old archives are at http://librelist.com/browser/numba/
 * See if our sponsor can help you (which can help this project) 
 http://www.continuum.io
 
-For some documenation, see
+For some documentation, see
 https://github.com/numba/numba/blob/master/docs/source/doc/userguide.rst
