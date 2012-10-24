@@ -91,12 +91,12 @@ class TestIf(unittest.TestCase):
             for j in range(-3, 3):
                 self.assertEqual(if_fn_4c(i, j), oracle(i, j))
 
-#    def test_if_fn_5(self):
-#        if_fn_5c = jit(restype=int4, argtypes=[i4, i4], backend='ast')(if_fn_5)
-#        oracle = if_fn_5
-#        for i in range(-3, 3):
-#            for j in range(-3, 3):
-#                self.assertEqual(if_fn_5c(i, j), oracle(i, j))
+    def test_if_fn_5(self):
+        if_fn_5c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_5)
+        oracle = if_fn_5
+        for i in range(-3, 3):
+            for j in range(-3, 3):
+                self.assertEqual(if_fn_5c(i, j), oracle(i, j))
 
     def test_if_fn_6(self):
         if_fn_6c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_6)

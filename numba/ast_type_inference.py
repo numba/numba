@@ -1167,10 +1167,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif self.return_variable.type is None:
             self.return_variable.type = type
             node.value = value
-        else:
+        elif self.return_variable.type != type:
             # todo: in case of unpromotable types, return object?
             self.return_variable.type = self.promote_types_numeric(
                                     self.return_variable.type, type)
+            
+            # XXX: DeferredCoercionNode __init__ is not compatible
+            #      with CoercionNode __new__.
+            #      We go around the problem for test_if.test_if_fn_5
+            #      by not visiting this block if return_variable.type == type.
             node.value = nodes.DeferredCoercionNode(
                     value, self.return_variable.type)
 
