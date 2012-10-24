@@ -122,21 +122,21 @@ class LLVMContextManager(object):
     _fpass = {}         # module => function passes
     _DEFAULT_MODULE = 'default'
 
-    def __init__(self):
-        self._initialize()
+    def __init__(self, opt=3):
+        self._initialize(opt=opt)
 
     @classmethod
-    def _initialize(cls):
+    def _initialize(cls, opt=3):
         if not cls._mods: # no modules yet
             # Create default module
-            default_mod = cls._init_module(cls._DEFAULT_MODULE)
+            default_mod = cls._init_module(cls._DEFAULT_MODULE, opt=opt)
 
             # Create execution engine
             # NOTE: EE owns all registered modules
             cls._ee = le.ExecutionEngine.new(default_mod)
 
     @classmethod
-    def _init_module(cls, name):
+    def _init_module(cls, name, opt=3):
         '''
         Initialize a module with the given name;
         Prepare pass managers for it.
@@ -145,7 +145,7 @@ class LLVMContextManager(object):
         cls._mods[name] = mod
         
         pmb = lp.PassManagerBuilder.new()
-        pmb.opt_level = 3
+        pmb.opt_level = opt 
         fpm = lp.FunctionPassManager.new(mod)
         pmb.populate(fpm)
         
@@ -153,13 +153,13 @@ class LLVMContextManager(object):
 
         return mod
 
-    def create_module(self, name):
+    def create_module(self, name, opt=3):
         '''
         Create a llvm Module and add it to the execution engine.
 
         NOTE: Will we ever need this?
         '''
-        mod = self._init_module(name)
+        mod = self._init_module(name, opt)
         self._ee.add_module(mod)
         return mod
 
