@@ -45,11 +45,19 @@ cdef void *align_pointer(void *memory, size_t alignment) nogil:
 
 def compute_vtab_offset(py_class):
     "Returns the vtab pointer offset in the object"
+    offset = getattr(py_class, '__numba_vtab_offset', None)
+    if offset:
+        return offset
+
     cdef PyTypeObject *type_p = <PyTypeObject *> py_class
     return align(type_p.tp_basicsize, 8)
 
 def compute_attrs_offset(py_class):
     "Returns the start of the attribute struct"
+    offset = getattr(py_class, '__numba_attr_offset', None)
+    if offset:
+        return offset
+
     return align(compute_vtab_offset(py_class) + sizeof(void *), 8)
 
 def create_new_extension_type(name, bases, dict, ext_numba_type, vtab, vtab_type,
@@ -74,7 +82,7 @@ def create_new_extension_type(name, bases, dict, ext_numba_type, vtab, vtab_type
             assert issubclass(cls, ext_type), (cls, ext_type)
             obj = super(ext_type, cls).__new__(cls, *args, **kwds)
 
-        if (#cls.__numba_vtab is not ext_type.__numba_vtab or
+        if (cls.__numba_vtab is not ext_type.__numba_vtab or
                 not isinstance(obj, cls)):
             # Subclass will set the vtab and attributes
             return obj
