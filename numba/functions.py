@@ -168,7 +168,8 @@ class FunctionCache(object):
         if func is not None:
             result = self.get_function(func, argtypes)
             if result is not None:
-                return result
+                sig, trans, pycall = result
+                return sig, trans.lfunc, pycall
 
             if is_numba_func(func):
                 from numba import pipeline
