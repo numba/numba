@@ -192,8 +192,7 @@ class FunctionCache(object):
             return declared_func.signature, lfunc
 
     def call(self, name, *args, **kw):
-        temp_name = kw.pop('temp_name', '')
-        function_cls = globals()[name]
+        temp_name = kw.pop('temp_name', name)
         sig, lfunc = self.function_by_name(name, **kw)
         return nodes.NativeCallNode(sig, args, lfunc, name=temp_name)
 
