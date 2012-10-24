@@ -1,7 +1,6 @@
 import ast, sys
 
 def prettyprint(node, stream=sys.stdout):
-    print 'prettyprinting'
     text = ast.dump(node)
     depth = 0
     last = ''
@@ -23,4 +22,4 @@ def prettyprint(node, stream=sys.stdout):
         stream.write(i)
 
         last = i
-
+    stream.write('\n')

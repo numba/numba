@@ -35,7 +35,7 @@ def func2(arg):
 
 # ______________________________________________________________________
 
-class TestExternCall(test_support.ByteCodeTestCase):
+class TestASTExternCall(test_support.ASTTestCase):
     def test_call_zeros_like(self):
         testarr = numpy.array([1., 2, 3, 4, 5], dtype=numpy.double)
         testfn = self.jit(argtypes = [double[:]], restype = double[:])(
@@ -55,9 +55,6 @@ class TestExternCall(test_support.ByteCodeTestCase):
     def test_numba_calls_numba(self):
         self.assertEqual(func2(3), 8)
         self.assertEqual(func2(2+3j), (3+3j)*2)
-
-class TestASTExternCall(test_support.ASTTestCase, TestExternCall):
-    pass
 
 # ______________________________________________________________________
 

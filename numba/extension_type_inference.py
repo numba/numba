@@ -2,7 +2,7 @@ import types
 import ctypes
 
 import numba
-from numba import pipeline, error
+from numba import pipeline, error, symtab
 from numba import _numba_types as numba_types
 from numba.minivect import minitypes
 
@@ -96,7 +96,17 @@ def _type_infer_methods(context, class_dict, ext_type):
         _type_infer_method(context, ext_type, method, method_name, class_dict)
 
 def _compile_methods(class_dict, context, ext_type, lmethods, method_pointers):
-    for method_name, func_signature in ext_type.methods:
+    parent_method_pointers = getattr(
+                    ext_type.py_class, '__numba_method_pointers', None)
+    for i, (method_name, func_signature) in enumerate(ext_type.methods):
+        if method_name not in class_dict:
+            # Inherited method
+            assert parent_method_pointers is not None
+            name, p = parent_method_pointers[i]
+            assert name == method_name
+            method_pointers.append((method_name, p))
+            continue
+
         method = class_dict[method_name]
         # Don't use compile_after_type_inference, re-infer, since we may
         # have inferred some return types
@@ -105,12 +115,25 @@ def _compile_methods(class_dict, context, ext_type, lmethods, method_pointers):
                                                     func_signature.return_type,
                                                     func_signature.args)
         lmethods.append(translator.lfunc)
-        method_pointers.append(translator.lfunc_pointer)
+        method_pointers.append((method_name, translator.lfunc_pointer))
         class_dict[method_name] = wrapper
 
 def _construct_native_attribute_struct(ext_type):
     attrs = dict((name, var.type) for name, var in ext_type.symtab.iteritems())
-    ext_type.attribute_struct = numba.struct(**attrs)
+    if ext_type.attribute_struct is None:
+        # No fields to inherit
+        ext_type.attribute_struct = numba.struct(**attrs)
+    else:
+        # Inherit fields from parent
+        fields = []
+        for name, variable in ext_type.symtab.iteritems():
+            if name not in ext_type.attribute_struct.fielddict:
+                fields.append((name, variable.type))
+                ext_type.attribute_struct.fielddict[name] = variable.type
+
+        # Sort fields by rank
+        fields = numba.struct(fields).fields
+        ext_type.attribute_struct.fields.extend(fields)
 
 def compile_extension_methods(context, py_class, ext_type, class_dict):
     """
@@ -153,6 +176,49 @@ def inject_descriptors(context, py_class, ext_type, class_dict):
         descriptor = _create_descr(attr_name)
         class_dict[attr_name] = descriptor
 
+def is_numba_class(cls):
+    return hasattr(cls, '__numba_struct_type')
+
+def verify_base_class_compatibility(cls, struct_type, vtab_type):
+    bases = [cls]
+    for base in cls.__bases__:
+        if is_numba_class(base):
+            attr_prefix = base.__numba_struct_type.is_prefix(struct_type)
+            method_prefix = base.__numba_vtab_type.is_prefix(vtab_type)
+            if not attr_prefix or not method_prefix:
+                raise error.NumbaError(
+                            "Multiple incompatible base classes found: "
+                            "%s and %s" % (base, bases[-1]))
+
+            bases.append(base)
+
+def inherit_attributes(ext_type, class_dict):
+    cls = ext_type.py_class
+    if not is_numba_class(cls):
+        # superclass is not a numba class
+        return
+
+    struct_type = cls.__numba_struct_type
+    vtab_type = cls.__numba_vtab_type
+    verify_base_class_compatibility(cls, struct_type, vtab_type)
+
+    # Inherit attributes
+    ext_type.attribute_struct = numba.struct(struct_type.fields)
+    for field_name, field_type in ext_type.attribute_struct.fields:
+        ext_type.symtab[field_name] = symtab.Variable(field_type,
+                                                      promotable_type=False)
+
+    # Inherit methods
+    for method_name, method_type in vtab_type.fields:
+        func_signature = method_type.base_type
+        args = list(func_signature.args)
+        args[0] = ext_type
+        func_signature = func_signature.return_type(*args)
+        ext_type.add_method(method_name, func_signature)
+
+    ext_type.parent_attr_struct = struct_type
+    ext_type.parent_vtab_type = vtab_type
+
 def vtab_name(field_name):
     if field_name.startswith("__") and field_name.endswith("__"):
         field_name = '__numba_' + field_name.strip("_")
@@ -161,19 +227,20 @@ def vtab_name(field_name):
 def build_vtab(vtab_type, method_pointers):
     assert len(method_pointers) == len(vtab_type.fields)
 
-    vtab_type = numba.struct([(vtab_name(field_name), field_type)
-                                  for field_name, field_type in vtab_type.fields])
-    vtab_ctype = vtab_type.to_ctypes()
+    vtab_ctype = numba.struct(
+        [(vtab_name(field_name), field_type)
+            for field_name, field_type in vtab_type.fields]).to_ctypes()
 
     methods = []
-    for method_pointer, (field_name, field_type) in zip(method_pointers,
-                                                        vtab_type.fields):
+    for (method_name, method_pointer), (field_name, field_type) in zip(
+                                        method_pointers, vtab_type.fields):
+        assert method_name == field_name
         method_type_p = field_type.to_ctypes()
         cmethod = ctypes.cast(ctypes.c_void_p(method_pointer), method_type_p)
         methods.append(cmethod)
 
     vtab = vtab_ctype(*methods)
-    return vtab
+    return vtab, vtab_type
 
 def create_extension(context, py_class, translator_kwargs):
     """
@@ -197,16 +264,18 @@ def create_extension(context, py_class, translator_kwargs):
         attribute of the extension types. Objects have a direct pointer
         for efficiency.
     """
-    type = numba_types.ExtensionType(py_class)
+    ext_type = numba_types.ExtensionType(py_class)
     class_dict = dict(vars(py_class))
-    method_pointers, lmethods = compile_extension_methods(
-                                        context, py_class, type, class_dict)
-    inject_descriptors(context, py_class, type, class_dict)
+    inherit_attributes(ext_type, class_dict)
 
-    vtab = build_vtab(type.vtab_type, method_pointers)
+    method_pointers, lmethods = compile_extension_methods(
+                                        context, py_class, ext_type, class_dict)
+    inject_descriptors(context, py_class, ext_type, class_dict)
+
+    vtab, vtab_type = build_vtab(ext_type.vtab_type, method_pointers)
 
     extension_type = extension_types.create_new_extension_type(
             py_class.__name__, py_class.__bases__, class_dict,
-            type.attribute_struct, vtab,
+            ext_type, vtab, vtab_type,
             lmethods, method_pointers)
     return extension_type

@@ -17,9 +17,9 @@ def checkSkipFlag(reason):
         return _checkSkipWrapper
     return _checkSkipFlag
 
-class ASTTestCase(unittest.TestCase):
-    jit = staticmethod(lambda *args, **kw: jit_(*args, **dict(kw, backend='ast')))
-    backend = 'ast'
+class ByteCodeTestCase(unittest.TestCase):
+    jit = staticmethod(jit_)
+    backend = 'bytecode'
     autojit = staticmethod(autojit(backend=backend))
 
 def main():
@@ -37,5 +37,3 @@ class StdoutReplacer(object):
 
     def __exit__(self, *args):
         sys.stdout = self.out
-
-from .bytecode.test_support import ByteCodeTestCase

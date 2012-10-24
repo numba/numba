@@ -50,6 +50,12 @@ def if_fn_5(i, j):
         return i + j
     return 0xdefaced
 
+def if_fn_6(i, j):
+    if i < j:
+        return  #
+    i += j
+
+
 # ______________________________________________________________________
 
 class TestIf(unittest.TestCase):
@@ -60,7 +66,7 @@ class TestIf(unittest.TestCase):
         self.assertEqual(if_fn_1c(1.),  if_fn_1(1.))
 
     def test_if_fn_2(self):
-        if_fn_2c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_2)
+        if_fn_2c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_2)
 
         oracle = if_fn_2
         for i in range(6):
@@ -68,7 +74,7 @@ class TestIf(unittest.TestCase):
                 self.assertEqual(if_fn_2c(i, j), oracle(i, j))
 
     def test_if_fn_3(self):
-        if_fn_3c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_3)
+        if_fn_3c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_3)
 
         oracle = if_fn_3
         for i in range(6):
@@ -78,7 +84,7 @@ class TestIf(unittest.TestCase):
     def test_if_fn_4(self):
         from meta.decompiler import decompile_func
         import ast, inspect
-        if_fn_4c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_4)
+        if_fn_4c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_4)
 
         oracle = if_fn_4
         for i in range(-3, 3):
@@ -86,12 +92,15 @@ class TestIf(unittest.TestCase):
                 self.assertEqual(if_fn_4c(i, j), oracle(i, j))
 
 #    def test_if_fn_5(self):
-#        if_fn_5c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_5)
-
+#        if_fn_5c = jit(restype=int4, argtypes=[i4, i4], backend='ast')(if_fn_5)
 #        oracle = if_fn_5
 #        for i in range(-3, 3):
 #            for j in range(-3, 3):
 #                self.assertEqual(if_fn_5c(i, j), oracle(i, j))
+
+    def test_if_fn_6(self):
+        if_fn_6c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_6)
+
 
 # ______________________________________________________________________
 

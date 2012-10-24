@@ -6,7 +6,7 @@ Test the Numba compiler on a simple for loop over an iterable object.
 '''
 # ______________________________________________________________________
 
-from numba import *
+from numba.decorators import jit
 
 import numpy
 
@@ -76,47 +76,47 @@ def for_loop_w_guard_1 (test_input):
 # ______________________________________________________________________
 
 class TestForLoop(unittest.TestCase):
-    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'),
-                         "Requires implementation of iteration "
+    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'), 
+                         "Requires implementation of iteration " 
                          "over arrays.")
     def test_compiled_for_loop_fn_0(self):
         test_data = numpy.array([1, 2, 3], dtype = 'l')
-        compiled_for_loop_fn = jit(restype=f4,
-            argtypes = [i8[:]],backend='ast')(for_loop_fn_0)
+        compiled_for_loop_fn = jit(
+            argtypes = [['l']],backend='bytecode')(for_loop_fn_0)
         result = compiled_for_loop_fn(test_data)
         self.assertEqual(result, 6)
         self.assertEqual(result, for_loop_fn_0(test_data))
 
     def test_compiled_for_loop_fn_1(self):
-        compiled_for_loop_fn = jit(argtypes = [i4, i4, i4],
-                                             restype = i4, backend='ast')(for_loop_fn_1)
+        compiled_for_loop_fn = jit(argtypes = ['i','i','i'],
+                                             restype = 'i', backend='bytecode')(for_loop_fn_1)
         result = compiled_for_loop_fn(1, 4, 1)
         self.assertEqual(result, 6)
         self.assertEqual(result, for_loop_fn_1(1, 4, 1))
 
     def test_compiled_for_loop_fn_2(self):
-        compiled_for_loop_fn = jit(argtypes = [i4],
-                                             restype = i4, backend='ast')(for_loop_fn_2)
+        compiled_for_loop_fn = jit(argtypes = ['i'],
+                                             restype = 'i', backend='bytecode')(for_loop_fn_2)
         result = compiled_for_loop_fn(4)
         self.assertEqual(result, 36)
         self.assertEqual(result, for_loop_fn_2(4))
 
     def test_compiled_for_loop_fn_3(self):
-        compiled_for_loop_fn = jit(argtypes = [i4],
-                                             restype = i4, backend='ast')(for_loop_fn_3)
+        compiled_for_loop_fn = jit(argtypes = ['i'],
+                                             restype = 'i', backend='bytecode')(for_loop_fn_3)
         result = compiled_for_loop_fn(3)
         self.assertEqual(result, for_loop_fn_3(3))
         self.assertEqual(result, 81)
 
     def test_compiled_for_loop_w_guard_0(self):
-        compiled_for_loop_w_guard = autojit(backend='ast')(for_loop_w_guard_0)
+        compiled_for_loop_w_guard = jit(backend='bytecode')(for_loop_w_guard_0)
         self.assertEqual(compiled_for_loop_w_guard(5.),
                          for_loop_w_guard_0(5.))
         self.assertEqual(compiled_for_loop_w_guard(4.),
                          for_loop_w_guard_0(4.))
 
     def test_compiled_for_loop_w_guard_1(self):
-        compiled_for_loop_w_guard = autojit(backend='ast')(for_loop_w_guard_1)
+        compiled_for_loop_w_guard = jit(backend='bytecode')(for_loop_w_guard_1)
         self.assertEqual(compiled_for_loop_w_guard(5.),
                          for_loop_w_guard_1(5.))
         self.assertEqual(compiled_for_loop_w_guard(4.),

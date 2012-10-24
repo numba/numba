@@ -109,7 +109,9 @@ def mandel(x, y, max_iters):
 
 m, n = 0.4 + 1.2j, 5.1 - 0.6j
 
-class TestASTComplex(test_support.ASTTestCase):
+class TestComplex(test_support.ByteCodeTestCase):
+
+    skip = _plat_bits != 64
 
     def test_get_real_fn (self):
         num0 = 3 + 2j
@@ -165,38 +167,6 @@ class TestASTComplex(test_support.ASTTestCase):
             b = numpy.complex128(br + bi * 1j)
             self.assertEqual(prod_sum_fn(a, x, b),
                              compiled_prod_sum_fn(a, x, b))
-
-    skip = False
-
-    def test_arithmetic_mixed(self):
-        m, n = 0.4 + 1.2j, 10.0
-        self.arithmetic(m, n)
-        m, n = 0.4 + 1.2j, 10
-        self.arithmetic(m, n)
-
-    def arithmetic(self, m, n):
-        self.assertAlmostEqual(self.autojit(add)(m, n), add(m, n))
-        self.assertAlmostEqual(self.autojit(sub)(m, n), sub(m, n))
-        self.assertAlmostEqual(self.autojit(mul)(m, n), mul(m, n))
-        self.assertAlmostEqual(self.autojit(div)(m, n), div(m, n))
-        self.assertAlmostEqual(self.autojit(floordiv)(m, n), floordiv(m, n))
-
-    def test_complex_math(self):
-        self.assertAlmostEqual(self.autojit(sqrt)(m, n), sqrt(m, n))
-        self.assertAlmostEqual(self.autojit(log)(m, n), log(m, n))
-        self.assertAlmostEqual(self.autojit(log10)(m, n), log10(m, n))
-        self.assertAlmostEqual(self.autojit(exp)(m, n), exp(m, n))
-        self.assertAlmostEqual(self.autojit(sin)(m, n), sin(m, n))
-        self.assertAlmostEqual(self.autojit(cos)(m, n), cos(m, n))
-        self.assertAlmostEqual(self.autojit(cosh)(m, n), cosh(m, n))
-        self.assertAlmostEqual(self.autojit(atan)(m, n), atan(m, n))
-        self.assertAlmostEqual(self.autojit(asinh)(m, n), asinh(m, n))
-        self.assertAlmostEqual(self.autojit(absolute)(m, n), absolute(m, n))
-
-    def test_mandel(self):
-        self.assertEqual(self.autojit(mandel)(-1, -1, 20), 2)
-        self.assertEqual(mandel(-1, -1, 20), 2)
-
 # ______________________________________________________________________
 
 if __name__ == "__main__":

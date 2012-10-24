@@ -39,18 +39,8 @@ def bad_sum2d(arr):
 
 # ______________________________________________________________________
 
-class TestASTSum2d(test_support.ASTTestCase):
-    
-    def test_vectorized_sum2d(self):
-        usum2d = self.jit(argtypes=[double[:,:]],
-                          restype=double)(sum2d)
-        image = numpy.random.rand(10, 10)
-        plain_old_result = sum2d(image)
-        hot_new_result = usum2d(image)
-        self.assertTrue((abs(plain_old_result - hot_new_result) < 1e-9).all())
-
-    def test_vectorized_sum2d(self):
-        pass
+class TestSum2d(test_support.ByteCodeTestCase):
+    pass
 
     def test_vectorized_sum2d(self):
         usum2d = self.jit(argtypes=[double[:,:]],
@@ -59,16 +49,6 @@ class TestASTSum2d(test_support.ASTTestCase):
         plain_old_result = sum2d(image)
         hot_new_result = usum2d(image)
         self.assertTrue((abs(plain_old_result - hot_new_result) < 1e-9).all())
-
-    def _bad_sum2d(self):
-        compiled_bad_sum2d = self.jit(argtypes = [double[:,:]],
-                                      restype = double)(bad_sum2d)
-        image = numpy.random.rand(10, 10)
-        self.assertEqual(bad_sum2d(image), compiled_bad_sum2d(image))
-
-    @test_support.checkSkipFlag("Test fails due to problem in Meta.")
-    def test_bad_sum2d(self):
-        self._bad_sum2d()
 
 if __name__ == "__main__":
     unittest.main()

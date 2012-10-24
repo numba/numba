@@ -38,7 +38,7 @@ def mandel(real_coord, imag_coord, max_iters):
         i += 1
     return -1
 
-mandel_1c = jit(backend='bytecode',
+mandel_1c = jit(backend='ast',
                 argtypes = ['d', 'd', 'i'], restype = 'i')(mandel.py_func)
 
 @autojit

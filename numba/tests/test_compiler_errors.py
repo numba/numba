@@ -2,7 +2,7 @@
 >>> error()
 Traceback (most recent call last):
     ...
-NumbaError: 17:0: object of type int cannot be sliced
+NumbaError: 17:4: object of type int cannot be sliced
 """
 
 import sys

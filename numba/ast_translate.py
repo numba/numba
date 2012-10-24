@@ -143,21 +143,13 @@ class LLVMContextManager(object):
         '''
         mod = lc.Module.new(name)
         cls._mods[name] = mod
-
-        # TODO: We should use a PassManagerBuilder so that we can use O1, O2, O3
-
+        
+        pmb = lp.PassManagerBuilder.new()
+        pmb.opt_level = 3
         fpm = lp.FunctionPassManager.new(mod)
+        pmb.populate(fpm)
+        
         cls._fpass[mod] = fpm
-
-        # NOTE: initialize() link all passes into LLVM.
-        fpm.initialize()
-
-        #fpm.add(lp.PASS_PROMOTE_MEMORY_TO_REGISTER)
-        #fpm.add(lp.PASS_DEAD_CODE_ELIMINATION)
-
-        # NOTE: finalize() unlink all passes from LLVM. I don't see any reason
-        #       for a program to do so.
-        # fpm.finalize()
 
         return mod
 
@@ -179,13 +171,13 @@ class LLVMContextManager(object):
             mod = name_or_mod
         else:
             mod = name_or_mod
-
+                
         if mod in self._fpass:
             fpm = self._fpass[mod]
         else:
             fpm = lp.FunctionPassManager.new(mod)
             self._fpass[mod] = fpm
-            fpm.initialize()
+            #fpm.initialize()  # not necessary
 
         return fpm
 
@@ -472,7 +464,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         logger.debug("ast translated function: %s", self.lfunc)
         # Verify code generation
-        self.lfunc.verify()
+        self.mod.verify()  # only Module level verification checks everything.
         if self.optimize:
             fp = LLVMContextManager().get_function_pass_manager(self.mod)
             fp.run(self.lfunc)
@@ -873,7 +865,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             if is_obj(rettype):
                 self.xincref_temp(self.return_value)
 
-        self.builder.branch(self.cleanup_label)
+        if not self.is_block_terminated():
+            self.builder.branch(self.cleanup_label)
 
         # if node.value is not None:
         #     self.builder.ret(self.visit(node.value))
