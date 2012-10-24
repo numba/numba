@@ -224,6 +224,9 @@ class Driver(object):
             if sys.platform == 'win32':
                 dlloader = WinDLL
                 path = '\\windows\\system32\\nvcuda.dll'
+            elif sys.platform == 'darwin':
+                dlloader = CDLL
+                path = '/usr/local/cuda/lib/libcuda.dylib'
             else:
                 dlloader = CDLL
                 path = '/usr/lib/libcuda.so'

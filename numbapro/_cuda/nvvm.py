@@ -82,11 +82,16 @@ class NVVM(object):
             inst = cls.__INSTANCE = object.__new__(cls)
 
             # Determine DLL type
-            path = './libnvvm.so'
             if sys.platform == 'win32':
                 dlloader = WinDLL
+                path = './libnvvm.dll'
+            elif sys.platform == 'darwin':
+                dlloader = CDLL
+                path = './libnvvm.dylib'
             else:
                 dlloader = CDLL
+                path = './libnvvm.so'
+        
 
             if not override_path: # Try to discover libNVVM automatically
                 # Environment variable always override if present
