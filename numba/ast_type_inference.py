@@ -1178,7 +1178,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             #      We go around the problem for test_if.test_if_fn_5
             #      by not visiting this block if return_variable.type == type.
             node.value = nodes.DeferredCoercionNode(
-                    value, self.return_variable.type)
+                            value, self.return_variable)
 
         return node
 
@@ -1202,7 +1202,7 @@ class Store2Load(visitors.NumbaVisitor):
     visit_List = visit_node
     visit_Tuple = visit_node
 
-class TypeSettingVisitor(visitors.NumbaVisitor):
+class TypeSettingVisitor(visitors.NumbaTransformer):
     """
     Set node.type for all AST nodes after type inference from node.variable.
     Allows for deferred coercions (may be removed in the future).
@@ -1211,7 +1211,7 @@ class TypeSettingVisitor(visitors.NumbaVisitor):
     def visit(self, node):
         if hasattr(node, 'variable'):
             node.type = node.variable.type
-        super(TypeSettingVisitor, self).visit(node)
+        return super(TypeSettingVisitor, self).visit(node)
 
     def visit_ExtSlice(self, node):
         self.generic_visit(node)
