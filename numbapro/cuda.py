@@ -138,6 +138,7 @@ class CudaSRegRewrite(visitors.NumbaTransformer,
     def visit_Attribute(self, ast):
         this_module = sys.modules[__name__]
         value = self.visit(ast.value)
+        retval = ast # default to return the original node
         if isinstance(ast.value, _ast.Name):
             assert isinstance(value.ctx, _ast.Load)
             obj = self._myglobals.get(ast.value.id)
@@ -145,7 +146,7 @@ class CudaSRegRewrite(visitors.NumbaTransformer,
                 retval = CudaAttributeNode(this_module).resolve(ast.attr)
         elif isinstance(value, CudaAttributeNode):
             retval = value.resolve(ast.attr)
-
+      
         if retval.value in _SPECIAL_VALUES:
             # replace with a MathCallNode
             sig = minitypes.FunctionType(minitypes.uint32, [])
