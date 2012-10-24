@@ -65,6 +65,16 @@ CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED = 712
 CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED     = 713
 CUDA_ERROR_UNKNOWN                        = 999
 
+
+# no preference for shared memory or L1 (default)
+CU_FUNC_CACHE_PREFER_NONE    = 0x00
+# prefer larger shared memory and smaller L1 cache
+CU_FUNC_CACHE_PREFER_SHARED  = 0x01
+# prefer larger L1 cache and smaller shared memory
+CU_FUNC_CACHE_PREFER_L1      = 0x02
+# prefer equal sized L1 cache and shared memory
+CU_FUNC_CACHE_PREFER_EQUAL   = 0x03
+
 def _build_reverse_error_map():
     import sys
     prefix = 'CUDA_ERROR'
@@ -125,6 +135,10 @@ class Driver(object):
         # CUresult cuModuleGetFunction(CUfunction *hfunc, CUmodule hmod,
         #                              const char *name);
         'cuModuleGetFunction':  (c_int, cu_function, cu_module, c_char_p),
+        
+        # CUresult CUDAAPI cuFuncSetCacheConfig(CUfunction hfunc,
+        #                                       CUfunc_cache config);
+        'cuFuncSetCacheConfig': (c_int, cu_function, c_uint),
 
         # CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize);
         'cuMemAlloc':         (c_int, POINTER(cu_device_ptr), c_size_t),
@@ -566,6 +580,20 @@ class Function(object):
 
     def __str__(self):
         return 'CUDA kernel %s on %s' % (self.name, self)
+    
+    def cache_config(self, prefer_equal=False, prefer_cache=False, prefer_shared=False):
+        prefer_equal = prefer_equal or (prefer_cache and prefer_shared)
+        if prefer_equal:
+            flag = CU_FUNC_CACHE_PREFER_EQUAL
+        elif prefer_cache:
+            flag = CU_FUNC_CACHE_PREFER_L1
+        elif prefer_shared:
+            flag = CU_FUNC_CACHE_PREFER_SHARED
+        else:
+            flag = CU_FUNC_CACHE_PREFER_NONE
+   
+        err = self.driver.cuFuncSetCacheConfig(self._handle, flag)
+        self.driver.check_error(err, 'Failed to set cache config')
 
     def configure(self, griddim, blockdim, sharedmem=0, stream=None):
         import copy
