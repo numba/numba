@@ -8,47 +8,85 @@ from numba.minivect import minitypes
 
 from numba import *
 
-def validate_method(py_func, sig):
-    if isinstance(py_func, types.FunctionType):
-        nargs = py_func.func_code.co_argcount - 1
-        if len(sig.args) != nargs:
-            raise error.NumbaError(
-                "Expected %d argument types in function "
-                "%s (don't include 'self')" % (nargs, py_func.__name__))
+def validate_method(py_func, sig, is_static):
+    assert isinstance(py_func, types.FunctionType)
+    nargs = py_func.func_code.co_argcount - 1 + is_static
+    if len(sig.args) != nargs:
+        raise error.NumbaError(
+            "Expected %d argument types in function "
+            "%s (don't include 'self')" % (nargs, py_func.__name__))
 
+def get_signature(ext_type, is_class, is_static, sig):
+    if is_static:
+        leading_arg_types = ()
+    elif is_class:
+        leading_arg_types = (object_)
+    else:
+        leading_arg_types = (ext_type,)
+
+    argtypes = leading_arg_types + sig.args
+    restype = sig.return_type
+    return minitypes.FunctionType(return_type=restype, args=argtypes)
 
 def _process_signature(ext_type, method, default_signature,
-                   is_static=False, is_class=False):
+                       is_static=False, is_class=False):
     if isinstance(method, minitypes.Function):
         # @double(...)
         # def func(self, ...): ...
-        sig = method.signature
-        validate_method(method.py_func, sig)
-        argtypes = (ext_type,) + sig.args
-        restype = sig.return_type
-        method = method.py_func
+#        if not isinstance(method.py_func, types.FunctionType):
+        return _process_signature(ext_type, method.py_func,
+                                  method.signature, is_static, is_class)
+
+#        sig = method.signature
+#        validate_method(method.py_func, sig, is_static=is_static)
+#
+#        sig = get_signature(ext_type, is_class, is_static, sig)
+#        return _process_signature(ext_type, method.py_func, sig,
+#                                  is_static, is_class)
     elif isinstance(method, types.FunctionType):
         if default_signature is None:
             # TODO: construct dependency graph, toposort, type infer
             # TODO: delayed types
             raise error.NumbaError(
                 "Method '%s' does not have signature" % (method.__name__,))
-        validate_method(method, default_signature or object_())
-        if default_signature:
-            restype, argtypes = (default_signature.return_type,
-                                 (ext_type,) + default_signature.args)
-        else:
-            restype, argtypes = None, (ext_type,)
-    elif isinstance(method, staticmethod):
-        return _process_signature(ext_type, method.__func__,
-                              default_signature, is_static=True)
-    elif isinstance(method, classmethod):
-        return _process_signature(ext_type, method.__func__,
-                              default_signature, is_class=True)
+        validate_method(method, default_signature or object_(), is_static)
+        if default_signature is None:
+            default_signature = minitypes.FunctionType(return_type=None,
+                                                       args=[])
+        sig = get_signature(ext_type, is_class, is_static, default_signature)
+        return Method(method, is_class, is_static), sig.return_type, sig.args
     else:
-        return None, None, None
+        if isinstance(method, staticmethod):
+            is_static = True
+        elif isinstance(method, classmethod):
+            is_class = True
+        else:
+            return None, None, None
+
+        method, restype, argtypes = _process_signature(
+                        ext_type, method.__func__, default_signature,
+                        is_static=is_static, is_class=is_class)
 
     return method, restype, argtypes
+
+class Method(object):
+    """
+    py_func: the python 'def' function
+    """
+
+    def __init__(self, py_func, is_class, is_static):
+        self.py_func = py_func
+        py_func.live_objects = []
+        self.is_class = is_class
+        self.is_static = is_static
+
+    def result(self, py_func):
+        if self.is_class:
+            return classmethod(py_func)
+        elif self.is_static:
+            return staticmethod(py_func)
+        else:
+            return py_func
 
 def _process_method_signatures(class_dict, ext_type):
     for method_name, method in class_dict.iteritems():
@@ -59,7 +97,7 @@ def _process_method_signatures(class_dict, ext_type):
             default_signature = void(*argtypes)
 
         method, restype, argtypes = _process_signature(ext_type, method,
-                                                   default_signature)
+                                                       default_signature)
         if method is None:
             continue
 
@@ -75,11 +113,9 @@ def _type_infer_method(context, ext_type, method, method_name, class_dict):
     restype, argtypes = signature.return_type, signature.args
 
     class_dict[method_name] = method
-    method.live_objects = []
     func_signature, symtab, ast = pipeline.infer_types(
-                        context, method, restype, argtypes)
+                        context, method.py_func, restype, argtypes)
     ext_type.add_method(method_name, func_signature)
-    return method
 
 def _type_infer_init_method(context, class_dict, ext_type):
     initfunc = class_dict.get('__init__', None)
@@ -111,12 +147,12 @@ def _compile_methods(class_dict, context, ext_type, lmethods, method_pointers):
         # Don't use compile_after_type_inference, re-infer, since we may
         # have inferred some return types
         # TODO: delayed types and circular calls/variable assignments
-        sig, translator, wrapper = pipeline.compile(context, method,
+        sig, translator, wrapper = pipeline.compile(context, method.py_func,
                                                     func_signature.return_type,
                                                     func_signature.args)
         lmethods.append(translator.lfunc)
         method_pointers.append((method_name, translator.lfunc_pointer))
-        class_dict[method_name] = wrapper
+        class_dict[method_name] = method.result(wrapper)
 
 def _construct_native_attribute_struct(ext_type):
     attrs = dict((name, var.type) for name, var in ext_type.symtab.iteritems())

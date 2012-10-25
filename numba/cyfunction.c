@@ -425,61 +425,6 @@ CyFunction_repr(CyFunctionObject *op)
 #endif
 }
 
-#if CYTHON_COMPILING_IN_PYPY
-/* originally copied from PyCFunction_Call() in CPython's Objects/methodobject.c */
-/* PyPy does not have this function */
-static PyObject * CyFunction_Call(PyObject *func, PyObject *arg, PyObject *kw) {
-    PyCFunctionObject* f = (PyCFunctionObject*)func;
-    PyCFunction meth = PyCFunction_GET_FUNCTION(func);
-    PyObject *self = PyCFunction_GET_SELF(func);
-    Py_ssize_t size;
-
-    switch (PyCFunction_GET_FLAGS(func) & ~(METH_CLASS | METH_STATIC | METH_COEXIST)) {
-    case METH_VARARGS:
-        if (likely(kw == NULL) || PyDict_Size(kw) == 0)
-            return (*meth)(self, arg);
-        break;
-    case METH_VARARGS | METH_KEYWORDS:
-        return (*(PyCFunctionWithKeywords)meth)(self, arg, kw);
-    case METH_NOARGS:
-        if (likely(kw == NULL) || PyDict_Size(kw) == 0) {
-            size = PyTuple_GET_SIZE(arg);
-            if (size == 0)
-                return (*meth)(self, NULL);
-            PyErr_Format(PyExc_TypeError,
-                "%.200s() takes no arguments (%zd given)",
-                f->m_ml->ml_name, size);
-            return NULL;
-        }
-        break;
-    case METH_O:
-        if (likely(kw == NULL) || PyDict_Size(kw) == 0) {
-            size = PyTuple_GET_SIZE(arg);
-            if (size == 1)
-                return (*meth)(self, PyTuple_GET_ITEM(arg, 0));
-            PyErr_Format(PyExc_TypeError,
-                "%.200s() takes exactly one argument (%zd given)",
-                f->m_ml->ml_name, size);
-            return NULL;
-        }
-        break;
-    default:
-        PyErr_SetString(PyExc_SystemError, "Bad call flags in "
-                        "CyFunction_Call. METH_OLDARGS is no "
-                        "longer supported!");
-
-        return NULL;
-    }
-    PyErr_Format(PyExc_TypeError, "%.200s() takes no keyword arguments",
-                 f->m_ml->ml_name);
-    return NULL;
-}
-#else
-static PyObject * CyFunction_Call(PyObject *func, PyObject *arg, PyObject *kw) {
-	return PyCFunction_Call(func, arg, kw);
-}
-#endif
-
 static PyTypeObject CyFunctionType_type = {
     PyVarObject_HEAD_INIT(0, 0)
     NAMESTR("cython_function_or_method"), /*tp_name*/
@@ -499,7 +444,7 @@ static PyTypeObject CyFunctionType_type = {
     0,                                  /*tp_as_sequence*/
     0,                                  /*tp_as_mapping*/
     0,                                  /*tp_hash*/
-    CyFunction_Call,              /*tp_call*/
+    0,                                  /*tp_call*/
     0,                                  /*tp_str*/
     0,                                  /*tp_getattro*/
     0,                                  /*tp_setattro*/

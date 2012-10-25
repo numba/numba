@@ -816,7 +816,7 @@ class FunctionType(Type):
         return self.return_type.pointer()
 
     def __call__(self, *args):
-        if len(args) != 1 or not isinstance(args[0], types.FunctionType):
+        if len(args) != 1 or isinstance(args[0], Type):
             return super(FunctionType, self).__call__(*args)
 
         assert self.return_type is not None
@@ -912,7 +912,7 @@ class struct(Type):
 
     is_struct = True
 
-    def __init__(self, fields=None, name=None, readonly=False, packed=False, **kwargs):
+    def __init__(self, fields=(), name=None, readonly=False, packed=False, **kwargs):
         super(struct, self).__init__()
         if fields and kwargs:
             raise minierror.InvalidTypeSpecification(
@@ -921,7 +921,7 @@ class struct(Type):
         if kwargs:
             fields = sort_types(kwargs)
 
-        self.fields = list(fields) or []
+        self.fields = list(fields)
         self.rank = sum(_sort_key(field) for field in self.fields)
         self.name = name
         self.readonly = readonly
