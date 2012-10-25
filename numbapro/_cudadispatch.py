@@ -60,7 +60,8 @@ class CudaUFuncDispatcher(object):
         # TODO: Dispatch from actual ufunc
         assert all(isinstance(array, np.ndarray) for array in broadcast_arrays)
 
-        with _cuda.Stream() as stream:
+        stream = _cuda.Stream()
+        with stream.auto_synchronize():
             kernel_args = [dvmem for _, dvmem
                                  in map(ndarray_data_to_device_memory,
                                         broadcast_arrays)]
@@ -111,7 +112,8 @@ def _cuda_outer_loop(args, dimensions, steps, data, arrays):
     ndarrays = map(lambda x: x.contents,  (arrays_ptr[i] for i in range(nops)))
 
     driver = _cudadefaults.driver
-    with _cuda.Stream() as stream:
+    stream = _cuda.Stream()
+    with stream.auto_synchronize():
 
         device_count = c_size_t(dimensions[0])
         MAX_THREAD = 128
