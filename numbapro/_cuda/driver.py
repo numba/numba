@@ -7,6 +7,7 @@ import sys, os, atexit
 import contextlib
 from ctypes import *
 from .error import *
+
 # CUDA specific typedefs
 cu_device = c_int
 cu_device_attribute = c_int     # enum
@@ -687,5 +688,8 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, stream_handle, ar
         driver.check_error(error, "Failed to launch kernel")
 
 # auto initialize CUDA driver when import
-Driver()
+try:
+    Driver()
+except CudaDriverError, e:
+    raise CudaSupportError(*e.args)
 
