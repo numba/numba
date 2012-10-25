@@ -60,8 +60,8 @@ def compute_attrs_offset(py_class):
 
     return align(compute_vtab_offset(py_class) + sizeof(void *), 8)
 
-def create_new_extension_type(name, bases, dict, ext_numba_type, vtab, vtab_type,
-                              llvm_methods, method_pointers):
+def create_new_extension_type(name, bases, dict, ext_numba_type,
+                              vtab, vtab_type, llvm_methods, method_pointers):
     """
     Create an extension type from the given name, bases and dict. Also
     takes a vtab struct minitype, and a struct_type describing the
