@@ -785,7 +785,7 @@ class FunctionType(Type):
             namestr = self.name + ' '
         else:
             namestr = ''
-        return "%s%s (*)(%s)" % (namestr, self.return_type, ", ".join(args))
+        return "%s (*%s)(%s)" % (self.return_type, namestr, ", ".join(args))
 
     @property
     def actual_signature(self):

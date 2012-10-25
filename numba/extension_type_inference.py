@@ -20,7 +20,7 @@ def get_signature(ext_type, is_class, is_static, sig):
     if is_static:
         leading_arg_types = ()
     elif is_class:
-        leading_arg_types = (object_)
+        leading_arg_types = (object_,)
     else:
         leading_arg_types = (ext_type,)
 
@@ -33,16 +33,8 @@ def _process_signature(ext_type, method, default_signature,
     if isinstance(method, minitypes.Function):
         # @double(...)
         # def func(self, ...): ...
-#        if not isinstance(method.py_func, types.FunctionType):
         return _process_signature(ext_type, method.py_func,
                                   method.signature, is_static, is_class)
-
-#        sig = method.signature
-#        validate_method(method.py_func, sig, is_static=is_static)
-#
-#        sig = get_signature(ext_type, is_class, is_static, sig)
-#        return _process_signature(ext_type, method.py_func, sig,
-#                                  is_static, is_class)
     elif isinstance(method, types.FunctionType):
         if default_signature is None:
             # TODO: construct dependency graph, toposort, type infer
@@ -79,6 +71,7 @@ class Method(object):
         py_func.live_objects = []
         self.is_class = is_class
         self.is_static = is_static
+        self.name = py_func.__name__
 
     def result(self, py_func):
         if self.is_class:
@@ -101,7 +94,9 @@ def _process_method_signatures(class_dict, ext_type):
         if method is None:
             continue
 
-        signature = minitypes.FunctionType(return_type=restype, args=argtypes)
+        signature = numba_types.ExtMethodType(
+                    return_type=restype, args=argtypes, name=method.name,
+                    is_class=method.is_class, is_static=method.is_static)
         ext_type.add_method(method_name, signature)
         class_dict[method_name] = method
 
@@ -248,7 +243,8 @@ def inherit_attributes(ext_type, class_dict):
     for method_name, method_type in vtab_type.fields:
         func_signature = method_type.base_type
         args = list(func_signature.args)
-        args[0] = ext_type
+        if not (func_signature.is_class or func_signature.is_static):
+            args[0] = ext_type
         func_signature = func_signature.return_type(*args)
         ext_type.add_method(method_name, func_signature)
 
