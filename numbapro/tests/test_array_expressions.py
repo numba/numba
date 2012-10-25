@@ -34,6 +34,9 @@ def test_array_expressions():
     array_expr3.py_func(numpy_result, numpy_result, numpy_result)
     assert np.all(result == numpy_result)
 
+#
+### test matrix multiplication w/ array expressions
+#
 @autojit(backend='ast')
 def array_expr_matmul(A, B):
     m, n = A.shape
@@ -51,6 +54,9 @@ def test_matmul():
     result = array_expr_matmul(a, b)
     assert np.all(result == np.dot(a, b))
 
+#
+### test gufuncs
+#
 def array_expr_gufunc(A, B, C):
     m, n = A.shape
     n, p = B.shape
