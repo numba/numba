@@ -921,7 +921,7 @@ class struct(Type):
         if kwargs:
             fields = sort_types(kwargs)
 
-        self.fields = fields or []
+        self.fields = list(fields) or []
         self.rank = sum(_sort_key(field) for field in self.fields)
         self.name = name
         self.readonly = readonly
