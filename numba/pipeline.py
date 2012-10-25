@@ -63,9 +63,9 @@ class Pipeline(object):
     def run_pipeline(self):
         ast = self.ast
         for method_name in self.order:
-            #if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
-            #    stage_tuple = (method_name, utils.ast2tree(ast))
-            #    logger.debug(pprint.pformat(stage_tuple))
+            if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
+                stage_tuple = (method_name, utils.ast2tree(ast))
+                logger.debug(pprint.pformat(stage_tuple))
             ast = getattr(self, method_name)(ast)
 
         return self.func_signature, self.symtab, ast
