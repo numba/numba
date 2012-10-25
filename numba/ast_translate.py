@@ -259,7 +259,7 @@ class RefcountingMixin(object):
 
     def decref(self, value, func='Py_DecRef'):
         "Py_DECREF a value"
-        assert not self.flags.get('nopython')
+        assert not self.nopython
         object_ltype = object_.to_llvm(self.context)
         sig, py_decref = self.function_cache.function_by_name(func)
         b = self.builder
@@ -267,12 +267,12 @@ class RefcountingMixin(object):
 
     def incref(self, value):
         "Py_INCREF a value"
-        assert not self.flags.get('nopython')
+        assert not self.nopython
         return self.decref(value, func='Py_IncRef')
 
     def xdecref_temp(self, temp, decref=None):
         "Py_XDECREF a temporary"
-        assert not self.flags.get('nopython')
+        assert not self.nopython
         decref = decref or self.decref
 
         def cleanup(b, bb_true, bb_endif):
@@ -285,13 +285,13 @@ class RefcountingMixin(object):
 
     def xincref_temp(self, temp):
         "Py_XINCREF a temporary"
-        assert not self.flags.get('nopython')
+        assert not self.nopython
         return self.xdecref_temp(temp, decref=self.incref)
 
     def xdecref_temp_cleanup(self, temp):
         "Cleanup a temp at the end of the function"
         
-        assert not self.flags.get('nopython')
+        assert not self.nopython
         bb = self.builder.basic_block
 
         self.builder.position_at_end(self.current_cleanup_bb)
@@ -302,24 +302,23 @@ class RefcountingMixin(object):
 
 
 class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
-                        RefcountingMixin):
+                        RefcountingMixin, visitors.NoPythonContextMixin):
     """
     Translate a Python AST to LLVM. Each visit_* method should directly
     return an LLVM value.
     """
 
     def __init__(self, context, func, ast, func_signature, symtab,
-                 optimize=True,
+                 optimize=True, nopython=False,
                  llvm_module=None, llvm_ee=None,
                  refcount_args=True, **kwds):
-        super(LLVMCodeGenerator, self).__init__(context, func, ast)
+
+        super(LLVMCodeGenerator, self).__init__(
+                    context, func, ast, nopython=nopython, symtab=symtab)
 
         self.func_name = kwds.get('func_name', func_signature.name
                                             or func.__name__)
         self.func_signature = func_signature
-
-        self.symtab = symtab
-
         self.blocks = {} # stores id => basic-block
 
         # code generation attributes
@@ -387,7 +386,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             variable.lvalue = stackspace
 
             # TODO: incref objects in structs
-            if not self.flags.get('nopython'):
+            if not self.nopython:
                 if is_obj(variable.type) and self.refcount_args:
                     self.incref(self.builder.load(stackspace))
 
@@ -623,7 +622,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.position_at_end(self.current_cleanup_bb)
 
         # Decref local variables
-        if not self.flags.get('nopython'):
+        if not self.nopython:
             for name, var in self.symtab.iteritems():
                 if var.is_local and is_obj(var.type):
                     if self.refcount_args or not name in self.argnames:

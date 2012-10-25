@@ -506,7 +506,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
         return new_node
 
-class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
+class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
+                      visitors.NoPythonContextMixin):
 
     def visit_FunctionDef(self, node):
         self.generic_visit(node)
@@ -533,7 +534,11 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
         if value is not None:
             value = nodes.CoercionNode(value, dst_type=ret_type)
 
-        node.error_return = ast.Return(value=value)
+        error_return = ast.Return(value=value)
+        if self.nopython and is_obj(self.func_signature.return_type):
+            error_return = nodes.WithPythonNode(body=[error_return])
+
+        node.error_return = error_return
         return node
 
     def check_context(self, node):
@@ -867,28 +872,6 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
         if node.value is not None:
             node.value = self.visit(nodes.CoercionNode(node.value, return_type))
         return node
-
-    def visit_WithPythonNode(self, node):
-        if not self.nopython:
-            raise error.NumbaError(node, "Not in 'with nopython' context")
-
-        self.nopython -= 1
-        # logger.debug((self.nopython, node.lineno, node.col_offset))
-        result = self.visitlist(node.body)
-        self.nopython += 1
-
-        return ast.Suite(body=result)
-
-    def visit_WithNoPythonNode(self, node):
-        if self.nopython:
-            raise error.NumbaError(node, "Not in 'with python' context")
-
-        self.nopython += 1
-        # logger.debug((self.nopython, node.lineno, node.col_offset))
-        result = self.visitlist(node.body)
-        self.nopython -= 1
-
-        return ast.Suite(body=result)
 
     def visit_For(self, node):
         self.generic_visit(node)

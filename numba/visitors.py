@@ -96,3 +96,25 @@ class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
 
 class NumbaTransformer(ast.NodeTransformer, NumbaVisitorMixin):
     "Mutating visitor"
+
+class NoPythonContextMixin(object):
+
+    def visit_WithPythonNode(self, node):
+        if not self.nopython:
+            raise error.NumbaError(node, "Not in 'with nopython' context")
+
+        self.nopython -= 1
+        result = self.visitlist(node.body)
+        self.nopython += 1
+
+        return node
+
+    def visit_WithNoPythonNode(self, node):
+        if self.nopython:
+            raise error.NumbaError(node, "Not in 'with python' context")
+
+        self.nopython += 1
+        result = self.visitlist(node.body)
+        self.nopython -= 1
+
+        return node
