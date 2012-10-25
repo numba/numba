@@ -621,7 +621,7 @@ class Function(object):
         '''
         assert self.driver.current_context() is self.context
         launch_kernel(self._handle, self.griddim, self.blockdim,
-                      0, self.stream, args)
+                      self.sharedmem, self.stream, args)
 
 def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, stream_handle, args):
     driver = Driver()

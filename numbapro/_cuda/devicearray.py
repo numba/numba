@@ -1,7 +1,10 @@
 import numpy as np
 from .ndarray import *
 
-assert getattr(np.ndarray, 'synchronous', None) is None
+assert not hasattr(np.ndarray, 'to_device')
+assert not hasattr(np.ndarray, 'to_host')
+assert not hasattr(np.ndarray, 'free_device')
+assert not hasattr(np.ndarray, 'device_memory')
 
 class DeviceNDArray(np.ndarray):
     def to_device(self, stream=0):
@@ -24,3 +27,4 @@ class DeviceNDArray(np.ndarray):
             return self.__device_memory
         except AttributeError:
             raise RuntimeError("No GPU device memory for this array")
+
