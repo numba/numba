@@ -41,6 +41,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
 
     is_slice_assign = False
     nesting_level = 0
+    elementwise = False
 
     def register_array_expression(self, node, lhs=None):
         """
@@ -55,7 +56,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         node.value = self.visit(node.value)
         self.nesting_level = 0
 
-        elementwise = getattr(node.value, 'elementwise', False)
+        elementwise = self.elementwise
         if (len(node.targets) == 1 and node.targets[0].type.is_array and
                 self.is_slice_assign and elementwise):
             return self.register_array_expression(node.value,
@@ -72,13 +73,15 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         return node
 
     def visit_BinOp(self, node):
-        node.elementwise = node.type.is_array
-        if node.elementwise and self.nesting_level == 0:
+        elementwise = node.type.is_array
+        if elementwise and self.nesting_level == 0:
             return self.register_array_expression(node)
 
         self.nesting_level += 1
         self.generic_visit(node)
         self.nesting_level -= 1
+
+        self.elementwise = elementwise
         return node
 
     visit_UnaryOp = visit_BinOp
@@ -156,6 +159,7 @@ class UFuncRewriter(ArrayExpressionRewrite):
             result_type = node.type
         else:
             result_type = lhs.type
+            lhs.ctx = ast.Load()
 
         # Build ufunc AST module
         ufunc_builder = UFuncBuilder(self.context, self.func, node)
