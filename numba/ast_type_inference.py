@@ -485,10 +485,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         "Inplace assignment"
         target = node.target
         rhs_target = copy.deepcopy(target)
-        Store2Load(self.context, self.func, rhs_target).visit(rhs_target)
+        rhs_target.ctx = ast.Load()
         ast.fix_missing_locations(rhs_target)
 
-        assignment = ast.Assign([target], ast.BinOp(rhs_target, node.op, node.value))
+        bin_op = ast.BinOp(rhs_target, node.op, node.value)
+        assignment = ast.Assign([target], bin_op)
         return self.visit(assignment)
 
     def _handle_unpacking(self, node):
@@ -1189,18 +1190,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_Global(self, node):
         raise error.NumbaError(node, "Global keyword")
 
-class Store2Load(visitors.NumbaVisitor):
-
-    def visit_node(self, node):
-        node.ctx = ast.Load()
-        self.generic_visit(node)
-        return node
-
-    visit_Name = visit_node
-    visit_Attribute = visit_node
-    visit_Subscript = visit_node
-    visit_List = visit_node
-    visit_Tuple = visit_node
 
 class TypeSettingVisitor(visitors.NumbaTransformer):
     """

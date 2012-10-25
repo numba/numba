@@ -130,9 +130,6 @@ class TestASTComplex(test_support.ASTTestCase):
         self.assertEqual(get_imag_fn(num1), compiled_get_imag_fn(num1))
 
     def test_get_conj_fn (self):
-        if self.skip:
-            raise unittest.SkipTest(
-                'Complex return values not supported on 32-bit systems.')
         num0 = 4 - 1.5j
         num1 = numpy.complex128(num0)
         compiled_get_conj_fn = self.jit(argtypes = [complex128],
@@ -143,18 +140,12 @@ class TestASTComplex(test_support.ASTTestCase):
         self.assertEqual(get_conj_fn(num1), compiled_get_conj_fn(num1))
 
     def test_get_complex_constant_fn (self):
-        if self.skip:
-            raise unittest.SkipTest(
-                'Complex return values not supported on 32-bit systems.')
         compiled_get_complex_constant_fn = self.jit(
             argtypes = [], restype = complex128)(get_complex_constant_fn)
         self.assertEqual(get_complex_constant_fn(),
                          compiled_get_complex_constant_fn())
 
     def test_prod_sum_fn (self):
-        if self.skip:
-            raise unittest.SkipTest(
-                'Complex return values not supported on 32-bit systems.')
         compiled_prod_sum_fn = self.jit(argtypes = [complex128, complex128, complex128],
                                         restype = complex128)(prod_sum_fn)
         rng = numpy.arange(-1., 1.1, 0.5)
@@ -165,8 +156,6 @@ class TestASTComplex(test_support.ASTTestCase):
             b = numpy.complex128(br + bi * 1j)
             self.assertEqual(prod_sum_fn(a, x, b),
                              compiled_prod_sum_fn(a, x, b))
-
-    skip = False
 
     def test_arithmetic_mixed(self):
         m, n = 0.4 + 1.2j, 10.0

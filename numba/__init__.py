@@ -21,9 +21,7 @@ from . import decorators
 from .decorators import *
 
 def test():
-    from subprocess import check_call
-
-    check_call([sys.executable, '-m', 'numba.tests.test_all'])
+    raise Exception("run nosetests from the numba directory")
 
 
 __all__ = _numba_types.__all__ + decorators.__all__
