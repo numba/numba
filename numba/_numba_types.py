@@ -261,7 +261,10 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
             # Patch current signature after type inference
             signature = self.get_signature(method_name)
             assert method_signature.args == signature.args
-            signature.return_type = method_signature.return_type
+            if signature.return_type is None:
+                signature.return_type = method_signature.return_type
+            else:
+                assert signature.return_type == method_signature.return_type, method_signature
         else:
             self.methoddict[method_name] = (method_signature, len(self.methods))
             self.methods.append((method_name, method_signature))

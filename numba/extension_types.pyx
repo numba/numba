@@ -68,7 +68,7 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
     object attributes.
     """
     cdef PyTypeObject *ext_type_p
-    cdef Py_ssize_t vtab_offset
+    cdef Py_ssize_t vtab_offset, attrs_offset
 
     orig_new = dict.get('__new__', None)
     def new(cls, *args, **kwds):
@@ -94,7 +94,7 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
         vtab_location = <void **> ((<char *> obj_p) + vtab_offset)
         vtab_location[0] = <void *> <Py_uintptr_t> cls.__numba_vtab_p
 
-        attrs_pointer = (<Py_uintptr_t> obj_p) + vtab_offset + sizeof(void *)
+        attrs_pointer = (<Py_uintptr_t> obj_p) + attrs_offset
         obj._numba_attrs = ctypes.cast(attrs_pointer,
                                        cls.__numba_struct_ctype_p)[0]
 

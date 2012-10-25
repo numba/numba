@@ -1,5 +1,6 @@
 import types
 import ctypes
+import logging
 
 import numba
 from numba import pipeline, error, symtab
@@ -7,6 +8,8 @@ from numba import _numba_types as numba_types
 from numba.minivect import minitypes
 
 from numba import *
+
+logger = logging.getLogger(__name__)
 
 def validate_method(py_func, sig, is_static):
     assert isinstance(py_func, types.FunctionType)
@@ -306,6 +309,8 @@ def create_extension(context, py_class, translator_kwargs):
 
     vtab, vtab_type = build_vtab(ext_type.vtab_type, method_pointers)
 
+    logger.info("struct: %s" % ext_type.attribute_struct)
+    logger.info("ctypes struct: %s" % ext_type.attribute_struct.to_ctypes())
     extension_type = extension_types.create_new_extension_type(
             py_class.__name__, py_class.__bases__, class_dict,
             ext_type, vtab, vtab_type,

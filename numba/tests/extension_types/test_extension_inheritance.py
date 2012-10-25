@@ -76,10 +76,15 @@ class Derived(Base):
         self.value = value
         self.value2 = 2.0
 
-    @object_()
+    @double()
     def getvalue(self):
         "Return value"
         return self.value * self.value2
+
+    @void(double)
+    def setvalue2(self, value2):
+        "Set value"
+        self.value2 = value2
 
     @object_()
     def __repr__(self):
