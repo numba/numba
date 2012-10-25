@@ -68,25 +68,6 @@ class NumbaVisitorMixin(object):
             return isinstance(n, numbers.Int)
         return isinstance(n, (int, long))
 
-    def visit_WithPythonNode(self, node):
-        if not self.nopython:
-            raise error.NumbaError(node, "Not in 'with nopython' context")
-
-        self.nopython -= 1
-        self.visitlist(node.body)
-        self.nopython += 1
-
-        return node
-
-    def visit_WithNoPythonNode(self, node):
-        if self.nopython:
-            raise error.NumbaError(node, "Not in 'with python' context")
-
-        self.nopython += 1
-        self.visitlist(node.body)
-        self.nopython -= 1
-
-        return node
 
 class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
     "Non-mutating visitor"
