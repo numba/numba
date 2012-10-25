@@ -7,6 +7,7 @@ from llvm import ee as _le
 from llvm import passes as _lp
 from llvm_cbuilder import shortnames as _llvm_cbuilder_types
 from _cuda.sreg import threadIdx, blockIdx, blockDim, gridDim
+from _cuda.smem import shared
 from _cuda.transform import function_cache
 from numba.minivect import minitypes
 from numba import void
@@ -248,10 +249,12 @@ class CudaNumbaFunction(CudaBaseFunction):
         # print self.module
 
         from numbapro._cuda import nvvm
+        print self.module
         nvvm.fix_data_layout(self.module)
         nvvm.set_cuda_kernel(lfunc)
         self._ptxasm = nvvm.llvm_to_ptx(str(self.module))
         # print self._ptxasm
+        print self._ptxasm
         from numbapro import _cudadispatch
         self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(self._ptxasm,
                                                                 func_name,
@@ -331,7 +334,10 @@ def to_device(ary, *args, **kws):
     devarray.to_device(*args, **kws)
     return devarray
 
+# Stream helper
+
 def stream():
     from numbapro._cuda.driver import Stream
     return Stream()
+
 

@@ -1,6 +1,7 @@
 import sys
 from numba.minivect import minitypes
-from sreg import SPECIAL_VALUES
+from .sreg import SPECIAL_VALUES
+from . import smem
 # modify numba behavior
 from numba import utils, functions, ast_translate
 from numba import visitors, nodes, error, ast_type_inference
@@ -11,6 +12,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 class CudaAttributeNode(nodes.Node):
+    _attributes = ['value']
+    
     def __init__(self, value):
         self.value = value
     
@@ -20,7 +23,17 @@ class CudaAttributeNode(nodes.Node):
     def __repr__(self):
         return '<%s value=%s>' % (type(self).__nmae__, self.value)
 
-class CudaSRegRewriteMixin(object):
+class CudaSMemArrayNode(nodes.Node):
+    pass
+
+class CudaSMemArrayCallNode(nodes.Node):
+    def __init__(self, shape, dtype):
+        self.shape = shape
+        self.type = minitypes.ArrayType(dtype=dtype,
+                                        ndim=len(self.shape),
+                                        is_c_contig=True)
+
+class CudaAttrRewriteMixin(object):
     
     def visit_Attribute(self, node):
         from numbapro import cuda as _THIS_MODULE
@@ -31,28 +44,46 @@ class CudaSRegRewriteMixin(object):
             obj = self._myglobals.get(node.value.id)
             if obj is _THIS_MODULE:
                 retval = CudaAttributeNode(_THIS_MODULE).resolve(node.attr)
-            else:
-                print node.attr
-                
         elif isinstance(value, CudaAttributeNode):
             retval = value.resolve(node.attr)
         
-        if retval.value in SPECIAL_VALUES:
+        if retval.value in SPECIAL_VALUES:  # sreg
             # replace with a MathCallNode
             sig = minitypes.FunctionType(minitypes.uint32, [])
             fname = SPECIAL_VALUES[retval.value]
             retval = nodes.MathCallNode(sig, [], None, name=fname)
-            return retval
-                
+        elif retval.value == smem._array:   # allocate shared memory
+            retval = CudaSMemArrayNode()
+
         if retval is node:
-            retval = super(CudaSRegRewriteMixin, self).visit_Attribute(node)
+            retval = super(CudaAttrRewriteMixin, self).visit_Attribute(node)
         
         return retval
 
-class CudaSharedRewriteMixin(object):
-    pass
+    def visit_Call(self, node):
+        func = self.visit(node.func)
+        if isinstance(func, CudaSMemArrayNode):
+            kws = dict((kw.arg, kw.value)for kw in node.keywords)
 
-class CudaTypeInferer(CudaSRegRewriteMixin, CudaSharedRewriteMixin,
+            shape = tuple()
+            for elem in kws['shape'].elts:
+                shape += (elem.n,)  # FIXME: must be a constant
+            
+            dtype_id = kws['dtype'].id # FIXME must be a ast.Name
+            dtype = self._myglobals[dtype_id] # must be a Numba type
+        
+            return CudaSMemArrayCallNode(shape=shape, dtype=dtype)
+        else:
+            return super(CudaAttrRewriteMixin, self).visit_Call(node)
+
+    def visit_Assign(self, node):
+        rhs = self.visit(node.value)
+        if isinstance(rhs, CudaSMemArrayCallNode):
+            raise
+        else:
+            return super(CudaAttrRewriteMixin, self).visit_Assign(node)
+                      
+class CudaTypeInferer(CudaAttrRewriteMixin, 
                       type_inference.TypeInferer):
     pass
 
