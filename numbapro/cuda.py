@@ -8,7 +8,7 @@ from llvm import passes as _lp
 from llvm_cbuilder import shortnames as _llvm_cbuilder_types
 from _cuda.sreg import threadIdx, blockIdx, blockDim, gridDim
 from _cuda.transform import function_cache
-
+from numba.minivect import minitypes
 from numba import void
 import numba.decorators
 
