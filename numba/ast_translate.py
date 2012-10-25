@@ -18,6 +18,7 @@ from . import visitors, nodes, llvm_types, utils
 from .minivect import minitypes
 from numba import ndarray_helpers, translate, error, extension_types
 from numba._numba_types import is_obj, promote_closest
+from numba.utils import dump
 
 import logging
 logger = logging.getLogger(__name__)
@@ -468,7 +469,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # Done code generation
         del self.builder  # release the builder to make GC happy
 
-        logger.debug("ast translated function: %s", self.lfunc)
+        logger.debug("ast translated function: %s" % self.lfunc)
         # Verify code generation
         self.mod.verify()  # only Module level verification checks everything.
         if self.optimize:
@@ -544,12 +545,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         args_tuple = self.lfunc.args[1]
         arg_types = [object_] * len(node.signature.args)
 
-        if arg_types:
-            # Unpack tuple into arguments
-            types, lstr = self.object_coercer.lstr(arg_types)
-            largs = self.object_coercer.parse_tuple(lstr, args_tuple, arg_types)
-        else:
-            largs = []
+        # Unpack tuple into arguments
+        types, lstr = self.object_coercer.lstr(arg_types)
+        largs = self.object_coercer.parse_tuple(lstr, args_tuple, arg_types)
 
         # Call wrapped function
         args = [nodes.LLVMValueRefNode(arg_type, larg)
@@ -861,7 +859,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                               self.return_value.type.pointee)
 
             if not retval.type == self.return_value.type.pointee:
-                logger.debug(utils.pformat_ast(node))
+#                logger.debug(utils.pformat_ast(node))
+                dump(node)
                 logger.debug('%s != %s' % (self.return_value.type,
                                            retval.type))
                 assert False, ('Expected %s type in return, got %s!' %

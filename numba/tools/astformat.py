@@ -15,8 +15,8 @@ def prettyprint(node, stream=sys.stdout):
         if i in ['(', '[']:
             depth += 1
         elif i in [')', ']']:
-            if last not in ['(', '[']:
-                stream.write('\n' + indent)
+#            if last not in ['(', '[']:
+#                stream.write('\n' + indent)
             depth -= 1
 
         stream.write(i)

@@ -1,19 +1,19 @@
 """
->>> pow3(2,3,5)
-3
->>> pow3(3,3,5)
-2
+>>> pow3(2,3,5) == 3
+True
+>>> pow3(3,3,5) == 2
+True
 
->>> pow3_const()
-3
+>>> pow3_const() == 3
+True
 
->>> pow2(2,3)
-8
->>> pow2(3,3)
-27
+>>> pow2(2,3) == 8
+True
+>>> pow2(3,3) == 27
+True
 
->>> pow2_const()
-8
+>>> pow2_const() == 8
+True
 
 >>> c1, c2 = 1.2 + 4.1j, 0.6 + 0.5j
 >>> pow2(c1, c2) == pow(c1, c2)
@@ -43,7 +43,8 @@ def pow2_const():
     return pow(2,3)
 
 if __name__ == '__main__':
-#    c1, c2 = 1.2 + 4.1j, 0.6 + 0.5j
-#    print pow2(c1, c2)
-    import doctest
-    doctest.testmod()
+    c1, c2 = 1.2 + 4.1j, 0.6 + 0.5j
+    print pow2(c1, c2)
+    print pow(c1, c2)
+#    import doctest
+#    doctest.testmod()

@@ -11,10 +11,10 @@ NumbaError: locals() is not supported in numba functions
 'hello'
 >>> list(enumerate_list())
 [(0, 1), (1, 2), (2, 3)]
->>> max_(20)
-20
->>> min_(-2)
--2
+>>> max_(20) == 20
+True
+>>> min_(-2) == -2
+True
 """
 
 from numba import *

@@ -1,5 +1,21 @@
+"""
+>>> test_staticmethods()
+>>> test_classmethods()
+>>> obj = Base(10.0)
+>>> obj.getvalue(10)
+Traceback (most recent call last):
+TypeError: function takes exactly 1 argument (2 given)
+>>> obj.static1(10)
+Traceback (most recent call last):
+TypeError: function takes exactly 0 arguments (1 given)
+>>> obj.class1(10)
+Traceback (most recent call last):
+TypeError: function takes exactly 1 argument (2 given)
+"""
+
 import sys
 from numba import *
+from nose.tools import raises
 
 @autojit
 class Base(object):
@@ -80,7 +96,8 @@ def test_classmethods():
     test(Base)
     test(Derived)
 
-
 if __name__ == '__main__':
-    test_staticmethods()
-    test_classmethods()
+#    test_staticmethods()
+#    test_classmethods()
+    import doctest
+    doctest.testmod()

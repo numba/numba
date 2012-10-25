@@ -15,6 +15,7 @@ from .symtab import Variable
 from . import visitors, nodes, error
 from numba import stdio_util
 from numba._numba_types import is_obj, promote_closest
+from numba.utils import dump
 
 import llvm.core
 import numpy
@@ -118,6 +119,10 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
 
         node.variable = Variable(result_type)
         return nodes.CoercionNode(node, dst_type)
+
+    def _resolve_pow(self, func, node, argtype):
+        self._expect_n_args(func, node, (2, 3))
+        return nodes.CoercionNode(node, argtype)
 
     def _resolve_round(self, func, node, argtype):
         self._expect_n_args(func, node, (1, 2))

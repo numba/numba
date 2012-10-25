@@ -95,6 +95,7 @@ from .symtab import Variable
 from . import visitors, nodes, error, functions
 from numba import stdio_util
 from numba._numba_types import is_obj, promote_closest
+from numba.utils import dump
 
 import llvm.core
 import numpy as np
@@ -196,7 +197,7 @@ class MathMixin(object):
         "Binary result type for math operations"
         x_type = x.variable.type
         y_type = y.variable.type
-        dst_type = self.promote_types(x_type, y_type)
+        dst_type = self.context.promote_types(x_type, y_type)
         type = dst_type
         if type.is_int:
             type = double
@@ -414,10 +415,12 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                             dst_type, name=node.name)
             return self.visit(node)
 
-        if node.node.type == node.type:
-            node = self.visit(node.node)
-        else:
-            self.generic_visit(node)
+        self.generic_visit(node)
+        if not node.node.type == node_type:
+            return self.visit(node)
+
+        if dst_type == node.node.type:
+            return node.node
 
         return node
 

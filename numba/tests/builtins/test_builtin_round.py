@@ -24,5 +24,6 @@ def round2(a, b):
     return round(a, b)
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    round2(10.497, 2)
+#    import doctest
+#    doctest.testmod()

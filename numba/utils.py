@@ -82,3 +82,6 @@ def ast2tree (node, include_attrs = True):
 
 def pformat_ast (node, include_attrs = True):
     return pprint.pformat(ast2tree(node, include_attrs))
+
+def dump(node):
+    print pformat_ast(node)

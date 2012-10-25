@@ -1,10 +1,10 @@
 """
->>> int()
-0
->>> convert_int(2.5)
-2
->>> convert_to_int('FF', 16)
-255
+>>> int() == 0
+True
+>>> convert_int(2.5) == 2
+True
+>>> convert_to_int('FF', 16) == 255
+True
 """
 
 import sys
