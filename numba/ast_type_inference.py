@@ -1159,10 +1159,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # This is possible when we do "return" without any value
             value = None
 
-
         if value is None or type.is_none:
             # When returning None, set the return type to void.
-            # That way, we don't have to due with the PyObject reference.
+            # That way, we don't have to deal with the PyObject reference.
             if self.return_variable.type is None:
                 self.return_variable.type = minitypes.VoidType()
             node.value = None
