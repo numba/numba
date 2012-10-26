@@ -28,8 +28,12 @@ class PyArrayAccessor(object):
     def __init__(self, builder, pyarray_ptr):
         self.builder = builder
         self.pyarray_ptr = pyarray_ptr
-
+    
     def _get_element(self, idx):
+        ptr = self._get_element_ptr(idx)
+        return self.builder.load(ptr)
+
+    def _get_element_ptr(self, idx):
         indices = map(const_int, [0, _head_len + idx])
         ptr = self.builder.gep(self.pyarray_ptr, indices)
         return ptr
@@ -63,5 +67,4 @@ class PyArrayAccessor(object):
     @make_property
     def flags(self):
         return self._get_element(6)
-
-
+    
