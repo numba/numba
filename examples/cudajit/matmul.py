@@ -4,8 +4,8 @@ import numpy as np
 import math
 from time import time
 
-@cuda.jit(argtypes=[f4[:,:], f4[:,:], f4[:,:]])
-def cu_square_matrix_mul(A, B, C, n):
+@cuda.jit(argtypes=[f4[:,:], f4[:,:], f4[:,:]], target='gpu')
+def cu_square_matrix_mul(A, B, C):
     tx = cuda.threadIdx.x
     ty = cuda.threadIdx.y
     bx = cuda.blockIdx.x
@@ -17,7 +17,7 @@ def cu_square_matrix_mul(A, B, C, n):
     y = ty + by * bh
 
     n = C.shape[0]
-
+    
     if x >= n:
         return
     if y >= n:
@@ -54,7 +54,8 @@ tcpu = e - s
 relerr = lambda got, gold: abs(got - gold)/gold
 for y in range(n):
     for x in range(n):
-        assert relerr(C[y, x], Cans[y, x]) < 1e-6, (x, y)
+        err = relerr(C[y, x], Cans[y, x])
+        assert err < 1e-5, (x, y, err)
 
 print 'cpu:  %f' % tcpu
 print 'cuda: %f' % tcuda
