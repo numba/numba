@@ -226,7 +226,7 @@ class CudaNumbaFuncDispatcher(object):
         self.cu_function = _cuda.Function(cu_module, func_name)
         self.typemap = typemap
         # default to prefer cache
-        self.cu_function.cache_config(prefer_cache=True)
+        # self.cu_function.cache_config(prefer_shared=True)
 
     def __call__(self, args, griddim, blkdim, stream=0):
         from ._cuda.devicearray import DeviceNDArray
