@@ -249,9 +249,15 @@ class CudaNumbaFunction(CudaBaseFunction):
         # print self.module
 
         from numbapro._cuda import nvvm
-        print self.module
         nvvm.fix_data_layout(self.module)
         nvvm.set_cuda_kernel(lfunc)
+
+        pmb = _lp.PassManagerBuilder.new()
+        pmb.opt_level = 3
+        pm = _lp.PassManager.new()
+        pmb.populate(pm)
+        pm.run(self.module)
+        print self.module
         self._ptxasm = nvvm.llvm_to_ptx(str(self.module))
         # print self._ptxasm
         print self._ptxasm

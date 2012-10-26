@@ -6,6 +6,12 @@ import sys, os, atexit
 from ctypes import *
 from error import NvvmError, NvvmSupportError
 
+ADDRSPACE_GENERIC = 0
+ADDRSPACE_GLOBAL = 1
+ADDRSPACE_SHARED = 3
+ADDRSPACE_CONSTANT = 4
+ADDRSPACE_LOCAL = 5
+
 # Opaque handle for comilation unit
 nvvm_cu = c_void_p
 

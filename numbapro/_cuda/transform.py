@@ -2,13 +2,20 @@ import sys
 from numba.minivect import minitypes
 from .sreg import SPECIAL_VALUES
 from . import smem
+import numpy as np
 # modify numba behavior
-from numba import utils, functions, ast_translate
+
+from numba import utils, functions, ast_translate, _numba_types, llvm_types
 from numba import visitors, nodes, error, ast_type_inference
-from numba import pipeline
+from numba import pipeline, naming, f4
 import ast
 from numba import ast_type_inference as type_inference
+from numba.symtab import Variable
+from .nvvm import ADDRSPACE_SHARED, ADDRSPACE_GENERIC
+from llvm.core import *
+
 import logging
+
 logger = logging.getLogger(__name__)
 
 class CudaAttributeNode(nodes.Node):
@@ -26,19 +33,37 @@ class CudaAttributeNode(nodes.Node):
 class CudaSMemArrayNode(nodes.Node):
     pass
 
+
 class CudaSMemArrayCallNode(nodes.Node):
-    def __init__(self, shape, dtype):
+    _attributes = ('shape', 'variable')
+    def __init__(self, context, shape, dtype):
         self.shape = shape
-        self.type = minitypes.ArrayType(dtype=dtype,
-                                        ndim=len(self.shape),
-                                        is_c_contig=True)
+        self.strides = [dtype.itemsize * s for s in [1] + list(self.shape[1:])]
+        self.elemcount = np.prod(self.shape)
+        self.dtype = dtype
+        type = minitypes.ArrayType(dtype=dtype,
+                                   ndim=len(self.shape),
+                                   is_c_contig=True)
+
+        self.variable = Variable(type, promotable_type=False)
+
+
+class CudaSMemAssignNode(nodes.Node):
+    
+    _fields = ['target', 'value']
+    
+    def __init__(self, target, value):
+        self.target = target
+        self.value = value
 
 class CudaAttrRewriteMixin(object):
     
     def visit_Attribute(self, node):
         from numbapro import cuda as _THIS_MODULE
+        
         value = self.visit(node.value)
         retval = node # default to return the original node
+        
         if isinstance(node.value, ast.Name):
             #assert isinstance(value.ctx, ast.Load)
             obj = self._myglobals.get(node.value.id)
@@ -72,20 +97,108 @@ class CudaAttrRewriteMixin(object):
             dtype_id = kws['dtype'].id # FIXME must be a ast.Name
             dtype = self._myglobals[dtype_id] # must be a Numba type
         
-            return CudaSMemArrayCallNode(shape=shape, dtype=dtype)
+            node = CudaSMemArrayCallNode(self.context, shape=shape, dtype=dtype)
+            return node
         else:
             return super(CudaAttrRewriteMixin, self).visit_Call(node)
 
     def visit_Assign(self, node):
-        rhs = self.visit(node.value)
-        if isinstance(rhs, CudaSMemArrayCallNode):
-            raise
-        else:
-            return super(CudaAttrRewriteMixin, self).visit_Assign(node)
-                      
+        node.value = self.visit(node.value)
+        if isinstance(node.value, CudaSMemArrayCallNode):
+            assert len(node.targets) == 1
+            target = node.targets[0] = self.visit(node.targets[0])
+            self.assign(target.variable, node.value.variable, node.value)
+            return CudaSMemAssignNode(node.targets[0], node.value)
+        
+        # FIXME: the following is copied from TypeInferer.visit_Assign
+        #        there seems to be some side-effect in visit(node.value)
+        if len(node.targets) != 1 or isinstance(node.targets[0], (ast.List,
+                                                                  ast.Tuple)):
+            return self._handle_unpacking(node)
+        
+        target = node.targets[0] = self.visit(node.targets[0])
+       
+        node.value = self.assign(target.variable, node.value.variable,
+                                 node.value)
+        return node
+
+
 class CudaTypeInferer(CudaAttrRewriteMixin, 
                       type_inference.TypeInferer):
     pass
+
+class CudaCodeGenerator(ast_translate.LLVMCodeGenerator):
+    def visit_CudaSMemArrayCallNode(self, node):
+        from numba.ndarray_helpers import PyArrayAccessor
+        ndarray_ptr_ty = node.variable.ltype
+        ndarray_ty = ndarray_ptr_ty.pointee
+        ndarray = self.builder.alloca(ndarray_ty)
+        
+        accessor = PyArrayAccessor(self.builder, ndarray)
+        ndim_ptr = accessor.ndim_pointer
+        data_ptr = accessor.data_pointer
+        dims_ptr = accessor.dimensions_pointer
+        strides_ptr = accessor.strides_pointer
+
+        # store ndim
+        store = lambda src, dst: self.builder.store(src, dst)
+        store(Constant.int(ndim_ptr.type.pointee, len(node.shape)), ndim_ptr)
+        
+        
+        # store data
+        mod = self.builder.basic_block.function.module
+        smem_elemtype = node.dtype.to_llvm(self.context)
+        smem_type = Type.array(smem_elemtype, node.elemcount)
+        smem = mod.add_global_variable(smem_type, 'smem', ADDRSPACE_SHARED)
+        smem.initializer = Constant.undef(smem_type)
+
+        smem_elem_ptr_ty = Type.pointer(smem_elemtype)
+        smem_elem_ptr_ty_addrspace = Type.pointer(smem_elemtype,
+                                                  ADDRSPACE_SHARED)
+        smem_elem_ptr = smem.bitcast(smem_elem_ptr_ty_addrspace)
+        s2g_intrinic = 'llvm.nvvm.ptr.shared.to.gen.%s' % smem_elemtype
+        shared_to_generic = mod.get_or_insert_function(
+                                    Type.function(smem_elem_ptr_ty,
+                                                  [smem_elem_ptr_ty_addrspace]),
+                                   s2g_intrinic)
+        
+        data = self.builder.call(shared_to_generic, [smem_elem_ptr])
+        store(self.builder.bitcast(data, data_ptr.type.pointee), data_ptr)
+        
+        # store dims
+        intp_t = dims_ptr.type.pointee.pointee
+        const_intp = lambda x: Constant.int(intp_t, x)
+        const_int = lambda x: Constant.int(Type.int(), x)
+        
+        dims = self.builder.alloca_array(intp_t,
+                                         Constant.int(Type.int(),
+                                                      len(node.shape)))
+        
+        for i, s in enumerate(node.shape):
+            ptr = self.builder.gep(dims, map(const_int, [i]))
+            store(const_intp(s), ptr)
+        
+        store(dims, dims_ptr)
+        
+        # store strides
+        strides = self.builder.alloca_array(intp_t,
+                                            Constant.int(Type.int(),
+                                                         len(node.strides)))
+
+
+        for i, s in enumerate(node.strides):
+            ptr = self.builder.gep(strides, map(const_int, [i]))
+            store(const_intp(s), ptr)
+        store(strides, strides_ptr)
+        
+        return ndarray
+        
+
+    def visit_CudaSMemAssignNode(self, node):
+        target = self.visit(node.target)
+        value = self.visit(node.value)
+        self.generate_assign(value, target)
+
 
 class NumbaproCudaPipeline(pipeline.Pipeline):
 #    def __init__(self, context, func, node, func_signature, **kwargs):
@@ -93,8 +206,8 @@ class NumbaproCudaPipeline(pipeline.Pipeline):
 #                                                   func_signature, **kwargs)
 #        self.insert_specializer('rewrite_cuda_sreg', after='type_infer')
 #    
-    def rewrite_cuda_sreg(self, node):
-        return CudaSRegRewrite(self.context, self.func, node).visit(node)
+#    def rewrite_cuda_sreg(self, node):
+#        return CudaSRegRewrite(self.context, self.func, node).visit(node)
 
     def type_infer(self, node):
         type_inferer = self.make_specializer(CudaTypeInferer, node,
@@ -105,8 +218,21 @@ class NumbaproCudaPipeline(pipeline.Pipeline):
                                                self.func_signature))
         self.symtab = type_inferer.symtab
         return node
+    
+    def codegen(self, ast):
+        func_name = self.kwargs.get('name')
+        func_name = func_name or naming.specialized_mangle(
+                                            self.func.__name__,
+                                            self.func_signature.args)
+        
+        self.translator = self.make_specializer(CudaCodeGenerator,
+                                                ast, func_name=func_name,
+                                                **self.kwargs)
+        self.translator.translate()
+        return ast
 
-context = utils.get_minivect_context()  # creates a new NumbaContext
+
+context = utils.get_minivect_context()
 context.llvm_context = ast_translate.LLVMContextManager()
 context.numba_pipeline = NumbaproCudaPipeline
 function_cache = context.function_cache = functions.FunctionCache(context)
