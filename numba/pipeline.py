@@ -41,6 +41,10 @@ class Pipeline(object):
         if symtab is None:
             self.symtab = {}
 
+        self.llvm_module = kwargs.get('llvm_module', None)
+        if self.llvm_module is None:
+            self.llvm_module = self.context.function_cache.module
+
         self.nopython = nopython
         self.locals = locals
         self.kwargs = kwargs
@@ -102,8 +106,8 @@ class Pipeline(object):
 
     def codegen(self, ast):
         func_name = self.kwargs.get('name')
-        func_name = func_name or naming.specialized_mangle(self.func.__name__,
-                                            self.func_signature.args)
+        func_name = func_name or naming.specialized_mangle(
+                            self.func.__name__, self.func_signature.args)
 
         self.translator = self.make_specializer(ast_translate.LLVMCodeGenerator,
                                                 ast, func_name=func_name,
@@ -172,3 +176,7 @@ def compile(context, func, restype=None, argtypes=None, ctypes=False,
         return func_signature, t, None
 
     return func_signature, t, get_wrapper(t, ctypes)
+
+def compile_from_sig(context, func, signature, **kwds):
+    return compile(context, func, signature.return_type, signature.args,
+                   **kwds)
