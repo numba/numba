@@ -37,7 +37,7 @@ class CudaSMemArrayCallNode(nodes.Node):
     _attributes = ('shape', 'variable')
     def __init__(self, context, shape, dtype):
         self.shape = shape
-        self.strides = [dtype.itemsize * s for s in [1] + list(self.shape[1:])]
+        self.strides = [dtype.itemsize * s for s in list(self.shape[:-1]) + [1]]
         self.elemcount = np.prod(self.shape)
         self.dtype = dtype
         type = minitypes.ArrayType(dtype=dtype,
@@ -197,12 +197,12 @@ class CudaCodeGenerator(ast_translate.LLVMCodeGenerator):
                                             Constant.int(Type.int(),
                                                          len(node.strides)))
 
-
+        
         for i, s in enumerate(node.strides):
             ptr = self.builder.gep(strides, map(const_int, [i]))
             store(const_intp(s), ptr)
         store(strides, strides_ptr)
-        
+    
         return ndarray
         
 
