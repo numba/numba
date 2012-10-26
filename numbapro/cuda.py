@@ -248,7 +248,10 @@ class CudaNumbaFunction(CudaBaseFunction):
         #    self._ptxasm = ptxasm
 
         # print self.module
-
+        
+        # FIXME: this function is called multiple times on the same lfunc.
+        #        As a result, it has a long list of nvvm.annotation of the
+        #        same data.
         from numbapro._cuda import nvvm
         nvvm.fix_data_layout(self.module)
         nvvm.set_cuda_kernel(lfunc)
@@ -258,10 +261,9 @@ class CudaNumbaFunction(CudaBaseFunction):
         pm = _lp.PassManager.new()
         pmb.populate(pm)
         pm.run(self.module)
-        print self.module
+#        print self.module
         self._ptxasm = nvvm.llvm_to_ptx(str(self.module))
-        # print self._ptxasm
-        print self._ptxasm
+#        print self._ptxasm
         from numbapro import _cudadispatch
         self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(self._ptxasm,
                                                                 func_name,
