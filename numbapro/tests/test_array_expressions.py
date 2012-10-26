@@ -84,6 +84,9 @@ def test_gufunc_array_expressions():
         raise ValueError
 
 if __name__ == '__main__':
-    test_gufunc_array_expressions()
-    test_array_expressions()
-    test_matmul()
+#    test_gufunc_array_expressions()
+#    test_array_expressions()
+#    test_matmul()
+    a = np.arange(120).reshape(10, 12).astype(np.float32)
+    b = c = a.copy()
+    array_expr3(a, b, c)

@@ -89,6 +89,23 @@ def fallback_vectorize(fallback_cls, pyfunc, signatures,
     ufunc = vectorizer.build_ufunc(minivect_dispatcher, cuda_dispatcher)
     return ufunc, vectorizer._get_lfunc_list()
 
+def build_kernel_call(lfunc, signature, miniargs):
+    """
+    Call the kernel `lfunc` in a bunch of loops with scalar arguments.
+    """
+    # Build the kernel function signature
+    funcname = b.funcname(signature, lfunc.name, is_external=False)
+
+    # Generate 'lhs[i, j] = kernel(A[i, j], B[i, j])'
+    lhs = miniargs[0].variable
+    kernel_args = [arg.variable for arg in miniargs[1:]]
+    funccall = b.funccall(funcname, kernel_args, inline=True)
+    assmt = b.assign(lhs, funccall)
+    if lhs.type.is_object:
+        assmt = b.stats(b.decref(lhs), assmt)
+
+    return assmt
+
 class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
     """
     Map and inline a ufunc written in Python to a minivect AST. The result
@@ -219,8 +236,9 @@ class MiniVectorize(object):
                     # Operations on complex numbers or objects are not
                     # supported by minivect, generate a kernel call
                     logging.info("Kernel not inlined, has objects/complex numbers")
-                    minivect_ast = self.build_kernel_call(
-                                    lfunc, mapper, restype, argtypes, kwargs)
+                    signature = restype(*argtypes)
+                    minivect_ast = build_kernel_call(
+                                lfunc, signature, mapper.miniargs)
                 else:
                     # Try to directly map and inline, or fall back to generating
                     # a call
@@ -239,25 +257,6 @@ class MiniVectorize(object):
         dispatcher = self.minivect(minivect_asts, parallel)
         dispatch.set_dispatchers(dyn_ufunc, dispatcher, None)
         return dyn_ufunc
-
-    def build_kernel_call(self, lfunc, mapper, restype, argtypes, kwargs):
-        """
-        Call the kernel in a bunch of loops with scalar arguments.
-        """
-        # Build the kernel function signature
-        signature = minitypes.FunctionType(return_type=restype,
-                                           argtypes=argtypes)
-        funcname = b.funcname(signature, lfunc.name, is_external=False)
-
-        # Generate 'lhs[i, j] = kernel(A[i, j], B[i, j])'
-        lhs = mapper.miniargs[0].variable
-        kernel_args = [arg.variable for arg in mapper.miniargs[1:]]
-        funccall = b.funccall(funcname, kernel_args, inline=True)
-        assmt = b.assign(lhs, funccall)
-        if lhs.type.is_object:
-            assmt = b.stats(b.decref(lhs), assmt)
-
-        return assmt
 
     def build_minifunction(self, ast, miniargs):
         """

@@ -1,7 +1,190 @@
+import ast
+
 from llvm.core import Type, inline_function
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm_cbuilder import builder
+
+from numba import *
+from numba import (visitors, nodes, error,
+                   ast_type_inference, ast_translate,
+                   ndarray_helpers)
+from numba.minivect import minitypes
+from numbapro.vectorize.gufunc import PyArray
+
+class SliceDimNode(nodes.Node):
+    """
+    Array is sliced, and this dimension contains an integer index or newaxis.
+    """
+
+    _fields = ['subslice']
+
+    def __init__(self, subslice, src_dim, dst_dim, **kwargs):
+        super(SliceDimNode, self).__init__(**kwargs)
+        self.subslice = subslice
+        self.src_dim = src_dim
+        self.dst_dim = dst_dim
+        self.type = subslice.type
+
+        # PyArrayAccessor wrapper of llvm fake PyArrayObject value
+        # set by NativeSliceNode
+        self.view_accessor = None
+        self.view_copy_accessor = None
+
+class SliceSliceNode(SliceDimNode):
+    """
+    Array is sliced, and this dimension contains a slice.
+    """
+
+    _fields = ['start', 'stop', 'step']
+
+    def __init__(self, subslice, src_dim, dst_dim, **kwargs):
+        super(SliceSliceNode, self).__init__(subslice, src_dim, dst_dim,
+                                             **kwargs)
+        self.start = subslice.lower
+        self.stop = subslice.upper
+        self.step = subslice.step
+
+def create_slice_dim_node(subslice, *args):
+    if subslice.type.is_slice:
+        return SliceSliceNode(subslice, *args)
+    else:
+        return SliceDimNode(subslice, *args)
+
+class NativeSliceNode(nodes.Node):
+    """
+    Aggregate of slices in all dimensions.
+    """
+
+    _fields = ['value', 'subslices']
+
+    def __init__(self, type, value, subslices, **kwargs):
+        super(NativeSliceNode, self).__init__(**kwargs)
+        self.type = type
+        self.value = value
+        self.subslices = subslices
+
+class SliceRewriterMixin(ast_type_inference.NumpyMixin,
+                         visitors.NoPythonContextMixin):
+    """
+    Visitor mixin that rewrites slices to its native equivalent without
+    using the Python API.
+
+    Only works in a nopython context!
+    """
+
+    def _rewrite_slice(self, node):
+        assert self.nopython
+
+        assert isinstance(node.slice, ast.ExtSlice)
+        slices = []
+        src_dim = node.value.type.ndim - 1
+        dst_dim = node.type.ndim - 1
+        assert node.value.type.ndim == len(node.slice.dims)
+
+        all_slices = True
+        for src_dim, subslice in enumerate(node.slice.dims):
+            slices.append(create_slice_dim_node(subslice, src_dim, dst_dim))
+
+            src_dim -= 1
+            is_newaxis = self._is_newaxis(subslice)
+            if subslice.type.is_slice or is_newaxis:
+                all_slices = all_slices and not is_newaxis
+                dst_dim -= 1
+            else:
+                assert subslice.type.is_int
+                all_slices = False
+
+        assert src_dim == 0
+        assert dst_dim == 0
+
+        #if all_slices and all(empty(subslice) for subslice in slices):
+        #    return node.value
+
+        return NativeSliceNode(node.type, node.value, slices)
+
+    def visit_Subscript(self, node):
+        node = super(SliceRewriter, self).visit_Subscript(node)
+        if (isinstance(node, ast.Subscript) and node.value.type.is_array and
+                node.type.is_array):
+            node = self._rewrite_slice(node)
+        return node
+
+class NativeSliceCodegenMixin(ast_translate.LLVMCodeGenerator):
+
+    def __init__(self, *args, **kwds):
+        super(NativeSliceCodegenMixin, self).__init__(*args, **kwds)
+
+        newaxis_func_def = NewAxis()
+        self.newaxis_func = newaxis_func_def(self.mod)
+
+        index_func_def = IndexAxis()
+        self.index_func = index_func_def(self.mod)
+
+    def visit_NativeSliceNode(self, node):
+        array_ltype = PyArray.llvm_type()
+        shape_ltype = npy_intp.to_llvm(self.context)
+
+        view = self.visit(node.value)
+        view_copy = self.llvm_alloca(array_ltype)
+        self.builder.store(self.builder.load(view), view_copy)
+
+        view_accessor = ndarray_helpers.PyArrayAccessor(self.builder, view)
+        view_copy_accessor = ndarray_helpers.PyArrayAccessor(self.builder,
+                                                             view_copy)
+
+        shape_type = minitypes.CArrayType(npy_intp, node.type.ndim)
+        shape = self.alloca(shape_type)
+        strides = self.alloca(shape_type)
+
+        view_copy_accessor.data = view_accessor.data
+        view_copy_accessor.dimensions = self.builder.bitcast(shape, shape_ltype)
+        view_copy_accessor.strides = strides
+
+        for subslice in node.subslices:
+            subslice.view_accessor = view_accessor
+            subslice.view_copy_accessor = view_copy_accessor
+
+        self.visitlist(node.subslices)
+        return view_copy
+
+    def visit_SliceSliceNode(self, node):
+        start, stop, step = node.start, node.stop, node.step
+
+        if start is not None:
+            start = self.visit(node.start)
+        if stop is not None:
+            stop = self.visit(node.stop)
+        if step is not None:
+            step = self.visit(node.step)
+
+        slice_func_def = SliceArray(node.src_dim, node.dst_dim,
+                                    start, stop, step)
+        slice_func = slice_func_def(self.mod)
+
+        data = node.view_copy_accessor.data
+        in_shape = node.view_accessor.shape
+        in_strides = node.view_accessor.strides
+        out_shape = node.view_copy_accessor.shape
+        out_strides = node.view_copy_accessor.strides
+
+        data_p = slice_func(data, in_shape, in_strides, out_shape, out_strides)
+        node.view_copy_accessor.data = data_p
+
+        return None
+
+    def visit_SliceDimNode(self, node):
+        acc_copy = node.view_copy_accessor
+        acc = node.view_accessor
+        if node.type.is_int:
+            value = self.visit(node.subslice)
+            acc_copy.data = self.index_func(acc_copy.data,
+                                            acc.shape, acc.strides,
+                                            node.src_dim, value)
+        else:
+            self.newaxis_func(acc_copy.shape, acc_copy.strides, node.dst_dim)
+
+        return None
 
 class SliceArray(CDefinition):
 
@@ -14,7 +197,6 @@ class SliceArray(CDefinition):
         ('out_shape', C.pointer(C.npy_intp)),
         ('out_strides', C.pointer(C.npy_intp))
     ]
-
 
     def _adjust_given_index(self, extent, negative_step, index, is_start):
         # Tranliterate the below code to llvm cbuilder
@@ -138,8 +320,8 @@ class IndexAxis(CDefinition):
         ('data', C.char_p),
         ('in_shape', C.pointer(C.npy_intp)),
         ('in_strides', C.pointer(C.npy_intp)),
-        ('index', C.npy_intp),
         ('src_dim', C.npy_intp),
+        ('index', C.npy_intp),
     ]
 
     def body(self, data, in_shape, in_strides, index, src_dim):
