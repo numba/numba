@@ -760,11 +760,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         if self.nopython:
             raise error.NumbaError(node, "Cannot slice in nopython context")
 
-        if all(isinstance(node, nodes.ConstNode) for node in slice_values):
-            get_const = lambda node: None if node is None else node.pyval
-            value = slice(get_const(node.lower), get_const(node.upper),
-                          get_const(node.step))
-            return self.visit(nodes.ObjectInjectNode(value))
+        if node.variable.is_constant:
+            return self.visit(nodes.ObjectInjectNode(node.variable.constant_value))
 
         bounds = []
         for node in slice_values:

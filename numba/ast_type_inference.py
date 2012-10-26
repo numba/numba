@@ -838,6 +838,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.generic_visit(node)
         type = numba_types.SliceType()
 
+        is_constant = False
+        const = None
+
         values = [node.lower, node.upper, node.step]
         constants = []
         for value in values:
@@ -848,9 +851,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             else:
                 break
         else:
-            return nodes.ObjectInjectNode(slice(*constants), type)
+            is_constant = True
+            const = slice(*constants)
 
-        node.variable = Variable(type)
+        node.variable = Variable(type, is_constant=is_constant,
+                                 constant_value=const)
         return node
 
     def visit_ExtSlice(self, node):
