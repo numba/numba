@@ -84,7 +84,6 @@ class TestGetattr(unittest.TestCase):
 
         # this returns a buffer object
         #   _get_ndarray_data(test_data)
-
         for i, _ in enumerate(expect):
             self.assertEqual(got[i], expect[i])
 
@@ -98,7 +97,7 @@ class TestGetattr(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    TestGetattr('test_getattr_shape').debug()
+#    TestGetattr('test_getattr_data_1').debug()
     unittest.main()
 
 # ______________________________________________________________________

@@ -553,14 +553,14 @@ class ArrayAttributeNode(Node):
         self.array = array
         self.attr_name = attribute_name
 
-        array_type = array.variable.type
+        self.array_type = array.variable.type
         if attribute_name == 'ndim':
             type = minitypes.int_
         elif attribute_name in ('shape', 'strides'):
             type = numba_types.SizedPointerType(numba_types.intp,
-                                                size=array_type.ndim)
+                                                size=self.array_type.ndim)
         elif attribute_name == 'data':
-            type = array_type.dtype.pointer()
+            type = self.array_type.dtype.pointer()
         else:
             raise error._UnknownAttribute(attribute_name)
 

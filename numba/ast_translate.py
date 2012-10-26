@@ -1331,7 +1331,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         if attr_name == 'shape':
             attr_name = 'dimensions'
 
-        return getattr(acc, attr_name)
+        result = getattr(acc, attr_name)
+        ltype = node.type.to_llvm(self.context)
+        if node.attr_name == 'data':
+            result = self.builder.bitcast(result, ltype)
+
+        return result
 
     def visit_ShapeAttributeNode(self, node):
         # hurgh, no dispatch on superclasses?
