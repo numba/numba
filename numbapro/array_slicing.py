@@ -290,9 +290,15 @@ class SliceArray(CDefinition):
         with self.parent.ifelse((stop - start) % step != 0) as ifelse:
             with ifelse.then():
                 new_extent += 1
-        with self.parent.ifelse(new_shape < 0) as ifelse:
+
+        with self.parent.ifelse(new_extent < 0) as ifelse:
             with ifelse.then():
-                new_shape.assign(0)
+                new_extent.assign(0)
+
+        # if extent == 1, set stride to 0 for broadcasting
+        with self.parent.ifelse(new_extent == 1) as ifelse:
+            with ifelse.then():
+                stride.assign(0)
 
         dst_dim = self.dst_dimension
 

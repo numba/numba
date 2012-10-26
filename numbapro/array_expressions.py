@@ -8,14 +8,14 @@ import __builtin__ as builtins
 import numba
 from numba import *
 from numba import error, pipeline, nodes
-from numba.minivect import minierror, minitypes
+from numba.minivect import minierror, minitypes, specializers, miniast
 from numba import translate, utils, functions, nodes
 from numba.symtab import Variable
 from numba import visitors, nodes, error, ast_type_inference
 from numba import decorators
 
 from numbapro import vectorize, dispatch, array_slicing
-from numbapro.vectorize import basic
+from numbapro.vectorize import basic, minivectorize
 
 import numpy
 
@@ -28,7 +28,8 @@ class NumbaproPipeline(pipeline.Pipeline):
 
     def rewrite_array_expressions(self, ast):
         transformer = ArrayExpressionRewriteUfunc(self.context, self.func, ast)
-        transformer = ArrayExpressionRewriteGPU(self.context, self.func, ast)
+        transformer = ArrayExpressionRewriteGPU(self.context, self.func, ast,
+                                                self.llvm_module)
         return transformer.visit(ast)
 
 decorators.context.numba_pipeline = NumbaproPipeline
@@ -209,6 +210,10 @@ class ArrayExpressionRewriteUfunc(ArrayExpressionRewrite):
         return nodes.ObjectTempNode(call_ufunc)
 
 
+class NumbaproStaticArgsContext(utils.NumbaContext):
+    "Use a static argument list: shape, data1, strides1, data2, strides2, ..."
+    astbuilder_cls = miniast.ASTBuilder
+
 class ArrayExpressionRewriteGPU(ArrayExpressionRewrite,
                                 array_slicing.SliceRewriterMixin):
     """
@@ -238,11 +243,14 @@ class ArrayExpressionRewriteGPU(ArrayExpressionRewrite,
                     a[i, j] = numba_kernel(b[i, j], c[i, j])
     """
 
-    def __init__(self, context, func, ast):
+    def __init__(self, context, func, ast, llvm_module):
         super(ArrayExpressionRewriteGPU, self).__init__(context, func, ast)
+        self.array_expr_context = NumbaproStaticArgsContext()
+        self.llvm_module = llvm_module
+        self.array_expr_context.llvm_module = llvm_module
 
-    def broadcast_shape(self, lhs, operands):
-        pass
+    def array_attr(self, node, attr):
+        return nodes.ArrayAttributeNode(attr, node)
 
     def register_array_expression(self, node, lhs=None):
         # Create ufunc scalar kernel
@@ -259,10 +267,36 @@ class ArrayExpressionRewriteGPU(ArrayExpressionRewrite,
             raise error.NumbaError(node, "Cannot allocate new memory on GPU")
 
         # Build minivect wrapper kernel
-        b = self.context.astbuilder
-        variables = [b.variable(name_node.type, name_node.id)
-                         for name_node in operands]
+        context = self.array_expr_context
+        b = context.astbuilder
+
+        variables = [b.variable(name_node.type, "op%d" % i)
+                         for i, name_node in enumerate([lhs] + operands)]
         miniargs = map(b.funcarg, variables)
-        minikernel = dispatch.build_kernel_call(lfunc, signature, miniargs)
+        body = minivectorize.build_kernel_call(lfunc, signature, miniargs, b)
+
+        minikernel = minivectorize.build_minifunction(body, miniargs, b)
+        lminikernel, ctypes_kernel = context.run_simple(
+                            minikernel, specializers.StridedSpecializer)
 
         # Build call to minivect kernel
+        operands = [nodes.CloneableNode(operand) for operand in operands]
+
+        lhs = nodes.CloneableNode(lhs)
+        # The broadcast shape. There is no error checking or actual
+        # broadcasting!
+        # Broadcasting dimensions are assumed to have stride 0, this may
+        # not be true at all!
+        shape = self.array_attr(lhs, 'shape')
+
+        lhs = nodes.CloneNode(lhs)
+        operands.insert(0, lhs)
+
+        args = [shape]
+        for node in operands:
+            args.append(self.array_attr(node, 'data'))
+            if not isinstance(node, nodes.CloneNode):
+                node = nodes.CloneNode(node)
+            args.append(self.array_attr(node, 'strides'))
+
+        return nodes.NativeCallNode(minikernel.type, args, lminikernel)

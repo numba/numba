@@ -89,7 +89,7 @@ def fallback_vectorize(fallback_cls, pyfunc, signatures,
     ufunc = vectorizer.build_ufunc(minivect_dispatcher, cuda_dispatcher)
     return ufunc, vectorizer._get_lfunc_list()
 
-def build_kernel_call(lfunc, signature, miniargs):
+def build_kernel_call(lfunc, signature, miniargs, b=b):
     """
     Call the kernel `lfunc` in a bunch of loops with scalar arguments.
     """
@@ -105,6 +105,46 @@ def build_kernel_call(lfunc, signature, miniargs):
         assmt = b.stats(b.decref(lhs), assmt)
 
     return assmt
+
+def build_minifunction(ast, miniargs, b=b):
+    """
+    Build a minivect function from the given ast and arguments.
+    """
+    type = minitypes.npy_intp.pointer()
+    shape_variable = b.variable(type, 'shape')
+
+    minifunc = b.function('expr%d' % MiniVectorize.num_exprs,
+                          ast, miniargs, shapevar=shape_variable)
+    MiniVectorize.num_exprs += 1
+
+    # minifunc.print_tree(minicontext)
+
+    return minifunc
+
+def specialize(minifunc):
+    "Specialize a minivect function"
+    if minifunc.ndim < 2:
+        # Remove tiled specializer
+        specializers = [
+            NumbaContigSpecializer,
+            minispecializers.StridedSpecializer,
+        ]
+    else:
+        specializers = [
+            minispecializers.StridedCInnerContigSpecializer,
+            minispecializers.CTiledStridedSpecializer,
+            minispecializers.StridedSpecializer,
+        ]
+
+    result = list(minicontext.run(minifunc, specializers))
+
+    contig = inner_contig = tiled = strided = None
+    if minifunc.ndim < 2:
+        contig, strided = result
+    else:
+        inner_contig, tiled, strided = result
+
+    return [contig, inner_contig, tiled, strided]
 
 class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
     """
@@ -258,21 +298,6 @@ class MiniVectorize(object):
         dispatch.set_dispatchers(dyn_ufunc, dispatcher, None)
         return dyn_ufunc
 
-    def build_minifunction(self, ast, miniargs):
-        """
-        Build a minivect function from the given ast and arguments.
-        """
-        type = minitypes.npy_intp.pointer()
-        shape_variable = b.variable(type, 'shape')
-
-        minifunc = b.function('expr%d' % MiniVectorize.num_exprs,
-                              ast, miniargs, shapevar=shape_variable)
-        MiniVectorize.num_exprs += 1
-
-        # minifunc.print_tree(minicontext)
-
-        return minifunc
-
     def _debug(self, minifunc):
         if debug_c:
             print minicontext.debug_c(
@@ -307,30 +332,6 @@ class MiniVectorize(object):
 
         return dtype_args, function_pointers, result_dtype
 
-    def _specialize(self, minifunc):
-        if minifunc.ndim < 2:
-            # Remove tiled specializer
-            specializers = [
-                NumbaContigSpecializer,
-                minispecializers.StridedSpecializer,
-            ]
-        else:
-            specializers = [
-                minispecializers.StridedCInnerContigSpecializer,
-                minispecializers.CTiledStridedSpecializer,
-                minispecializers.StridedSpecializer,
-            ]
-
-        result = list(minicontext.run(minifunc, specializers))
-
-        contig = inner_contig = tiled = strided = None
-        if minifunc.ndim < 2:
-            contig, strided = result
-        else:
-            inner_contig, tiled, strided = result
-
-        return [contig, inner_contig, tiled, strided]
-
     def minivect(self, asts, parallel):
         """
         Given a bunch of specialized miniasts, return a ufunc object that
@@ -340,9 +341,9 @@ class MiniVectorize(object):
 
         ufuncs = {}
         for mapper, dimensionality, ast in asts:
-            minifunc = self.build_minifunction(ast, mapper.miniargs)
+            minifunc = build_minifunction(ast, mapper.miniargs)
             self._debug(minifunc)
-            codes = self._specialize(minifunc)
+            codes = specialize(minifunc)
             dtype_args, function_pointers, result_dtype = \
                         self._get_function_pointers(mapper, codes)
             self._debug_llvm(codes)
