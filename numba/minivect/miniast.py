@@ -183,8 +183,13 @@ class Context(object):
             codegen = self.codegen_cls(self, codewriter)
             codegen.visit(specialized_ast)
 
-            yield (pipeline[0], specialized_ast, codewriter,
+            specializer = pipeline[0]
+            yield (specializer, specialized_ast, codewriter,
                    self.codeformatter_cls().format(codewriter))
+
+    def run_simple(self, ast, specializer):
+        (_, _, _, code_result), = self.run(ast, [specializer])
+        return code_result
 
     def debug_c(self, ast, specializer, astbuilder_cls=None):
         "Generate C code (for debugging)"
