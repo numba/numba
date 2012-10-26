@@ -14,6 +14,16 @@ import llvm.core as lc
 
 const_int = lambda X: lc.Constant.int(_int32, X)
 
+def make_property(access_func):
+    def load(self):
+        return self.builder.load(access_func(self))
+
+    def store(self, value):
+        ptr = access_func(self)
+        self.builder.store(value, ptr)
+
+    return property(load, store)
+
 class PyArrayAccessor(object):
     def __init__(self, builder, pyarray_ptr):
         self.builder = builder
@@ -24,31 +34,33 @@ class PyArrayAccessor(object):
         ptr = self.builder.gep(self.pyarray_ptr, indices)
         return self.builder.load(ptr)
 
-    @property
+    @make_property
     def data(self):
         return self._get_element(0)
 
-    @property
+    @make_property
     def ndim(self):
         return self._get_element(1)
 
-    @property
+    @make_property
     def dimensions(self):
         return self._get_element(2)
 
-    @property
+    shape = dimensions
+
+    @make_property
     def strides(self):
         return self._get_element(3)
 
-    @property
+    @make_property
     def base(self):
         return self._get_element(4)
 
-    @property
+    @make_property
     def descr(self):
         return self._get_element(5)
 
-    @property
+    @make_property
     def flags(self):
         return self._get_element(6)
 
