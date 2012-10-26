@@ -37,6 +37,11 @@ class Pipeline(object):
         self.func = func
         self.ast = ast
         self.func_signature = func_signature
+
+        func_name = kwargs.get('name')
+        self.func_name = func_name or naming.specialized_mangle(
+                           self.func.__name__, self.func_signature.args)
+
         self.symtab = symtab
         if symtab is None:
             self.symtab = {}
@@ -105,12 +110,8 @@ class Pipeline(object):
         return specializer.visit(ast)
 
     def codegen(self, ast):
-        func_name = self.kwargs.get('name')
-        func_name = func_name or naming.specialized_mangle(
-                            self.func.__name__, self.func_signature.args)
-
         self.translator = self.make_specializer(ast_translate.LLVMCodeGenerator,
-                                                ast, func_name=func_name,
+                                                ast, func_name=self.func_name,
                                                 **self.kwargs)
         self.translator.translate()
         return ast
