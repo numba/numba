@@ -1,7 +1,6 @@
 import sys
 from numba.minivect import minitypes
-from .sreg import SPECIAL_VALUES
-from . import smem
+from . import sreg, smem, barrier
 import numpy as np
 # modify numba behavior
 
@@ -56,6 +55,12 @@ class CudaSMemAssignNode(nodes.Node):
         self.target = target
         self.value = value
 
+class CudaDeferredCallNode(nodes.Node):
+    _fields = ['node']
+
+    def __init__(self, node):
+        self.node = node
+
 class CudaAttrRewriteMixin(object):
     
     def visit_Attribute(self, node):
@@ -72,13 +77,18 @@ class CudaAttrRewriteMixin(object):
         elif isinstance(value, CudaAttributeNode):
             retval = value.resolve(node.attr)
         
-        if retval.value in SPECIAL_VALUES:  # sreg
+        if retval.value in sreg.SPECIAL_VALUES:  # sreg
             # replace with a MathCallNode
             sig = minitypes.FunctionType(minitypes.uint32, [])
-            fname = SPECIAL_VALUES[retval.value]
+            fname = sreg.SPECIAL_VALUES[retval.value]
             retval = nodes.MathCallNode(sig, [], None, name=fname)
         elif retval.value == smem._array:   # allocate shared memory
             retval = CudaSMemArrayNode()
+        elif retval.value == barrier.syncthreads: # syncthreads
+            sig = minitypes.FunctionType(minitypes.void, [])
+            fname = 'llvm.nvvm.barrier0'
+            callnode = nodes.LLVMExternalFunctionCallNode(sig, fname, [])
+            retval = CudaDeferredCallNode(callnode)
 
         if retval is node:
             retval = super(CudaAttrRewriteMixin, self).visit_Attribute(node)
@@ -99,6 +109,8 @@ class CudaAttrRewriteMixin(object):
         
             node = CudaSMemArrayCallNode(self.context, shape=shape, dtype=dtype)
             return node
+        elif isinstance(func, CudaDeferredCallNode):
+            return func.node
         else:
             return super(CudaAttrRewriteMixin, self).visit_Call(node)
 
