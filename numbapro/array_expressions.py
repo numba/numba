@@ -92,6 +92,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
     def visit_Assign(self, node):
         self.is_slice_assign = False
         self.visitlist(node.targets)
+        is_slice_assign = self.is_slice_assign
 
         self.nesting_level = self.is_slice_assign
         node.value = self.visit(node.value)
@@ -99,7 +100,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
 
         elementwise = self.elementwise
         if (len(node.targets) == 1 and node.targets[0].type.is_array and
-                self.is_slice_assign and elementwise):
+                is_slice_assign and elementwise):
             return self.register_array_expression(node.value,
                                                   lhs=node.targets[0])
 

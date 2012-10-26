@@ -1040,6 +1040,9 @@ class IntegerValue(OperatorMixin):
         else:
             return self._temp(self.parent.builder.icmp(lc.ICMP_SGE, self.value, rhs.value))
 
+    def __neg__(self):
+        return self._temp(self.parent.builder.neg(self.value))
+
     def cast(self, ty, unsigned=False):
         if ty == self.type:
             return self._temp(self.value)

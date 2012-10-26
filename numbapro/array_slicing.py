@@ -123,7 +123,7 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
 
     def visit_NativeSliceNode(self, node):
         array_ltype = PyArray.llvm_type()
-        shape_ltype = npy_intp.to_llvm(self.context)
+        shape_ltype = npy_intp.pointer().to_llvm(self.context)
 
         view = self.visit(node.value)
         view_copy = self.llvm_alloca(array_ltype)
@@ -139,7 +139,7 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
 
         view_copy_accessor.data = view_accessor.data
         view_copy_accessor.dimensions = self.builder.bitcast(shape, shape_ltype)
-        view_copy_accessor.strides = strides
+        view_copy_accessor.strides = self.builder.bitcast(strides, shape_ltype)
 
         for subslice in node.subslices:
             subslice.view_accessor = view_accessor
@@ -158,7 +158,8 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         if step is not None:
             step = self.visit(node.step)
 
-        slice_func_def = SliceArray(node.src_dim, node.dst_dim,
+        slice_func_def = SliceArray(self.context,
+                                    node.src_dim, node.dst_dim,
                                     start, stop, step)
         slice_func = slice_func_def(self.mod)
 
@@ -168,7 +169,8 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         out_shape = node.view_copy_accessor.shape
         out_strides = node.view_copy_accessor.strides
 
-        data_p = slice_func(data, in_shape, in_strides, out_shape, out_strides)
+        args = [data, in_shape, in_strides, out_shape, out_strides]
+        data_p = self.builder.call(slice_func, args)
         node.view_copy_accessor.data = data_p
 
         return None
@@ -232,19 +234,21 @@ class SliceArray(CDefinition):
         #     else:
         #         stop = extent
 
-        with self.parent.ifelse(index < 0) as ifelse:
+        one, zero = self.get_constants()
+
+        with self.ifelse(index < zero) as ifelse:
             with ifelse.then():
                 index += extent
-                if index < 0:
-                    index.assign(0)
+                if index < zero:
+                    index.assign(zero)
 
             with ifelse.otherwise():
-                with self.parent.ifelse(index >= extent) as ifelse:
+                with self.ifelse(index >= extent) as ifelse:
                     if is_start:
                         # index is 'start' index
-                        with self.parent.ifelse(negative_step) as ifelse:
+                        with self.ifelse(negative_step) as ifelse:
                             with ifelse.then():
-                                index.assign(extent - 1)
+                                index.assign(extent - one)
                             with ifelse.otherwise():
                                 index.assign(extent)
                     else:
@@ -253,7 +257,7 @@ class SliceArray(CDefinition):
                         index.assign(extent)
 
     def _set_default_index(self, default1, default2, negative_step, start):
-        with self.parent.ifelse(negative_step) as ifelse:
+        with self.ifelse(negative_step) as ifelse:
             with ifelse.then():
                 start.assign(default1)
             with ifelse.otherwise():
@@ -261,57 +265,72 @@ class SliceArray(CDefinition):
 
     def adjust_index(self, extent, negative_step, index, default1, default2,
                      is_start=False):
+        var_index = self.var(C.npy_intp)
         if index is not None:
-            self._adjust_given_index(extent, negative_step, index, is_start)
+            index = index.cast(npy_intp.to_llvm(self.context))
+            var_index.assign(index)
+            self._adjust_given_index(extent, negative_step, var_index, is_start)
         else:
-            index = self.parent.var(C.npy_intp)
-            self._set_default_index(default1, default2, negative_step, index)
+            self._set_default_index(default1, default2, negative_step, var_index)
 
-        return index
+        return var_index
+
+    def get_constants(self):
+        zero = self.constant(C.npy_intp, 0)
+        one = self.constant(C.npy_intp, 1)
+        return one, zero
 
     def body(self, data, in_shape, in_strides, out_shape, out_strides):
         start = self.start
         stop = self.stop
         step = self.step
 
-        dim = self.src_dimension
-        stride = strides[dim]
-        extent = shape[dim]
+        src_dim = self.src_dimension
+        stride = in_strides[src_dim]
+        extent = in_shape[src_dim]
 
-        negative_step = step < 0
+        one, zero = self.get_constants()
 
-        start = self.adjust_index(extent, negative_step, start, extent - 1, 0,
-                                  is_start=True)
-        stop = self.adjust_index(extent, negative_step, start, -1, extent)
+        if start is not None:
+            start = builder.CTemp(self, start)
+        if stop is not None:
+            stop = builder.CTemp(self, stop)
         if step is None:
-            step = 1
+            step = one
 
-        new_extent = (stop - start) / step
-        with self.parent.ifelse((stop - start) % step != 0) as ifelse:
-            with ifelse.then():
-                new_extent += 1
+        negative_step = step < zero
+        start = self.adjust_index(extent, negative_step, start,
+                                  extent - one, zero, is_start=True)
+        stop = self.adjust_index(extent, negative_step, start, -one, extent)
 
-        with self.parent.ifelse(new_extent < 0) as ifelse:
+        new_extent = self.var(C.npy_intp)
+        new_extent.assign((stop - start) / step)
+        with self.ifelse((stop - start) % step != zero) as ifelse:
             with ifelse.then():
-                new_extent.assign(0)
+                new_extent += one
+
+        with self.ifelse(new_extent < zero) as ifelse:
+            with ifelse.then():
+                new_extent.assign(zero)
 
         # if extent == 1, set stride to 0 for broadcasting
-        with self.parent.ifelse(new_extent == 1) as ifelse:
+        with self.ifelse(new_extent == one) as ifelse:
             with ifelse.then():
-                stride.assign(0)
+                stride.assign(zero)
 
         dst_dim = self.dst_dimension
 
-        result = self.parent.var(data.type, name='result')
-        result.assign(data + start * stride)
-        shape[dim] = new_extent
-        strides[dim] = stride * step
+        result = self.var(data.type, name='result')
+        result.assign(data[start * stride:])
+        out_shape[dst_dim] = new_extent
+        out_strides[dst_dim] = stride * step
 
         self.ret(result)
 
     @classmethod # specializing classes is bad, ameliorate
-    def specialize(cls, src_dimension, dst_dimension, start, stop, step):
-        cls.FuncDef = func_def
+    def specialize(cls, context, src_dimension, dst_dimension,
+                   start, stop, step):
+        cls.context = context
         cls.src_dimension = src_dimension
         cls.dst_dimension = dst_dimension
         cls.start = start
