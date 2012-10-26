@@ -32,7 +32,7 @@ class PyArrayAccessor(object):
     def _get_element(self, idx):
         indices = map(const_int, [0, _head_len + idx])
         ptr = self.builder.gep(self.pyarray_ptr, indices)
-        return self.builder.load(ptr)
+        return ptr
 
     @make_property
     def data(self):

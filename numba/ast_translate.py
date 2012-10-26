@@ -1098,7 +1098,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             raise error.InternalError(node, "Unsupported type:", node.value.type)
 
         value = self.visit(node.value)
-        lptr = self.builder.gep(value, [self.visit(node.slice)])
+        index = self.visit(node.slice)
+        lptr = self.builder.gep(value, [index])
         if node.slice.type.is_int:
             lptr = self._handle_ctx(node, lptr)
 
