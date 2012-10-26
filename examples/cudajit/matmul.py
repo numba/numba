@@ -4,7 +4,7 @@ import numpy as np
 import math
 from time import time
 
-@cuda.jit(argtypes=[f4[:,:], f4[:,:], f4[:,:]], target='gpu')
+@cuda.jit(argtypes=[f4[:,:], f4[:,:], f4[:,:]])
 def cu_square_matrix_mul(A, B, C):
     tx = cuda.threadIdx.x
     ty = cuda.threadIdx.y
