@@ -74,7 +74,7 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
     """
 
     def _rewrite_slice(self, node):
-        assert self.nopython
+        # assert self.nopython
 
         assert isinstance(node.slice, ast.ExtSlice)
         slices = []
@@ -83,7 +83,7 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
         assert node.value.type.ndim == len(node.slice.dims)
 
         all_slices = True
-        for src_dim, subslice in enumerate(node.slice.dims):
+        for subslice in node.slice.dims:
             slices.append(create_slice_dim_node(subslice, src_dim, dst_dim))
 
             src_dim -= 1
@@ -95,8 +95,8 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
                 assert subslice.type.is_int
                 all_slices = False
 
-        assert src_dim == 0
-        assert dst_dim == 0
+        assert src_dim + 1 == 0
+        assert dst_dim + 1 == 0
 
         #if all_slices and all(empty(subslice) for subslice in slices):
         #    return node.value
@@ -104,13 +104,13 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
         return NativeSliceNode(node.type, node.value, slices)
 
     def visit_Subscript(self, node):
-        node = super(SliceRewriter, self).visit_Subscript(node)
+        node = super(SliceRewriterMixin, self).visit_Subscript(node)
         if (isinstance(node, ast.Subscript) and node.value.type.is_array and
                 node.type.is_array):
             node = self._rewrite_slice(node)
         return node
 
-class NativeSliceCodegenMixin(ast_translate.LLVMCodeGenerator):
+class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
 
     def __init__(self, *args, **kwds):
         super(NativeSliceCodegenMixin, self).__init__(*args, **kwds)

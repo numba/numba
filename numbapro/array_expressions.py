@@ -11,7 +11,7 @@ from numba import error, pipeline, nodes
 from numba.minivect import minierror, minitypes, specializers, miniast
 from numba import translate, utils, functions, nodes
 from numba.symtab import Variable
-from numba import visitors, nodes, error, ast_type_inference
+from numba import visitors, nodes, error, ast_type_inference, ast_translate
 from numba import decorators
 
 from numbapro import vectorize, dispatch, array_slicing
@@ -31,6 +31,13 @@ class NumbaproPipeline(pipeline.Pipeline):
         transformer = ArrayExpressionRewriteGPU(self.context, self.func, ast,
                                                 self.llvm_module)
         return transformer.visit(ast)
+
+    def codegen(self, ast):
+        self.translator = self.make_specializer(ArrayExpressionGPUCodegen,
+                                                ast, func_name=self.func_name,
+                                                **self.kwargs)
+        self.translator.translate()
+        return ast
 
 decorators.context.numba_pipeline = NumbaproPipeline
 
@@ -214,8 +221,8 @@ class NumbaproStaticArgsContext(utils.NumbaContext):
     "Use a static argument list: shape, data1, strides1, data2, strides2, ..."
     astbuilder_cls = miniast.ASTBuilder
 
-class ArrayExpressionRewriteGPU(ArrayExpressionRewrite,
-                                array_slicing.SliceRewriterMixin):
+class ArrayExpressionRewriteGPU(array_slicing.SliceRewriterMixin,
+                                ArrayExpressionRewrite):
     """
     Compile array expressions to a minivect kernel that calls a Numba
     scalar kernel with scalar inputs:
@@ -294,9 +301,14 @@ class ArrayExpressionRewriteGPU(ArrayExpressionRewrite,
 
         args = [shape]
         for node in operands:
-            args.append(self.array_attr(node, 'data'))
+            data_p = self.array_attr(node, 'data')
+            args.append(nodes.CoercionNode(data_p, operand.type.dtype.pointer()))
             if not isinstance(node, nodes.CloneNode):
                 node = nodes.CloneNode(node)
             args.append(self.array_attr(node, 'strides'))
 
         return nodes.NativeCallNode(minikernel.type, args, lminikernel)
+
+class ArrayExpressionGPUCodegen(ast_translate.LLVMCodeGenerator,
+                                array_slicing.NativeSliceCodegenMixin):
+    pass
