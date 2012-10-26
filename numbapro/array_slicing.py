@@ -14,7 +14,8 @@ class SliceArray(CDefinition):
     ]
 
     def adjust_index(self, index, ):
-
+        pass
+    
     def body(self, data, shape, strides):
         start = self.start
         stop = self.stop

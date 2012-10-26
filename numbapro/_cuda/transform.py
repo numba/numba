@@ -147,14 +147,10 @@ class CudaCodeGenerator(ast_translate.LLVMCodeGenerator):
         ndarray = self.builder.alloca(ndarray_ty)
         
         accessor = PyArrayAccessor(self.builder, ndarray)
-        ndim_ptr = accessor.ndim_pointer
-        data_ptr = accessor.data_pointer
-        dims_ptr = accessor.dimensions_pointer
-        strides_ptr = accessor.strides_pointer
 
         # store ndim
         store = lambda src, dst: self.builder.store(src, dst)
-        store(Constant.int(ndim_ptr.type.pointee, len(node.shape)), ndim_ptr)
+        accessor.ndim = Constant.int(llvm_types._int32, len(node.shape))
         
         
         # store data
@@ -175,10 +171,10 @@ class CudaCodeGenerator(ast_translate.LLVMCodeGenerator):
                                    s2g_intrinic)
         
         data = self.builder.call(shared_to_generic, [smem_elem_ptr])
-        store(self.builder.bitcast(data, data_ptr.type.pointee), data_ptr)
+        accessor.data = self.builder.bitcast(data, llvm_types._void_star)
         
         # store dims
-        intp_t = dims_ptr.type.pointee.pointee
+        intp_t = llvm_types._intp
         const_intp = lambda x: Constant.int(intp_t, x)
         const_int = lambda x: Constant.int(Type.int(), x)
         
@@ -190,8 +186,8 @@ class CudaCodeGenerator(ast_translate.LLVMCodeGenerator):
             ptr = self.builder.gep(dims, map(const_int, [i]))
             store(const_intp(s), ptr)
         
-        store(dims, dims_ptr)
-        
+        accessor.dims = dims
+                
         # store strides
         strides = self.builder.alloca_array(intp_t,
                                             Constant.int(Type.int(),
@@ -201,7 +197,8 @@ class CudaCodeGenerator(ast_translate.LLVMCodeGenerator):
         for i, s in enumerate(node.strides):
             ptr = self.builder.gep(strides, map(const_int, [i]))
             store(const_intp(s), ptr)
-        store(strides, strides_ptr)
+
+        accessor.strides = strides
     
         return ndarray
         
