@@ -305,6 +305,18 @@ class MathNode(Node):
         self.arg = arg
         self.type = signature.return_type
 
+class LLVMExternalFunctionCallNode(NativeCallNode):
+    '''For calling an external llvm function where you only have the 
+    signature and the function name.
+        
+    TODO: Not yet able to assign to a variable.
+    '''
+    def __init__(self, signature, fname, args, **kwargs):
+        super(LLVMExternalFunctionCallNode, self).__init__(signature, args,
+                                                       llvm_func=None, **kwargs)
+        self.fname = fname
+        assert signature.return_type is minitypes.void
+
 class LLVMIntrinsicNode(NativeCallNode):
     "Call an llvm intrinsic function"
 

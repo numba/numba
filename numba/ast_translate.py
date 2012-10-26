@@ -1227,6 +1227,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return node.macro(self.function_cache, self.builder,
                           *self.visitlist(node.args))
 
+    def visit_LLVMExternalFunctionCallNode(self, node):
+        lfunc_type = node.signature.to_llvm(self.context)
+        node.llvm_func = self.mod.get_or_insert_function(lfunc_type, node.fname)
+        self.builder.call(node.llvm_func, node.args)
+    
     def visit_LLVMIntrinsicNode(self, node):
         intr = getattr(llvm.core, 'INTR_' + node.py_func.__name__.upper())
         largs = self.visitlist(node.args)
