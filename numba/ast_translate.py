@@ -1049,6 +1049,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             val = self.builder.ptrtoint(val, ldst_type)
         elif node_type.is_int and dst_type.is_pointer:
             val = self.builder.inttoptr(val, ldst_type)
+        elif dst_type.is_pointer and node_type.is_pointer:
+            val = self.builder.bitcast(val, ldst_type)
         elif dst_type.is_complex and node_type.is_complex:
             val = self._promote_complex(node_type, dst_type, val)
         elif dst_type.is_complex and node_type.is_numeric:
