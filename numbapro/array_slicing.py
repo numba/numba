@@ -1,5 +1,6 @@
 import ast
 
+import llvm.core
 from llvm.core import Type, inline_function
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
@@ -41,9 +42,9 @@ class SliceSliceNode(SliceDimNode):
     def __init__(self, subslice, src_dim, dst_dim, **kwargs):
         super(SliceSliceNode, self).__init__(subslice, src_dim, dst_dim,
                                              **kwargs)
-        self.start = subslice.lower
-        self.stop = subslice.upper
-        self.step = subslice.step
+        self.start = nodes.CoercionNode(subslice.lower, npy_intp)
+        self.stop = nodes.CoercionNode(subslice.upper, npy_intp)
+        self.step = nodes.CoercionNode(subslice.step, npy_intp)
 
 def create_slice_dim_node(subslice, *args):
     if subslice.type.is_slice:
@@ -211,7 +212,10 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
 
         slice_func_def = SliceArray(self.context,
                                     node.src_dim, node.dst_dim,
-                                    start, stop, step)
+                                    start is not None,
+                                    stop is not None,
+                                    step is not None)
+
         slice_func = slice_func_def(self.mod)
 
         data = node.view_copy_accessor.data
@@ -220,7 +224,9 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         out_shape = node.view_copy_accessor.shape
         out_strides = node.view_copy_accessor.strides
 
-        args = [data, in_shape, in_strides, out_shape, out_strides]
+        default = llvm.core.Constant.int(C.npy_intp, 0)
+        args = [data, in_shape, in_strides, out_shape, out_strides,
+                start or default, stop or default, step or default]
         data_p = self.builder.call(slice_func, args)
         node.view_copy_accessor.data = data_p
 
@@ -245,10 +251,16 @@ class SliceArray(CDefinition):
     _retty_ = C.char_p
     _argtys_ = [
         ('data', C.char_p),
+
         ('in_shape', C.pointer(C.npy_intp)),
         ('in_strides', C.pointer(C.npy_intp)),
+
         ('out_shape', C.pointer(C.npy_intp)),
-        ('out_strides', C.pointer(C.npy_intp))
+        ('out_strides', C.pointer(C.npy_intp)),
+
+        ('start', C.npy_intp),
+        ('stop', C.npy_intp),
+        ('step', C.npy_intp),
     ]
 
     def _adjust_given_index(self, extent, negative_step, index, is_start):
@@ -290,8 +302,9 @@ class SliceArray(CDefinition):
         with self.ifelse(index < zero) as ifelse:
             with ifelse.then():
                 index += extent
-                if index < zero:
-                    index.assign(zero)
+                with self.ifelse(index < zero) as ifelse_inner:
+                    with ifelse_inner.then():
+                        index.assign(zero)
 
             with ifelse.otherwise():
                 with self.ifelse(index >= extent) as ifelse:
@@ -308,55 +321,52 @@ class SliceArray(CDefinition):
                             # we don't care about the sign of the step
                             index.assign(extent)
 
-    def _set_default_index(self, default1, default2, negative_step, start):
+    def _set_default_index(self, default1, default2, negative_step, index):
         with self.ifelse(negative_step) as ifelse:
             with ifelse.then():
-                start.assign(default1)
+                index.assign(default1)
             with ifelse.otherwise():
-                start.assign(default2)
+                index.assign(default2)
 
     def adjust_index(self, extent, negative_step, index, default1, default2,
-                     is_start=False):
-        var_index = self.var(C.npy_intp)
-        if index is not None:
-            index = index.cast(npy_intp.to_llvm(self.context))
-            var_index.assign(index)
-            self._adjust_given_index(extent, negative_step, var_index, is_start)
+                     is_start=False, have_index=True):
+#        var_index = self.var(C.npy_intp)
+        if have_index:
+#            index = index.cast(npy_intp.to_llvm(self.context))
+#            var_index.assign(index)
+            self._adjust_given_index(extent, negative_step, index, is_start)
         else:
-            self._set_default_index(default1, default2, negative_step, var_index)
+            self._set_default_index(default1, default2, negative_step, index)
 
-        return var_index
+#        return var_index
 
     def get_constants(self):
         zero = self.constant(C.npy_intp, 0)
         one = self.constant(C.npy_intp, 1)
         return one, zero
 
-    def body(self, data, in_shape, in_strides, out_shape, out_strides):
-        start = self.start
-        stop = self.stop
-        step = self.step
+    def body(self, data, in_shape, in_strides, out_shape, out_strides,
+             start, stop, step):
 
         src_dim = self.src_dimension
         stride = in_strides[src_dim]
         extent = in_shape[src_dim]
 
         one, zero = self.get_constants()
-
-        if start is not None:
-            start = builder.CTemp(self, start)
-        if stop is not None:
-            stop = builder.CTemp(self, stop)
-        if step is None:
+        if not self.have_step:
             step = one
 
         negative_step = step < zero
-        start = self.adjust_index(extent, negative_step, start,
-                                  default1=extent - one, default2=zero,
-                                  is_start=True)
-        stop = self.adjust_index(extent, negative_step, stop,
-                                 default1=-one, default2=extent)
 
+        self.adjust_index(extent, negative_step, start,
+                                  default1=extent - one, default2=zero,
+                                  is_start=True, have_index=self.have_start)
+        self.adjust_index(extent, negative_step, stop,
+                                 default1=-one, default2=extent,
+                                 have_index=self.have_stop)
+
+        # self.debug("extent", extent)
+        # self.debug("negative_step", negative_step.cast(C.npy_intp))
         # self.debug("start/stop/step", start, stop, step)
         new_extent = self.var(C.npy_intp)
         new_extent.assign((stop - start) / step)
@@ -384,13 +394,15 @@ class SliceArray(CDefinition):
         self.ret(result)
 
     def specialize(self, context, src_dimension, dst_dimension,
-                   start, stop, step):
+                   have_start, have_stop, have_step):
         self.context = context
+
         self.src_dimension = src_dimension
         self.dst_dimension = dst_dimension
-        self.start = start
-        self.stop = stop
-        self.step = step
+
+        self.have_start = have_start
+        self.have_stop = have_stop
+        self.have_step = have_step
 
         self.specialize_name()
 
