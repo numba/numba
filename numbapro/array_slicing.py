@@ -54,15 +54,41 @@ def create_slice_dim_node(subslice, *args):
 class NativeSliceNode(nodes.Node):
     """
     Aggregate of slices in all dimensions.
+
+    In nopython context, uses a fake stack-allocated PyArray struct.
+
+    In python context, it builds an actual heap-allocated numpy array.
+    In this case, the following attributes are patched during code generation
+    time that sets the llvm values:
+
+        dst_data, dst_shape, dst_strides
     """
 
-    _fields = ['value', 'subslices']
+    _fields = ['value', 'subslices', 'build_array_node']
 
-    def __init__(self, type, value, subslices, **kwargs):
+    def __init__(self, type, value, subslices, nopython, **kwargs):
         super(NativeSliceNode, self).__init__(**kwargs)
+        value = nodes.CloneableNode(value)
+
         self.type = type
         self.value = value
         self.subslices = subslices
+
+        self.shape_type = minitypes.CArrayType(npy_intp, type.ndim)
+
+        if not nopython:
+            self.build_array_node = self.build_array()
+        else:
+            self.build_array_node = None
+
+    def build_array(self):
+        self.dst_data = nodes.LLVMValueRefNode(void.pointer(), None)
+        self.dst_shape = nodes.LLVMValueRefNode(self.shape_type, None)
+        self.dst_strides = nodes.LLVMValueRefNode(self.shape_type, None)
+        array_node = nodes.ArrayNewNode(
+                self.type, self.dst_data, self.dst_shape, self.dst_strides,
+                base=self.value.clone)
+        return nodes.CoercionNode(array_node, self.type)
 
 class SliceRewriterMixin(ast_type_inference.NumpyMixin,
                          visitors.NoPythonContextMixin):
@@ -104,7 +130,7 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
         #if all_slices and all(empty(subslice) for subslice in slices):
         #    return node.value
 
-        return NativeSliceNode(node.type, node.value, slices)
+        return NativeSliceNode(node.type, node.value, slices, self.nopython)
 
     def visit_Subscript(self, node):
         node = super(SliceRewriterMixin, self).visit_Subscript(node)
@@ -112,6 +138,9 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
                 node.type.is_array):
             node = self._rewrite_slice(node)
         return node
+
+class FakePyArrayAccessor(object):
+    pass
 
 class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
 
@@ -131,28 +160,44 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         array_ltype = PyArray.llvm_type()
         shape_ltype = npy_intp.pointer().to_llvm(self.context)
 
+        # Create PyArrayObject accessors
         view = self.visit(node.value)
-        view_copy = self.llvm_alloca(array_ltype)
-        self.builder.store(self.builder.load(view), view_copy)
-
         view_accessor = ndarray_helpers.PyArrayAccessor(self.builder, view)
-        view_copy_accessor = ndarray_helpers.PyArrayAccessor(self.builder,
-                                                             view_copy)
 
-        shape_type = minitypes.CArrayType(npy_intp, node.type.ndim)
-        shape = self.alloca(shape_type)
-        strides = self.alloca(shape_type)
+        if self.nopython:
+            view_copy = self.llvm_alloca(array_ltype)
+            self.builder.store(self.builder.load(view), view_copy)
+            view_copy_accessor = ndarray_helpers.PyArrayAccessor(self.builder,
+                                                                 view_copy)
+        else:
+            view_copy_accessor = FakePyArrayAccessor()
+
+        # Stack-allocate shape/strides and update accessors
+        shape = self.alloca(node.shape_type)
+        strides = self.alloca(node.shape_type)
 
         view_copy_accessor.data = view_accessor.data
         view_copy_accessor.shape = self.builder.bitcast(shape, shape_ltype)
         view_copy_accessor.strides = self.builder.bitcast(strides, shape_ltype)
 
+        # Patch and visit all children
         for subslice in node.subslices:
             subslice.view_accessor = view_accessor
             subslice.view_copy_accessor = view_copy_accessor
 
         self.visitlist(node.subslices)
-        return view_copy
+
+        # Return fake or actual array
+        if self.nopython:
+            return view_copy
+        else:
+            # Update LLVMValueRefNode fields, build actual numpy array
+            void_p = void.pointer().to_llvm(self.context)
+            node.dst_data.llvm_value = self.builder.bitcast(
+                                    view_copy_accessor.data, void_p)
+            node.dst_shape.llvm_value = view_copy_accessor.shape
+            node.dst_strides.llvm_value = view_copy_accessor.strides
+            return self.visit(node.build_array_node)
 
     def visit_SliceSliceNode(self, node):
         start, stop, step = node.start, node.stop, node.step
