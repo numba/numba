@@ -70,6 +70,10 @@ class Node(ast.AST):
 
     variable = property(_variable_get, _variable_set)
 
+    @property
+    def cloneable(self):
+        return CloneableNode(self)
+
 class CoercionNode(Node):
     """
     Coerce a node to a different type
@@ -435,6 +439,10 @@ class CloneableNode(Node):
         self.clone_nodes = []
         self.type = node.type
 
+    @property
+    def clone(self):
+        return CloneNode(self)
+
 class CloneNode(Node):
 
     _fields = ['node']
@@ -448,6 +456,19 @@ class CloneNode(Node):
         node.clone_nodes.append(self)
 
         self.llvm_value = None
+
+class ExpressionNode(Node):
+    """
+    Node that allows an expression to execute a bunch of statements first.
+    """
+
+    _fields = ['stmts', 'expr']
+
+    def __init__(self, stmts, expr, **kwargs):
+        super(ExpressionNode, self).__init__(**kwargs)
+        self.stmts = stmts
+        self.expr = expr
+        self.type = expr.variable.type
 
 class LLVMValueRefNode(Node):
     """
@@ -491,6 +512,17 @@ class TempLoadNode(Node):
 
 class TempStoreNode(TempLoadNode):
     _fields = ['temp']
+
+class IncrefNode(Node):
+
+    _fields = ['value']
+
+    def __init__(self, value, **kwargs):
+        super(IncrefNode, self).__init__(**kwargs)
+        self.value = value
+
+class DecrefNode(IncrefNode):
+    pass
 
 class DataPointerNode(Node):
 
@@ -585,6 +617,21 @@ class ShapeAttributeNode(ArrayAttributeNode):
         self.element_type = numba_types.intp
         self.type = minitypes.CArrayType(self.element_type,
                                          array.variable.type.ndim)
+
+class ArrayNewNode(Node):
+    """
+    Allocate a new array given the attributes.
+    """
+
+    _fields = ['data', 'shape', 'strides', 'base']
+
+    def __init__(self, type, data, shape, strides, base=None, **kwargs):
+        super(ArrayNewNode, self).__init__(**kwargs)
+        self.type = type
+        self.data = data
+        self.shape = shape
+        self.strides = strides
+        self.base = base
 
 
 class ExtTypeAttribute(Node):
@@ -711,3 +758,38 @@ class PointerFromObject(Node):
     def __init__(self, node, **kwargs):
         super(PointerFromObject, self).__init__(**kwargs)
         self.node = node
+
+
+#
+### Nodes for NumPy calls
+#
+
+shape_type = npy_intp.pointer()
+void_p = void.pointer()
+
+class MultiArrayAPINode(NativeCallNode):
+
+    def __init__(self, name, signature, args):
+        super(MultiArrayAPINode, self).__init__(signature, args,
+                                                llvm_func=None)
+        self.func_name = name
+
+def PyArray_NewFromDescr(args):
+    """
+    Low-level specialized equivalent of ArrayNewNode
+    """
+    signature = object_(
+        object_,    # subtype
+        object_,    # descr
+        int_,       # ndim
+        shape_type, # shape
+        shape_type, # strides
+        void_p,     # data
+        int_,       # flags
+        object_,    # obj
+    )
+
+    return MultiArrayAPINode('PyArray_NewFromDescr', signature, args)
+
+def PyArray_UpdateFlags(args):
+    return MultiArrayAPINode('PyArray_UpdateFlags', void(object_, int_), args)

@@ -6,9 +6,8 @@ import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 
-#from ._ext import make_ufunc
 from .llvm_types import    _int32, _intp, _LLVMCaster
-#from .multiarray_api import MultiarrayAPI # not used
+from .multiarray_api import MultiarrayAPI # not used
 from .symtab import Variable
 from . import _numba_types as _types
 from ._numba_types import BuiltinType
@@ -309,6 +308,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     return an LLVM value.
     """
 
+    multiarray_api = MultiarrayAPI()
+
     def __init__(self, context, func, ast, func_signature, symtab,
                  optimize=True, nopython=False,
                  llvm_module=None, llvm_ee=None,
@@ -418,6 +419,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder = lc.Builder.new(entry)
         self.caster = _LLVMCaster(self.builder)
         self.object_coercer = ObjectCoercer(self)
+        self.multiarray_api.set_PyArray_API(self.mod)
 
         self._init_args()
         self._allocate_locals()
@@ -1266,6 +1268,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return self.builder.insert_value(lcomplex, new_imag_lval, 1)
 
+    def visit_MultiArrayAPINode(self, node):
+        meth = getattr(self.multiarray_api, 'load_' + node.func_name)
+        lfunc = meth(self.mod, self.builder)
+        lsignature = node.signature.pointer().to_llvm(self.context)
+        node.llvm_func = self.builder.bitcast(lfunc, lsignature)
+        self.puts("calling...")
+        result = self.visit_NativeCallNode(node)
+        self.puts("done...")
+        return result
+
     def alloca(self, type, name='', change_bb=True):
         return self.llvm_alloca(self.to_llvm(type), name, change_bb)
 
@@ -1345,6 +1357,20 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_ShapeAttributeNode(self, node):
         # hurgh, no dispatch on superclasses?
         return self.visit_ArrayAttributeNode(node)
+
+    def visit_IncrefNode(self, node):
+        obj = self.visit(node.value)
+        self.incref(obj)
+        return obj
+
+    def visit_DecrefNode(self, node):
+        obj = self.visit(node.value)
+        self.decref(obj)
+        return obj
+
+    def visit_ExpressionNode(self, node):
+        self.visitlist(node.stmts)
+        return self.visit(node.expr)
 
 
 def llvm_alloca(lfunc, builder, ltype, name='', change_bb=True):

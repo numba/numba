@@ -860,6 +860,33 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         result.signature.is_bound_method = False
         return self.visit(result)
 
+    def visit_ArrayNewNode(self, node):
+        if self.nopython:
+            # Give the codegen (subclass) a chance to handle this
+            self.generic_visit(node)
+            return node
+
+        PyArray_Type = nodes.ObjectInjectNode(type(np.ndarray))
+        descr = nodes.ObjectInjectNode(node.type.dtype.get_dtype()).cloneable
+        ndim = nodes.const(node.type.ndim, int_)
+        flags = nodes.const(0, int_)
+        args = [PyArray_Type, descr.clone, ndim,
+                node.shape, node.strides, node.data, flags]
+
+        if node.base is None:
+            args.append(nodes.NULL_obj)
+        else:
+            args.append(node.base)
+
+        incref_descr = nodes.IncrefNode(descr)
+        array = nodes.PyArray_NewFromDescr(args).cloneable
+        body = [incref_descr, array]
+
+        # TODO: PyArray_UpdateFlags()
+        # TODO: PyArray_SetBaseObject()
+        result = nodes.ExpressionNode(body, array.clone)
+        return self.visit(result)
+
     def visit_Name(self, node):
         if node.type.is_builtin and not node.variable.is_local:
             obj = getattr(builtins, node.name)
