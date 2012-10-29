@@ -1273,9 +1273,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         lfunc = meth(self.mod, self.builder)
         lsignature = node.signature.pointer().to_llvm(self.context)
         node.llvm_func = self.builder.bitcast(lfunc, lsignature)
-        self.puts("calling...")
         result = self.visit_NativeCallNode(node)
-        self.puts("done...")
         return result
 
     def alloca(self, type, name='', change_bb=True):

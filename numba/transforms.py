@@ -866,7 +866,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             self.generic_visit(node)
             return node
 
-        PyArray_Type = nodes.ObjectInjectNode(type(np.ndarray))
+        PyArray_Type = nodes.ObjectInjectNode(np.ndarray)
         descr = nodes.ObjectInjectNode(node.type.dtype.get_dtype()).cloneable
         ndim = nodes.const(node.type.ndim, int_)
         flags = nodes.const(0, int_)
