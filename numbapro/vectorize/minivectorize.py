@@ -89,6 +89,63 @@ def fallback_vectorize(fallback_cls, pyfunc, signatures,
     ufunc = vectorizer.build_ufunc(minivect_dispatcher, cuda_dispatcher)
     return ufunc, vectorizer._get_lfunc_list()
 
+def build_kernel_call(lfunc, signature, miniargs, b=b):
+    """
+    Call the kernel `lfunc` in a bunch of loops with scalar arguments.
+    """
+    # Build the kernel function signature
+    funcname = b.funcname(signature, lfunc.name, is_external=False)
+
+    # Generate 'lhs[i, j] = kernel(A[i, j], B[i, j])'
+    lhs = miniargs[0].variable
+    kernel_args = [arg.variable for arg in miniargs[1:]]
+    funccall = b.funccall(funcname, kernel_args, inline=True)
+    assmt = b.assign(lhs, funccall)
+    if lhs.type.is_object:
+        assmt = b.stats(b.decref(lhs), assmt)
+
+    return assmt
+
+def build_minifunction(ast, miniargs, b=b):
+    """
+    Build a minivect function from the given ast and arguments.
+    """
+    type = minitypes.npy_intp.pointer()
+    shape_variable = b.variable(type, 'shape')
+
+    minifunc = b.function('expr%d' % MiniVectorize.num_exprs,
+                          ast, miniargs, shapevar=shape_variable)
+    MiniVectorize.num_exprs += 1
+
+    # minifunc.print_tree(minicontext)
+
+    return minifunc
+
+def specialize(minifunc):
+    "Specialize a minivect function"
+    if minifunc.ndim < 2:
+        # Remove tiled specializer
+        specializers = [
+            NumbaContigSpecializer,
+            minispecializers.StridedSpecializer,
+        ]
+    else:
+        specializers = [
+            minispecializers.StridedCInnerContigSpecializer,
+            minispecializers.CTiledStridedSpecializer,
+            minispecializers.StridedSpecializer,
+        ]
+
+    result = list(minicontext.run(minifunc, specializers))
+
+    contig = inner_contig = tiled = strided = None
+    if minifunc.ndim < 2:
+        contig, strided = result
+    else:
+        inner_contig, tiled, strided = result
+
+    return [contig, inner_contig, tiled, strided]
+
 class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
     """
     Map and inline a ufunc written in Python to a minivect AST. The result
@@ -219,8 +276,9 @@ class MiniVectorize(object):
                     # Operations on complex numbers or objects are not
                     # supported by minivect, generate a kernel call
                     logging.info("Kernel not inlined, has objects/complex numbers")
-                    minivect_ast = self.build_kernel_call(
-                                    lfunc, mapper, restype, argtypes, kwargs)
+                    signature = restype(*argtypes)
+                    minivect_ast = build_kernel_call(
+                                lfunc, signature, mapper.miniargs)
                 else:
                     # Try to directly map and inline, or fall back to generating
                     # a call
@@ -239,40 +297,6 @@ class MiniVectorize(object):
         dispatcher = self.minivect(minivect_asts, parallel)
         dispatch.set_dispatchers(dyn_ufunc, dispatcher, None)
         return dyn_ufunc
-
-    def build_kernel_call(self, lfunc, mapper, restype, argtypes, kwargs):
-        """
-        Call the kernel in a bunch of loops with scalar arguments.
-        """
-        # Build the kernel function signature
-        signature = minitypes.FunctionType(return_type=restype,
-                                           argtypes=argtypes)
-        funcname = b.funcname(signature, lfunc.name, is_external=False)
-
-        # Generate 'lhs[i, j] = kernel(A[i, j], B[i, j])'
-        lhs = mapper.miniargs[0].variable
-        kernel_args = [arg.variable for arg in mapper.miniargs[1:]]
-        funccall = b.funccall(funcname, kernel_args, inline=True)
-        assmt = b.assign(lhs, funccall)
-        if lhs.type.is_object:
-            assmt = b.stats(b.decref(lhs), assmt)
-
-        return assmt
-
-    def build_minifunction(self, ast, miniargs):
-        """
-        Build a minivect function from the given ast and arguments.
-        """
-        type = minitypes.npy_intp.pointer()
-        shape_variable = b.variable(type, 'shape')
-
-        minifunc = b.function('expr%d' % MiniVectorize.num_exprs,
-                              ast, miniargs, shapevar=shape_variable)
-        MiniVectorize.num_exprs += 1
-
-        # minifunc.print_tree(minicontext)
-
-        return minifunc
 
     def _debug(self, minifunc):
         if debug_c:
@@ -308,30 +332,6 @@ class MiniVectorize(object):
 
         return dtype_args, function_pointers, result_dtype
 
-    def _specialize(self, minifunc):
-        if minifunc.ndim < 2:
-            # Remove tiled specializer
-            specializers = [
-                NumbaContigSpecializer,
-                minispecializers.StridedSpecializer,
-            ]
-        else:
-            specializers = [
-                minispecializers.StridedCInnerContigSpecializer,
-                minispecializers.CTiledStridedSpecializer,
-                minispecializers.StridedSpecializer,
-            ]
-
-        result = list(minicontext.run(minifunc, specializers))
-
-        contig = inner_contig = tiled = strided = None
-        if minifunc.ndim < 2:
-            contig, strided = result
-        else:
-            inner_contig, tiled, strided = result
-
-        return [contig, inner_contig, tiled, strided]
-
     def minivect(self, asts, parallel):
         """
         Given a bunch of specialized miniasts, return a ufunc object that
@@ -341,9 +341,9 @@ class MiniVectorize(object):
 
         ufuncs = {}
         for mapper, dimensionality, ast in asts:
-            minifunc = self.build_minifunction(ast, mapper.miniargs)
+            minifunc = build_minifunction(ast, mapper.miniargs)
             self._debug(minifunc)
-            codes = self._specialize(minifunc)
+            codes = specialize(minifunc)
             dtype_args, function_pointers, result_dtype = \
                         self._get_function_pointers(mapper, codes)
             self._debug_llvm(codes)

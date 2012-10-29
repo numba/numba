@@ -12,7 +12,6 @@ class OneOne(CDefinition):
     def body(self, inval):
         self.ret( (inval * inval).cast(self.OUT_TYPE) )
 
-    @classmethod
     def specialize(cls, itype, otype):
         cls._name_ = '.'.join(map(str, ['oneone', itype, otype]))
         cls._retty_ = otype

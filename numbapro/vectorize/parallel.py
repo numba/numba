@@ -121,12 +121,11 @@ class ParallelUFunc(CDefinition):
         ('data',       C.void_p, [ATTR_NO_ALIAS]),
     ]
 
-    @classmethod
-    def specialize(cls, num_thread):
+    def specialize(self, num_thread):
         '''specialize to the maximum # of thread
         '''
-        cls._name_ = 'parallel_ufunc_%d' % num_thread
-        cls.ThreadCount = num_thread
+        self._name_ = 'parallel_ufunc_%d' % num_thread
+        self.ThreadCount = num_thread
 
     def body(self, worker, args, dimensions, steps, data):
 
@@ -400,13 +399,12 @@ class SpecializedParallelUFunc(CDefinition):
                inline=True)
         self.ret()
 
-    @classmethod
-    def specialize(cls, pufunc_def, core_def):
+    def specialize(self, pufunc_def, core_def):
         '''specialize to a combination of ParallelUFunc, UFuncCore and workload
         '''
-        cls._name_ = 'specialized_%s_%s'% (pufunc_def, core_def)
-        cls.PUFuncDef = pufunc_def
-        cls.CoreDef = core_def
+        self._name_ = 'specialized_%s_%s' % (pufunc_def, core_def)
+        self.PUFuncDef = pufunc_def
+        self.CoreDef = core_def
 
 class PThreadAPI(CExternal):
     '''external declaration of pthread API
@@ -484,18 +482,17 @@ class UFuncCoreGeneric(UFuncCore):
             retval_ptr.store(res, nontemporal=True)
             arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
 
-    @classmethod
-    def specialize(cls, lfunc):
+    def specialize(self, lfunc):
         '''specialize to a LLVM function type
 
         fntype : a LLVM function type (llvm.core.FunctionType)
         '''
         fntype = lfunc.type.pointee
-        cls._name_ = '.'.join([cls._name_, lfunc.name])
+        self._name_ = '.'.join([self._name_, lfunc.name])
 
         #cls.RETTY = fntype.return_type
         #cls.ARGTYS = tuple(fntype.args)
-        cls.WORKER = lfunc
+        self.WORKER = lfunc
 
 
 if sys.platform == 'win32':

@@ -22,7 +22,7 @@ def array_expr2(a, b, c):
 
 @autojit(backend='ast')
 def array_expr3(a, b, c):
-    a[...] = a + b * c
+    a[1:, 1:] = a[1:, 1:] + b[1:, :-1] * c[1:, :-1]
 
 def test_array_expressions():
     a = np.arange(120).reshape(10, 12).astype(np.float32)
@@ -83,7 +83,21 @@ def test_gufunc_array_expressions():
         print(Gold)
         raise ValueError
 
+
 if __name__ == '__main__':
     test_gufunc_array_expressions()
     test_array_expressions()
     test_matmul()
+
+#    a = np.arange(100).reshape(10, 10).astype(np.float32)
+#    print test_slicing(a)
+
+#    a = np.arange(120).reshape(10, 12).astype(np.float32)
+#    b = c = a.copy()
+#    array_expr3(a, b, c)
+#
+#    a2 = np.arange(120).reshape(10, 12).astype(np.float32)
+#    b = c = a2.copy()
+#    array_expr3.py_func(a2, b, c)
+
+#    assert np.allclose(a, a2)

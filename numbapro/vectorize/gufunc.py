@@ -420,10 +420,6 @@ def create_kernel_wrapper(kernel):
             self.ret()
             inline_function(kerncall)
 
-        @classmethod
-        def specialize(cls):
-            pass
-
     return CUDAKernelWrapper()
 
 def _ltype(minitype):
@@ -483,12 +479,11 @@ class GUFuncCUDAEntry(GUFuncEntry):
 
         llvm_builder.call(cuda_outer_loop, largs)
 
-    @classmethod
-    def specialize(cls, dtypes, signature, func_def):
+    def specialize(self, dtypes, signature, func_def):
         '''specialize to a workload
         '''
         global num_wrappers
-        super(GUFuncCUDAEntry, cls).specialize(dtypes, signature, func_def)
-        cls._name_ = 'cuda_outer_loop_wrapper_%d' % num_wrappers
+        super(GUFuncCUDAEntry, self).specialize(dtypes, signature, func_def)
+        self._name_ = 'cuda_outer_loop_wrapper_%d' % num_wrappers
         num_wrappers += 1
 

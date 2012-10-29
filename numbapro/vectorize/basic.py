@@ -44,7 +44,6 @@ class BasicUFunc(CDefinition):
 
         self.ret()
 
-    @classmethod
     def specialize(cls, func_def):
         '''specialize to a workload
         '''

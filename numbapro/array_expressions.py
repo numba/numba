@@ -7,15 +7,15 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import error, pipeline
-from numba.minivect import minierror, minitypes
+from numba import error, pipeline, nodes
+from numba.minivect import minierror, minitypes, specializers, miniast
 from numba import translate, utils, functions, nodes
 from numba.symtab import Variable
-from numba import visitors, nodes, error, ast_type_inference
+from numba import visitors, nodes, error, ast_type_inference, ast_translate
 from numba import decorators
 
-from numbapro import vectorize
-from numbapro.vectorize import basic
+from numbapro import vectorize, dispatch, array_slicing
+from numbapro.vectorize import basic, minivectorize
 
 import numpy
 
@@ -27,7 +27,17 @@ class NumbaproPipeline(pipeline.Pipeline):
                                 after='specialize')
 
     def rewrite_array_expressions(self, ast):
-        return UFuncRewriter(self.context, self.func, ast).visit(ast)
+        transformer = ArrayExpressionRewriteUfunc(self.context, self.func, ast)
+        transformer = ArrayExpressionRewriteGPU(self.context, self.func, ast,
+                                                self.llvm_module)
+        return transformer.visit(ast)
+
+    def codegen(self, ast):
+        self.translator = self.make_specializer(ArrayExpressionGPUCodegen,
+                                                ast, func_name=self.func_name,
+                                                **self.kwargs)
+        self.translator.translate()
+        return ast
 
 decorators.context.numba_pipeline = NumbaproPipeline
 
@@ -48,9 +58,41 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         Start the mapping process for the outmost node in the array expression.
         """
 
+    def get_py_ufunc(self, lhs, node):
+        if lhs is None:
+            result_type = node.type
+        else:
+            result_type = lhs.type
+            lhs.ctx = ast.Load()
+
+        # Build ufunc AST module
+        ufunc_builder = UFuncBuilder(self.context, self.func, node)
+        tree = ufunc_builder.visit(node)
+        ufunc_ast = ufunc_builder.build_ufunc_ast(tree)
+        module = ast.Module(body=[ufunc_ast])
+        functions.fix_ast_lineno(module)
+        # logging.debug(ast.dump(ufunc_ast))
+
+        # Create Python ufunc function
+        d = {}
+        exec compile(module, '<ast>', 'exec') in d, d
+        py_ufunc = d['ufunc']
+
+        # Vectorize Python function
+        if lhs is None:
+            restype = node.type
+        else:
+            restype = lhs.type.dtype
+
+        argtypes = [op.type.dtype if op.type.is_array else op.type
+                        for op in ufunc_builder.operands]
+        signature = restype(*argtypes)
+        return py_ufunc, signature, ufunc_builder
+
     def visit_Assign(self, node):
         self.is_slice_assign = False
         self.visitlist(node.targets)
+        is_slice_assign = self.is_slice_assign
 
         self.nesting_level = self.is_slice_assign
         node.value = self.visit(node.value)
@@ -58,7 +100,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
 
         elementwise = self.elementwise
         if (len(node.targets) == 1 and node.targets[0].type.is_array and
-                self.is_slice_assign and elementwise):
+                is_slice_assign and elementwise):
             return self.register_array_expression(node.value,
                                                   lhs=node.targets[0])
 
@@ -143,55 +185,27 @@ class UFuncBuilder(visitors.NumbaTransformer):
         return func
 
 
-class UFuncRewriter(ArrayExpressionRewrite):
+class ArrayExpressionRewriteUfunc(ArrayExpressionRewrite):
     """
-    Compile array expressions to ufuncs.
+    Compile array expressions to ufuncs. Then call the ufunc with the array
+    arguments.
 
     vectorizer_cls: the ufunc vectorizer to use
     """
 
     def __init__(self, context, func, ast, vectorizer_cls=None):
-        super(UFuncRewriter, self).__init__(context, func, ast)
+        super(ArrayExpressionRewriteUfunc, self).__init__(context, func, ast)
         self.vectorizer_cls = vectorizer_cls or basic.BasicASTVectorize
 
     def register_array_expression(self, node, lhs=None):
-        if lhs is None:
-            result_type = node.type
-        else:
-            result_type = lhs.type
-            lhs.ctx = ast.Load()
-
-        # Build ufunc AST module
-        ufunc_builder = UFuncBuilder(self.context, self.func, node)
-        tree = ufunc_builder.visit(node)
-        ufunc_ast = ufunc_builder.build_ufunc_ast(tree)
-        module = ast.Module(body=[ufunc_ast])
-        functions.fix_ast_lineno(module)
-
-        logging.debug(ast.dump(ufunc_ast))
-
-        # Create Python ufunc function
-        d = {}
-        exec compile(module, '<ast>', 'exec') in d, d
-        py_ufunc = d['ufunc']
+        py_ufunc, signature, ufunc_builder = self.get_py_ufunc(lhs, node)
 
         # Vectorize Python function
-        if lhs is None:
-            restype = node.type
-        else:
-            restype = lhs.type.dtype
-
         vectorizer = self.vectorizer_cls(py_ufunc)
-        argtypes = [op.type.dtype if op.type.is_array else op.type
-                         for op in ufunc_builder.operands]
-        vectorizer.add(restype=restype, argtypes=argtypes)
+        vectorizer.add(restype=signature.return_type, argtypes=signature.args)
         ufunc = vectorizer.build_ufunc()
 
         # Call ufunc
-        signature = minitypes.FunctionType(
-                return_type=result_type,
-                args=[op.type for op in ufunc_builder.operands])
-
         args = ufunc_builder.operands
         if lhs is None:
             keywords = None
@@ -199,7 +213,117 @@ class UFuncRewriter(ArrayExpressionRewrite):
             keywords = [ast.keyword('out', lhs)]
 
         func = nodes.ObjectInjectNode(ufunc)
-        call_ufunc = nodes.ObjectCallNode(signature=signature,
-                                          func=func, args=args,
+        call_ufunc = nodes.ObjectCallNode(signature=None, func=func, args=args,
                                           keywords=keywords, py_func=ufunc)
         return nodes.ObjectTempNode(call_ufunc)
+
+
+class NumbaproStaticArgsContext(utils.NumbaContext):
+    "Use a static argument list: shape, data1, strides1, data2, strides2, ..."
+    astbuilder_cls = miniast.ASTBuilder
+
+class ArrayExpressionRewriteGPU(array_slicing.SliceRewriterMixin,
+                                ArrayExpressionRewrite):
+    """
+    Compile array expressions to a minivect kernel that calls a Numba
+    scalar kernel with scalar inputs:
+
+        a[:, :] = b[:, :] * c[:, :]
+
+    becomes
+
+        tmp_a = slice(a)
+        tmp_b = slice(b)
+        tmp_c = slice(c)
+        shape = broadcast(tmp_a, tmp_b, tmp_c)
+        call minikernel(shape, tmp_a.data, tmp_a.strides,
+                               tmp_b.data, tmp_b.strides,
+                               tmp_c.data, tmp_c.strides)
+
+    with
+
+        def numba_kernel(b, c):
+            return b * c
+
+        def minikernel(...):
+            for (...)
+                for(...)
+                    a[i, j] = numba_kernel(b[i, j], c[i, j])
+    """
+
+    def __init__(self, context, func, ast, llvm_module):
+        super(ArrayExpressionRewriteGPU, self).__init__(context, func, ast)
+        self.array_expr_context = NumbaproStaticArgsContext()
+        self.llvm_module = llvm_module
+        self.array_expr_context.llvm_module = llvm_module
+
+    def array_attr(self, node, attr):
+        return nodes.ArrayAttributeNode(attr, node)
+
+    def register_array_expression(self, node, lhs=None):
+        # Create ufunc scalar kernel
+        py_ufunc, signature, ufunc_builder = self.get_py_ufunc(lhs, node)
+        # Compile ufunc scalar kernel with numba
+        sig, translator, wrapper = pipeline.compile_from_sig(
+                    self.context, py_ufunc, signature, compile_only=True,
+                    nopython=self.nopython)
+
+        lfunc = translator.lfunc
+        operands = ufunc_builder.operands
+        self.func.live_objects.append(lfunc)
+
+        if lhs is None and self.nopython:
+            raise error.NumbaError(
+                    node, "Cannot allocate new memory in nopython context")
+        elif lhs is None:
+            raise NotImplementedError
+
+        # Build minivect wrapper kernel
+        context = self.array_expr_context
+        # context.debug = True
+        b = context.astbuilder
+
+        variables = [b.variable(name_node.type, "op%d" % i)
+                         for i, name_node in enumerate([lhs] + operands)]
+        miniargs = map(b.funcarg, variables)
+        body = minivectorize.build_kernel_call(lfunc, signature, miniargs, b)
+
+        minikernel = minivectorize.build_minifunction(body, miniargs, b)
+        lminikernel, ctypes_kernel = context.run_simple(
+                            minikernel, specializers.StridedSpecializer)
+
+        # Build call to minivect kernel
+        operands = [nodes.CloneableNode(operand) for operand in operands]
+
+        lhs = nodes.CloneableNode(lhs)
+        # The broadcast shape. There is no error checking or actual
+        # broadcasting!
+        # Broadcasting dimensions are assumed to have stride 0, this may
+        # not be true at all!
+        shape = self.array_attr(lhs, 'shape')
+
+        lhs = nodes.CloneNode(lhs)
+        operands.insert(0, lhs)
+
+        args = [shape]
+        for node in operands:
+            data_p = self.array_attr(node, 'data')
+            args.append(nodes.CoercionNode(data_p, operand.type.dtype.pointer()))
+            if not isinstance(node, nodes.CloneNode):
+                node = nodes.CloneNode(node)
+            args.append(self.array_attr(node, 'strides'))
+
+        result = nodes.NativeCallNode(minikernel.type, args, lminikernel)
+        #result = result.cloneable
+        #return nodes.ExpressionNode(
+        #        stmts=[nodes.WithNoPythonNode(body=[result])],
+        #        expr=result.clone)
+
+        # Use native slicing in array expressions
+        array_slicing.mark_nopython(self.context, ast.Suite(body=result.args))
+        return result
+
+
+class ArrayExpressionGPUCodegen(ast_translate.LLVMCodeGenerator,
+                                array_slicing.NativeSliceCodegenMixin):
+    pass
