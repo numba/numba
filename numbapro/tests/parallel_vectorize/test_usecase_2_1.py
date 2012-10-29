@@ -11,7 +11,6 @@ class TwoOne(CDefinition):
     def body(self, a, b):
         self.ret( (a * b).cast(self.OUT_TYPE) )
 
-    @classmethod
     def specialize(cls, itype1, itype2, otype):
         cls._name_ = '.'.join(map(str, ['oneone', itype1, itype2, otype]))
         cls._retty_ = otype

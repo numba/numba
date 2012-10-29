@@ -78,25 +78,28 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
 
         assert isinstance(node.slice, ast.ExtSlice)
         slices = []
-        src_dim = node.value.type.ndim - 1
-        dst_dim = node.type.ndim - 1
+        src_dim = 0
+        dst_dim = 0
         assert node.value.type.ndim == len(node.slice.dims)
 
         all_slices = True
         for subslice in node.slice.dims:
             slices.append(create_slice_dim_node(subslice, src_dim, dst_dim))
 
-            src_dim -= 1
-            is_newaxis = self._is_newaxis(subslice)
-            if subslice.type.is_slice or is_newaxis:
-                all_slices = all_slices and not is_newaxis
-                dst_dim -= 1
+            if subslice.type.is_slice:
+                src_dim += 1
+                dst_dim += 1
+            elif self._is_newaxis(subslice):
+                all_slices = False
+                dst_dim += 1
             else:
                 assert subslice.type.is_int
                 all_slices = False
+                src_dim += 1
+                dst_dim += 1
 
-        assert src_dim + 1 == 0
-        assert dst_dim + 1 == 0
+        assert src_dim == node.value.type.ndim
+        assert dst_dim == node.type.ndim
 
         #if all_slices and all(empty(subslice) for subslice in slices):
         #    return node.value
@@ -327,15 +330,16 @@ class SliceArray(CDefinition):
 
         self.ret(result)
 
-    @classmethod # specializing classes is bad, ameliorate
-    def specialize(cls, context, src_dimension, dst_dimension,
+    def specialize(self, context, src_dimension, dst_dimension,
                    start, stop, step):
-        cls.context = context
-        cls.src_dimension = src_dimension
-        cls.dst_dimension = dst_dimension
-        cls.start = start
-        cls.stop = stop
-        cls.step = step
+        self.context = context
+        self.src_dimension = src_dimension
+        self.dst_dimension = dst_dimension
+        self.start = start
+        self.stop = stop
+        self.step = step
+
+        self.specialize_name()
 
 class IndexAxis(CDefinition):
 
@@ -354,9 +358,8 @@ class IndexAxis(CDefinition):
         result.assign(data + in_strides[src_dim] * index)
         self.ret(result)
 
-    @classmethod
-    def specialize(cls):
-        pass
+    def specialize(self):
+        self.specialize_name()
 
 class NewAxis(CDefinition):
 
@@ -373,4 +376,4 @@ class NewAxis(CDefinition):
 
     @classmethod
     def specialize(cls):
-        pass
+        cls.specialize_name()

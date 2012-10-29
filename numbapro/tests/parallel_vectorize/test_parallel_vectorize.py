@@ -82,7 +82,7 @@ class TestInner_RaceCondition(unittest.TestCase):
         pmbuilder.opt_level = 3
         pmbuilder.populate(mpm)
 
-        fntester = Tester.define(module)
+        fntester = Tester().define(module)
 
         #    print(module)
         module.verify()

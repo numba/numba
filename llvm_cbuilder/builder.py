@@ -709,24 +709,6 @@ class CBuilder(object):
         md = lc.MetaData.get(self.function.module, [const_one])
         ldst.set_metadata('nontemporal', md)
 
-class _DeclareCDef(object):
-    '''create a function a CDefinition to use with `CBuilder.depends`
-
-    An instance of this class is created by the constructor of CDefinition.
-    Do not use directly.
-    '''
-    def __init__(self, cdef):
-        self.cdef = cdef
-
-    def __str__(self):
-        return self.cdef._name_
-
-    def __call__(self, module):
-        try:
-            func = self.cdef.define(module)
-        except FunctionAlreadyExists as e:
-            (func,) = e
-        return func
 
 class CFuncRef(object):
     '''create a function reference to use with `CBuilder.depends`
@@ -766,7 +748,8 @@ class CFuncRef(object):
     def __str__(self):
         return self._name
 
-class CDefinition(CBuilder):
+
+class CDefinition(object):
     '''represents function definition
 
     Inherit from this class to create a new function definition.
@@ -782,31 +765,33 @@ class CDefinition(CBuilder):
     _retty_  = types.void # return type; can overide in subclass
     _argtys_ = []       # a list of tuple(name, type, [attributes]); can overide in subclass
 
-    def __new__(cls, *args, **kws):
-        if cls.is_generic():
-            # Call specialize if it is defined.
-            cls = type('%s_Specialized' % cls.__name__, (cls,), {})
-            cls.specialize(*args, **kws)
+    def __init__(self, *args, **kwargs):
+        self.specialize(*args, **kwargs)
+        self.cbuilder = None
 
-        obj = object.__new__(_DeclareCDef)
-        obj.__init__(cls)
-        return obj
+    def specialize(self, *args, **kwargs):
+        """
+        Override in subclasses
+        """
 
-    @classmethod
-    def is_generic(cls):
-        '''Is this a generic definition?
-        '''
-        return hasattr(cls, 'specialize')
+    def specialize_name(self):
+        """
+        Specialize the class name to enable multiple function definitions
+        """
+        cls = type(self)
 
-    @classmethod
-    def define(cls, module):
+        counter = getattr(cls, 'counter', 0)
+        cls._name_ = "%s_%d" % (cls._name_, counter)
+        cls.counter = counter + 1
+
+    def define(self, module):
         '''define the function in the module.
 
         Raises NameError if a function of the same name has already been
         defined.
         '''
-        functype = lc.Type.function(cls._retty_, [arg[1] for arg in cls._argtys_])
-        name = cls._name_
+        functype = lc.Type.function(self._retty_, [arg[1] for arg in self._argtys_])
+        name = self._name_
         if not name:
             raise AttributeError("Function name cannot be empty.")
 
@@ -816,17 +801,17 @@ class CDefinition(CBuilder):
             raise FunctionAlreadyExists(func)
 
         # Name all arguments
-        for i, arginfo in enumerate(cls._argtys_):
+        for i, arginfo in enumerate(self._argtys_):
             name = arginfo[0]
             func.args[i].name = name
             if len(arginfo) > 2:
                 for attr in arginfo[2]:
                     func.args[i].add_attribute(attr)
+
         # Create builder and populate body
-        cbuilder = object.__new__(cls)
-        cbuilder.__init__(func)
-        cbuilder.body(*cbuilder.args)
-        cbuilder.close()
+        self.cbuilder = CBuilder(func)
+        self.body(*self.cbuilder.args)
+        self.cbuilder.close()
 
         # optimize
         fpm = lp.FunctionPassManager.new(module)
@@ -837,10 +822,23 @@ class CDefinition(CBuilder):
         fpm.run(func)
         return func
 
+    def __call__(self, module):
+        # We don't really have to overload __call__ to do things like
+        # defining functions...
+        try:
+            func = self.define(module)
+        except FunctionAlreadyExists as e:
+            (func,) = e
+        return func
+
+    def __getattr__(self, attr):
+        return getattr(self.cbuilder, attr)
+
     def body(self):
         '''overide this function to define the body.
         '''
         raise NotImplementedError
+
 
 class CValue(object):
     def __init__(self, parent, handle):

@@ -276,6 +276,7 @@ class ArrayExpressionRewriteGPU(array_slicing.SliceRewriterMixin,
 
         # Build minivect wrapper kernel
         context = self.array_expr_context
+        context.debug = True
         b = context.astbuilder
 
         variables = [b.variable(name_node.type, "op%d" % i)
