@@ -873,18 +873,25 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         args = [PyArray_Type, descr.clone, ndim,
                 node.shape, node.strides, node.data, flags]
 
+        incref_descr = nodes.IncrefNode(descr)
+        incref_base = None
+        setbase = None
+
         if node.base is None:
             args.append(nodes.NULL_obj)
         else:
-            args.append(node.base)
+            base = nodes.CloneableNode(node.base)
+            incref_base = nodes.IncrefNode(base)
+            args.append(base.clone)
 
-        incref_descr = nodes.IncrefNode(descr)
         array = nodes.PyArray_NewFromDescr(args).cloneable
-        body = [incref_descr, array]
+        body = [incref_descr, incref_base, array, setbase]
+
+        if node.base is not None:
+            body.append(nodes.PyArray_SetBaseObject([array.clone, base.clone]))
 
         # TODO: PyArray_UpdateFlags()
-        # TODO: PyArray_SetBaseObject()
-        result = nodes.ExpressionNode(body, array.clone)
+        result = nodes.ExpressionNode(filter(None, body), array.clone)
         return self.visit(result)
 
     def visit_Name(self, node):

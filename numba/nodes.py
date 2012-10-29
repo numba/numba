@@ -791,5 +791,9 @@ def PyArray_NewFromDescr(args):
 
     return MultiArrayAPINode('PyArray_NewFromDescr', signature, args)
 
+def PyArray_SetBaseObject(args):
+    signature = int_(object_, object_)
+    return MultiArrayAPINode('PyArray_SetBaseObject', signature, args)
+
 def PyArray_UpdateFlags(args):
     return MultiArrayAPINode('PyArray_UpdateFlags', void(object_, int_), args)
