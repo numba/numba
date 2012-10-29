@@ -125,6 +125,9 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         self.index_func = index_func_def(self.mod)
 
     def visit_NativeSliceNode(self, node):
+        """
+        Slice an array. Allocate fake PyArray and allocate shape/strides
+        """
         array_ltype = PyArray.llvm_type()
         shape_ltype = npy_intp.pointer().to_llvm(self.context)
 
@@ -141,7 +144,7 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         strides = self.alloca(shape_type)
 
         view_copy_accessor.data = view_accessor.data
-        view_copy_accessor.dimensions = self.builder.bitcast(shape, shape_ltype)
+        view_copy_accessor.shape = self.builder.bitcast(shape, shape_ltype)
         view_copy_accessor.strides = self.builder.bitcast(strides, shape_ltype)
 
         for subslice in node.subslices:
@@ -247,17 +250,18 @@ class SliceArray(CDefinition):
 
             with ifelse.otherwise():
                 with self.ifelse(index >= extent) as ifelse:
-                    if is_start:
-                        # index is 'start' index
-                        with self.ifelse(negative_step) as ifelse:
-                            with ifelse.then():
-                                index.assign(extent - one)
-                            with ifelse.otherwise():
-                                index.assign(extent)
-                    else:
-                        # index is 'stop' index. Stop is exclusive, to
-                        # we don't care about the sign of the step
-                        index.assign(extent)
+                    with ifelse.then():
+                        if is_start:
+                            # index is 'start' index
+                            with self.ifelse(negative_step) as ifelse:
+                                with ifelse.then():
+                                    index.assign(extent - one)
+                                with ifelse.otherwise():
+                                    index.assign(extent)
+                        else:
+                            # index is 'stop' index. Stop is exclusive, to
+                            # we don't care about the sign of the step
+                            index.assign(extent)
 
     def _set_default_index(self, default1, default2, negative_step, start):
         with self.ifelse(negative_step) as ifelse:
@@ -303,9 +307,12 @@ class SliceArray(CDefinition):
 
         negative_step = step < zero
         start = self.adjust_index(extent, negative_step, start,
-                                  extent - one, zero, is_start=True)
-        stop = self.adjust_index(extent, negative_step, start, -one, extent)
+                                  default1=extent - one, default2=zero,
+                                  is_start=True)
+        stop = self.adjust_index(extent, negative_step, stop,
+                                 default1=-one, default2=extent)
 
+        # self.debug("start/stop/step", start, stop, step)
         new_extent = self.var(C.npy_intp)
         new_extent.assign((stop - start) / step)
         with self.ifelse((stop - start) % step != zero) as ifelse:
@@ -326,6 +333,7 @@ class SliceArray(CDefinition):
         result = self.var(data.type, name='result')
         result.assign(data[start * stride:])
         out_shape[dst_dim] = new_extent
+        # self.debug("new_extent", new_extent)
         out_strides[dst_dim] = stride * step
 
         self.ret(result)

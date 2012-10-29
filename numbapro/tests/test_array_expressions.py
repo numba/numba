@@ -93,9 +93,7 @@ if __name__ == '__main__':
     array_expr3(a, b, c)
 
     a2 = np.arange(120).reshape(10, 12).astype(np.float32)
-    b = c = a.copy()
+    b = c = a2.copy()
     array_expr3.py_func(a2, b, c)
 
-    print np.all(a == a2)
-    print a
-    print a2
+    assert np.allclose(a, a2)
