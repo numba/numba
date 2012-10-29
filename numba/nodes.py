@@ -312,7 +312,6 @@ class LLVMExternalFunctionNode(Node):
     def __init__(self, signature, fname):
         super(LLVMExternalFunctionNode, self).__init__(signature=signature,
                                                        fname=fname)
-        assert signature.return_type is minitypes.void
 
 class LLVMIntrinsicNode(NativeCallNode):
     "Call an llvm intrinsic function"
