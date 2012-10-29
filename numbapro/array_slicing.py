@@ -42,9 +42,9 @@ class SliceSliceNode(SliceDimNode):
     def __init__(self, subslice, src_dim, dst_dim, **kwargs):
         super(SliceSliceNode, self).__init__(subslice, src_dim, dst_dim,
                                              **kwargs)
-        self.start = nodes.CoercionNode(subslice.lower, npy_intp)
-        self.stop = nodes.CoercionNode(subslice.upper, npy_intp)
-        self.step = nodes.CoercionNode(subslice.step, npy_intp)
+        self.start = subslice.lower and nodes.CoercionNode(subslice.lower, npy_intp)
+        self.stop = subslice.upper and nodes.CoercionNode(subslice.upper, npy_intp)
+        self.step = subslice.step and nodes.CoercionNode(subslice.step, npy_intp)
 
 def create_slice_dim_node(subslice, *args):
     if subslice.type.is_slice:
@@ -404,7 +404,7 @@ class SliceArray(CDefinition):
         self.have_stop = have_stop
         self.have_step = have_step
 
-        self.specialize_name()
+        self._name_ = "slice_%s_%s_%s" % (have_start, have_stop, have_step)
 
 class IndexAxis(CDefinition):
 
