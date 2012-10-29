@@ -265,14 +265,18 @@ class ArrayExpressionRewriteGPU(array_slicing.SliceRewriterMixin,
         py_ufunc, signature, ufunc_builder = self.get_py_ufunc(lhs, node)
         # Compile ufunc scalar kernel with numba
         sig, translator, wrapper = pipeline.compile_from_sig(
-                    self.context, py_ufunc, signature, compile_only=True)
+                    self.context, py_ufunc, signature, compile_only=True,
+                    nopython=self.nopython)
 
         lfunc = translator.lfunc
         operands = ufunc_builder.operands
         self.func.live_objects.append(lfunc)
 
-        if lhs is None:
-            raise error.NumbaError(node, "Cannot allocate new memory on GPU")
+        if lhs is None and self.nopython:
+            raise error.NumbaError(
+                    node, "Cannot allocate new memory in nopython context")
+        elif lhs is None:
+            raise NotImplementedError
 
         # Build minivect wrapper kernel
         context = self.array_expr_context
@@ -309,7 +313,16 @@ class ArrayExpressionRewriteGPU(array_slicing.SliceRewriterMixin,
                 node = nodes.CloneNode(node)
             args.append(self.array_attr(node, 'strides'))
 
-        return nodes.NativeCallNode(minikernel.type, args, lminikernel)
+        result = nodes.NativeCallNode(minikernel.type, args, lminikernel)
+        #result = result.cloneable
+        #return nodes.ExpressionNode(
+        #        stmts=[nodes.WithNoPythonNode(body=[result])],
+        #        expr=result.clone)
+
+        # Use native slicing in array expressions
+        array_slicing.mark_nopython(self.context, ast.Suite(body=result.args))
+        return result
+
 
 class ArrayExpressionGPUCodegen(ast_translate.LLVMCodeGenerator,
                                 array_slicing.NativeSliceCodegenMixin):

@@ -24,9 +24,9 @@ def slice_array(a, start, stop, step):
 
 @autojit
 def time_slicing(a, start, stop, step):
-#    with nopython:
-    for i in range(1000000):
-        a[start:stop:step]
+#    with nopython: # should make no difference in timing!
+        for i in range(1000000):
+            a[start:stop:step] = a[start:stop:step] * a[start:stop:step]
 
 def test_slicing():
     """
@@ -55,11 +55,10 @@ def test_slicing_result():
     return slice_array_start(a, 2)
 
 if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
-#    test_slicing()
+#    import doctest
+#    doctest.testmod()
 
-    #    a = np.arange(10)
-    #    t = time.time()
-    #    time_slicing(a, 1, 7, 2)
-    #    print time.time() - t
+        a = np.arange(10)
+        t = time.time()
+        time_slicing(a, 1, 7, 2)
+        print time.time() - t

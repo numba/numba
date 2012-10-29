@@ -76,11 +76,15 @@ class NativeSliceNode(nodes.Node):
         self.subslices = subslices
 
         self.shape_type = minitypes.CArrayType(npy_intp, type.ndim)
-
+        self.nopython = nopython
         if not nopython:
             self.build_array_node = self.build_array()
         else:
             self.build_array_node = None
+
+    def mark_nopython(self):
+        self.nopython = True
+        self.build_array_node = None
 
     def build_array(self):
         self.dst_data = nodes.LLVMValueRefNode(void.pointer(), None)
@@ -140,6 +144,17 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
             node = self._rewrite_slice(node)
         return node
 
+class MarkNoPython(visitors.NumbaVisitor):
+    def visit_NativeSliceNode(self, node):
+        node.mark_nopython()
+        self.generic_visit(node)
+        return node
+
+def mark_nopython(context, ast):
+    def dummy():
+        pass
+    MarkNoPython(context, dummy, ast).visit(ast)
+
 class FakePyArrayAccessor(object):
     pass
 
@@ -165,7 +180,7 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         view = self.visit(node.value)
         view_accessor = ndarray_helpers.PyArrayAccessor(self.builder, view)
 
-        if self.nopython:
+        if node.nopython:
             view_copy = self.llvm_alloca(array_ltype)
             self.builder.store(self.builder.load(view), view_copy)
             view_copy_accessor = ndarray_helpers.PyArrayAccessor(self.builder,
@@ -189,7 +204,7 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         self.visitlist(node.subslices)
 
         # Return fake or actual array
-        if self.nopython:
+        if node.nopython:
             return view_copy
         else:
             # Update LLVMValueRefNode fields, build actual numpy array

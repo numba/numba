@@ -85,12 +85,12 @@ def test_gufunc_array_expressions():
 
 
 if __name__ == '__main__':
-#    test_gufunc_array_expressions()
-#    test_array_expressions()
-#    test_matmul()
+    test_gufunc_array_expressions()
+    test_array_expressions()
+    test_matmul()
 
-    a = np.arange(100).reshape(10, 10).astype(np.float32)
-    print test_slicing(a)
+#    a = np.arange(100).reshape(10, 10).astype(np.float32)
+#    print test_slicing(a)
 
 #    a = np.arange(120).reshape(10, 12).astype(np.float32)
 #    b = c = a.copy()
