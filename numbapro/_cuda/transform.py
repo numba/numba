@@ -55,12 +55,6 @@ class CudaSMemAssignNode(nodes.Node):
         self.target = target
         self.value = value
 
-class CudaDeferredCallNode(nodes.Node):
-    _fields = ['node']
-
-    def __init__(self, node):
-        self.node = node
-
 class CudaAttrRewriteMixin(object):
     
     def visit_Attribute(self, node):
@@ -78,18 +72,19 @@ class CudaAttrRewriteMixin(object):
             retval = value.resolve(node.attr)
         
         if retval.value in sreg.SPECIAL_VALUES:  # sreg
-            # replace with a MathCallNode
+            # subsitute with a function call 
             sig = minitypes.FunctionType(minitypes.uint32, [])
             fname = sreg.SPECIAL_VALUES[retval.value]
-            retval = nodes.MathCallNode(sig, [], None, name=fname)
+            funcnode = nodes.LLVMExternalFunctionNode(sig, fname)
+            callnode = nodes.NativeFunctionCallNode(sig, funcnode, [])
+            retval = callnode
         elif retval.value == smem._array:   # allocate shared memory
             retval = CudaSMemArrayNode()
         elif retval.value == barrier.syncthreads: # syncthreads
             sig = minitypes.FunctionType(minitypes.void, [])
             fname = 'llvm.nvvm.barrier0'
-            callnode = nodes.LLVMExternalFunctionCallNode(sig, fname, [])
-            retval = CudaDeferredCallNode(callnode)
-
+            funcnode = nodes.LLVMExternalFunctionNode(sig, fname)
+            retval = funcnode
         if retval is node:
             retval = super(CudaAttrRewriteMixin, self).visit_Attribute(node)
         
@@ -98,19 +93,34 @@ class CudaAttrRewriteMixin(object):
     def visit_Call(self, node):
         func = self.visit(node.func)
         if isinstance(func, CudaSMemArrayNode):
+            assert len(node.args) <= 2
             kws = dict((kw.arg, kw.value)for kw in node.keywords)
-
-            shape = tuple()
-            for elem in kws['shape'].elts:
-                shape += (elem.n,)  # FIXME: must be a constant
             
+            arglist = 'shape', 'dtype'
+            for i, v in enumerate(node.args):
+                k = arglist[i]
+                if k in kws:
+                    raise KeyError("%s is re-defined as keyword argument" % k)
+                else:
+                    kws[k] = v
+        
+            shape = tuple()
+        
+            for elem in kws['shape'].elts:
+                node = self.visit(elem)
+                shape += (node.pyval,)
+    
             dtype_id = kws['dtype'].id # FIXME must be a ast.Name
-            dtype = self._myglobals[dtype_id] # must be a Numba type
+            dtype = self._myglobals[dtype_id] # FIXME must be a Numba type
         
             node = CudaSMemArrayCallNode(self.context, shape=shape, dtype=dtype)
             return node
-        elif isinstance(func, CudaDeferredCallNode):
-            return func.node
+        elif isinstance(func, nodes.LLVMExternalFunctionNode):
+            self.visitlist(node.args)
+            self.visitlist(node.keywords)
+            callnode = nodes.NativeFunctionCallNode(func.signature, func,
+                                                    node.args)
+            return callnode
         else:
             return super(CudaAttrRewriteMixin, self).visit_Call(node)
 
