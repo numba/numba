@@ -272,11 +272,19 @@ class ArrayExpressionRewriteGPU(array_slicing.SliceRewriterMixin,
         operands = ufunc_builder.operands
         self.func.live_objects.append(lfunc)
 
+        operands = [nodes.CloneableNode(operand) for operand in operands]
+        shape = array_slicing.BroadcastNode(lhs.type if lhs else node.type,
+                                            operands)
+        operands = [op.clone for op in operands]
+
         if lhs is None and self.nopython:
             raise error.NumbaError(
                     node, "Cannot allocate new memory in nopython context")
         elif lhs is None:
-            raise NotImplementedError
+            # TODO: determine best output order at runtime
+            lhs = nodes.ArrayNewEmptyNode(node.type, shape,
+                                          node.type.is_f_contig)
+
 
         # Build minivect wrapper kernel
         context = self.array_expr_context
@@ -293,25 +301,16 @@ class ArrayExpressionRewriteGPU(array_slicing.SliceRewriterMixin,
                             minikernel, specializers.StridedSpecializer)
 
         # Build call to minivect kernel
-        operands = [nodes.CloneableNode(operand) for operand in operands]
-
-        lhs = nodes.CloneableNode(lhs)
-        # The broadcast shape. There is no error checking or actual
-        # broadcasting!
-        # Broadcasting dimensions are assumed to have stride 0, this may
-        # not be true at all!
-        shape = self.array_attr(lhs, 'shape')
-
-        lhs = nodes.CloneNode(lhs)
-        operands.insert(0, lhs)
-
+        operands.insert(0, nodes.CloneableNode(lhs))
         args = [shape]
-        for node in operands:
-            data_p = self.array_attr(node, 'data')
-            args.append(nodes.CoercionNode(data_p, operand.type.dtype.pointer()))
-            if not isinstance(node, nodes.CloneNode):
-                node = nodes.CloneNode(node)
-            args.append(self.array_attr(node, 'strides'))
+        for operand in operands:
+            data_p = self.array_attr(operand, 'data')
+            data_p = nodes.CoercionNode(data_p, operand.type.dtype.pointer())
+            if not isinstance(operand, nodes.CloneNode):
+                operand = nodes.CloneNode(operand)
+            strides_p = self.array_attr(operand, 'strides')
+
+            args.extend((data_p, strides_p))
 
         result = nodes.NativeCallNode(minikernel.type, args, lminikernel)
         #result = result.cloneable

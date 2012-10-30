@@ -55,8 +55,8 @@ def test_slicing_result():
     return slice_array_start(a, 2)
 
 if __name__ == "__main__":
-#    import doctest
-#    doctest.testmod()
+    import doctest
+    doctest.testmod()
 
     a = np.arange(10)
     t = time.time()

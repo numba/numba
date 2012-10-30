@@ -9,7 +9,7 @@ from llvm_cbuilder import builder
 from numba import *
 from numba import (visitors, nodes, error,
                    ast_type_inference, ast_translate,
-                   ndarray_helpers)
+                   ndarray_helpers, llvm_types)
 from numba.minivect import minitypes
 from numbapro.vectorize.gufunc import PyArray
 
@@ -45,6 +45,26 @@ class SliceSliceNode(SliceDimNode):
         self.start = subslice.lower and nodes.CoercionNode(subslice.lower, npy_intp)
         self.stop = subslice.upper and nodes.CoercionNode(subslice.upper, npy_intp)
         self.step = subslice.step and nodes.CoercionNode(subslice.step, npy_intp)
+
+class BroadcastNode(nodes.Node):
+    """
+    Broadcast a bunch of operands:
+
+        - set strides of single-sized dimensions to zero
+        - find big shape
+    """
+
+    _fields = ['operands', 'check_error']
+
+    def __init__(self, array_type, operands, **kwargs):
+        super(BroadcastNode, self).__init__(**kwargs)
+        self.operands = operands
+        self.shape_type = minitypes.CArrayType(npy_intp, array_type.ndim)
+        self.array_type = array_type
+        self.type = npy_intp.pointer()
+
+        self.return_value = nodes.LLVMValueRefNode(int_, None)
+        self.check_error = nodes.CheckErrorNode(self.return_value, 0)
 
 def create_slice_dim_node(subslice, *args):
     if subslice.type.is_slice:
@@ -100,8 +120,6 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
     """
     Visitor mixin that rewrites slices to its native equivalent without
     using the Python API.
-
-    Only works in a nopython context!
     """
 
     def _rewrite_slice(self, node):
@@ -145,6 +163,11 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
         return node
 
 class MarkNoPython(visitors.NumbaVisitor):
+    """
+    Mark array slicing nodes as nopython, which allows them to use
+    stack-allocated fake arrays.
+    """
+
     def visit_NativeSliceNode(self, node):
         node.mark_nopython()
         self.generic_visit(node)
@@ -259,6 +282,32 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
             self.newaxis_func(acc_copy.shape, acc_copy.strides, node.dst_dim)
 
         return None
+
+    def visit_BroadcastNode(self, node):
+        shape = self.alloca(node.shape_type)
+        shape = self.builder.bitcast(shape, node.type.to_llvm(self.context))
+
+        # Initialize shape to ones
+        default_extent = llvm.core.Constant.int(C.npy_intp, 1)
+        for i in range(node.array_type.ndim):
+            dst = self.builder.gep(shape, [llvm.core.Constant.int(C.int, i)])
+            self.builder.store(default_extent, dst)
+
+        func_def = Broadcast()
+        broadcast = func_def(self.mod)
+
+        for op in node.operands:
+            op_result = self.visit(op)
+            acc = ndarray_helpers.PyArrayAccessor(self.builder, op_result)
+            if op.type.is_array:
+                args = [shape, acc.shape, acc.strides,
+                        llvm_types.constant_int(node.array_type.ndim),
+                        llvm_types.constant_int(op.type.ndim)]
+                lresult = self.builder.call(broadcast, args)
+                node.return_value.llvm_value = lresult
+                self.visit(node.check_error)
+
+        return shape
 
 class SliceArray(CDefinition):
 
@@ -457,3 +506,76 @@ class NewAxis(CDefinition):
     @classmethod
     def specialize(cls):
         cls.specialize_name()
+
+class Broadcast(CDefinition):
+    """
+    Transliteration of
+
+        @cname('__pyx_memoryview_broadcast')
+        cdef bint __pyx_broadcast(Py_ssize_t *dst_shape,
+                                  Py_ssize_t *input_shape,
+                                  Py_ssize_t *strides,
+                                  int max_ndim, int ndim,
+                                  bint *p_broadcast) nogil except -1:
+            cdef Py_ssize_t i
+            cdef int dim_offset = max_ndim - ndim
+
+            for i in range(ndim):
+                src_extent = input_shape[i]
+                dst_extent = dst_shape[i + dim_offset]
+
+                if src_extent == 1:
+                    p_broadcast[0] = True
+                    strides[i] = 0
+                elif dst_extent == 1:
+                    dst_shape[i + dim_offset] = src_extent
+                elif src_extent != dst_extent:
+                    __pyx_err_extents(i, dst_shape[i], input_shape[i])
+    """
+
+    _name_ = "broadcast"
+    _argtys_ = [
+        ('dst_shape', C.pointer(C.npy_intp)),
+        ('src_shape', C.pointer(C.npy_intp)),
+        ('src_strides', C.pointer(C.npy_intp)),
+        ('max_ndim', C.int),
+        ('ndim', C.int),
+    ]
+    _retty_ = C.int
+
+    def body(self, dst_shape, src_shape, src_strides, max_ndim, ndim):
+        dim_offset = max_ndim - ndim
+
+        def constants(type):
+            return self.constant(type, 0), self.constant(type, 1)
+
+        zero, one = constants(C.npy_intp)
+        zero_int, one_int = constants(C.int)
+
+        i = self.var(C.int, 0, name='i')
+        with self.loop() as loop:
+            with loop.condition() as setcond:
+                setcond(i < ndim)
+
+            with loop.body():
+                src_extent = src_shape[i]
+                dst_extent = dst_shape[i + dim_offset]
+
+                with self.ifelse(src_extent == one) as ifelse:
+                    with ifelse.then():
+                        # p_broadcast[0] = True
+                        src_strides[i] = zero
+                    with ifelse.otherwise():
+                        with self.ifelse(dst_extent == one) as ifelse:
+                            with ifelse.then():
+                                dst_shape[i + dim_offset] = src_extent
+
+                            with ifelse.otherwise():
+                                with self.ifelse(src_extent != dst_extent) as ifelse:
+                                    with ifelse.then():
+                                        # Shape mismatch
+                                        self.ret(zero_int)
+
+                i += one_int
+
+        self.ret(one_int)
