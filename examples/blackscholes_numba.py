@@ -3,7 +3,7 @@ import math
 import time
 from numba import *
 from blackscholes import black_scholes
-# import logging; logging.getLogger().setLevel(0)
+import logging; logging.getLogger().setLevel(logging.WARNING)
 
 
 RISKFREE = 0.02
@@ -18,7 +18,7 @@ def cnd_numba(d):
     A4 = -1.821255978
     A5 = 1.330274429
     RSQRT2PI = 0.39894228040143267793994605993438
-    K = 1.0 / (1.0 + 0.2316419 * math.abs(d))
+    K = 1.0 / (1.0 + 0.2316419 * math.fabs(d))
     ret_val = (RSQRT2PI * math.exp(-0.5 * d * d) *
                (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5))))))
     if d > 0:
@@ -41,7 +41,7 @@ def black_scholes_numba(callResult, putResult, stockPrice, optionStrike,
         cndd1 = cnd_numba(d1)
         cndd2 = cnd_numba(d2)
 
-        expRT = math.exp(- R * T)
+        expRT = math.exp((-1. * R) * T[i])
         callResult[i] = (S[i] * cndd1 - X[i] * expRT * cndd2)
         putResult[i] = (X[i] * expRT * (1.0 - cndd2) - S[i] * (1.0 - cndd1))
 
