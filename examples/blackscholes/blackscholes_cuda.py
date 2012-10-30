@@ -3,16 +3,16 @@ import math
 import time
 from numba import *
 from numbapro import cuda
-from numbapro.vectorize import GUVectorize
 from blackscholes_numba import black_scholes, black_scholes_numba
-#import logging; logging.getLogger().setLevel(logging.WARNING)
+import logging; logging.getLogger().setLevel(0)
 
 
 RISKFREE = 0.02
 VOLATILITY = 0.30
 
 
-def cnd(d):
+@cuda.jit(argtypes=(double,), restype=double, device=True, inline=True)
+def cnd_cuda(d):
     A1 = 0.31938153
     A2 = -0.356563782
     A3 = 1.781477937
@@ -26,11 +26,13 @@ def cnd(d):
         ret_val = 1.0 - ret_val
     return ret_val
 
-cnd_cuda = GUVectorize(cnd, 'n->n', target='gpu')
 
+# FIXME: There is a bug in how Numba computes the first line of a
+# decorated function, such that it doesn't account for a decorator
+# that occupies more than one line.  The following decorator should
+# comply with PEP 8, and not go past the 79-th column.
 
-@cuda.jit(argtypes=(double[:], double[:], double[:], double[:], double[:],
-                    double, double))
+@cuda.jit(argtypes=(double[:], double[:], double[:], double[:], double[:], double, double))
 def black_scholes_cuda(callResult, putResult, stockPrice, optionStrike,
                        optionYears, Riskfree, Volatility):
     S = stockPrice
@@ -59,7 +61,7 @@ def main (*args):
     iterations = 10
     if len(args) >= 2:
         iterations = int(args[0])
-    
+
     callResultNumpy = np.zeros(OPT_N)
     putResultNumpy = -np.ones(OPT_N)
     stockPrice = randfloat(np.random.random(OPT_N), 5.0, 30.0)
@@ -95,6 +97,7 @@ def main (*args):
     d_stockPrice = cuda.to_device(stockPrice, stream)
     d_optionStrike = cuda.to_device(optionStrike, stream)
     d_optionYears = cuda.to_device(optionYears, stream)
+    time1 = time.time()
     for i in range(iterations):
         black_scholes_cuda[griddim, blockdim, stream](
             d_callResult, d_putResult, d_stockPrice, d_optionStrike,
@@ -102,9 +105,9 @@ def main (*args):
         d_callResult.to_host(stream)
         d_putResult.to_host(stream)
         stream.synchronize()
-    time1 = time.time()
-    print("numbapro.cuda time: %f msec" % ((1000 * (time1 -time0)) /
-                                           iterations))
+    time2 = time.time()
+    dt = (time1 - time0) * 10 + (time2 - time1)
+    print("numbapro.cuda time: %f msec" % ((1000 * dt) / iterations))
 
     delta = np.abs(callResultNumpy - callResultNumba)
     L1norm = delta.sum() / np.abs(callResultNumpy).sum()
