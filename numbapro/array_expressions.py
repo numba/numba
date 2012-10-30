@@ -306,7 +306,8 @@ class ArrayExpressionRewrite(array_slicing.SliceRewriterMixin,
 
         # Build minivect wrapper kernel
         context = self.array_expr_context
-        # context.debug = True
+        context.debug = True
+        context.optimize_broadcasting = False
         b = context.astbuilder
 
         variables = [b.variable(name_node.type, "op%d" % i)
@@ -346,8 +347,8 @@ class ArrayExpressionRewrite(array_slicing.SliceRewriterMixin,
         return nodes.ExpressionNode(stmts=[result], expr=lhs.clone)
 
 
-class ArrayExpressionCodegen(ast_translate.LLVMCodeGenerator,
-                             array_slicing.NativeSliceCodegenMixin):
+class ArrayExpressionCodegen(array_slicing.NativeSliceCodegenMixin,
+                             ast_translate.LLVMCodeGenerator):
     """
     Support native slicing code generation.
     """

@@ -129,7 +129,6 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
         slices = []
         src_dim = 0
         dst_dim = 0
-        assert node.value.type.ndim == len(node.slice.dims)
 
         all_slices = True
         for subslice in node.slice.dims:
@@ -146,9 +145,6 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
                 all_slices = False
                 src_dim += 1
                 dst_dim += 1
-
-        assert src_dim == node.value.type.ndim
-        assert dst_dim == node.type.ndim
 
         #if all_slices and all(empty(subslice) for subslice in slices):
         #    return node.value
@@ -239,6 +235,7 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
             return self.visit(node.build_array_node)
 
     def visit_SliceSliceNode(self, node):
+        "Handle slicing"
         start, stop, step = node.start, node.stop, node.step
 
         if start is not None:
@@ -273,15 +270,19 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         return None
 
     def visit_SliceDimNode(self, node):
+        "Handle indexing and newaxes in a slice operation"
         acc_copy = node.view_copy_accessor
         acc = node.view_accessor
         if node.type.is_int:
-            value = self.visit(node.subslice)
-            acc_copy.data = self.index_func(acc_copy.data,
-                                            acc.shape, acc.strides,
-                                            node.src_dim, value)
+            value = self.visit(nodes.CoercionNode(node.subslice, npy_intp))
+            args = [acc_copy.data, acc.shape, acc.strides,
+                    llvm_types.constant_int(node.src_dim, C.npy_intp), value]
+            result = self.builder.call(self.index_func, args)
+            acc_copy.data = result
         else:
-            self.newaxis_func(acc_copy.shape, acc_copy.strides, node.dst_dim)
+            args = [acc_copy.shape, acc_copy.strides,
+                    llvm_types.constant_int(node.dst_dim)]
+            self.builder.call(self.newaxis_func, args)
 
         return None
 
@@ -311,7 +312,14 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
 
         return shape
 
-class SliceArray(CDefinition):
+class ConstantBase(CDefinition):
+
+    def get_constants(self):
+        zero = self.constant(C.npy_intp, 0)
+        one = self.constant(C.npy_intp, 1)
+        return one, zero
+
+class SliceArray(ConstantBase):
 
     _name_ = "slice"
     _retty_ = C.char_p
@@ -404,11 +412,6 @@ class SliceArray(CDefinition):
         else:
             self._set_default_index(default1, default2, negative_step, index)
 
-    def get_constants(self):
-        zero = self.constant(C.npy_intp, 0)
-        one = self.constant(C.npy_intp, 1)
-        return one, zero
-
     def body(self, data, in_shape, in_strides, out_shape, out_strides,
              start, stop, step, src_dim, dst_dim):
 
@@ -463,7 +466,7 @@ class SliceArray(CDefinition):
 
         self._name_ = "slice_%s_%s_%s" % (have_start, have_stop, have_step)
 
-class IndexAxis(CDefinition):
+class IndexAxis(ConstantBase):
 
     _name_ = "index"
     _retty_ = C.char_p
@@ -475,32 +478,27 @@ class IndexAxis(CDefinition):
         ('index', C.npy_intp),
     ]
 
-    def body(self, data, in_shape, in_strides, index, src_dim):
-        result = self.parent.var(data.type, name='result')
-        result.assign(data + in_strides[src_dim] * index)
+    def body(self, data, in_shape, in_strides, src_dim, index):
+        result = self.var(data.type, name='result')
+        result.assign(data[in_strides[src_dim] * index:])
         self.ret(result)
 
-    def specialize(self):
-        self.specialize_name()
-
-class NewAxis(CDefinition):
+class NewAxis(ConstantBase):
 
     _name_ = "newaxis"
     _argtys_ = [
         ('out_shape', C.pointer(C.npy_intp)),
         ('out_strides', C.pointer(C.npy_intp)),
-        ('dst_dim', C.npy_intp),
+        ('dst_dim', C.int),
     ]
 
     def body(self, out_shape, out_strides, dst_dim):
-        out_shape[dst_dim] = 1
-        out_strides[dst_dim] = 0
+        one, zero = self.get_constants()
+        out_shape[dst_dim] = one
+        out_strides[dst_dim] = zero
+        self.ret()
 
-    @classmethod
-    def specialize(cls):
-        cls.specialize_name()
-
-class Broadcast(CDefinition):
+class Broadcast(ConstantBase):
     """
     Transliteration of
 
