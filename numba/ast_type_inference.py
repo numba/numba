@@ -216,7 +216,7 @@ class NumpyMixin(object):
                 if seen_ellipsis:
                     result.append(full_slice)
                 else:
-                    nslices = type.ndim - n_indices
+                    nslices = type.ndim - n_indices + 1
                     result.extend([full_slice] * nslices)
                     seen_ellipsis = True
             elif (slice_type.is_slice or slice_type.is_int or
