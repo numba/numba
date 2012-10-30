@@ -474,7 +474,8 @@ class ArrayType(Type):
 
     @property
     def comparison_type_list(self):
-        return [self.dtype, self.is_c_contig, self.is_f_contig, self.inner_contig]
+        return [self.dtype, self.is_c_contig, self.is_f_contig,
+                self.inner_contig, self.ndim]
 
     def pointer(self):
         raise Exception("You probably want a pointer type to the dtype")

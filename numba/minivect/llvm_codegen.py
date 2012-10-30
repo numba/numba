@@ -17,6 +17,33 @@ import minitypes
 import minivisitor
 import ctypes_conversion
 
+def handle_struct_passing(builder, alloca_func, largs, signature):
+    """
+    Handle signatures with structs. If signature.struct_by_reference
+    is set, we need to pass in structs by reference, and retrieve
+    struct return values by refererence through an additional argument.
+
+    Structs are always loaded as pointers.
+    Complex numbers are always immediate struct values.
+    """
+    for i, (arg_type, larg) in enumerate(zip(signature.args, largs)):
+        if minitypes.pass_by_ref(arg_type):
+            if signature.struct_by_reference:
+                if arg_type.is_complex:
+                    new_arg = alloca_func(arg_type)
+                    builder.store(larg, new_arg)
+                    larg = new_arg
+
+            largs[i] = larg
+
+    if (signature.struct_by_reference and
+            minitypes.pass_by_ref(signature.return_type)):
+        return_value = alloca_func(signature.return_type)
+        largs.append(return_value)
+        return return_value
+
+    return None
+
 class LLVMCodeGen(codegen.CodeGen):
     """
     Generate LLVM code for a minivect AST.
@@ -356,13 +383,15 @@ class LLVMCodeGen(codegen.CodeGen):
         if node not in self.declared_temps:
             self._mangle_temp(node)
 
+        llvm_temp = self.alloca(node.type)
+        self.llvm_temps[node] = llvm_temp
+        return llvm_temp
+
+    def alloca(self, type, name=''):
         bb = self.builder.basic_block
         self.builder.position_at_beginning(self.entry_bb)
-        llvm_temp = self.builder.alloca(node.type.to_llvm(self.context),
-                                        node.name)
+        llvm_temp = self.builder.alloca(type.to_llvm(self.context), name)
         self.builder.position_at_end(bb)
-
-        self.llvm_temps[node] = llvm_temp
         return llvm_temp
 
     def visit_AssignmentExpr(self, node):
@@ -463,14 +492,24 @@ class LLVMCodeGen(codegen.CodeGen):
         return lvalue
 
     def visit_FuncCallNode(self, node):
-        llvm_args = self.results(node.args)
+        llvm_args = list(self.results(node.args))
         llvm_func = self.visit(node.func_or_pointer)
+
+        signature = node.func_or_pointer.type
+        if signature.struct_by_reference:
+            result = handle_struct_passing(
+                        self.builder, self.alloca, llvm_args, signature)
+
         llvm_call = self.builder.call(llvm_func, llvm_args)
 
         if node.inline:
             self.inline_calls.append(llvm_call)
 
-        return llvm_call
+        if (signature.struct_by_reference and
+                minitypes.pass_by_ref(signature.return_type)):
+            return self.builder.load(result)
+        else:
+            return llvm_call
 
     def visit_FuncNameNode(self, node):
         try:
