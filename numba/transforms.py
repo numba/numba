@@ -692,6 +692,12 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             if node.value.is_read_only and isinstance(node.ctx, ast.Store):
                 raise error.NumbaError("Attempt to load read-only attribute")
 
+        # Short-circuit visiting a Slice child if this is a nopython
+        # string slice.
+        if (self.nopython and node.value.type.is_c_string and
+                node.type.is_c_string):
+            return self.visit(self._c_string_slice(node))
+
         # logging.debug(ast.dump(node))
         self.generic_visit(node)
 
@@ -713,13 +719,10 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             # Array index with integer indices
             node = nodes.DataPointerNode(node.value, node.slice, node.ctx)
         elif node.value.type.is_c_string and node.type.is_c_string:
-            if self.nopython:
-                node = self._c_string_slice(node)
-            else:
-                node.value = nodes.CoercionNode(node.value, dst_type = object_)
-                node.type = object_
-                node = nodes.CoercionNode(nodes.ObjectTempNode(node),
-                                          dst_type = c_string_type)
+            node.value = nodes.CoercionNode(node.value, dst_type = object_)
+            node.type = object_
+            node = nodes.CoercionNode(nodes.ObjectTempNode(node),
+                                      dst_type = c_string_type)
             node = self.visit(node)
 
         return node
