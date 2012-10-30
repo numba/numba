@@ -1,6 +1,6 @@
 import sys
 from numba.minivect import minitypes
-from . import sreg, smem, barrier
+from . import sreg, smem, barrier, macros
 import numpy as np
 # modify numba behavior
 
@@ -27,11 +27,10 @@ class CudaAttributeNode(nodes.Node):
         return type(self)(getattr(self.value, name))
     
     def __repr__(self):
-        return '<%s value=%s>' % (type(self).__nmae__, self.value)
+        return '<%s value=%s>' % (type(self).__name__, self.value)
 
 class CudaSMemArrayNode(nodes.Node):
     pass
-
 
 class CudaSMemArrayCallNode(nodes.Node):
     _attributes = ('shape', 'variable')
@@ -55,8 +54,28 @@ class CudaSMemAssignNode(nodes.Node):
         self.target = target
         self.value = value
 
+class CudaMacroGridNode(nodes.Node):
+    pass
+
+class CudaMacroGridExpandValuesNode(nodes.Node):
+    pass
+
+def _make_sreg_call(attr):
+    fname = sreg.SPECIAL_VALUES[attr]
+    sig = minitypes.FunctionType(minitypes.uint32, [])
+    funcnode = nodes.LLVMExternalFunctionNode(sig, fname)
+    callnode = nodes.NativeFunctionCallNode(sig, funcnode, [])
+    return callnode
+
+def _make_sreg_pattern(x, y, z):
+    x, y, z = (_make_sreg_call(i) for i in [x, y, z])
+    mul = ast.BinOp(op=ast.Mult(), left=y, right=z)
+    add = ast.BinOp(op=ast.Add(), left=x, right =mul)
+    return add
+
+
 class CudaAttrRewriteMixin(object):
-    
+
     def visit_Attribute(self, node):
         from numbapro import cuda as _THIS_MODULE
         
@@ -85,6 +104,8 @@ class CudaAttrRewriteMixin(object):
             fname = 'llvm.nvvm.barrier0'
             funcnode = nodes.LLVMExternalFunctionNode(sig, fname)
             retval = funcnode
+        elif retval.value == macros.grid:  # expand into sreg attributes
+            retval = CudaMacroGridNode()
         if retval is node:
             retval = super(CudaAttrRewriteMixin, self).visit_Attribute(node)
         
@@ -121,6 +142,28 @@ class CudaAttrRewriteMixin(object):
             callnode = nodes.NativeFunctionCallNode(func.signature, func,
                                                     node.args)
             return callnode
+        elif isinstance(func, CudaMacroGridNode):
+            assert len(node.args) == 1
+            assert len(node.keywords) == 0
+            ndim = self.visit(node.args[0]).pyval
+            if ndim == 1:
+                node = _make_sreg_pattern(sreg.threadIdx.x,
+                                        sreg.blockIdx.x,
+                                        sreg.blockDim.x)
+                return self.visit(node)
+            elif ndim == 2:
+                node1 = _make_sreg_pattern(sreg.threadIdx.x,
+                                           sreg.blockIdx.x,
+                                           sreg.blockDim.x)
+                node2 = _make_sreg_pattern(sreg.threadIdx.y,
+                                           sreg.blockIdx.y,
+                                           sreg.blockDim.y)
+
+                return self.visit(ast.Tuple(elts=[node1, node2],
+                                            ctx=ast.Load()))
+            else:
+                raise ValueError("Dimension is only valid for 1 or 2, " \
+                                 "but got %d" % ndim)
         else:
             return super(CudaAttrRewriteMixin, self).visit_Call(node)
 
@@ -131,7 +174,7 @@ class CudaAttrRewriteMixin(object):
             target = node.targets[0] = self.visit(node.targets[0])
             self.assign(target.variable, node.value.variable, node.value)
             return CudaSMemAssignNode(node.targets[0], node.value)
-        
+
         # FIXME: the following is copied from TypeInferer.visit_Assign
         #        there seems to be some side-effect in visit(node.value)
         if len(node.targets) != 1 or isinstance(node.targets[0], (ast.List,

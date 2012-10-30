@@ -9,6 +9,7 @@ from llvm_cbuilder import shortnames as _llvm_cbuilder_types
 from _cuda.sreg import threadIdx, blockIdx, blockDim, gridDim
 from _cuda.smem import shared
 from _cuda.barrier import syncthreads
+from _cuda.macros import grid
 from _cuda.transform import function_cache
 from numba.minivect import minitypes
 from numba import void
@@ -252,7 +253,9 @@ class CudaNumbaFunction(CudaBaseFunction):
         # FIXME: this function is called multiple times on the same lfunc.
         #        As a result, it has a long list of nvvm.annotation of the
         #        same data.
-        from numbapro._cuda import nvvm
+        from numbapro._cuda import nvvm, default
+        arch = 'compute_%d0' % default.device.COMPUTE_CAPABILITY[0]
+        
         nvvm.fix_data_layout(self.module)
         nvvm.set_cuda_kernel(lfunc)
 
@@ -262,8 +265,8 @@ class CudaNumbaFunction(CudaBaseFunction):
         pmb.populate(pm)
         pm.run(self.module)
 #        print self.module
-        self._ptxasm = nvvm.llvm_to_ptx(str(self.module))
-#        print self._ptxasm
+        self._ptxasm = nvvm.llvm_to_ptx(str(self.module), arch=arch)
+        print self._ptxasm
         from numbapro import _cudadispatch
         self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(self._ptxasm,
                                                                 func_name,
@@ -349,4 +352,5 @@ def stream():
     from numbapro._cuda.driver import Stream
     return Stream()
 
+# Macros
 
