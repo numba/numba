@@ -249,7 +249,6 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
             step = self.visit(node.step)
 
         slice_func_def = SliceArray(self.context,
-                                    node.src_dim, node.dst_dim,
                                     start is not None,
                                     stop is not None,
                                     step is not None)
@@ -261,10 +260,13 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         in_strides = node.view_accessor.strides
         out_shape = node.view_copy_accessor.shape
         out_strides = node.view_copy_accessor.strides
+        src_dim = llvm_types.constant_int(node.src_dim)
+        dst_dim = llvm_types.constant_int(node.dst_dim)
 
-        default = llvm.core.Constant.int(C.npy_intp, 0)
+        default = llvm_types.constant_int(0, C.npy_intp)
         args = [data, in_shape, in_strides, out_shape, out_strides,
-                start or default, stop or default, step or default]
+                start or default, stop or default, step or default,
+                src_dim, dst_dim]
         data_p = self.builder.call(slice_func, args)
         node.view_copy_accessor.data = data_p
 
@@ -325,6 +327,9 @@ class SliceArray(CDefinition):
         ('start', C.npy_intp),
         ('stop', C.npy_intp),
         ('step', C.npy_intp),
+
+        ('src_dim', C.int),
+        ('dst_dim', C.int),
     ]
 
     def _adjust_given_index(self, extent, negative_step, index, is_start):
@@ -394,15 +399,10 @@ class SliceArray(CDefinition):
 
     def adjust_index(self, extent, negative_step, index, default1, default2,
                      is_start=False, have_index=True):
-#        var_index = self.var(C.npy_intp)
         if have_index:
-#            index = index.cast(npy_intp.to_llvm(self.context))
-#            var_index.assign(index)
             self._adjust_given_index(extent, negative_step, index, is_start)
         else:
             self._set_default_index(default1, default2, negative_step, index)
-
-#        return var_index
 
     def get_constants(self):
         zero = self.constant(C.npy_intp, 0)
@@ -410,9 +410,8 @@ class SliceArray(CDefinition):
         return one, zero
 
     def body(self, data, in_shape, in_strides, out_shape, out_strides,
-             start, stop, step):
+             start, stop, step, src_dim, dst_dim):
 
-        src_dim = self.src_dimension
         stride = in_strides[src_dim]
         extent = in_shape[src_dim]
 
@@ -447,8 +446,6 @@ class SliceArray(CDefinition):
             with ifelse.then():
                 stride.assign(zero)
 
-        dst_dim = self.dst_dimension
-
         result = self.var(data.type, name='result')
         result.assign(data[start * stride:])
         out_shape[dst_dim] = new_extent
@@ -457,12 +454,8 @@ class SliceArray(CDefinition):
 
         self.ret(result)
 
-    def specialize(self, context, src_dimension, dst_dimension,
-                   have_start, have_stop, have_step):
+    def specialize(self, context, have_start, have_stop, have_step):
         self.context = context
-
-        self.src_dimension = src_dimension
-        self.dst_dimension = dst_dimension
 
         self.have_start = have_start
         self.have_stop = have_stop

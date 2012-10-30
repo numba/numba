@@ -13,6 +13,7 @@ from numba import translate, utils, functions, nodes
 from numba.symtab import Variable
 from numba import visitors, nodes, error, ast_type_inference, ast_translate
 from numba import decorators
+from numba.utils import dump
 
 from numbapro import vectorize, dispatch, array_slicing
 from numbapro.vectorize import basic, minivectorize
@@ -258,9 +259,14 @@ class ArrayExpressionRewriteGPU(array_slicing.SliceRewriterMixin,
         self.array_expr_context.llvm_module = llvm_module
 
     def array_attr(self, node, attr):
-        return nodes.ArrayAttributeNode(attr, node)
+        # Perform a low-level bitcast from object to an array type
+        array = nodes.CoercionNode(node, float_[:])
+        return nodes.ArrayAttributeNode(attr, array)
 
     def register_array_expression(self, node, lhs=None):
+        lhs_type = lhs.type if lhs else node.type
+        is_expr = lhs is None
+
         # Create ufunc scalar kernel
         py_ufunc, signature, ufunc_builder = self.get_py_ufunc(lhs, node)
         # Compile ufunc scalar kernel with numba
@@ -273,8 +279,13 @@ class ArrayExpressionRewriteGPU(array_slicing.SliceRewriterMixin,
         self.func.live_objects.append(lfunc)
 
         operands = [nodes.CloneableNode(operand) for operand in operands]
-        shape = array_slicing.BroadcastNode(lhs.type if lhs else node.type,
-                                            operands)
+
+        if lhs is not None:
+            broadcast_operands = [lhs] + operands
+        else:
+            broadcast_operands = operands[:]
+
+        shape = array_slicing.BroadcastNode(lhs_type, operands)
         operands = [op.clone for op in operands]
 
         if lhs is None and self.nopython:
@@ -282,8 +293,8 @@ class ArrayExpressionRewriteGPU(array_slicing.SliceRewriterMixin,
                     node, "Cannot allocate new memory in nopython context")
         elif lhs is None:
             # TODO: determine best output order at runtime
-            lhs = nodes.ArrayNewEmptyNode(node.type, shape,
-                                          node.type.is_f_contig)
+            lhs = nodes.ArrayNewEmptyNode(lhs_type, shape,
+                                          lhs_type.is_f_contig)
 
 
         # Build minivect wrapper kernel
@@ -301,26 +312,31 @@ class ArrayExpressionRewriteGPU(array_slicing.SliceRewriterMixin,
                             minikernel, specializers.StridedSpecializer)
 
         # Build call to minivect kernel
-        operands.insert(0, nodes.CloneableNode(lhs))
+        lhs = nodes.CloneableNode(lhs)
+        operands.insert(0, lhs)
         args = [shape]
         for operand in operands:
-            data_p = self.array_attr(operand, 'data')
-            data_p = nodes.CoercionNode(data_p, operand.type.dtype.pointer())
-            if not isinstance(operand, nodes.CloneNode):
-                operand = nodes.CloneNode(operand)
-            strides_p = self.array_attr(operand, 'strides')
-
-            args.extend((data_p, strides_p))
+            if operand.type.is_array:
+                data_p = self.array_attr(operand, 'data')
+                data_p = nodes.CoercionNode(data_p, operand.type.dtype.pointer())
+                if not isinstance(operand, nodes.CloneNode):
+                    operand = nodes.CloneNode(operand)
+                strides_p = self.array_attr(operand, 'strides')
+                args.extend((data_p, strides_p))
+            else:
+                args.append(operand)
 
         result = nodes.NativeCallNode(minikernel.type, args, lminikernel)
-        #result = result.cloneable
-        #return nodes.ExpressionNode(
-        #        stmts=[nodes.WithNoPythonNode(body=[result])],
-        #        expr=result.clone)
 
         # Use native slicing in array expressions
         array_slicing.mark_nopython(self.context, ast.Suite(body=result.args))
-        return result
+
+        if not is_expr:
+            # a[:] = b[:] * c[:]
+            return result
+
+        # b[:] * c[:], return new array as expression
+        return nodes.ExpressionNode(stmts=[result], expr=lhs.clone)
 
 
 class ArrayExpressionGPUCodegen(ast_translate.LLVMCodeGenerator,
