@@ -1234,7 +1234,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return self.mod.get_or_insert_function(lfunc_type, node.fname)
 
     def visit_LLVMIntrinsicNode(self, node):
-        intr = getattr(llvm.core, 'INTR_' + node.py_func.__name__.upper())
+        intr = getattr(llvm.core, 'INTR_' + node.func_name)
         largs = self.visitlist(node.args)
         node.llvm_func = llvm.core.Function.intrinsic(
                         self.mod, intr, [largs[0].type])
@@ -1320,6 +1320,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # Generate Py_XDECREF(temp) at end-of-function cleanup path
         self.xdecref_temp_cleanup(lhs)
         return self.builder.load(lhs, name=name + '_load')
+
+    def visit_PropagateNode(self, node):
+        self.builder.branch(self.error_label)
 
     def visit_ObjectTempRefNode(self, node):
         return node.obj_temp_node.llvm_temp

@@ -161,7 +161,8 @@ class MathMixin(object):
         return (type.is_float or type.is_int) and (is_intrinsic or is_math)
 
     def _resolve_intrinsic(self, args, py_func, signature):
-        return nodes.LLVMIntrinsicNode(signature, args, None, py_func)
+        func_name = py_func.__name__.upper()
+        return nodes.LLVMIntrinsicNode(signature, args, func_name=func_name)
 
     def math_suffix(self, name, type):
         if name == 'abs':
@@ -893,6 +894,56 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         # TODO: PyArray_UpdateFlags()
         result = nodes.ExpressionNode(filter(None, body), array.clone)
         return self.visit(result)
+
+    def visit_ArrayNewEmptyNode(self, node):
+        ndim = nodes.const(node.type.ndim, int_)
+        dtype = nodes.const(type.dtype.get_dtype(), object_)
+        is_fortran = nodes.const(node.fortran, int_)
+        result = nodes.PyArray_Empty(ndim, node.shape, dtype, is_fortran)
+        return self.visit(result)
+
+    def _raise_exception(self, body, node):
+        if node.exc_type:
+            assert node.exc_msg
+
+            if node.exc_args:
+                args = [node.exc_type, node.exc_msg, node.exc_args]
+                raise_node = self.function_cache.call('PyErr_Format', args)
+            else:
+                args = [node.exc_type, node.exc_msg]
+                raise_node = self.function_cache.call('PyErr_SetString', args)
+
+            body.append(raise_node)
+
+    def _trap(self, body, node):
+        if node.exc_msg and node.print_on_trap:
+            pos = error.format_pos(node)
+            msg = '%s: %s%%s' % (node.exc_type, pos)
+            format = nodes.const(msg, c_string_type)
+            print_msg = self.function_cache.call('printf', format, node.exc_msg)
+            body.append(print_msg)
+
+        trap = nodes.LLVMIntrinsicNode(signature=void(), args=[],
+                                       func_name='TRAP')
+        body.append(trap)
+
+    def visit_RaiseNode(self, node):
+        body = []
+        if self.nopython:
+            self._trap(body, node)
+        else:
+            self._raise_exception(body, node)
+
+        body.append(nodes.PropagateNode())
+        return ast.Suite(body=body)
+
+    def visit_CheckErrorNode(self, node):
+        test = ast.Compare(left=node.return_value, ops=[ast.Eq()],
+                           comparators=[node.badval])
+        test.right = node.badval
+
+        check = ast.If(test=test, body=[node.raise_node], orelse=[])
+        return self.visit(check)
 
     def visit_Name(self, node):
         if node.type.is_builtin and not node.variable.is_local:

@@ -1,5 +1,11 @@
 import traceback
 
+def format_pos(node):
+    if node is not None and hasattr(node, 'lineno'):
+        return "%s:%s: " % (node.lineno, node.col_offset)
+    else:
+        return ""
+
 class NumbaError(Exception):
     "Some error happened during compilation"
 
@@ -13,10 +19,7 @@ class NumbaError(Exception):
 
     def __str__(self):
         try:
-            pos = ""
-            if self.node is not None and hasattr(self.node, 'lineno'):
-                pos = "%s:%s: " % (self.node.lineno, self.node.col_offset)
-
+            pos = format_pos(self.node)
             msg = "%s%s %s" % (pos, self.msg, " ".join(map(str, self.args)))
             return msg.rstrip()
         except:

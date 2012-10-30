@@ -476,6 +476,15 @@ class PySlice_New(ExternalFunction):
     arg_types = [object_, object_, object_]
     return_type = object_
 
+class PyErr_SetString(ExternalFunction):
+    arg_types = [object_, c_string_type]
+    return_type = void
+
+class PyErr_Format(ExternalFunction):
+    arg_types = [object_, c_string_type]
+    return_type = void.pointer() # object_
+    is_vararg = True
+
 class PyModulo(InternalFunction):
 
     @property

@@ -320,6 +320,10 @@ class LLVMExternalFunctionNode(Node):
 class LLVMIntrinsicNode(NativeCallNode):
     "Call an llvm intrinsic function"
 
+    def __init__(self, signature, args, func_name, **kw):
+        super(LLVMIntrinsicNode, self).__init__(signature, args, None, **kw)
+        self.func_name = func_name
+
 class MathCallNode(NativeCallNode):
     "Low level call a libc math function"
 
@@ -377,6 +381,42 @@ class ComplexConjugateNode(Node):
         super(ComplexConjugateNode, self).__init__(**kwargs)
         self.complex_node = complex_node
 
+class CheckErrorNode(Node):
+    """
+    Check for an exception
+    """
+
+    _fields = ['return_value', 'badval', 'raise_node']
+
+    def __init__(self, return_value, badval,
+                 exc_type=None, exc_msg=None, exc_args=None,
+                 **kwargs):
+        super(CheckErrorNode, self).__init__(**kwargs)
+        self.return_value = return_value
+
+        if not isinstance(badval, ast.AST):
+            badval = ConstNode(badval, return_value.type)
+        self.badval = badval
+
+        self.raise_node = RaiseNode(exc_type, exc_msg, exc_args)
+
+class RaiseNode(Node):
+
+    _fields = ['exc_type', 'exc_msg', 'exc_args']
+
+    def __init__(self, exc_type, exc_msg, exc_args=None, print_on_trap=True,
+                 **kwargs):
+        super(RaiseNode, self).__init__(**kwargs)
+        self.exc_type = exc_type
+        self.exc_msg = exc_msg
+        self.exc_args = exc_args
+
+        self.print_on_trap = print_on_trap
+
+class PropagateNode(Node):
+    """
+    Propagate an exception (jump to the error label).
+    """
 
 class ObjectInjectNode(Node):
     """
@@ -428,7 +468,7 @@ class ObjectTempRefNode(Node):
 class CloneableNode(Node):
     """
     Create a node that can be cloned. This allows sub-expressions to be
-    re-used without
+    re-used without re-evaluating them.
     """
 
     _fields = ['node']
@@ -444,6 +484,12 @@ class CloneableNode(Node):
         return CloneNode(self)
 
 class CloneNode(Node):
+    """
+    Clone a CloneableNode. This allows the node's sub-expressions to be
+    re-used without re-evaluating them.
+
+    The CloneableNode must be evaluated before the CloneNode is evaluated!
+    """
 
     _fields = ['node']
 
@@ -633,6 +679,19 @@ class ArrayNewNode(Node):
         self.strides = strides
         self.base = base
 
+class ArrayNewEmptyNode(Node):
+    """
+    Allocate a new array with data.
+    """
+
+    _fields = ['shape']
+
+    def __init__(self, type, shape, is_fortran=False, **kwargs):
+        super(ArrayNewEmptyNode, self).__init__(**kwargs)
+        self.type = type
+        self.shape = shape
+        self.is_fortran = is_fortran
+
 
 class ExtTypeAttribute(Node):
 
@@ -797,3 +856,14 @@ def PyArray_SetBaseObject(args):
 
 def PyArray_UpdateFlags(args):
     return MultiArrayAPINode('PyArray_UpdateFlags', void(object_, int_), args)
+
+empty_signature = object_(int_,                   # nd
+                          npy_intp.pointer(),     # shape
+                          object_,                # dtype
+                          int_)                   # fortran
+
+def PyArray_Empty(args):
+    return MultiArrayAPINode('PyArray_Empty', empty_signature, args)
+
+def PyArray_Zeros(args):
+    return MultiArrayAPINode('PyArray_Zeros', empty_signature, args)
