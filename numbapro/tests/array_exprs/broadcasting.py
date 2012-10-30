@@ -49,8 +49,12 @@ def test(dtype):
     """
     >>> test(np.double)
     >>> test('l')
-    >> test(np.complex128)
-    blah
+    >>> test(np.complex128)
+    >>> test(np.complex64)
+
+    >> if hasattr(np, 'complex256'):
+    ...     test(np.complex256)
+    ...
     """
     a, b = operands(dtype)
     views = get_slices(a, b)
@@ -84,8 +88,8 @@ def test_index_slice_assmt(dtype):
     """
     >>> test_index_slice_assmt(np.double)
     >>> test_index_slice_assmt('l')
-
-    >> test_index_slice_assmt(np.complex128)
+    >>> test_index_slice_assmt(np.complex64)
+    >>> test_index_slice_assmt(np.complex128)
     """
     a, b = operands(dtype)
     test_kernel(broadcast_expr5, a, b)

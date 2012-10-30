@@ -276,6 +276,8 @@ class ArrayExpressionRewrite(array_slicing.SliceRewriterMixin,
 
         # Create ufunc scalar kernel
         py_ufunc, signature, ufunc_builder = self.get_py_ufunc(lhs, node)
+        signature.struct_by_reference = True
+
         # Compile ufunc scalar kernel with numba
         sig, translator, wrapper = pipeline.compile_from_sig(
                     self.context, py_ufunc, signature, compile_only=True,
@@ -306,7 +308,7 @@ class ArrayExpressionRewrite(array_slicing.SliceRewriterMixin,
 
         # Build minivect wrapper kernel
         context = self.array_expr_context
-        context.debug = True
+        # context.debug = True
         context.optimize_broadcasting = False
         b = context.astbuilder
 
