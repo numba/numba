@@ -64,7 +64,6 @@ def slicing(a):
     h = a[..., numpy.newaxis]
     i = a[:, n]
 
-    # 3D
     j = a[n, numpy.newaxis, 0]
     k = a[numpy.newaxis, 0, n]
     l = a[0, n, n]
@@ -78,7 +77,6 @@ def none_newaxis(a):
     h = a[..., None]
     #i = a[:, n]
 
-    # 3D
     #j = a[n, None, 0]
     k = a[None, 0, numpy.newaxis]
     l = a[0, n, numpy.newaxis]
@@ -131,9 +129,9 @@ class TestTypeInference(unittest.TestCase):
         self.assertEqual(symtab['g'].type, double[:, :])
         self.assertEqual(symtab['h'].type, double[:, :])
         self.assertEqual(symtab['i'].type, double[:, :])
-        self.assertEqual(symtab['j'].type, double[:, :, :])
-        self.assertEqual(symtab['k'].type, double[:, :, :])
-        self.assertEqual(symtab['l'].type, double[:, :, :])
+        self.assertEqual(symtab['j'].type, double[:, :])
+        self.assertEqual(symtab['k'].type, double[:, :])
+        self.assertEqual(symtab['l'].type, double[:, :])
 
     def test_none_newaxis(self):
         sig, symtab = infer(none_newaxis, [double[:]])
@@ -142,8 +140,8 @@ class TestTypeInference(unittest.TestCase):
         self.assertEqual(symtab['h'].type, double[:, :])
         #self.assertEqual(symtab['i'].type, double[:, :])
         #self.assertEqual(symtab['j'].type, double[:, :, :])
-        self.assertEqual(symtab['k'].type, double[:, :, :])
-        self.assertEqual(symtab['l'].type, double[:, :, :])
+        self.assertEqual(symtab['k'].type, double[:, :])
+        self.assertEqual(symtab['l'].type, double[:, :])
 
 
 # ______________________________________________________________________
