@@ -3,27 +3,27 @@
 1st iteration
 
 C:                   too fast to measure
-pure-python:         68s
+pure-python:         68 s
 numba:               2 s
-numbapro-cuda:       0.29 s
-numbapro-cuda-smem:  0.47 s
+numbapro-cuda:       0.29 s    0.22 s
+numbapro-cuda-smem:  0.47 s    0.23 s
 
 
 
 100 iteration
 a
-C:                   5s
+C:                   5 s
 pure-python:         impossible to wait that long
 numba:               215 s
-numbapro-cuda:       18 s
-numbapro-cuda-smem:  17 s
+numbapro-cuda:       18 s      13 s
+numbapro-cuda-smem:  17 s      13 s
 
 
 
 Total 1000 iteration:
 
-C:                   51 
+C:                   51 s
 pure-python:         impossible to wait that long
 numba:               impossible to wait that long
-numbapro-cuda:       181 s
-numbapro-cuda-smem:  170 s
+numbapro-cuda:       181 s     133 s
+numbapro-cuda-smem:  170 s     137 s
