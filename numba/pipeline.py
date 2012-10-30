@@ -10,6 +10,7 @@ import pprint
 from numba import error
 from numba import functions, naming, transforms
 from numba import ast_type_inference as type_inference
+from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
 from numba import utils
 
@@ -23,6 +24,7 @@ class Pipeline(object):
     """
 
     order = [
+        'const_folding',
         'type_infer',
         'type_set',
         'transform_for',
@@ -82,6 +84,15 @@ class Pipeline(object):
     #
     ### Pipeline stages
     #
+    
+    def const_folding(self, ast):
+        const_marker = self.make_specializer(constant_folding.ConstantMarker,
+                                             ast)
+        const_marker.visit(ast)
+        constvars = const_marker.get_constants()
+        const_folder = self.make_specializer(constant_folding.ConstantFolder,
+                                             ast, constvars=constvars)
+        return const_folder.visit(ast)
 
     def type_infer(self, ast):
         type_inferer = self.make_specializer(
