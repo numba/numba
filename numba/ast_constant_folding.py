@@ -1,3 +1,12 @@
+'''
+This module implements constant folding on the AST.  It handles simple cases
+such as 
+    
+* 1 + 2 -> 3
+* 2 ** 10 -> 1024
+* N=1; N + 1 -> 2  (for N is assigned as global variable or a variable 
+                    that's only assigned once)
+'''
 import operator, ast
 from . import visitors
 
@@ -110,9 +119,13 @@ class ConstantMarker(visitors.NumbaVisitor):
         self._invalidated = set()
 
     def visit_Assign(self, node):
-        # FIXME: does not handle assign to multiple targets
-        if len(node.targets) == 1:
-            target = node.targets[0]
+        targets = []
+        for target in node.targets:
+            targets.extend(self._list_in_tuple(target))
+
+        not_handled = len(node.targets) != len(targets) # targets contains tuple
+        
+        for target in targets:
             try:
                 name = target.id
             except AttributeError:
@@ -120,7 +133,7 @@ class ConstantMarker(visitors.NumbaVisitor):
                 pass
             else:
                 if name not in self._invalidated:
-                    if name in self._candidates:
+                    if not_handled or name in self._candidates:
                         self._invalidate(name)
                     else:
                         self._candidates[name] = node.value
@@ -135,9 +148,28 @@ class ConstantMarker(visitors.NumbaVisitor):
             if name in self._candidates:
                 self._invalidate(name)
 
+    def visit_For(self, node):
+        targets = self._list_in_tuple(node.target)
+        for t in targets:
+            self._invalidate(t.id)
+        for instr in node.body:
+            self.visit(instr)
+
+    def _list_in_tuple(self, node):
+        if isinstance(node, ast.Tuple):
+            ret = []
+            for i in node.elts:
+                ret.extend(self._list_in_tuple(i))
+            return ret
+        else:
+            return [node]
+
     def _invalidate(self, name):
         self._invalidated.add(name)
-        del self._candidates[name]
+        try:
+            del self._candidates[name]
+        except KeyError:
+            pass
 
     def get_constants(self):
         '''Return a set of constant variable names
@@ -163,10 +195,10 @@ class ConstantFolder(visitors.NumbaTransformer):
         self.constvars = kws.pop('constvars')
         self.constvalues = {}
         super(ConstantFolder, self).__init__(*args, **kws)
-    
+
     def visit_BinOp(self, node):
-        lval = self.visit(node.left)
-        rval = self.visit(node.right)
+        lval = node.left = self.visit(node.left)
+        rval = node.right = self.visit(node.right)
 
         if self.is_constant(lval) and self.is_constant(rval):
             return self.eval_binary_operation(node.op, lval, rval)
@@ -174,7 +206,7 @@ class ConstantFolder(visitors.NumbaTransformer):
             return node
 
     def visit_BoolOp(self, node):
-        values = [self.visit(nd) for nd in node.values]
+        values = node.values = [self.visit(nd) for nd in node.values]
         if all(self.is_constant(v) for v in values):
             operation = lambda x, y: self.eval_binary_operation(node.op, x, y)
             return reduce(operation, values)
@@ -182,8 +214,8 @@ class ConstantFolder(visitors.NumbaTransformer):
             return node
 
     def visit_Compare(self, node):
-        left = self.visit(node.left)
-        comparators = [self.visit(nd) for nd in node.comparators]
+        left = node.left = self.visit(node.left)
+        comparators = node.comparators = [self.visit(nd) for nd in node.comparators]
         operands = [left] + comparators
         operators = iter(reversed(node.ops))
 
@@ -199,24 +231,34 @@ class ConstantFolder(visitors.NumbaTransformer):
     def visit_Assign(self, node):
         '''Store the rhs value so we can inline them in future reference.
             
-        TODO: Remove assignment to constant
+        TODO: Remove assignment of constant
         '''
-        # FIXME: does not handle assign to multiple targets
-        if len(node.targets) == 1:
-            left = node.targets[0]
+        # FIXME: does not handle assign to tuple
+        names = []
+        value = node.value = self.visit(node.value)
+        for left in node.targets:
             try:
                 name = left.id
             except AttributeError:
-                pass
+                return node # escape
             else:
-                if name in self.constvars: # is known constant
-                    value = self.visit(node.value)
-                    assert left.id not in self.constvalues
-                    self.constvalues[left.id] = value
-                    self.constvars.remove(left.id)
-                    # FIXME The following causes error in various places
-                    # return None # remove node
+                names.append(name)
+
+        ct = 0
+        for name in names:
+            if name in self.constvars: # is known constant
+                assert name not in self.constvalues
+                self.constvalues[name] = value
+                self.constvars.remove(name)
+                ct += 1
+
         return node
+
+    def visit_Name(self, node):
+        try:
+            return self.constvalues[node.id]
+        except KeyError:
+            return node
 
     def eval_binary_operation(self, op, left, right):
         '''Evaluate the constant expression and return a ast.Num instance

@@ -30,8 +30,20 @@ def cf_7():
 
 def cf_8():
     N = 1
-    N += 2
+    N += 2  # invalidate N
     return N + 3
+
+def cf_9():
+    i = 1
+    j = 2
+    k = 3  # the only constant
+    for i, n in range(10):
+        j += 0
+    return i + k
+
+def cf_10():
+    i = j = 123
+    return i + j
 
 class TestConstFolding(unittest.TestCase):
     def run_pipeline(self, func):
@@ -112,6 +124,22 @@ class TestConstFolding(unittest.TestCase):
             self.assertEqual(name.id, 'N')
         for i, num in enumerate(nums):
             self.assertEqual(num.n, i + 1)
+
+    def test_cf_9(self):
+        astree = self.run_pipeline(cf_9)
+        print utils.pformat_ast(astree)
+        names = list(self.iter_all(astree, ast.Name))
+        nums = list(self.iter_all(astree, ast.Num))
+        self.assertEqual(len(names), 8)
+        self.assertEqual(len(nums), 6)
+
+    def test_cf_10(self):
+        astree = self.run_pipeline(cf_10)
+        print utils.pformat_ast(astree)
+        names = list(self.iter_all(astree, ast.Name))
+        nums = list(self.iter_all(astree, ast.Num))
+        self.assertEqual(len(names), 2)
+        self.assertEqual(len(nums), 2)
 
 if __name__ == '__main__':
     unittest.main()
