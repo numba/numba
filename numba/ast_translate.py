@@ -1319,7 +1319,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # Generate Py_XDECREF(temp) at end-of-function cleanup path
         self.xdecref_temp_cleanup(lhs)
-        return self.builder.load(lhs, name=name + '_load')
+        result = self.builder.load(lhs, name=name + '_load')
+
+        if not node.type == object_:
+            dst_type = node.type.to_llvm(self.context)
+            result = self.builder.bitcast(result, dst_type)
+
+        return result
 
     def visit_PropagateNode(self, node):
         self.builder.branch(self.error_label)
