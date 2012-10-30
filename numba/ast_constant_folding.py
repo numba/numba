@@ -121,10 +121,11 @@ class ConstantMarker(visitors.NumbaVisitor):
     def visit_Assign(self, node):
         targets = []
         for target in node.targets:
-            targets.extend(self._list_in_tuple(target))
+            targets.extend(self._flatten_aggregate(target))
 
-        not_handled = len(node.targets) != len(targets) # targets contains tuple
-        
+        # targets contains tuple/list
+        not_handled = len(node.targets) != len(targets)
+                
         for target in targets:
             try:
                 name = target.id
@@ -149,17 +150,18 @@ class ConstantMarker(visitors.NumbaVisitor):
                 self._invalidate(name)
 
     def visit_For(self, node):
-        targets = self._list_in_tuple(node.target)
+        targets = self._flatten_aggregate(node.target)
         for t in targets:
             self._invalidate(t.id)
         for instr in node.body:
             self.visit(instr)
 
-    def _list_in_tuple(self, node):
-        if isinstance(node, ast.Tuple):
+    def _flatten_aggregate(self, node):
+        assert isinstance(node.ctx, ast.Store)
+        if isinstance(node, ast.Tuple) or isinstance(node, ast.List):
             ret = []
             for i in node.elts:
-                ret.extend(self._list_in_tuple(i))
+                ret.extend(self._flatten_aggregate(i))
             return ret
         else:
             return [node]
