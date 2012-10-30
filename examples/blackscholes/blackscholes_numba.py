@@ -3,7 +3,7 @@ import math
 import time
 from numba import *
 from blackscholes import black_scholes
-import logging; logging.getLogger().setLevel(logging.WARNING)
+#import logging; logging.getLogger().setLevel(logging.WARNING)
 
 
 RISKFREE = 0.02
@@ -70,7 +70,7 @@ def main (*args):
                       optionStrike, optionYears, RISKFREE, VOLATILITY)
     time1 = time.time()
     print("Numpy Time: %f msec" %
-          ((time1 - time0) / iterations * 1000))
+          ((1000 * (time1 - time0)) / iterations))
 
     time0 = time.time()
     for i in range(iterations):
@@ -78,7 +78,7 @@ def main (*args):
                             optionStrike, optionYears, RISKFREE, VOLATILITY)
     time1 = time.time()
     print("Numba Time: %f msec" %
-          ((time1 - time0) / iterations * 1000))
+          ((1000 * (time1 - time0)) / iterations))
 
     delta = np.abs(callResultNumpy - callResultNumba)
     L1norm = delta.sum() / np.abs(callResultNumpy).sum()
