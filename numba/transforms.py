@@ -897,9 +897,9 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
     def visit_ArrayNewEmptyNode(self, node):
         ndim = nodes.const(node.type.ndim, int_)
-        dtype = nodes.const(type.dtype.get_dtype(), object_)
-        is_fortran = nodes.const(node.fortran, int_)
-        result = nodes.PyArray_Empty(ndim, node.shape, dtype, is_fortran)
+        dtype = nodes.const(node.type.dtype.get_dtype(), object_)
+        is_fortran = nodes.const(node.is_fortran, int_)
+        result = nodes.PyArray_Empty([ndim, node.shape, dtype, is_fortran])
         return self.visit(result)
 
     def _raise_exception(self, body, node):

@@ -857,13 +857,15 @@ def PyArray_SetBaseObject(args):
 def PyArray_UpdateFlags(args):
     return MultiArrayAPINode('PyArray_UpdateFlags', void(object_, int_), args)
 
-empty_signature = object_(int_,                   # nd
-                          npy_intp.pointer(),     # shape
-                          object_,                # dtype
-                          int_)                   # fortran
-
-def PyArray_Empty(args):
-    return MultiArrayAPINode('PyArray_Empty', empty_signature, args)
+def PyArray_Empty(args, name='PyArray_Empty'):
+    nd, shape, dtype, fortran = args
+    return_type = minitypes.ArrayType(dtype, nd)
+    signature = return_type(
+                int_,                   # nd
+                npy_intp.pointer(),     # shape
+                object_,                # dtype
+                int_)                   # fortran
+    return MultiArrayAPINode(name, signature, args)
 
 def PyArray_Zeros(args):
-    return MultiArrayAPINode('PyArray_Zeros', empty_signature, args)
+    return PyArray_Empty(args, name='PyArray_Zeros')
