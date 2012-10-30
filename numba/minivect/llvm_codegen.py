@@ -114,8 +114,9 @@ class LLVMCodeGen(codegen.CodeGen):
                 for var in arg.variables:
                     llvm_arg = self.lfunc.args[i]
                     self.symtab[var.name] = llvm_arg
-                    llvm_arg.add_attribute(llvm.core.ATTR_NO_ALIAS)
-                    llvm_arg.add_attribute(llvm.core.ATTR_NO_CAPTURE)
+                    if var.type.is_pointer:
+                        llvm_arg.add_attribute(llvm.core.ATTR_NO_ALIAS)
+                        llvm_arg.add_attribute(llvm.core.ATTR_NO_CAPTURE)
                     i += 1
             else:
                 for var in arg.variables:
