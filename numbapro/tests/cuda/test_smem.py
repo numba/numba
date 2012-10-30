@@ -37,7 +37,6 @@ class TestCudaSMem(unittest.TestCase):
     def test_array_double_2d(self):
         shape = 16, 32
         A = np.array(np.random.random(shape), dtype=np.float32)
-        A = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
         Gold = A * 2
     
         cu_array_double_2d[(1,), tuple(reversed(shape))](A)

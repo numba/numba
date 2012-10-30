@@ -55,7 +55,6 @@ class TestCudaBarrier(unittest.TestCase):
 
     def test_barrier_in_use(self):
         A = np.array(np.random.random(256), dtype=np.float32)
-        A = np.arange(256, dtype=np.float32)
         Gold = A * 2
         
         cu_array_double[(1,), (A.shape[0],)](A)

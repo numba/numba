@@ -12,7 +12,7 @@ from numbapro import cuda
 
 @cuda.jit(argtypes=[f8[:,:], f8[:,:], f8[:,:]])
 def jocabi_relax_core(A, Anew, error):
-    smem = cuda.shared.array(shape=(34, 34), dtype=f4)
+    smem = cuda.shared.array(shape=(32 + 2, 32 + 2), dtype=f4)
     n = A.shape[0]
     m = A.shape[1]
 
