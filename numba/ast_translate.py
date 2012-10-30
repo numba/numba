@@ -14,7 +14,7 @@ from ._numba_types import BuiltinType
 
 from numba import *
 from . import visitors, nodes, llvm_types, utils
-from .minivect import minitypes
+from .minivect import minitypes, llvm_codegen
 from numba import ndarray_helpers, translate, error, extension_types
 from numba._numba_types import is_obj, promote_closest
 from numba.utils import dump
@@ -1174,37 +1174,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return self.mod.get_global_variable_named("Py_None")
 
-    def _handle_struct_passing(self, largs, node):
-        """
-        Handle signatures with structs. If signature.struct_by_reference
-        is set, we need to pass in structs by reference, and retrieve
-        struct return values by refererence through an additional argument.
-
-        Structs are always loaded as pointers.
-        Complex numbers are always immediate struct values.
-        """
-        for i, (arg_type, larg) in enumerate(zip(node.signature.args, largs)):
-            if minitypes.pass_by_ref(arg_type):
-                if node.signature.struct_by_reference:
-                    if arg_type.is_complex:
-                        new_arg = self.alloca(arg_type)
-                        self.generate_assign(larg, new_arg)
-                        larg = new_arg
-
-                largs[i] = larg
-
-        if node.signature.struct_by_reference:
-            return_value = self.alloca(node.signature.return_type)
-            largs.append(return_value)
-            return return_value
-
-        return None
-
     def visit_NativeCallNode(self, node, largs=None):
         if largs is None:
             largs = self.visitlist(node.args)
 
-        return_value = self._handle_struct_passing(largs, node)
+        return_value = llvm_codegen.handle_struct_passing(
+                            self.builder, self.alloca, largs, node.signature)
 
         if hasattr(node.llvm_func, 'module') and node.llvm_func.module != self.mod:
             lfunc = self.mod.get_or_insert_function(node.llvm_func.type.pointee,
