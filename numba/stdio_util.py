@@ -34,6 +34,9 @@ def get_stdio_streams ():
         if hasattr(libc, '__getreent'):
             # Cygwin
             ret_val = tuple(ctypes.cast(libc.__getreent(), c_void_pp)[1:4])
+        elif hasattr(libc, '__iob_func'):
+            # MSVC
+            ret_val = tuple(ctypes.cast(libc.__iob_func(), c_void_pp)[0:3])
         else:
             raise NotImplementedError("Unsupported platform, don't know how to "
                                       "find pointers to stdio streams!")
