@@ -24,7 +24,7 @@ class NumbaError(Exception):
             return msg.rstrip()
         except:
             traceback.print_exc()
-            return ""
+            return "<internal error creating numba error message>"
 
 
 class InternalError(NumbaError):
