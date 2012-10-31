@@ -76,6 +76,7 @@ bytecode using meta. We run the following transformations:
 """
 
 
+import sys
 import ast
 import copy
 import opcode
@@ -126,7 +127,6 @@ class MathMixin(object):
         'asinh',
         'acosh',
         'atanh',
-        'expm1',
         'log2',
         'fabs',
         'pow',
@@ -135,6 +135,8 @@ class MathMixin(object):
         'rint',
         'round',
     ]
+    if sys.platform != 'win32':
+        libc_math_funcs.append('expm1')
 
     def get_funcname(self, py_func):
         if py_func is np.abs:
