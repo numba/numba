@@ -84,6 +84,12 @@ def broadcast_expr6(m1, m2):
     m2[1:-1:2, 0] = m1[1:-1:2] * m1[-2:1:-2]
     return m2
 
+@autojit
+def broadcast_expr7(m1, m2):
+    m2[1:-1:2, 0, ..., ::2] = (m1[1:-1:2, ..., ::2] *
+                               m1[-2:1:-2, ..., ::2])
+    return m2
+
 def test_index_slice_assmt(dtype):
     """
     >>> test_index_slice_assmt(np.double)
@@ -94,6 +100,10 @@ def test_index_slice_assmt(dtype):
     a, b = operands(dtype)
     test_kernel(broadcast_expr5, a, b)
     test_kernel(broadcast_expr6, a, b)
+
+    b = np.arange(10000).reshape(10, 10, 10, 10)
+    a = b[0]
+    test_kernel(broadcast_expr7, a, b)
 
 if __name__ == "__main__":
 #    a, b = operands('l')

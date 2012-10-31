@@ -144,7 +144,6 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
                 assert subslice.type.is_int
                 all_slices = False
                 src_dim += 1
-                dst_dim += 1
 
         #if all_slices and all(empty(subslice) for subslice in slices):
         #    return node.value
@@ -220,6 +219,7 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
             subslice.view_accessor = view_accessor
             subslice.view_copy_accessor = view_copy_accessor
 
+        # print ast.dump(node)
         self.visitlist(node.subslices)
 
         # Return fake or actual array
