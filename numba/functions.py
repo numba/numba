@@ -71,9 +71,11 @@ def _get_ast(func):
     except IOError:
         return decompile_func(func)
     else:
-        if source.lstrip().startswith('@'):
-            decorator, sep, source = source.partition('\n')
         source = textwrap.dedent(source)
+        if source.startswith('@'):
+            decorator, sep, source = source.partition('\n')
+            while not source.startswith('def'): # decorator can have multiple lines
+                decorator, sep, source = source.partition('\n')
         module_ast = ast.parse(source)
 
         # fix line numbering
