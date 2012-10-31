@@ -446,39 +446,44 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return type.to_llvm(self.context)
 
     def translate(self):
-        self.setup_func()
+        try:
+            self.setup_func()
 
-        if isinstance(self.ast, ast.FunctionDef):
-            # Handle the doc string for the function
-            # FIXME: Ignoring it for now
-            if (isinstance(self.ast.body[0], ast.Expr) and
-                isinstance(self.ast.body[0].value, ast.Str)):
-                # Python doc string
-                logger.info('Ignoring python doc string.')
-                statements = self.ast.body[1:]
+            if isinstance(self.ast, ast.FunctionDef):
+                # Handle the doc string for the function
+                # FIXME: Ignoring it for now
+                if (isinstance(self.ast.body[0], ast.Expr) and
+                    isinstance(self.ast.body[0].value, ast.Str)):
+                    # Python doc string
+                    logger.info('Ignoring python doc string.')
+                    statements = self.ast.body[1:]
+                else:
+                    statements = self.ast.body
+
+                for node in statements: # do codegen for each statement
+                    self.visit(node)
             else:
-                statements = self.ast.body
+                self.visit(self.ast)
 
-            for node in statements: # do codegen for each statement
-                self.visit(node)
-        else:
-            self.visit(self.ast)
+            if not self.is_block_terminated():
+                # self.builder.ret_void()
+                self.builder.branch(self.cleanup_label)
 
-        if not self.is_block_terminated():
-            # self.builder.ret_void()
-            self.builder.branch(self.cleanup_label)
+            self.terminate_cleanup_blocks()
 
-        self.terminate_cleanup_blocks()
+            # Done code generation
+            del self.builder  # release the builder to make GC happy
 
-        # Done code generation
-        del self.builder  # release the builder to make GC happy
-
-        logger.debug("ast translated function: %s" % self.lfunc)
-        # Verify code generation
-        self.mod.verify()  # only Module level verification checks everything.
-        if self.optimize:
-            fp = LLVMContextManager().get_function_pass_manager(self.mod)
-            fp.run(self.lfunc)
+            logger.debug("ast translated function: %s" % self.lfunc)
+            # Verify code generation
+            self.mod.verify()  # only Module level verification checks everything.
+            if self.optimize:
+                fp = LLVMContextManager().get_function_pass_manager(self.mod)
+                fp.run(self.lfunc)
+        except:
+            # Delete the function to prevent an invalid function from living in the module
+            self.lfunc.delete()
+            raise
 
     def get_ctypes_func(self, llvm=True):
         ee = self.ee
