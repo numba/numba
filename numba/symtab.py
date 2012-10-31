@@ -24,6 +24,9 @@ class Variable(object):
         self.promotable_type = promotable_type
         self.is_local = is_local
 
+        self.is_cellvar = False
+        self.is_freevar = False
+
     @classmethod
     def from_variable(cls, variable, **kwds):
         result = cls(variable.type)

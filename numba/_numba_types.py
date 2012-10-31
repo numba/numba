@@ -235,6 +235,19 @@ class CastType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "<cast(%s)>" % self.dst_type
 
+class ClosureType(NumbaType, minitypes.ObjectType):
+
+    is_closure = True
+
+    def __init__(self, signature, closure_def, **kwds):
+        super(ClosureType, self).__init__(**kwds)
+        self.signature = signature
+        self.closure_def = closure_def
+
+    def __repr__(self):
+        return "<closure(%s)>" % self.signature
+
+
 class ExtensionType(NumbaType, minitypes.ObjectType):
 
     is_extension = True

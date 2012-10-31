@@ -473,6 +473,7 @@ class ObjectInjectNode(Node):
         super(ObjectInjectNode, self).__init__(**kwargs)
         self.object = object
         self.type = type or object_
+        self.variable = Variable(type, is_constant=True, constant_value=object)
 
 
 class ObjectTempNode(Node):
@@ -809,6 +810,50 @@ class ExtensionMethod(Node):
 #        self.args = args
 #        self.signature = signature
 #        self.type = signature
+
+
+class ClosureNode(Node):
+    """
+    Inner functions or closures.
+    """
+
+    _fields = []
+
+    def __init__(self, func_def, closure_type, **kwargs):
+        super(ClosureNode, self).__init__(**kwargs)
+        self.func_def
+        self.type = closure_type
+
+        self.lfunc = None
+
+        # We need a wrapper function if we ever coerce the closure to an
+        # object
+        self.need_wrapper = False
+        self.wrapper_func = None
+        self.wrapper_lfunc = None
+
+        # ast and symtab after type inference
+        self.type_inferred_ast = None
+        self.symtab = None
+
+        # The Python extension type that must be instantiated to hold cellvars
+        self.closure_scope_type = None
+
+        # variables we need to put in a closure scope for our inner functions
+        self.cellvars = None
+
+class ClosureCallNode(NativeCallNode):
+    """
+    Call to closure or inner function.
+    """
+
+    def __init__(self, closure_type, args, keywords, **kwargs):
+        args = args + self._resolve_keywords(keywords)
+        super(ClosureCallNode, self).__init__(closure_type.signature, args,
+                                              llvm_func=None, **kwargs)
+
+    def _resolve_keywords(self, closure_type, keywords):
+        return []
 
 class FunctionWrapperNode(Node):
     """

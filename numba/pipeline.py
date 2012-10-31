@@ -99,8 +99,10 @@ class Pipeline(object):
 
     def type_infer(self, ast):
         type_inferer = self.make_specializer(
-                    type_inference.TypeInferer, ast, locals=self.locals)
+                    type_inference.TypeInferer, ast, locals=self.locals,
+                    closure_scope=self.kwargs.get('closure_scope', None))
         type_inferer.infer_types()
+
         self.func_signature = type_inferer.func_signature
         logger.debug("signature for %s: %s" % (self.func.func_name,
                                                self.func_signature))
@@ -177,6 +179,10 @@ def infer_types(context, func, restype=None, argtypes=None, **kwargs):
                                                 argtypes, order=['type_infer'],
                                                 **kwargs)
     return sig, symtab, ast
+
+def infer_types_from_ast_and_sig(context, dummy_func, ast, signature):
+    return run_pipeline(context, dummy_func, ast, signature,
+                        order=['type_infer'])
 
 def compile_after_type_inference(context, func, func_signature, symtab, ast,
                                  ctypes=False):

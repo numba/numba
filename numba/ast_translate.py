@@ -536,7 +536,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         wrapper_call.pipeline = self.ast.pipeline
         return wrapper_call
 
-    def build_wrapper_function(self):
+    def build_wrapper_function(self, get_lfunc=False):
         # PyObject *(*)(PyObject *self, PyObject *args)
         def func(self, args):
             pass
@@ -557,9 +557,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                               refcount_args=False)
         t.translate()
 
+        func.live_objects.append(t.lfunc)
+
         # Return a PyCFunctionObject holding the wrapper
         func_pointer = t.lfunc_pointer
         result = pycfunction_new(self.func, func_pointer)
+
+        if get_lfunc:
+            return result, t.lfunc
+
         return result
 
     def visit_FunctionWrapperNode(self, node):

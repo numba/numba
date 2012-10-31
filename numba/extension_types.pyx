@@ -143,4 +143,5 @@ def create_function(methoddef, py_func):
     cdef Py_uintptr_t methoddef_p = ctypes.cast(ctypes.byref(methoddef),
                                                 ctypes.c_void_p).value
     cdef PyMethodDef *ml = <PyMethodDef *> methoddef_p
-    return CyFunction_NewEx(ml, 0, methoddef, py_func.__module__, NULL)
+    py_func.live_objects.append(ml)
+    return CyFunction_NewEx(py_func, 0, methoddef, py_func.__module__, NULL)

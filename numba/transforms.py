@@ -723,7 +723,6 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             if isinstance(node.ctx, ast.Load):
                 result = self.function_cache.call('PyObject_GetItem',
                                                   node.value, node.slice)
-                # print ast.dump(result)
                 node = nodes.CoercionNode(result, dst_type=node.type)
                 node = self.visit(node)
             else:
