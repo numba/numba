@@ -51,9 +51,13 @@ class MyExtension(object):
 class ObjectAttrExtension(object):
     """
     >>> obj = ObjectAttrExtension(10.0, 'blah')
+    Traceback (most recent call last):
+        ...
+    TypeError: a float is required
+    >>> obj = ObjectAttrExtension(10.0, 3.5)
     >>> obj.value1
     10.0
-    >>> obj = ObjectAttrExtension('hello', 'world')
+    >>> obj = ObjectAttrExtension('hello', 9.3)
     >>> obj.value1
     'hello'
     >>> obj.setvalue(20.0)

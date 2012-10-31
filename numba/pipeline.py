@@ -3,12 +3,13 @@ This module contains the Pipeline class which provides a pluggable way to
 define the transformations and the order in which they run on the AST.
 """
 
+import ast as ast_module
 import logging
 import functools
 import pprint
 
 from numba import error
-from numba import functions, naming, transforms
+from numba import functions, naming, transforms, visitors
 from numba import ast_type_inference as type_inference
 from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
@@ -30,6 +31,7 @@ class Pipeline(object):
         'transform_for',
         'specialize',
         'late_specializer',
+        'fix_ast_locations',
     ]
 
     def __init__(self, context, func, ast, func_signature,
@@ -39,6 +41,7 @@ class Pipeline(object):
         self.func = func
         self.ast = ast
         self.func_signature = func_signature
+        ast.pipeline = self
 
         func_name = kwargs.get('name')
         self.func_name = func_name or naming.specialized_mangle(
@@ -120,6 +123,11 @@ class Pipeline(object):
         specializer = self.make_specializer(transforms.LateSpecializer, ast)
         return specializer.visit(ast)
 
+    def fix_ast_locations(self, ast):
+        fixer = self.make_specializer(FixMissingLocations, ast)
+        fixer.visit(ast)
+        return ast
+
     def codegen(self, ast):
         self.translator = self.make_specializer(ast_translate.LLVMCodeGenerator,
                                                 ast, func_name=self.func_name,
@@ -127,6 +135,23 @@ class Pipeline(object):
         self.translator.translate()
         return ast
 
+
+class FixMissingLocations(visitors.NumbaVisitor):
+
+    def __init__(self, context, func, ast, func_signature=None, nopython=0,
+                 symtab=None):
+        super(FixMissingLocations, self).__init__(context, func, ast,
+                                                  func_signature, nopython,
+                                                  symtab)
+        self.lineno = getattr(ast, 'lineno', 1)
+        self.col_offset = getattr(ast, 'col_offset', 0)
+
+    def visit(self, node):
+        if not hasattr(node, 'lineno'):
+            node.lineno = self.lineno
+            node.col_offset = self.col_offset
+
+        super(FixMissingLocations, self).visit(node)
 
 def run_pipeline(context, func, ast, func_signature,
                  pipeline=None, **kwargs):

@@ -32,7 +32,7 @@ __all__ = ['Py_ssize_t', 'void', 'char', 'uchar', 'short', 'ushort',
            'size_t', 'npy_intp', 'c_string_type', 'bool_', 'object_',
            'float_', 'double', 'longdouble', 'float32', 'float64', 'float128',
            'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64',
-           'complex64', 'complex128', 'complex256', 'struct']
+           'complex64', 'complex128', 'complex256', 'struct', 'Py_uintptr_t']
 
 import sys
 import math
@@ -976,6 +976,9 @@ except ImportError:
     npy_intp = None
 
 Py_ssize_t = Py_ssize_t_Type()
+Py_uintptr_t = IntType(name='Py_uintptr_t',
+                       itemsize=getsize('c_void_p', Py_ssize_t.itemsize),
+                       rank=8.5)
 
 
 size_t = IntType(name="size_t", rank=8.5,

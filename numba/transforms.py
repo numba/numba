@@ -396,7 +396,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
         elif is_obj(node_type) and not is_obj(node.dst_type):
             node = nodes.CoerceToNative(node.node, node.dst_type,
                                         name=node.name)
-            return self.visit(node)
+            result = self.visit(node)
+            return result
         elif node_type.is_c_string and dst_type.is_numeric:
             if self.nopython:
                 node = nodes.CoercionNode(
@@ -470,6 +471,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
         """
         new_node = None
 
+        from_type = node.node.type
         node_type = node.type
         if node_type.is_numeric:
             cls = None
@@ -485,8 +487,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     node.node = nodes.call_pyfunc(long, [node.node])
             elif node_type.is_float:
                 cls = functions.PyFloat_AsDouble
-            # elif node_type.is_complex:
-            #      cls = functions.PyComplex_AsCComplex
+            #elif node_type.is_complex:
+            #    cls = functions.PyComplex_AsCComplex
 
             if cls:
                 # TODO: error checking!
@@ -536,7 +538,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             value = None
 
         if value is not None:
-            value = nodes.CoercionNode(value, dst_type=ret_type)
+            value = nodes.CoercionNode(value, dst_type=ret_type).cloneable
 
         error_return = ast.Return(value=value)
         if self.nopython and is_obj(self.func_signature.return_type):
@@ -616,14 +618,24 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         return node
 
     def visit_NativeCallNode(self, node):
-        self.generic_visit(node)
         if is_obj(node.signature.return_type):
             if self.nopython:
                 raise error.NumbaError(
-                        node, "Cannot call function returning object in "
-                              "nopython context")
-            node = nodes.ObjectTempNode(node)
-        return node
+                    node, "Cannot call function returning object in "
+                          "nopython context")
+
+            self.generic_visit(node)
+            return nodes.ObjectTempNode(node)
+        elif node.badval is not None:
+            cloneable_node = node.cloneable
+            body = nodes.CheckErrorNode(cloneable_node, node.badval,
+                                        node.exc_type, node.exc_msg,
+                                        node.exc_args)
+            node = nodes.ExpressionNode(stmts=[body], expr=cloneable_node.clone)
+            return self.visit(node)
+        else:
+            self.generic_visit(node)
+            return node
 
     def visit_NativeFunctionCallNode(self, node):
         if node.signature.is_bound_method:
@@ -941,9 +953,17 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         return ast.Suite(body=body)
 
     def visit_CheckErrorNode(self, node):
-        test = ast.Compare(left=node.return_value, ops=[ast.Eq()],
-                           comparators=[node.badval])
-        test.right = node.badval
+        if node.badval is not None:
+            badval = node.badval
+            eq = ast.Eq()
+        else:
+            assert node.goodval is not None
+            badval = node.goodval
+            eq = ast.NotEq()
+
+        test = ast.Compare(left=node.return_value, ops=[eq],
+                           comparators=[badval])
+        test.right = badval
 
         check = ast.If(test=test, body=[node.raise_node], orelse=[])
         return self.visit(check)

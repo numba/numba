@@ -68,6 +68,9 @@ class NumbaVisitorMixin(object):
             return isinstance(n, numbers.Int)
         return isinstance(n, (int, long))
 
+    def visit_CloneNode(self, node):
+        return node
+
 
 class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
     "Non-mutating visitor"

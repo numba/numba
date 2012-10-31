@@ -46,6 +46,27 @@ def index(node, constant_index, load=True, type=int_):
     index.variable = Variable(type)
     return ast.Subscript(value=node, slice=index, ctx=ctx)
 
+def ptrtoint(node):
+    return CoercionNode(node, Py_uintptr_t)
+
+printing = False
+def print_(translator, node):
+    global printing
+    if printing:
+        return
+
+    printing = True
+
+    node = translator.function_cache.call('PyObject_Str', node)
+    node = translator.function_cache.call('puts', node)
+    node = translator.ast.pipeline.late_specializer(node)
+    translator.visit(node)
+
+    printing = False
+
+def print_llvm(translator, type, llvm_value):
+    return print_(translator, LLVMValueRefNode(type, llvm_value))
+
 #
 ### AST nodes
 #
@@ -88,8 +109,12 @@ class CoercionNode(Node):
         #    return node
 
         if isinstance(node, ConstNode) and dst_type.is_numeric:
-            node.cast(dst_type)
-            return node
+            try:
+                node.cast(dst_type)
+            except TypeError:
+                pass
+            else:
+                return node
 
         return super(CoercionNode, cls).__new__(cls, node, dst_type, name=name)
 
@@ -188,7 +213,9 @@ class ConstNode(Node):
 
         constant = self.pyval
 
-        if type.is_float:
+        if constant is _NULL:
+            lvalue = llvm.core.Constant.null(type.to_llvm(context))
+        elif type.is_float:
             lvalue = llvm.core.Constant.real(ltype, constant)
         elif type.is_int:
             lvalue = llvm.core.Constant.int(ltype, constant)
@@ -201,10 +228,7 @@ class ConstNode(Node):
             addr_int = translator.visit(ConstNode(self.pyval, type=Py_ssize_t))
             lvalue = translator.builder.inttoptr(addr_int, ltype)
         elif type.is_object:
-            if self.pyval is _NULL:
-                lvalue = llvm.core.Constant.null(type.to_llvm(context))
-            else:
-                raise NotImplementedError("Use ObjectInjectNode")
+            raise NotImplementedError("Use ObjectInjectNode")
         elif type.is_c_string:
             lvalue = translate._LLVMModuleUtils.get_string_constant(
                                             translator.mod, constant)
@@ -236,6 +260,7 @@ class ConstNode(Node):
 
 _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)
+NULL = ConstNode(_NULL, void.pointer())
 
 class FunctionCallNode(Node):
     _attributes = ['signature', 'type', 'name']
@@ -250,6 +275,7 @@ class NativeCallNode(FunctionCallNode):
     _fields = ['args']
 
     def __init__(self, signature, args, llvm_func, py_func=None,
+                 badval=None, exc_type=None, exc_msg=None, exc_args=None,
                  skip_self=False, **kw):
         super(NativeCallNode, self).__init__(signature, args, **kw)
         self.llvm_func = llvm_func
@@ -257,6 +283,11 @@ class NativeCallNode(FunctionCallNode):
         self.skip_self = skip_self
         self.type = signature.return_type
         self.coerce_args()
+
+        self.badval = badval
+        self.exc_type = exc_type
+        self.exc_msg = exc_msg
+        self.exc_args = exc_args
 
     def coerce_args(self):
         self.args = list(self.original_args)
@@ -388,15 +419,19 @@ class CheckErrorNode(Node):
 
     _fields = ['return_value', 'badval', 'raise_node']
 
-    def __init__(self, return_value, badval,
+    def __init__(self, return_value, badval=None, goodval=None,
                  exc_type=None, exc_msg=None, exc_args=None,
                  **kwargs):
         super(CheckErrorNode, self).__init__(**kwargs)
         self.return_value = return_value
 
-        if not isinstance(badval, ast.AST):
+        if badval is not None and not isinstance(badval, ast.AST):
             badval = ConstNode(badval, return_value.type)
+        if goodval is not None and not isinstance(goodval, ast.AST):
+            goodval = ConstNode(goodval, return_value.type)
+
         self.badval = badval
+        self.goodval = goodval
 
         self.raise_node = RaiseNode(exc_type, exc_msg, exc_args)
 
@@ -786,9 +821,9 @@ class FunctionWrapperNode(Node):
 
 def pointer_add(pointer, offset):
     assert pointer.type == char.pointer()
-    left = CoercionNode(pointer, Py_ssize_t)
+    left = ptrtoint(pointer)
     result = ast.BinOp(left, ast.Add(), offset)
-    result.type = Py_ssize_t
+    result.type = left.type
     result.variable = Variable(result.type)
     return CoercionNode(result, char.pointer())
 

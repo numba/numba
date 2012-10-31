@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 _int32_zero = lc.Constant.int(_int32, 0)
 
+debug_conversion = False
+
 def map_to_function(func, typs, mod):
     typs = [str_to_llvmtype(x) if isinstance(x, str) else x for x in typs]
     INTR = getattr(lc, 'INTR_%s' % func.__name__.upper())
@@ -513,6 +515,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                                  self.func_signature,
                                                  self.func,
                                                  fake_pyfunc)
+        wrapper_call.pipeline = self.ast.pipeline
         return wrapper_call
 
     def build_wrapper_function(self):
@@ -549,13 +552,27 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # Unpack tuple into arguments
         types, lstr = self.object_coercer.lstr(arg_types)
+        #if debug_conversion:
+        #    self.puts("args tuple:")
+        #    nodes.print_llvm(self, object_, args_tuple)
+
         largs = self.object_coercer.parse_tuple(lstr, args_tuple, arg_types)
 
         # Call wrapped function
         args = [nodes.LLVMValueRefNode(arg_type, larg)
                     for arg_type, larg in zip(arg_types, largs)]
+
         func_call = nodes.NativeCallNode(node.signature, args,
                                          node.wrapped_function)
+
+        if not is_obj(node.signature.return_type):
+            # Check for error using PyErr_Occurred()
+            check_err = nodes.CheckErrorNode(
+                    nodes.ptrtoint(self.function_cache.call('PyErr_Occurred')),
+                    goodval=nodes.ptrtoint(nodes.NULL))
+            func_call = func_call.cloneable
+            func_call = nodes.ExpressionNode(stmts=[func_call, check_err],
+                                             expr=func_call.clone)
 
         # Coerce and return result
         if node.signature.return_type.is_void:
@@ -565,6 +582,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             node.body = None
             result_node = func_call
 
+        # self.puts("calling wrapped function %r" % node.orig_py_func.__name__)
         node.return_result = ast.Return(
                     value=nodes.CoercionNode(result_node, object_))
 
@@ -1065,6 +1083,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
 
+        if debug_conversion:
+            self.puts("Coercing %s to %s" % (node_type, dst_type))
+
         return val
 
     def visit_CoerceToObject(self, node):
@@ -1287,7 +1308,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.generate_assign(rhs, lhs, decref=self.in_loop)
 
         # goto error if NULL
+        # self.puts("checking error... %s" % error.format_pos(node))
         self.object_coercer.check_err(rhs)
+        # self.puts("all good at %s" % error.format_pos(node))
 
         if node.incref:
             self.incref(self.builder.load(lhs))
@@ -1303,6 +1326,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return result
 
     def visit_PropagateNode(self, node):
+        # self.puts("ERROR! %s" % error.format_pos(node))
         self.builder.branch(self.error_label)
 
     def visit_ObjectTempRefNode(self, node):
@@ -1418,6 +1442,8 @@ class ObjectCoercer(object):
                                                               'Py_BuildValue')
         sig, self.pyarg_parsetuple = translator.function_cache.function_by_name(
                                                               'PyArg_ParseTuple')
+        sig, self.pyerr_clear = translator.function_cache.function_by_name(
+                                                            'PyErr_Clear')
         self.function_cache = translator.function_cache
         self.NULL = self.translator.visit(nodes.NULL_obj)
 
@@ -1468,7 +1494,9 @@ class ObjectCoercer(object):
         if fmt is not None:
             str = fmt % str
 
-        # self.translator.puts("fmt: %s" % str)
+        if debug_conversion:
+            self.translator.puts("fmt: %s" % str)
+
         result = self._create_llvm_string(str)
         return result_types, result
 
@@ -1480,13 +1508,17 @@ class ObjectCoercer(object):
         types, lstr = self.lstr(types, fmt)
         largs = (lstr,) + largs
 
-        # self.translator.puts("building... %s" % name)
+        if debug_conversion:
+            self.translator.puts("building... %s" % name)
         # func_type = object_(*types).pointer()
         # py_buildvalue = self.builder.bitcast(
         #         self.py_buildvalue, func_type.to_llvm(self.context))
         py_buildvalue = self.py_buildvalue
         result = self.builder.call(py_buildvalue, largs, name=name)
-        # self.translator.puts("done building... %s" % name)
+
+        if debug_conversion:
+            self.translator.puts("done building... %s" % name)
+
         return result
 
     def npy_intp_to_py_ssize_t(self, llvm_result, type):
@@ -1563,8 +1595,20 @@ class ObjectCoercer(object):
             lresults.append(var)
 
         largs = [llvm_tuple, lstr] + lresults
+
+        if debug_conversion:
+            self.translator.puts("parsing tuple... %s" % (types,))
+            nodes.print_llvm(self.translator, object_, llvm_tuple)
+
         parse_result = self.builder.call(self.pyarg_parsetuple, largs)
         self.check_err_int(parse_result, 0)
+
+        # Some conversion functions don't reset the exception state...
+        # self.builder.call(self.pyerr_clear, [])
+
+        if debug_conversion:
+            self.translator.puts("successfully parsed tuple...")
+
         return map(self.builder.load, lresults)
 
     def to_native(self, type, llvm_tuple, name=''):
@@ -1572,6 +1616,3 @@ class ObjectCoercer(object):
         types, lstr = self.lstr([type])
         lresult, = self.parse_tuple(lstr, llvm_tuple, [type], name=name)
         return lresult
-
-
-

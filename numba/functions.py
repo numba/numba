@@ -485,6 +485,14 @@ class PyErr_Format(ExternalFunction):
     return_type = void.pointer() # object_
     is_vararg = True
 
+class PyErr_Occurred(ExternalFunction):
+    arg_types = []
+    return_type = void.pointer() # object_
+
+class PyErr_Clear(ExternalFunction):
+    arg_types = []
+    return_type = void
+
 class PyModulo(InternalFunction):
 
     @property
