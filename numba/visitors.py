@@ -12,9 +12,16 @@ from numba import error
 import logging
 logger = logging.getLogger(__name__)
 
-class NumbaVisitorMixin(object):
+class CooperativeBase(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+class NumbaVisitorMixin(CooperativeBase):
     def __init__(self, context, func, ast, func_signature=None, nopython=0,
-                 symtab=None):
+                 symtab=None, **kwargs):
+        super(NumbaVisitorMixin, self).__init__(
+                                context, func, ast, func_signature,
+                                nopython, symtab, **kwargs)
         self.context = context
         self.ast = ast
         self.function_cache = context.function_cache
@@ -78,7 +85,7 @@ class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
     def visitlist(self, list):
         return [self.visit(item) for item in list]
 
-class NumbaTransformer(ast.NodeTransformer, NumbaVisitorMixin):
+class NumbaTransformer(NumbaVisitorMixin, ast.NodeTransformer):
     "Mutating visitor"
 
 class NoPythonContextMixin(object):

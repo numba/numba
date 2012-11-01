@@ -3,6 +3,7 @@ import ctypes
 import collections
 
 import numba
+import numba.functions
 from numba import *
 from .symtab import Variable
 from . import _numba_types as numba_types
@@ -48,6 +49,9 @@ def index(node, constant_index, load=True, type=int_):
 
 def ptrtoint(node):
     return CoercionNode(node, Py_uintptr_t)
+
+def ptrfromint(intval, dst_ptr_type):
+    return CoercionNode(ConstNode(intval, Py_uintptr_t), dst_ptr_type)
 
 printing = False
 def print_(translator, node):
@@ -225,7 +229,7 @@ class ConstNode(Node):
             lvalue = llvm.core.Constant.struct([real.value(translator),
                                                 imag.value(translator)])
         elif type.is_pointer:
-            addr_int = translator.visit(ConstNode(self.pyval, type=Py_ssize_t))
+            addr_int = translator.visit(ConstNode(self.pyval, type=Py_uintptr_t))
             lvalue = translator.builder.inttoptr(addr_int, ltype)
         elif type.is_object:
             raise NotImplementedError("Use ObjectInjectNode")
@@ -235,7 +239,6 @@ class ConstNode(Node):
             type_char_p = numba_types.c_string_type.to_llvm(translator.context)
             lvalue = translator.builder.bitcast(lvalue, type_char_p)
         elif type.is_function:
-            # TODO:
             # lvalue = map_to_function(constant, type, self.mod)
             raise NotImplementedError
         else:
@@ -472,8 +475,10 @@ class ObjectInjectNode(Node):
         super(ObjectInjectNode, self).__init__(**kwargs)
         self.object = object
         self.type = type or object_
-        self.variable = Variable(type, is_constant=True, constant_value=object)
+        self.variable = Variable(self.type, is_constant=True,
+                                 constant_value=object)
 
+NoneNode = ObjectInjectNode(None, object_)
 
 class ObjectTempNode(Node):
     """
@@ -843,15 +848,22 @@ class ClosureNode(Node):
 
     _fields = []
 
-    def __init__(self, func_def, closure_type, **kwargs):
+    def __init__(self, func_def, closure_type, outer_py_func, **kwargs):
         super(ClosureNode, self).__init__(**kwargs)
         self.func_def = func_def
         self.type = closure_type
 
-        d = {}
-        exec compile('func_def', '<string>', 'ast') in d
-        self.py_func = d.popitem()
-        assert not d
+        argnames = tuple(arg.id for arg in func_def.args.args)
+        dummy_func_string = """
+def %s(%s):
+    pass
+        """ % ((func_def.name,) + argnames)
+
+        d = outer_py_func.func_globals
+        exec dummy_func_string in d, d
+        self.py_func = d[func_def.name]
+        self.py_func.live_objects = []
+        self.py_func.__module__ = outer_py_func.__module__
 
         self.lfunc = None
         self.wrapper_func = None

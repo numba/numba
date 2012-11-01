@@ -33,6 +33,6 @@ NumbaError: 10:5: Dynamic closures not yet supported, use @jit
 """
 
 if __name__ == '__main__':
-#    closure1()
-    import doctest
-    doctest.testmod()
+    closure1()
+#    import doctest
+#    doctest.testmod()

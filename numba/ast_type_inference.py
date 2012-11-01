@@ -397,7 +397,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.return_variable = Variable(None)
         self.ast = self.visit(self.ast)
 
-        self.return_type = self.return_variable.type
+        self.return_type = self.return_variable.type or void
         ret_type = self.func_signature.return_type
 
         if ret_type and ret_type != self.return_type:

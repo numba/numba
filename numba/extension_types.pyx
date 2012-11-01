@@ -9,12 +9,10 @@ import numba
 
 ctypedef object (*tp_new_func)(PyObject *, PyObject *, PyObject *)
 
-cdef extern int CyFunction_init() except -1
-cdef extern object CyFunction_NewEx(PyMethodDef *ml, int flags, self, module,
-                                    PyObject *code)
-cdef extern object CyFunction_NewExAndClosure(
-                           PyMethodDef *ml, PyObject *self,
-                           PyObject *module, PyObject *closure);
+cdef extern int NumbaFunction_init() except -1
+cdef extern object NumbaFunction_NewEx(
+                PyMethodDef *ml, module, code, PyObject *closure,
+                void *native_func, native_signature, keep_alive)
 
 cdef extern from *:
     ctypedef unsigned long Py_uintptr_t
@@ -28,9 +26,8 @@ cdef extern from *:
     ctypedef struct PyMethodDef:
         pass
 
-CyFunction_init()
-
-CyFunction_NewExAndClosure_pointer = <Py_uintptr_t> &CyFunction_NewExAndClosure
+NumbaFunction_init()
+NumbaFunction_NewEx_pointer = <Py_uintptr_t> &NumbaFunction_NewEx
 
 cdef Py_uintptr_t align(Py_uintptr_t p, size_t alignment) nogil:
     "Align on a boundary"
@@ -144,10 +141,13 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
 
     return ext_type
 
-def create_function(methoddef, py_func):
+def create_function(methoddef, py_func, lfunc_pointer, signature):
     cdef Py_uintptr_t methoddef_p = ctypes.cast(ctypes.byref(methoddef),
                                                 ctypes.c_void_p).value
     cdef PyMethodDef *ml = <PyMethodDef *> methoddef_p
-    py_func.methoddef = methoddef
-    py_func.methodef_p = methoddef_p
-    return CyFunction_NewEx(ml, 0, py_func, py_func.__module__, NULL)
+    cdef Py_uintptr_t lfunc_p = lfunc_pointer
+
+    py_func.live_objects.append(methoddef)
+    result = NumbaFunction_NewEx(ml, py_func.__module__, py_func.func_code,
+                                 NULL, <void *>lfunc_p, signature, py_func)
+    return result

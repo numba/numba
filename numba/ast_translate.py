@@ -55,7 +55,7 @@ class DelayedObj(object):
     def get_stop(self):
         return self.args[0 if (len(self.args) == 1) else 1]
 
-def pycfunction_new(py_func, func_pointer):
+def _create_methoddef(py_func, func_pointer):
     # struct PyMethodDef {
     #     const char  *ml_name;   /* The name of the built-in function/method */
     #     PyCFunction  ml_meth;   /* The C function that implements it */
@@ -75,11 +75,19 @@ def pycfunction_new(py_func, func_pointer):
                                   ctypes.c_void_p]
     PyCFunction_NewEx.restype = ctypes.py_object
 
+    py_func.live_objects.extend((py_func.__name__, py_func.__doc__))
+
     methoddef = c_PyMethodDef()
     methoddef.name = py_func.__name__
     methoddef.doc = py_func.__doc__
     methoddef.method = ctypes.c_void_p(func_pointer)
     methoddef.flags = 1 # METH_VARARGS
+
+    return methoddef
+
+def numbafunction_new(py_func, func_pointer, wrapped_lfunc_pointer,
+                      wrapped_signature):
+    methoddef = _create_methoddef(py_func, func_pointer)
 
     # Create PyCFunctionObject, pass in the methoddef struct as the m_self
     # attribute
@@ -87,7 +95,8 @@ def pycfunction_new(py_func, func_pointer):
     #NULL = ctypes.c_void_p()
     #result = PyCFunction_NewEx(methoddef_p, methoddef, NULL)
     #return result
-    return extension_types.create_function(methoddef, py_func)
+    return methoddef, extension_types.create_function(
+            methoddef, py_func, wrapped_lfunc_pointer, wrapped_signature)
 
 class MethodReference(object):
     def __init__(self, object_var, py_method):
@@ -561,12 +570,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # Return a PyCFunctionObject holding the wrapper
         func_pointer = t.lfunc_pointer
-        result = pycfunction_new(self.func, func_pointer)
+        methoddef, wrapper = numbafunction_new(self.func, func_pointer,
+                                   self.lfunc_pointer, self.func_signature)
 
         if get_lfunc:
-            return result, t.lfunc
+            return wrapper, t.lfunc, methoddef
 
-        return result
+        return wrapper
 
     def visit_FunctionWrapperNode(self, node):
         from numba import ast_type_inference, pipeline

@@ -8,8 +8,9 @@ import logging
 import functools
 import pprint
 
+import numba.closure
 from numba import error
-from numba import functions, naming, transforms, visitors, closure
+from numba import functions, naming, transforms, visitors
 from numba import ast_type_inference as type_inference
 from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
@@ -33,6 +34,7 @@ class Pipeline(object):
         'specialize',
         'late_specializer',
         'fix_ast_locations',
+        'codegen',
     ]
 
     def __init__(self, context, func, ast, func_signature,
@@ -62,8 +64,8 @@ class Pipeline(object):
 
         if order is None:
             self.order = list(Pipeline.order)
-            if codegen:
-                self.order.append('codegen')
+            if not codegen:
+                self.order.remove('codegen')
         else:
             self.order = order
 
@@ -116,7 +118,8 @@ class Pipeline(object):
         return ast
 
     def closure_type_inference(self, ast):
-        type_inferer = self.make_specializer(closure.ClosureTypeInferer, ast)
+        type_inferer = self.make_specializer(
+                            numba.closure.ClosureTypeInferer, ast)
         return type_inferer.visit(ast)
 
     def transform_for(self, ast):
@@ -185,22 +188,9 @@ def infer_types(context, func, restype=None, argtypes=None, **kwargs):
                                                 **kwargs)
     return sig, symtab, ast
 
-def infer_types_from_ast_and_sig(context, dummy_func, ast, signature):
+def infer_types_from_ast_and_sig(context, dummy_func, ast, signature, **kwargs):
     return run_pipeline(context, dummy_func, ast, signature,
-                        order=['type_infer'])
-
-def compile_after_type_inference(context, func, func_signature, symtab, ast,
-                                 ctypes=False, **kwargs):
-    """
-    Use this function to compile a type-inferred AST. THis allows one
-    to separate the stages.
-    """
-    order = Pipeline.order[1:]
-    pipeline, (new_signature, symtab, ast) = run_pipeline(
-                        context, func, ast, func_signature, order=order,
-                        **kwargs)
-    assert new_signature == func_signature
-    return pipeline.translator, get_wrapper(pipeline.translator, ctypes)
+                        order=['type_infer'], **kwargs)
 
 def get_wrapper(translator, ctypes=False):
     if ctypes:
