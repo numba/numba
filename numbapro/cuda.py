@@ -126,7 +126,7 @@ CUDA_MATH_INTRINSICS_3.update({
 })
 
 
-def _link_llvm_math_intrinsics(lfunc, cc):
+def _link_llvm_math_intrinsics(module, cc):
     '''Discover and implement llvm math intrinsics that are not supported
     by NVVM.  NVVM only supports llvm.sqrt at this point (11/1/2012).
     '''
@@ -134,28 +134,27 @@ def _link_llvm_math_intrinsics(lfunc, cc):
     to_be_removed = set()    # functions to be deleted
     inlinelist = []          # functions to be inlined
 
-    module = lfunc.module
-
     library = {
         2 : CUDA_MATH_INTRINSICS_2,
         3 : CUDA_MATH_INTRINSICS_3,
     }[cc]
 
     # find all known math intrinsics and implement them.
-    for instr in _list_callinstr(lfunc):
-        fn = instr.called_function
-        if fn is not None: # maybe a inline asm
-            fname = fn.name
-            if fname in library:
-                inlinelist.append(instr)
-                to_be_removed.add(fn)
-                ftype = fn.type.pointee
-                newfn = module.get_or_insert_function(ftype, "numbapro.%s" % fname)
-                ptxcode = library[fname]
-                to_be_implemented[newfn] = ptxcode
-                instr.called_function = newfn  # replace the function
-            else:
-                logger.debug("Unknown LLVM intrinsic %s", fname)
+    for lfunc in module.functions:
+        for instr in _list_callinstr(lfunc):
+            fn = instr.called_function
+            if fn is not None: # maybe a inline asm
+                fname = fn.name
+                if fname in library:
+                    inlinelist.append(instr)
+                    to_be_removed.add(fn)
+                    ftype = fn.type.pointee
+                    newfn = module.get_or_insert_function(ftype, "numbapro.%s" % fname)
+                    ptxcode = library[fname]
+                    to_be_implemented[newfn] = ptxcode
+                    instr.called_function = newfn  # replace the function
+                else:
+                    logger.debug("Unknown LLVM intrinsic %s", fname)
 
     # implement all the math functions with inline ptx
     for fn, ptx in to_be_implemented.items():
@@ -335,9 +334,9 @@ class CudaNumbaFunction(CudaBaseFunction):
         user_funcs = filter(lambda x: not x.is_declaration and \
                                       not x.name.startswith('llvm.'),
                             self.module.functions)
-        for fn in user_funcs:
-            _link_llvm_math_intrinsics(fn, cc_major)
 
+        _link_llvm_math_intrinsics(self.module, cc_major)
+        
         # prepare for ptx generation
         arch = 'compute_%d0' % cc_major
 
