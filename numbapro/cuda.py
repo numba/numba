@@ -91,33 +91,9 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
         # XXX: temp fix for PyIncRef and PyDecRef in lfunc.
         # IS this still necessary?
         # Yes, as of Oct 22 2012
-        def _temp_hack():
-            inlinelist = []
-            fakepy = {}
+        _temp_fix_to_remove_python_specifics(lfunc)
 
-            for bb in lfunc.basic_blocks:
-                for instr in bb.instructions:
-                    if isinstance(instr, _lc.CallOrInvokeInstruction):
-                        fn = instr.called_function
-                        fname = fn.name
-                        if fname.startswith('Py_'):
-                            inlinelist.append(instr)
-                            fty = instr.called_function.type.pointee
-                            fakepy[fname] = fn
-                            assert fty.return_type == _lc.Type.void(),\
-                                    'assume no sideeffect'
-
-            for fname, fn in fakepy.items():
-                bldr = _lc.Builder.new(fn.append_basic_block('entry'))
-                bldr.ret_void()
-
-            for call in inlinelist:
-                assert _lc.inline_function(call)
-
-            for fn in fakepy.values():
-                fn.delete()
-
-        _temp_hack()
+        _link_llvm_math_intrinsics(lfunc)
 
         if device:
             assert lfunc.name not in _device_functions, 'Device function name already used'
@@ -127,6 +103,39 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
             _link_device_function(lfunc)
             return CudaNumbaFunction(func, signature=signature, lfunc=lfunc)
     return _jit2
+
+def _link_llvm_math_intrinsics(lfunc):
+    pass
+
+def _temp_fix_to_remove_python_specifics(lfunc):
+    inlinelist = []  # list of calls to be inlined
+    fakepy = {}      # function name -> function object
+
+    # find every call to python functions
+    for bb in lfunc.basic_blocks:
+        for instr in bb.instructions:
+            if isinstance(instr, _lc.CallOrInvokeInstruction):
+                fn = instr.called_function
+                fname = fn.name
+                if fname.startswith('Py_'):
+                    inlinelist.append(instr)
+                    fty = instr.called_function.type.pointee
+                    fakepy[fname] = fn
+                    assert fty.return_type == _lc.Type.void(),\
+                        'assume no sideeffect'
+    # generate stub implementation for python functions
+    # assumes that it returns void
+    for fname, fn in fakepy.items():
+        bldr = _lc.Builder.new(fn.append_basic_block('entry'))
+        bldr.ret_void()
+
+    # inline all the calls
+    for call in inlinelist:
+        assert _lc.inline_function(call)
+
+    # remove the stub from the module
+    for fn in fakepy.values():
+        fn.delete()
 
 
 def _link_device_function(lfunc):
