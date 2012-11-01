@@ -629,11 +629,12 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             self.generic_visit(node)
             return nodes.ObjectTempNode(node)
         elif node.badval is not None:
-            cloneable_node = node.cloneable
-            body = nodes.CheckErrorNode(cloneable_node, node.badval,
-                                        node.exc_type, node.exc_msg,
-                                        node.exc_args)
-            node = nodes.ExpressionNode(stmts=[body], expr=cloneable_node.clone)
+            result = node.cloneable
+            body = nodes.CheckErrorNode(
+                        result, node.badval, node.goodval,
+                        node.exc_type, node.exc_msg, node.exc_args)
+            node = nodes.ExpressionNode(stmts=[body],
+                                        expr=result.clone)
             return self.visit(node)
         else:
             self.generic_visit(node)

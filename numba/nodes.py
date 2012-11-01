@@ -272,10 +272,12 @@ class FunctionCallNode(Node):
         self.original_args = args
 
 class NativeCallNode(FunctionCallNode):
+
     _fields = ['args']
 
     def __init__(self, signature, args, llvm_func, py_func=None,
-                 badval=None, exc_type=None, exc_msg=None, exc_args=None,
+                 badval=None, goodval=None,
+                 exc_type=None, exc_msg=None, exc_args=None,
                  skip_self=False, **kw):
         super(NativeCallNode, self).__init__(signature, args, **kw)
         self.llvm_func = llvm_func
@@ -285,6 +287,7 @@ class NativeCallNode(FunctionCallNode):
         self.coerce_args()
 
         self.badval = badval
+        self.goodval = goodval
         self.exc_type = exc_type
         self.exc_msg = exc_msg
         self.exc_args = exc_args
@@ -414,7 +417,13 @@ class ComplexConjugateNode(Node):
 
 class CheckErrorNode(Node):
     """
-    Check for an exception
+    Check for an exception.
+
+        badval: if this value is returned, propagate an error
+        goodval: if this value is not returned, propagate an error
+
+    If exc_type, exc_msg and optionally exc_args are given, an error is
+    raised instead of propagating it.
     """
 
     _fields = ['return_value', 'badval', 'raise_node']

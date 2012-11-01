@@ -207,7 +207,20 @@ class FunctionCache(object):
     def call(self, name, *args, **kw):
         temp_name = kw.pop('temp_name', name)
         sig, lfunc = self.function_by_name(name, **kw)
-        return nodes.NativeCallNode(sig, args, lfunc, name=temp_name)
+
+        if name in globals():
+            external_func = globals()[name]
+            exc_check = dict(badval=external_func.badval,
+                             goodval=external_func.goodval,
+                             exc_msg=external_func.exc_msg,
+                             exc_type=external_func.exc_type,
+                             exc_args=external_func.exc_args)
+        else:
+            exc_check = {}
+
+        result = nodes.NativeCallNode(sig, args, lfunc, name=temp_name,
+                                      **exc_check)
+        return result
 
     def build_function(self, external_function):
         """
@@ -376,6 +389,12 @@ class ExternalFunction(object):
     return_type = None
     linkage = None
     is_vararg = False
+
+    badval = None
+    goodval = None
+    exc_type = None
+    exc_msg = None
+    exc_args = None
 
     def __init__(self, **kwargs):
         vars(self).update(kwargs)
