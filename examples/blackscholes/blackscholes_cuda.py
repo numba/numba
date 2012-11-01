@@ -4,7 +4,7 @@ import time
 from numba import *
 from numbapro import cuda
 from blackscholes_numba import black_scholes, black_scholes_numba
-import logging; logging.getLogger().setLevel(0)
+#import logging; logging.getLogger().setLevel(0)
 
 
 RISKFREE = 0.02
@@ -33,14 +33,16 @@ def cnd_cuda(d):
 # comply with PEP 8, and not go past the 79-th column.
 
 @cuda.jit(argtypes=(double[:], double[:], double[:], double[:], double[:], double, double))
-def black_scholes_cuda(callResult, putResult, stockPrice, optionStrike,
-                       optionYears, Riskfree, Volatility):
-    S = stockPrice
-    X = optionStrike
-    T = optionYears
-    R = Riskfree
-    V = Volatility
+def black_scholes_cuda(callResult, putResult, S, X,
+                       T, R, V):
+#    S = stockPrice
+#    X = optionStrike
+#    T = optionYears
+#    R = Riskfree
+#    V = Volatility
     i = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+    if i >= S.shape[0]:
+        return
     sqrtT = math.sqrt(T[i])
     d1 = (math.log(S[i] / X[i]) + (R + 0.5 * V * V) * T[i]) / (V * sqrtT)
     d2 = d1 - V * sqrtT
@@ -90,7 +92,7 @@ def main (*args):
 
     time0 = time.time()
     blockdim = 1024, 1
-    griddim = OPT_N/1024, 1
+    griddim = int(math.ceil(float(OPT_N)/blockdim[0])), 1
     stream = cuda.stream()
     d_callResult = cuda.to_device(callResultNumbapro, stream)
     d_putResult = cuda.to_device(putResultNumbapro, stream)
@@ -101,7 +103,7 @@ def main (*args):
     for i in range(iterations):
         black_scholes_cuda[griddim, blockdim, stream](
             d_callResult, d_putResult, d_stockPrice, d_optionStrike,
-            d_optionYears)
+            d_optionYears, RISKFREE, VOLATILITY)
         d_callResult.to_host(stream)
         d_putResult.to_host(stream)
         stream.synchronize()
