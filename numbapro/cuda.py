@@ -112,11 +112,19 @@ def _list_callinstr(lfunc):
 
 CUDA_MATH_INTRINSICS_2 = {
     'llvm.exp.f32': ptx.exp_f32,
+    'llvm.exp.f64': ptx.exp_f64,
+    'fabsf'       : ptx.fabs_f32,
+    'fabs'        : ptx.fabs_f64,
+    'llvm.log.f32': ptx.log_f32,
+    'llvm.log.f64': ptx.log_f64,
 }
 
-CUDA_MATH_INTRINSICS_3 = CUDA_MATH_INTRINSICS_2.update({
-    
+CUDA_MATH_INTRINSICS_3 = CUDA_MATH_INTRINSICS_2.copy()
+CUDA_MATH_INTRINSICS_3.update({
+
+
 })
+
 
 def _link_llvm_math_intrinsics(lfunc, cc):
     '''Discover and implement llvm math intrinsics that are not supported
@@ -136,15 +144,18 @@ def _link_llvm_math_intrinsics(lfunc, cc):
     # find all known math intrinsics and implement them.
     for instr in _list_callinstr(lfunc):
         fn = instr.called_function
-        fname = fn.name
-        if fname in library:
-            inlinelist.append(instr)
-            to_be_removed.add(fn)
-            ftype = fn.type.pointee
-            newfn = module.get_or_insert_function(ftype, "numbapro.%s" % fname)
-            ptxcode = library[fname]
-            to_be_implemented[newfn] = ptxcode
-            instr.called_function = newfn  # replace the function
+        if fn is not None: # maybe a inline asm
+            fname = fn.name
+            if fname in library:
+                inlinelist.append(instr)
+                to_be_removed.add(fn)
+                ftype = fn.type.pointee
+                newfn = module.get_or_insert_function(ftype, "numbapro.%s" % fname)
+                ptxcode = library[fname]
+                to_be_implemented[newfn] = ptxcode
+                instr.called_function = newfn  # replace the function
+            else:
+                logger.debug("Unknown LLVM intrinsic %s", fname)
 
     # implement all the math functions with inline ptx
     for fn, ptx in to_be_implemented.items():
@@ -169,12 +180,13 @@ def _temp_fix_to_remove_python_specifics(lfunc):
     # find every call to python functions
     for instr in _list_callinstr(lfunc):
         fn = instr.called_function
-        fname = fn.name
-        if fname.startswith('Py_'):
-            inlinelist.append(instr)
-            fty = instr.called_function.type.pointee
-            fakepy[fname] = fn
-            assert fty.return_type == _lc.Type.void(), 'assume no sideeffect'
+        if fn is not None: # maybe a inline asm
+            fname = fn.name
+            if fname.startswith('Py_'):
+                inlinelist.append(instr)
+                fty = instr.called_function.type.pointee
+                fakepy[fname] = fn
+                assert fty.return_type == _lc.Type.void(), 'assume no sideeffect'
     # generate stub implementation for python functions
     # assumes that it returns void
     for fname, fn in fakepy.items():
@@ -320,7 +332,8 @@ class CudaNumbaFunction(CudaBaseFunction):
         cc_major = default.device.COMPUTE_CAPABILITY[0]
 
         # link all math intrinsics
-        user_funcs = filter(lambda x: not x.name.startswith('llvm.'),
+        user_funcs = filter(lambda x: not x.is_declaration and \
+                                      not x.name.startswith('llvm.'),
                             self.module.functions)
         for fn in user_funcs:
             _link_llvm_math_intrinsics(fn, cc_major)
