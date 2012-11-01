@@ -13,6 +13,12 @@ def cu_kernel_add(A, B, C):
     i = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
     C[i] = cu_device_add(A[i], B[i])
 
+@cuda.jit(argtypes=[f4[:], f4[:], f4[:]])
+def cu_kernel_add_2(A, B, C):
+    i = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+    C[i] = cu_device_add(A[i], B[i])
+    C[i] = cu_device_add(A[i], C[i])
+
 @cuda.jit(restype=f4, argtypes=[f4], device=True, inline=True)
 def cu_device_exp(x):
     return math.exp(x)
@@ -31,6 +37,15 @@ class TestDeviceFunction(unittest.TestCase):
         cu_kernel_add[(1,), (10,)](A, B, C)
 
         self.assertTrue((C == A + B).all())
+
+    def test_device_inlined_2(self):
+        A = np.arange(10, dtype=np.float32)
+        B = A.copy()
+        C = np.empty_like(A)
+
+        cu_kernel_add_2[(1,), (10,)](A, B, C)
+
+        self.assertTrue((C == A + A + B).all())
 
     def test_device_math(self):
         A = np.arange(32, dtype=np.float32)
