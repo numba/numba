@@ -16,7 +16,7 @@ class TestCudaInlineAsm(unittest.TestCase):
         rsqrt_approx_fnty = Type.function(Type.float(), [Type.float()])
         inlineasm = InlineAsm.get(rsqrt_approx_fnty,
                                   'rsqrt.approx.f32 $0, $1;',
-                                  '=r,r', side_effect=True)
+                                  '=f,f', side_effect=True)
         val = bldr.load(fn.args[0])
         res = bldr.call(inlineasm, [val])
 
@@ -28,6 +28,7 @@ class TestCudaInlineAsm(unittest.TestCase):
         nvvm.set_cuda_kernel(fn)
         nvvmir = str(mod)
         ptx = nvvm.llvm_to_ptx(nvvmir)
+        print ptx
 
         self.assertIn('rsqrt.approx.f32', ptx)
 
