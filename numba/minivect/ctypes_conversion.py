@@ -119,7 +119,6 @@ def convert_from_ctypes(type):
 
         c_float : float_,
         c_double : double,
-        c_longdouble : longdouble,
 
         c_char_p : c_string_type,
         c_void_p : void.pointer(),
@@ -127,6 +126,9 @@ def convert_from_ctypes(type):
 
         py_object : object_,
     }
+    # On MSVC Windows, these are equal
+    if c_longdouble != c_double:
+        ctypes_map[c_longdouble] = longdouble
 
     if type in ctypes_map:
         return ctypes_map[type]
