@@ -701,10 +701,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_UnaryOp(self, node):
         node.operand = self.visit(node.operand)
         if isinstance(node.op, ast.Not):
-            node.operand = CoercionNode(node.operand, minitypes.bool_)
-            return self.setvar(node, Variable(minitypes.bool_))
-
-        node.variable = Variable(node.variable.type)
+            node.operand = nodes.CoercionNode(node.operand, minitypes.bool_)
+            node.variable = Variable(minitypes.bool_)
+        else:
+            node.variable = Variable(node.operand.variable.type)
         return node
 
     def visit_Compare(self, node):

@@ -815,9 +815,37 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return phi
 
     def visit_UnaryOp(self, node):
+        operand_type = node.operand.type
         operand = self.visit(node.operand)
-        if isinstance(node.op, ast.Not):
-            return self.generate_not(operand)
+        operand_ltype = operand.type
+        op = node.op
+        if isinstance(op, ast.Not) and (operand_type.is_bool or
+                                        operand_type.is_int_like):
+            bb_false = self.builder.basic_block
+            bb_true = self.append_basic_block('not.true')
+            bb_done = self.append_basic_block('not.done')
+            self.builder.cbranch(
+                self.builder.icmp(lc.ICMP_NE, operand,
+                                  lc.Constant.null(operand_ltype)),
+                bb_true, bb_done)
+            self.builder.position_at_end(bb_true)
+            self.builder.branch(bb_done)
+            self.builder.position_at_end(bb_done)
+            phi = self.builder.phi(operand_ltype)
+            phi.add_incoming(lc.Constant.int(operand_ltype, 1), bb_false)
+            phi.add_incoming(lc.Constant.int(operand_ltype, 0), bb_true)
+            return phi
+        elif isinstance(op, ast.USub) and operand_type.is_numeric:
+            if operand_type.is_float:
+                return self.builder.fsub(lc.Constant.null(operand_ltype),
+                                         operand)
+            elif operand_type.is_int_like and operand_type.signed:
+                return self.builder.sub(lc.Constant.null(operand_ltype),
+                                        operand)
+        elif isinstance(op, ast.UAdd) and operand_type.is_numeric:
+            return operand
+        elif isinstance(op, ast.Invert) and operand_type.is_int_like:
+            return self.builder.xor(lc.Constant.int(operand_ltype, -1), operand)
         raise error.NumbaError(node, "Unary operator %s" % node.op)
 
     def visit_Compare(self, node):
@@ -897,12 +925,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                               self.return_value.type.pointee)
 
             if not retval.type == self.return_value.type.pointee:
-#                logger.debug(utils.pformat_ast(node))
                 dump(node)
-                logger.debug('%s != %s' % (self.return_value.type,
-                                           retval.type))
-                assert False, ('Expected %s type in return, got %s!' %
-                               (self.return_value.type, retval.type))
+                logger.debug('%s != %s (in node %s)' % (
+                        self.return_value.type.pointee, retval.type,
+                        utils.pformat_ast(node)))
+                raise error.NumbaError(
+                    node, 'Expected %s type in return, got %s!' %
+                    (self.return_value.type.pointee, retval.type))
 
             self.builder.store(retval, self.return_value)
 
