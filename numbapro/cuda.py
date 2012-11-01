@@ -117,6 +117,8 @@ CUDA_MATH_INTRINSICS_2 = {
     'fabs'        : ptx.fabs_f64,
     'llvm.log.f32': ptx.log_f32,
     'llvm.log.f64': ptx.log_f64,
+    'llvm.pow.f32': ptx.pow_f32,
+    'llvm.pow.f64': ptx.pow_f64,
 }
 
 CUDA_MATH_INTRINSICS_3 = CUDA_MATH_INTRINSICS_2.copy()

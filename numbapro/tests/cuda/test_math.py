@@ -22,6 +22,10 @@ def cu_log(A):
     i = cuda.grid(1)
     A[i] = math.log(A[i])
 
+def cu_pow(A, B):
+    i = cuda.grid(1)
+    A[i] = A[i] ** B[i]
+
 N = 10
 
 class TestCudaMath(unittest.TestCase):
@@ -31,12 +35,28 @@ class TestCudaMath(unittest.TestCase):
         Gold = npfunc(A)
         cufunc[(1,), A.shape](A)
         self.assertTrue(np.allclose(A, Gold))
-    
+
+    def _template_f4f4(self, func, npfunc):
+        cufunc = jit(argtypes=[f4[:], f4[:]], target='gpu')(func)
+        A = np.array(np.random.random(N), dtype=np.float32)
+        B = np.array(np.random.random(N), dtype=np.float32)
+        Gold = npfunc(A, B)
+        cufunc[(1,), A.shape](A, B)
+        self.assertTrue(np.allclose(A, Gold))
+
     def _template_f8(self, func, npfunc):
         cufunc = jit(argtypes=[f8[:]], target='gpu')(func)
         A = np.array(np.random.random(N), dtype=np.float64)
         Gold = npfunc(A)
         cufunc[(1,), A.shape](A)
+        self.assertTrue(np.allclose(A, Gold))
+
+    def _template_f8f8(self, func, npfunc):
+        cufunc = jit(argtypes=[f8[:], f8[:]], target='gpu')(func)
+        A = np.array(np.random.random(N), dtype=np.float64)
+        B = np.array(np.random.random(N), dtype=np.float64)
+        Gold = npfunc(A, B)
+        cufunc[(1,), A.shape](A, B)
         self.assertTrue(np.allclose(A, Gold))
 
     def test_sqrt(self):
@@ -54,6 +74,12 @@ class TestCudaMath(unittest.TestCase):
     def test_log(self):
         self._template_f4(cu_log, np.log)
         self._template_f8(cu_log, np.log)
+
+    def test_pow(self):
+        self._template_f4f4(cu_pow, np.power)
+        self._template_f8f8(cu_pow, np.power)
+
+
 
 if __name__ == '__main__':
     unittest.main()
