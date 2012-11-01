@@ -132,11 +132,11 @@ class MathMixin(object):
         'pow',
         'erfc',
         'ceil',
-        'rint',
         'round',
     ]
     if sys.platform != 'win32':
         libc_math_funcs.append('expm1')
+        libc_math_funcs.append('rint')
 
     def get_funcname(self, py_func):
         if py_func is np.abs:
