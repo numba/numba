@@ -204,21 +204,20 @@ def _temp_fix_to_remove_python_specifics(lfunc):
 
 def _link_device_function(lfunc):
     toinline = []
-    for bb in lfunc.basic_blocks:
-        for instr in bb.instructions:
-            if isinstance(instr, _lc.CallOrInvokeInstruction):
-                fn = instr.called_function
-                if fn is not None: # can be not for inline asm
-                    bag = _device_functions.get(fn.name)
-                    if bag is not None:
-                        pyfunc, linkee =bag
-                        lfunc.module.link_in(linkee.module.clone())
-                        if pyfunc._numba_inline:
-                            toinline.append(instr)
+    for instr in  _list_callinstr(lfunc):
+        fn = instr.called_function
+        if fn is not None and fn.is_declaration: # can be None for inline asm
+            bag = _device_functions.get(fn.name)
+            if bag is not None:
+                pyfunc, linkee =bag
+                lfunc.module.link_in(linkee.module.clone())
+                if pyfunc._numba_inline:
+                    toinline.append(instr)
 
     for call in toinline:
         callee = call.called_function
         _lc.inline_function(call)
+
 
 
 class CudaDeviceFunction(numba.decorators.NumbaFunction):
