@@ -414,8 +414,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def setup_func(self):
         self.lfunc_type = self.to_llvm(self.func_signature)
-        self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
 
+        self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
+        assert self.func_name == self.lfunc.name, \
+               "Redefinition of function %s" % self.func_name
+        
         # Add entry block for alloca.
         entry = self.append_basic_block('entry')
         self.builder = lc.Builder.new(entry)
@@ -446,6 +449,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return type.to_llvm(self.context)
 
     def translate(self):
+        # Try to find the function of the specified name in the current module.
+        # If it is found, we can return immediately.
+        # Otherwise, continue to translate.
+        try:
+            self.lfunc = self.mod.get_function_named(self.func_name)
+        except llvm.LLVMException:
+            pass
+        else:
+            assert not self.lfunc.is_declaration
+            return # we are done, escape now.
         try:
             self.setup_func()
 
