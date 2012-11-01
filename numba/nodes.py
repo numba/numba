@@ -405,7 +405,6 @@ class ObjectCallNode(FunctionCallNode):
 
         self.type = signature.return_type
 
-
 class ComplexConjugateNode(Node):
     "mycomplex.conjugate()"
 
@@ -750,6 +749,28 @@ class ExtTypeAttribute(Node):
         self.ctx = ctx
         self.ext_type = ext_type
 
+class NewExtObjectNode(Node):
+    """
+    Instantiate an extension type. Currently unused.
+    """
+
+    _fields = ['args']
+
+    def __init__(self, ext_type, args, **kwargs):
+        super(NewExtObjectNode, self).__init__(**kwargs)
+        self.ext_type = ext_type
+        self.args = args
+
+class InstantiateClosureScope(Node):
+
+    _fields = ['outer_scope']
+
+    def __init__(self, func_def, scope_ext_type, scope_type, outer_scope, **kwargs):
+        super(InstantiateClosureScope, self).__init__(**kwargs)
+        self.func_def = func_def
+        self.scope_ext_type = scope_ext_type
+        self.outer_scope = outer_scope
+        self.type = scope_type
 
 class StructAttribute(ExtTypeAttribute):
 
@@ -815,20 +836,24 @@ class ExtensionMethod(Node):
 class ClosureNode(Node):
     """
     Inner functions or closures.
+
+    When coerced to an object, a wrapper PyMethodDef gets created, and at
+    call time a function is dynamically created with the closure scope.
     """
 
     _fields = []
 
     def __init__(self, func_def, closure_type, **kwargs):
         super(ClosureNode, self).__init__(**kwargs)
-        self.func_def
+        self.func_def = func_def
         self.type = closure_type
 
-        self.lfunc = None
+        d = {}
+        exec compile('func_def', '<string>', 'ast') in d
+        self.py_func = d.popitem()
+        assert not d
 
-        # We need a wrapper function if we ever coerce the closure to an
-        # object
-        self.need_wrapper = False
+        self.lfunc = None
         self.wrapper_func = None
         self.wrapper_lfunc = None
 
@@ -841,6 +866,7 @@ class ClosureNode(Node):
 
         # variables we need to put in a closure scope for our inner functions
         self.cellvars = None
+
 
 class ClosureCallNode(NativeCallNode):
     """

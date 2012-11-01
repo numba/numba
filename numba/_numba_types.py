@@ -235,22 +235,11 @@ class CastType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "<cast(%s)>" % self.dst_type
 
-class ClosureType(NumbaType, minitypes.ObjectType):
-
-    is_closure = True
-
-    def __init__(self, signature, closure_def, **kwds):
-        super(ClosureType, self).__init__(**kwds)
-        self.signature = signature
-        self.closure_def = closure_def
-
-    def __repr__(self):
-        return "<closure(%s)>" % self.signature
-
 
 class ExtensionType(NumbaType, minitypes.ObjectType):
 
     is_extension = True
+    is_final = False
 
     def __init__(self, py_class, **kwds):
         super(ExtensionType, self).__init__(**kwds)
@@ -277,7 +266,8 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
             if signature.return_type is None:
                 signature.return_type = method_signature.return_type
             else:
-                assert signature.return_type == method_signature.return_type, method_signature
+                assert signature.return_type == method_signature.return_type, \
+                                                            method_signature
         else:
             self.methoddict[method_name] = (method_signature, len(self.methods))
             self.methods.append((method_name, method_signature))
@@ -288,6 +278,34 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
 
     def __repr__(self):
         return "<Extension %s>" % self.name
+
+
+class ClosureType(NumbaType, minitypes.ObjectType):
+
+    is_closure = True
+
+    def __init__(self, signature, **kwds):
+        super(ClosureType, self).__init__(**kwds)
+        self.signature = signature
+        self.closure = None
+
+    def __repr__(self):
+        return "<closure(%s)>" % self.signature
+
+class ClosureScopeType(ExtensionType):
+
+    is_closure_scope = True
+    is_final = True
+
+    def __init__(self, py_class, parent_scope, **kwds):
+        super(ClosureScopeType, self).__init__(py_class, **kwds)
+        self.parent_scope = parent_scope
+        if parent_scope is None:
+            self.scope_prefix = ""
+        else:
+            self.scope_prefix = parent_scope.scope_prefix + "0"
+
+        self.unmangled_symtab = None
 
 
 tuple_ = TupleType()

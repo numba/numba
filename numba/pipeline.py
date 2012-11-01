@@ -9,7 +9,7 @@ import functools
 import pprint
 
 from numba import error
-from numba import functions, naming, transforms, visitors
+from numba import functions, naming, transforms, visitors, closure
 from numba import ast_type_inference as type_inference
 from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
@@ -28,6 +28,7 @@ class Pipeline(object):
         'const_folding',
         'type_infer',
         'type_set',
+        'closure_type_inference',
         'transform_for',
         'specialize',
         'late_specializer',
@@ -114,6 +115,10 @@ class Pipeline(object):
         visitor.visit(ast)
         return ast
 
+    def closure_type_inference(self, ast):
+        type_inferer = self.make_specializer(closure.ClosureTypeInferer, ast)
+        return type_inferer.visit(ast)
+
     def transform_for(self, ast):
         transform = self.make_specializer(transforms.TransformForIterable, ast)
         return transform.visit(ast)
@@ -185,14 +190,15 @@ def infer_types_from_ast_and_sig(context, dummy_func, ast, signature):
                         order=['type_infer'])
 
 def compile_after_type_inference(context, func, func_signature, symtab, ast,
-                                 ctypes=False):
+                                 ctypes=False, **kwargs):
     """
     Use this function to compile a type-inferred AST. THis allows one
     to separate the stages.
     """
     order = Pipeline.order[1:]
     pipeline, (new_signature, symtab, ast) = run_pipeline(
-                        context, func, ast, func_signature, order=order)
+                        context, func, ast, func_signature, order=order,
+                        **kwargs)
     assert new_signature == func_signature
     return pipeline.translator, get_wrapper(pipeline.translator, ctypes)
 

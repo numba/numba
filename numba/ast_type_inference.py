@@ -384,8 +384,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.return_type = None
 
         ast.symtab = self.symtab
-#        self.closure_scope = closure_scope
-#        ast.closure_scope = closure_scope
+        self.closure_scope = closure_scope
+        ast.closure_scope = closure_scope
         ast.closures = []
 
     def infer_types(self):

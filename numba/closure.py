@@ -1,30 +1,24 @@
 import ast
-import math
-import cmath
-import copy
-import opcode
-import types
-import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import error, transforms, closure
-from .minivect import minierror, minitypes
-from . import translate, utils, _numba_types as numba_types
-from .symtab import Variable
-from . import visitors, nodes, error
-from numba import stdio_util
-from numba._numba_types import is_obj, promote_closest
-from numba.utils import dump
-
-import llvm.core
-import numpy
-import numpy as np
+from numba import error, visitors, nodes
+from numba.minivect import  minitypes
+from numba import  _numba_types as numba_types
+from numba.symtab import Variable
 
 import logging
 logger = logging.getLogger(__name__)
 
+
 class ClosureMixin(object):
+    """
+    Handles closures during type inference. Mostly performs error checking
+    for closure signatures.
+
+    Generates ClosureNodes that hold inner functions. When visited, they
+    do not recurse into the inner functions themselves!
+    """
 
     function_level = 0
 
@@ -80,8 +74,11 @@ class ClosureMixin(object):
         return restype
 
     def _handle_jit_decorator(self, func_def, decorator):
-        jit_args = _parse_args(decorator, ['restype', 'argtypes', 'backend',
-                                           'target', 'nopython'])
+        from numba import ast_type_inference
+
+        jit_args = ast_type_inference._parse_args(
+                decorator, ['restype', 'argtypes', 'backend',
+                            'target', 'nopython'])
 
         if decorator.args or decorator.keywords:
             restype = self._parse_restype(decorator, jit_args)
@@ -138,46 +135,69 @@ class ClosureMixin(object):
             return self._visit_func_children(node)
 
         signature = self._process_decorators(node)
-        type = numba_types.ClosureType(signature, node)
-
+        type = numba_types.ClosureType(signature)
         self.symtab[node.name] = Variable(type, is_local=True)
-        self.ast.closures.append(nodes.ClosureNode(node, type))
 
-        return None
+        closure = nodes.ClosureNode(node, type)
+        type.closure = closure
+        self.ast.closures.append(closure)
 
+        return closure
 
-class ClosureResolver(visitors.NumbaVisitor):
+def mangle(name, scope):
+    return '__numba_scope_%s_' % scope.scope_prefix
+
+def lookup_scope_attribute(cur_scope, scope_type, var_name, ctx=None):
     """
-    1) run type inference on inner functions
+    Look up a variable in the closure scope
+    """
+    ctx = ctx or ast.Load()
+    field_name, field_type = scope_type.attribute_struct.fields[0]
+
+    var_name = mangle(var_name, scope_type)
+    if var_name in scope_type.symtab:
+        return nodes.ExtTypeAttribute(value=cur_scope, attr=var_name,
+                                      ctx=ctx, ext_type=scope_type)
+    elif field_type.is_closure_scope:
+        return nodes.ExtTypeAttribute(value=cur_scope, attr=field_name,
+                                      ctx=ctx, ext_type=scope_type)
+    else:
+        # This indicates a bug
+        raise error.InternalError(
+                cur_scope, "Unable to look up attribute %s" % var_name)
+
+class ClosureTypeInferer(visitors.NumbaTransformer):
+    """
+    Runs just after type inference after the outer variables types are
+    resolved.
+
+    1) run type inferencer on inner functions
     2) build scope extension type
-    3) generate code to instantiate scope extension type at call time
-    4) rewrite local variable accesses to accesses on the instantiated scope
-    5) when coercing to object, instantiate function with scope as
-       first argument
+    3) generate nodes to instantiate scope extension type at call time
     """
-
-    def __init__(self, *args, **kwargs):
-        super(ClosureResolver, self).__init__(*args, **kwargs)
-        self.enclosing = [set()]
 
     def visit_FunctionDef(self, node):
         process_closures(self.context, node, self.symtab)
 
         cellvars = dict((name, var) for var in self.symtab.iteritems()
-                            if var.is_cellvar)
+                                        if var.is_cellvar)
         node.cellvars = cellvars
 
-        fields = [('var%d' % i, cellvar) for i in enumerate(cellvars)]
+        fields = numba.struct(**cellvars).fields
         if self.parent_scope:
-            fields.insert(0, ('base', self.parent_scope.__numba_ext_type))
+            fields.insert(0, ('__numba_base_scope',
+                              self.parent_scope.__numba_ext_type))
 
         class py_class(object):
             pass
 
         func_name = self.func.__name__
         py_class.__name__ = '%s_scope' % func_name
-        ext_type = numba_types.ExtensionType(py_class)
+        ext_type = numba_types.ClosureScopeType(py_class, self.parent_scope)
 
+        ext_type.unmangled_symtab = dict(fields)
+
+        fields = [(mangle(name, ext_type), type) for name, type in fields]
         ext_type.symtab.update(fields)
         ext_type.attribute_struct = numba.struct(fields)
 
@@ -187,32 +207,24 @@ class ClosureResolver(visitors.NumbaVisitor):
                 vtab=None, vtab_type=numba.struct(),
                 llvm_methods=[], method_pointers=[])
 
+        # Instantiate closure scope
         if self.parent_scope:
             outer_scope = ast.Name(id='__numba_closure_scope', ctx=ast.Load())
         else:
             outer_scope = None
 
         cellvar_scope = nodes.InstantiateClosureScope(
-                            node.closure_scope_type, outer_scope).cloneable
+                    node, node.closure_scope_ext_type, outer_scope).cloneable
         node.body.insert(0, cellvar_scope)
         self.cellvar_scope = cellvar_scope.clone
 
         self.generic_visit(node)
         return node
 
+    # process_closures performs the recursion
     #def visit_ClosureNode(self, node):
     #    node.func_def = self.visit(node.func_def)
     #    return node
-
-    def visit_Name(self, node):
-        if node.variable.is_cellvar:
-            return nodes.ExtTypeAttribute(self.cellvar_scope,
-                                          node.id, node.ctx,
-                                          self.closure_scope_type)
-        elif node.variable.is_freevar:
-            pass
-        else:
-            return node
 
 
 def get_locals(symtab):
@@ -239,8 +251,113 @@ def process_closures(context, outer_func_def, outer_symtab):
         closure.symtab = symtab
         closure.type_inferred_ast = ast
 
-#        if closure.need_wrapper:
-#             wrapper, lfunc = p.translator.build_wrapper_function(
-#                                                        get_lfunc=True)
-#             closure.wrapper_func = wrapper
-#             closure.wrapper_lfunc = lfunc
+
+class ClosureCompilingMixing(object):
+    """
+    Runs during late specialization.
+
+        - Instantiates the closure scope and makes the necessary assignments
+        - Rewrites local variable accesses to accesses on the instantiated scope
+        - Instantiate function with closure scope
+    """
+
+    closure_scope = None
+
+    def _load_name(self, var_name):
+        src = ast.Name(var_name, ast.Load())
+        src.variable = Variable.from_variable(self.symtab[var_name])
+        src.variable.is_cellvar = False
+        src.type = variable.type
+        return src
+
+    def visit_InstantiateClosureScope(self, node):
+        """
+        Instantiate a closure scope.
+
+        After instantiation, assign all function arguments that belong in the
+        scope to the scope.
+        """
+        ctor = nodes.ObjectInjectNode(object.__new__)
+        create_scope = nodes.ObjectCallNode(
+                    signature=node.scope_type(object_), func=ctor, args=[])
+
+        create_scope = create_scope.cloneable
+        scope = create_scope.clone
+        stats = [create_scope]
+
+        for arg in node.args:
+            assert isintance(arg, ast.Name)
+            if arg.id in node.scope_type.unmangled_symtab:
+                var_name = mangle(arg.id, node.scope_type)
+                dst = lookup_scope_attribute(scope, node.scope_type,
+                                             var_name, ast.Store())
+                src = self._load_name(arg.id)
+                assmt = ast.Assign(targets=[dst], value=src)
+                stats.append(assmt)
+
+        self.closure_scope = scope
+        return self.visit(nodes.ExpressionNode(smts=stats, expr=scope))
+
+    def visit_ClosureNode(self, node):
+        """
+        Compile the inner function.
+        """
+        assert self.closure_scope is not None
+
+        # Compile inner function
+        p, result = pipeline.run_pipeline(
+                    self.context, node.py_func, node.type_inferred_ast,
+                    node.type.signature, symtab=node.symtab,
+                    order=pipeline.Pipeline.order[1:], # skip type inference
+                    )
+
+        node.lfunc = p.translator.lfunc
+        node.lfunc_pointer = p.translator.lfunc_pointer
+        wrapper_funcs = self.translator.build_wrapper_function(get_lfunc=True)
+        node.wrapper_func, node.wrapper_lfunc = wrapper_funcs
+
+        # Create function with closure scope at runtime
+        create_cyfunc_signature = node.type(
+            void.pointer(), # PyMethodDef *ml
+            object_,        # PyObject *self
+            object_,        # PyObject *module
+            object_,        # PyObject *closure
+            void.pointer(), # void *native_func
+            object_,        # PyObject *native_signature
+        )
+        create_cyfunc = nodes.ConstNode(
+                extension_types.CyFunction_NewExAndClosure_pointer,
+                create_cyfunc_signature)
+
+        args = [
+            # Get the PyMethodDef * from the wrapper
+            # FIXME: this is a hack
+            nodes.const(node.wrapper_func.__self__.methoddef_p, void.pointer()),
+            # Hold on to methoddef ctypes structure
+            nodes.const(node.wrapper_func.__self__.methoddef, object_),
+            nodes.const(self.func.__module__),
+            self.closure_scope,
+            node.lfunc_pointer,
+            node.type.signature,
+        ]
+
+        func_call = nodes.NativeFunctionCallNode(
+                            signature=create_cyfunc_signature,
+                            function_node=create_cyfunc,
+                            args=args)
+
+        # Assign closure to its name
+        assmt = ast.Assign(
+                targets=[ast.Name(id=node.func_def.name, ctx=ast.Store())],
+                value=func_call)
+
+        return self.visit(assmt)
+
+    def visit_Name(self, node):
+        "Resolve cellvars and freevars"
+        if node.variable.is_cellvar or node.variable.is_freevar:
+            return self.lookup_scope_attribute(
+                self.cellvar_scope, self.closure_scope_type,
+                var_name=node.id, ctx=node.ctx)
+        else:
+            return node

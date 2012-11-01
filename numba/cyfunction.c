@@ -65,6 +65,9 @@ typedef struct {
     PyObject *func_closure;
     PyObject *func_classobj; /* No-args super() class cell */
 
+    void *native_func;
+    PyObject *native_signature;
+
     /* Dynamic default args*/
     void *defaults;
     int defaults_pyobjects;
@@ -294,7 +297,7 @@ static PyMethodDef CyFunction_methods[] = {
 
 
 static PyObject *CyFunction_New(PyTypeObject *type, PyMethodDef *ml, int flags,
-                                /*PyObject *closure,*/
+                                PyObject *closure,
                                 PyObject *self, PyObject *module, PyObject* code)
 {
     CyFunctionObject *op = PyObject_GC_New(CyFunctionObject, type);
@@ -306,8 +309,8 @@ static PyObject *CyFunction_New(PyTypeObject *type, PyMethodDef *ml, int flags,
     /* op->func.m_self = (PyObject *) op;*/
     Py_XINCREF(self);
     op->func.m_self = self;
-    /*Py_XINCREF(closure);
-    op->func_closure = closure;*/
+    Py_XINCREF(closure);
+    op->func_closure = closure;
     op->func_closure = NULL;
     Py_XINCREF(module);
     op->func.m_module = module;
@@ -317,11 +320,16 @@ static PyObject *CyFunction_New(PyTypeObject *type, PyMethodDef *ml, int flags,
     op->func_classobj = NULL;
     Py_XINCREF(code);
     op->func_code = code;
+
     /* Dynamic Default args */
     op->defaults_pyobjects = 0;
     op->defaults = NULL;
     op->defaults_tuple = NULL;
     op->defaults_getter = NULL;
+
+    op->native_func = NULL;
+    op->native_signature = NULL;
+
     PyObject_GC_Track(op);
     return (PyObject *) op;
 }
@@ -330,7 +338,23 @@ PyObject *
 CyFunction_NewEx(PyMethodDef *ml, int flags, PyObject *self,
                  PyObject *module, PyObject *code)
 {
-    return CyFunction_New(CyFunctionType, ml, flags, self, module, code);
+    return CyFunction_New(CyFunctionType, ml, flags, NULL, self, module, code);
+}
+
+/* Create a new function and set the closure scope */
+PyObject *
+CyFunction_NewExAndClosure(PyMethodDef *ml, PyObject *self,
+                           PyObject *module, PyObject *closure,
+                           void *native_func, PyObject *native_signature)
+{
+    CyFunctionObject *result = CyFunction_New(
+                        CyFunctionType, ml, 0, closure, self, module, NULL);
+    if (result) {
+        result->native_func = native_func;
+        Py_XINCREF(native_signature);
+        result->native_signature = native_signature;
+    }
+    return result;
 }
 
 static int
