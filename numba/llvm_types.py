@@ -4,8 +4,9 @@ Utility module containing common (to Numba) LLVM types.
 '''
 # ______________________________________________________________________
 
-import ctypes
 import sys
+import ctypes
+import struct as struct_
 import platform
 import llvm.core as lc
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # ______________________________________________________________________
 
-_plat_bits = int(platform.architecture()[0][:2])
+_plat_bits = struct_.calcsize('@P') * 8
 
 # Assuming sizeof(c_size_t) == sizeof(c_ssize_t) == sizeof(Py_ssize_t)...
 _sizeof_py_ssize_t = ctypes.sizeof(
@@ -59,9 +60,6 @@ _numpy_struct = lc.Type.struct(_pyobject_head+\
        _void_star,          # descr
        _int32,              # flags
        _void_star,          # weakreflist
-       _void_star,          # maskna_dtype
-       _void_star,          # maskna_data
-       _intp_star,          # masna_strides
       ])
 _numpy_array = lc.Type.pointer(_numpy_struct)
 

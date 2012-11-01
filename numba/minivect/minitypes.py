@@ -46,11 +46,7 @@ import minierror
 
 from miniutils import *
 
-# Check below taken from Numba
-if sys.maxint > 2**33:
-    _plat_bits = 64
-else:
-    _plat_bits = 32
+_plat_bits = struct_.calcsize('@P') * 8
 
 if struct_.pack('i', 1)[0] == '\1':
     nbo = '<' # little endian
