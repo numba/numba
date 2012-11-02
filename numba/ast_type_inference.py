@@ -107,7 +107,7 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
                     nodes.ObjectTempNode(
                         self.function_cache.call(
                             'PyInt_FromString', arg1,
-                            nodes.const(0, Py_ssize_t), arg2)),
+                            nodes.NULL, arg2)),
                     dst_type=dst_type)
             return None
 
@@ -651,11 +651,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if (variable.type is None and variable.is_local and
                     isinstance(node.ctx, ast.Load)):
                 raise UnboundLocalError(variable.name)
-        elif self.closure_scope and node.id in self.closure_scope:
+        elif (self.closure_scope and node.id in self.closure_scope and not
+                  self.is_store(node.ctx)):
             closure_var = self.closure_scope[node.id]
             closure_var.is_cellvar = True
 
-            assert not self.is_store(node.ctx)
             variable = Variable.from_variable(closure_var)
             variable.is_cellvar = False
             variable.is_freevar = True

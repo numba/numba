@@ -332,7 +332,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                  refcount_args=True, **kwds):
 
         super(LLVMCodeGenerator, self).__init__(
-                    context, func, ast, nopython=nopython, symtab=symtab)
+                    context, func, ast, func_signature=func_signature,
+                    nopython=nopython, symtab=symtab)
 
         self.func_name = kwds.get('func_name', func_signature.name
                                             or func.__name__)
@@ -603,12 +604,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         args_tuple = self.lfunc.args[1]
         arg_types = [object_] * len(node.signature.args)
 
-        is_closure = False
-        if node.signature.args and node.signature.args[0].is_closure_scope:
+        if self.is_closure(node.signature):
             # Wrapper expects closure scope as first argument, which we
             # have as the m_self attribute
             arg_types.pop()
-            is_closure = True
 
         # Unpack tuple into arguments
         types, lstr = self.object_coercer.lstr(arg_types)
@@ -622,7 +621,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         args = [nodes.LLVMValueRefNode(arg_type, larg)
                     for arg_type, larg in zip(arg_types, largs)]
 
-        if is_closure:
+        if self.is_closure(node.signature):
             # Insert m_self as scope argument type
             self.insert_closure_scope_arg(args, node)
 

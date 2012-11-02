@@ -342,6 +342,8 @@ class TransformForIterable(visitors.NumbaTransformer):
             # replace node.iter
             call_func = ast.Name(id='range', ctx=ast.Load())
             call_func.type = numba_types.RangeType()
+            call_func.variable = Variable(call_func.type)
+
             shape_index = ast.Index(nodes.ConstNode(0, numba_types.Py_ssize_t))
             shape_index.type = numba_types.npy_intp
             stop = ast.Subscript(value=nodes.ShapeAttributeNode(orig_iter),
@@ -410,7 +412,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 if dst_type.is_int:
                     cvtobj = self.function_cache.call(
                         'PyInt_FromString', node.node,
-                        nodes.const(0, Py_ssize_t), nodes.const(10, int_))
+                        nodes.NULL, nodes.const(10, int_))
                 else:
                     cvtobj = self.function_cache.call(
                         'PyFloat_FromString', node.node,
@@ -496,8 +498,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 # TODO: error checking!
                 new_node = self.function_cache.call(cls.__name__, node.node)
         elif node_type.is_pointer:
-            raise error.NumbaError(
-                    "Obtaining pointers from objects is not yet supported")
+            raise error.NumbaError(node, "Obtaining pointers from objects "
+                                         "is not yet supported")
+        elif node_type.is_void:
+            raise error.NumbaError(node, "Cannot coerce %s to void" % (from_type,))
 
         if new_node is None:
             # Create a tuple for PyArg_ParseTuple

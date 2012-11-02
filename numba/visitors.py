@@ -39,6 +39,11 @@ class NumbaVisitorMixin(CooperativeBase):
         self.costr = func.func_code.co_code
         self.argnames = self.fco.co_varnames[:self.fco.co_argcount]
 
+        if self.is_closure(func_signature):
+            from numba import closure
+            self.argnames = (closure.CLOSURE_SCOPE_ARG_NAME,) + self.argnames
+            self.varnames.append(closure.CLOSURE_SCOPE_ARG_NAME)
+
         # Just the globals we will use
         self._myglobals = {}
         for name in self.names:
@@ -48,6 +53,11 @@ class NumbaVisitorMixin(CooperativeBase):
                 # Assumption here is that any name not in globals or
                 # builtins is an attribtue.
                 self._myglobals[name] = getattr(builtins, name, None)
+
+    def is_closure(self, func_signature):
+        return (func_signature is not None and
+                func_signature.args and
+                func_signature.args[0].is_closure_scope)
 
     def error(self, node, msg):
         raise error.NumbaError(node, msg)

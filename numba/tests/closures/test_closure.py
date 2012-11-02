@@ -75,6 +75,26 @@ def closure4():
     a = 12
     return inner
 
+@autojit
+def nested_closure():
+    a = 20
+    b = 21
+
+    @jit('object_()')
+    def c1():
+        b = 10
+        @jit('void()')
+        def c2():
+            print a, b
+
+        return c2
+
+    @jit('void()')
+    def c3():
+        print b
+
+    return c1, c3
+
 __doc__ = """
 >>> error1()
 Traceback (most recent call last):
@@ -124,8 +144,22 @@ inner
 12
 >>> func()
 12
+
+>>> c1, c3 = nested_closure()
+>>> c1.__name__
+'c1'
+>>> c3.__name__
+'c3'
+>>> c1().__name__
+'c2'
+>>> c1()()
+20 10
+>>> c3()
+21
 """
 
 if __name__ == '__main__':
+#    c1, c3 = nested_closure()
+#    print c1.__name__, c3.__name__
     import doctest
     doctest.testmod()

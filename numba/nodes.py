@@ -878,17 +878,25 @@ class ClosureNode(Node):
         # self.cellvars = None
 
     def make_pyfunc(self):
-        argnames = tuple(arg.id for arg in self.func_def.args.args)
-        dummy_func_string = """
-def %s(%s):
-    pass
-        """ % (self.func_def.name, ", ".join(argnames))
-
         d = self.outer_py_func.func_globals
-        exec dummy_func_string in d, d
-        self.py_func = d[self.func_def.name]
+#        argnames = tuple(arg.id for arg in self.func_def.args.args)
+#        dummy_func_string = """
+#def __numba_closure_func(%s):
+#    pass
+#        """ % ", ".join(argnames)
+#        exec dummy_func_string in d, d
+
+        name = self.func_def.name
+        self.func_def.name = '__numba_closure_func'
+        ast_mod = ast.Module(body=[self.func_def])
+        c = compile(ast_mod, '<string>', 'exec')
+        exec c in d, d
+
+        self.py_func = d['__numba_closure_func']
         self.py_func.live_objects = []
         self.py_func.__module__ = self.outer_py_func.__module__
+        self.py_func.__name__ = name
+        self.func_def.name = name
 
 class InstantiateClosureScope(Node):
 
