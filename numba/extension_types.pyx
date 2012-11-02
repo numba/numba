@@ -147,7 +147,8 @@ def create_function(methoddef, py_func, lfunc_pointer, signature):
     cdef PyMethodDef *ml = <PyMethodDef *> methoddef_p
     cdef Py_uintptr_t lfunc_p = lfunc_pointer
 
-    py_func.live_objects.append(methoddef)
-    result = NumbaFunction_NewEx(ml, py_func.__module__, py_func.func_code,
-                                 NULL, <void *>lfunc_p, signature, py_func)
+    modname = py_func.__module__
+    py_func.live_objects.extend((methoddef, modname))
+    result = NumbaFunction_NewEx(ml, modname, py_func.func_code,
+                                 NULL, <void *> lfunc_p, signature, py_func)
     return result

@@ -99,6 +99,7 @@ class ClosureMixin(object):
         # TODO: Analyse closure at call or outer function return time to
         # TODO:     infer return type
         # TODO: parse out nopython argument
+        del func_def.decorator_list[:]
         return signature
 
     def _process_decorators(self, node):
@@ -352,13 +353,15 @@ class ClosureCompilingMixing(ClosureBaseVisitor):
 
         # Keep methoddef alive
         assert methoddef in node.py_func.live_objects
+        modname = self.func.__module__
+        node.py_func.live_objects.append(modname)
 
         # Create function with closure scope at runtime
         create_numbafunc_signature = node.type(
             void.pointer(), # PyMethodDef *ml
             object_,        # PyObject *module
             void.pointer(), # PyObject *code
-            object_,        # PyObject *closure
+            void.pointer(), # PyObject *closure
             void.pointer(), # void *native_func
             object_,        # PyObject *native_signature
             object_,        # PyObject *keep_alive
@@ -369,12 +372,13 @@ class ClosureCompilingMixing(ClosureBaseVisitor):
 
         methoddef_p = ctypes.cast(ctypes.byref(methoddef),
                                   ctypes.c_void_p).value
+
         args = [
             nodes.const(methoddef_p, void.pointer()),
-            nodes.const(self.func.__module__, object_),
+            nodes.const(modname, object_),
             nodes.NULL,
             closure_scope,
-            nodes.const(node.lfunc_pointer, void.pointer()),
+            nodes.ptrfromint(node.lfunc_pointer, void.pointer()),
             nodes.const(node.type.signature, object_),
             nodes.const(node.py_func, object_),
         ]
@@ -388,10 +392,13 @@ class ClosureCompilingMixing(ClosureBaseVisitor):
         func_name = node.func_def.name
         dst = self._load_name(func_name, self.symtab[func_name].is_cellvar)
         dst.ctx = ast.Store()
-        assmt = ast.Assign(targets=[dst], value=func_call)
+        result = ast.Assign(targets=[dst], value=func_call)
 
-        # import pdb; pdb.set_trace()
-        return self.visit(assmt)
+        #stats = [nodes.inject_print(nodes.const("calling...", c_string_type)),
+        #         result]
+        #result = ast.Suite(body=stats)
+        result = self.visit(result)
+        return result
 
     def visit_Name(self, node):
         "Resolve cellvars and freevars"

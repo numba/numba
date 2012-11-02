@@ -75,11 +75,15 @@ def _create_methoddef(py_func, func_pointer):
                                   ctypes.c_void_p]
     PyCFunction_NewEx.restype = ctypes.py_object
 
-    py_func.live_objects.extend((py_func.__name__, py_func.__doc__))
+    # It is paramount to put these into variables first, since every
+    # access may return a new string object!
+    name = py_func.__name__
+    doc = py_func.__doc__
+    py_func.live_objects.extend((name, doc))
 
     methoddef = c_PyMethodDef()
-    methoddef.name = py_func.__name__
-    methoddef.doc = py_func.__doc__
+    methoddef.name = name
+    methoddef.doc = doc
     methoddef.method = ctypes.c_void_p(func_pointer)
     methoddef.flags = 1 # METH_VARARGS
 
@@ -95,8 +99,9 @@ def numbafunction_new(py_func, func_pointer, wrapped_lfunc_pointer,
     #NULL = ctypes.c_void_p()
     #result = PyCFunction_NewEx(methoddef_p, methoddef, NULL)
     #return result
-    return methoddef, extension_types.create_function(
+    wrapper = extension_types.create_function(
             methoddef, py_func, wrapped_lfunc_pointer, wrapped_signature)
+    return methoddef, wrapper
 
 class MethodReference(object):
     def __init__(self, object_var, py_method):

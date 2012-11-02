@@ -29,10 +29,20 @@ NumbaError: 5:4: Closure must be decorated with 'jit' or 'autojit'
 Traceback (most recent call last):
     ...
 NumbaError: 10:5: Dynamic closures not yet supported, use @jit
->>> closure1()
+>>> closure1().__name__
+'inner'
+>>> closure1()()
+Traceback (most recent call last):
+    ...
+TypeError: function takes exactly 1 argument (0 given)
+>>> closure1()(object())
+Traceback (most recent call last):
+    ...
+TypeError: an integer is required
+>>> closure1()(10.0)
+10
 """
 
 if __name__ == '__main__':
-    closure1()
-#    import doctest
-#    doctest.testmod()
+    import doctest
+    doctest.testmod()

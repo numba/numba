@@ -24,10 +24,10 @@ def _const_int(X):
     return llvm.core.Constant.int(llvm.core.Type.int(), X)
 
 def const(obj, type):
-    if type.is_object:
+    if numba_types.is_obj(type):
         node = ObjectInjectNode(obj, type)
     else:
-        node = ConstNode(obj)
+        node = ConstNode(obj, type)
 
     return node
 
@@ -54,6 +54,12 @@ def ptrfromint(intval, dst_ptr_type):
     return CoercionNode(ConstNode(intval, Py_uintptr_t), dst_ptr_type)
 
 printing = False
+
+def inject_print(function_cache, node):
+    node = function_cache.call('PyObject_Str', node)
+    node = function_cache.call('puts', node)
+    return node
+
 def print_(translator, node):
     global printing
     if printing:
@@ -61,8 +67,7 @@ def print_(translator, node):
 
     printing = True
 
-    node = translator.function_cache.call('PyObject_Str', node)
-    node = translator.function_cache.call('puts', node)
+    node = inject_print(translator.function_cache, node)
     node = translator.ast.pipeline.late_specializer(node)
     translator.visit(node)
 
@@ -119,6 +124,9 @@ class CoercionNode(Node):
                 pass
             else:
                 return node
+
+        if dst_type.is_pointer and node.type.is_int:
+            assert node.type == Py_uintptr_t
 
         return super(CoercionNode, cls).__new__(cls, node, dst_type, name=name)
 
@@ -229,6 +237,7 @@ class ConstNode(Node):
             lvalue = llvm.core.Constant.struct([real.value(translator),
                                                 imag.value(translator)])
         elif type.is_pointer:
+#            lvalue = translator.visit(ptrtoint(self.pyval))
             addr_int = translator.visit(ConstNode(self.pyval, type=Py_uintptr_t))
             lvalue = translator.builder.inttoptr(addr_int, ltype)
         elif type.is_object:
@@ -298,7 +307,8 @@ class NativeCallNode(FunctionCallNode):
     def coerce_args(self):
         self.args = list(self.original_args)
         for i, dst_type in enumerate(self.signature.args[self.skip_self:]):
-            self.args[i] = CoercionNode(self.args[i], dst_type,
+            arg = self.args[i]
+            self.args[i] = CoercionNode(arg, dst_type,
                                         name='func_%s_arg%d' % (self.name, i))
 
 class NativeFunctionCallNode(NativeCallNode):

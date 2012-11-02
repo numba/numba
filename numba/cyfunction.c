@@ -303,8 +303,6 @@ static PyObject *NumbaFunction_New(
             PyObject *module, PyObject *code, PyObject *keep_alive)
 {
     NumbaFunctionObject *op = PyObject_GC_New(NumbaFunctionObject, type);
-    puts("creating function...");
-    puts(op->func.m_ml->ml_name);
     if (op == NULL)
         return NULL;
     op->flags = flags;
@@ -441,6 +439,7 @@ static PyObject *NumbaFunction_descr_get(PyObject *func, PyObject *obj, PyObject
 static PyObject*
 NumbaFunction_repr(NumbaFunctionObject *op)
 {
+    /* Py_RETURN_NONE; */
     PyObject *func_name = NumbaFunction_get_name(op);
 
 #if PY_MAJOR_VERSION >= 3
