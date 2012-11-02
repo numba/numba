@@ -118,12 +118,14 @@ TypeError: an integer is required
 >>> func = closure4()
 >>> print func.__name__
 inner
->>> print func.__closure__
+>>> print func.__closure__._numba_attrs._fields_
+[('__numba_scope_a', <class 'ctypes.c_int'>)]
+>>> print func.__closure__._numba_attrs.__numba_scope_a
+12
 >>> func()
 12
 """
 
 if __name__ == '__main__':
-    print closure4()()
-#    import doctest
-#    doctest.testmod()
+    import doctest
+    doctest.testmod()

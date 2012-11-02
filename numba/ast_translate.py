@@ -593,7 +593,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         closure = nodes.LLVMValueRefNode(void.pointer(), self.lfunc.args[0])
         closure = nodes.CoercionNode(closure, char.pointer())
         closure = nodes.pointer_add(closure, nodes.const(offset, size_t))
-        closure = nodes.CoercionNode(closure, closure_scope_type)
+        closure = nodes.CoercionNode(closure, closure_scope_type.pointer())
+        closure = nodes.DereferenceNode(closure)
         args.insert(0, closure)
 
     def visit_FunctionWrapperNode(self, node):
