@@ -975,7 +975,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             obj = getattr(builtins, node.name)
             return nodes.ObjectInjectNode(obj, node.type)
 
-        return node
+        return super(LateSpecializer, self).visit_Name(node)
 
     def visit_Return(self, node):
         return_type = self.func_signature.return_type

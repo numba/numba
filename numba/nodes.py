@@ -764,6 +764,7 @@ class ExtTypeAttribute(Node):
         self.value = value
         self.attr = attr
         self.variable = ext_type.symtab[attr]
+        self.type = self.variable.type
         self.ctx = ctx
         self.ext_type = ext_type
 

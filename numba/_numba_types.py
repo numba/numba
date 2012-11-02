@@ -276,6 +276,17 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
         signature, vtab_offset = self.methoddict[method_name]
         return signature
 
+    def set_attributes(self, attribute_list):
+        """
+        Create the symbol table and attribute struct from a list of
+        (varname, attribute_type)
+        """
+        import numba.symtab
+
+        self.attribute_struct = numba.struct(attribute_list)
+        self.symtab.update([(name, numba.symtab.Variable(type))
+                               for name, type in attribute_list])
+
     def __repr__(self):
         return "<Extension %s>" % self.name
 

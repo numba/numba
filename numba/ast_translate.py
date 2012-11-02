@@ -400,8 +400,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
             # Store away arguments in locals
             variable = self.symtab[argname]
-            if variable.type.is_closure_scope:
-                continue
             stackspace = self._allocate_arg_local(argname, argtype, larg)
             variable.lvalue = stackspace
 
@@ -545,12 +543,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return prototype(self.func)
 
     def _build_wrapper_function_ast(self, fake_pyfunc):
-        wrapper_call = nodes.FunctionWrapperNode(self.lfunc,
-                                                 self.func_signature,
-                                                 self.func,
-                                                 fake_pyfunc)
-        wrapper_call.pipeline = self.ast.pipeline
-        return wrapper_call
+        wrapper = nodes.FunctionWrapperNode(self.lfunc,
+                                            self.func_signature,
+                                            self.func,
+                                            fake_pyfunc)
+        wrapper.pipeline = self.ast.pipeline
+        wrapper.cellvars = []
+        return wrapper
 
     def build_wrapper_function(self, get_lfunc=False):
         # PyObject *(*)(PyObject *self, PyObject *args)

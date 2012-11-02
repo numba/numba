@@ -151,13 +151,14 @@ class ClosureMixin(object):
         return closure
 
 def mangle(name, scope):
-    return '__numba_scope_%s_' % scope.scope_prefix
+    return '__numba_scope%s_%s' % (scope.scope_prefix, name)
 
-def lookup_scope_attribute(cur_scope, scope_type, var_name, ctx=None):
+def lookup_scope_attribute(cur_scope, var_name, ctx=None):
     """
     Look up a variable in the closure scope
     """
     ctx = ctx or ast.Load()
+    scope_type = cur_scope.type
     field_name, field_type = scope_type.attribute_struct.fields[0]
 
     var_name = mangle(var_name, scope_type)
@@ -176,15 +177,10 @@ CLOSURE_SCOPE_ARG_NAME = '__numba_closure_scope'
 
 class ClosureBaseVisitor(object):
 
-    def __init__(self, *args, **kwargs):
-        super(ClosureBaseVisitor, self).__init__(*args, **kwargs)
-        # { name -> variable }, only set if we are some inner function
-        self.parent_scope = kwargs.get('closure_scope')
-
     @property
     def outer_scope(self):
         outer_scope = None
-        if self.parent_scope:
+        if CLOSURE_SCOPE_ARG_NAME in self.symtab:
             outer_scope = ast.Name(id=CLOSURE_SCOPE_ARG_NAME, ctx=ast.Load())
             outer_scope.variable = self.symtab[CLOSURE_SCOPE_ARG_NAME]
             outer_scope.type = outer_scope.variable.type
@@ -225,7 +221,7 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
         # Create closure scope extension type
         cellvar_fields = [(name, var.type) for name, var in cellvars.iteritems()]
         fields = numba.struct(cellvar_fields).fields
-        if self.parent_scope:
+        if self.outer_scope:
             fields.insert(0, ('__numba_base_scope',
                               self.parent_scope.__numba_ext_type))
 
@@ -234,12 +230,12 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
 
         func_name = self.func.__name__
         py_class.__name__ = '%s_scope' % func_name
-        scope_type = numba_types.ClosureScopeType(py_class, self.parent_scope)
+        scope_type = numba_types.ClosureScopeType(py_class, self.outer_scope)
         scope_type.unmangled_symtab = dict(fields)
 
-        fields = [(mangle(name, scope_type), type) for name, type in fields]
-        scope_type.symtab.update(fields)
-        scope_type.attribute_struct = numba.struct(fields)
+        mangled_fields = [(mangle(name, scope_type), type)
+                              for name, type in fields]
+        scope_type.set_attributes(mangled_fields)
 
         ext_type = extension_types.create_new_extension_type(
                             func_name , (object,), {}, scope_type,
@@ -247,7 +243,7 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
                             llvm_methods=[], method_pointers=[])
 
         # Instantiate closure scope
-        if self.parent_scope:
+        if self.outer_scope:
             outer_scope = self.outer_scope
         else:
             outer_scope = None
@@ -262,7 +258,7 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
             closure.ext_type = ext_type
 
             # patch symtab and function parameters
-            var = Variable(scope_type)
+            var = Variable(scope_type, is_local=True)
             closure.symtab[CLOSURE_SCOPE_ARG_NAME] = var
 
             param = ast.Name(id=CLOSURE_SCOPE_ARG_NAME, ctx=ast.Param())
@@ -323,11 +319,10 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         - Instantiate function with closure scope
     """
 
-    def visit_FunctionDef(self, node):
-        if not node.cellvars:
-            node.closure_scope = self.outer_scope
-
-        return super(ClosureCompilingMixin, self).visit_FunctionDef(self, node)
+    def __init__(self, *args, **kwargs):
+        super(ClosureCompilingMixin, self).__init__(*args, **kwargs)
+        if not self.ast.cellvars:
+            self.ast.cur_scope = self.outer_scope
 
     def _load_name(self, var_name, is_cellvar=False):
         src = ast.Name(var_name, ast.Load())
@@ -363,14 +358,15 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
                 assmt = ast.Assign(targets=[dst], value=src)
                 stats.append(assmt)
 
-        self.ast.closure_scope = scope
+        self.ast.cur_scope = scope
         return self.visit(nodes.ExpressionNode(stmts=stats, expr=scope))
 
     def visit_ClosureNode(self, node):
         """
         Compile the inner function.
         """
-        closure_scope = self.ast.closure_scope
+        closure_scope = self.ast.cur_scope
+
         if closure_scope is None:
             closure_scope = nodes.NULL
         else:
@@ -443,16 +439,16 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
     def visit_Name(self, node):
         "Resolve cellvars and freevars"
         if node.variable.is_cellvar or node.variable.is_freevar:
-            return lookup_scope_attribute(
-                self.ast.closure_scope, self.closure_scope_type,
-                var_name=node.id, ctx=node.ctx)
+            attr = lookup_scope_attribute(self.ast.cur_scope,
+                                          var_name=node.id, ctx=node.ctx)
+            return self.visit(attr)
         else:
             return node
 
     def visit_ClosureCallNode(self, node):
         if node.closure_type.closure.need_closure_scope:
-            assert self.ast.closure_scope is not None
-            node.args.insert(0, self.ast.closure_scope)
+            assert self.ast.cur_scope is not None
+            node.args.insert(0, self.ast.cur_scope)
 
         self.generic_visit(node)
         return node

@@ -118,6 +118,5 @@ TypeError: an integer is required
 """
 
 if __name__ == '__main__':
-#    error4()
     import doctest
     doctest.testmod()
