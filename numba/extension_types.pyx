@@ -9,6 +9,7 @@ import numba
 
 ctypedef object (*tp_new_func)(PyObject *, PyObject *, PyObject *)
 
+cdef extern size_t closure_field_offset
 cdef extern int NumbaFunction_init() except -1
 cdef extern object NumbaFunction_NewEx(
                 PyMethodDef *ml, module, code, PyObject *closure,
@@ -28,6 +29,8 @@ cdef extern from *:
 
 NumbaFunction_init()
 NumbaFunction_NewEx_pointer = <Py_uintptr_t> &NumbaFunction_NewEx
+
+numbafunc_closure_field_offset = closure_field_offset
 
 cdef Py_uintptr_t align(Py_uintptr_t p, size_t alignment) nogil:
     "Align on a boundary"
@@ -94,7 +97,10 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
         obj_p = <PyObject *> obj
 
         vtab_location = <void **> ((<char *> obj_p) + vtab_offset)
-        vtab_location[0] = <void *> <Py_uintptr_t> cls.__numba_vtab_p
+        if vtab:
+            vtab_location[0] = <void *> <Py_uintptr_t> cls.__numba_vtab_p
+        else:
+            vtab_location[0] = NULL
 
         attrs_pointer = (<Py_uintptr_t> obj_p) + attrs_offset
         obj._numba_attrs = ctypes.cast(attrs_pointer,

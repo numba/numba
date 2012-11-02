@@ -338,7 +338,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         After instantiation, assign the parent scope and all function
         arguments that belong in the scope to the scope.
         """
-        ctor = nodes.objconst(object.__new__)
+        ctor = nodes.objconst(node.ext_type.__new__)
         ext_type_arg = nodes.objconst(node.ext_type)
         create_scope = nodes.ObjectCallNode(
                     signature=node.scope_type(object_), func=ctor,

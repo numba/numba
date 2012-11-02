@@ -584,11 +584,30 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return wrapper
 
+    def insert_closure_scope_arg(self, args, node):
+        """
+        Retrieve the closure from the NumbaFunction passed in as m_self
+        """
+        closure_scope_type = node.signature.args[0]
+        offset = extension_types.numbafunc_closure_field_offset
+        closure = nodes.LLVMValueRefNode(void.pointer(), self.lfunc.args[0])
+        closure = nodes.CoercionNode(closure, char.pointer())
+        closure = nodes.pointer_add(closure, nodes.const(offset, size_t))
+        closure = nodes.CoercionNode(closure, closure_scope_type)
+        args.insert(0, closure)
+
     def visit_FunctionWrapperNode(self, node):
         from numba import ast_type_inference, pipeline
 
         args_tuple = self.lfunc.args[1]
         arg_types = [object_] * len(node.signature.args)
+
+        is_closure = False
+        if node.signature.args and node.signature.args[0].is_closure_scope:
+            # Wrapper expects closure scope as first argument, which we
+            # have as the m_self attribute
+            arg_types.pop()
+            is_closure = True
 
         # Unpack tuple into arguments
         types, lstr = self.object_coercer.lstr(arg_types)
@@ -602,11 +621,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         args = [nodes.LLVMValueRefNode(arg_type, larg)
                     for arg_type, larg in zip(arg_types, largs)]
 
+        if is_closure:
+            # Insert m_self as scope argument type
+            self.insert_closure_scope_arg(args, node)
+
         func_call = nodes.NativeCallNode(node.signature, args,
                                          node.wrapped_function)
 
         if not is_obj(node.signature.return_type):
             # Check for error using PyErr_Occurred()
+            # TODO: make this an option in CheckErrorNode
             check_err = nodes.CheckErrorNode(
                     nodes.ptrtoint(self.function_cache.call('PyErr_Occurred')),
                     goodval=nodes.ptrtoint(nodes.NULL))

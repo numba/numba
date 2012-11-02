@@ -115,8 +115,15 @@ TypeError: an integer is required
 10
 >>> closure3()
 12
+>>> func = closure4()
+>>> print func.__name__
+inner
+>>> print func.__closure__
+>>> func()
+12
 """
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    print closure4()()
+#    import doctest
+#    doctest.testmod()

@@ -78,6 +78,8 @@ typedef struct {
     PyObject *(*defaults_getter)(PyObject *);
 } NumbaFunctionObject;
 
+size_t closure_field_offset = offsetof(NumbaFunctionObject, func_closure);
+
 static PyTypeObject *NumbaFunctionType = 0;
 
 static PyObject *NumbaFunction_New(PyTypeObject *type,
@@ -219,6 +221,10 @@ NumbaFunction_get_globals(CYTHON_UNUSED NumbaFunctionObject *op)
 static PyObject *
 NumbaFunction_get_closure(CYTHON_UNUSED NumbaFunctionObject *op)
 {
+    if (op->func_closure) {
+        Py_INCREF(op->func_closure);
+        return op->func_closure;
+    }
     Py_INCREF(Py_None);
     return Py_None;
 }
@@ -311,7 +317,6 @@ static PyObject *NumbaFunction_New(
     op->func.m_self = (PyObject *) op; /* No incref or decref here */
     Py_XINCREF(closure);
     op->func_closure = closure;
-    op->func_closure = NULL;
     Py_XINCREF(module);
     op->func.m_module = module;
     op->func_dict = NULL;
