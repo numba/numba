@@ -5,24 +5,24 @@ import unittest
 
 from numba import *
 
-def test_exp(a):
+def exp_fn(a):
     return math.exp(a)
 
-def test_sqrt(a):
+def sqrt_fn(a):
     return math.sqrt(a)
 
-def test_log(a):
+def log_fn(a):
     return math.log(a)
 
 class TestNoPythonMath(unittest.TestCase):
     def test_sqrt(self):
-        self._template(test_sqrt, np.sqrt)
+        self._template(sqrt_fn, np.sqrt)
 
     def test_exp(self):
-        self._template(test_exp, np.exp)
+        self._template(exp_fn, np.exp)
 
     def test_log(self):
-        self._template(test_log, np.log)
+        self._template(log_fn, np.log)
 
     def _template(self, func, npfunc):
         func_jitted = jit(argtypes=[f4], restype=f4, nopython=True)(func)
