@@ -2,9 +2,10 @@
 This is a direct translation of nvvm.h
 '''
 
-import sys, os, atexit
+import sys, os
 from ctypes import *
 from error import NvvmError, NvvmSupportError
+from numbapro.utils import finalizer
 
 ADDRSPACE_GENERIC = 0
 ADDRSPACE_GLOBAL = 1
@@ -122,17 +123,11 @@ class NVVM(object):
                 func.argtypes = proto[1:]
                 setattr(inst, name, func)
 
-            # Setup finalizer
-            atexit.register(inst._atexit)
-
             # Initialize
             err = inst.nvvmInit()
             inst.check_error(err, 'Failed to initialize NVVM.')
 
         return cls.__INSTANCE
-
-    def _atexit(self):
-        self.__TEARDOWN = True
 
     def __del__(self):
         err = self.driver.nvvmFini()
@@ -147,25 +142,22 @@ class NVVM(object):
 
     def check_error(self, error, msg, exit=False):
         if error:
-            if self.__TEARDOWN:
-                print 'Error during teardown'
-                print error, msg, RESULT_CODE_NAMES[error]
+            exc = NvvmError(msg, RESULT_CODE_NAMES[error])
+            if exit:
+                print exc
+                sys.exit(1)
             else:
-                exc = NvvmError(msg, RESULT_CODE_NAMES[error])
-                if exit:
-                    print exc
-                    sys.exit(1)
-                else:
-                    raise exc
+                raise exc
 
-class CompilationUnit(object):
+class CompilationUnit(finalizer.OwnerMixin):
     def __init__(self):
         self.driver = NVVM()
         self._handle = nvvm_cu()
         err = self.driver.nvvmCreateCU(byref(self._handle))
         self.driver.check_error(err, 'Failed to create CU')
+        self._finalizer_track(self._handle)
 
-    def __del__(self):
+    def _finalize(self):
         err = self.driver.nvvmDestroyCU(byref(self._handle))
         self.driver.check_error(err, 'Failed to destroy CU', exit=True)
 

@@ -3,7 +3,7 @@ This is more-or-less a object-oriented interface to the CUDA driver API.
 It properly has a lot of resemblence with PyCUDA.
 '''
 
-import sys, os, atexit
+import sys, os
 import contextlib
 from ctypes import *
 from .error import *
