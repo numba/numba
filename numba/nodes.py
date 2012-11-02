@@ -23,6 +23,9 @@ context = utils.get_minivect_context()
 def _const_int(X):
     return llvm.core.Constant.int(llvm.core.Type.int(), X)
 
+def objconst(obj):
+    return const(obj, object_)
+
 def const(obj, type):
     if numba_types.is_obj(type):
         node = ObjectInjectNode(obj, type)
@@ -776,16 +779,6 @@ class NewExtObjectNode(Node):
         self.ext_type = ext_type
         self.args = args
 
-class InstantiateClosureScope(Node):
-
-    _fields = ['outer_scope']
-
-    def __init__(self, func_def, scope_ext_type, scope_type, outer_scope, **kwargs):
-        super(InstantiateClosureScope, self).__init__(**kwargs)
-        self.func_def = func_def
-        self.scope_ext_type = scope_ext_type
-        self.outer_scope = outer_scope
-        self.type = scope_type
 
 class StructAttribute(ExtTypeAttribute):
 
@@ -862,18 +855,9 @@ class ClosureNode(Node):
         super(ClosureNode, self).__init__(**kwargs)
         self.func_def = func_def
         self.type = closure_type
+        self.outer_py_func = outer_py_func
 
-        argnames = tuple(arg.id for arg in func_def.args.args)
-        dummy_func_string = """
-def %s(%s):
-    pass
-        """ % ((func_def.name,) + argnames)
-
-        d = outer_py_func.func_globals
-        exec dummy_func_string in d, d
-        self.py_func = d[func_def.name]
-        self.py_func.live_objects = []
-        self.py_func.__module__ = outer_py_func.__module__
+        self.make_pyfunc()
 
         self.lfunc = None
         self.wrapper_func = None
@@ -884,24 +868,80 @@ def %s(%s):
         self.symtab = None
 
         # The Python extension type that must be instantiated to hold cellvars
-        self.closure_scope_type = None
+        self.scope_type = None
+        self.ext_type = None
+        self.need_closure_scope = False
 
         # variables we need to put in a closure scope for our inner functions
-        self.cellvars = None
+        # This is set on the FunctionDef node
+        # self.cellvars = None
 
+    def make_pyfunc(self):
+        argnames = tuple(arg.id for arg in self.func_def.args.args)
+        dummy_func_string = """
+def %s(%s):
+    pass
+        """ % (self.func_def.name, ", ".join(argnames))
+
+        d = self.outer_py_func.func_globals
+        exec dummy_func_string in d, d
+        self.py_func = d[self.func_def.name]
+        self.py_func.live_objects = []
+        self.py_func.__module__ = self.outer_py_func.__module__
+
+class InstantiateClosureScope(Node):
+
+    _fields = ['outer_scope']
+
+    def __init__(self, func_def, scope_ext_type, scope_type, outer_scope, **kwargs):
+        super(InstantiateClosureScope, self).__init__(**kwargs)
+        self.func_def = func_def
+        self.scope_type = scope_type
+        self.ext_type = scope_ext_type
+        self.outer_scope = outer_scope
+        self.type = scope_type
 
 class ClosureCallNode(NativeCallNode):
     """
     Call to closure or inner function.
     """
 
-    def __init__(self, closure_type, args, keywords, **kwargs):
-        args = args + self._resolve_keywords(keywords)
+    def __init__(self, closure_type, call_node, **kwargs):
+        self.call_node = call_node
+        args, keywords = call_node.args, call_node.keywords
+        args = args + self._resolve_keywords(closure_type, args, keywords)
         super(ClosureCallNode, self).__init__(closure_type.signature, args,
                                               llvm_func=None, **kwargs)
+        self.closure_type = closure_type
 
-    def _resolve_keywords(self, closure_type, keywords):
-        return []
+    def _resolve_keywords(self, closure_type, args, keywords):
+        func_def = closure_type.closure.func_def
+        argnames = [name.id for name in func_def.args.args]
+
+        expected = len(argnames) - len(args)
+        if len(keywords) != expected:
+            raise error.NumbaError(
+                    self.call_node,
+                    "Expected %d arguments, got %d" % (len(argnames),
+                                                       len(args) + len(keywords)))
+
+        argpositions = dict(zip(argnames, range(len(argnames))))
+        positional = [None] * (len(argnames) - len(args))
+
+        for keyword in keywords:
+            argname = keyword.arg
+            pos = argpositions.get(argname, None)
+            if pos is None:
+                raise error.NumbaError(
+                        keyword, "Not a valid keyword argument name: %s" % argname)
+            elif pos < len(args):
+                raise error.NumbaError(
+                        keyword, "Got multiple values for positional "
+                                 "argument %r" % argname)
+            else:
+                positional[pos] = keyword.value
+
+        return positional
 
 class FunctionWrapperNode(Node):
     """

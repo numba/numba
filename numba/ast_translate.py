@@ -397,9 +397,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
                                           self.func_signature.args):
             larg.name = argname
-            # Store away arguments in locals
 
+            # Store away arguments in locals
             variable = self.symtab[argname]
+            if variable.type.is_closure_scope:
+                continue
             stackspace = self._allocate_arg_local(argname, argtype, larg)
             variable.lvalue = stackspace
 
@@ -1317,6 +1319,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_CTypesCallNode(self, node):
         node.llvm_func = self.visit(node.function)
+        return self.visit_NativeCallNode(node)
+
+    def visit_ClosureCallNode(self, node):
+        lfunc = node.closure_type.closure.lfunc
+        assert lfunc is not None
+        node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)
 
     def visit_ComplexConjugateNode(self, node):

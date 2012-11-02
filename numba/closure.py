@@ -1,7 +1,7 @@
 import ast
 import ctypes
 
-import numba
+import numba.decorators
 from numba import *
 from numba import error, visitors, nodes
 from numba.minivect import  minitypes
@@ -65,12 +65,16 @@ class ClosureMixin(object):
 
         if restype_node is not None:
             restype = self._assert_constant(decorator, restype_node)
-            if isinstance(restype, (string, unicode)):
-                restype = decorators._process_sig(restype)
-
-            self._check_valid_argtype(restype_node, restype)
+            if isinstance(restype, (str, unicode)):
+                name, restype, argtypes = numba.decorators._process_sig(restype)
+                self._check_valid_argtype(restype_node, restype)
+                for argtype in argtypes:
+                    self._check_valid_argtype(restype_node, argtype)
+                restype = restype(*argtypes)
+            else:
+                self._check_valid_argtype(restype_node, restype)
         else:
-            restype = None
+            raise error.NumbaError(restype_node, "Return type expected")
 
         return restype
 
@@ -183,7 +187,7 @@ class ClosureBaseVisitor(object):
         if self.parent_scope:
             outer_scope = ast.Name(id=CLOSURE_SCOPE_ARG_NAME, ctx=ast.Load())
             outer_scope.variable = self.symtab[CLOSURE_SCOPE_ARG_NAME]
-            outer_type.type = outer_scope.variable.type
+            outer_scope.type = outer_scope.variable.type
 
         return outer_scope
 
@@ -197,6 +201,15 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
     3) generate nodes to instantiate scope extension type at call time
     """
 
+    def visit_func_children(self, node):
+        for closure in node.closures:
+            # Create fake python function that backs up the AST of inner
+            # functions
+            closure.make_pyfunc()
+
+        self.generic_visit(node)
+        return node
+
     def visit_FunctionDef(self, node):
         # Process inner functions and determine cellvars and freevars
         process_closures(self.context, node, self.symtab)
@@ -207,10 +220,11 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
         node.cellvars = cellvars
 
         if not cellvars:
-            self.generic_visit(node)
-            return node
+            return self.visit_func_children(node)
 
-        fields = numba.struct(**cellvars).fields
+        # Create closure scope extension type
+        cellvar_fields = [(name, var.type) for name, var in cellvars.iteritems()]
+        fields = numba.struct(cellvar_fields).fields
         if self.parent_scope:
             fields.insert(0, ('__numba_base_scope',
                               self.parent_scope.__numba_ext_type))
@@ -220,19 +234,17 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
 
         func_name = self.func.__name__
         py_class.__name__ = '%s_scope' % func_name
-        ext_type = numba_types.ClosureScopeType(py_class, self.parent_scope)
+        scope_type = numba_types.ClosureScopeType(py_class, self.parent_scope)
+        scope_type.unmangled_symtab = dict(fields)
 
-        ext_type.unmangled_symtab = dict(fields)
+        fields = [(mangle(name, scope_type), type) for name, type in fields]
+        scope_type.symtab.update(fields)
+        scope_type.attribute_struct = numba.struct(fields)
 
-        fields = [(mangle(name, ext_type), type) for name, type in fields]
-        ext_type.symtab.update(fields)
-        ext_type.attribute_struct = numba.struct(fields)
-
-        self.closure_scope_type = ext_type
-        self.closure_scope_ext_type = extension_types.create_new_extension_type(
-                func_name , (object,), {}, ext_type,
-                vtab=None, vtab_type=numba.struct(),
-                llvm_methods=[], method_pointers=[])
+        ext_type = extension_types.create_new_extension_type(
+                            func_name , (object,), {}, scope_type,
+                            vtab=None, vtab_type=numba.struct(),
+                            llvm_methods=[], method_pointers=[])
 
         # Instantiate closure scope
         if self.parent_scope:
@@ -241,15 +253,30 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
             outer_scope = None
 
         cellvar_scope = nodes.InstantiateClosureScope(
-                    node, node.closure_scope_ext_type, outer_scope)
+                    node, ext_type, scope_type, outer_scope)
         node.body.insert(0, cellvar_scope)
 
-
+        # Path closures to get the closure scope as the first argument
         for closure in node.closures:
-            closure.symtab[CLOSURE_SCOPE_ARG_NAME] = \
-                            Variable(self.closure_scope_type)
-        self.generic_visit(node)
-        return node
+            closure.scope_type = scope_type
+            closure.ext_type = ext_type
+
+            # patch symtab and function parameters
+            var = Variable(scope_type)
+            closure.symtab[CLOSURE_SCOPE_ARG_NAME] = var
+
+            param = ast.Name(id=CLOSURE_SCOPE_ARG_NAME, ctx=ast.Param())
+            param.variable = var
+            param.type = var.type
+
+            closure.func_def.args.args.insert(0, param)
+            closure.need_closure_scope = True
+
+            # patch closure signature
+            closure.type.signature.args = (scope_type,) + closure.type.signature.args
+
+        # Update closures python functions and visit children
+        return self.visit_func_children(node)
 
     # process_closures performs the recursion
     #def visit_ClosureNode(self, node):
@@ -258,7 +285,7 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
 
 
 def get_locals(symtab):
-    return dict((name, var.name) for name, var in symtab.iteritems()
+    return dict((name, var) for name, var in symtab.iteritems()
                     if var.is_local)
 
 def process_closures(context, outer_func_def, outer_symtab):
@@ -269,6 +296,8 @@ def process_closures(context, outer_func_def, outer_symtab):
     import numba.pipeline
 
     outer_symtab = get_locals(outer_symtab)
+
+    # closure_scope is set on the FunctionDef by TypeInferer
     if outer_func_def.closure_scope is not None:
         closure_scope = dict(outer_func_def.closure_scope, **outer_symtab)
     else:
@@ -285,7 +314,7 @@ def process_closures(context, outer_func_def, outer_symtab):
         closure.type_inferred_ast = ast
 
 
-class ClosureCompilingMixing(ClosureBaseVisitor):
+class ClosureCompilingMixin(ClosureBaseVisitor):
     """
     Runs during late specialization.
 
@@ -294,7 +323,11 @@ class ClosureCompilingMixing(ClosureBaseVisitor):
         - Instantiate function with closure scope
     """
 
-    closure_scope = None
+    def visit_FunctionDef(self, node):
+        if not node.cellvars:
+            node.closure_scope = self.outer_scope
+
+        return super(ClosureCompilingMixin, self).visit_FunctionDef(self, node)
 
     def _load_name(self, var_name, is_cellvar=False):
         src = ast.Name(var_name, ast.Load())
@@ -310,15 +343,17 @@ class ClosureCompilingMixing(ClosureBaseVisitor):
         After instantiation, assign the parent scope and all function
         arguments that belong in the scope to the scope.
         """
-        ctor = nodes.ObjectInjectNode(object.__new__)
+        ctor = nodes.objconst(object.__new__)
+        ext_type_arg = nodes.objconst(node.ext_type)
         create_scope = nodes.ObjectCallNode(
-                    signature=node.scope_type(object_), func=ctor, args=[])
+                    signature=node.scope_type(object_), func=ctor,
+                    args=[ext_type_arg])
 
         create_scope = create_scope.cloneable
         scope = create_scope.clone
         stats = [create_scope]
 
-        for arg in node.args:
+        for arg in self.ast.args.args:
             assert isintance(arg, ast.Name)
             if arg.id in node.scope_type.unmangled_symtab:
                 var_name = mangle(arg.id, node.scope_type)
@@ -328,22 +363,26 @@ class ClosureCompilingMixing(ClosureBaseVisitor):
                 assmt = ast.Assign(targets=[dst], value=src)
                 stats.append(assmt)
 
-        self.closure_scope = scope
-        return self.visit(nodes.ExpressionNode(smts=stats, expr=scope))
+        self.ast.closure_scope = scope
+        return self.visit(nodes.ExpressionNode(stmts=stats, expr=scope))
 
     def visit_ClosureNode(self, node):
         """
         Compile the inner function.
         """
-        closure_scope = self.closure_scope
+        closure_scope = self.ast.closure_scope
         if closure_scope is None:
-            closure_scope = self.outer_scope or nodes.NULL
+            closure_scope = nodes.NULL
+        else:
+            assert node.func_def.args.args[0].type
 
-        # Compile inner function
+        # Compile inner function, skip type inference
+        order = numba.pipeline.Pipeline.order
+        order = order[order.index('type_infer') + 1:]
         p, result = numba.pipeline.run_pipeline(
                     self.context, node.py_func, node.type_inferred_ast,
                     node.type.signature, symtab=node.symtab,
-                    order=numba.pipeline.Pipeline.order[1:], # skip type inference
+                    order=order, # skip type inference
                     )
 
         node.lfunc = p.translator.lfunc
@@ -357,14 +396,15 @@ class ClosureCompilingMixing(ClosureBaseVisitor):
         node.py_func.live_objects.append(modname)
 
         # Create function with closure scope at runtime
+        scope_type = node.scope_type or void.pointer()
         create_numbafunc_signature = node.type(
-            void.pointer(), # PyMethodDef *ml
-            object_,        # PyObject *module
-            void.pointer(), # PyObject *code
-            void.pointer(), # PyObject *closure
-            void.pointer(), # void *native_func
-            object_,        # PyObject *native_signature
-            object_,        # PyObject *keep_alive
+            void.pointer(),     # PyMethodDef *ml
+            object_,            # PyObject *module
+            void.pointer(),     # PyObject *code
+            scope_type,         # PyObject *closure
+            void.pointer(),     # void *native_func
+            object_,            # PyObject *native_signature
+            object_,            # PyObject *keep_alive
         )
         create_numbafunc = nodes.ptrfromint(
                         extension_types.NumbaFunction_NewEx_pointer,
@@ -378,7 +418,7 @@ class ClosureCompilingMixing(ClosureBaseVisitor):
             nodes.const(modname, object_),
             nodes.NULL,
             closure_scope,
-            nodes.ptrfromint(node.lfunc_pointer, void.pointer()),
+            nodes.const(node.lfunc_pointer, void.pointer()),
             nodes.const(node.type.signature, object_),
             nodes.const(node.py_func, object_),
         ]
@@ -403,8 +443,16 @@ class ClosureCompilingMixing(ClosureBaseVisitor):
     def visit_Name(self, node):
         "Resolve cellvars and freevars"
         if node.variable.is_cellvar or node.variable.is_freevar:
-            return self.lookup_scope_attribute(
-                self.closure_scope, self.closure_scope_type,
+            return lookup_scope_attribute(
+                self.ast.closure_scope, self.closure_scope_type,
                 var_name=node.id, ctx=node.ctx)
         else:
             return node
+
+    def visit_ClosureCallNode(self, node):
+        if node.closure_type.closure.need_closure_scope:
+            assert self.ast.closure_scope is not None
+            node.args.insert(0, self.ast.closure_scope)
+
+        self.generic_visit(node)
+        return node

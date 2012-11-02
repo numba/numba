@@ -1059,7 +1059,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         elif func_type.is_closure:
             # Call to closure/inner function
-            return nodes.ClosureCallNode(func_type, node.args, node.keywords)
+            return nodes.ClosureCallNode(func_type, node)
 
         elif func_type.is_ctypes_function:
             # Call to ctypes function
@@ -1071,6 +1071,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif func_type.is_cast:
             # Call of a numba type, like double(value)
             no_keywords()
+            if not node.args:
+                raise error.NumbaError(node, "Expected one argument for cast")
             new_node = nodes.CoercionNode(node.args[0], func_type.dst_type,
                                           name="cast")
 

@@ -514,7 +514,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
         return new_node
 
-class LateSpecializer(closure.ClosureCompilingMixing, ResolveCoercions,
+class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                       LateBuiltinResolverMixin, visitors.NoPythonContextMixin):
 
     def visit_FunctionDef(self, node):

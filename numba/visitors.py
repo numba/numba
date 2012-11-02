@@ -32,7 +32,9 @@ class NumbaVisitorMixin(CooperativeBase):
         self.func = func
         self.fco = func.func_code
         self.names = self.global_names = self.fco.co_names
-        self.varnames = self.local_names = self.fco.co_varnames
+        self.varnames = self.local_names = list(self.fco.co_varnames)
+        if self.fco.co_cellvars:
+            self.varnames.extend(self.fco.co_cellvars)
         self.constants = self.fco.co_consts
         self.costr = func.func_code.co_code
         self.argnames = self.fco.co_varnames[:self.fco.co_argcount]

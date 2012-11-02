@@ -129,9 +129,13 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
 
     ext_type.__numba_vtab = vtab
     ext_type.__numba_vtab_type = vtab_type
-    vtab_p = ctypes.byref(ext_type.__numba_vtab)
 
-    ext_type.__numba_vtab_p = ctypes.cast(vtab_p, ctypes.c_void_p).value
+    if vtab:
+        vtab_p = ctypes.byref(vtab)
+        ext_type.__numba_vtab_p = ctypes.cast(vtab_p, ctypes.c_void_p).value
+    else:
+        ext_type.__numba_vtab_p = None
+
     ext_type.__numba_orig_tp_new = <Py_uintptr_t> ext_type_p.tp_new
     ext_type.__numba_struct_type = struct_type
     ext_type.__numba_struct_ctype_p = struct_type.pointer().to_ctypes()

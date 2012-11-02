@@ -281,6 +281,9 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
 
 
 class ClosureType(NumbaType, minitypes.ObjectType):
+    """
+    Type of closures and inner functions.
+    """
 
     is_closure = True
 
@@ -293,6 +296,10 @@ class ClosureType(NumbaType, minitypes.ObjectType):
         return "<closure(%s)>" % self.signature
 
 class ClosureScopeType(ExtensionType):
+    """
+    Type of the enclosing scope for closures. This is always passed in as
+    first argument to the function.
+    """
 
     is_closure_scope = True
     is_final = True
