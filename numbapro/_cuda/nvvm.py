@@ -5,7 +5,7 @@ This is a direct translation of nvvm.h
 import sys, os
 from ctypes import *
 from error import NvvmError, NvvmSupportError
-from numbapro.utils import finalizer
+from numbapro._utils import finalizer
 
 ADDRSPACE_GENERIC = 0
 ADDRSPACE_GLOBAL = 1

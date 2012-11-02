@@ -7,7 +7,7 @@ import sys, os
 import contextlib
 from ctypes import *
 from .error import *
-from numbapro.utils import finalizer
+from numbapro._utils import finalizer
 
 # CUDA specific typedefs
 cu_device = c_int
