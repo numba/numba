@@ -149,9 +149,9 @@ class PyArray(CStruct):
         ('descr',          C.void_p),
         ('flags',          C.int),
         ('weakreflist',    C.void_p),
-        ('maskna_dtype',   C.void_p),
-        ('maskna_data',    C.void_p),
-        ('maskna_strides', _intp_ptr),
+#        ('maskna_dtype',   C.void_p),
+#        ('maskna_data',    C.void_p),
+#        ('maskna_strides', _intp_ptr),
     ]
 
     def fakeit(self, dtype, data, dimensions, steps):
