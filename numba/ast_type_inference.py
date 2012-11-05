@@ -41,6 +41,12 @@ def _parse_args(call_node, arg_names):
 
     return result
 
+def no_keywords(node):
+    if node.keywords or node.starargs or node.kwargs:
+        raise error.NumbaError(
+            node, "Function call does not support keyword or star arguments")
+
+
 class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
     """
     Resolve builtin calls for type inference. Only applies high-level
@@ -495,14 +501,21 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return result
 
     def visit_AugAssign(self, node):
-        "Inplace assignment"
+        """
+        Inplace assignment.
+
+        Resolve a += b to a = a + b. Set 'inplace_op' attribute of the
+        Assign node so later stages may recognize inplace assignment.
+        """
         target = node.target
+
         rhs_target = copy.deepcopy(target)
         rhs_target.ctx = ast.Load()
         ast.fix_missing_locations(rhs_target)
 
         bin_op = ast.BinOp(rhs_target, node.op, node.value)
         assignment = ast.Assign([target], bin_op)
+        assignment.inplace_op = node.op
         return self.visit(assignment)
 
     def _handle_unpacking(self, node):
@@ -546,6 +559,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return result
 
     def visit_Assign(self, node):
+        # Initialize inplace operator
+        node.inplace_op = getattr(node, 'inplace_op', None)
+
         node.value = self.visit(node.value)
         if len(node.targets) != 1 or isinstance(node.targets[0], (ast.List,
                                                                   ast.Tuple)):
@@ -1036,11 +1052,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         func = self._resolve_function(func_type, func_variable.name)
 
-        def no_keywords():
-            if node.keywords:
-                raise error.NumbaError(
-                    node, "Function call does not support keyword arguments")
-
         new_node = None
         if func_type.is_builtin:
             # Call to Python built-in function
@@ -1050,13 +1061,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 new_node = node
         elif func_type.is_function:
             # Native function call
-            no_keywords()
+            no_keywords(node)
             new_node = nodes.NativeFunctionCallNode(
                             func_variable.type, node.func, node.args,
                             skip_self=True)
         elif func_type.is_method:
             # Call to special object method
-            no_keywords()
+            no_keywords(node)
             new_node = self._resolve_method_calls(func_type, new_node, node)
 
         elif func_type.is_closure:
@@ -1065,14 +1076,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         elif func_type.is_ctypes_function:
             # Call to ctypes function
-            no_keywords()
+            no_keywords(node)
             new_node = nodes.CTypesCallNode(
                     func_type.signature, node.args, func_type,
                     py_func=func_type.ctypes_func)
 
         elif func_type.is_cast:
             # Call of a numba type, like double(value)
-            no_keywords()
+            no_keywords(node)
             if not node.args:
                 raise error.NumbaError(node, "Expected one argument for cast")
             new_node = nodes.CoercionNode(node.args[0], func_type.dst_type,
@@ -1184,6 +1195,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.variable = Variable(result_type)
         node.type = result_type
         return node
+
+    def visit_ClosureScopeLoadNode(self, node):
+        return node.type
 
     def visit_Return(self, node):
         if node.value is not None:

@@ -155,6 +155,9 @@ class ClosureMixin(object):
 
     def _process_decorators(self, node):
         if not node.decorator_list:
+            if hasattr(node, 'func_signature'):
+                return node.func_signature
+
             raise error.NumbaError(
                 node, "Closure must be decorated with 'jit' or 'autojit'")
 
@@ -541,3 +544,6 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
 
         self.generic_visit(node)
         return node
+
+    def visit_ClosureScopeLoadNode(self, node):
+        return self.ast.cur_scope or nodes.NULL_obj

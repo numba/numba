@@ -911,6 +911,11 @@ class InstantiateClosureScope(Node):
         self.outer_scope = outer_scope
         self.type = scope_type
 
+class ClosureScopeLoadNode(Node):
+    "Load the closure scope for the function or NULL"
+
+    type = object_
+
 class ClosureCallNode(NativeCallNode):
     """
     Call to closure or inner function.
