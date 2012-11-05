@@ -812,6 +812,7 @@ class CDefinition(object):
         self.cbuilder = CBuilder(func)
         self.body(*self.cbuilder.args)
         self.cbuilder.close()
+        self.cbuilder = None
 
         # optimize
         fpm = lp.FunctionPassManager.new(module)
@@ -839,6 +840,8 @@ class CDefinition(object):
         '''
         raise NotImplementedError
 
+    def __str__(self):
+        return self._name_
 
 class CValue(object):
     def __init__(self, parent, handle):
