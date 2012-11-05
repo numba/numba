@@ -858,7 +858,7 @@ class ClosureNode(Node):
         self.type = closure_type
         self.outer_py_func = outer_py_func
 
-        self.make_pyfunc()
+        # self.make_pyfunc()
 
         self.lfunc = None
         self.wrapper_func = None
@@ -869,7 +869,7 @@ class ClosureNode(Node):
         self.symtab = None
 
         # The Python extension type that must be instantiated to hold cellvars
-        self.scope_type = None
+        # self.scope_type = None
         self.ext_type = None
         self.need_closure_scope = False
 
@@ -889,14 +889,15 @@ class ClosureNode(Node):
         name = self.func_def.name
         self.func_def.name = '__numba_closure_func'
         ast_mod = ast.Module(body=[self.func_def])
+        numba.functions.fix_ast_lineno(ast_mod)
         c = compile(ast_mod, '<string>', 'exec')
         exec c in d, d
+        self.func_def.name = name
 
         self.py_func = d['__numba_closure_func']
         self.py_func.live_objects = []
         self.py_func.__module__ = self.outer_py_func.__module__
         self.py_func.__name__ = name
-        self.func_def.name = name
 
 class InstantiateClosureScope(Node):
 

@@ -15,6 +15,7 @@ from numba import ast_type_inference as type_inference
 from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
 from numba import utils
+from numba.utils import dump
 
 from numba.minivect import minitypes
 

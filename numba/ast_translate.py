@@ -623,6 +623,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         if self.is_closure(node.signature):
             # Insert m_self as scope argument type
+            logger.debug("Closure:")
             self.insert_closure_scope_arg(args, node)
 
         func_call = nodes.NativeCallNode(node.signature, args,
@@ -1144,7 +1145,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             logging.debug('Unrecognized node type "%s"' % node.type)
             logging.debug(ast.dump(node))
-            raise error.NumbaError(node, op, node.type, lhs, rhs)
+            raise error.NumbaError(
+                    node, "Binary operations %s on values typed %s and %s "
+                          "not (yet) supported)" % (self.opname(op),
+                                                    node.left.type,
+                                                    node.right.type))
 
         return result
 

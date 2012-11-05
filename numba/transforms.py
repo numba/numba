@@ -320,10 +320,6 @@ class TransformForIterable(visitors.NumbaTransformer):
                 value = my_array[i]
     """
 
-    def __init__(self, context, func, ast, symtab, **kwds):
-        super(TransformForIterable, self).__init__(context, func, ast, **kwds)
-        self.symtab = symtab
-
     def visit_For(self, node):
         if node.iter.type.is_range:
             return node
@@ -522,7 +518,9 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                       LateBuiltinResolverMixin, visitors.NoPythonContextMixin):
 
     def visit_FunctionDef(self, node):
-        self.generic_visit(node)
+#        self.generic_visit(node)
+        node.decorator_list = self.visitlist(node.decorator_list)
+        node.body = self.visitlist(node.body)
 
         ret_type = self.func_signature.return_type
         if ret_type.is_object or ret_type.is_array:
@@ -589,7 +587,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         if node.nl:
             result.append(self._print(nodes.ObjectInjectNode("\n"), node.dest))
 
-        return self.visitlist(result)
+        return ast.Suite(body=self.visitlist(result))
 
     def visit_Tuple(self, node):
         self.check_context(node)

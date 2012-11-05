@@ -438,7 +438,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         arg_types = self.func_signature.args
         for i, arg_type in enumerate(arg_types):
             varname = self.local_names[i]
-            self.symtab[varname] = Variable(arg_type, is_local=True, name=varname)
+            self.symtab[varname] = Variable(arg_type, is_local=True,
+                                            name=varname)
 
         for varname in self.local_names[len(arg_types):]:
             self.symtab[varname] = Variable(None, is_local=True, name=varname)
@@ -657,6 +658,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             closure_var.is_cellvar = True
 
             variable = Variable.from_variable(closure_var)
+            variable.is_local = False
             variable.is_cellvar = False
             variable.is_freevar = True
             variable.promotable_type = False

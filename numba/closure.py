@@ -1,4 +1,5 @@
 import ast
+import types
 import ctypes
 
 import numba.decorators
@@ -10,7 +11,7 @@ from numba.symtab import Variable
 
 import logging
 logger = logging.getLogger(__name__)
-
+#logger.setLevel(logging.DEBUG)
 
 class ClosureMixin(object):
     """
@@ -151,7 +152,16 @@ class ClosureMixin(object):
         return closure
 
 def mangle(name, scope):
-    return '__numba_scope%s_%s' % (scope.scope_prefix, name)
+    return name
+
+    if not scope.is_closure_type or name in scope.unmangled_symtab:
+        return '__numba_scope%s_var_%s' % (scope.scope_prefix, name)
+    else:
+        scope_attr_name, scope_type = scope.attribute_struct.fields[0]
+        return mangle(name, scope_type)
+
+def outer_scope_field(scope_type):
+    return scope_type.attribute_struct.fields[0]
 
 def lookup_scope_attribute(cur_scope, var_name, ctx=None):
     """
@@ -159,15 +169,16 @@ def lookup_scope_attribute(cur_scope, var_name, ctx=None):
     """
     ctx = ctx or ast.Load()
     scope_type = cur_scope.type
-    field_name, field_type = scope_type.attribute_struct.fields[0]
+    outer_scope_name, outer_scope_type = outer_scope_field(scope_type)
 
-    var_name = mangle(var_name, scope_type)
-    if var_name in scope_type.symtab:
-        return nodes.ExtTypeAttribute(value=cur_scope, attr=var_name,
+    if var_name in scope_type.unmangled_symtab:
+        return nodes.ExtTypeAttribute(value=cur_scope,
+                                      attr=mangle(var_name, scope_type),
                                       ctx=ctx, ext_type=scope_type)
-    elif field_type.is_closure_scope:
-        return nodes.ExtTypeAttribute(value=cur_scope, attr=field_name,
-                                      ctx=ctx, ext_type=scope_type)
+    elif outer_scope_type.is_closure_scope:
+        scope = nodes.ExtTypeAttribute(value=cur_scope, attr=outer_scope_name,
+                                       ctx=ctx, ext_type=scope_type)
+        return lookup_scope_attribute(scope, var_name, ctx)
     else:
         # This indicates a bug
         raise error.InternalError(
@@ -193,42 +204,52 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
     resolved.
 
     1) run type inferencer on inner functions
-    2) build scope extension type
+    2) build scope extension types pre-order
     3) generate nodes to instantiate scope extension type at call time
     """
 
-    def visit_func_children(self, node):
-        #for closure in node.closures:
-            # Create fake python function that backs up the AST of inner
-            # functions
-         #   closure.make_pyfunc()
+    func_level = 0
 
+    def _visit_children(self, node):
+        self.func_level += 1
         self.generic_visit(node)
+        self.func_level -= 1
         return node
 
     def visit_FunctionDef(self, node):
-        # Process inner functions and determine cellvars and freevars
-        process_closures(self.context, node, self.symtab)
+        if node.closure_scope is None:
+            # Process inner functions and determine cellvars and freevars
+            # codes = [c for c in self.constants
+            #                if isinstance(c, types.CodeType)]
+            process_closures(self.context, node, self.symtab)
 
         # cellvars are the variables we own
         cellvars = dict((name, var) for name, var in self.symtab.iteritems()
                                         if var.is_cellvar)
         node.cellvars = cellvars
 
+        logger.debug("Cellvars in function %s: %s", node.name, cellvars)
+
+        outer_scope = self.outer_scope
+        if outer_scope:
+            outer_scope_type = outer_scope.type
+        else:
+            outer_scope_type = None
+
         if not cellvars:
-            return self.visit_func_children(node)
+            # No cellvars, so use parent closure scope if this is a closure
+            if outer_scope:
+                self.update_closures(node, outer_scope_type, None)
+
+            return self._visit_children(node)
 
         # Create closure scope extension type
         cellvar_fields = [(name, var.type)
                               for name, var in cellvars.iteritems()]
         fields = numba.struct(cellvar_fields).fields
 
-        outer_scope = self.outer_scope
         if outer_scope:
-            outer_scope_type = outer_scope.type
             fields.insert(0, ('__numba_base_scope', outer_scope_type))
-        else:
-            outer_scope_type = None
 
         class py_class(object):
             pass
@@ -248,36 +269,38 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
                             llvm_methods=[], method_pointers=[])
 
         # Instantiate closure scope
+        logger.debug("Generate closure %s %s %s", node.name, scope_type,
+                     outer_scope)
+
         cellvar_scope = nodes.InstantiateClosureScope(
                     node, ext_type, scope_type, outer_scope)
         node.body.insert(0, cellvar_scope)
 
-        # Path closures to get the closure scope as the first argument
-        for closure in node.closures:
-            closure.scope_type = scope_type
+        self.update_closures(node, scope_type, ext_type)
+        return self._visit_children(node)
+
+    def update_closures(self, func_def, scope_type, ext_type):
+        # Patch closures to get the closure scope as the first argument
+        for closure in func_def.closures:
+            # closure.scope_type = scope_type
+            closure.func_def.scope_type = scope_type
             closure.ext_type = ext_type
 
-            # patch symtab and function parameters
-            var = Variable(scope_type, is_local=True)
-            closure.symtab[CLOSURE_SCOPE_ARG_NAME] = var
-
+            # patch function parameters
             param = ast.Name(id=CLOSURE_SCOPE_ARG_NAME, ctx=ast.Param())
-            param.variable = var
-            param.type = var.type
+            param.variable = Variable(scope_type, is_local=True)
+            param.type = param.variable.type
 
+            closure.symtab[CLOSURE_SCOPE_ARG_NAME] = param.variable
             closure.func_def.args.args.insert(0, param)
             closure.need_closure_scope = True
 
             # patch closure signature
             closure.type.signature.args = (scope_type,) + closure.type.signature.args
 
-        # Update closures python functions and visit children
-        return self.visit_func_children(node)
-
-    # process_closures performs the recursion
-    #def visit_ClosureNode(self, node):
-    #    node.func_def = self.visit(node.func_def)
-    #    return node
+#    def visit_ClosureNode(self, node):
+#        node.func_def = self.visit(node.func_def)
+#        return node
 
 
 def get_locals(symtab):
@@ -300,15 +323,21 @@ def process_closures(context, outer_func_def, outer_symtab):
         closure_scope = outer_symtab
 
     for closure in outer_func_def.closures:
+        logger.debug("process closures: %s %s", outer_func_def.name,
+                     closure.func_def.name)
         closure.make_pyfunc()
+        symtab = {}
         p, result = numba.pipeline.infer_types_from_ast_and_sig(
                     context, closure.py_func, closure.func_def,
                     closure.type.signature,
-                    closure_scope=closure_scope)
+                    closure_scope=closure_scope,
+                    symtab=symtab)
 
-        _, symtab, ast = result
+        _, _, ast = result
         closure.symtab = symtab
         closure.type_inferred_ast = ast
+
+        process_closures(context, closure.func_def, symtab)
 
 
 class ClosureCompilingMixin(ClosureBaseVisitor):
@@ -349,16 +378,25 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         scope = create_scope.clone
         stats = [create_scope]
 
+        # Chain outer scope - if present - to current scope
+        outer_scope = self.outer_scope
+        if outer_scope:
+            outer_scope_name, outer_scope_type = outer_scope_field(scope.type)
+            dst = lookup_scope_attribute(scope, outer_scope_name,
+                                         ctx=ast.Store())
+            assmt = ast.Assign(targets=[dst], value=outer_scope)
+            stats.append(assmt)
+
+        # Assign function arguments that are cellvars
         for arg in self.ast.args.args:
             assert isinstance(arg, ast.Name)
             if arg.id in node.scope_type.unmangled_symtab:
-                var_name = mangle(arg.id, node.scope_type)
-                dst = lookup_scope_attribute(scope, node.scope_type,
-                                             var_name, ast.Store())
+                dst = lookup_scope_attribute(scope, arg.id, ast.Store())
                 src = self._load_name(arg.id)
                 assmt = ast.Assign(targets=[dst], value=src)
                 stats.append(assmt)
 
+        logger.debug("instantiating %s", scope.type)
         self.ast.cur_scope = scope
         return self.visit(nodes.ExpressionNode(stmts=stats, expr=scope))
 
@@ -370,8 +408,10 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
 
         if closure_scope is None:
             closure_scope = nodes.NULL
+            scope_type = void.pointer()
         else:
-            assert node.func_def.args.args[0].type
+            assert node.func_def.args.args[0].variable.type
+            scope_type = closure_scope.type
 
         # Compile inner function, skip type inference
         order = numba.pipeline.Pipeline.order
@@ -393,7 +433,6 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         node.py_func.live_objects.append(modname)
 
         # Create function with closure scope at runtime
-        scope_type = node.scope_type or void.pointer()
         create_numbafunc_signature = node.type(
             void.pointer(),     # PyMethodDef *ml
             object_,            # PyObject *module
@@ -440,6 +479,9 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
     def visit_Name(self, node):
         "Resolve cellvars and freevars"
         if node.variable.is_cellvar or node.variable.is_freevar:
+            logger.debug("Function %s, lookup %s in scope %s: %s",
+                         self.ast.name, node.id, self.ast.cur_scope.type,
+                         self.ast.cur_scope.type.attribute_struct)
             attr = lookup_scope_attribute(self.ast.cur_scope,
                                           var_name=node.id, ctx=node.ctx)
             return self.visit(attr)

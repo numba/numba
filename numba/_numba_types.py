@@ -34,6 +34,9 @@ def promote_closest(context, int_type, candidates):
 
     return candidates[-1]
 
+# Patch repr of objects to print "object_" instead of "PyObject *"
+minitypes.ObjectType.__repr__ = lambda self: "object_"
+
 class NumbaType(minitypes.Type):
     is_numba_type = True
 
@@ -318,12 +321,12 @@ class ClosureScopeType(ExtensionType):
     def __init__(self, py_class, parent_scope, **kwds):
         super(ClosureScopeType, self).__init__(py_class, **kwds)
         self.parent_scope = parent_scope
-        if parent_scope is None:
+        self.unmangled_symtab = None
+
+        if self.parent_scope is None:
             self.scope_prefix = ""
         else:
-            self.scope_prefix = parent_scope.scope_prefix + "0"
-
-        self.unmangled_symtab = None
+            self.scope_prefix = self.parent_scope.scope_prefix + "0"
 
 
 tuple_ = TupleType()

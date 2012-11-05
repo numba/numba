@@ -139,8 +139,8 @@ TypeError: an integer is required
 >>> print func.__name__
 inner
 >>> print func.__closure__._numba_attrs._fields_
-[('__numba_scope_a', <class 'ctypes.c_int'>)]
->>> print func.__closure__._numba_attrs.__numba_scope_a
+[('a', <class 'ctypes.c_int'>)]
+>>> print func.__closure__._numba_attrs.a
 12
 >>> func()
 12
@@ -158,8 +158,73 @@ inner
 21
 """
 
+@autojit
+def closure_arg(a):
+    @jit('object_(object_)')
+    def closure1(b):
+        print a, b
+        x = 10 + int_(b)
+        @jit('object_(object_)')
+        def closure2(c):
+            print a, b, c, x
+            y = double(x) + double(c)
+            @jit('void(object_)')
+            def closure3(d):
+                print a, b, c, d, x, y
+            return closure3
+        return closure2
+    return closure1
+
+__doc__ += \
+"""
+This test doesn't work yet...
+
+>>> closure1 = closure_arg(1)
+>>> closure1.__name__
+'closure1'
+
+>>> closure2_1 = closure1(2)
+1 2
+>>> closure2_1.__name__
+'closure2'
+>>> closure2_2 = closure1(3)
+1 3
+>>> closure2_2.__name__
+'closure2'
+
+>>> closure3_1 = closure2_1(4)
+1 2 4 12
+>>> closure3_1.__name__
+'closure3'
+>>> closure3_2 = closure2_2(5)
+1 3 5 13
+>>> closure3_2.__name__
+'closure3'
+
+>>> closure3_1(6)
+1 2 4 6 12 16.0
+>>> closure3_2(7)
+1 3 5 7 13 18.0
+"""
+
+@autojit
+def closure_arg_simple(a):
+    @jit('object_(object_)')
+    def inner(b):
+        print a, b
+        @jit('void(object_)')
+        def inner_inner(c):
+            print a, b, c
+        return inner_inner
+    return inner
+
+__doc__ += """
+>>> closure_arg_simple(10)(20)(30)
+10 20
+10 20 30
+"""
+
 if __name__ == '__main__':
-#    c1, c3 = nested_closure()
-#    print c1.__name__, c3.__name__
+#    closure2()
     import doctest
     doctest.testmod()
