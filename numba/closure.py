@@ -1,3 +1,49 @@
+"""
+This module provides support for closures and inner functions.
+
+@autojit
+def outer():
+    a = 10 # this is a cellvar
+
+    @jit('void()')
+    def inner():
+        print a # this is a freevar
+
+    inner()
+    a = 12
+    return inner
+
+The 'inner' function closes over the outer scope. Each function with
+cellvars packs them into a heap-allocated structure, the closure scope.
+
+The closure scope is passed into 'inner' when called from within outer.
+
+The execution of 'def' creates a NumbaFunction, which has itself as the
+ m_self attribute. So when 'inner' is invoked from Python, the numba
+ wrapper function gets called with NumbaFunction object and the args
+ tuple. The closure scope is then set in NumbaFunction.func_closure.
+
+The closure scope is an extension type with the cellvars as attributes.
+Closure scopes are chained together, since multiple inner scopes may need
+to share a single outer scope. E.g.
+
+    def outer(a):
+        def inner(b):
+            def closure():
+                print a, b
+            return closure
+
+        return inner(1), inner(2)
+
+We have three closure scopes here:
+
+    scope_outer = { 'a': a }
+    scope_inner_1 = { 'scope_outer': scope_outer, 'b': 1 }
+    scope_inner_2 = { 'scope_outer': scope_outer, 'b': 2 }
+
+These scopes are instances of a numba extension class.
+"""
+
 import ast
 import types
 import ctypes

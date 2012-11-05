@@ -224,7 +224,21 @@ __doc__ += """
 10 20 30
 """
 
+@autojit
+def closure_skip_level(a):
+    @jit('object_()')
+    def inner():
+        @jit('void()')
+        def inner_inner():
+            print a
+        return inner_inner
+    return inner
+
+__doc__ += """
+>>> closure_skip_level(10)()()
+10
+"""
+
 if __name__ == '__main__':
-#    closure2()
     import doctest
     doctest.testmod()
