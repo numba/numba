@@ -177,7 +177,7 @@ class ConstantMarker(visitors.NumbaVisitor):
         '''Return a set of constant variable names
         '''
         const_names = set(self.varnames).difference(self._invalidated)
-        const_names |= set(self._myglobals)
+        const_names |= set(self.func.func_globals)
 
         constexpr_recognizer = ConstantExprRecognizer(const_names)
         retvals = []
@@ -217,7 +217,8 @@ class ConstantFolder(visitors.NumbaTransformer):
 
     def visit_Compare(self, node):
         left = node.left = self.visit(node.left)
-        comparators = node.comparators = [self.visit(nd) for nd in node.comparators]
+        comparators = node.comparators = [self.visit(nd)
+                                          for nd in node.comparators]
         operands = [left] + comparators
         operators = iter(reversed(node.ops))
 
@@ -257,10 +258,12 @@ class ConstantFolder(visitors.NumbaTransformer):
         return node
 
     def visit_Name(self, node):
-        try:
-            return self.constvalues[node.id]
-        except KeyError:
-            return node
+        if isinstance(node.ctx, ast.Load):
+            try:
+                return self.constvalues[node.id]
+            except KeyError:
+                pass
+        return node
 
     def eval_binary_operation(self, op, left, right):
         '''Evaluate the constant expression and return a ast.Num instance
@@ -294,14 +297,15 @@ class ConstantFolder(visitors.NumbaTransformer):
             elif node.id in self.constvalues:
                 return self.valueof(self.constvalues[node.id])
             else:
-                value = self._myglobals[node.id]
+                value = self.func.func_globals[node.id]
+                print 'value', value
                 if not is_simple_value(value):
                     raise ValueError("%s is not a simple value.")
                 return value
         raise ValueError("node %s is not a has constant value" % node)
 
     def is_constant(self, node):
-        return is_constant(node, set(self._myglobals) | set(self.constvalues))
+        return is_constant(node, set(self.func.func_globals) | set(self.constvalues))
 
 def is_constant(node, constants=set()):
     if isinstance(node, ast.Num):
