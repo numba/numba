@@ -951,6 +951,11 @@ class struct(Type):
         other_fields = other_struct.fields[:len(self.fields)]
         return self.fields == other_fields
 
+    def add_field(self, name, type):
+        assert name not in self.fielddict
+        self.fielddict[name] = type
+        self.fields.append((name, type))
+
 def getsize(ctypes_name, default):
     try:
         return ctypes.sizeof(getattr(ctypes, ctypes_name))
