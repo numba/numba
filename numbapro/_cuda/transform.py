@@ -84,7 +84,7 @@ class CudaAttrRewriteMixin(object):
         
         if isinstance(node.value, ast.Name):
             #assert isinstance(value.ctx, ast.Load)
-            obj = self._myglobals.get(node.value.id)
+            obj = self.func.func_globals.get(node.value.id)
             if obj is _THIS_MODULE:
                 retval = CudaAttributeNode(_THIS_MODULE).resolve(node.attr)
         elif isinstance(value, CudaAttributeNode):
@@ -132,7 +132,7 @@ class CudaAttrRewriteMixin(object):
                 shape += (node.pyval,)
     
             dtype_id = kws['dtype'].id # FIXME must be a ast.Name
-            dtype = self._myglobals[dtype_id] # FIXME must be a Numba type
+            dtype = self.func.func_globals[dtype_id] # FIXME must be a Numba type
         
             node = CudaSMemArrayCallNode(self.context, shape=shape, dtype=dtype)
             return node
