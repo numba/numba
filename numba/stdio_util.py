@@ -43,7 +43,7 @@ def get_stdio_streams ():
     return ret_val
 
 def get_stream_as_node(fp):
-    return nodes.CoercionNode(nodes.ConstNode(fp, Py_ssize_t),
+    return nodes.CoercionNode(nodes.ConstNode(fp, Py_uintptr_t),
                               void.pointer())
 
 # ______________________________________________________________________

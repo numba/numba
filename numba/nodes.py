@@ -3,6 +3,7 @@ import ctypes
 import collections
 
 import numba
+import numba.functions
 from numba import *
 from .symtab import Variable
 from . import _numba_types as numba_types
@@ -22,11 +23,14 @@ context = utils.get_minivect_context()
 def _const_int(X):
     return llvm.core.Constant.int(llvm.core.Type.int(), X)
 
+def objconst(obj):
+    return const(obj, object_)
+
 def const(obj, type):
-    if type.is_object:
+    if numba_types.is_obj(type):
         node = ObjectInjectNode(obj, type)
     else:
-        node = ConstNode(obj)
+        node = ConstNode(obj, type)
 
     return node
 
@@ -49,7 +53,16 @@ def index(node, constant_index, load=True, type=int_):
 def ptrtoint(node):
     return CoercionNode(node, Py_uintptr_t)
 
+def ptrfromint(intval, dst_ptr_type):
+    return CoercionNode(ConstNode(intval, Py_uintptr_t), dst_ptr_type)
+
 printing = False
+
+def inject_print(function_cache, node):
+    node = function_cache.call('PyObject_Str', node)
+    node = function_cache.call('puts', node)
+    return node
+
 def print_(translator, node):
     global printing
     if printing:
@@ -57,8 +70,7 @@ def print_(translator, node):
 
     printing = True
 
-    node = translator.function_cache.call('PyObject_Str', node)
-    node = translator.function_cache.call('puts', node)
+    node = inject_print(translator.function_cache, node)
     node = translator.ast.pipeline.late_specializer(node)
     translator.visit(node)
 
@@ -115,6 +127,9 @@ class CoercionNode(Node):
                 pass
             else:
                 return node
+
+        if dst_type.is_pointer and node.type.is_int:
+            assert node.type == Py_uintptr_t
 
         return super(CoercionNode, cls).__new__(cls, node, dst_type, name=name)
 
@@ -225,7 +240,8 @@ class ConstNode(Node):
             lvalue = llvm.core.Constant.struct([real.value(translator),
                                                 imag.value(translator)])
         elif type.is_pointer:
-            addr_int = translator.visit(ConstNode(self.pyval, type=Py_ssize_t))
+#            lvalue = translator.visit(ptrtoint(self.pyval))
+            addr_int = translator.visit(ConstNode(self.pyval, type=Py_uintptr_t))
             lvalue = translator.builder.inttoptr(addr_int, ltype)
         elif type.is_object:
             raise NotImplementedError("Use ObjectInjectNode")
@@ -235,7 +251,6 @@ class ConstNode(Node):
             type_char_p = numba_types.c_string_type.to_llvm(translator.context)
             lvalue = translator.builder.bitcast(lvalue, type_char_p)
         elif type.is_function:
-            # TODO:
             # lvalue = map_to_function(constant, type, self.mod)
             raise NotImplementedError
         else:
@@ -295,7 +310,8 @@ class NativeCallNode(FunctionCallNode):
     def coerce_args(self):
         self.args = list(self.original_args)
         for i, dst_type in enumerate(self.signature.args[self.skip_self:]):
-            self.args[i] = CoercionNode(self.args[i], dst_type,
+            arg = self.args[i]
+            self.args[i] = CoercionNode(arg, dst_type,
                                         name='func_%s_arg%d' % (self.name, i))
 
 class NativeFunctionCallNode(NativeCallNode):
@@ -405,7 +421,6 @@ class ObjectCallNode(FunctionCallNode):
 
         self.type = signature.return_type
 
-
 class ComplexConjugateNode(Node):
     "mycomplex.conjugate()"
 
@@ -473,7 +488,10 @@ class ObjectInjectNode(Node):
         super(ObjectInjectNode, self).__init__(**kwargs)
         self.object = object
         self.type = type or object_
+        self.variable = Variable(self.type, is_constant=True,
+                                 constant_value=object)
 
+NoneNode = ObjectInjectNode(None, object_)
 
 class ObjectTempNode(Node):
     """
@@ -746,8 +764,21 @@ class ExtTypeAttribute(Node):
         self.value = value
         self.attr = attr
         self.variable = ext_type.symtab[attr]
+        self.type = self.variable.type
         self.ctx = ctx
         self.ext_type = ext_type
+
+class NewExtObjectNode(Node):
+    """
+    Instantiate an extension type. Currently unused.
+    """
+
+    _fields = ['args']
+
+    def __init__(self, ext_type, args, **kwargs):
+        super(NewExtObjectNode, self).__init__(**kwargs)
+        self.ext_type = ext_type
+        self.args = args
 
 
 class StructAttribute(ExtTypeAttribute):
@@ -809,6 +840,118 @@ class ExtensionMethod(Node):
 #        self.args = args
 #        self.signature = signature
 #        self.type = signature
+
+
+class ClosureNode(Node):
+    """
+    Inner functions or closures.
+
+    When coerced to an object, a wrapper PyMethodDef gets created, and at
+    call time a function is dynamically created with the closure scope.
+    """
+
+    _fields = []
+
+    def __init__(self, func_def, closure_type, outer_py_func, **kwargs):
+        super(ClosureNode, self).__init__(**kwargs)
+        self.func_def = func_def
+        self.type = closure_type
+        self.outer_py_func = outer_py_func
+
+        # self.make_pyfunc()
+
+        self.lfunc = None
+        self.wrapper_func = None
+        self.wrapper_lfunc = None
+
+        # ast and symtab after type inference
+        self.type_inferred_ast = None
+        self.symtab = None
+
+        # The Python extension type that must be instantiated to hold cellvars
+        # self.scope_type = None
+        self.ext_type = None
+        self.need_closure_scope = False
+
+        # variables we need to put in a closure scope for our inner functions
+        # This is set on the FunctionDef node
+        # self.cellvars = None
+
+    def make_pyfunc(self):
+        d = self.outer_py_func.func_globals
+#        argnames = tuple(arg.id for arg in self.func_def.args.args)
+#        dummy_func_string = """
+#def __numba_closure_func(%s):
+#    pass
+#        """ % ", ".join(argnames)
+#        exec dummy_func_string in d, d
+
+        name = self.func_def.name
+        self.func_def.name = '__numba_closure_func'
+        ast_mod = ast.Module(body=[self.func_def])
+        numba.functions.fix_ast_lineno(ast_mod)
+        c = compile(ast_mod, '<string>', 'exec')
+        exec c in d, d
+        self.func_def.name = name
+
+        self.py_func = d['__numba_closure_func']
+        self.py_func.live_objects = []
+        self.py_func.__module__ = self.outer_py_func.__module__
+        self.py_func.__name__ = name
+
+class InstantiateClosureScope(Node):
+
+    _fields = ['outer_scope']
+
+    def __init__(self, func_def, scope_ext_type, scope_type, outer_scope, **kwargs):
+        super(InstantiateClosureScope, self).__init__(**kwargs)
+        self.func_def = func_def
+        self.scope_type = scope_type
+        self.ext_type = scope_ext_type
+        self.outer_scope = outer_scope
+        self.type = scope_type
+
+class ClosureCallNode(NativeCallNode):
+    """
+    Call to closure or inner function.
+    """
+
+    def __init__(self, closure_type, call_node, **kwargs):
+        self.call_node = call_node
+        args, keywords = call_node.args, call_node.keywords
+        args = args + self._resolve_keywords(closure_type, args, keywords)
+        super(ClosureCallNode, self).__init__(closure_type.signature, args,
+                                              llvm_func=None, **kwargs)
+        self.closure_type = closure_type
+
+    def _resolve_keywords(self, closure_type, args, keywords):
+        func_def = closure_type.closure.func_def
+        argnames = [name.id for name in func_def.args.args]
+
+        expected = len(argnames) - len(args)
+        if len(keywords) != expected:
+            raise error.NumbaError(
+                    self.call_node,
+                    "Expected %d arguments, got %d" % (len(argnames),
+                                                       len(args) + len(keywords)))
+
+        argpositions = dict(zip(argnames, range(len(argnames))))
+        positional = [None] * (len(argnames) - len(args))
+
+        for keyword in keywords:
+            argname = keyword.arg
+            pos = argpositions.get(argname, None)
+            if pos is None:
+                raise error.NumbaError(
+                        keyword, "Not a valid keyword argument name: %s" % argname)
+            elif pos < len(args):
+                raise error.NumbaError(
+                        keyword, "Got multiple values for positional "
+                                 "argument %r" % argname)
+            else:
+                positional[pos] = keyword.value
+
+        return positional
 
 class FunctionWrapperNode(Node):
     """

@@ -38,4 +38,4 @@ def test_str_return():
 
 if __name__ == "__main__":
     test_ctypes_calls()
-    test_str_return()
+#    test_str_return()

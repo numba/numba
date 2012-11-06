@@ -13,6 +13,8 @@ class Variable(object):
         state: state passed from one stage to the next
     """
 
+    _type = None
+
     def __init__(self, type, is_constant=False, is_local=False,
                  name=None, lvalue=None, constant_value=None,
                  promotable_type=True):
@@ -23,6 +25,20 @@ class Variable(object):
         self.lvalue = lvalue
         self.promotable_type = promotable_type
         self.is_local = is_local
+
+        self.is_cellvar = False
+        self.is_freevar = False
+
+    def _type_get(self):
+        return self._type
+
+    def _type_set(self, type):
+        assert not (self.type and type is None)
+        if type is None:
+            print 'Setting None type!', self.name
+        self._type = type
+
+    #type = property(_type_get, _type_set)
 
     @classmethod
     def from_variable(cls, variable, **kwds):
@@ -57,6 +73,10 @@ class Variable(object):
             args.append("is_global=True")
         if self.is_constant:
             args.append("is_constant=True")
+        if self.is_freevar:
+            args.append("is_freevar=True")
+        if self.is_cellvar:
+            args.append("is_cellvar=True")
         if self.name:
             args.append("name=%s" % self.name)
         if self.lvalue:
