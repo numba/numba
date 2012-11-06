@@ -12,39 +12,12 @@ from numba.minivect import minierror, minitypes, specializers, miniast
 from numba import translate, utils, functions, nodes
 from numba.symtab import Variable
 from numba import visitors, nodes, error, ast_type_inference, ast_translate
-from numba import decorators
 from numba.utils import dump
 
 from numbapro import vectorize, dispatch, array_slicing
 from numbapro.vectorize import basic, minivectorize
 
 import numpy
-
-class NumbaproPipeline(pipeline.Pipeline):
-    """
-    Pipeline that support
-    """
-    def __init__(self, context, func, ast, func_signature, **kwargs):
-        super(NumbaproPipeline, self).__init__(context, func, ast,
-                                               func_signature, **kwargs)
-        self.insert_specializer('rewrite_array_expressions',
-                                after='specialize')
-
-    def rewrite_array_expressions(self, ast):
-        # transformer = ArrayExpressionRewriteUfunc(self.context, self.func, ast)
-        transformer = ArrayExpressionRewrite(self.context, self.func, ast,
-                                             self.llvm_module)
-        return transformer.visit(ast)
-
-    def codegen(self, ast):
-        self.translator = self.make_specializer(ArrayExpressionCodegen,
-                                                ast, func_name=self.func_name,
-                                                **self.kwargs)
-        self.translator.translate()
-        return ast
-
-decorators.context.numba_pipeline = NumbaproPipeline
-
 
 class ArrayExpressionRewrite(visitors.NumbaTransformer,
                              ast_type_inference.NumpyMixin):
@@ -228,8 +201,8 @@ class NumbaproStaticArgsContext(utils.NumbaContext):
     "Use a static argument list: shape, data1, strides1, data2, strides2, ..."
     astbuilder_cls = miniast.ASTBuilder
 
-class ArrayExpressionRewrite(array_slicing.SliceRewriterMixin,
-                             ArrayExpressionRewrite):
+class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
+                                   ArrayExpressionRewrite):
     """
     Compile array expressions to a minivect kernel that calls a Numba
     scalar kernel with scalar inputs:
@@ -259,8 +232,8 @@ class ArrayExpressionRewrite(array_slicing.SliceRewriterMixin,
     CAN be used in a nopython context
     """
 
-    def __init__(self, context, func, ast, llvm_module):
-        super(ArrayExpressionRewrite, self).__init__(context, func, ast)
+    def __init__(self, context, func, ast, llvm_module, **kwds):
+        super(ArrayExpressionRewrite, self).__init__(context, func, ast, **kwds)
         self.array_expr_context = NumbaproStaticArgsContext()
         self.llvm_module = llvm_module
         self.array_expr_context.llvm_module = llvm_module
@@ -347,10 +320,3 @@ class ArrayExpressionRewrite(array_slicing.SliceRewriterMixin,
 
         # b[:] * c[:], return new array as expression
         return nodes.ExpressionNode(stmts=[result], expr=lhs.clone)
-
-
-class ArrayExpressionCodegen(array_slicing.NativeSliceCodegenMixin,
-                             ast_translate.LLVMCodeGenerator):
-    """
-    Support native slicing code generation.
-    """

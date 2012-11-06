@@ -74,9 +74,9 @@ def drop_in_gdb(addr=None, type='int'):
 
 #
 # This import will modify numba ast translation pipeline and enables
-# array expression on it.
+# array expression and prange on it.
 #
-import numbapro.array_expressions
+import numbapro.pipeline
 
 #
 # This import will modify ast translation pipeline and
