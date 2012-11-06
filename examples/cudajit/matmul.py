@@ -6,7 +6,7 @@ from timeit import default_timer as time
 
 
 bpg = 50
-tpb = 20
+tpb = 32
 n = bpg * tpb
 
 @cuda.jit(argtypes=[f4[:,:], f4[:,:], f4[:,:]])
@@ -33,10 +33,17 @@ A = np.array(np.random.random((n, n)), dtype=np.float32)
 B = np.array(np.random.random((n, n)), dtype=np.float32)
 C = np.empty_like(A)
 
-print "N = %d x %d" % (bpg * tpb, bpg * tpb)
+print "N = %d x %d" % (n, n)
 
 s = time()
-cu_square_matrix_mul[(bpg, bpg), (tpb, tpb)](A, B, C)
+stream = cuda.stream()
+with stream.auto_synchronize():
+    dA = cuda.to_device(A, stream)
+    dB = cuda.to_device(B, stream)
+    dC = cuda.to_device(C, stream)
+    cu_square_matrix_mul[(bpg, bpg), (tpb, tpb), stream](dA, dB, dC)
+    dC.to_host(stream)
+
 e = time()
 tcuda = e - s
 
@@ -50,14 +57,14 @@ e = time()
 tcpu = e - s
 
 # Check result
-relerr = lambda got, gold: abs(got - gold)/gold
-for y in range(n):
-    for x in range(n):
-        err = relerr(C[y, x], Cans[y, x])
-        assert err < 1e-5, (x, y, err)
+np.allclose(C, Cans)
+#relerr = lambda got, gold: abs(got - gold)/gold
+#for y in range(n):
+#    for x in range(n):
+#        err = relerr(C[y, x], Cans[y, x])
+#        assert err < 1e-5, (x, y, err)
 
 print 'cpu:  %f' % tcpu
 print 'cuda: %f' % tcuda
 print 'cuda speedup: %.2fx' % (tcpu / tcuda)
-
 
