@@ -39,19 +39,19 @@
 #include <Python.h>
 #include <structmember.h>
 
-#define CYFUNCTION_STATICMETHOD  0x01
-#define CYFUNCTION_CLASSMETHOD   0x02
-#define CYFUNCTION_CCLASS        0x04
+#define NumbaFunction_STATICMETHOD  0x01
+#define NumbaFunction_CLASSMETHOD   0x02
+#define NumbaFunction_CCLASS        0x04
 
-#define CyFunction_GetClosure(f) \
-    (((CyFunctionObject *) (f))->func_closure)
-#define CyFunction_GetClassObj(f) \
-    (((CyFunctionObject *) (f))->func_classobj)
+#define NumbaFunction_GetClosure(f) \
+    (((NumbaFunctionObject *) (f))->func_closure)
+#define NumbaFunction_GetClassObj(f) \
+    (((NumbaFunctionObject *) (f))->func_classobj)
 
-#define CyFunction_Defaults(type, f) \
-    ((type *)(((CyFunctionObject *) (f))->defaults))
-#define CyFunction_SetDefaultsGetter(f, g) \
-    ((CyFunctionObject *) (f))->defaults_getter = (g)
+#define NumbaFunction_Defaults(type, f) \
+    ((type *)(((NumbaFunctionObject *) (f))->defaults))
+#define NumbaFunction_SetDefaultsGetter(f, g) \
+    ((NumbaFunctionObject *) (f))->defaults_getter = (g)
 
 
 typedef struct {
@@ -65,6 +65,10 @@ typedef struct {
     PyObject *func_closure;
     PyObject *func_classobj; /* No-args super() class cell */
 
+    void *native_func;
+    PyObject *native_signature;
+    PyObject *keep_alive;
+
     /* Dynamic default args*/
     void *defaults;
     int defaults_pyobjects;
@@ -72,25 +76,28 @@ typedef struct {
     /* Defaults info */
     PyObject *defaults_tuple; /* Const defaults tuple */
     PyObject *(*defaults_getter)(PyObject *);
-} CyFunctionObject;
+} NumbaFunctionObject;
 
-static PyTypeObject *CyFunctionType = 0;
+size_t closure_field_offset = offsetof(NumbaFunctionObject, func_closure);
 
-static PyObject *CyFunction_New(PyTypeObject *,
-                                      PyMethodDef *ml, int flags,
-                                      PyObject *self, PyObject *module,
-                                      PyObject* code);
+static PyTypeObject *NumbaFunctionType = 0;
 
-static CYTHON_INLINE void *CyFunction_InitDefaults(PyObject *m,
+static PyObject *NumbaFunction_New(PyTypeObject *type,
+                                   PyMethodDef *ml, int flags,
+                                   PyObject *closure,
+                                   PyObject *self, PyObject *module,
+                                   PyObject* code);
+
+static CYTHON_INLINE void *NumbaFunction_InitDefaults(PyObject *m,
                                                    size_t size,
                                                    int pyobjects);
-static CYTHON_INLINE void CyFunction_SetDefaultsTuple(PyObject *m,
+static CYTHON_INLINE void NumbaFunction_SetDefaultsTuple(PyObject *m,
                                                       PyObject *tuple);
 
 /* Implementation */
 
 static PyObject *
-CyFunction_get_doc(CyFunctionObject *op, CYTHON_UNUSED void *closure)
+NumbaFunction_get_doc(NumbaFunctionObject *op, CYTHON_UNUSED void *closure)
 {
     if (op->func_doc == NULL && op->func.m_ml->ml_doc) {
 #if PY_MAJOR_VERSION >= 3
@@ -108,7 +115,7 @@ CyFunction_get_doc(CyFunctionObject *op, CYTHON_UNUSED void *closure)
 }
 
 static int
-CyFunction_set_doc(CyFunctionObject *op, PyObject *value)
+NumbaFunction_set_doc(NumbaFunctionObject *op, PyObject *value)
 {
     PyObject *tmp = op->func_doc;
     if (value == NULL)
@@ -121,7 +128,7 @@ CyFunction_set_doc(CyFunctionObject *op, PyObject *value)
 }
 
 static PyObject *
-CyFunction_get_name(CyFunctionObject *op)
+NumbaFunction_get_name(NumbaFunctionObject *op)
 {
     if (op->func_name == NULL) {
 #if PY_MAJOR_VERSION >= 3
@@ -130,12 +137,12 @@ CyFunction_get_name(CyFunctionObject *op)
         op->func_name = PyString_InternFromString(op->func.m_ml->ml_name);
 #endif
     }
-    Py_INCREF(op->func_name);
+    Py_XINCREF(op->func_name);
     return op->func_name;
 }
 
 static int
-CyFunction_set_name(CyFunctionObject *op, PyObject *value)
+NumbaFunction_set_name(NumbaFunctionObject *op, PyObject *value)
 {
     PyObject *tmp;
 
@@ -156,7 +163,7 @@ CyFunction_set_name(CyFunctionObject *op, PyObject *value)
 }
 
 static PyObject *
-CyFunction_get_self(CyFunctionObject *m, CYTHON_UNUSED void *closure)
+NumbaFunction_get_self(NumbaFunctionObject *m, CYTHON_UNUSED void *closure)
 {
     PyObject *self;
 
@@ -168,7 +175,7 @@ CyFunction_get_self(CyFunctionObject *m, CYTHON_UNUSED void *closure)
 }
 
 static PyObject *
-CyFunction_get_dict(CyFunctionObject *op)
+NumbaFunction_get_dict(NumbaFunctionObject *op)
 {
     if (op->func_dict == NULL) {
         op->func_dict = PyDict_New();
@@ -180,7 +187,7 @@ CyFunction_get_dict(CyFunctionObject *op)
 }
 
 static int
-CyFunction_set_dict(CyFunctionObject *op, PyObject *value)
+NumbaFunction_set_dict(NumbaFunctionObject *op, PyObject *value)
 {
     PyObject *tmp;
 
@@ -203,7 +210,7 @@ CyFunction_set_dict(CyFunctionObject *op, PyObject *value)
 
 /*
 static PyObject *
-CyFunction_get_globals(CYTHON_UNUSED CyFunctionObject *op)
+NumbaFunction_get_globals(CYTHON_UNUSED NumbaFunctionObject *op)
 {
     PyObject* dict = PyModule_GetDict(${module_cname});
     Py_XINCREF(dict);
@@ -212,14 +219,18 @@ CyFunction_get_globals(CYTHON_UNUSED CyFunctionObject *op)
 */
 
 static PyObject *
-CyFunction_get_closure(CYTHON_UNUSED CyFunctionObject *op)
+NumbaFunction_get_closure(CYTHON_UNUSED NumbaFunctionObject *op)
 {
+    if (op->func_closure) {
+        Py_INCREF(op->func_closure);
+        return op->func_closure;
+    }
     Py_INCREF(Py_None);
     return Py_None;
 }
 
 static PyObject *
-CyFunction_get_code(CyFunctionObject *op)
+NumbaFunction_get_code(NumbaFunctionObject *op)
 {
     PyObject* result = (op->func_code) ? op->func_code : Py_None;
     Py_INCREF(result);
@@ -227,7 +238,7 @@ CyFunction_get_code(CyFunctionObject *op)
 }
 
 static PyObject *
-CyFunction_get_defaults(CyFunctionObject *op)
+NumbaFunction_get_defaults(NumbaFunctionObject *op)
 {
     if (op->defaults_tuple) {
         Py_INCREF(op->defaults_tuple);
@@ -249,22 +260,22 @@ CyFunction_get_defaults(CyFunctionObject *op)
     return Py_None;
 }
 
-static PyGetSetDef CyFunction_getsets[] = {
-    {(char *) "func_doc", (getter)CyFunction_get_doc, (setter)CyFunction_set_doc, 0, 0},
-    {(char *) "__doc__",  (getter)CyFunction_get_doc, (setter)CyFunction_set_doc, 0, 0},
-    {(char *) "func_name", (getter)CyFunction_get_name, (setter)CyFunction_set_name, 0, 0},
-    {(char *) "__name__", (getter)CyFunction_get_name, (setter)CyFunction_set_name, 0, 0},
-    {(char *) "__self__", (getter)CyFunction_get_self, 0, 0, 0},
-    {(char *) "func_dict", (getter)CyFunction_get_dict, (setter)CyFunction_set_dict, 0, 0},
-    {(char *) "__dict__", (getter)CyFunction_get_dict, (setter)CyFunction_set_dict, 0, 0},
-    /*{(char *) "func_globals", (getter)CyFunction_get_globals, 0, 0, 0},
-    {(char *) "__globals__", (getter)CyFunction_get_globals, 0, 0, 0},*/
-    {(char *) "func_closure", (getter)CyFunction_get_closure, 0, 0, 0},
-    {(char *) "__closure__", (getter)CyFunction_get_closure, 0, 0, 0},
-    {(char *) "func_code", (getter)CyFunction_get_code, 0, 0, 0},
-    {(char *) "__code__", (getter)CyFunction_get_code, 0, 0, 0},
-    {(char *) "func_defaults", (getter)CyFunction_get_defaults, 0, 0, 0},
-    {(char *) "__defaults__", (getter)CyFunction_get_defaults, 0, 0, 0},
+static PyGetSetDef NumbaFunction_getsets[] = {
+    {(char *) "func_doc", (getter)NumbaFunction_get_doc, (setter)NumbaFunction_set_doc, 0, 0},
+    {(char *) "__doc__",  (getter)NumbaFunction_get_doc, (setter)NumbaFunction_set_doc, 0, 0},
+    {(char *) "func_name", (getter)NumbaFunction_get_name, (setter)NumbaFunction_set_name, 0, 0},
+    {(char *) "__name__", (getter)NumbaFunction_get_name, (setter)NumbaFunction_set_name, 0, 0},
+    {(char *) "__self__", (getter)NumbaFunction_get_self, 0, 0, 0},
+    {(char *) "func_dict", (getter)NumbaFunction_get_dict, (setter)NumbaFunction_set_dict, 0, 0},
+    {(char *) "__dict__", (getter)NumbaFunction_get_dict, (setter)NumbaFunction_set_dict, 0, 0},
+    /*{(char *) "func_globals", (getter)NumbaFunction_get_globals, 0, 0, 0},
+    {(char *) "__globals__", (getter)NumbaFunction_get_globals, 0, 0, 0},*/
+    {(char *) "func_closure", (getter)NumbaFunction_get_closure, 0, 0, 0},
+    {(char *) "__closure__", (getter)NumbaFunction_get_closure, 0, 0, 0},
+    {(char *) "func_code", (getter)NumbaFunction_get_code, 0, 0, 0},
+    {(char *) "__code__", (getter)NumbaFunction_get_code, 0, 0, 0},
+    {(char *) "func_defaults", (getter)NumbaFunction_get_defaults, 0, 0, 0},
+    {(char *) "__defaults__", (getter)NumbaFunction_get_defaults, 0, 0, 0},
     {0, 0, 0, 0, 0}
 };
 
@@ -272,13 +283,13 @@ static PyGetSetDef CyFunction_getsets[] = {
 #define PY_WRITE_RESTRICTED WRITE_RESTRICTED
 #endif
 
-static PyMemberDef CyFunction_members[] = {
-    {(char *) "__module__", T_OBJECT, offsetof(CyFunctionObject, func.m_module), PY_WRITE_RESTRICTED, 0},
+static PyMemberDef NumbaFunction_members[] = {
+    {(char *) "__module__", T_OBJECT, offsetof(NumbaFunctionObject, func.m_module), PY_WRITE_RESTRICTED, 0},
     {0, 0, 0,  0, 0}
 };
 
 static PyObject *
-CyFunction_reduce(CyFunctionObject *m, CYTHON_UNUSED PyObject *args)
+NumbaFunction_reduce(NumbaFunctionObject *m, CYTHON_UNUSED PyObject *args)
 {
 #if PY_MAJOR_VERSION >= 3
     return PyUnicode_FromString(m->func.m_ml->ml_name);
@@ -287,54 +298,69 @@ CyFunction_reduce(CyFunctionObject *m, CYTHON_UNUSED PyObject *args)
 #endif
 }
 
-static PyMethodDef CyFunction_methods[] = {
-    {NAMESTR("__reduce__"), (PyCFunction)CyFunction_reduce, METH_VARARGS, 0},
+static PyMethodDef NumbaFunction_methods[] = {
+    {NAMESTR("__reduce__"), (PyCFunction)NumbaFunction_reduce, METH_VARARGS, 0},
     {0, 0, 0, 0}
 };
 
 
-static PyObject *CyFunction_New(PyTypeObject *type, PyMethodDef *ml, int flags,
-                                /*PyObject *closure,*/
-                                PyObject *self, PyObject *module, PyObject* code)
+static PyObject *NumbaFunction_New(
+            PyTypeObject *type, PyMethodDef *ml, int flags, PyObject *closure,
+            PyObject *module, PyObject *code, PyObject *keep_alive)
 {
-    CyFunctionObject *op = PyObject_GC_New(CyFunctionObject, type);
+    NumbaFunctionObject *op = PyObject_GC_New(NumbaFunctionObject, type);
     if (op == NULL)
         return NULL;
     op->flags = flags;
     op->func_weakreflist = NULL;
     op->func.m_ml = ml;
-    /* op->func.m_self = (PyObject *) op;*/
-    Py_XINCREF(self);
-    op->func.m_self = self;
-    /*Py_XINCREF(closure);
-    op->func_closure = closure;*/
-    op->func_closure = NULL;
+    op->func.m_self = (PyObject *) op; /* No incref or decref here */
+    Py_XINCREF(closure);
+    op->func_closure = closure;
     Py_XINCREF(module);
     op->func.m_module = module;
     op->func_dict = NULL;
     op->func_name = NULL;
     op->func_doc = NULL;
+
     op->func_classobj = NULL;
     Py_XINCREF(code);
     op->func_code = code;
+
     /* Dynamic Default args */
     op->defaults_pyobjects = 0;
     op->defaults = NULL;
     op->defaults_tuple = NULL;
     op->defaults_getter = NULL;
+
+    Py_XINCREF(keep_alive);
+    op->keep_alive = keep_alive;
+    op->native_func = NULL;
+    op->native_signature = NULL;
+
     PyObject_GC_Track(op);
     return (PyObject *) op;
 }
 
+/* Create a new function and set the closure scope */
 PyObject *
-CyFunction_NewEx(PyMethodDef *ml, int flags, PyObject *self,
-                 PyObject *module, PyObject *code)
+NumbaFunction_NewEx(PyMethodDef *ml, PyObject *module, PyObject *code,
+                    PyObject *closure, void *native_func,
+                    PyObject *native_signature, PyObject *keep_alive)
 {
-    return CyFunction_New(CyFunctionType, ml, flags, self, module, code);
+    NumbaFunctionObject *result = NumbaFunction_New(
+                        NumbaFunctionType, ml, 0, closure, module,
+                        code, keep_alive);
+    if (result) {
+        result->native_func = native_func;
+        Py_XINCREF(native_signature);
+        result->native_signature = native_signature;
+    }
+    return result;
 }
 
 static int
-CyFunction_clear(CyFunctionObject *m)
+NumbaFunction_clear(NumbaFunctionObject *m)
 {
     Py_CLEAR(m->func_closure);
     Py_CLEAR(m->func.m_module);
@@ -344,9 +370,10 @@ CyFunction_clear(CyFunctionObject *m)
     Py_CLEAR(m->func_code);
     Py_CLEAR(m->func_classobj);
     Py_CLEAR(m->defaults_tuple);
+    Py_CLEAR(m->keep_alive);
 
     if (m->defaults) {
-        PyObject **pydefaults = CyFunction_Defaults(PyObject *, m);
+        PyObject **pydefaults = NumbaFunction_Defaults(PyObject *, m);
         int i;
 
         for (i = 0; i < m->defaults_pyobjects; i++)
@@ -359,28 +386,31 @@ CyFunction_clear(CyFunctionObject *m)
     return 0;
 }
 
-static void CyFunction_dealloc(CyFunctionObject *m)
+static void NumbaFunction_dealloc(NumbaFunctionObject *m)
 {
     PyObject_GC_UnTrack(m);
     if (m->func_weakreflist != NULL)
         PyObject_ClearWeakRefs((PyObject *) m);
-    CyFunction_clear(m);
+    NumbaFunction_clear(m);
     PyObject_GC_Del(m);
 }
 
-static int CyFunction_traverse(CyFunctionObject *m, visitproc visit, void *arg)
+static int NumbaFunction_traverse(NumbaFunctionObject *m, visitproc visit, void *arg)
 {
     Py_VISIT(m->func_closure);
     Py_VISIT(m->func.m_module);
     Py_VISIT(m->func_dict);
     Py_VISIT(m->func_name);
     Py_VISIT(m->func_doc);
+
     Py_VISIT(m->func_code);
     Py_VISIT(m->func_classobj);
     Py_VISIT(m->defaults_tuple);
 
+    Py_VISIT(m->keep_alive);
+
     if (m->defaults) {
-        PyObject **pydefaults = CyFunction_Defaults(PyObject *, m);
+        PyObject **pydefaults = NumbaFunction_Defaults(PyObject *, m);
         int i;
 
         for (i = 0; i < m->defaults_pyobjects; i++)
@@ -390,16 +420,16 @@ static int CyFunction_traverse(CyFunctionObject *m, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *CyFunction_descr_get(PyObject *func, PyObject *obj, PyObject *type)
+static PyObject *NumbaFunction_descr_get(PyObject *func, PyObject *obj, PyObject *type)
 {
-    CyFunctionObject *m = (CyFunctionObject *) func;
+    NumbaFunctionObject *m = (NumbaFunctionObject *) func;
 
-    if (m->flags & CYFUNCTION_STATICMETHOD) {
+    if (m->flags & NumbaFunction_STATICMETHOD) {
         Py_INCREF(func);
         return func;
     }
 
-    if (m->flags & CYFUNCTION_CLASSMETHOD) {
+    if (m->flags & NumbaFunction_CLASSMETHOD) {
         if (type == NULL)
             type = (PyObject *)(Py_TYPE(obj));
         return PyMethod_New(func,
@@ -412,25 +442,26 @@ static PyObject *CyFunction_descr_get(PyObject *func, PyObject *obj, PyObject *t
 }
 
 static PyObject*
-CyFunction_repr(CyFunctionObject *op)
+NumbaFunction_repr(NumbaFunctionObject *op)
 {
-    PyObject *func_name = CyFunction_get_name(op);
+    /* Py_RETURN_NONE; */
+    PyObject *func_name = NumbaFunction_get_name(op);
 
 #if PY_MAJOR_VERSION >= 3
-    return PyUnicode_FromFormat("<cyfunction %U at %p>",
+    return PyUnicode_FromFormat("<NumbaFunction %U at %p>",
                                 func_name, (void *)op);
 #else
-    return PyString_FromFormat("<cyfunction %s at %p>",
+    return PyString_FromFormat("<NumbaFunction %s at %p>",
                                PyString_AsString(func_name), (void *)op);
 #endif
 }
 
-static PyTypeObject CyFunctionType_type = {
+static PyTypeObject NumbaFunctionType_type = {
     PyVarObject_HEAD_INIT(0, 0)
     NAMESTR("cython_function_or_method"), /*tp_name*/
-    sizeof(CyFunctionObject),   /*tp_basicsize*/
+    sizeof(NumbaFunctionObject),   /*tp_basicsize*/
     0,                                  /*tp_itemsize*/
-    (destructor) CyFunction_dealloc, /*tp_dealloc*/
+    (destructor) NumbaFunction_dealloc, /*tp_dealloc*/
     0,                                  /*tp_print*/
     0,                                  /*tp_getattr*/
     0,                                  /*tp_setattr*/
@@ -439,7 +470,7 @@ static PyTypeObject CyFunctionType_type = {
 #else
     0,                                  /*reserved*/
 #endif
-    (reprfunc) CyFunction_repr,   /*tp_repr*/
+    (reprfunc) NumbaFunction_repr,   /*tp_repr*/
     0,                                  /*tp_as_number*/
     0,                                  /*tp_as_sequence*/
     0,                                  /*tp_as_mapping*/
@@ -451,20 +482,20 @@ static PyTypeObject CyFunctionType_type = {
     0,                                  /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /* tp_flags*/
     0,                                  /*tp_doc*/
-    (traverseproc) CyFunction_traverse,   /*tp_traverse*/
-    (inquiry) CyFunction_clear,   /*tp_clear*/
+    (traverseproc) NumbaFunction_traverse,   /*tp_traverse*/
+    (inquiry) NumbaFunction_clear,   /*tp_clear*/
     0,                                  /*tp_richcompare*/
-    offsetof(CyFunctionObject, func_weakreflist), /* tp_weaklistoffse */
+    offsetof(NumbaFunctionObject, func_weakreflist), /* tp_weaklistoffse */
     0,                                  /*tp_iter*/
     0,                                  /*tp_iternext*/
-    CyFunction_methods,           /*tp_methods*/
-    CyFunction_members,           /*tp_members*/
-    CyFunction_getsets,           /*tp_getset*/
+    NumbaFunction_methods,           /*tp_methods*/
+    NumbaFunction_members,           /*tp_members*/
+    NumbaFunction_getsets,           /*tp_getset*/
     0,                                  /*tp_base*/
     0,                                  /*tp_dict*/
-    CyFunction_descr_get,         /*tp_descr_get*/
+    NumbaFunction_descr_get,         /*tp_descr_get*/
     0,                                  /*tp_descr_set*/
-    offsetof(CyFunctionObject, func_dict),/*tp_dictoffset*/
+    offsetof(NumbaFunctionObject, func_dict),/*tp_dictoffset*/
     0,                                  /*tp_init*/
     0,                                  /*tp_alloc*/
     0,                                  /*tp_new*/
@@ -482,17 +513,17 @@ static PyTypeObject CyFunctionType_type = {
 };
 
 
-int CyFunction_init(void) {
+int NumbaFunction_init(void) {
     // avoid a useless level of call indirection
-    CyFunctionType_type.tp_call = PyCFunction_Call;
-    if (PyType_Ready(&CyFunctionType_type) < 0)
+    NumbaFunctionType_type.tp_call = PyCFunction_Call;
+    if (PyType_Ready(&NumbaFunctionType_type) < 0)
         return -1;
-    CyFunctionType = &CyFunctionType_type;
+    NumbaFunctionType = &NumbaFunctionType_type;
     return 0;
 }
 
-static CYTHON_INLINE void *CyFunction_InitDefaults(PyObject *func, size_t size, int pyobjects) {
-    CyFunctionObject *m = (CyFunctionObject *) func;
+static CYTHON_INLINE void *NumbaFunction_InitDefaults(PyObject *func, size_t size, int pyobjects) {
+    NumbaFunctionObject *m = (NumbaFunctionObject *) func;
 
     m->defaults = PyMem_Malloc(size);
     if (!m->defaults)
@@ -502,8 +533,8 @@ static CYTHON_INLINE void *CyFunction_InitDefaults(PyObject *func, size_t size, 
     return m->defaults;
 }
 
-static CYTHON_INLINE void CyFunction_SetDefaultsTuple(PyObject *func, PyObject *tuple) {
-    CyFunctionObject *m = (CyFunctionObject *) func;
+static CYTHON_INLINE void NumbaFunction_SetDefaultsTuple(PyObject *func, PyObject *tuple) {
+    NumbaFunctionObject *m = (NumbaFunctionObject *) func;
     m->defaults_tuple = tuple;
     Py_INCREF(tuple);
 }

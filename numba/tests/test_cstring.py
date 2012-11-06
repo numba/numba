@@ -38,6 +38,7 @@ class TestCString(test_support.ASTTestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+#    TestCString('test_convert').debug()
     test_support.main()
 
 # ______________________________________________________________________

@@ -89,7 +89,7 @@ if __debug__:
 
 import numba
 from numba import *
-from numba import error
+from numba import error, closure
 from .minivect import minierror, minitypes
 from . import macros, utils, _numba_types as numba_types
 from .symtab import Variable
@@ -320,10 +320,6 @@ class TransformForIterable(visitors.NumbaTransformer):
                 value = my_array[i]
     """
 
-    def __init__(self, context, func, ast, symtab, **kwds):
-        super(TransformForIterable, self).__init__(context, func, ast, **kwds)
-        self.symtab = symtab
-
     def visit_For(self, node):
         if node.iter.type.is_range:
             return node
@@ -342,6 +338,8 @@ class TransformForIterable(visitors.NumbaTransformer):
             # replace node.iter
             call_func = ast.Name(id='range', ctx=ast.Load())
             call_func.type = numba_types.RangeType()
+            call_func.variable = Variable(call_func.type)
+
             shape_index = ast.Index(nodes.ConstNode(0, numba_types.Py_ssize_t))
             shape_index.type = numba_types.npy_intp
             stop = ast.Subscript(value=nodes.ShapeAttributeNode(orig_iter),
@@ -410,7 +408,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 if dst_type.is_int:
                     cvtobj = self.function_cache.call(
                         'PyInt_FromString', node.node,
-                        nodes.const(0, Py_ssize_t), nodes.const(10, int_))
+                        nodes.NULL, nodes.const(10, int_))
                 else:
                     cvtobj = self.function_cache.call(
                         'PyFloat_FromString', node.node,
@@ -496,8 +494,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 # TODO: error checking!
                 new_node = self.function_cache.call(cls.__name__, node.node)
         elif node_type.is_pointer:
-            raise error.NumbaError(
-                    "Obtaining pointers from objects is not yet supported")
+            raise error.NumbaError(node, "Obtaining pointers from objects "
+                                         "is not yet supported")
+        elif node_type.is_void:
+            raise error.NumbaError(node, "Cannot coerce %s to void" % (from_type,))
 
         if new_node is None:
             # Create a tuple for PyArg_ParseTuple
@@ -514,11 +514,13 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
         return new_node
 
-class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
-                      visitors.NoPythonContextMixin):
+class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
+                      LateBuiltinResolverMixin, visitors.NoPythonContextMixin):
 
     def visit_FunctionDef(self, node):
-        self.generic_visit(node)
+#        self.generic_visit(node)
+        node.decorator_list = self.visitlist(node.decorator_list)
+        node.body = self.visitlist(node.body)
 
         ret_type = self.func_signature.return_type
         if ret_type.is_object or ret_type.is_array:
@@ -585,7 +587,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         if node.nl:
             result.append(self._print(nodes.ObjectInjectNode("\n"), node.dest))
 
-        return self.visitlist(result)
+        return ast.Suite(body=self.visitlist(result))
 
     def visit_Tuple(self, node):
         self.check_context(node)
@@ -723,7 +725,6 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             if isinstance(node.ctx, ast.Load):
                 result = self.function_cache.call('PyObject_GetItem',
                                                   node.value, node.slice)
-                # print ast.dump(result)
                 node = nodes.CoercionNode(result, dst_type=node.type)
                 node = self.visit(node)
             else:
@@ -976,7 +977,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             obj = getattr(builtins, node.name)
             return nodes.ObjectInjectNode(obj, node.type)
 
-        return node
+        return super(LateSpecializer, self).visit_Name(node)
 
     def visit_Return(self, node):
         return_type = self.func_signature.return_type
@@ -991,4 +992,3 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
     def visit_Compare(self, node):
         self.generic_visit(node)
         return node
-

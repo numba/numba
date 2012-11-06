@@ -34,6 +34,9 @@ def promote_closest(context, int_type, candidates):
 
     return candidates[-1]
 
+# Patch repr of objects to print "object_" instead of "PyObject *"
+minitypes.ObjectType.__repr__ = lambda self: "object_"
+
 class NumbaType(minitypes.Type):
     is_numba_type = True
 
@@ -235,9 +238,11 @@ class CastType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "<cast(%s)>" % self.dst_type
 
+
 class ExtensionType(NumbaType, minitypes.ObjectType):
 
     is_extension = True
+    is_final = False
 
     def __init__(self, py_class, **kwds):
         super(ExtensionType, self).__init__(**kwds)
@@ -264,7 +269,8 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
             if signature.return_type is None:
                 signature.return_type = method_signature.return_type
             else:
-                assert signature.return_type == method_signature.return_type, method_signature
+                assert signature.return_type == method_signature.return_type, \
+                                                            method_signature
         else:
             self.methoddict[method_name] = (method_signature, len(self.methods))
             self.methods.append((method_name, method_signature))
@@ -273,8 +279,54 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
         signature, vtab_offset = self.methoddict[method_name]
         return signature
 
+    def set_attributes(self, attribute_list):
+        """
+        Create the symbol table and attribute struct from a list of
+        (varname, attribute_type)
+        """
+        import numba.symtab
+
+        self.attribute_struct = numba.struct(attribute_list)
+        self.symtab.update([(name, numba.symtab.Variable(type))
+                               for name, type in attribute_list])
+
     def __repr__(self):
         return "<Extension %s>" % self.name
+
+
+class ClosureType(NumbaType, minitypes.ObjectType):
+    """
+    Type of closures and inner functions.
+    """
+
+    is_closure = True
+
+    def __init__(self, signature, **kwds):
+        super(ClosureType, self).__init__(**kwds)
+        self.signature = signature
+        self.closure = None
+
+    def __repr__(self):
+        return "<closure(%s)>" % self.signature
+
+class ClosureScopeType(ExtensionType):
+    """
+    Type of the enclosing scope for closures. This is always passed in as
+    first argument to the function.
+    """
+
+    is_closure_scope = True
+    is_final = True
+
+    def __init__(self, py_class, parent_scope, **kwds):
+        super(ClosureScopeType, self).__init__(py_class, **kwds)
+        self.parent_scope = parent_scope
+        self.unmangled_symtab = None
+
+        if self.parent_scope is None:
+            self.scope_prefix = ""
+        else:
+            self.scope_prefix = self.parent_scope.scope_prefix + "0"
 
 
 tuple_ = TupleType()

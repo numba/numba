@@ -8,7 +8,7 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import error, transforms
+from numba import error, transforms, closure
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as numba_types
 from .symtab import Variable
@@ -23,6 +23,23 @@ import numpy as np
 
 import logging
 logger = logging.getLogger(__name__)
+
+def _parse_args(call_node, arg_names):
+    result = dict.fromkeys(arg_names)
+
+    # parse positional arguments
+    i = 0
+    for i, (arg_name, arg) in enumerate(zip(arg_names, call_node.args)):
+        result[arg_name] = arg
+
+    arg_names = arg_names[i:]
+    if arg_names:
+        # parse keyword arguments
+        for keyword in call_node.keywords:
+            if keyword.arg in result:
+                result[keyword.arg] = keyword.value
+
+    return result
 
 class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
     """
@@ -90,7 +107,7 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
                     nodes.ObjectTempNode(
                         self.function_cache.call(
                             'PyInt_FromString', arg1,
-                            nodes.const(0, Py_ssize_t), arg2)),
+                            nodes.NULL, arg2)),
                     dst_type=dst_type)
             return None
 
@@ -274,22 +291,6 @@ class NumpyMixin(object):
 
         return dtype
 
-    def _parse_args(self, call_node, arg_names):
-        result = dict.fromkeys(arg_names)
-
-        # parse positional arguments
-        for i, (arg_name, arg) in enumerate(zip(arg_names, call_node.args)):
-            result[arg_name] = arg
-
-        arg_names = arg_names[i:]
-        if arg_names:
-            # parse keyword arguments
-            for keyword in call_node.keywords:
-                if keyword.arg in result:
-                    result[keyword.arg] = keyword.value
-
-        return result
-
     def _resolve_empty_like(self, node):
         "Parse the result type for np.empty_like calls"
         args = node.args
@@ -323,7 +324,7 @@ class NumpyMixin(object):
             return dtype.resolve()[:]
 
     def _resolve_empty(self, node):
-        args = self._parse_args(node, ['shape', 'dtype', 'order'])
+        args = _parse_args(node, ['shape', 'dtype', 'order'])
         if not args['shape'] or not args['dtype']:
             return None
 
@@ -358,8 +359,9 @@ class NumpyMixin(object):
 
         return result_type
 
+
 class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
-                  NumpyMixin, transforms.MathMixin):
+                  NumpyMixin, closure.ClosureMixin, transforms.MathMixin):
     """
     Type inference. Initialize with a minivect context, a Python ast,
     and a function type with a given or absent, return type.
@@ -369,7 +371,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     See transform.py for an overview of AST transformations.
     """
 
-    def __init__(self, context, func, ast, locals, **kwds):
+    def __init__(self, context, func, ast, locals, closure_scope=None, **kwds):
         super(TypeInferer, self).__init__(context, func, ast, **kwds)
 
         self.locals = locals or {}
@@ -381,6 +383,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.return_variables = []
         self.return_type = None
 
+        ast.symtab = self.symtab
+        self.closure_scope = closure_scope
+        ast.closure_scope = closure_scope
+        ast.closures = []
+
     def infer_types(self):
         """
         Infer types for the function.
@@ -390,7 +397,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.return_variable = Variable(None)
         self.ast = self.visit(self.ast)
 
-        self.return_type = self.return_variable.type
+        self.return_type = self.return_variable.type or void
         ret_type = self.func_signature.return_type
 
         if ret_type and ret_type != self.return_type:
@@ -431,7 +438,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         arg_types = self.func_signature.args
         for i, arg_type in enumerate(arg_types):
             varname = self.local_names[i]
-            self.symtab[varname] = Variable(arg_type, is_local=True, name=varname)
+            self.symtab[varname] = Variable(arg_type, is_local=True,
+                                            name=varname)
 
         for varname in self.local_names[len(arg_types):]:
             self.symtab[varname] = Variable(None, is_local=True, name=varname)
@@ -644,6 +652,17 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if (variable.type is None and variable.is_local and
                     isinstance(node.ctx, ast.Load)):
                 raise UnboundLocalError(variable.name)
+        elif (self.closure_scope and node.id in self.closure_scope and not
+                  self.is_store(node.ctx)):
+            closure_var = self.closure_scope[node.id]
+            closure_var.is_cellvar = True
+
+            variable = Variable.from_variable(closure_var)
+            variable.is_local = False
+            variable.is_cellvar = False
+            variable.is_freevar = True
+            variable.promotable_type = False
+            self.symtab[node.id] = variable
         else:
             variable = self.init_global(node.id)
 
@@ -1040,6 +1059,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             no_keywords()
             new_node = self._resolve_method_calls(func_type, new_node, node)
 
+        elif func_type.is_closure:
+            # Call to closure/inner function
+            return nodes.ClosureCallNode(func_type, node)
+
         elif func_type.is_ctypes_function:
             # Call to ctypes function
             no_keywords()
@@ -1050,6 +1073,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif func_type.is_cast:
             # Call of a numba type, like double(value)
             no_keywords()
+            if not node.args:
+                raise error.NumbaError(node, "Expected one argument for cast")
             new_node = nodes.CoercionNode(node.args[0], func_type.dst_type,
                                           name="cast")
 

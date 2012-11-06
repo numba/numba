@@ -12,9 +12,16 @@ from numba import error
 import logging
 logger = logging.getLogger(__name__)
 
-class NumbaVisitorMixin(object):
+class CooperativeBase(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+class NumbaVisitorMixin(CooperativeBase):
     def __init__(self, context, func, ast, func_signature=None, nopython=0,
-                 symtab=None):
+                 symtab=None, **kwargs):
+        super(NumbaVisitorMixin, self).__init__(
+                                context, func, ast, func_signature,
+                                nopython, symtab, **kwargs)
         self.context = context
         self.ast = ast
         self.function_cache = context.function_cache
@@ -25,10 +32,18 @@ class NumbaVisitorMixin(object):
         self.func = func
         self.fco = func.func_code
         self.names = self.global_names = self.fco.co_names
-        self.varnames = self.local_names = self.fco.co_varnames
+        self.varnames = self.local_names = list(self.fco.co_varnames)
+        if self.fco.co_cellvars:
+            self.varnames.extend(cellvar for cellvar in self.fco.co_cellvars
+                                     if cellvar not in self.varnames)
         self.constants = self.fco.co_consts
         self.costr = func.func_code.co_code
         self.argnames = self.fco.co_varnames[:self.fco.co_argcount]
+
+        if self.is_closure(func_signature):
+            from numba import closure
+            self.argnames = (closure.CLOSURE_SCOPE_ARG_NAME,) + self.argnames
+            self.varnames.append(closure.CLOSURE_SCOPE_ARG_NAME)
 
         # Just the globals we will use
         self._myglobals = {}
@@ -39,6 +54,11 @@ class NumbaVisitorMixin(object):
                 # Assumption here is that any name not in globals or
                 # builtins is an attribtue.
                 self._myglobals[name] = getattr(builtins, name, None)
+
+    def is_closure(self, func_signature):
+        return (func_signature is not None and
+                func_signature.args and
+                func_signature.args[0].is_closure_scope)
 
     def error(self, node, msg):
         raise error.NumbaError(node, msg)
@@ -78,7 +98,7 @@ class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
     def visitlist(self, list):
         return [self.visit(item) for item in list]
 
-class NumbaTransformer(ast.NodeTransformer, NumbaVisitorMixin):
+class NumbaTransformer(NumbaVisitorMixin, ast.NodeTransformer):
     "Mutating visitor"
 
 class NoPythonContextMixin(object):
