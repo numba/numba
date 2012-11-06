@@ -1,4 +1,3 @@
-
 import ast
 import __builtin__ as builtins
 try:
@@ -17,6 +16,7 @@ class CooperativeBase(object):
         pass
 
 class NumbaVisitorMixin(CooperativeBase):
+    _overloads = None
     def __init__(self, context, func, ast, func_signature=None, nopython=0,
                  symtab=None, **kwargs):
         super(NumbaVisitorMixin, self).__init__(
@@ -54,6 +54,34 @@ class NumbaVisitorMixin(CooperativeBase):
                 # Assumption here is that any name not in globals or
                 # builtins is an attribtue.
                 self._myglobals[name] = getattr(builtins, name, None)
+
+        if self._overloads:
+            self.visit = self._visit_overload
+
+    def _visit_overload(self, node):
+        assert self._overloads
+
+        try:
+            return super(NumbaVisitorMixin, self).visit(node)
+        except error.NumbaError, e:
+            # Try one of the overloads
+            cls_name = type(node).__name__
+            for i, cls_name in enumerate(self._overloads):
+                for overload_name, func in self._overloads[cls_name]:
+                    try:
+                        return func(self, node)
+                    except error.NumbaError, e:
+                        if i == len(self._overloads) - 1:
+                            raise
+
+        assert False, "unreachable"
+
+    def add_overload(self, visit_name, func):
+        assert visit_name.startswith("visit_")
+        if not self._overloads:
+            self._overloads = {}
+
+        self._overloads.setdefault(visit_name, []).append(func)
 
     def is_closure(self, func_signature):
         return (func_signature is not None and

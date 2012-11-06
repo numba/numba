@@ -584,7 +584,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return rhs_node
 
-    def _get_iterator_type(self, iterator_type):
+    def _get_iterator_type(self, node, iterator_type):
         "Get the type of an iterator Variable"
         if iterator_type.is_iterator:
             base_type = iterator_type.base_type
@@ -600,7 +600,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             base_type = numba_types.Py_ssize_t
         else:
             raise error.NumbaError(
-                node, "Cannot iterate over object of type %s" % (iterator_type,))
+                node, "Cannot iterate over value of type %s" % (iterator_type,))
 
         return base_type
 
@@ -616,7 +616,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         node.target = self.visit(node.target)
         node.iter = self.visit(node.iter)
-        base_type = self._get_iterator_type(node.iter.variable.type)
+        base_type = self._get_iterator_type(node.iter, node.iter.variable.type)
         node.target = self.assign(node.target.variable, Variable(base_type),
                                   node.target)
 
@@ -683,7 +683,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             variable = self.init_global(node.id)
 
         if variable.type:
-            if variable.type.is_global or variable.type.is_module:
+            if variable.type.is_global: # or variable.type.is_module:
                 # TODO: look up globals in dict at call time
                 obj = self.func.func_globals[node.name]
                 if not functions.is_numba_func(obj):
@@ -1110,6 +1110,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def _resolve_module_attribute(self, node, type):
         "Resolve attributes of the numpy module or a submodule"
         attribute = getattr(type.module, node.attr)
+
+        result_type = None
         if attribute is numpy.newaxis:
             result_type = numba_types.NewAxisType()
         elif type.is_numpy_module or type.is_numpy_attribute:
@@ -1117,7 +1119,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                                          attr=node.attr)
         elif type.is_numba_module:
             result_type = self.context.typemapper.from_python(attribute)
-        else:
+            if result_type == object_:
+                result_type = None
+
+        if result_type is None:
             result_type = numba_types.ModuleAttributeType(module=type.module,
                                                           attr=node.attr)
 

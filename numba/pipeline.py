@@ -38,6 +38,9 @@ class Pipeline(object):
         'codegen',
     ]
 
+    mixins = {}
+    _current_pipeline_stage = None
+
     def __init__(self, context, func, ast, func_signature,
                  nopython=False, locals=None, order=None, codegen=False,
                  symtab=None, **kwargs):
@@ -71,12 +74,34 @@ class Pipeline(object):
             self.order = order
 
     def make_specializer(self, cls, ast, **kwds):
+        "Create a visitor or transform and add any mixins"
+        if self._current_pipeline_stage in self.mixins:
+            before, after = self.mixins[self._current_pipeline_stage]
+            classes = tuple(before + [cls] + after)
+            name = '__'.join(cls.__name__ for cls in classes)
+            cls = type(name, classes, {})
+
         return cls(self.context, self.func, ast,
                    func_signature=self.func_signature, nopython=self.nopython,
                    symtab=self.symtab, **kwds)
 
     def insert_specializer(self, name, after):
-        self.order.insert(self.order.index(after), name)
+        "Insert a new transform or visitor into the pipeline"
+        self.order.insert(self.order.index(after) + 1, name)
+
+    def try_insert_specializer(self, name, after):
+        if name in self.order:
+            self.insert_specializer(name, after)
+
+    @classmethod
+    def add_mixin(cls, pipeline_stage, transform, before=False):
+        before_mixins, after_mixins = cls.mixins.get(pipeline_stage, ([], []))
+        if before:
+            before_mixins.append(transform)
+        else:
+            after_mixins.append(transform)
+
+        cls.mixins[pipeline_stage] = before_mixins, after_mixins
 
     def run_pipeline(self):
         ast = self.ast
@@ -84,6 +109,8 @@ class Pipeline(object):
             if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
                 stage_tuple = (method_name, utils.ast2tree(ast))
                 logger.debug(pprint.pformat(stage_tuple))
+
+            self._current_pipeline_stage = method_name
             ast = getattr(self, method_name)(ast)
 
         return self.func_signature, self.symtab, ast

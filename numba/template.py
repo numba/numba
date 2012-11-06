@@ -1,6 +1,9 @@
+import re
 import ast
+import string
 import types
 import ctypes
+import textwrap
 
 import numba.decorators, numba.pipeline, numba.functions
 from numba import *
@@ -22,10 +25,13 @@ class TempName(object):
         self._count += 1
         return self._count
 
-    def __str__(self, name):
-        return '__numba_%s_temp%d_' % (name, self.count())
+    def temp_name(self, name):
+        return '__numba_%s_temp%d' % (name, self.count())
 
 _temp_name = TempName()
+
+def temp_name(name=''):
+    return _temp_name.temp_name(name)
 
 class TemplateVariable(Variable):
     """
@@ -34,32 +40,77 @@ class TemplateVariable(Variable):
     table is updated. The default 'code' is a temporary variable name.
     """
 
-    def __init__(self, type, name, code, codelist, **kwargs):
+    def __init__(self, type, name, temp_name=None, code=False, **kwargs):
         super(TemplateVariable, self).__init__(type, name=name, **kwargs)
-        self.code = code
-        self.codes = []
+        self.temp_name = temp_name
+        if not temp_name:
+            assert code
+            self.codes = []
 
     def __str__(self):
-        if self.codes:
-            return "\n".join(self.codes)
+        if self.temp_name:
+            return self.temp_name
 
-        return self.code
-
-    @property
-    def temp_name(self):
-        assert not self.codes
-        return self.code
+        return "\n".join(self.codes)
 
     @property
     def node(self):
-        return ast.Name(self.temp_name, ast.Load())
+        node = ast.Name(self.temp_name, ast.Load())
+        node.type = self.type
+        node.variable = self
+        return node
 
-def temp_name(name=''):
-    return _temp_name.temp_name(name)
+class TemplateContext(object):
 
-def temp_var(name, type=None, code=None):
-    return TemplateVariable(name, type, is_local=True,
-                            code=code or temp_name(name))
+    def __init__(self, context, template):
+        self.context = context
+        self.template = template
+        self.variables = []
+        self.nodes = {}
+
+        self.substituted_template = None
+
+    def temp_var(self, name, type=None, code=False):
+        var = TemplateVariable(name=name, type=type, is_local=True,
+                               temp_name=not code and temp_name(name),
+                               code=code)
+        self.variables.append(var)
+        return var
+
+    def code_var(self, name):
+        return self.temp_var(name, code=True)
+
+    def temp_vars(self, *names):
+        for name in names:
+            yield self.temp_var(name)
+
+    def code_vars(self, *names):
+        for name in names:
+            yield self.code_var(name)
+
+    def string_substitute(self, s):
+        if self.variables:
+            d = dict((var.name, str(var)) for var in self.variables)
+            s = string.Template(s).substitute(d)
+
+        return s
+
+    def template_type_infer(self, substitutions, **kwargs):
+        s = textwrap.dedent(self.template)
+        s = self.string_substitute(s)
+        # print s
+        self.substituted_template = s
+
+        symtab = kwargs.get('symtab', None)
+        if self.variables or symtab:
+            vars = dict((var.name, Variable(name=var.name, is_local=True,
+                                            type=var.type))
+                            for var in self.variables if var.type)
+            kwargs['symtab'] = dict(symtab or {}, **vars)
+
+        tree = template(s, substitutions)
+        return dummy_type_infer(self.context, tree, **kwargs)
+
 
 def dummy_type_infer(context, tree, order=['type_infer', 'type_set'], **kwargs):
     def dummy():
@@ -67,26 +118,12 @@ def dummy_type_infer(context, tree, order=['type_infer', 'type_set'], **kwargs):
     return numba.pipeline.run_pipeline(context, dummy, tree, void(),
                                        order=order, **kwargs)
 
-def template_type_infer(context, s, substitutions, variables, **kwargs):
-    symtab = kwargs.get('symtab', None)
-    if variables or symtab:
-        variables = variables or {}
-        vars = [(name, Variable(var.name, is_local=True, type=var.type))
-                    for var in variables if var.type]
-        kwargs['symtab'] = dict(symtab or {}, **vars)
-
-    if variables:
-        d = dict((var.name, var.code) for var in variables)
-        s = s % d
-
-    tree = template(s, substitutions)
-    return dummy_type_infer(context, tree, **kwargs)
-
 def template(s, substitutions):
+    s = textwrap.dedent(s)
     replaced = [0]
     def replace(ident):
         replaced[0] += 1
-        return '%s_%s' % (prefix, ident.group(1))
+        return '%s%s' % (prefix, ident.group(1))
 
     source = re.sub('{{(.*?)}}', replace, s)
     tree = ast.parse(source)
