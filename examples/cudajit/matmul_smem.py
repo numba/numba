@@ -23,8 +23,7 @@ def cu_square_matrix_mul(A, B, C):
     x = tx + bx * bw
     y = ty + by * bh
 
-    if x < n and y < n:
-        C[y, x] = 0
+    acc = 0.
     for i in range(bpg):
         if x < n and y < n:
             sA[ty, tx] = A[y, tx + i * tpb]
@@ -34,9 +33,12 @@ def cu_square_matrix_mul(A, B, C):
 
         if x < n and y < n:
             for j in range(tpb):
-                C[y, x] += sA[ty, j] * sB[j, tx]
+                acc += sA[ty, j] * sB[j, tx]
 
         cuda.syncthreads()
+
+    if x < n and y < n:
+        C[ty, tx] = acc
 
 A = np.array(np.random.random((n, n)), dtype=np.float32)
 B = np.array(np.random.random((n, n)), dtype=np.float32)
