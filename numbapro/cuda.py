@@ -347,12 +347,12 @@ class CudaNumbaFunction(CudaBaseFunction):
         pmb = _lp.PassManagerBuilder.new()
         pmb.opt_level = 2 # O3 causes bar.sync to be duplicated in unrolled loop
         pm = _lp.PassManager.new()
-#        pmb.populate(pm)
+        pmb.populate(pm)
         pm.run(self.module)
 #        print self.module
         # generate ptx
         self._ptxasm = nvvm.llvm_to_ptx(str(self.module), arch=arch)
-        print self._ptxasm
+        
         from numbapro import _cudadispatch
         self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(self._ptxasm,
                                                                 func_name,
