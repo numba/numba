@@ -1158,8 +1158,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 raise error.NumbaError("Unsupported binary operation "
                                        "for complex numbers: %s" % opname)
         else:
-            logging.debug('Unrecognized node type "%s"' % node.type)
-            logging.debug(ast.dump(node))
+            logger.debug('Unrecognized node type "%s"' % node.type)
+            logger.debug(ast.dump(node))
             raise error.NumbaError(
                     node, "Binary operations %s on values typed %s and %s "
                           "not (yet) supported)" % (self.opname(op),
