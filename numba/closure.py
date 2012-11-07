@@ -68,8 +68,6 @@ class ClosureMixin(object):
     do not recurse into the inner functions themselves!
     """
 
-    function_level = 0
-
     def _visit_func_children(self, node):
         self.function_level += 1
         self.generic_visit(node)
@@ -453,15 +451,6 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         """
         Compile the inner function.
         """
-        closure_scope = self.ast.cur_scope
-
-        if closure_scope is None:
-            closure_scope = nodes.NULL
-            scope_type = void.pointer()
-        else:
-            assert node.func_def.args.args[0].variable.type
-            scope_type = closure_scope.type
-
         # Compile inner function, skip type inference
         order = numba.pipeline.Pipeline.order
         order = order[order.index('type_infer') + 1:]
@@ -473,6 +462,25 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
 
         node.lfunc = p.translator.lfunc
         node.lfunc_pointer = p.translator.lfunc_pointer
+
+        if node.need_numba_func:
+            return self.create_numba_function(node, p)
+        else:
+            func_name = node.func_def.name
+            self.symtab[func_name] = Variable(name=func_name, type=node.type,
+                                              is_local=True)
+            return ast.Pass()
+
+    def create_numba_function(self, node, p):
+        closure_scope = self.ast.cur_scope
+
+        if closure_scope is None:
+            closure_scope = nodes.NULL
+            scope_type = void.pointer()
+        else:
+            assert node.func_def.args.args[0].variable.type
+            scope_type = closure_scope.type
+
         node.wrapper_func, node.wrapper_lfunc, methoddef = (
                     p.translator.build_wrapper_function(get_lfunc=True))
 

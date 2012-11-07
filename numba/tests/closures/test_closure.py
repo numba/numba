@@ -239,6 +239,19 @@ __doc__ += """
 10
 """
 
+@autojit
+def objects(s):
+    @jit('object_()')
+    def inner():
+        return s.upper()
+    return inner
+
+__doc__ += """
+>>> objects("hello")()
+'HELLO'
+"""
+
 if __name__ == '__main__':
+#    print objects("hello")
     import doctest
     doctest.testmod()

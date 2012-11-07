@@ -394,11 +394,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         ast.closure_scope = closure_scope
         ast.closures = []
 
+        self.function_level = kwds.get('function_level', 0)
+        self.init_locals()
+
     def infer_types(self):
         """
         Infer types for the function.
         """
-        self.init_locals()
+#        self.init_locals()
 
         self.return_variable = Variable(None)
         self.ast = self.visit(self.ast)
@@ -1156,7 +1159,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     node, "Struct %s has no field %r" % (type, node.attr))
 
         if isinstance(node.ctx, ast.Store):
-            if not isinstance(node.value, (ast.Name, ast.Subscript)):
+            if not isinstance(node.value, (ast.Name, ast.Subscript,
+                                           nodes.StructVariable)):
                 raise error.NumbaError(
                         node, "Can only assign to struct attributes of "
                               "variables or array indices")
@@ -1195,6 +1199,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             return self._resolve_extension_attribute(node, type)
         else:
             # use PyObject_GetAttrString
+            node.value = nodes.CoercionNode(node.value, object_)
             result_type = object_
 
         node.variable = Variable(result_type)
@@ -1202,7 +1207,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return node
 
     def visit_ClosureScopeLoadNode(self, node):
-        return node.type
+        return node
 
     def visit_Return(self, node):
         if node.value is not None:

@@ -876,8 +876,7 @@ class ClosureNode(Node):
         self.type = closure_type
         self.outer_py_func = outer_py_func
 
-        # self.make_pyfunc()
-
+        self.need_numba_func = getattr(func_def, 'need_closure_wrapper', True)
         self.lfunc = None
         self.wrapper_func = None
         self.wrapper_lfunc = None
@@ -890,10 +889,6 @@ class ClosureNode(Node):
         # self.scope_type = None
         self.ext_type = None
         self.need_closure_scope = False
-
-        # variables we need to put in a closure scope for our inner functions
-        # This is set on the FunctionDef node
-        # self.cellvars = None
 
     def make_pyfunc(self):
         d = self.outer_py_func.func_globals
@@ -932,7 +927,7 @@ class InstantiateClosureScope(Node):
 class ClosureScopeLoadNode(Node):
     "Load the closure scope for the function or NULL"
 
-    type = object_
+    type = void.pointer()
 
 class ClosureCallNode(NativeCallNode):
     """
