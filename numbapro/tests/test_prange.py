@@ -31,18 +31,33 @@ NumbaError: 21:8: Reduction variable 'sum' must be initialized before the loop
 
 @autojit
 def prange_reduction_and_privates():
-    sum = 0.0
+    sum = 10.0
     for i in numba.prange(10):
         j = i * 2
-        sum += i
+        sum += j
 
     return sum
 
 __doc__ += """
 >>> prange_reduction_and_privates()
+100.0
+"""
+
+@autojit
+def prange_privates_error():
+    sum = 10.0
+    for i in numba.prange(10):
+        j = i * 2
+        sum += j
+
+    return sum
+
+__doc__ += """
+>> prange_privates_error()
 """
 
 if __name__ == '__main__':
-    prange_reduction_and_privates()
+#    prange_reduction_and_privates()
+#    prange_reduction()
     import doctest
     doctest.testmod()

@@ -67,7 +67,7 @@ def outline_prange_body(context, outer_py_func, outer_symtab, subnode, **kwargs)
     # of private variables as argument
     for i, (name, type) in enumerate(fields):
         if type is None:
-            fields[i] = name, numba_types.DeferredType()
+            fields[i] = name, numba_types.DeferredType(name)
 
     privates_struct_type = numba.struct(fields)
     privates_struct = ast.Name('__numba_privates', ast.Param())
@@ -337,6 +337,9 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
                                               contexts, temp_i, name))
                 # reductions.codes.append('print "%s:", %s' % (name, name))
             else:
+                if type.is_deferred:
+                    self.symtab.pop(name)
+                    continue
                 default = name
                 unpack_struct.codes.append(
                         "%s = %s.%s" % (name, lastprivates_struct, name))
@@ -408,6 +411,7 @@ class PrangeCodegenMixin(object):
         self.builder.call(lfunc_run, [contexts, num_threads])
         return None
 
+_count = 0
 def get_threadpool_funcs(context, ee, context_struct_type, target_name,
                          lfunc, signature, num_threads):
     """
@@ -419,6 +423,9 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
         context_struct_type:
             the struct type holding all private and reduction variables
     """
+    global _count
+    _count += 1
+
     context_cbuilder_type = builder.CStruct.from_numba_struct(
                                     context, context_struct_type)
     context_p_ltype = context_struct_type.pointer().to_llvm(context)
@@ -432,7 +439,7 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
                 worker(closure_scope, privates)
         """
 
-        _name_ = "prange_kernel_wrapper"
+        _name_ = "prange_kernel_wrapper_%d" % _count
         _argtys_ = [
             ('context', C.void_p),
         ]
@@ -463,12 +470,9 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
 
             self.ret()
 
-        def specialize(self):
-            self.specialize_name()
-
     class RunThreadPool(CDefinition, parallel.ParallelUFuncPosixMixin):
 
-        _name_ = "invoke_prange"
+        _name_ = "invoke_prange_%d" % _count
         _argtys_ = [
             ('contexts', context_p_ltype),
             ('num_threads', C.int),
@@ -481,12 +485,10 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
             self._dispatch_worker(callback, contexts,  num_threads)
             self.ret()
 
-        def specialize(self):
-            self.specialize_name()
-
     wrapper_lfunc = KernelWrapper()(lfunc.module)
     # print wrapper_lfunc
-    run_threadpool_lfunc = RunThreadPool()(lfunc.module)
+    run_threadpool_def = RunThreadPool()
+    run_threadpool_lfunc = run_threadpool_def(lfunc.module)
     return wrapper_lfunc, run_threadpool_lfunc
 
 def prange(start=0, stop=None, step=1):
