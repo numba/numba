@@ -670,8 +670,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         variable = self.symtab.get(node.id)
         if variable:
             # local variable
-            if (variable.type is None and variable.is_local and
-                    isinstance(node.ctx, ast.Load)):
+            if ((variable.type is None or variable.type.is_deferred) and
+                    variable.is_local and isinstance(node.ctx, ast.Load)):
                 raise UnboundLocalError(variable.name)
         elif (self.closure_scope and node.id in self.closure_scope and not
                   self.is_store(node.ctx)):
@@ -687,7 +687,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         else:
             variable = self.init_global(node.id)
 
-        if variable.type:
+        if variable.type and not variable.type.is_deferred:
             if variable.type.is_global: # or variable.type.is_module:
                 # TODO: look up globals in dict at call time
                 obj = self.func.func_globals[node.name]

@@ -106,7 +106,7 @@ class TemplateContext(object):
         s = textwrap.dedent(self.templ)
         s = self.string_substitute(s)
 
-        print s
+        # print s
         self.substituted_template = s
 
         tree = template(s, substitutions)

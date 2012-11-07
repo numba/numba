@@ -11,7 +11,7 @@ def print_(value):
 
 @autojit(backend='ast', nopython=True)
 def print_nopython(value):
-    print value
+    print "value", value
 
 @autojit(backend='ast')
 def print_to_stream(stream, value):

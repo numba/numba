@@ -329,6 +329,10 @@ class ClosureScopeType(ExtensionType):
             self.scope_prefix = self.parent_scope.scope_prefix + "0"
 
 
+class DeferredType(NumbaType):
+    is_deferred = True
+    rank = 1
+
 tuple_ = TupleType()
 phi = PHIType()
 none = NoneType()
@@ -419,6 +423,8 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             type = copy.copy(array_type)
             type.dtype = self.promote_types(array_type.dtype, other_type)
             return type
+        elif type1.is_deferred or type2.is_deferred:
+            return [type1, type2][type2.is_deferred]
 
         return super(NumbaTypeMapper, self).promote_types(type1, type2)
 

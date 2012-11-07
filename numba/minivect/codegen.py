@@ -69,14 +69,14 @@ def get_printf_specifier(type):
         if type.is_int or type.is_float:
             format = {
                 minitypes.int_: "%i",
-                minitypes.long_: "%l",
-                minitypes.longlong: "%ll",
+                minitypes.long_: "%ld",
+                minitypes.longlong: "%lld",
                 minitypes.uint: "%u",
                 minitypes.ulong: "%lu",
                 minitypes.ulonglong: "%llu",
                 minitypes.float_: "%f",
                 minitypes.double: "%lf",
-            }.get(type, ["%ll", "%lf"][type.is_float])
+            }.get(type, ["%lld", "%lf"][type.is_float])
     elif type.is_c_string:
         format = "%s"
 

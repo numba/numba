@@ -479,6 +479,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # Try to find the function of the specified name in the current module.
         # If it is found, we can return immediately.
         # Otherwise, continue to translate.
+        self.lfunc = None
         try:
             self.lfunc = self.mod.get_function_named(self.func_name)
         except llvm.LLVMException:
@@ -522,7 +523,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 fp.run(self.lfunc)
         except:
             # Delete the function to prevent an invalid function from living in the module
-            self.lfunc.delete()
+            if self.lfunc is not None:
+                self.lfunc.delete()
             raise
 
     def get_ctypes_func(self, llvm=True):
