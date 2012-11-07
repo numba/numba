@@ -398,9 +398,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
                                           self.func_signature.args):
             larg.name = argname
+            variable = self.symtab[argname]
+
+            if not variable.need_arg_copy:
+                assert not is_obj(argtype)
+                variable.lvalue = larg
+                continue
 
             # Store away arguments in locals
-            variable = self.symtab[argname]
             stackspace = self._allocate_arg_local(argname, argtype, larg)
             variable.lvalue = stackspace
 
