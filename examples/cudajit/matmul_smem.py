@@ -38,7 +38,7 @@ def cu_square_matrix_mul(A, B, C):
         cuda.syncthreads()
 
     if x < n and y < n:
-        C[ty, tx] = acc
+        C[y, x] = acc
 
 A = np.array(np.random.random((n, n)), dtype=np.float32)
 B = np.array(np.random.random((n, n)), dtype=np.float32)
@@ -67,16 +67,15 @@ Cans = Amat * Bmat
 e = time()
 tcpu = e - s
 
+print 'cpu:  %f' % tcpu
+print 'cuda: %f' % tcuda
+print 'cuda speedup: %.2fx' % (tcpu / tcuda)
+
 # Check result
-np.allclose(C, Cans)
+assert np.allclose(C, Cans)
 #relerr = lambda got, gold: abs(got - gold)/gold
 #for y in range(n):
 #    for x in range(n):
 #        err = relerr(C[y, x], Cans[y, x])
 #        assert err < 1e-5, (x, y, err)
-
-print 'cpu:  %f' % tcpu
-print 'cuda: %f' % tcuda
-print 'cuda speedup: %.2fx' % (tcpu / tcuda)
-
 

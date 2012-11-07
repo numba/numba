@@ -57,7 +57,7 @@ e = time()
 tcpu = e - s
 
 # Check result
-np.allclose(C, Cans)
+assert np.allclose(C, Cans)
 #relerr = lambda got, gold: abs(got - gold)/gold
 #for y in range(n):
 #    for x in range(n):
