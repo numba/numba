@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # TODO: Create a subclass of
-# numba.llnumba.byte_translator.LLVMTranslator that does macro
+# llpython.byte_translator.LLVMTranslator that does macro
 # expansion.
 
 def c_string_slice_2 (func_cache, builder, c_string, lb, ub = None):

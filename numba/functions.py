@@ -6,7 +6,7 @@ from . import naming
 from .minivect import minitypes
 import numba.ast_translate as translate
 from numba import nodes
-from numba.llnumba.byte_translator import LLVMTranslator
+from llpython.byte_translator import LLVMTranslator
 
 import logging
 import traceback
