@@ -430,6 +430,8 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
                                     context, context_struct_type)
     context_p_ltype = context_struct_type.pointer().to_llvm(context)
 
+    lobject = object_.to_llvm(context)
+
     class KernelWrapper(CDefinition):
         """
         Implements a prange kernel wrapper that is invoked in each thread.
@@ -462,7 +464,7 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
 
                 worker = CFunc(self, lfunc)
                 if signature.args[0].is_closure_scope:
-                    worker(context.__numba_closure, context_p)
+                    worker(gf('closure_scope').cast(lobject), context_p)
                 else:
                     worker(context_p)
 

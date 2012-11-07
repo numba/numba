@@ -56,8 +56,22 @@ __doc__ += """
 >> prange_privates_error()
 """
 
+@autojit
+def prange_shared_privates_reductions(shared):
+    sum = 10.0
+
+    for i in numba.prange(10):
+        j = i * shared
+        sum += j
+
+    shared = 3.0
+    return sum
+
+__doc__ += """
+>>> prange_shared_privates_reductions(2.0)
+100.0
+"""
+
 if __name__ == '__main__':
-#    prange_reduction_and_privates()
-#    prange_reduction()
     import doctest
     doctest.testmod()
