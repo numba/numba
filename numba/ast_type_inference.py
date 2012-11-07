@@ -576,6 +576,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return node
 
     def assign(self, lhs_var, rhs_var, rhs_node):
+        if lhs_var.type and lhs_var.type.is_deferred:
+            # TODO: complete this
+            if lhs_var.type.resolved_type:
+                lhs_var.type = lhs_var.type.resolved_type
+            else:
+                lhs_var.type.resolved_type = rhs_var.type
+                lhs_var.type = rhs_var.type
+
         if lhs_var.type is None:
             lhs_var.type = rhs_var.type
         elif lhs_var.type != rhs_var.type:
@@ -1264,6 +1272,9 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
     def visit(self, node):
         if hasattr(node, 'variable'):
             node.type = node.variable.type
+            if node.type.is_deferred:
+                assert node.type.resolved_type, node.type
+                node.type = node.type.resolved_type
         return super(TypeSettingVisitor, self).visit(node)
 
     def visit_ExtSlice(self, node):

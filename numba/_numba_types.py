@@ -332,6 +332,20 @@ class ClosureScopeType(ExtensionType):
 class DeferredType(NumbaType):
     is_deferred = True
     rank = 1
+    resolved_type = None
+
+    def __init__(self, name, **kwds):
+        super(DeferredType, self).__init__(**kwds)
+        self.name = name
+        self.candidates = []
+
+    def __str__(self):
+        return "<deferred(%s)>" % self.name
+
+    def to_llvm(self, context):
+        assert self.resolved_type, self
+        return self.resolved_type.to_llvm(context)
+
 
 tuple_ = TupleType()
 phi = PHIType()
