@@ -39,7 +39,7 @@ def jocabi_relax_core(A, Anew, error):
 
     cuda.syncthreads()
 
-    # sum-reduce err_sm vertically
+    # max-reduce err_sm vertically
     t = tpb // 2
     while t > 0:
         if ty < t:
@@ -47,7 +47,7 @@ def jocabi_relax_core(A, Anew, error):
         t //= 2
         cuda.syncthreads()
 
-    # sum-reduce err_sm horizontally
+    # max-reduce err_sm horizontally
     t = tpb // 2
     while t > 0:
         if tx < t and ty == 0:
