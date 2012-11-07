@@ -68,7 +68,7 @@ setup(
     license = "Proprietary",
     description = "compile Python code",
     ext_modules = ext_modules,
-    packages = ['numbapro', 'llvm_cbuilder', 'numbapro.vectorize',
+    packages = ['numbapro', 'numbapro.vectorize',
                 'numbapro._cuda',
                 'numbapro._utils',
                 'numbapro.tests',
