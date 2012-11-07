@@ -429,6 +429,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 if var.type.is_struct:
                     # TODO: memset struct to 0
                     pass
+                elif var.type.is_carray:
+                    ltype = var.type.base_type.pointer().to_llvm(self.context)
+                    pointer = self.builder.alloca(ltype, name=name + "_p")
+                    p = self.builder.gep(stackspace, [llvm_types.constant_int(0),
+                                                      llvm_types.constant_int(0)])
+                    self.builder.store(p, pointer)
+                    stackspace = pointer
 
                 var.lvalue = stackspace
 
@@ -1229,7 +1236,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         value = self.visit(node.value)
         index = self.visit(node.slice)
-        lptr = self.builder.gep(value, [index])
+        indices = [index]
+
+        lptr = self.builder.gep(value, indices)
         if node.slice.type.is_int:
             lptr = self._handle_ctx(node, lptr)
 

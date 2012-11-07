@@ -741,9 +741,6 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             node = nodes.CoercionNode(nodes.ObjectTempNode(node),
                                       dst_type = c_string_type)
             node = self.visit(node)
-        else:
-            # GEP only accepts int32 arguments
-            node.slice = self.visit(nodes.CoercionNode(node.slice, int32))
 
         return node
 
