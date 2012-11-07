@@ -9,6 +9,10 @@ from numba import *
 def print_(value):
     print value
 
+@autojit(backend='ast', nopython=True)
+def print_nopython(value):
+    print value
+
 @autojit(backend='ast')
 def print_to_stream(stream, value):
     print >>stream, value
@@ -44,4 +48,5 @@ class TestPrint(unittest.TestCase):
         assert data == "14.1", repr(data)
 
 if __name__ == "__main__":
+    print_nopython(10)
     unittest.main()

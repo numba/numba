@@ -90,7 +90,7 @@ if __debug__:
 import numba
 from numba import *
 from numba import error, closure
-from .minivect import minierror, minitypes
+from .minivect import minierror, minitypes, codegen
 from . import macros, utils, _numba_types as numba_types
 from .symtab import Variable
 from . import visitors, nodes, error, functions
@@ -556,10 +556,24 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             raise error.NumbaError(node, "Cannot construct object in "
                                          "nopython context")
 
-    def _print(self, value, dest=None):
+    def _print_nopython(self, value, dest=None):
+        if dest is not None:
+            raise error.NumbaError(dest, "No file may be given in nopython mode")
+
         stdin, stdout, stderr = stdio_util.get_stdio_streams()
         stdout = stdio_util.get_stream_as_node(stdout)
 
+        format = codegen.get_printf_specifier(value.type)
+        if format is None:
+            raise error.NumbaError(
+                value, "Printing values of type '%s' is not supported "
+                       "in nopython mode" % (value.type,))
+
+        return self.function_cache.call(
+                    'printf', nodes.const(format, c_string_type), value)
+
+
+    def _print(self, value, dest=None):
         signature, lfunc = self.function_cache.function_by_name(
                                                 'PyObject_CallMethod')
         if dest is None:
@@ -571,21 +585,23 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
     def visit_Print(self, node):
         if self.nopython:
-            raise error.NumbaError(node, "Cannot use print statement in "
-                                         "nopython context")
+            printfunc = self._print_nopython
+            dst_type = c_string_type
+        else:
+            printfunc = self._print
+            dst_type = object_
 
-        print_space = self._print(nodes.ObjectInjectNode(" "), node.dest)
+        print_space = printfunc(nodes.const(" ", dst_type), node.dest)
 
         result = []
         for value in node.values:
-            value = nodes.CoercionNode(value, object_, name="print_arg")
-            result.append(self._print(value, node.dest))
+            result.append(printfunc(value, node.dest))
             result.append(print_space)
 
         result.pop() # pop last space
 
         if node.nl:
-            result.append(self._print(nodes.ObjectInjectNode("\n"), node.dest))
+            result.append(printfunc(nodes.const("\n", dst_type), node.dest))
 
         return ast.Suite(body=self.visitlist(result))
 

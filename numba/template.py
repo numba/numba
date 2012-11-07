@@ -44,6 +44,7 @@ class TemplateVariable(Variable):
         super(TemplateVariable, self).__init__(type, name=name, **kwargs)
         self.temp_name = temp_name
         self.code = code
+        self.sep = "\n"
         if not temp_name:
             assert code
             self.codes = []
@@ -52,7 +53,7 @@ class TemplateVariable(Variable):
         if self.temp_name:
             return self.temp_name
 
-        return "\n".join(self.codes) or "pass"
+        return self.sep.join(self.codes) or "pass"
 
     @property
     def node(self):

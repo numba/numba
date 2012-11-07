@@ -103,6 +103,9 @@ class Node(ast.AST):
 
     variable = property(_variable_get, _variable_set)
 
+    def coerce(self, dst_type):
+        return CoercionNode(self, dst_type)
+
     @property
     def cloneable(self):
         return CloneableNode(self)
