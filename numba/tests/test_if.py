@@ -65,6 +65,11 @@ def if_fn_8(i, j):
         return 1
     return 0
 
+def if_fn_9(i, j, k):
+    if i or (j and k):
+        return 1
+    return 0
+
 # ______________________________________________________________________
 
 class TestIf(unittest.TestCase):
@@ -110,12 +115,11 @@ class TestIf(unittest.TestCase):
     def test_if_fn_6(self):
         if_fn_6c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_6)
 
-    @unittest.skip("Not generating the implicit != 0.")
     def test_if_fn_7(self):
         if_fn_7c = jit(restype=i4, argtypes=[i4], backend='ast')(if_fn_7)
         oracle = if_fn_7
         for i in range(-3, 3):
-            self.assertEqual(if_fn_5c(i), oracle(i))
+            self.assertEqual(if_fn_7c(i), oracle(i))
 
     def test_if_fn_8(self):
         if_fn_5c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_8)
@@ -124,6 +128,15 @@ class TestIf(unittest.TestCase):
             for j in range(-3, 3):
                 self.assertEqual(if_fn_5c(i, j), oracle(i, j))
 
+    def test_if_fn_9(self):
+        if_fn_5c = jit(restype=i4, argtypes=[i4, i4, i4], backend='ast')(
+            if_fn_9)
+        oracle = if_fn_9
+        for i in range(-2, 2):
+            for j in range(-2, 2):
+                for k in range(-2, 2):
+                    self.assertEqual(if_fn_5c(i, j, k), oracle(i, j, k))
+
 # ______________________________________________________________________
 
 if __name__ == "__main__":
@@ -131,4 +144,3 @@ if __name__ == "__main__":
 
 # ______________________________________________________________________
 # End of test_if.py
-

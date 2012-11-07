@@ -1242,6 +1242,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.value = value
         return node
 
+    def visit_If(self, node):
+        self.generic_visit(node)
+        node.test = nodes.CoercionNode(node.test, minitypes.bool_)
+        return node
+
     #
     ### Unsupported nodes
     #

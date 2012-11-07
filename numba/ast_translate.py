@@ -6,7 +6,7 @@ import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 
-from .llvm_types import    _int32, _intp, _LLVMCaster
+from .llvm_types import _int1, _int32, _intp, _LLVMCaster
 from .multiarray_api import MultiarrayAPI # not used
 from .symtab import Variable
 from . import _numba_types as _types
@@ -823,6 +823,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             raise error.NumbaError(node, "Looping over iterables")
 
+    def _generate_test(self, llval):
+        return self.builder.icmp(lc.ICMP_NE, llval,
+                                 lc.Constant.null(llval.type))
+
     def visit_BoolOp(self, node):
         # NOTE: Can have >2 values
         assert len(node.values) >= 2
@@ -839,6 +843,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
             for i in range(count):
                 value = self.visit(node.values[i])
+                if value.type != _int1:
+                    value = self._generate_test(value)
                 self.builder.cbranch(value, bb_next[i], bb_false)
                 self.builder.position_at_end(bb_next[i])
 
@@ -858,6 +864,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
             for i in range(count):
                 value = self.visit(node.values[i])
+                if value.type != _int1:
+                    value = self._generate_test(value)
                 self.builder.cbranch(value, bb_true, bb_next[i])
                 self.builder.position_at_end(bb_next[i])
 
@@ -871,7 +879,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             raise Exception("internal erorr")
 
-        booltype = lc.Type.int(1)
+        booltype = _int1
         phi = self.builder.phi(booltype)
         phi.add_incoming(lc.Constant.int(booltype, 1), bb_true)
         phi.add_incoming(lc.Constant.int(booltype, 0), bb_false)
@@ -944,6 +952,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_If(self, node):
         test = self.visit(node.test)
+        if test.type != _int1:
+            test = self._generate_test(test)
         iftrue_body = node.body
         orelse_body = node.orelse
 
@@ -1084,6 +1094,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # condition
         self.builder.position_at_end(bb_cond)
         cond = self.visit(node.test)
+        if cond.type != _int1:
+            cond = self._generate_test(cond)
         self.builder.cbranch(cond, bb_body, bb_exit)
 
         # body
