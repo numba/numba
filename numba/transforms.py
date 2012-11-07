@@ -716,6 +716,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             return self.visit(self._c_string_slice(node))
 
         # logging.debug(ast.dump(node))
+        # TODO: do this in the respective cases below when needed
         self.generic_visit(node)
 
         node_type = node.value.type
@@ -740,6 +741,9 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             node = nodes.CoercionNode(nodes.ObjectTempNode(node),
                                       dst_type = c_string_type)
             node = self.visit(node)
+        else:
+            # GEP only accepts int32 arguments
+            node.slice = self.visit(nodes.CoercionNode(node.slice, int32))
 
         return node
 
@@ -803,9 +807,12 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif is_obj(node.value.type):
-            new_node = self.function_cache.call(
-                                'PyObject_GetAttrString', node.value,
-                                nodes.ConstNode(node.attr))
+            if node.type.is_module_attribute:
+                new_node = nodes.ObjectInjectNode(node.type.value)
+            else:
+                new_node = self.function_cache.call(
+                                    'PyObject_GetAttrString', node.value,
+                                    nodes.ConstNode(node.attr))
             return self.visit(new_node)
 
         self.generic_visit(node)

@@ -587,7 +587,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return rhs_node
 
-    def _get_iterator_type(self, node, iterator_type):
+    def _get_iterator_type(self, node, iterator_type, target_type):
         "Get the type of an iterator Variable"
         if iterator_type.is_iterator:
             base_type = iterator_type.base_type
@@ -600,7 +600,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             else:
                 base_type = iterator_type.dtype
         elif iterator_type.is_range:
-            base_type = numba_types.Py_ssize_t
+            # base_type = target_type or Py_ssize_t
+            base_type = Py_ssize_t
         else:
             raise error.NumbaError(
                 node, "Cannot iterate over value of type %s" % (iterator_type,))
@@ -619,7 +620,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         node.target = self.visit(node.target)
         node.iter = self.visit(node.iter)
-        base_type = self._get_iterator_type(node.iter, node.iter.variable.type)
+        base_type = self._get_iterator_type(node.iter, node.iter.variable.type,
+                                            node.target.variable.type)
         node.target = self.assign(node.target.variable, Variable(base_type),
                                   node.target)
 
