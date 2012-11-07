@@ -3,7 +3,7 @@ import numpy as np
 import math
 from numba import *
 from numbapro import cuda
-import logging; logging.getLogger('numbapro').setLevel(1)
+#import logging; logging.getLogger('numbapro').setLevel(1)
 
 
 def cu_sqrt(A):

@@ -11,7 +11,7 @@ def cuda_sum(a, b, c):
 griddim = 50, 1
 blockdim = 32, 1, 1
 N = griddim[0] * blockdim[0]
-print "N"
+print "N", N
 cuda_sum_configured = cuda_sum.configure(griddim, blockdim)
 a = np.array(np.random.random(N), dtype=np.float32)
 b = np.array(np.random.random(N), dtype=np.float32)

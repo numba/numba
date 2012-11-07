@@ -4,7 +4,7 @@ import math
 from numba import *
 from numbapro._cuda import nvvm
 from llvm.core import *
-import logging; logging.getLogger().setLevel(1)
+#import logging; logging.getLogger().setLevel(1)
 
 class TestCudaInlineAsm(unittest.TestCase):
     def test_inline_rsqrt(self):
