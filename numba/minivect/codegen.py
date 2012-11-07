@@ -61,6 +61,8 @@ class CodeGenCleanup(CodeGen):
         pass
 
 def get_printf_specifier(type):
+    format = None
+
     if type.is_pointer:
         format = "%p"
     elif type.is_numeric:
@@ -77,8 +79,6 @@ def get_printf_specifier(type):
             }.get(type, ["%ll", "%lf"][type.is_float])
     elif type.is_c_string:
         format = "%s"
-    else:
-        format = None
 
     return format
 
