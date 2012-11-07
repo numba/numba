@@ -754,6 +754,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return result
 
+    def visit_StructVariable(self, node):
+        return self.visit(node.node)
+
     def visit_Assign(self, node):
         target_node = node.targets[0]
 

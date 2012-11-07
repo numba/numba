@@ -11,9 +11,18 @@ def struct_local():
     value.b = 10
     return value.a, value.b
 
+@autojit(backend='ast', locals=dict(value=struct(a=char.pointer(), b=int_)))
+def struct_local_inplace():
+    value.a = "foo"
+    value.b = 10
+    value.b += 10.0
+    return value.a, value.b
+
 def test_struct_locals():
     result = struct_local()
     assert result == ("foo", 10), result
+    result = struct_local_inplace()
+    assert result == ("foo", 20), result
 
 @autojit(backend='ast', locals=dict(value=struct(a=char.pointer(), b=int_)))
 def struct_indexing_strings():

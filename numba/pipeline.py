@@ -90,7 +90,7 @@ class Pipeline(object):
         self.order.insert(self.order.index(after) + 1, name)
 
     def try_insert_specializer(self, name, after):
-        if name in self.order:
+        if after in self.order:
             self.insert_specializer(name, after)
 
     @classmethod
@@ -131,7 +131,7 @@ class Pipeline(object):
     def type_infer(self, ast):
         type_inferer = self.make_specializer(
                     type_inference.TypeInferer, ast, locals=self.locals,
-                    closure_scope=self.kwargs.get('closure_scope', None))
+                    **self.kwargs)
         type_inferer.infer_types()
 
         self.func_signature = type_inferer.func_signature

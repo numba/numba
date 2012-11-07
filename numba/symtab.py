@@ -28,6 +28,7 @@ class Variable(object):
         self.is_local = is_local
         self.is_cellvar = False
         self.is_freevar = False
+        self.need_arg_copy = True
 
     def _type_get(self):
         return self._type
@@ -77,8 +78,6 @@ class Variable(object):
             args.append("is_freevar=True")
         if self.is_cellvar:
             args.append("is_cellvar=True")
-        if self.name:
-            args.append("name=%s" % self.name)
         if self.lvalue:
             args.append("llvm=%s" % (self.lvalue,))
 
@@ -87,4 +86,8 @@ class Variable(object):
         else:
             extra_info = ""
 
-        return '<Variable(type=%s%s)>' % (self.type, extra_info)
+        if self.name:
+            return "<Variable(name=%r, type=%s%s)>" % (self.name, self.type,
+                                                       extra_info)
+        else:
+            return "<Variable(type=%s%s)>" % (self.type, extra_info)

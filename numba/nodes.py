@@ -797,6 +797,24 @@ class StructAttribute(ExtTypeAttribute):
 
         self.type = self.attr_type
 
+class StructVariable(Node):
+    """
+    Tells the type inferencer that the node is actually a valid struct that
+    we can mutate. For instance
+
+        func().a = 2
+
+    is wrong if func() returns a struct by value. So we only allow references
+    like struct.a = 2 and array[i].a = 2.
+    """
+
+    _fields = ['node']
+
+    def __init__(self, node, **kwargs):
+        super(StructVariable, self).__init__(**kwargs)
+        self.node = node
+        self.type = node.type
+
 class ComplexNode(Node):
     _fields = ['real', 'imag']
     type = complex128

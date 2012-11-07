@@ -803,10 +803,10 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif is_obj(node.value.type):
-            node = self.function_cache.call(
+            new_node = self.function_cache.call(
                                 'PyObject_GetAttrString', node.value,
                                 nodes.ConstNode(node.attr))
-            return self.visit(node)
+            return self.visit(new_node)
 
         self.generic_visit(node)
         return node
