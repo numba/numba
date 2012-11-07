@@ -1225,10 +1225,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # That way, we don't have to deal with the PyObject reference.
             if self.return_variable.type is None:
                 self.return_variable.type = minitypes.VoidType()
-            node.value = None
+            value = None
         elif self.return_variable.type is None:
             self.return_variable.type = type
-            node.value = value
         elif self.return_variable.type != type:
             # todo: in case of unpromotable types, return object?
             self.return_variable.type = self.promote_types_numeric(
@@ -1238,9 +1237,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             #      with CoercionNode __new__.
             #      We go around the problem for test_if.test_if_fn_5
             #      by not visiting this block if return_variable.type == type.
-            node.value = nodes.DeferredCoercionNode(
-                            value, self.return_variable)
+            value = nodes.DeferredCoercionNode(value, self.return_variable)
 
+        node.value = value
         return node
 
     #

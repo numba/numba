@@ -55,6 +55,15 @@ def if_fn_6(i, j):
         return  #
     i += j
 
+def if_fn_7(i):
+    if i:
+        return i + 1
+    return i
+
+def if_fn_8(i, j):
+    if i > j:
+        return 1
+    return 0
 
 # ______________________________________________________________________
 
@@ -101,6 +110,19 @@ class TestIf(unittest.TestCase):
     def test_if_fn_6(self):
         if_fn_6c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_6)
 
+    @unittest.skip("Not generating the implicit != 0.")
+    def test_if_fn_7(self):
+        if_fn_7c = jit(restype=i4, argtypes=[i4], backend='ast')(if_fn_7)
+        oracle = if_fn_7
+        for i in range(-3, 3):
+            self.assertEqual(if_fn_5c(i), oracle(i))
+
+    def test_if_fn_8(self):
+        if_fn_5c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_8)
+        oracle = if_fn_8
+        for i in range(-3, 3):
+            for j in range(-3, 3):
+                self.assertEqual(if_fn_5c(i, j), oracle(i, j))
 
 # ______________________________________________________________________
 
