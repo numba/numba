@@ -43,6 +43,7 @@ class TemplateVariable(Variable):
     def __init__(self, type, name, temp_name=None, code=False, **kwargs):
         super(TemplateVariable, self).__init__(type, name=name, **kwargs)
         self.temp_name = temp_name
+        self.code = code
         if not temp_name:
             assert code
             self.codes = []
@@ -51,7 +52,7 @@ class TemplateVariable(Variable):
         if self.temp_name:
             return self.temp_name
 
-        return "\n".join(self.codes)
+        return "\n".join(self.codes) or "pass"
 
     @property
     def node(self):
@@ -64,7 +65,7 @@ class TemplateContext(object):
 
     def __init__(self, context, template):
         self.context = context
-        self.template = template
+        self.templ = template
         self.variables = []
         self.nodes = {}
 
@@ -95,28 +96,42 @@ class TemplateContext(object):
 
         return s
 
-    def template_type_infer(self, substitutions, **kwargs):
-        s = textwrap.dedent(self.template)
+    def get_vars_symtab(self):
+        return dict((var.temp_name, Variable(name=var.temp_name,
+                                             is_local=True, type=var.type))
+                        for var in self.variables if not var.code)
+
+    def template(self, substitutions):
+        s = textwrap.dedent(self.templ)
         s = self.string_substitute(s)
-        # print s
+
+        print s
         self.substituted_template = s
+
+        tree = template(s, substitutions)
+        return tree
+
+    def template_type_infer(self, substitutions, **kwargs):
+        tree = self.template(substitutions)
 
         symtab = kwargs.get('symtab', None)
         if self.variables or symtab:
-            vars = dict((var.name, Variable(name=var.name, is_local=True,
-                                            type=var.type))
-                            for var in self.variables if var.type)
-            kwargs['symtab'] = dict(symtab or {}, **vars)
+            vars = self.get_vars_symtab()
+            symtab = dict(symtab or {}, **vars)
+            kwargs['symtab'] = symtab
 
-        tree = template(s, substitutions)
         return dummy_type_infer(self.context, tree, **kwargs)
 
 
 def dummy_type_infer(context, tree, order=['type_infer', 'type_set'], **kwargs):
     def dummy():
         pass
-    return numba.pipeline.run_pipeline(context, dummy, tree, void(),
-                                       order=order, **kwargs)
+    result = numba.pipeline.run_pipeline(
+                    context, dummy, tree, void(), order=order,
+                    # Allow closures to be recognized
+                    function_level=1, **kwargs)
+    pipeline, (sig, symtab, ast) = result
+    return symtab, ast
 
 def template(s, substitutions):
     s = textwrap.dedent(s)
@@ -131,7 +146,7 @@ def template(s, substitutions):
     if replaced:
         tree = Interpolate(substitutions).visit(tree)
 
-    return tree
+    return ast.Suite(body=tree.body)
 
 def template_simple(s, **substitutions):
     return template(s, substitutions)
