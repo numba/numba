@@ -60,25 +60,33 @@ class CodeGenCleanup(CodeGen):
         # stop recursion here
         pass
 
-def format_specifier(node, astbuilder):
-    "Return a printf() format specifier for the type of the given AST node"
-    type = node.type
-
-    format = None
-    dst_type = None
-
+def get_printf_specifier(type):
     if type.is_pointer:
         format = "%p"
     elif type.is_numeric:
-        if type.is_int_like:
-            format = "%i"
-            dst_type = minitypes.int_
-        elif type.is_float:
-            format = "%f"
-        elif type.is_double:
-            format = "%lf"
+        if type.is_int or type.is_float:
+            format = {
+                minitypes.int_: "%i",
+                minitypes.long_: "%l",
+                minitypes.longlong: "%ll",
+                minitypes.uint: "%u",
+                minitypes.ulong: "%lu",
+                minitypes.ulonglong: "%llu",
+                minitypes.float_: "%f",
+                minitypes.double: "%lf",
+            }.get(type, ["%ll", "%lf"][type.is_float])
     elif type.is_c_string:
         format = "%s"
+    else:
+        format = None
+
+    return format
+
+def format_specifier(node, astbuilder):
+    "Return a printf() format specifier for the type of the given AST node"
+    type = node.type
+    dst_type = None
+    format = get_printf_specifier(type)
 
     if format is not None:
         if dst_type:
