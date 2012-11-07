@@ -1565,7 +1565,7 @@ class ObjectCoercer(object):
         complex128: "D",
 
         object_: "O",
-        bool_: "p",
+        bool_: "b", # ?
         c_string_type: "s",
         char.pointer() : "s",
     }
