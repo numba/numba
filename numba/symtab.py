@@ -24,6 +24,7 @@ class Variable(object):
         self.constant_value = constant_value
         self.lvalue = lvalue
         self.promotable_type = promotable_type
+        self.deleted = False
 
         self.is_local = is_local
         self.is_cellvar = False

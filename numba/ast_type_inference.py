@@ -593,6 +593,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 lhs_var.type = self.promote_types(lhs_var.type, rhs_var.type)
             return nodes.CoercionNode(rhs_node, lhs_var.type)
 
+        lhs_var.deleted = False
         return rhs_node
 
     def _get_iterator_type(self, node, iterator_type, target_type):
@@ -678,9 +679,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         variable = self.symtab.get(node.id)
         if variable:
             # local variable
-            if ((variable.type is None or variable.type.is_deferred) and
-                    variable.is_local and isinstance(node.ctx, ast.Load)):
-                raise UnboundLocalError(variable.name)
+            uninitialized = (variable.type is None or
+                             variable.type.is_deferred or
+                             variable.deleted)
+            if (uninitialized and variable.is_local and
+                    isinstance(node.ctx, ast.Load)):
+                raise error.NumbaError(node, "Local variable  %r is "
+                                             "not bound yet" % variable.name)
         elif (self.closure_scope and node.id in self.closure_scope and not
                   self.is_store(node.ctx)):
             closure_var = self.closure_scope[node.id]

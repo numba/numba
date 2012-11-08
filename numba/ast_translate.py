@@ -416,6 +416,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def _allocate_locals(self):
         for name, var in self.symtab.items():
+            if var.deleted:
+                self.symtab.pop(name)
+                continue
+
             # FIXME: 'None' should be handled as a special case (probably).
             if name not in self.argnames and var.is_local:
                 # Not argument and not builtin type.

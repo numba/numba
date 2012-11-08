@@ -107,7 +107,7 @@ NumbaError: 10:5: Dynamic closures not yet supported, use @jit
 >>> error3()
 Traceback (most recent call last):
     ...
-UnboundLocalError: inner
+NumbaError: 16:4: Local variable  'inner' is not bound yet
 >>> error4()
 Traceback (most recent call last):
     ...
