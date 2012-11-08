@@ -39,7 +39,7 @@ from numba import *
 def format_str(msg, *values):
     return msg % values
 
-@autojit
+@jit
 class Base(object):
 
     @void(double)
@@ -68,7 +68,7 @@ class Base(object):
     def __repr__(self):
         return format_str('Base(%s)', self.value)
 
-@autojit
+@jit
 class Derived(Base):
 
     @void(double)

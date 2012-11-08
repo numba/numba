@@ -6,7 +6,7 @@ from numba import *
 def format_str(msg, *values):
     return msg % values
 
-@autojit
+@jit
 class MyExtension(object):
     """
     >>> obj = MyExtension(10.0)
@@ -47,7 +47,7 @@ class MyExtension(object):
     def __repr__(self):
         return format_str('MyExtension%s', self.value)
 
-@autojit
+@jit
 class ObjectAttrExtension(object):
     """
     >>> obj = ObjectAttrExtension(10.0, 'blah')

@@ -166,9 +166,9 @@ class NumbaFunction(object):
     def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
         return compiled_numba_func(*args, **kwargs)
 
-def autojit_extension_class(target, nopython, py_class, translator_kwargs):
+def jit_extension_class(py_class, translator_kwargs):
     return extension_type_inference.create_extension(
-                    context, py_class, translator_kwargs)
+                        context, py_class, translator_kwargs)
 
 # TODO: make these two implementations the same
 def _autojit2(target, nopython, **translator_kwargs):
@@ -178,10 +178,6 @@ def _autojit2(target, nopython, **translator_kwargs):
         types. Uses the AST translator backend. For the bytecode translator,
         use @autojit.
         """
-        if isinstance(f, type):
-            return autojit_extension_class(target, nopython, f,
-                                           translator_kwargs)
-
         @functools.wraps(f)
         def wrapper(numba_func, *args, **kwargs):
             arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
@@ -250,6 +246,7 @@ def autojit(backend='ast', target='cpu', nopython=False, locals=None):
 
 def _jit2(restype=None, argtypes=None, nopython=False,
           _llvm_module=None, _llvm_ee=None, **kwargs):
+    kwargs.update(llvm_module=_llvm_module, llvm_ee=_llvm_ee)
     def _jit2_decorator(func):
         argtys = argtypes
         if func.func_code.co_argcount == 0 and argtys is None:
@@ -263,8 +260,6 @@ def _jit2(restype=None, argtypes=None, nopython=False,
         result = function_cache.compile_function(func, argtys,
                                                  nopython=nopython,
                                                  ctypes=False,
-                                                 llvm_module=_llvm_module,
-                                                 llvm_ee=_llvm_ee,
                                                  **kwargs)
         signature, lfunc, wrapper_func = result
         return NumbaFunction(func, ctypes_func=wrapper_func,
@@ -341,6 +336,12 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
     the bytecode translator is used, if backend='ast' the AST translator is
     used.
     """
+    kws.update(llvm_module=_llvm_module, llvm_ee=_llvm_ee,
+               nopython=nopython, backend=backend)
+    if isinstance(restype, type):
+        cls = restype
+        return jit_extension_class(cls, kws)
+
     # Called with f8(f8) syntax which returns a dictionary of argtypes and restype
     if isinstance(restype, minitypes.FunctionType):
         if argtypes is not None:
@@ -356,10 +357,6 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
     if argtypes is not None:
         kws['argtypes'] = argtypes
 
-    kws['backend'] = backend
-    kws['nopython'] = nopython
-    kws['_llvm_module'] = _llvm_module
-    kws['_llvm_ee'] = _llvm_ee
     return jit_targets[target, backend](**kws)
 
 def jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None,

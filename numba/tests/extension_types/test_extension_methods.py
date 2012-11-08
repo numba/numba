@@ -17,7 +17,7 @@ import sys
 from numba import *
 from nose.tools import raises
 
-@autojit
+@jit
 class Base(object):
 
     @void(double)
@@ -68,7 +68,7 @@ class Base(object):
     def class4(cls, value1, value2):
         return value1 * value2
 
-@autojit
+@jit
 class Derived(Base):
     pass
 

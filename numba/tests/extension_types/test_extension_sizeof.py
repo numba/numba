@@ -1,7 +1,7 @@
 import sys
 from numba import *
 
-@autojit
+@jit
 class Base(object):
 
     @void(double)
@@ -13,7 +13,7 @@ class Base(object):
         "Return value"
         return self.value
 
-@autojit
+@jit
 class Derived1(Base):
 
     @void(double)
@@ -28,7 +28,7 @@ def test_sizeof_extra_attr():
     derived_size = sys.getsizeof(derived)
     assert base_size + 8 == derived_size, (base_size, derived_size)
 
-@autojit
+@jit
 class Derived2(Base):
 
     @double()
