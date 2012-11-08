@@ -12,12 +12,12 @@ from numbapro import cuda
 
 tpb = 16
 
-@cuda.jit(rettype=f8, argtypes=[f8, f8], device=True, inline=True)
+@cuda.jit(f8(f8, f8), device=True, inline=True)
 def get_max(a, b):
     if a > b : return a
     else: return b
 
-@cuda.jit(argtypes=[f8[:,:], f8[:,:], f8[:,:]])
+@cuda.jit(void(f8[:,:], f8[:,:], f8[:,:]))
 def jocabi_relax_core(A, Anew, error):
     err_sm = cuda.shared.array((tpb, tpb), dtype=f8)
 
