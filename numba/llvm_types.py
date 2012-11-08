@@ -166,7 +166,8 @@ class _LLVMCaster(object):
                 ret_val = cls.CAST_MAP[map_index](cls, builder, lval1, lty2,
                                                   *args, **kws)
             else:
-                raise NotImplementedError(str(lty1), str(lty2))
+                raise NotImplementedError('Unable to cast from %s to %s.' %
+                                          (str(lty1), str(lty2)))
         return ret_val
 
 # ______________________________________________________________________

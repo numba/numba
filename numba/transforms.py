@@ -838,7 +838,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             value = self.visit(node.value)
             call = self.function_cache.call('PyObject_SetItem',
                                             obj, key, value)
-            return call
+            return self.visit(call)
 
         self.generic_visit(node)
         return node
