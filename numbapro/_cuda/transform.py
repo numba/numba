@@ -36,7 +36,11 @@ class CudaSMemArrayCallNode(nodes.Node):
     _attributes = ('shape', 'variable')
     def __init__(self, context, shape, dtype):
         self.shape = shape
-        self.strides = [dtype.itemsize * s for s in list(self.shape[:-1]) + [1]]
+        tmp_strides = [dtype.itemsize]
+        for s in reversed(self.shape[1:]):
+            tmp_strides.append(tmp_strides[-1] * s)
+        self.strides = tuple(reversed(tmp_strides))
+
         self.elemcount = np.prod(self.shape)
         self.dtype = dtype
         type = minitypes.ArrayType(dtype=dtype,
@@ -84,7 +88,7 @@ class CudaAttrRewriteMixin(object):
         
         if isinstance(node.value, ast.Name):
             #assert isinstance(value.ctx, ast.Load)
-            obj = self._myglobals.get(node.value.id)
+            obj = self.func.func_globals.get(node.value.id)
             if obj is _THIS_MODULE:
                 retval = CudaAttributeNode(_THIS_MODULE).resolve(node.attr)
         elif isinstance(value, CudaAttributeNode):
@@ -132,7 +136,7 @@ class CudaAttrRewriteMixin(object):
                 shape += (node.pyval,)
     
             dtype_id = kws['dtype'].id # FIXME must be a ast.Name
-            dtype = self._myglobals[dtype_id] # FIXME must be a Numba type
+            dtype = self.func.func_globals[dtype_id] # FIXME must be a Numba type
         
             node = CudaSMemArrayCallNode(self.context, shape=shape, dtype=dtype)
             return node

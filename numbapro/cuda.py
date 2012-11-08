@@ -11,6 +11,7 @@ from _cuda.smem import shared
 from _cuda.barrier import syncthreads
 from _cuda.macros import grid
 from _cuda.transform import function_cache
+from _cuda import ptx
 from numba.minivect import minitypes
 from numba import void
 import numba.decorators
@@ -91,33 +92,7 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
         # XXX: temp fix for PyIncRef and PyDecRef in lfunc.
         # IS this still necessary?
         # Yes, as of Oct 22 2012
-        def _temp_hack():
-            inlinelist = []
-            fakepy = {}
-
-            for bb in lfunc.basic_blocks:
-                for instr in bb.instructions:
-                    if isinstance(instr, _lc.CallOrInvokeInstruction):
-                        fn = instr.called_function
-                        fname = fn.name
-                        if fname.startswith('Py_'):
-                            inlinelist.append(instr)
-                            fty = instr.called_function.type.pointee
-                            fakepy[fname] = fn
-                            assert fty.return_type == _lc.Type.void(),\
-                                    'assume no sideeffect'
-
-            for fname, fn in fakepy.items():
-                bldr = _lc.Builder.new(fn.append_basic_block('entry'))
-                bldr.ret_void()
-
-            for call in inlinelist:
-                assert _lc.inline_function(call)
-
-            for fn in fakepy.values():
-                fn.delete()
-
-        _temp_hack()
+        _temp_fix_to_remove_python_specifics(lfunc)
 
         if device:
             assert lfunc.name not in _device_functions, 'Device function name already used'
@@ -129,22 +104,122 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
     return _jit2
 
 
-def _link_device_function(lfunc):
-    toinline = []
+def _list_callinstr(lfunc):
     for bb in lfunc.basic_blocks:
         for instr in bb.instructions:
             if isinstance(instr, _lc.CallOrInvokeInstruction):
-                fn = instr.called_function
-                bag = _device_functions.get(fn.name)
-                if bag is not None:
-                    pyfunc, linkee =bag
-                    lfunc.module.link_in(linkee.module.clone())
-                    if pyfunc._numba_inline:
-                        toinline.append(instr)
+                yield instr
+
+CUDA_MATH_INTRINSICS_2 = {
+    'llvm.exp.f32': ptx.exp_f32,
+    'llvm.exp.f64': ptx.exp_f64,
+    'fabsf'       : ptx.fabs_f32,
+    'fabs'        : ptx.fabs_f64,
+    'llvm.log.f32': ptx.log_f32,
+    'llvm.log.f64': ptx.log_f64,
+    'llvm.pow.f32': ptx.pow_f32,
+    'llvm.pow.f64': ptx.pow_f64,
+}
+
+CUDA_MATH_INTRINSICS_3 = CUDA_MATH_INTRINSICS_2.copy()
+CUDA_MATH_INTRINSICS_3.update({
+
+
+})
+
+
+def _link_llvm_math_intrinsics(module, cc):
+    '''Discover and implement llvm math intrinsics that are not supported
+    by NVVM.  NVVM only supports llvm.sqrt at this point (11/1/2012).
+    '''
+    to_be_implemented = {}   # new-function object -> inline ptx object
+    to_be_removed = set()    # functions to be deleted
+    inlinelist = []          # functions to be inlined
+
+    library = {
+        2 : CUDA_MATH_INTRINSICS_2,
+        3 : CUDA_MATH_INTRINSICS_3,
+    }[cc]
+
+    # find all known math intrinsics and implement them.
+    for lfunc in module.functions:
+        for instr in _list_callinstr(lfunc):
+            fn = instr.called_function
+            if fn is not None: # maybe a inline asm
+                fname = fn.name
+                if fname in library:
+                    inlinelist.append(instr)
+                    to_be_removed.add(fn)
+                    ftype = fn.type.pointee
+                    newfn = module.get_or_insert_function(ftype, "numbapro.%s" % fname)
+                    ptxcode = library[fname]
+                    to_be_implemented[newfn] = ptxcode
+                    instr.called_function = newfn  # replace the function
+                else:
+                    logger.debug("Unknown LLVM intrinsic %s", fname)
+
+    # implement all the math functions with inline ptx
+    for fn, ptx in to_be_implemented.items():
+        entry = fn.append_basic_block('entry')
+        builder = _lc.Builder.new(entry)
+        value = builder.call(ptx, fn.args)
+        builder.ret(value)
+        to_be_removed.add(fn)
+
+    # inline all the functions
+    for callinstr in inlinelist:
+        ok = _lc.inline_function(callinstr)
+        assert ok
+
+    for fn in to_be_removed:
+        fn.delete()
+
+def _temp_fix_to_remove_python_specifics(lfunc):
+    inlinelist = []  # list of calls to be inlined
+    fakepy = {}      # function name -> function object
+
+    # find every call to python functions
+    for instr in _list_callinstr(lfunc):
+        fn = instr.called_function
+        if fn is not None: # maybe a inline asm
+            fname = fn.name
+            if fname.startswith('Py_'):
+                inlinelist.append(instr)
+                fty = instr.called_function.type.pointee
+                fakepy[fname] = fn
+                assert fty.return_type == _lc.Type.void(), 'assume no sideeffect'
+    # generate stub implementation for python functions
+    # assumes that it returns void
+    for fname, fn in fakepy.items():
+        bldr = _lc.Builder.new(fn.append_basic_block('entry'))
+        bldr.ret_void()
+
+    # inline all the calls
+    for call in inlinelist:
+        ok = _lc.inline_function(call)
+        assert ok
+
+    # remove the stub from the module
+    for fn in fakepy.values():
+        fn.delete()
+
+
+def _link_device_function(lfunc):
+    toinline = []
+    for instr in  _list_callinstr(lfunc):
+        fn = instr.called_function
+        if fn is not None and fn.is_declaration: # can be None for inline asm
+            bag = _device_functions.get(fn.name)
+            if bag is not None:
+                pyfunc, linkee =bag
+                lfunc.module.link_in(linkee.module.clone())
+                if pyfunc._numba_inline:
+                    toinline.append(instr)
 
     for call in toinline:
         callee = call.called_function
         _lc.inline_function(call)
+
 
 
 class CudaDeviceFunction(numba.decorators.NumbaFunction):
@@ -254,19 +329,30 @@ class CudaNumbaFunction(CudaBaseFunction):
         #        As a result, it has a long list of nvvm.annotation of the
         #        same data.
         from numbapro._cuda import nvvm, default
-        arch = 'compute_%d0' % default.device.COMPUTE_CAPABILITY[0]
+        cc_major = default.device.COMPUTE_CAPABILITY[0]
+
+        # link all math intrinsics
+        user_funcs = filter(lambda x: not x.is_declaration and \
+                                      not x.name.startswith('llvm.'),
+                            self.module.functions)
+
+        _link_llvm_math_intrinsics(self.module, cc_major)
         
+        # prepare for ptx generation
+        arch = 'compute_%d0' % cc_major
+
         nvvm.fix_data_layout(self.module)
         nvvm.set_cuda_kernel(lfunc)
 
         pmb = _lp.PassManagerBuilder.new()
-        pmb.opt_level = 3
+        pmb.opt_level = 2 # O3 causes bar.sync to be duplicated in unrolled loop
         pm = _lp.PassManager.new()
         pmb.populate(pm)
         pm.run(self.module)
 #        print self.module
+        # generate ptx
         self._ptxasm = nvvm.llvm_to_ptx(str(self.module), arch=arch)
-        print self._ptxasm
+        
         from numbapro import _cudadispatch
         self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(self._ptxasm,
                                                                 func_name,

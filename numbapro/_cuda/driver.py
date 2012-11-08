@@ -3,10 +3,11 @@ This is more-or-less a object-oriented interface to the CUDA driver API.
 It properly has a lot of resemblence with PyCUDA.
 '''
 
-import sys, os, atexit
+import sys, os
 import contextlib
 from ctypes import *
 from .error import *
+from numbapro._utils import finalizer
 
 # CUDA specific typedefs
 cu_device = c_int
@@ -223,17 +224,12 @@ class Driver(object):
 
     __INSTANCE = None
 
-    __TEARDOWN = False
-
     _CONTEXTS = {}
 
     def __new__(cls, override_path=None):
         if cls.__INSTANCE is None:
             cls.__INSTANCE = inst = object.__new__(Driver)
             inst.old_api = False
-
-            # Install exit handlers
-            atexit.register(inst._atexit)
 
             # Determine DLL type
             if sys.platform == 'win32':
@@ -293,13 +289,6 @@ class Driver(object):
 
         return cls.__INSTANCE
 
-    def _atexit(self):
-        '''
-        This will run before any object is released.  We will mark a teardown
-        flag to redirect error caught in __del__
-        '''
-        self.__TEARDOWN = True
-
     def _cu_symbol_newer(self, symbol):
         try:
             return getattr(self.driver, '%s_v2' % symbol)
@@ -314,16 +303,12 @@ class Driver(object):
 
     def check_error(self, error, msg, exit=False):
         if error:
-            if self.__TEARDOWN:
-                print 'Error during teardown'
-                print error, msg, self._REVERSE_ERROR_MAP[error]
+            exc = CudaDriverError(msg, self._REVERSE_ERROR_MAP[error])
+            if exit:
+                print>>sys.stderr, exc
+                sys.exit(1)
             else:
-                exc = CudaDriverError(msg, self._REVERSE_ERROR_MAP[error])
-                if exit:
-                    print exc
-                    sys.exit(1)
-                else:
-                    raise exc
+                raise exc
 
     def create_context(self, device=None):
         if device is None:
@@ -407,16 +392,20 @@ class Device(object):
         keys += ['COMPUTE_CAPABILITY']
         return dict((k, getattr(self, k)) for k in keys)
 
-class _Context(object):
+class _Context(finalizer.OwnerMixin):
     def __init__(self, device):
         self.device = device
         self._handle = cu_context()
         error = self.driver.cuCtxCreate(byref(self._handle), 0, self.device.id)
-        self.driver.check_error(error, 'Failed to create context on %s' % self.device)
+        self.driver.check_error(error,
+                                'Failed to create context on %s' % self.device)
+        self._finalizer_track(self._handle)
 
-    def __del__(self):
+    def _finalize(self):
         error = self.driver.cuCtxDestroy(self._handle)
-        self.driver.check_error(error, 'Failed to destroy context on %s' % self.device, exit=True)
+        self.driver.check_error(error,
+                                'Failed to destroy context on %s' % self.device,
+                                exit=True)
 
     @property
     def driver(self):
@@ -425,14 +414,15 @@ class _Context(object):
     def __str__(self):
         return 'Context %s on %s' % (id(self), self.device)
 
-class Stream(object):
+class Stream(finalizer.OwnerMixin):
     def __init__(self):
         self.context = Driver().current_context()
         self._handle = cu_stream()
         error = self.driver.cuStreamCreate(byref(self._handle), 0)
         self.driver.check_error(error, 'Failed to create stream on %s' % self.context)
+        self._finalizer_track(self._handle)
 
-    def __del__(self):
+    def _finalize(self):
         error = self.driver.cuStreamDestroy(self._handle)
         self.driver.check_error(error, 'Failed to destory stream %s' % self, exit=True)
 
@@ -460,7 +450,7 @@ class Stream(object):
     def device(self):
         return self.context.device
 
-class DeviceMemory(object):
+class DeviceMemory(finalizer.OwnerMixin):
     '''Memory on the GPU deivce.
 
     The lifetime of the object is tied to the GPU memory handle; that is the
@@ -472,8 +462,9 @@ class DeviceMemory(object):
         self._handle = cu_device_ptr()
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
         self.driver.check_error(error, 'Failed to allocate memory')
+        self._finalizer_track(self._handle)
 
-    def __del__(self):
+    def _finalize(self):
         error = self.driver.cuMemFree(self._handle)
         self.driver.check_error(error, 'Failed to free memory', exit=True)
 
@@ -512,7 +503,7 @@ class DeviceMemory(object):
 CU_JIT_INFO_LOG_BUFFER = 3
 CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES = 4
 
-class Module(object):
+class Module(finalizer.OwnerMixin):
     def __init__(self, ptx):
         self.context = Driver().current_context()
         self.ptx = ptx
@@ -535,10 +526,11 @@ class Module(object):
                                                c_option_vals)
 
         self.driver.check_error(error, 'Failed to load module')
+        self._finalizer_track(self._handle)
 
         self.info_log = c_info_log_buffer[:c_info_log_n.value]
 
-    def __del__(self):
+    def _finalize(self):
         error =  self.driver.cuModuleUnload(self._handle)
         self.driver.check_error(error, 'Failed to unload module', exit=True)
 
@@ -551,7 +543,7 @@ class Module(object):
         return self.context.device
 
 
-class Function(object):
+class Function(finalizer.OwnerMixin):
 
     griddim = 1, 1, 1
     blockdim = 1, 1, 1
@@ -566,7 +558,7 @@ class Function(object):
                                                 self.module._handle,
                                                 name);
         self.driver.check_error(error, 'Failed to get function "%s" from module' % name)
-
+    
     @property
     def driver(self):
         return self.device.driver
