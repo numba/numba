@@ -253,6 +253,34 @@ __doc__ += """
 'HELLO'
 """
 
+@autojit
+def wrong_signature(s):
+    @jit('object_(object_)')
+    def inner():
+        return s.upper()
+    return inner
+
+__doc__ += """
+>>> wrong_signature("foo")
+Traceback (most recent call last):
+    ...
+NumbaError: 258:5: Expected 1 arguments type(s), got 0
+"""
+
+@autojit
+def wrong_restype():
+    @jit('object_()')
+    def inner():
+        pass
+    return inner
+
+__doc__ += """
+>>> wrong_restype()
+Traceback (most recent call last):
+    ...
+NumbaError: 1:0: Function with non-void return does not return a value
+"""
+
 if __name__ == '__main__':
 #    print objects("hello")
     import doctest

@@ -444,6 +444,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 var.lvalue = stackspace
 
     def setup_func(self):
+        have_return = getattr(self.ast, 'have_return', None)
+        if have_return is not None:
+            if not have_return and not self.func_signature.return_type.is_void:
+                self.error(self.ast, "Function with non-void return does "
+                                     "not return a value")
+
         self.lfunc_type = self.to_llvm(self.func_signature)
 
         self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)

@@ -148,6 +148,13 @@ class ClosureMixin(object):
         # TODO: Analyse closure at call or outer function return time to
         # TODO:     infer return type
         # TODO: parse out nopython argument
+
+        if len(signature.args) != len(func_def.args.args):
+            self.error(decorator,
+                       "Expected %d arguments type(s), got %d" % (
+                                len(signature.args), len(func_def.args.args)))
+
+
         del func_def.decorator_list[:]
         return signature
 

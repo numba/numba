@@ -380,13 +380,12 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         self.function_level = kwds.get('function_level', 0)
         self.init_locals()
+        ast.have_return = False
 
     def infer_types(self):
         """
         Infer types for the function.
         """
-#        self.init_locals()
-
         self.return_variable = Variable(None)
         self.ast = self.visit(self.ast)
 
@@ -1208,6 +1207,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return node
 
     def visit_Return(self, node):
+        self.ast.have_return = True
+
         if node.value is not None:
             value = self.visit(node.value)
             type = value.variable.type
