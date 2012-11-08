@@ -555,11 +555,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             return self._handle_unpacking(node)
 
         target = node.targets[0] = self.visit(node.targets[0])
-        node.value = self.assign(target.variable, node.value.variable,
-                                 node.value)
+        node.value = self.assign(target, node.value)
         return node
 
-    def assign(self, lhs_var, rhs_var, rhs_node):
+    def assign(self, lhs_node, rhs_node, rhs_var=None):
+        lhs_var = lhs_node.variable
+        if rhs_var is None:
+            rhs_var = rhs_node.variable
+
         if lhs_var.type and lhs_var.type.is_deferred:
             # TODO: complete this
             if lhs_var.type.resolved_type:
@@ -575,7 +578,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
                     lhs_var.promotable_type):
                 lhs_var.type = self.promote_types(lhs_var.type, rhs_var.type)
-            return nodes.CoercionNode(rhs_node, lhs_var.type)
+
+            if rhs_node:
+                return nodes.CoercionNode(rhs_node, lhs_var.type)
 
         lhs_var.deleted = False
         return rhs_node
@@ -615,8 +620,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.iter = self.visit(node.iter)
         base_type = self._get_iterator_type(node.iter, node.iter.variable.type,
                                             node.target.variable.type)
-        node.target = self.assign(node.target.variable, Variable(base_type),
-                                  node.target)
+        self.assign(node.target, None, rhs_var=Variable(base_type))
 
         self.visitlist(node.body)
         return node

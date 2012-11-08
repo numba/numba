@@ -802,6 +802,7 @@ class StructAttribute(ExtTypeAttribute):
         self.field_idx = struct_type.fields.index((attr, self.attr_type))
 
         self.type = self.attr_type
+        self.variable = Variable(self.type, promotable_type=False)
 
 class StructVariable(Node):
     """

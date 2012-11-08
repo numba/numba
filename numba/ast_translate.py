@@ -217,7 +217,7 @@ class ComplexSupportMixin(object):
                 self.builder.extract_value(value, 1))
 
     def _create_complex(self, real, imag):
-        assert real.type == imag.type
+        assert real.type == imag.type, (str(real.type), str(imag.type))
         complex = lc.Constant.undef(llvm.core.Type.struct([real.type, real.type]))
         complex = self.builder.insert_value(complex, real, 0)
         complex = self.builder.insert_value(complex, imag, 1)

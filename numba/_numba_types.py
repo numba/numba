@@ -339,12 +339,21 @@ class DeferredType(NumbaType):
         self.name = name
         self.candidates = []
 
-    def __str__(self):
-        return "<deferred(%s)>" % self.name
+    def __repr__(self):
+        if self.resolved_type:
+            typestr = ", %s" % self.resolved_type
+        else:
+            typestr = ""
+        return "<deferred(%s%s)>" % (self.name, typestr)
 
     def to_llvm(self, context):
         assert self.resolved_type, self
         return self.resolved_type.to_llvm(context)
+
+    def resolve(self):
+        if self.resolved_type:
+            return self.resolved_type
+        return self
 
 
 tuple_ = TupleType()

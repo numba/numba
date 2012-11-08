@@ -341,8 +341,6 @@ class TransformForIterable(visitors.NumbaTransformer):
             raise error.NumbaError(node, 'Else in for-loop is not implemented.')
 
         if node.iter.type.is_range:
-
-
             self.generic_visit(node)
 
             temp = nodes.TempNode(node.target.type)
