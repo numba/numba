@@ -192,17 +192,19 @@ class FunctionCache(object):
         signature = ofunc(argtypes=ofunc.arg_types * len(argtypes)).signature
         return signature, None, func
 
-    def function_by_name(self, name, **kws):
+    def function_by_name(self, name, module=None, **kws):
         """
         Return the signature and LLVM function given a name. The function must
         either already be compiled, or it must be defined in this module.
         """
         if name in self.external_functions:
-            return self.external_functions[name]
-        else:
-            declared_func = globals()[name](**kws)
-            lfunc = self.build_function(declared_func)
-            return declared_func.signature, lfunc
+            extfunc = self.external_functions[name]
+            if module is None or extfunc.module == module:
+                return extfunc
+
+        declared_func = globals()[name](**kws)
+        lfunc = self.build_function(declared_func, module=module)
+        return declared_func.signature, lfunc
 
     def call(self, name, *args, **kw):
         temp_name = kw.pop('temp_name', name)
@@ -222,25 +224,25 @@ class FunctionCache(object):
                                       **exc_check)
         return result
 
-    def build_function(self, external_function):
+    def build_function(self, external_function, module=None):
         """
         Build a function given it's signature information. See the
         `ExternalFunction` class.
         """
+        module = module or self.module
         try:
-            lfunc = self.module.get_function_named(external_function.name)
+            lfunc = module.get_function_named(external_function.name)
         except llvm.LLVMException:
             func_type = minitypes.FunctionType(
                     return_type=external_function.return_type,
                     args=external_function.arg_types,
                     is_vararg=external_function.is_vararg)
             lfunc_type = func_type.to_llvm(self.context)
-            lfunc = self.module.add_function(lfunc_type, external_function.name)
+            lfunc = module.add_function(lfunc_type, external_function.name)
 
             if external_function.linkage == llvm.core.LINKAGE_INTERNAL:
                 lfunc.linkage = external_function.linkage
-                external_function.implementation(
-                                        self.module, lfunc)
+                external_function.implementation(module, lfunc)
 
         return lfunc
 

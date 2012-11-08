@@ -1145,7 +1145,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def _handle_mod(self, node, lhs, rhs):
         _, func = self.function_cache.function_by_name(
-            'PyModulo', arg_types = (node.type, node.type),
+            'PyModulo',
+            module=self.mod,
+            arg_types = (node.type, node.type),
             return_type = node.type)
         return self.builder.call(func, (lhs, rhs))
 
