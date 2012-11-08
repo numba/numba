@@ -157,14 +157,16 @@ class Interpolate(ast.NodeTransformer):
     def __init__(self, substitutions):
         self.substitutions = substitutions
         for name, replacement in substitutions.iteritems():
-            if not isinstance(replacement, nodes.CloneableNode):
+            if (not isinstance(replacement, nodes.CloneableNode) and
+                    hasattr(replacement, 'type')):
                 substitutions[name] = nodes.CloneableNode(replacement)
 
     def visit_Name(self, node):
         if node.id.startswith(prefix):
             name = node.id[len(prefix):]
             replacement = self.substitutions[name]
-            if not isinstance(replacement, nodes.CloneNode):
+            if (not isinstance(replacement, nodes.CloneNode) and
+                    isinstance(replacement, nodes.CloneableNode)):
                 self.substitutions[name] = replacement.clone
             return replacement
 
