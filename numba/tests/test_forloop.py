@@ -75,6 +75,22 @@ def for_loop_w_guard_1 (test_input):
 
 # ______________________________________________________________________
 
+def for_loop_fn_4(i, u, p, U):
+    '''Test case for issue #48.  See:
+    https://github.com/numba/numba/issues/48'''
+    s = 0
+    t = 0
+    for j in range(-p, p+2):
+        if U[i+j] == u:
+            t = t + 1
+        if u == U[i+j]:
+            s = s + 1
+    if t != s:
+        s = -1
+    return s
+
+# ______________________________________________________________________
+
 class TestForLoop(unittest.TestCase):
     @unittest.skipUnless(hasattr(__builtin__, '__noskip__'),
                          "Requires implementation of iteration "
@@ -121,6 +137,13 @@ class TestForLoop(unittest.TestCase):
                          for_loop_w_guard_1(5.))
         self.assertEqual(compiled_for_loop_w_guard(4.),
                          for_loop_w_guard_1(4.))
+
+    def test_compiled_for_loop_fn_4(self):
+        compiled = jit('i4(i4,f8,i4,f8[:])')(for_loop_fn_4)
+        args0 = 5, 1.0, 2, numpy.ones(10)
+        self.assertEqual(compiled(*args0), for_loop_fn_4(*args0))
+        args1 = 5, 1.0, 2, numpy.zeros(10)
+        self.assertEqual(compiled(*args1), for_loop_fn_4(*args1))
 
 # ______________________________________________________________________
 

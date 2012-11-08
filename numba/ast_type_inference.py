@@ -751,13 +751,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.generic_visit(node)
 
         lhs = node.left
-        rhs, = node.right, = node.comparators
+        rhs, = node.comparators
 
         if lhs.variable.type != rhs.variable.type:
             type = self.context.promote_types(lhs.variable.type,
                                               rhs.variable.type)
             node.left = nodes.CoercionNode(lhs, type)
-            node.right = nodes.CoercionNode(rhs, type)
+            node.comparators = [nodes.CoercionNode(rhs, type)]
 
         node.variable = Variable(minitypes.bool_)
         return node

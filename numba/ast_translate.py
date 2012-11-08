@@ -915,7 +915,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         raise error.NumbaError(node, "Unary operator %s" % node.op)
 
     def visit_Compare(self, node):
-        lhs, rhs = node.left, node.right
+        lhs = node.left
+        # The number of comparisons is also checked in type inference.
+        # We are coding defensively since Compare nodes might be
+        # injected by other stages of the transformation pipeline.
+        if len(node.comparators) != 1:
+            raise error.NumbaError(
+                node, 'Multiple comparison operators not supported')
+        rhs, = node.comparators
         lhs_lvalue, rhs_lvalue = self.visitlist([lhs, rhs])
 
         op_map = {
