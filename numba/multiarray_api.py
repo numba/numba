@@ -5,6 +5,8 @@ out of the Numpy array C API PyCObject/capsule.
 '''
 # ______________________________________________________________________
 
+import ctypes
+
 import llvm.core as lc
 import llvm.ee as le
 
@@ -96,31 +98,25 @@ class MultiarrayAPI (object):
         self.api_addr = None
 
     def calculate_api_addr (self):
-        '''Constructs a dummy LLVM module that only links to the
-        Python C API function PyCObject_AsVoidPtr().  This method then
-        uses a LLVM execution engine to extract the multiarray API
-        address from the _ARRAY_API object.'''
-        module = lc.Module.new('import_arrayish_mod')
+        PyCObject_AsVoidPtr = ctypes.pythonapi.PyCObject_AsVoidPtr
+        PyCObject_AsVoidPtr.argtypes = [ctypes.py_object]
+        PyCObject_AsVoidPtr.restype = ctypes.c_void_p
         # FIXME: Add test to see if we should be using the capsule API
         # instead of PyCObject.
-        fn_ty = lc.Type.function(_void_star, [_void_star])
-        pycobj_avp = module.add_function(fn_ty, 'PyCObject_AsVoidPtr')
-        ee = le.ExecutionEngine.new(module)
-        pycobj = le.GenericValue.pointer(id(_ARRAY_API))
-        ee.run_static_ctors()
-        voidptr = ee.run_function(pycobj_avp, [pycobj])
-        ret_val = self.api_addr = voidptr.as_pointer()
+        ret_val = self.api_addr = PyCObject_AsVoidPtr(_ARRAY_API)
         return ret_val
 
     def set_PyArray_API (self, module):
         '''Adds PyArray_API as a global variable to the input LLVM module.'''
         if self.api_addr is None:
             self.calculate_api_addr()
-        api = module.add_global_variable(_void_star_star, "PyArray_API")
-        api.initializer = lc.Constant.inttoptr(lc.Constant.int(_intp,
-                                                               self.api_addr),
-                                               _void_star_star)
-        api.linkage = lc.LINKAGE_INTERNAL
+        try:
+            api = module.get_global_variable_named("PyArray_API")
+        except:
+            api = module.add_global_variable(_void_star_star, "PyArray_API")
+            api.initializer = lc.Constant.inttoptr(
+                lc.Constant.int(_intp, self.api_addr), _void_star_star)
+            api.linkage = lc.LINKAGE_INTERNAL
 
 # ______________________________________________________________________
 # End of multiarray_api.py
