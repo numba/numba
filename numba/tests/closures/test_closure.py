@@ -138,8 +138,10 @@ TypeError: an integer is required
 >>> func = closure4()
 >>> print func.__name__
 inner
->>> print func.__closure__._numba_attrs._fields_
-[('a', <class 'ctypes.c_int'>)]
+>>> field, = func.__closure__._numba_attrs._fields_
+>>> import ctypes
+>>> print field[0], field[1] == ctypes.c_int
+a True
 >>> print func.__closure__._numba_attrs.a
 12
 >>> func()
