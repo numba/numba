@@ -21,8 +21,9 @@ Dependencies:
   * llvm-py (from llvmpy/llvmpy fork)
   * numpy
   * Meta (from numba/Meta fork)
+  * Cython
 
-* Compile LLVM 3.1: 
+* Compile LLVM 3.1
 
 wget http://llvm.org/releases/3.1/llvm-3.1.src.tar.gz 
 tar zxvf llvm-3.1.src.tar.gz
@@ -31,16 +32,26 @@ tar zxvf llvm-3.1.src.tar.gz
 #  e.g. -arch i386 or -arch x86_64.  It might be best to be explicit about this.
 make install
 
-
 * Clone LLVM-py from github
+
 git clone https://github.com/llvmpy/llvmpy.git
 python setup.py install
 
 * Clone Meta from github
+
 git clone https://github.com/numba/Meta.git
 python setup.py install
 
+* Install Cython (http://cython.org)
+
+easy_install cython
+-OR-
+pip install cython
+-OR-
+...
+
 * Build Numba
+
 python setup.py install
 
 
