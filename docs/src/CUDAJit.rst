@@ -37,7 +37,7 @@ back to the host upon completion of the kernel.
 		i = tid + blkid * blkdim
 		c[i] = a[i] + b[i]
 
-CUDA JIT enhances Numba translation by recognizing CUDA intrinsics for `threadIdx`, `blockIdx`, `blockDim` and `gridIdx`.  These intrinsics are defined inside the `numbapro.cuda` module.
+CUDA JIT enhances Numba translation by recognizing CUDA-C intrinsics, including threadIdx, blockIdx, blockDim, gridDim. All intrinsics are defined inside the `numbapro.cuda` module.
 
 Similar to `numba.decorators.jit`, argument types are defined in `argtypes` for `cuda.jit`.  Since a CUDA kernel does not return any value, there is no `restype`.
 
@@ -58,5 +58,104 @@ Lastly, we call `cuda_sum_configured` with three NumPy arrays as arguments::
 	c = np.empty_like(a)
 	cuda_sum_configured(a, b, c)
 
+You can also do the configuration and calling together::
+
+	cuda_sum[griddim, blockdim](a, b, c)
+
+This style looks closer to CUDA-C kernel<<<griddim, blockdim>>>(…).
+
 **Note: All arrays are passed to the device without casting even if the array type does not match the signature of the CUDA kernel.  It is important to ensure all arguments have the correct type.**
 
+Transferring Numpy Arrays to Device
+------------------------------------
+
+Numpy arrays can be transferred to the device by::
+	
+	device_array = cuda.to_device(array)
+ 
+To retrieve the data, do::
+	
+	device_array.to_host()
+
+This call copies the device memory back to the data buffer of `array`.
+
+`device_array` is of type `DeviceNDArray`, which is a subclass of `numpy.ndarray`.  After the call, `device_array` contains the same buffer as `array`.  The lifetime of the device memory is tied to the `DeviceNDArray` instance.  When the `DeviceNDArray` is released, the device memory is also released.
+
+CUDA Stream
+-----------
+
+A CUDA stream is a command queue for the CUDA device.  By specifying a stream, the CUDA API call become asynchronous, meaning that the call may return before the command has been completed.  Memory transfer instructions and kernel invocation can use CUDA stream::
+
+	stream = cuda.stream()
+	devary = cuda.to_device(an_array, stream=stream)
+	a_cuda_kernel[griddim, blockdim, stream](devary) 
+	cuda.to_host(devary, stream=stream)
+	stream.synchronize()
+	# data available in an_array
+
+Use `stream.synchronize()` to ensure all commands in the stream has been completed.
+  
+An alternative syntax is available for use with a python context::
+	
+	stream = cuda.stream()
+	with stream.auto_synchronize():
+	    devary = cuda.to_device(an_array, stream=stream)
+	    a_cuda_kernel[griddim, blockdim, stream](devary) 
+	    cuda.to_host(devary)
+	# data available in an_array
+	
+When the python "with" context exits, the stream is automatically synchronized.
+
+Shared Memory
+------------------
+
+For maximum performance, a CUDA kernel needs to use shared memory for manual caching of data.  CUDA JIT supports the use of `cuda.shared.array(shape, dtype)` for specifying an numpy-array-like object inside a kernel.
+
+For example:::
+
+
+    bpg = 50
+    tpb = 32
+    n = bpg * tpb
+
+    @cuda.jit(argtypes=[f4[:,:], f4[:,:], f4[:,:]])
+    def cu_square_matrix_mul(A, B, C):
+        sA = cuda.shared.array(shape=(tpb, tpb), dtype=f4)
+        sB = cuda.shared.array(shape=(tpb, tpb), dtype=f4)
+        
+        tx = cuda.threadIdx.x
+        ty = cuda.threadIdx.y
+        bx = cuda.blockIdx.x
+        by = cuda.blockIdx.y
+        bw = cuda.blockDim.x
+        bh = cuda.blockDim.y
+
+        x = tx + bx * bw
+        y = ty + by * bh
+
+        acc = 0.
+        for i in range(bpg):
+            if x < n and y < n:
+                sA[ty, tx] = A[y, tx + i * tpb]
+                sB[ty, tx] = B[ty + i * tpb, x]
+
+            cuda.syncthreads()
+
+            if x < n and y < n:
+                for j in range(tpb):
+                    acc += sA[ty, j] * sB[j, tx]
+
+            cuda.syncthreads()
+
+        if x < n and y < n:
+            C[y, x] = acc
+
+
+
+The return value of `cuda.shared.array` is a numpy-array-like object.  The `shape` argument  is similar as in Numpy API, with the requirement that it must contain a constant expression.  The `dtype` argument takes Numba types.
+
+
+Synchronization Primitives
+--------------------------
+
+We currently support the `cuda.syncthreads()` only.  It is the same as `__syncthreads()` in CUDA-C.
