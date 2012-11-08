@@ -176,23 +176,24 @@ class CudaAttrRewriteMixin(object):
         if isinstance(node.value, CudaSMemArrayCallNode):
             assert len(node.targets) == 1
             target = node.targets[0] = self.visit(node.targets[0])
-            self.assign(target.variable, node.value.variable, node.value)
+            self.assign(target, node.value)
             return CudaSMemAssignNode(node.targets[0], node.value)
 
         # FIXME: the following is copied from TypeInferer.visit_Assign
         #        there seems to be some side-effect in visit(node.value)
+        node.inplace_op = getattr(node, 'inplace_op', None)
+
+        node.value = self.visit(node.value)
         if len(node.targets) != 1 or isinstance(node.targets[0], (ast.List,
                                                                   ast.Tuple)):
             return self._handle_unpacking(node)
-        
+
         target = node.targets[0] = self.visit(node.targets[0])
-       
-        node.value = self.assign(target.variable, node.value.variable,
-                                 node.value)
+        node.value = self.assign(target, node.value)
         return node
 
 
-class CudaTypeInferer(CudaAttrRewriteMixin, 
+class CudaTypeInferer(CudaAttrRewriteMixin,
                       type_inference.TypeInferer):
     pass
 
@@ -274,8 +275,24 @@ class NumbaproCudaPipeline(pipeline.Pipeline):
 #    
 #    def rewrite_cuda_sreg(self, node):
 #        return CudaSRegRewrite(self.context, self.func, node).visit(node)
+    order = [
+         'const_folding',
+         'type_infer',
+         'type_set',
+         'transform_for',
+         'specialize',
+         'late_specializer',
+         'fix_ast_locations',
+         'codegen',
+         ]
+
+    def make_specializer(self, cls, ast, **kwds):
+        self.mixins = {}
+        return super(NumbaproCudaPipeline, self).make_specializer(cls, ast,
+                                                                  **kwds)
 
     def type_infer(self, node):
+
         type_inferer = self.make_specializer(CudaTypeInferer, node,
                                              locals=self.locals)
         type_inferer.infer_types()
