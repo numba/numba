@@ -338,7 +338,7 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
                 # reductions.codes.append('print "%s:", %s' % (name, name))
             else:
                 if type.is_deferred:
-                    self.symtab.pop(name)
+                    self.symtab[name].deleted = True
                     continue
                 default = name
                 unpack_struct.codes.append(

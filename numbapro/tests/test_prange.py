@@ -50,10 +50,14 @@ def prange_privates_error():
         j = i * 2
         sum += j
 
+    print j
     return sum
 
 __doc__ += """
->> prange_privates_error()
+>>> prange_privates_error()
+Traceback (most recent call last):
+    ...
+NumbaError: 53:10: Local variable  'j' is not bound yet
 """
 
 @autojit
@@ -73,5 +77,6 @@ __doc__ += """
 """
 
 if __name__ == '__main__':
+#    prange_privates_error()
     import doctest
     doctest.testmod()
