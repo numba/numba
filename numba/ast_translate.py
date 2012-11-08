@@ -817,16 +817,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             return lptr
 
-    def visit_For(self, node):
-        if node.orelse:
-            # FIXME
-            raise error.NumbaError(node, 'Else in for-loop is not implemented.')
-
-        if node.iter.type.is_range:
-            self.generate_for_range(node, node.target, node.iter, node.body)
-        else:
-            raise error.NumbaError(node, "Looping over iterables")
-
     def _generate_test(self, llval):
         return self.builder.icmp(lc.ICMP_NE, llval,
                                  lc.Constant.null(llval.type))
@@ -1043,10 +1033,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.loop_exits.pop()
         self.in_loop -= 1
 
-    def generate_for_range(self, for_node, target, iternode, body):
-        '''
-        Implements simple for loops with iternode as range, xrange
-        '''
+    def visit_For(self, node):
+        raise error.NumbaError(node, "This node should have been replaced")
+
+    def visit_ForRangeNode(self, node):
+        """
+        Implements simple for loops over range or xrange
+        """
         # assert isinstance(target.ctx, ast.Store)
         bb_cond = self.append_basic_block('for.cond')
         bb_incr = self.append_basic_block('for.incr')
@@ -1054,8 +1047,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         bb_exit = self.append_basic_block('for.exit')
         self.setup_loop(bb_cond, bb_exit)
 
-        target = self.visit(target)
-        start, stop, step = self.visitlist(iternode.args)
+        target = self.visit(node.target)
+        start, stop, step = self.visitlist([node.start, node.stop, node.step])
 
         # generate initializer
         self.generate_assign(start, target)
@@ -1063,10 +1056,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # generate condition
         self.builder.position_at_end(bb_cond)
+        index = self.visit(node.index)
         op = _compare_mapping_sint['<']
-        # Please visit the children properly. Assuming ast.Name breaks the entire approach...
-        #ctvalue = self.generate_load_symbol(target.id)
-        index = self.visit(for_node.index)
         cond = self.builder.icmp(op, index, stop)
         self.builder.cbranch(cond, bb_body, bb_exit)
 
@@ -1077,7 +1068,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # generate body
         self.builder.position_at_end(bb_body)
-        for stmt in body:
+        for stmt in node.body:
             self.visit(stmt)
 
         if not self.is_block_terminated():
@@ -1163,6 +1154,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             meth = getattr(self.builder, llvm_method_name)
             if not lhs.type == rhs.type:
                 print ast.dump(node)
+                print lhs.type, rhs.type
                 assert False
             result = meth(lhs, rhs)
         elif (node.type.is_int or node.type.is_float) and op == ast.Mod:

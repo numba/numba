@@ -307,6 +307,22 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
         return self.pow(*node.args)
 
 
+def unpack_range_args(node):
+    start, stop, step = (nodes.const(0, Py_ssize_t),
+                             None,
+                             nodes.const(1, Py_ssize_t))
+
+    if len(node.args) == 0:
+        raise error.NumbaError(node, "Expected at least one argument")
+    elif len(node.args) == 1:
+        stop, = node.args
+    elif len(node.args) == 2:
+        start, stop = node.args
+    else:
+        start, stop, step = node.args
+
+    return [start, stop, step]
+
 class TransformForIterable(visitors.NumbaTransformer):
     """
     This transforms for loops such as loops over 1D arrays:
@@ -321,8 +337,48 @@ class TransformForIterable(visitors.NumbaTransformer):
     """
 
     def visit_For(self, node):
+        if node.orelse:
+            raise error.NumbaError(node, 'Else in for-loop is not implemented.')
+
         if node.iter.type.is_range:
-            return node
+
+
+            self.generic_visit(node)
+
+            temp = nodes.TempNode(node.target.type)
+            nsteps = nodes.TempNode(Py_ssize_t)
+            start, stop, step = [nodes.CloneableNode(n)
+                                     for n in unpack_range_args(node.iter)]
+
+            s1 = self.run_template(
+                    """
+                        $length = {{stop}} - {{start}}
+                        {{nsteps}} = $length / {{step}}
+                        if $length % {{step}}:
+                            {{nsteps}} = {{nsteps_load}} + 1
+                    """,
+                    vars=dict(length=Py_ssize_t),
+                    start=start, stop=stop, step=step,
+                    nsteps=nsteps.store(), nsteps_load=nsteps.load())
+
+            # Rely on LLVM strength reduction. It's easier this way, or we
+            # need to make the assignment to 'target' conditional for zero
+            # iterations
+            s2 = self.run_template(
+                    "{{target}} = {{start}} + {{temp}} * {{step}}",
+                    target=node.target, start=start.clone, stop=stop.clone,
+                    step=step.clone, temp=temp.load())
+
+            body = node.body
+            body.insert(0, s2)
+            zero = nodes.const(0, nsteps.type)
+            one = nodes.const(1, nsteps.type)
+            return ast.Suite([s1, nodes.ForRangeNode(index=temp.load(),
+                                                     target=temp.store(),
+                                                     start=zero,
+                                                     stop=nsteps.load(),
+                                                     step=one,
+                                                     body=body)])
         elif node.iter.type.is_array and node.iter.type.ndim == 1:
             # Convert 1D array iteration to for-range and indexing
             logger.debug(ast.dump(node))
@@ -332,7 +388,7 @@ class TransformForIterable(visitors.NumbaTransformer):
 
             # replace node.target with a temporary
             target_name = orig_target.id + '.idx'
-            target_temp = nodes.TempNode(minitypes.Py_ssize_t)
+            target_temp = nodes.TempNode(Py_ssize_t)
             node.target = target_temp.store()
 
             # replace node.iter
@@ -367,7 +423,7 @@ class TransformForIterable(visitors.NumbaTransformer):
 
             node.body = [assign] + node.body
 
-            return node
+            return self.visit(node)
         else:
             raise error.NumbaError("Unsupported for loop pattern")
 
@@ -591,14 +647,16 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             printfunc = self._print
             dst_type = object_
 
-        print_space = printfunc(nodes.const(" ", dst_type), node.dest)
-
         result = []
-        for value in node.values:
-            result.append(printfunc(value, node.dest))
-            result.append(print_space)
 
-        result.pop() # pop last space
+        if node.values:
+            print_space = printfunc(nodes.const(" ", dst_type), node.dest)
+            for value in node.values:
+                result.append(printfunc(value, node.dest))
+                result.append(print_space)
+
+            if node.nl:
+                result.pop() # pop last space
 
         if node.nl:
             result.append(printfunc(nodes.const("\n", dst_type), node.dest))
@@ -629,7 +687,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
     def visit_Call(self, node):
         func_type = node.func.type
 
-        if func_type.is_builtin and not node.type.is_range:
+        if func_type.is_builtin:
             result = self._resolve_builtin_call_or_object(node, func_type.func)
             result =  self.visit(result)
             return result

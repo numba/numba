@@ -202,7 +202,7 @@ class BuiltinType(NumbaType, minitypes.ObjectType):
         self.name = name
         self.func = getattr(__builtin__, name)
 
-class RangeType(NumbaType):
+class RangeType(NumbaType, minitypes.ObjectType):
     is_range = True
 
 class NoneType(NumbaType, minitypes.ObjectType):

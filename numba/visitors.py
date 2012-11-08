@@ -88,6 +88,19 @@ class NumbaVisitorMixin(CooperativeBase):
                 func_signature.args and
                 func_signature.args[0].is_closure_scope)
 
+    def run_template(self, s, vars=None, **substitutions):
+        from numba import template
+
+        templ = template.TemplateContext(self.context, s)
+        if vars:
+            for name, type in vars.iteritems():
+                templ.temp_var(name, type)
+
+        symtab, tree = templ.template_type_infer(substitutions,
+                                                 symtab=self.symtab)
+        self.symtab.update(templ.get_vars_symtab())
+        return tree
+
     def error(self, node, msg):
         raise error.NumbaError(node, msg)
 

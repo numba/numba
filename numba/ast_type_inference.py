@@ -55,25 +55,9 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
     """
 
     def _resolve_range(self, func, node, argtype):
-        arg_type = minitypes.Py_ssize_t
         node.variable = Variable(numba_types.RangeType())
         args = self.visitlist(node.args)
-
-        if not args:
-            raise error.NumbaError("No argument provided to %s" % node.id)
-
-        start = nodes.ConstNode(0, arg_type)
-        step = nodes.ConstNode(1, arg_type)
-
-        if len(args) == 3:
-            start, stop, step = args
-        elif len(args) == 2:
-            start, stop = args
-        else:
-            stop, = args
-
-        node.args = nodes.CoercionNode.coerce([start, stop, step],
-                                              dst_type=minitypes.Py_ssize_t)
+        node.args = nodes.CoercionNode.coerce(args, dst_type=Py_ssize_t)
         return node
 
     _resolve_xrange = _resolve_range
@@ -623,9 +607,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                    'Else in for-loop is not implemented.')
 
         target = node.target
-        if not isinstance(target, ast.Name):
-            self.error(node.target,
-                       "Only assignment to target names is supported.")
+        #if not isinstance(target, ast.Name):
+        #    self.error(node.target,
+        #               "Only assignment to target names is supported.")
 
         node.target = self.visit(node.target)
         node.iter = self.visit(node.iter)
@@ -634,12 +618,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.target = self.assign(node.target.variable, Variable(base_type),
                                   node.target)
 
-        if node.iter.variable.type.is_range:
-            node.index = self.visit(ast.Name(id=target.id, ctx=ast.Load()))
-            node.index.type = node.index.variable.type
-
         self.visitlist(node.body)
-
         return node
 
     def visit_While(self, node):

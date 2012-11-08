@@ -863,7 +863,7 @@ def _sort_types_key(field_type):
         return field_type.rank
     elif field_type.is_vector:
         return _sort_key(field_type.element_type) * field_type.vector_size
-    elif field_type.is_array:
+    elif field_type.is_carray:
         return _sort_key(field_type.base_type) * field_type.size
     elif field_type.is_pointer or field_type.is_object or field_type.is_array:
         return 8

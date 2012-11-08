@@ -45,7 +45,7 @@ class TestPrint(unittest.TestCase):
         temp_out = StringIO.StringIO()
         print_no_newline(temp_out, 14.1)
         data = temp_out.getvalue()
-        assert data == "14.1", repr(data)
+        assert data == "14.1 ", repr(data)
 
 if __name__ == "__main__":
     print_nopython(10)

@@ -280,6 +280,9 @@ _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)
 NULL = ConstNode(_NULL, void.pointer())
 
+class ForRangeNode(Node):
+    _fields = ['index', 'target', 'start', 'stop', 'step', 'body']
+
 class FunctionCallNode(Node):
     _attributes = ['signature', 'type', 'name']
 
