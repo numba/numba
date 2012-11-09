@@ -9,6 +9,14 @@ import ast
 import copy
 import types
 import ctypes
+import warnings
+import multiprocessing
+
+try:
+    NUM_THREADS = multiprocessing.cpu_count()
+except NotImplementedError:
+    warnings.warn("Unable to determine cpu count, assuming 2")
+    NUM_THREADS = 2
 
 import llvm.core
 from llvm.core import Type, inline_function
@@ -309,7 +317,7 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
         """)
 
         # Allocate context for each thread
-        num_threads = 4
+        num_threads = NUM_THREADS
         contexts_array_type = minitypes.CArrayType(struct_type,
                                                    num_threads)
 
