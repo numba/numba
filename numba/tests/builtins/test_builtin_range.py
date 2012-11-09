@@ -22,6 +22,8 @@ done
 
 >>> empty_assign()
 14
+>>> last_value()
+9
 """
 
 from numba import *
@@ -79,6 +81,13 @@ def empty_assign():
     i = 14
     for i in range(10, 4):
         pass
+    print i
+
+@autojit
+def last_value():
+    for i in range(10):
+        pass
+
     print i
 
 if __name__ == '__main__':
