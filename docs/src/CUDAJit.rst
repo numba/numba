@@ -6,7 +6,7 @@ CUDA JIT
 
 **Warning: CUDA devices with compute capability less than 1.3 do not support double precision arithmetic.**
 
-CUDA JIT translates Python function into a CUDA kernel.  It uses translated code from Numba and converts it to `PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_.  NumbaPro interacts with the CUDA Runtime Libraries to load the PTX onto the CUDA device and execute.  
+CUDA JIT translates Python function into a CUDA kernel.  It uses translated code from Numba and converts it to `PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_.  NumbaPro interacts with the CUDA Driver Libraries to load the PTX onto the CUDA device and execute.  
 
 Imports
 -------
@@ -58,7 +58,7 @@ Lastly, we call `cuda_sum_configured` with three NumPy arrays as arguments::
 	c = np.empty_like(a)
 	cuda_sum_configured(a, b, c)
 
-You can also do the configuration and calling together::
+Users can also do the configuration and calling together::
 
 	cuda_sum[griddim, blockdim](a, b, c)
 
@@ -149,6 +149,51 @@ For example:::
 
         if x < n and y < n:
             C[y, x] = acc
+
+The same code in CUDA-C will be:::
+
+    #define pos2d(Y, X, W) ((Y) * (W) + (X))
+
+    const unsigned int BPG = 50;
+    const unsigned int TPB = 32;
+    const unsigned int N = BPG * TPB;
+
+    __global__
+    void cuMatrixMul(const float A[], const float B[], float C[]){
+        __shared__ float sA[TPB * TPB];
+        __shared__ float sB[TPB * TPB];
+
+        unsigned int tx = threadIdx.x;
+        unsigned int ty = threadIdx.y;
+        unsigned int bx = blockIdx.x;
+        unsigned int by = blockIdx.y;
+        unsigned int bw = blockDim.x;
+        unsigned int bh = blockDim.y;
+
+        unsigned int x = tx + bx * bw;
+        unsigned int y = ty + by * bh;
+
+        float acc = 0.0;
+        
+        for (int i = 0; i < BPG; ++i) {
+            if (x < N and y < N) {
+                sA[pos2d(ty, tx, TPB)] = A[pos2d(y, tx + i * TPB, N)];
+                sB[pos2d(ty, tx, TPB)] = B[pos2d(ty + i * TPB, x, N)];
+            }
+            __syncthreads();
+            if (x < N and y < N) {
+                for (int j = 0; j < TPB; ++j) {
+                    acc += sA[pos2d(ty, j, TPB)] * sB[pos2d(j, tx, TPB)];
+                }
+            }
+            __syncthreads();
+        }
+
+        if (x < N and y < N) {
+            C[pos2d(y, x, N)] = acc;
+        }
+    }
+
 
 
 

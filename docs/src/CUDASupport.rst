@@ -2,14 +2,12 @@
 CUDA Support
 ------------
 
-All CUDA features are still in experimental stages. Computation speeds may have unexpected results.  CUDA cards with compute capability less than 1.3 do not support double-precision floating-point arithmetic.
+All CUDA supports are dependent on `CUDA 5 <https://developer.nvidia.com/cuda-toolkit>`_ and `NVVM <https://developer.nvidia.com/cuda-llvm-compiler>`_.  NVVM is a CUDA LLVM Compiler that is only available to registered Nvidia Developer.
 
-CUDA features have been verified to work on Linux 32-bit and 64-bit.  On Windows, there is a known issue with CUDA Generalized UFunc.  CUDA features are not verified to work on Windows 32-bit, Mac 32-bit and Mac 64-bit.
+NumbaPro tries to locate the CUDA driver automatically.  Users can override the location by setting the environment variable NUMBAPRO_CUDA_DRIVER to point to the path of the CUDA driver shared library.
 
+For the NVVM shared library, NumbaPro will try to find it in the current directory.  Users can override the location by providing the environment variable NUMBAPRO_NVVM that points to the path of the NVVM shared library.
 
+All CUDA features are experimental. Computation speeds may have unexpected results.  CUDA cards with compute capability less than 1.3 do not support double-precision floating-point arithmetic.
 
-**Supported**: Linux 32-bit and 64-bit.
-
-**Partially supported**: Windows 64-bit. (Problem with CUDA GUFunc)
-
-**Not verified**: Windows 32-bit, Mac 32-bit and Mac 64-bit.
+**Supported**: Linux, Windows and Mac OSX 32/64-bit with CUDA 5 and NVVM.
