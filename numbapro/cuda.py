@@ -66,11 +66,12 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
     if restype == None: restype = void
     assert device or restype == void,\
            ("Only device function can have return value %s" % restype)
-    assert kws.get('_llvm_ee') is None
+    if kws.pop('_llvm_ee', None) is not None:
+        raise Exception("_llvm_ee should not be defined.")
     assert not inline or device
     kws['nopython'] = True # override nopython option
     def _jit2(func):
-        llvm_module = (kws.get('_llvm_module')
+        llvm_module = (kws.pop('llvm_module', None)
                        or _lc.Module.new('ptx_%s' % func))
         if not hasattr(func, '_is_numba_func'):
             func._is_numba_func = True
@@ -83,7 +84,7 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
         result = function_cache.compile_function(func, argtypes,
                                                  ctypes=True,
                                                  llvm_module=llvm_module,
-                                                 llvm_ee=None,
+                                                 _llvm_ee=None,
                                                  **kws)
 
         signature, lfunc, unused = result
