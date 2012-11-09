@@ -496,11 +496,12 @@ class UFuncCoreGeneric(UFuncCore):
 
 
 if sys.platform == 'win32':
-    class ParallelUFuncPlatform(ParallelUFunc, ParallelUFuncWindowsMixin):
-        pass
+    ParallelMixin = ParallelUFuncWindowsMixin
 else:
-    class ParallelUFuncPlatform(ParallelUFunc, ParallelUFuncPosixMixin):
-        pass
+    ParallelMixin = ParallelUFuncPosixMixin
+
+class ParallelUFuncPlatform(ParallelUFunc, ParallelMixin):
+    pass
 
 class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
     def build(self, lfunc, dtypes):

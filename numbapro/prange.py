@@ -473,7 +473,7 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
 
             self.ret()
 
-    class RunThreadPool(CDefinition, parallel.ParallelUFuncPosixMixin):
+    class RunThreadPool(CDefinition, parallel.ParallelMixin):
         """
         Function that spawns the thread pool.
         """

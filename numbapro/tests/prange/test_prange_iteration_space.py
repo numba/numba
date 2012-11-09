@@ -21,6 +21,9 @@ import numba
 from numba import *
 import numpy as np
 
+import nose.tools
+
+@nose.tools.nottest
 def test(func):
     N = 10
     A = np.empty(N, dtype=np.float32)
