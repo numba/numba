@@ -8,6 +8,8 @@ import numba
 from numba import utils
 from numba import *
 
+import numpy as np
+
 @autojit
 def prange_reduction():
     sum = 0.0
@@ -26,7 +28,7 @@ __doc__ += """
 >>> prange_reduction_error()
 Traceback (most recent call last):
     ...
-NumbaError: 21:8: Reduction variable 'sum' must be initialized before the loop
+NumbaError: 23:8: Local variable  'sum' is not bound yet
 """
 
 @autojit
@@ -44,7 +46,7 @@ __doc__ += """
 """
 
 @autojit
-def prange_privates_error():
+def prange_lastprivate():
     sum = 10.0
     for i in numba.prange(10):
         j = i * 2
@@ -54,10 +56,9 @@ def prange_privates_error():
     return sum
 
 __doc__ += """
->>> prange_privates_error()
-Traceback (most recent call last):
-    ...
-NumbaError: 53:10: Local variable  'j' is not bound yet
+>>> prange_lastprivate()
+18
+100.0
 """
 
 @autojit
@@ -76,7 +77,25 @@ __doc__ += """
 100.0
 """
 
+@autojit
+def test_sum2d(A):
+    sum = 0.0
+    for i in numba.prange(A.shape[0]):
+        for j in range(A.shape[1]):
+            sum += A[i, j]
+
+    return sum
+
+__doc__ += """
+>>> a = np.arange(100).reshape(10, 10)
+>>> test_sum2d(a)
+4950.0
+>>> test_sum2d(a.astype(np.complex128))
+(4950+0j)
+>>> np.sum(a)
+4950
+"""
+
 if __name__ == '__main__':
-#    prange_privates_error()
     import doctest
     doctest.testmod()

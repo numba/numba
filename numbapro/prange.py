@@ -6,6 +6,7 @@ Support for
 """
 
 import ast
+import copy
 import types
 import ctypes
 
@@ -17,7 +18,8 @@ from llvm_cbuilder import builder
 
 import numba.decorators
 from numba import *
-from numba import error, visitors, nodes, template, ast_type_inference
+from numba import (error, visitors, nodes, template, ast_type_inference,
+                   transforms)
 from numba.minivect import  minitypes
 from numba import  _numba_types as numba_types
 from numba.symtab import Variable
@@ -113,6 +115,8 @@ class VariableFindingVisitor(visitors.NumbaVisitor):
                                   "(%s and %s) for variable %r" % (
                                             op, previous_op, target.id))
             else:
+                # This will not be triggered, since the body is already
+                # analyzed
                 if (self.outer_symtab[target.id].type is None and
                         redop is not None):
                     raise error.NumbaError(
@@ -123,11 +127,11 @@ class VariableFindingVisitor(visitors.NumbaVisitor):
 
     def visit_Assign(self, node):
         self.generic_visit(node)
-        self.register_assignment(node, node.targets[0], None)
+        self.register_assignment(node, node.targets[0], node.inplace_op)
 
-    def visit_AugAssign(self, node):
+    def visit_For(self, node):
         self.generic_visit(node)
-        self.register_assignment(node, node.target, node.op)
+        self.register_assignment(node, node.target, None)
 
     def visit_Name(self, node):
         self.referenced[node.id] = node
@@ -158,10 +162,6 @@ class PrangePrivatesReplacerMixin(object):
     Rewrite private variables to accesses on the privates during
     closure type inference (closure type inference of the outer function, and
     type inference of the inner function).
-
-    We do this because we may not mutate the prange body AST before
-    closure type inference has run, but need to rewrite accesses of
-    non-existent private variables to accesses on the struct.
     """
 
     privates_struct = None
@@ -184,35 +184,39 @@ class PrangePrivatesReplacerMixin(object):
         super(PrangePrivatesReplacerMixin, self).visit_FunctionDef(func_def)
         self.in_prange_body -= 1
 
+        # Update symtab with inferred types
+        for name, type in self.privates_struct_type.fields:
+            var = self.closure_scope.get(name, None)
+            if var and not type == var.type:
+                if type.is_deferred:
+                    if not type.resolve().is_deferred:
+                        var.type = type.resolve()
+                else:
+                    var.type = type
+
     def visit_Name(self, node):
         if self.in_prange_body:
-            privates_struct = ast.Name('__numba_privates', ast.Load()) #node.ctx)
-#            privates_struct.type = func_def.args.args[-1].type.base_type
+            privates_struct = ast.Name('__numba_privates', node.ctx)
             privates_struct.type = self.privates_struct_type
             privates_struct.variable = Variable(privates_struct.type,
                                                 is_local=True)
 
-#            privates_struct = self.privates_struct
-#            privates_struct_type = privates_struct.type
             if node.id in self.privates_struct_type.fielddict:
                 self.symtab.pop(node.id, None)
-#                privates_struct = ast.Name('__numba_privates', ast.Store())
-#                privates_struct.variable = Variable(privates_struct_type,
-#                                                    is_local=True)
-#                Although the actual type is struct *, we pretend the type
-#                is actually struct
-#                privates_struct.type = privates_struct_type
 
-                result = ast.Attribute(value=privates_struct, attr=node.id,
-                                       ctx=node.ctx)
-                result.type = self.privates_struct_type.fielddict[node.id]
-                result.variable = Variable(result.type)
-                result = self.visit(result)
+                result = nodes.StructAttribute(
+                        value=privates_struct, attr=node.id,
+                        struct_type=self.privates_struct_type, ctx=node.ctx)
+                if result.type.is_deferred:
+                    result.type = result.type.resolve()
                 return result
 
         return super(PrangePrivatesReplacerMixin, self).visit_Name(node)
 
 class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
+    """
+    Rewrite prange() loops.
+    """
 
     prange = 0
 
@@ -225,20 +229,7 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
             return super(PrangeTypeInfererMixin, self).visit_Call(node)
 
         ast_type_inference.no_keywords(node)
-        start, stop, step = (nodes.const(0, Py_ssize_t),
-                             None,
-                             nodes.const(1, Py_ssize_t))
-
-        if len(node.args) == 0:
-            raise error.NumbaError(node, "Expected at least one argument")
-        elif len(node.args) == 1:
-            stop, = node.args
-        elif len(node.args) == 2:
-            start, stop = node.args
-        else:
-            start, stop, step = node.args
-
-        start, stop, step = self.visitlist([start, stop, step])
+        start, stop, step = self.visitlist(transforms.unpack_range_args(node))
         node = PrangeNode(start, nodes.CoercionNode(stop, Py_ssize_t), step)
         return node
 
@@ -252,30 +243,37 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
                                        "Else clause to prange not yet supported")
 
             prange_node = node.iter
+
+            # Copy the pure AST for compile() during closure type inference
+            pure_ast_body = copy.deepcopy(node.body)
+
+            node.target = self.visit(node.target)
+            self.assign(node.target, node.iter, Variable(Py_ssize_t))
+
+            # Analyze types before outlining
+            node.body = self.visitlist(node.body)
+
+            # Outline function body
             result = outline_prange_body(self.context, self.func, self.symtab,
                                          ast.Suite(body=node.body))
             closure, privates_struct_type, reductions = result
-            if len(closure.body) == 1 and isinstance(closure.body[0], ast.Suite):
-                # compile(...) doesn't accept ast.Suite, replace it
-                closure.body = closure.body[0].body
+            closure.pure_ast_body = pure_ast_body
 
-            node.target = self.visit(node.target)
-            target = self.assign(node.target.variable, Variable(Py_ssize_t),
-                                 node.target)
-
+            # Pack privates and reductions in a struct and inject function
+            # as a closure
             self.prange += 1
             result = self.visit_PrangeNode(
                         prange_node, closure, privates_struct_type,
-                        dict(reductions), target)
+                        dict(reductions), node.target)
             self.prange -= 1
 
             return result
 
         node = super(PrangeTypeInfererMixin, self).visit_For(node)
-#        self.generic_visit(node)
         return node
 
-    def visit_PrangeNode(self, node, func_def, struct_type, reductions_dict, target):
+    def visit_PrangeNode(self, node, func_def, struct_type,
+                         reductions_dict, target):
         templ = template.TemplateContext(self.context, """
             {{func_def}}
 
@@ -382,11 +380,6 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
             stop=node.stop,
             step=node.step)
 
-#        symtab = dict(self.symtab, __numba_privates=Variable(struct_type, is_local=True))
-#        symtab, tree = templ.template_type_infer(subs, symtab=symtab)
-#        self.symtab.update(symtab)
-#        self.ast.closures.extend(tree.closures)
-
         self.symtab.update(templ.get_vars_symtab())
         tree = templ.template(subs)
         result = self.visit(tree)
@@ -395,6 +388,9 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
 
 
 class PrangeCodegenMixin(object):
+    """
+    Code generator mixin that handles InvokeAndJoinThreads. Uses llvm_cbuilder
+    """
 
     def visit_InvokeAndJoinThreads(self, node):
         closure_type = self.symtab[node.func_def_name].type
@@ -473,6 +469,9 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
             self.ret()
 
     class RunThreadPool(CDefinition, parallel.ParallelUFuncPosixMixin):
+        """
+        Function that spawns the thread pool.
+        """
 
         _name_ = "invoke_prange_%d" % _count
         _argtys_ = [
