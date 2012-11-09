@@ -78,6 +78,7 @@ ast_to_unary_operator = {
     ast.USub    : '-',
     ast.UAdd    : '+',
 }
+
 class NotConstExprError(Exception):
     pass
 

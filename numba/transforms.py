@@ -1003,10 +1003,10 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
             if node.exc_args:
                 args = [node.exc_type, node.exc_msg, node.exc_args]
-                raise_node = self.function_cache.call('PyErr_Format', args)
+                raise_node = self.function_cache.call('PyErr_Format', *args)
             else:
                 args = [node.exc_type, node.exc_msg]
-                raise_node = self.function_cache.call('PyErr_SetString', args)
+                raise_node = self.function_cache.call('PyErr_SetString', *args)
 
             body.append(raise_node)
 
