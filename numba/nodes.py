@@ -472,8 +472,9 @@ class RaiseNode(Node):
     def __init__(self, exc_type, exc_msg, exc_args=None, print_on_trap=True,
                  **kwargs):
         super(RaiseNode, self).__init__(**kwargs)
-
+        self.exception_type = None
         if isinstance(exc_type, type) and issubclass(exc_type, BaseException):
+            self.exception_type = exc_type
             exc_type = ObjectInjectNode(exc_type)
         if isinstance(exc_msg, (str, unicode)):
             exc_msg = const(exc_msg, c_string_type)

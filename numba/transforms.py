@@ -1013,7 +1013,12 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
     def _trap(self, body, node):
         if node.exc_msg and node.print_on_trap:
             pos = error.format_pos(node)
-            msg = '%s: %s%%s' % (node.exc_type, pos)
+            if node.exception_type:
+                exc_type = '%s: ' % node.exception_type.__name__
+            else:
+                exc_type = ''
+
+            msg = '%s%s%%s' % (exc_type, pos)
             format = nodes.const(msg, c_string_type)
             print_msg = self.function_cache.call('printf', format, node.exc_msg)
             body.append(print_msg)
