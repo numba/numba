@@ -76,7 +76,8 @@ class ClosureMixin(object):
 
     def _err_decorator(self, decorator):
         raise error.NumbaError(
-                decorator, "Only @jit and @autojit decorators are supported")
+                decorator, "Only @jit and @autojit and signature decorators "
+                           "are supported")
 
     def _check_valid_argtype(self, argtype_node, argtype):
         if not isinstance(argtype, minitypes.Type):
@@ -158,6 +159,15 @@ class ClosureMixin(object):
         del func_def.decorator_list[:]
         return signature
 
+    def _check_signature_decorator(self, decorator):
+        dec = self.visit(decorator)
+        type = dec.variable.type
+        print type
+        if type.is_cast and type.dst_type.is_function:
+            return type.dst_type
+        else:
+            self._err_decorator(decorator)
+
     def _process_decorators(self, node):
         if not node.decorator_list:
             if hasattr(node, 'func_signature'):
@@ -182,13 +192,14 @@ class ClosureMixin(object):
             decorator_name = decorator.func.id
 
         if decorator_name not in ('jit', 'autojit'):
-            self._err_decorator(decorator)
+            signature = self._check_signature_decorator(decorator)
+        else:
+            if decorator_name == 'autojit':
+                raise error.NumbaError(
+                    decorator, "Dynamic closures not yet supported, use @jit")
 
-        if decorator_name == 'autojit':
-            raise error.NumbaError(
-                decorator, "Dynamic closures not yet supported, use @jit")
+            signature = self._handle_jit_decorator(node, decorator)
 
-        signature = self._handle_jit_decorator(node, decorator)
         return signature
 
     def visit_FunctionDef(self, node):

@@ -281,7 +281,19 @@ Traceback (most recent call last):
 NumbaError: 1:0: Function with non-void return does not return a value
 """
 
+@autojit
+def signature_dec():
+    @object_()
+    def inner():
+        return "hello"
+    return inner
+
+__doc__ += """
+>>> signature_dec()
+"""
+
 if __name__ == '__main__':
 #    print objects("hello")
-    import doctest
-    doctest.testmod()
+    print signature_dec()
+#    import doctest
+#    doctest.testmod()

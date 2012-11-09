@@ -1039,6 +1039,18 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         new_node.variable = Variable(result_type)
         return new_node
 
+    def _parse_signature(self, node, func_type):
+        types = []
+        for arg in node.args:
+            if not node.arg.variable.type.is_cast:
+                self.error(arg, "Expected a numba type")
+            else:
+                types.append(arg.variable.type)
+
+        signature = func_type.dst_type(*types)
+        new_node = nodes.const(signature, numba_types.CastType(signature))
+        return new_node
+
     def visit_Call(self, node):
         if node.starargs or node.kwargs:
             raise error.NumbaError("star or keyword arguments not implemented")
@@ -1082,12 +1094,16 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     py_func=func_type.ctypes_func)
 
         elif func_type.is_cast:
-            # Call of a numba type, like double(value)
+            # Call of a numba type
+            # 1) double(value) -> cast value to double
+            # 2) double() or double(object_, double), ->
+            #       this specifies a function signature
             no_keywords(node)
-            if not node.args:
-                raise error.NumbaError(node, "Expected one argument for cast")
-            new_node = nodes.CoercionNode(node.args[0], func_type.dst_type,
-                                          name="cast")
+            if len(node.args) != 1 or node.args[0].variable.type.is_cast:
+                new_node = self._parse_signature(node, func_type)
+            else:
+                new_node = nodes.CoercionNode(node.args[0], func_type.dst_type,
+                                              name="cast")
 
         if new_node is None:
             # All other type of calls:
