@@ -9,7 +9,7 @@ import numba
 from numba import *
 from numba import error, pipeline, nodes
 from numba.minivect import minierror, minitypes, specializers, miniast
-from numba import translate, utils, functions, nodes
+from numba import translate, utils, functions, nodes, transforms
 from numba.symtab import Variable
 from numba import visitors, nodes, error, ast_type_inference, ast_translate
 from numba.utils import dump
@@ -20,7 +20,8 @@ from numbapro.vectorize import basic, minivectorize
 import numpy
 
 class ArrayExpressionRewrite(visitors.NumbaTransformer,
-                             ast_type_inference.NumpyMixin):
+                             ast_type_inference.NumpyMixin,
+                             transforms.MathMixin):
     """
     Find element-wise expressions and run ElementalMapper to turn it into
     a minivect AST or a ufunc.
@@ -66,6 +67,15 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         signature = restype(*argtypes)
         return py_ufunc, signature, ufunc_builder
 
+    def visit_elementwise(self, elementwise, node):
+        if elementwise and self.nesting_level == 0:
+            return self.register_array_expression(node)
+        self.nesting_level += 1
+        self.generic_visit(node)
+        self.nesting_level -= 1
+        self.elementwise = elementwise
+        return node
+
     def visit_Assign(self, node):
         self.is_slice_assign = False
         self.visitlist(node.targets)
@@ -91,17 +101,14 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
             return node.value
         return node
 
+    # TODO: move away from code objects, instead find locals in a visitor
+    #def visit_MathNode(self, node):
+    #    elementwise = node.arg.type.is_array
+    #    return self.visit_elementwise(elementwise, node)
+
     def visit_BinOp(self, node):
         elementwise = node.type.is_array
-        if elementwise and self.nesting_level == 0:
-            return self.register_array_expression(node)
-
-        self.nesting_level += 1
-        self.generic_visit(node)
-        self.nesting_level -= 1
-
-        self.elementwise = elementwise
-        return node
+        return self.visit_elementwise(elementwise, node)
 
     visit_UnaryOp = visit_BinOp
 

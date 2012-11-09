@@ -1,7 +1,7 @@
 import numbapro
 from numbapro.vectorize import GUVectorize
+import numba
 from numba import *
-from numba.decorators import autojit
 
 import numpy as np
 import numpy.core.umath_tests as ut
@@ -85,8 +85,16 @@ def test_gufunc_array_expressions():
         print(Gold)
         raise ValueError
 
+#@autojit
+#def vectorized_math(a):
+#    a[...] = np.cos(a) * np.sin(a)
+#    return a
+#
+#def test_vectorized_math():
+#    a = vectorized_math(np.arange(100, dtype=np.float64))
+#    b = vectorized_math.py_func(np.arange(100, dtype=np.float64))
+#    assert np.allclose(a, b)
 
 if __name__ == '__main__':
-    test_gufunc_array_expressions()
-    test_array_expressions()
-    test_matmul()
+#    test_vectorized_math()
+    numba.nose_run()
