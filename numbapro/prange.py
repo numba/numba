@@ -325,9 +325,12 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
 
         lastprivates_struct = "%s[{{num_threads}} - 1]" % contexts
 
+        target_name = target.id
+        struct_type.add_field(target_name, target.variable.type)
+
         # Create code for reductions and (last)privates
         for i, (name, type) in enumerate(struct_type.fields):
-            if name in reductions_dict:
+            if name != target_name and name in reductions_dict:
                 reduction_op = reductions_dict[name]
                 default = get_reduction_default(reduction_op)
                 reductions.codes.append(
@@ -348,9 +351,6 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
 
         # Update struct type with closure scope, index variable, start,
         # stop and step
-        target_name = target.id
-        if target_name not in struct_type.fielddict:
-            struct_type.add_field(target_name, target.variable.type)
         struct_type.add_field('__numba_closure_scope', void.pointer())
         struct_type.add_field('__numba_start', npy_intp)
         struct_type.add_field('__numba_stop', npy_intp)
@@ -453,7 +453,12 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
             start = self.var(C.npy_intp, gf('start'))
             stop = self.var(C.npy_intp, gf('stop'))
             step = self.var(C.npy_intp, gf('step'))
-            nsteps = self.var(C.npy_intp, (stop - start) / step)
+            length = stop - start
+            nsteps = self.var(C.npy_intp, length / step)
+            zero = self.constant(C.npy_intp, 0)
+            with self.ifelse(length % step != zero) as ifelse:
+                with ifelse.then():
+                    nsteps += self.constant(C.npy_intp, 1)
 
             with self.for_range(nsteps) as (loop, i):
                 getattr(context, target_name).assign(start)
