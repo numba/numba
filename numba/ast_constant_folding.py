@@ -204,10 +204,7 @@ class ConstantFolder(visitors.NumbaTransformer):
         rval = node.right = self.visit(node.right)
 
         if self.is_constant(lval) and self.is_constant(rval):
-            try:
-                return self.eval_binary_operation(node.op, lval, rval)
-            except NotConstExprError, e:
-                return node
+            return self.eval_binary_operation(node.op, lval, rval)
         else:
             return node
 
@@ -300,11 +297,16 @@ class ConstantFolder(visitors.NumbaTransformer):
                 return None
             elif node.id in self.constvalues:
                 return self.valueof(self.constvalues[node.id])
-
-        raise NotConstExprError
+            else:
+                value = self.func.func_globals[node.id]
+                if not is_simple_value(value):
+                    raise ValueError("%s is not a simple value.")
+                return value
+        raise ValueError("node %s is not a has constant value" % node)
 
     def is_constant(self, node):
-        return is_constant(node, set(self.func.func_globals) | set(self.constvalues))
+        globals = set(self.func.func_globals).difference(self.local_names)
+        return is_constant(node, globals | set(self.constvalues))
 
 def is_constant(node, constants=set()):
     if isinstance(node, ast.Num):

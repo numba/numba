@@ -45,6 +45,14 @@ def cf_10():
     i = j = 123
     return i + j
 
+def cf_11(M):
+    return M + 2
+
+def cf_12(a):
+    M = a
+    return M + 2
+
+
 class TestConstFolding(unittest.TestCase):
     def run_pipeline(self, func):
         func_sig = minitypes.FunctionType(minitypes.void, [])
@@ -95,7 +103,6 @@ class TestConstFolding(unittest.TestCase):
         self.assertEqual(names[0].id, str(1 != 2 and 3 < 4 and 5 > 8 / 9))
 
     def test_cf_6(self):
-        raise unittest.SkipTest("Fix global variable constant folding")
         astree = self.run_pipeline(cf_6)
         print utils.pformat_ast(astree)
         names = list(self.iter_all(astree, ast.Name))
@@ -141,6 +148,26 @@ class TestConstFolding(unittest.TestCase):
         nums = list(self.iter_all(astree, ast.Num))
         self.assertEqual(len(names), 2)
         self.assertEqual(len(nums), 2)
+
+    def test_cf_11(self):
+        astree = self.run_pipeline(cf_11)
+        print utils.pformat_ast(astree)
+        names = list(self.iter_all(astree, ast.Name))
+        nums = list(self.iter_all(astree, ast.Num))
+        self.assertEqual(len(names), 2)
+        self.assertEqual(len(nums), 1)
+        self.assertEqual(nums[0].n, (2))
+    
+    def test_cf_12(self):
+        astree = self.run_pipeline(cf_12)
+        print utils.pformat_ast(astree)
+        names = list(self.iter_all(astree, ast.Name))
+        nums = list(self.iter_all(astree, ast.Num))
+        self.assertEqual(len(names), 4)
+        self.assertEqual(len(nums), 1)
+        self.assertEqual(nums[0].n, (2))
+
+
 
 if __name__ == '__main__':
     unittest.main()
