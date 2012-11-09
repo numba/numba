@@ -18,6 +18,14 @@ def get_functions():
         result = a**2 + b**2
         return np.log10(result) + 1.6
 
+    def log1p(a, b):
+        result = a**2 + b**2
+        return np.log1p(result) + 1.6
+
+    def log2(a, b):
+        result = a**2 + b**2
+        return np.log2(result) + 1.6
+
     def exp(a, b):
         result = a**2 + b**2
         return np.exp(result) + 1.6

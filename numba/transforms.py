@@ -128,6 +128,8 @@ class MathMixin(object):
         'acosh',
         'atanh',
         'log2',
+        'log10',
+        'log1p',
         'fabs',
         'pow',
         'erfc',
