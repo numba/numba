@@ -105,10 +105,30 @@ def test_index_slice_assmt(dtype):
     a = b[0]
     test_kernel(broadcast_expr7, a, b)
 
+@autojit
+def test_shape_mismatch(a, b):
+    """
+    >>> a, b = operands(np.double)
+    >>> test_shape_mismatch(a[:2], b)
+    Traceback (most recent call last):
+        ...
+    ValueError: Shape mismatch while broadcasting
+    """
+    b[...] = a + b
+
 if __name__ == "__main__":
-#    a, b = operands('l')
-#    print broadcast_expr6.py_func(a, b)
-#    print hex(a.ctypes.data)
-#    print hex(b.ctypes.data)
+#    a, b = operands(np.float64)
+#    test_shape_mismatch(a[:2], b)
+
+#    print test(np.double)
+#    print test('l')
+#    print test(np.complex128)
+#    print test(np.complex64)
+
+#    print test_index_slice_assmt(np.double)
+#    print test_index_slice_assmt('l')
+#    print test_index_slice_assmt(np.complex64)
+#    print test_index_slice_assmt(np.complex128)
+
     import doctest
     doctest.testmod()

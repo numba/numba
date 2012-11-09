@@ -39,5 +39,5 @@ class NumbaProCodegen(array_slicing.NativeSliceCodegenMixin,
     """
 
 NumbaproPipeline.add_mixin('type_infer', NumbaProTypeInferer, before=True)
-NumbaproPipeline.add_mixin('codegen', NumbaProCodegen)
+NumbaproPipeline.add_mixin('codegen', NumbaProCodegen, before=True)
 decorators.context.numba_pipeline = NumbaproPipeline

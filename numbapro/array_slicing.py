@@ -64,7 +64,9 @@ class BroadcastNode(nodes.Node):
         self.type = npy_intp.pointer()
 
         self.return_value = nodes.LLVMValueRefNode(int_, None)
-        self.check_error = nodes.CheckErrorNode(self.return_value, 0)
+        self.check_error = nodes.CheckErrorNode(
+                self.return_value, 0, exc_type=ValueError,
+                exc_msg="Shape mismatch while broadcasting")
 
 def create_slice_dim_node(subslice, *args):
     if subslice.type.is_slice:
@@ -464,6 +466,7 @@ class SliceArray(ConstantBase):
         self.have_stop = have_stop
         self.have_step = have_step
 
+#        self.specialize_name()
         self._name_ = "slice_%s_%s_%s" % (have_start, have_stop, have_step)
 
 class IndexAxis(ConstantBase):
@@ -483,6 +486,9 @@ class IndexAxis(ConstantBase):
         result.assign(data[in_strides[src_dim] * index:])
         self.ret(result)
 
+#    def specialize(self):
+#        self.specialize_name()
+
 class NewAxis(ConstantBase):
 
     _name_ = "newaxis"
@@ -497,6 +503,9 @@ class NewAxis(ConstantBase):
         out_shape[dst_dim] = one
         out_strides[dst_dim] = zero
         self.ret()
+
+#    def specialize(self):
+#        self.specialize_name()
 
 class Broadcast(ConstantBase):
     """
@@ -543,30 +552,26 @@ class Broadcast(ConstantBase):
         zero, one = constants(C.npy_intp)
         zero_int, one_int = constants(C.int)
 
-        i = self.var(C.int, 0, name='i')
-        with self.loop() as loop:
-            with loop.condition() as setcond:
-                setcond(i < ndim)
+        with self.for_range(ndim) as (loop, i):
+            src_extent = src_shape[i]
+            dst_extent = dst_shape[i + dim_offset]
 
-            with loop.body():
-                src_extent = src_shape[i]
-                dst_extent = dst_shape[i + dim_offset]
+            with self.ifelse(src_extent == one) as ifelse:
+                with ifelse.then():
+                    # p_broadcast[0] = True
+                    src_strides[i] = zero
+                with ifelse.otherwise():
+                    with self.ifelse(dst_extent == one) as ifelse:
+                        with ifelse.then():
+                            dst_shape[i + dim_offset] = src_extent
 
-                with self.ifelse(src_extent == one) as ifelse:
-                    with ifelse.then():
-                        # p_broadcast[0] = True
-                        src_strides[i] = zero
-                    with ifelse.otherwise():
-                        with self.ifelse(dst_extent == one) as ifelse:
-                            with ifelse.then():
-                                dst_shape[i + dim_offset] = src_extent
-
-                            with ifelse.otherwise():
-                                with self.ifelse(src_extent != dst_extent) as ifelse:
-                                    with ifelse.then():
-                                        # Shape mismatch
-                                        self.ret(zero_int)
-
-                i += one_int
+                        with ifelse.otherwise():
+                            with self.ifelse(src_extent != dst_extent) as ifelse:
+                                with ifelse.then():
+                                    # Shape mismatch
+                                    self.ret(zero_int)
 
         self.ret(one_int)
+
+#    def specialize(self):
+#        self.specialize_name()
