@@ -47,5 +47,16 @@ from .decorators import *
 def test():
     raise Exception("run nosetests from the numba directory")
 
+def nose_run():
+    "Oh nose, why dost thou never read my configuration file"
+    import nose.config
+    config = nose.config.Config()
+    config.configure(['--logging-level=DEBUG',
+                      '--verbosity=3',      # why is this ignored?
+                      # '--with-doctest=1', # not recognized?
+                      #'--doctest-tests'
+                      ])
+    config.verbosity = 3
+    nose.run(config=config)
 
 __all__ = _numba_types.__all__ + decorators.__all__
