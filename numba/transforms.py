@@ -140,7 +140,7 @@ class MathMixin(object):
 
     def get_funcname(self, py_func):
         if py_func is np.abs:
-            return 'abs'
+            return 'fabs'
         elif py_func is np.round:
             return 'round'
 
