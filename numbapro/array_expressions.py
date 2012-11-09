@@ -247,6 +247,13 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
         lhs_type = lhs.type if lhs else node.type
         is_expr = lhs is None
 
+        if lhs_type.ndim < node.type.ndim:
+            # TODO: this is valid in NumPy if the leading dimensions of the
+            # TODO: RHS have extent 1
+            raise error.NumbaError(
+                node, "Right hand side must have a "
+                      "dimensionality <= %d" % lhs_type.ndim)
+
         # Create ufunc scalar kernel
         py_ufunc, signature, ufunc_builder = self.get_py_ufunc(lhs, node)
         signature.struct_by_reference = True
