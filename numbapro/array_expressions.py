@@ -240,7 +240,8 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
 
     def array_attr(self, node, attr):
         # Perform a low-level bitcast from object to an array type
-        array = nodes.CoercionNode(node, float_[:])
+        # array = nodes.CoercionNode(node, float_[:])
+        array = node
         return nodes.ArrayAttributeNode(attr, array)
 
     def register_array_expression(self, node, lhs=None):

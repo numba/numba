@@ -106,19 +106,30 @@ def test_index_slice_assmt(dtype):
     test_kernel(broadcast_expr7, a, b)
 
 @autojit
-def test_shape_mismatch(a, b):
+def shape_mismatch(a, b):
+    b[...] = a + b
+
+@autojit(nopython=True)
+def shape_mismatch_nopython(a, b):
+    b[...] = a + b
+
+def test_shape_mismatch():
     """
     >>> a, b = operands(np.double)
-    >>> test_shape_mismatch(a[:2], b)
+
+    >>> shape_mismatch(a[:2], b)
     Traceback (most recent call last):
         ...
     ValueError: Shape mismatch while broadcasting
+
+    # This will abort, so don't run it :)
+    >> shape_mismatch_nopython(a[:2], b)
+    ValueError: Shape mismatch while broadcasting
     """
-    b[...] = a + b
 
 if __name__ == "__main__":
-#    a, b = operands(np.float64)
-#    test_shape_mismatch(a[:2], b)
+    a, b = operands(np.float64)
+    shape_mismatch_nopython(a[:2], b)
 
 #    print test(np.double)
 #    print test('l')
