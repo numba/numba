@@ -906,6 +906,12 @@ class ClosureNode(Node):
 #        """ % ", ".join(argnames)
 #        exec dummy_func_string in d, d
 
+        # Something set a pure and original, unmodified, AST, use that
+        # instead and reset it after the compile. This is a HACK
+        func_body = self.func_def.body
+        if hasattr(self.func_def, 'pure_ast_body'):
+            self.func_def.body = self.func_def.pure_ast_body
+
         name = self.func_def.name
         self.func_def.name = '__numba_closure_func'
         ast_mod = ast.Module(body=[self.func_def])
@@ -918,6 +924,9 @@ class ClosureNode(Node):
         self.py_func.live_objects = []
         self.py_func.__module__ = self.outer_py_func.__module__
         self.py_func.__name__ = name
+
+        if hasattr(self.func_def, 'pure_ast_body'):
+            self.func_def.body = func_body
 
 class InstantiateClosureScope(Node):
 

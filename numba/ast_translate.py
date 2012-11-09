@@ -21,10 +21,12 @@ from numba.utils import dump
 
 import logging
 logger = logging.getLogger(__name__)
+debug_conversion = False
+
+#logger.setLevel(logging.DEBUG)
+#debug_conversion = True
 
 _int32_zero = lc.Constant.int(_int32, 0)
-
-debug_conversion = False
 
 def map_to_function(func, typs, mod):
     typs = [str_to_llvmtype(x) if isinstance(x, str) else x for x in typs]
@@ -647,7 +649,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         if self.is_closure(node.signature):
             # Insert m_self as scope argument type
-            logger.debug("Closure:")
             self.insert_closure_scope_arg(args, node)
 
         func_call = nodes.NativeCallNode(node.signature, args,

@@ -414,7 +414,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
 
     def __init__(self, *args, **kwargs):
         super(ClosureCompilingMixin, self).__init__(*args, **kwargs)
-        if not self.ast.cellvars:
+        if hasattr(self.ast, 'cellvars') and not self.ast.cellvars:
             self.ast.cur_scope = self.outer_scope
 
     def _load_name(self, var_name, is_cellvar=False):

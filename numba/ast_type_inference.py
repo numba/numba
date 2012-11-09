@@ -554,7 +554,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             return self._handle_unpacking(node)
 
         target = node.targets[0] = self.visit(node.targets[0])
-        node.value = self.assign(target, node.value)
+        self.assign(target, node.value)
+        if isinstance(target, ast.Name):
+            # Variable's type may be promoted later!
+            node.value = nodes.DeferredCoercionNode(node.value,
+                                                    target.variable)
+        elif target.variable.type != node.value.variable.type:
+            node.value = nodes.CoercionNode(node.value, target.variable.type)
         return node
 
     def assign(self, lhs_node, rhs_node, rhs_var=None):
