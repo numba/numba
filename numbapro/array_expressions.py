@@ -278,11 +278,13 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
         operands = [nodes.CloneableNode(operand) for operand in operands]
 
         if lhs is not None:
+            lhs = nodes.CloneableNode(lhs)
             broadcast_operands = [lhs] + operands
+            lhs = lhs.clone
         else:
             broadcast_operands = operands[:]
 
-        shape = array_slicing.BroadcastNode(lhs_type, operands)
+        shape = array_slicing.BroadcastNode(lhs_type, broadcast_operands)
         operands = [op.clone for op in operands]
 
         if lhs is None and self.nopython:
@@ -291,7 +293,7 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
         elif lhs is None:
             # TODO: determine best output order at runtime
             lhs = nodes.ArrayNewEmptyNode(lhs_type, shape,
-                                          lhs_type.is_f_contig)
+                                          lhs_type.is_f_contig).cloneable
 
 
         # Build minivect wrapper kernel
@@ -310,7 +312,6 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
                             minikernel, specializers.StridedSpecializer)
 
         # Build call to minivect kernel
-        lhs = nodes.CloneableNode(lhs)
         operands.insert(0, lhs)
         args = [shape]
         for operand in operands:

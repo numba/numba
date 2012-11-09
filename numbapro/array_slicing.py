@@ -466,7 +466,6 @@ class SliceArray(ConstantBase):
         self.have_stop = have_stop
         self.have_step = have_step
 
-#        self.specialize_name()
         self._name_ = "slice_%s_%s_%s" % (have_start, have_stop, have_step)
 
 class IndexAxis(ConstantBase):
@@ -483,6 +482,7 @@ class IndexAxis(ConstantBase):
 
     def body(self, data, in_shape, in_strides, src_dim, index):
         result = self.var(data.type, name='result')
+        # self.debug("indexing...", src_dim, "stride", in_strides[src_dim])
         result.assign(data[in_strides[src_dim] * index:])
         self.ret(result)
 
@@ -502,6 +502,7 @@ class NewAxis(ConstantBase):
         one, zero = self.get_constants()
         out_shape[dst_dim] = one
         out_strides[dst_dim] = zero
+        # self.debug("newaxis in dimension:", dst_dim)
         self.ret()
 
 #    def specialize(self):
