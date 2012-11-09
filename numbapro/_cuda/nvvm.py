@@ -90,8 +90,8 @@ class NVVM(object):
 
             # Determine DLL type
             if sys.platform == 'win32':
-                dlloader = WinDLL
-                path = './libnvvm.dll'
+                dlloader = CDLL
+                path = './nvvm.dll'
             elif sys.platform == 'darwin':
                 dlloader = CDLL
                 path = './libnvvm.dylib'
