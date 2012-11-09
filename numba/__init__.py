@@ -51,7 +51,7 @@ def test():
 
     run = failed = 0
     for fn in os.listdir(join(dirname(__file__), 'tests')):
-        if fn.endswith('.py'):
+        if fn.startswith('test_') and fn.endswith('.py'):
             modname = fn[:-3]
             run += 1
             res = call([sys.executable, '-m', 'numba.tests.' + modname])
