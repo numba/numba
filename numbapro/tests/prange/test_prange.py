@@ -96,6 +96,48 @@ __doc__ += """
 4950
 """
 
+@autojit
+def test_prange_in_closure(x):
+    sum = 10.0
+    N = 10
+
+    @double()
+    def inner():
+        sum = 100.0
+        for i in numba.prange(N):
+            for j in range(N):
+                sum += i * x
+
+        return sum
+
+    return inner
+
+__doc__ += """
+>>> test_prange_in_closure(2.0)()
+1000.0
+"""
+
+@autojit
+def test_prange_in_closure2(x):
+    sum = 10.0
+    N = 10
+
+    @double()
+    def inner():
+        sum = 100.0
+        for i in numba.prange(N):
+            for j in range(N):
+                sum += (i * N + j) * x
+
+        return sum
+
+    return inner
+
+__doc__ += """
+>>> test_prange_in_closure2(2.0)()
+10000.0
+"""
+
 if __name__ == '__main__':
     import doctest
     doctest.testmod()

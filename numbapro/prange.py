@@ -221,7 +221,7 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
     prange = 0
 
     def visit_Call(self, node):
-        func = self.visit(node.func)
+        node.func = self.visit(node.func)
 
         func_type = node.func.variable.type
         if not (func_type.is_module_attribute and
