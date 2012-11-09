@@ -555,12 +555,19 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         target = node.targets[0] = self.visit(node.targets[0])
         self.assign(target, node.value)
+
+        lhs_var = target.variable
+        rhs_var = node.value.variable
         if isinstance(target, ast.Name):
             # Variable's type may be promoted later!
-            node.value = nodes.DeferredCoercionNode(node.value,
-                                                    target.variable)
-        elif target.variable.type != node.value.variable.type:
-            node.value = nodes.CoercionNode(node.value, target.variable.type)
+            node.value = nodes.DeferredCoercionNode(node.value, lhs_var)
+        elif lhs_var.type != rhs_var.type:
+            if lhs_var.type.is_array and rhs_var.type.is_array:
+                # Let other code handle array coercions
+                pass
+            else:
+                node.value = nodes.CoercionNode(node.value, lhs_var.type)
+
         return node
 
     def assign(self, lhs_node, rhs_node, rhs_var=None):
@@ -724,10 +731,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             node = self.pow(node.left, node.right)
             return self.visit(node)
 
-        promotion_type = self.promote(node.left.variable,
-                                      node.right.variable)
-        node.left, node.right = nodes.CoercionNode.coerce(
-                            [node.left, node.right], promotion_type)
+        v1, v2 = node.left.variable, node.right.variable
+        promotion_type = self.promote(v1, v2)
+        if not (v1.type.is_array and v2.type.is_array):
+            # Don't coerce arrays to lesser or higher dimensionality
+            # Broadcasting transforms should take care of this
+            node.left, node.right = nodes.CoercionNode.coerce(
+                                [node.left, node.right], promotion_type)
 
         node.variable = Variable(promotion_type)
         if isinstance(node.op, ast.FloorDiv):
