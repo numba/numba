@@ -412,7 +412,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             variable.lvalue = stackspace
 
             # TODO: incref objects in structs
-            if not self.nopython:
+            if not (self.nopython or argtype.is_closure_scope):
                 if is_obj(variable.type) and self.refcount_args:
                     self.incref(self.builder.load(stackspace))
 
@@ -732,7 +732,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # Decref local variables
         if not self.nopython:
             for name, var in self.symtab.iteritems():
-                if var.is_local and is_obj(var.type):
+                if (var.is_local and is_obj(var.type) and not
+                        var.type.is_closure_scope):
                     if self.refcount_args or not name in self.argnames:
                         self.xdecref_temp(var.lvalue)
 
