@@ -1379,8 +1379,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_LLVMIntrinsicNode(self, node):
         intr = getattr(llvm.core, 'INTR_' + node.func_name)
         largs = self.visitlist(node.args)
-        node.llvm_func = llvm.core.Function.intrinsic(
-                        self.mod, intr, [largs[0].type])
+        if largs:
+            ltypes = [largs[0].type]
+        else:
+            ltypes = []
+        node.llvm_func = llvm.core.Function.intrinsic(self.mod, intr, ltypes)
         return self.visit_NativeCallNode(node, largs=largs)
 
     def visit_MathCallNode(self, node):
