@@ -281,6 +281,9 @@ Traceback (most recent call last):
 NumbaError: 1:0: Function with non-void return does not return a value
 """
 
+#
+### Test signatures like @double(object_)
+#
 @autojit
 def signature_dec():
     @object_()
@@ -289,11 +292,24 @@ def signature_dec():
     return inner
 
 __doc__ += """
->>> signature_dec()
+>>> signature_dec()()
+'hello'
+"""
+
+@autojit
+def wrong_signature2(s):
+    @object_(object_)
+    def inner():
+        return s.upper()
+    return inner
+
+__doc__ += """
+>>> wrong_signature2("foo")
+Traceback (most recent call last):
+    ...
+NumbaError: 301:5: Expected 1 arguments type(s), got 0
 """
 
 if __name__ == '__main__':
-#    print objects("hello")
-    print signature_dec()
-#    import doctest
-#    doctest.testmod()
+    import doctest
+    doctest.testmod()

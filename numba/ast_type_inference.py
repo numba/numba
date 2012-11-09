@@ -1042,7 +1042,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def _parse_signature(self, node, func_type):
         types = []
         for arg in node.args:
-            if not node.arg.variable.type.is_cast:
+            if not arg.variable.type.is_cast:
                 self.error(arg, "Expected a numba type")
             else:
                 types.append(arg.variable.type)
@@ -1223,9 +1223,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return node
 
     def visit_Return(self, node):
-        self.ast.have_return = True
-
         if node.value is not None:
+            self.ast.have_return = True
             value = self.visit(node.value)
             type = value.variable.type
             assert type is not None
