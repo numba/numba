@@ -1,4 +1,4 @@
-import unittest
+import unittest, os
 
 from numbapro._cuda.nvvm import *
 from ctypes import c_size_t, c_uint64, sizeof
@@ -9,14 +9,17 @@ is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 class TestNvvmDriver(unittest.TestCase):
 
     def get_ptx(self):
+        directory = os.path.dirname(__file__)
         nvvm = NVVM()
         print nvvm.get_version()
 
         if is64bit:
-            with open('simple-gpu64.ll') as fin:
+            filename = os.path.join(directory, 'simple-gpu64.ll')
+            with open(filename) as fin:
                 return fin.read()
         else:
-            with open('simple-gpu.ll') as fin:
+            filename = os.path.join(directory, 'simple-gpu.ll')
+            with open(filename) as fin:
                 return fin.read()
 
 
