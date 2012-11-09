@@ -45,7 +45,20 @@ from . import decorators
 from .decorators import *
 
 def test():
-    raise Exception("run nosetests from the numba directory")
+    import os
+    from os.path import dirname, join
+    from subprocess import call
+
+    run = failed = 0
+    for fn in os.listdir(join(dirname(__file__), 'tests')):
+        if fn.endswith('.py'):
+            modname = fn[:-3]
+            run += 1
+            res = call([sys.executable, '-m', 'numba.tests.' + modname])
+            if res != 0:
+                failed += 1
+    print "ran test files: failed: (%d/%d)" % (failed, run)
+    return failed
 
 def nose_run():
     "Oh nose, why dost thou never read my configuration file"
