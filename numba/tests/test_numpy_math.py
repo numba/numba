@@ -30,6 +30,10 @@ def get_functions():
         result = a**2 + b**2
         return np.exp(result) + 1.6
 
+    def expm1(a, b):
+        result = a**2 + b**2
+        return np.expm1(result) + 1.6
+
     def sin(a, b):
         result = a**2 + b**2
         return np.sin(result) + 1.6
