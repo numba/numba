@@ -28,11 +28,17 @@ This kind of quadruply-nested for-loop is going to be quite slow.  Using Numba w
 
 .. code-block:: python
 
-   from numba *
+   from numba double
 
-   fastfilter_2d = jit(argtypes = [double[:,:], double[:,:]], restype=double[:,:])(filter2d)
+   fastfilter_2d = jit(double[:,:](double[:,:], double[:,:]))(filter2d)
 
-   # Now fastfilter_2d runs at speeds as if you had translated it to C
+   # Now fastfilter_2d runs at speeds as if you had first translated
+   # it to C, compiled the code and wrapped it with Python
    res = fastfilter_2d(image, filt)
 
+Numba actually produces two functions.   The first function is the
+low-level compiled version of filter2d.  The second function is the
+Python wrapper to that low-level function so that the function can be
+called from Python.   The first function can be called from other
+numba functions to eliminate all python overhead in function calling. 
 

@@ -3,6 +3,16 @@ Version 0.3
 ===========
 * Changed default compilation approach to ast
 * Added support for cross-module linking
+* Added support for closures (can jit inner functions and return them) (see examples/closure.py)
+* Added support for dtype structures (can access elements of structure with attribute access) (see examples/structures.py)
+* Added support for extension types (numba classes) (see examples/numbaclasses.py)
+* Added support for general Python code (use nopython to raise an error if Python C-API is used to avoid unexpected slowness because of lack of implementation defaulting to generic Python)
+* Fixed many bugs
+* Added support to detect math operations. 
+* Added with python and with nopython contexts
+* Added more examples
+
+Many features need to be documented still.  Look at examples and tests for more information.
 
 
 Version 0.2

@@ -7,9 +7,7 @@ at runtime. This happens by decorating Python functions, which allows users
 to create native functions for different input types, or to create them
 on the fly::
 
-    from numba import *
-
-    @jit(restype=double, argtypes=[double[:, :]])
+    @jit('f8(f8[:])')
     def sum1d(my_double_array):
         sum = 0.0
         for i in range(my_double_array.shape[0]):
@@ -48,7 +46,33 @@ complex128  double complex
 complex256  long double complex
 ==========  ===================
 
-Unsigned integer counterparts are available under the name ``uint8`` etc.
+Unsigned integer counterparts are available under the name ``uint8``
+etc.   Also, short-names are available with the style '<char>N' where
+char is 'b', 'i', 'u', 'f', and 'c' for boolean, integer, unsigned,
+float and complex types respectively with 'N' indicating the number of
+bytes in the type.    Thus, f8 is equivalent to float32, and c16 is
+equivalent to double complex. 
+
+Types are names that can be imported from the numba namespace.
+Alternatively, they can be specified in strings in the jit decorator. 
+
+The jit decorator can take keyword arguments: restype, and argtypes to
+specify the function signature.  Alternatively, the signature can be
+expressed by passing a single argument to jit either as a string as
+shown above or directly (assuming the type names have been imported
+from the numba module)::
+
+   from numba import f8, jit
+
+   @jit(f8(f8[:]))
+   def sum(arr):
+       ...
+
+Notice how the argument types are passed in as arguments to the return
+type treated as a python function.    Previously, this same syntax was
+used but embedded in a string which avoids having to import f8 from
+numba directly. 
+
 
 Specifying Arrays
 -----------------
@@ -62,15 +86,8 @@ Translator Backends
 Then ``autojit`` decorator takes ``backend`` as an optional argument, which
 may be set to **bytecode** or **ast**. Both backends currently have different
 capabilities, but the next release plans for the ast backend to supersede
-the bytecode backend. The default is **bytecode**.
-
-For instance the bytecode backend supports complex
-numbers, whereas the ast backend has limited support for Python objects (
-conversions to and from native data and objects, attribute access and calling
-functions).
-
-.. NOTE:: Currently the bytecode translator does not support returning arrays
-          from the function. The ast backend does handle this.
+the bytecode backend. The default is **ast** and the bytecode backend
+has been deprecated and will be removed in the next release. 
 
 Examples
 ========

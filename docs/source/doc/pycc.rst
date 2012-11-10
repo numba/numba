@@ -10,18 +10,20 @@ library. Below is an example::
     def mult(a, b):
         return a * b
 
-    export(argtypes=[float64, float64], restype=float64)(mult, name='mult')
-    export(argtypes=[float32, float32], restype=float32)(mult, name='multf')
-    export(argtypes=[int32, int32], restype=int32)(mult, name='multi')
-    export(argtypes=[complex128, complex128], restype=complex128)(mult, name='multc')
+    export('mult f8(f8, f8)'))(mult)
+    export(['multf f4(f4, f4)', 'multi i4(i4, i4)'])(mult)
+    export('multc c16(c16, c16)'))(mult)
 
 This defines a trivial function and exports four specializations under
 different names. The code can be compiled as follows::
 
     pycc thefile.py
 
-Which will create a shared library for your platform. Multiple files may be given
-to compile them simulteneously into a shared library. Options exist to compile
-to native object files instead of a shared library, to emit LLVM code or
-to generate a C header file with function prototypes. For more information
-on the available command line options, see ``pycc -h``.
+Which will create a pure shared library for your platform which can be
+linked against any other program.  This is **not** a Python extension.
+You would have to use ctypes to load the code that is created.
+Multiple files may be given to compile them simulteneously into a
+shared library. Options exist to compile to native object files
+instead of a shared library, to emit LLVM code or to generate a C
+header file with function prototypes. For more information on the
+available command line options, see ``pycc -h``.

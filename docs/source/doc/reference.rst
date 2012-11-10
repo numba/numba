@@ -12,6 +12,7 @@ Contents:
    modules/ast_translate.rst
    modules/ast_type_inference.rst
    modules/cfg.rst
+   modules/closures.rst
    modules/decorators.rst
    modules/functions.rst
    modules/llvm_types.rst
@@ -20,6 +21,7 @@ Contents:
    modules/naming.rst
    modules/ndarray_helpers.rst
    modules/nodes.rst
+   modules/pipeline.rst
    modules/pycc.rst
    modules/stdio_util.rst
    modules/symtab.rst
