@@ -10,6 +10,8 @@ def hypot(data):
     # return types of numpy functions are inferred
     result = np.empty_like(data, dtype=np.float64) 
     # notice access to structure elements 'x' and 'y' via attribute access
+    # You can also index by field name or field index:
+    #       data[i].x == data[i]['x'] == data[i][0]
     for i in range(data.shape[0]):
         result[i] = np.sqrt(data[i].x * data[i].x + data[i].y * data[i].y)
 
