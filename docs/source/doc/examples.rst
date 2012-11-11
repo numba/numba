@@ -28,7 +28,7 @@ This kind of quadruply-nested for-loop is going to be quite slow.  Using Numba w
 
 .. code-block:: python
 
-   from numba double
+   from numba import double
 
    fastfilter_2d = jit(double[:,:](double[:,:], double[:,:]))(filter2d)
 
