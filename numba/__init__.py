@@ -1,6 +1,8 @@
 import sys
 import logging
 
+__version__ = '0.3.1'
+
 # NOTE: Be sure to keep the logging level commented out before commiting.  See:
 #   https://github.com/numba/numba/issues/31
 # A good work around is to make your tests handle a debug flag, per
