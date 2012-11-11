@@ -1,3 +1,22 @@
+"""
+Example for extension classes.
+
+Things that work:
+
+    - overriding Numba methods in Numba (all methods are virtual)
+    - inheritance
+    - instance attributes
+    - subclassing in python and calling overridden methods in Python
+
+Things that do NOT (yet) work:
+
+    - overriding methods in Python and calling the method from Numba
+    - multiple inheritance of Numba classes
+        - this is not likely to be supported in the near future
+        - multiple inheritance with Python classes should work
+    - subclassing variable sized objects like 'str' or 'tuple'
+"""
+
 from numba import jit, void, int_
 
 # All methods must be given signatures
@@ -21,8 +40,10 @@ class Shrubbery(object):
 shrub = Shrubbery(10, 20)
 print(shrub.area())
 shrub.describe()
-print(shrub._numba_attrs)
-print(shrub._numba_attrs._fields_)
+print(shrub.width, shrub.height)
+shrub.width = 30
+print(shrub.area())
+print(shrub._numba_attrs._fields_) # This is an internal attribute subject to change!
 
 class MyClass(Shrubbery):
     def newmethod(self):
