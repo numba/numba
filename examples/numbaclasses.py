@@ -7,6 +7,8 @@ Things that work:
     - inheritance
     - instance attributes
     - subclassing in python and calling overridden methods in Python
+    - arbitrary new attributes on extension classes and objects
+    - weakrefs to extension objects
 
 Things that do NOT (yet) work:
 
@@ -17,7 +19,7 @@ Things that do NOT (yet) work:
     - subclassing variable sized objects like 'str' or 'tuple'
 """
 
-from numba import jit, void, int_
+from numba import jit, void, int_, double
 
 # All methods must be given signatures
 
@@ -25,8 +27,12 @@ from numba import jit, void, int_
 class Shrubbery(object):
     @void(int_, int_)
     def __init__(self, w, h):
+        # All instance attributes must be defined in the initializer
         self.width = w
         self.height = h
+
+        # Types can be explicitly specified through casts
+        self.some_attr = double(1.0)
 
     @int_()
     def area(self):
