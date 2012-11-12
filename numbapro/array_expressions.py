@@ -299,6 +299,7 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
                         self.context, None, ufunc_ast, signature, codegen=True)
 
         lfunc = p.translator.lfunc
+        # print lfunc
         operands = ufunc_builder.operands
         self.func.live_objects.append(lfunc)
 

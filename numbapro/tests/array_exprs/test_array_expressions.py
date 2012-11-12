@@ -119,5 +119,4 @@ def test_diffusion():
     assert np.allclose(diffuse_numbapro(100), diffuse_numbapro.py_func(100))
 
 if __name__ == '__main__':
-    test_vectorized_math()
-#    numba.nose_run()
+    numba.nose_run()
