@@ -1043,11 +1043,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         to infer a more specific return value than 'object'.
         """
         result_type = None
-        if func_type.is_numpy_attribute:
+        is_numpy = func_type.is_numpy_attribute
+        if is_numpy:
             result_type = self._resolve_numpy_call(func_type, node)
-        elif func_type.is_module_attribute and func_type.module is cmath:
+
+        if ((func_type.is_module_attribute and func_type.module is cmath) or
+            (result_type is None and is_numpy)):
             new_node, result_type = self._infer_complex_math(
-                func_type, new_node , node, result_type)
+                                func_type, new_node , node, result_type)
 
         if result_type is None:
             result_type = object_

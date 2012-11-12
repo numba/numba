@@ -159,6 +159,9 @@ class MathMixin(object):
             return False
 
         type = func_args[0].variable.type
+        if type.is_array:
+            type = type.dtype
+
         is_intrinsic = self._is_intrinsic(py_func)
         is_math = self.get_funcname(py_func) in self.libc_math_funcs
 
@@ -184,19 +187,17 @@ class MathMixin(object):
         return nodes.MathCallNode(signature, args, llvm_func=None,
                                   py_func=py_func, name=name)
 
-    def _resolve_math_call(self, call_node, py_func, coerce_to_input_type=True):
+    def _resolve_math_call(self, call_node, py_func):
         "Resolve calls to math functions to llvm.log.f32() etc"
         # signature is a generic signature, build a correct one
         orig_type = type = call_node.args[0].variable.type
-        if not type.is_float:
+
+        if type.is_int:
             type = double
 
         signature = minitypes.FunctionType(return_type=type, args=[type])
         result = nodes.MathNode(py_func, signature, call_node.args[0])
-        if coerce_to_input_type:
-            return nodes.CoercionNode(result, orig_type)
-        else:
-            return result
+        return result
 
     def _binop_type(self, x, y):
         "Binary result type for math operations"
@@ -299,8 +300,7 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
             return node.args[0]
         elif self._is_math_function(node.args, round):
             # round() always returns a float
-            return self._resolve_math_call(node, round,
-                                           coerce_to_input_type=False)
+            return self._resolve_math_call(node, round)
 
         return None
 
