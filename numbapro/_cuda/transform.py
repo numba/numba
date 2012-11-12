@@ -301,19 +301,12 @@ class NumbaproCudaPipeline(pipeline.Pipeline):
                                                self.func_signature))
         self.symtab = type_inferer.symtab
         return node
-    
+
     def codegen(self, ast):
-        func_name = self.kwargs.get('name')
-        func_name = func_name or naming.specialized_mangle(
-                                            self.func.__name__,
-                                            self.func_signature.args)
-        
         self.translator = self.make_specializer(CudaCodeGenerator,
-                                                ast, func_name=func_name,
-                                                **self.kwargs)
+                                                ast, **self.kwargs)
         self.translator.translate()
         return ast
-
 
 context = utils.get_minivect_context()
 context.llvm_context = ast_translate.LLVMContextManager()
