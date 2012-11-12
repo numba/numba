@@ -1,6 +1,8 @@
 """
 >>> prange_reduction()
 45.0
+>>> prange_reduction2()
+49999995000000.0
 """
 
 import numbapro
@@ -18,6 +20,13 @@ def prange_reduction():
     return sum
 
 @autojit
+def prange_reduction2():
+    sum = 0.0
+    for i in numba.prange(10000000):
+        sum += i
+    return sum
+
+@autojit
 def prange_reduction_error():
     for i in numba.prange(10):
         sum += i
@@ -28,7 +37,7 @@ __doc__ += """
 >>> prange_reduction_error()
 Traceback (most recent call last):
     ...
-NumbaError: 23:8: Local variable  'sum' is not bound yet
+NumbaError: 32:8: Local variable  'sum' is not bound yet
 """
 
 @autojit
@@ -139,5 +148,6 @@ __doc__ += """
 """
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    prange_shared_privates_reductions(2.0)
+#    import doctest
+#    doctest.testmod()

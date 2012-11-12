@@ -44,6 +44,7 @@ and not just scalars, using `GUFuncVectorize`.
    generalizedufuncs
    CUDAJit
    CUDASupport
+   prange
 
 
 ..   BasicVectorize

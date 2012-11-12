@@ -496,7 +496,7 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
             callback = ee.get_pointer_to_function(wrapper_lfunc)
             callback = self.constant(Py_uintptr_t.to_llvm(context), callback)
             callback = callback.cast(C.void_p)
-            self._dispatch_worker(callback, contexts,  num_threads)
+            self._dispatch_worker(callback, contexts, num_threads)
             self.ret()
 
     wrapper_lfunc = KernelWrapper()(lfunc.module)
