@@ -337,8 +337,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                     context, func, ast, func_signature=func_signature,
                     nopython=nopython, symtab=symtab)
 
-        self.func_name = kwds.get('func_name', func_signature.name
-                                            or func.__name__)
+        self.func_name = kwds.get('func_name', None)
         self.func_signature = func_signature
         self.blocks = {} # stores id => basic-block
 
@@ -596,7 +595,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         wrapper_call.error_return = error_return
         t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
                               symtab, llvm_module=self.mod, llvm_ee=self.ee,
-                              refcount_args=False)
+                              refcount_args=False, func_name=func.__name__)
         t.translate()
 
         func.live_objects.append(t.lfunc)

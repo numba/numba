@@ -50,9 +50,15 @@ class Pipeline(object):
         self.func_signature = func_signature
         ast.pipeline = self
 
-        func_name = kwargs.get('name')
-        self.func_name = func_name or naming.specialized_mangle(
-                           self.func.__name__, self.func_signature.args)
+        self.func_name = kwargs.get('name')
+        if not self.func_name:
+            if func:
+                name = func.__name__
+            else:
+                name = ast.name
+
+            self.func_name = naming.specialized_mangle(
+                                    name, self.func_signature.args)
 
         self.symtab = symtab
         if symtab is None:
@@ -83,7 +89,7 @@ class Pipeline(object):
 
         return cls(self.context, self.func, ast,
                    func_signature=self.func_signature, nopython=self.nopython,
-                   symtab=self.symtab, **kwds)
+                   symtab=self.symtab, func_name=self.func_name, **kwds)
 
     def insert_specializer(self, name, after):
         "Insert a new transform or visitor into the pipeline"
@@ -135,8 +141,8 @@ class Pipeline(object):
         type_inferer.infer_types()
 
         self.func_signature = type_inferer.func_signature
-        logger.debug("signature for %s: %s" % (self.func.func_name,
-                                               self.func_signature))
+        logger.debug("signature for %s: %s", self.func_name,
+                     self.func_signature)
         self.symtab = type_inferer.symtab
         return ast
 
@@ -168,19 +174,16 @@ class Pipeline(object):
 
     def codegen(self, ast):
         self.translator = self.make_specializer(ast_translate.LLVMCodeGenerator,
-                                                ast, func_name=self.func_name,
-                                                **self.kwargs)
+                                                ast, **self.kwargs)
         self.translator.translate()
         return ast
 
 
 class FixMissingLocations(visitors.NumbaVisitor):
 
-    def __init__(self, context, func, ast, func_signature=None, nopython=0,
-                 symtab=None):
+    def __init__(self, context, func, ast, *args, **kwargs):
         super(FixMissingLocations, self).__init__(context, func, ast,
-                                                  func_signature, nopython,
-                                                  symtab)
+                                                  *args, **kwargs)
         self.lineno = getattr(ast, 'lineno', 1)
         self.col_offset = getattr(ast, 'col_offset', 0)
 

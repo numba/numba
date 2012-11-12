@@ -178,7 +178,7 @@ class ConstantMarker(visitors.NumbaVisitor):
         '''Return a set of constant variable names
         '''
         const_names = set(self.varnames).difference(self._invalidated)
-        const_names |= set(self.func.func_globals)
+        const_names |= set(self.func_globals)
 
         constexpr_recognizer = ConstantExprRecognizer(const_names)
         retvals = []
@@ -298,14 +298,14 @@ class ConstantFolder(visitors.NumbaTransformer):
             elif node.id in self.constvalues:
                 return self.valueof(self.constvalues[node.id])
             else:
-                value = self.func.func_globals[node.id]
+                value = self.func_globals[node.id]
                 if not is_simple_value(value):
                     raise ValueError("%s is not a simple value.")
                 return value
         raise ValueError("node %s is not a has constant value" % node)
 
     def is_constant(self, node):
-        globals = set(self.func.func_globals).difference(self.local_names)
+        globals = set(self.func_globals).difference(self.local_names)
         return is_constant(node, globals | set(self.constvalues))
 
 def is_constant(node, constants=set()):

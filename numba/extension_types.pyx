@@ -3,7 +3,6 @@ from cpython cimport PyObject
 
 import sys
 import ctypes
-import doctest
 
 import numba
 

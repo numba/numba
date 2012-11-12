@@ -408,7 +408,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             self.func_signature.struct_by_reference = True
 
     def init_global(self, global_name):
-        globals = self.func.__globals__
+        globals = self.func_globals
         # Determine the type of the global, i.e. a builtin, global
         # or (numpy) module
         if (global_name not in globals and
@@ -698,7 +698,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if variable.type and not variable.type.is_deferred:
             if variable.type.is_global: # or variable.type.is_module:
                 # TODO: look up globals in dict at call time
-                obj = self.func.func_globals[node.name]
+                obj = self.func_globals[node.name]
                 if not functions.is_numba_func(obj):
                     type = self.context.typemapper.from_python(obj)
                     return nodes.const(obj, type)

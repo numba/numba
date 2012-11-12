@@ -1,4 +1,5 @@
 import ast
+import ast as ast_module
 import __builtin__ as builtins
 try:
     import numbers
@@ -31,11 +32,15 @@ class NumbaVisitorMixin(CooperativeBase):
 
         self.func = func
         if func is None:
-            assert isinstance(ast, ast.FunctionDef)
+            assert isinstance(ast, ast_module.FunctionDef)
             locals, freevars = find_locals_and_freevars(context, ast)
             self.names = self.global_names = freevars
-            self.varnames = self.local_names = locals
-            self.argnames = [arg for arg in ast.args.args]
+            self.argnames = [arg.id for arg in ast.args.args]
+            argnames = set(self.argnames)
+            local_names = [local_name for local_name in locals
+                                          if local_name not in argnames]
+            self.varnames = self.local_names = self.argnames + local_names
+            self.func_globals = kwargs.get('func_globals', {})
         else:
             f_code = self.func.func_code
             self.names = self.global_names = f_code.co_names
@@ -47,6 +52,7 @@ class NumbaVisitorMixin(CooperativeBase):
                                     if cellvar not in self.varnames)
 
             self.argnames = f_code.co_varnames[:f_code.co_argcount]
+            self.func_globals = func.func_globals
 
         if self.is_closure(func_signature):
             from numba import closure
@@ -57,7 +63,7 @@ class NumbaVisitorMixin(CooperativeBase):
         self._myglobals = {}
         for name in self.names:
             try:
-                self._myglobals[name] = func.func_globals[name]
+                self._myglobals[name] = self.func_globals[name]
             except KeyError:
                 # Assumption here is that any name not in globals or
                 # builtins is an attribtue.
@@ -175,7 +181,6 @@ class NoPythonContextMixin(object):
 class VariableFindingVisitor(NumbaVisitor):
     "Find referenced and assigned ast.Name nodes"
     def __init__(self, *args, **kwargs):
-        super(VariableFindingVisitor, self).__init__(*args, **kwargs)
         self.referenced = {}
         self.assigned = {}
 
