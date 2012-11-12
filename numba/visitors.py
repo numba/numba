@@ -30,15 +30,23 @@ class NumbaVisitorMixin(CooperativeBase):
         self.nopython = nopython
 
         self.func = func
-        self.fco = func.func_code
-        self.names = self.global_names = self.fco.co_names
-        self.varnames = self.local_names = list(self.fco.co_varnames)
-        if self.fco.co_cellvars:
-            self.varnames.extend(cellvar for cellvar in self.fco.co_cellvars
-                                     if cellvar not in self.varnames)
-        self.constants = self.fco.co_consts
-        self.costr = func.func_code.co_code
-        self.argnames = self.fco.co_varnames[:self.fco.co_argcount]
+        if func is None:
+            assert isinstance(ast, ast.FunctionDef)
+            locals, freevars = find_locals_and_freevars(context, ast)
+            self.names = self.global_names = freevars
+            self.varnames = self.local_names = locals
+            self.argnames = [arg for arg in ast.args.args]
+        else:
+            f_code = self.func.func_code
+            self.names = self.global_names = f_code.co_names
+            self.varnames = self.local_names = list(f_code.co_varnames)
+
+            if f_code.co_cellvars:
+                self.varnames.extend(
+                        cellvar for cellvar in f_code.co_cellvars
+                                    if cellvar not in self.varnames)
+
+            self.argnames = f_code.co_varnames[:f_code.co_argcount]
 
         if self.is_closure(func_signature):
             from numba import closure
@@ -163,3 +171,35 @@ class NoPythonContextMixin(object):
         self.nopython -= 1
 
         return node
+
+class VariableFindingVisitor(NumbaVisitor):
+    "Find referenced and assigned ast.Name nodes"
+    def __init__(self, *args, **kwargs):
+        super(VariableFindingVisitor, self).__init__(*args, **kwargs)
+        self.referenced = {}
+        self.assigned = {}
+
+    def register_assignment(self, node, target):
+        if isinstance(target, ast.Name):
+            self.assigned[node.id] = node
+
+    def visit_Assign(self, node):
+        self.generic_visit(node)
+        self.register_assignment(node, node.targets[0])
+
+    def visit_For(self, node):
+        self.generic_visit(node)
+        self.register_assignment(node, node.target)
+
+    def visit_Name(self, node):
+        self.referenced[node.id] = node
+
+def find_locals_and_freevars(context, ast):
+    """
+    Find local variables and free variables (or globals) given an AST.
+    """
+    v = VariableFindingVisitor(context, None, ast)
+    v.visit(ast)
+    locals = set(v.assigned)
+    freevars = set(v.referenced) - locals
+    return locals, freevars
