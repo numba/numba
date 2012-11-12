@@ -741,7 +741,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         if math_node.type.is_array:
             assert math_node.py_func is not None
             result = nodes.call_pyfunc(math_node.py_func, [math_node.arg])
-            return self.visit(result)
+            return self.visit(result.coerce(math_node.type))
 
         args = [math_node.arg], math_node.py_func, math_node.signature
         if self._is_intrinsic(math_node.py_func):
