@@ -64,6 +64,6 @@ setup(
             sources = ["numba/extension_types.pyx", "numba/cyfunction.c"],
             cython_gdb=True),
     ],
-    version = '0.5',
+    version = '0.3.1',
     cmdclass={'build_ext': build_ext},
 )
