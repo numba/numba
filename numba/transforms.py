@@ -350,19 +350,32 @@ class TransformForIterable(visitors.NumbaTransformer):
 
             temp = nodes.TempNode(node.target.type)
             nsteps = nodes.TempNode(Py_ssize_t)
-            start, stop, step = [nodes.CloneableNode(n)
-                                     for n in unpack_range_args(node.iter)]
+            start, stop, step = unpack_range_args(node.iter)
 
-            s1 = self.run_template(
-                    """
-                        $length = {{stop}} - {{start}}
-                        {{nsteps}} = $length / {{step}}
-                        if $length % {{step}}:
-                            {{nsteps}} = {{nsteps_load}} + 1
-                    """,
-                    vars=dict(length=Py_ssize_t),
-                    start=start, stop=stop, step=step,
-                    nsteps=nsteps.store(), nsteps_load=nsteps.load())
+            if isinstance(step, nodes.ConstNode):
+                have_step = step.pyval != 1
+            else:
+                have_step = True
+
+            start, stop, step = [nodes.CloneableNode(n)
+                                     for n in (start, stop, step)]
+
+            if have_step:
+                s1 = self.run_template(
+                        """
+                            $length = {{stop}} - {{start}}
+                            {{nsteps}} = $length / {{step}}
+                            if $length % {{step}}:
+                                {{nsteps}} = {{nsteps_load}} + 1
+                        """,
+                        vars=dict(length=Py_ssize_t),
+                        start=start, stop=stop, step=step,
+                        nsteps=nsteps.store(), nsteps_load=nsteps.load())
+                step = step.clone
+            else:
+                s1 = self.run_template(
+                    "{{nsteps}} = {{stop}} - {{start}}",
+                    start=start, stop=stop, nsteps=nsteps.store())
 
             # Rely on LLVM strength reduction. It's easier this way, or we
             # need to make the assignment to 'target' conditional for zero
@@ -370,7 +383,7 @@ class TransformForIterable(visitors.NumbaTransformer):
             s2 = self.run_template(
                     "{{target}} = {{start}} + {{temp}} * {{step}}",
                     target=node.target, start=start.clone, stop=stop.clone,
-                    step=step.clone, temp=temp.load())
+                    step=step, temp=temp.load())
 
             body = node.body
             body.insert(0, s2)
