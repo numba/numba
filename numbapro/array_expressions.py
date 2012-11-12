@@ -314,6 +314,7 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
         # Build call to minivect kernel
         operands.insert(0, lhs)
         args = [shape]
+        scalar_args = []
         for operand in operands:
             if operand.type.is_array:
                 data_p = self.array_attr(operand, 'data')
@@ -323,8 +324,9 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
                 strides_p = self.array_attr(operand, 'strides')
                 args.extend((data_p, strides_p))
             else:
-                args.append(operand)
+                scalar_args.append(operand)
 
+        args.extend(scalar_args)
         result = nodes.NativeCallNode(minikernel.type, args, lminikernel)
 
         # Use native slicing in array expressions
