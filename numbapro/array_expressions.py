@@ -127,6 +127,8 @@ class UFuncBuilder(visitors.NumbaTransformer):
     in the ufunc and generate a return.
     """
 
+    ufunc_counter = 0
+
     def __init__(self, context, func, ast):
         # super(UFuncBuilder, self).__init__(context, func, ast)
         self.operands = []
@@ -188,8 +190,9 @@ class UFuncBuilder(visitors.NumbaTransformer):
                                   [],   # defaults
         )
         body = ast.Return(value=tree)
-        func = ast.FunctionDef(name='ufunc', args=arguments,
-                               body=[body], decorator_list=[])
+        func = ast.FunctionDef(name='ufunc%d' % self.ufunc_counter,
+                               args=arguments, body=[body], decorator_list=[])
+        UFuncBuilder.ufunc_counter += 1
         # print ast.dump(func)
         return func
 

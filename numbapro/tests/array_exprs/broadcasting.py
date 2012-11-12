@@ -128,15 +128,5 @@ def test_shape_mismatch():
     """
 
 if __name__ == "__main__":
-    a, b = operands(np.double)
-#    views = get_slices(a, b)
-    test_kernel(broadcast_expr1, a, b)
-    a, b = operands(np.double)
-    test_kernel(broadcast_expr5, a, b)
-#    print test_index_slice_assmt(np.double)
-#    print test_index_slice_assmt('l')
-#    print test_index_slice_assmt(np.complex64)
-#    print test_index_slice_assmt(np.complex128)
-
-#    import doctest
-#    doctest.testmrod()
+    import doctest
+    doctest.testmod()
