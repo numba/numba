@@ -738,6 +738,11 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
     def visit_MathNode(self, math_node):
         "Translate a nodes.MathNode to an intrinsic or libc math call"
+        if math_node.type.is_array:
+            assert math_node.py_func is not None
+            result = nodes.call_pyfunc(math_node.py_func, [math_node.arg])
+            return self.visit(result)
+
         args = [math_node.arg], math_node.py_func, math_node.signature
         if self._is_intrinsic(math_node.py_func):
             result = self._resolve_intrinsic(*args)

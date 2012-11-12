@@ -77,6 +77,15 @@ def test_math_funcs():
     if exceptions:
         raise Exception
 
+@autojit
+def sin(A):
+    return np.sin(A)
+
+def test_array_math():
+    A = np.arange(10)
+    assert np.all(sin(A) == sin.py_func(A))
+
+
 if __name__ == "__main__":
 #    @jit(complex64(complex64, complex64))
 #    def log1(a, b):
@@ -91,4 +100,5 @@ if __name__ == "__main__":
 #    print log1(5.2, 6.9)
 #    print log2(5.2, 6.9)
 #    print log1.py_func(5.2, 6.9)
+    test_array_math()
     test_math_funcs()
