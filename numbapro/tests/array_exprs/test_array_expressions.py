@@ -85,15 +85,15 @@ def test_gufunc_array_expressions():
         print(Gold)
         raise ValueError
 
-#@autojit
-#def vectorized_math(a):
-#    a[...] = np.cos(a) * np.sin(a)
-#    return a
-#
-#def test_vectorized_math():
-#    a = vectorized_math(np.arange(100, dtype=np.float64))
-#    b = vectorized_math.py_func(np.arange(100, dtype=np.float64))
-#    assert np.allclose(a, b)
+@autojit
+def vectorized_math(a):
+    a[...] = np.cos(a) * np.sin(a)
+    return a
+
+def test_vectorized_math():
+    a = vectorized_math(np.arange(100, dtype=np.float64))
+    b = vectorized_math.py_func(np.arange(100, dtype=np.float64))
+    assert np.allclose(a, b)
 
 @autojit
 def diffuse_numbapro(iter_num):
@@ -119,5 +119,5 @@ def test_diffusion():
     assert np.allclose(diffuse_numbapro(100), diffuse_numbapro.py_func(100))
 
 if __name__ == '__main__':
-#    test_vectorized_math()
-    numba.nose_run()
+    test_vectorized_math()
+#    numba.nose_run()

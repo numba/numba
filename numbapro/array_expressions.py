@@ -19,6 +19,8 @@ from numbapro.vectorize import basic, minivectorize
 
 import numpy
 
+print_ufunc = False
+
 class ArrayExpressionRewrite(visitors.NumbaTransformer,
                              ast_type_inference.NumpyMixin,
                              transforms.MathMixin):
@@ -36,25 +38,17 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         Start the mapping process for the outmost node in the array expression.
         """
 
-    def get_py_ufunc(self, lhs, node):
-        if lhs is None:
-            result_type = node.type
-        else:
-            result_type = lhs.type
+    def get_py_ufunc_ast(self, lhs, node):
+        if lhs is not None:
             lhs.ctx = ast.Load()
 
-        # Build ufunc AST module
         ufunc_builder = UFuncBuilder(self.context, self.func, node)
         tree = ufunc_builder.visit(node)
         ufunc_ast = ufunc_builder.build_ufunc_ast(tree)
-        module = ast.Module(body=[ufunc_ast])
-        functions.fix_ast_lineno(module)
-        # logging.debug(ast.dump(ufunc_ast))
 
-        # Create Python ufunc function
-        d = {}
-        exec compile(module, '<ast>', 'exec') in d, d
-        py_ufunc = d['ufunc']
+        if print_ufunc:
+            from meta import asttools
+            print asttools.python_source(module)
 
         # Vectorize Python function
         if lhs is None:
@@ -63,8 +57,23 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
             restype = lhs.type.dtype
 
         argtypes = [op.type.dtype if op.type.is_array else op.type
-                        for op in ufunc_builder.operands]
+                    for op in ufunc_builder.operands]
         signature = restype(*argtypes)
+
+        return ufunc_ast, signature, ufunc_builder
+
+    def get_py_ufunc(self, lhs, node):
+        ufunc_ast, signature, ufunc_builder = self.get_py_ufunc_ast(lhs, node)
+
+        # Build ufunc AST module
+        module = ast.Module(body=[ufunc_ast])
+        functions.fix_ast_lineno(module)
+
+        # Create Python ufunc function
+        d = {}
+        exec compile(module, '<ast>', 'exec') in d, d
+        py_ufunc = d['ufunc']
+
         return py_ufunc, signature, ufunc_builder
 
     def visit_elementwise(self, elementwise, node):
@@ -101,10 +110,9 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
             return node.value
         return node
 
-    # TODO: move away from code objects, instead find locals in a visitor
-    #def visit_MathNode(self, node):
-    #    elementwise = node.arg.type.is_array
-    #    return self.visit_elementwise(elementwise, node)
+    def visit_MathNode(self, node):
+        elementwise = node.arg.type.is_array
+        return self.visit_elementwise(elementwise, node)
 
     def visit_BinOp(self, node):
         elementwise = node.type.is_array
@@ -120,12 +128,18 @@ class UFuncBuilder(visitors.NumbaTransformer):
     """
 
     def __init__(self, context, func, ast):
-        super(UFuncBuilder, self).__init__(context, func, ast)
+        # super(UFuncBuilder, self).__init__(context, func, ast)
         self.operands = []
 
     def demote_type(self, node):
-        if node.type.is_array:
-            node.type = node.type.dtype
+        node.type = self.demote(node.type)
+        if hasattr(node, 'variable'):
+            node.variable.type = node.type
+
+    def demote(self, type):
+        if type.is_array:
+            return type.dtype
+        return type
 
     def visit_BinOp(self, node):
         self.demote_type(node)
@@ -136,6 +150,17 @@ class UFuncBuilder(visitors.NumbaTransformer):
     def visit_UnaryOp(self, node):
         self.demote_type(node)
         node.op = self.visit(node.op)
+        return node
+
+    def visit_MathNode(self, node):
+        self.demote_type(node)
+        node.arg = self.visit(node.arg)
+
+        # Demote math signature
+        argtypes = [self.demote(argtype) for argtype in node.signature.args]
+        signature = self.demote(node.signature.return_type)(*argtypes)
+        node.signature = signature
+
         return node
 
     def visit_CoercionNode(self, node):
@@ -263,15 +288,14 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
                       "dimensionality <= %d" % lhs_type.ndim)
 
         # Create ufunc scalar kernel
-        py_ufunc, signature, ufunc_builder = self.get_py_ufunc(lhs, node)
+        ufunc_ast, signature, ufunc_builder = self.get_py_ufunc_ast(lhs, node)
         signature.struct_by_reference = True
 
         # Compile ufunc scalar kernel with numba
-        sig, translator, wrapper = pipeline.compile_from_sig(
-                    self.context, py_ufunc, signature, compile_only=True,
-                    nopython=self.nopython)
+        p, (_, _, _) = pipeline.run_pipeline(
+                        self.context, None, ufunc_ast, signature, codegen=True)
 
-        lfunc = translator.lfunc
+        lfunc = p.translator.lfunc
         operands = ufunc_builder.operands
         self.func.live_objects.append(lfunc)
 
