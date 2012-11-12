@@ -194,6 +194,9 @@ class MathMixin(object):
 
         if type.is_int:
             type = double
+        elif type.is_array and type.dtype.is_int:
+            type = type.copy()
+            type.dtype = double
 
         signature = minitypes.FunctionType(return_type=type, args=[type])
         result = nodes.MathNode(py_func, signature, call_node.args[0])

@@ -490,9 +490,12 @@ class ArrayType(Type):
 
         return "%s[%s]" % (self.dtype, ", ".join(axes))
 
+    def copy(self):
+        return copy.copy(self)
+
     @property
     def strided(self):
-        type = copy.copy(self)
+        type = self.copy()
         type.is_c_contig = False
         type.is_f_contig = False
         type.inner_contig = False

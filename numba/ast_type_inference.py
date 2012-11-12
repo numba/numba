@@ -428,6 +428,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def init_locals(self):
         arg_types = self.func_signature.args
+        if len(arg_types) > len(self.local_names):
+            raise error.NumbaError("Too many types specified in @jit()")
+
         for i, arg_type in enumerate(arg_types):
             varname = self.local_names[i]
             self.symtab[varname] = Variable(arg_type, is_local=True,
