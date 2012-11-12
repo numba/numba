@@ -81,8 +81,7 @@ with loops and indexes is clearly very slow. Let's verify correctness to be sure
 .. NOTE:: Correct handling of overlapping memory between the left-hand and
           right-hand side of expressions is not supported yet.
 
-.. NOTE:: Support for NumPy math functions in array expressions is scheduled for the next
-          release. The next release may also support parallel array expressions and
+.. NOTE:: The next release may support parallel array expressions and
           tiled array expressions for mixed C- and Fortran-like data layouts.
           The next release will also support array expressions on the GPU.
 
@@ -132,3 +131,12 @@ Allocating new arrays is however not support yet in nopython mode::
         return a * a
 
     print square(np.arange(10)) # NumbaError: 1:0: Cannot allocate new memory in nopython context
+
+Math
+----
+All NumPy math functions supported on scalars in Numba is also supported in NumbaPro on
+arrays. This includes most unary ufuncs::
+
+    @autojit
+    def tan(a):
+        return np.sin(a) / np.cos(a)
