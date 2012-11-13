@@ -37,6 +37,14 @@ There are several versions of vectorize for building native ufunc kernels from P
 Users can also build generalized ufuncs, in which user-defined kernels can operate on sub-arrays
 and not just scalars, using `GUFuncVectorize`.
 
+
+**Note:** NumbaPro adds features to Numba at import::
+
+    import numbapro    # adds numbapro features to numba.jit and numba.autojit
+    
+The above adds slicing, array-expression, prange and gpu target to Numba.
+
+
 .. toctree::
    :maxdepth: 1
 

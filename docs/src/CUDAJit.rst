@@ -15,7 +15,7 @@ Imports
 
 	import numpy as np
 	from numba import *
-	import numbapro
+	from numbapro import cuda
 
 
 
@@ -39,7 +39,7 @@ back to the host upon completion of the kernel.
 
 CUDA JIT enhances Numba translation by recognizing CUDA-C intrinsics, including threadIdx, blockIdx, blockDim, gridDim. All intrinsics are defined inside the `numbapro.cuda` module.
 
-Similar to `numba.decorators.jit`, argument types are defined in `argtypes` for `cuda.jit`.  Since a CUDA kernel does not return any value, there is no `restype`.
+Since a CUDA kernel does not return any value, there is no `restype` for `jit` when the target is 'gpu'.
 
 To invoke the CUDA kernel, it must be configured for the grid and block dimensions. By default, gridDim and blockDim are (1, 1, 1).
 
@@ -118,7 +118,7 @@ For example:::
     tpb = 32
     n = bpg * tpb
 
-    @cuda.jit(argtypes=[f4[:,:], f4[:,:], f4[:,:]])
+    @jit(argtypes=[f4[:,:], f4[:,:], f4[:,:]], target='gpu')
     def cu_square_matrix_mul(A, B, C):
         sA = cuda.shared.array(shape=(tpb, tpb), dtype=f4)
         sB = cuda.shared.array(shape=(tpb, tpb), dtype=f4)
