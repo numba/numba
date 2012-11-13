@@ -1,7 +1,7 @@
 # as _internal contains the license checking code, we import it here
 from . import _internal
 
-__version__ = '0.6.1'
+__version__ = '0.7.2'
 
 def test(verbosity=2, failfast=False):
     import unittest
