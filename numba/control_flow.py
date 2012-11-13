@@ -508,7 +508,10 @@ class MessageCollection:
             raise error.NumbaError(*errors[0])
 
 def warning(node, message):
-    logger.warning("Warning %s: %s", error.format_postup(getpos(node)), message)
+    # printing allows us to test the code
+    lineno, col = getpos(node)
+    print "Warning %s%s" % (error.format_postup((lineno - 1, col)), message)
+    # logger.warning("Warning %s: %s", error.format_postup(getpos(node)), message)
 
 def allow_null(node):
     return False
@@ -682,7 +685,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
     def visit(self, node):
         if hasattr(node, 'lineno'):
             self.mark_position(node)
-        assert self.flow.block
         if self.flow.block:
             self.flow.block.body.append(node)
         return super(ControlFlowAnalysis, self).visit(node)
