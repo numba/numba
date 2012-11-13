@@ -23,6 +23,7 @@ done
 >>> empty_assign()
 14
 >>> last_value()
+Warning 92:10: : local variable 'i' might be referenced before assignment
 9
 """
 

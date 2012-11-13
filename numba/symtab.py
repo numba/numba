@@ -17,7 +17,7 @@ class Variable(object):
 
     def __init__(self, type, is_constant=False, is_local=False,
                  name=None, lvalue=None, constant_value=None,
-                 promotable_type=True):
+                 promotable_type=True, is_arg=False):
         self.name = name
         self.type = type
         self.is_constant = is_constant
@@ -27,9 +27,17 @@ class Variable(object):
         self.deleted = False
 
         self.is_local = is_local
+        self.is_arg = is_arg
         self.is_cellvar = False
         self.is_freevar = False
         self.need_arg_copy = True
+
+        self.cf_assignments = []
+        self.cf_references = []
+
+        # position of first definition
+        self.lineno = -1
+        self.col_offset = -1
 
     def _type_get(self):
         return self._type
@@ -92,3 +100,25 @@ class Variable(object):
                                                        extra_info)
         else:
             return "<Variable(type=%s%s)>" % (self.type, extra_info)
+
+class Symtab(object):
+    def __init__(self, symtab_dict=None, parent=None):
+        self.symtab = symtab_dict or {}
+        self.parent = parent
+
+    def lookup(self, name):
+        result = self.symtab.get(name, None)
+        if result is None and self.parent is not None:
+            result = self.parent.lookup(self, name)
+        return result
+
+    def __getitem__(self, name):
+        result = self.lookup(name)
+        assert result is not None
+        return result
+
+    def __setitem__(self, name, variable):
+        self.symtab[name] = variable
+
+    def __getattr__(self, attr):
+        return getattr(self.symtab, attr)

@@ -72,6 +72,8 @@ class NumbaVisitorMixin(CooperativeBase):
         if self._overloads:
             self.visit = self._visit_overload
 
+        self.visitchildren = self.generic_visit
+
     def _visit_overload(self, node):
         assert self._overloads
 

@@ -362,15 +362,9 @@ class TransformForIterable(visitors.NumbaTransformer):
 
             if have_step:
                 s1 = self.run_template(
-                        """
-                            $length = {{stop}} - {{start}}
-                            {{nsteps}} = $length / {{step}}
-                            if $length % {{step}}:
-                                {{nsteps}} = {{nsteps_load}} + 1
-                        """,
-                        vars=dict(length=Py_ssize_t),
+                        "{{nsteps}} = ({{stop}} - {{start}} + {{step}} + {{step}} / {{step}}) / {{step}}",
                         start=start, stop=stop, step=step,
-                        nsteps=nsteps.store(), nsteps_load=nsteps.load())
+                        nsteps=nsteps.store())
                 step = step.clone
             else:
                 s1 = self.run_template(

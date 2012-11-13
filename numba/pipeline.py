@@ -10,7 +10,7 @@ import pprint
 
 import numba.closure
 from numba import error
-from numba import functions, naming, transforms, visitors
+from numba import functions, naming, transforms, visitors, control_flow
 from numba import ast_type_inference as type_inference
 from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
@@ -27,6 +27,7 @@ class Pipeline(object):
     """
 
     order = [
+        'cfg',
         'const_folding',
         'type_infer',
         'type_set',
@@ -124,7 +125,12 @@ class Pipeline(object):
     #
     ### Pipeline stages
     #
-    
+
+    def cfg(self, ast):
+        transform = self.make_specializer(
+                control_flow.ControlFlowAnalysis, ast, **self.kwargs)
+        return transform.visit(ast)
+
     def const_folding(self, ast):
         const_marker = self.make_specializer(constant_folding.ConstantMarker,
                                              ast)
