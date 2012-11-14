@@ -680,3 +680,27 @@ class PyFloat_AsDouble(ExternalFunction):
 class PyComplex_AsCComplex(ExternalFunction):
     arg_types = [object_]
     return_type = complex128
+
+def create_binary_pyfunc(name):
+    class PyNumber_BinOp(ExternalFunction):
+        arg_types = [object_, object_]
+        return_type = object_
+    PyNumber_BinOp.__name__ = name
+    globals()[name] = PyNumber_BinOp
+
+create_binary_pyfunc('PyNumber_Add')
+create_binary_pyfunc('PyNumber_Subtract')
+create_binary_pyfunc('PyNumber_Multiply')
+create_binary_pyfunc('PyNumber_Divide')
+create_binary_pyfunc('PyNumber_Remainder')
+
+class PyNumber_Power(ExternalFunction):
+    arg_types = [object_, object_, object_]
+    return_type = object_
+
+create_binary_pyfunc('PyNumber_Lshift')
+create_binary_pyfunc('PyNumber_Rshift')
+create_binary_pyfunc('PyNumber_Or')
+create_binary_pyfunc('PyNumber_Xor')
+create_binary_pyfunc('PyNumber_And')
+create_binary_pyfunc('PyNumber_FloorDivide')

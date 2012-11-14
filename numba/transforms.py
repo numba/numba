@@ -1096,3 +1096,57 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
     def visit_Compare(self, node):
         self.generic_visit(node)
         return node
+
+    def _object_binop(self, node, api_name):
+        return self.visit(
+            self.function_cache.call(api_name, node.left, node.right))
+
+    def _object_Add(self, node):
+        return self._object_binop(node, 'PyNumber_Add')
+
+    def _object_Sub(self, node):
+        return self._object_binop(node, 'PyNumber_Subtract')
+
+    def _object_Mult(self, node):
+        return self._object_binop(node, 'PyNumber_Multiply')
+
+    def _object_Div(self, node):
+        return self._object_binop(node, 'PyNumber_Divide')
+
+    def _object_Mod(self, node):
+        return self._object_binop(node, 'PyNumber_Remainder')
+
+    def _object_Pow(self, node):
+        return self.visit(self.function_cache.call(
+                'PyNumber_Power', node.left, node.right,
+                nodes.ObjectInjectNode(None)))
+
+    def _object_LShift(self, node):
+        return self._object_binop(node, 'PyNumber_Lshift')
+
+    def _object_RShift(self, node):
+        return self._object_binop(node, 'PyNumber_Rshift')
+
+    def _object_BitOr(self, node):
+        return self._object_binop(node, 'PyNumber_Or')
+
+    def _object_BitXor(self, node):
+        return self._object_binop(node, 'PyNumber_Xor')
+
+    def _object_BitAnd(self, node):
+        return self._object_binop(node, 'PyNumber_And')
+
+    def _object_FloorDiv(self, node):
+        return self._object_binop(node, 'PyNumber_FloorDivide')
+
+    def visit_BinOp(self, node):
+        self.generic_visit(node)
+        if node.left.type.is_object or node.right.type.is_object:
+            op_name = type(node.op).__name__
+            op_method = getattr(self, '_object_%s' % op_name, None)
+            if op_method:
+                node = op_method(node)
+            else:
+                raise error.NumbaError(
+                    node, 'Unsupported native binary operation: %s' % op_name)
+        return node

@@ -1,9 +1,7 @@
 #! /usr/bin/env python
 
 from numba import *
-from . import test_support
-
-import numpy, math
+from numba.tests import test_support
 
 import unittest
 
@@ -21,14 +19,6 @@ def unary_not_pred(p):
 
 def unary_invert(x):
     return ~x
-
-def maxstar1d(a, b):
-    M = a.shape[0]
-    res = numpy.empty(M)
-    for i in range(M):
-        res[i] = numpy.max(a[i], b[i]) + numpy.log1p(
-            numpy.exp(-numpy.abs(a[i] - b[i])))
-    return res
 
 
 class TestUnaryOps(unittest.TestCase):
@@ -55,14 +45,6 @@ class TestUnaryOps(unittest.TestCase):
         test_val = 0x70f0f0f0
         self.assertEqual(test_fn(test_val), ~test_val)
         self.assertEqual(test_fn(test_val), unary_invert(test_val))
-
-    @test_support.checkSkipFlag("Object arithmetic not currently supported.")
-    def test_maxstar1d(self):
-        test_fn = jit('f8[:](f8[:],f8[:])')(maxstar1d)
-        test_a = numpy.random.random(10)
-        test_b = numpy.random.random(10)
-        self.assertTrue((test_fn(test_a, test_b) ==
-                         maxstar1d(test_a, test_b)).all())
 
 
 if __name__ == "__main__":
