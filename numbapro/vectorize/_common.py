@@ -146,6 +146,25 @@ class GenericVectorize(object):
     def build_ufunc(self):
         raise NotImplementedError
 
+    def _from_func(self, **kws):
+        assert self.translates, "No translation"
+        lfunclist = self._get_lfunc_list()
+        tyslist = self._get_tys_list()
+        engine = self._get_ee()
+        return self._from_func_factory(lfunclist, tyslist, engine=engine, **kws)
+
+
+    def build_ufunc_core(self):
+        '''Build the ufunc core functions and returns the prototype and pointer.
+        The return value is a list of tuples (prototype, pointer).
+        '''
+        assert self.translates, "No translation"
+        lfunclist = self._get_lfunc_list()
+        tyslist = self._get_tys_list()
+        engine = self._get_ee()
+        get_proto_ptr = self._from_func_factory._prepare_prototypes_and_pointers
+        return get_proto_ptr(lfunclist, tyslist, engine)
+
 class ASTVectorizeMixin(object):
 
     def __init__(self, *args, **kwargs):

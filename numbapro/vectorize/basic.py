@@ -60,24 +60,13 @@ class _BasicVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
 basic_vectorize_from_func = _BasicVectorizeFromFunc()
 
 class BasicVectorize(_common.GenericVectorize):
-    def build_ufunc(self, minivect_dispatcher=None, cuda_dispatcher=None):
-        assert self.translates, "No translation"
-        lfunclist = self._get_lfunc_list()
-        tyslist = self._get_tys_list()
-        engine = self._get_ee()
-        return basic_vectorize_from_func(lfunclist, tyslist, engine=engine,
-                                         minivect_dispatcher=minivect_dispatcher,
-                                         cuda_dispatcher=cuda_dispatcher)
 
-    def build_ufunc_core(self):
-        '''Build the ufunc core function and returns the pointer to the ufunc.
-        '''
-        assert self.translates, "No translation"
-        lfunclist = self._get_lfunc_list()
-        tyslist = self._get_tys_list()
-        engine = self._get_ee()
-        return basic_vectorize_from_func._prepare_prototypes_and_pointers(
-                                            lfunclist, tyslist, engine)
+    _from_func_factory = basic_vectorize_from_func
+
+    def build_ufunc(self, minivect_dispatcher=None, cuda_dispatcher=None):
+        return self._from_func(minivect_dispatcher=minivect_dispatcher,
+                               cuda_dispatcher=cuda_dispatcher)
+
 
 
 class BasicASTVectorize(_common.GenericASTVectorize, BasicVectorize):

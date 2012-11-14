@@ -105,13 +105,11 @@ class _StreamVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
 stream_vectorize_from_func = _StreamVectorizeFromFunc()
 
 class StreamVectorize(_common.GenericVectorize):
+
+    _from_func_factory = stream_vectorize_from_func
+
     def build_ufunc(self, granularity=8):
-        assert self.translates, "No translation"
-        lfunclist = self._get_lfunc_list()
-        tyslist = self._get_tys_list()
-        engine = self._get_ee()
-        return stream_vectorize_from_func(lfunclist, tyslist, engine=engine,
-                                          granularity=granularity)
+        return self._from_func(granularity=granularity)
 
 class StreamASTVectorize(_common.GenericASTVectorize, StreamVectorize):
     pass

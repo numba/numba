@@ -172,6 +172,9 @@ class CudaVectorize(_common.GenericVectorize):
                     minivect_dispatcher=None, cuda_dispatcher=dispatcher)
         return ufunc
 
+    def build_ufunc_core(self):
+        # TODO: implement this after the refactoring of cuda dispatcher
+        raise NotImplementedError
 
     def _build_caller(self, lfunc):
         lcaller_def = _CudaStagingCaller(CFuncRef(lfunc), lfunc.type.pointee)

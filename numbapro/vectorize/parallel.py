@@ -520,14 +520,12 @@ class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
 parallel_vectorize_from_func = _ParallelVectorizeFromFunc()
 
 class ParallelVectorize(_common.GenericVectorize):
+
+    _from_func_factory = parallel_vectorize_from_func
+
     def build_ufunc(self, minivect_dispatcher=None, cuda_dispatcher=None):
-        assert self.translates, "No translation"
-        lfunclist = self._get_lfunc_list()
-        tyslist = self._get_tys_list()
-        engine = self._get_ee()
-        return parallel_vectorize_from_func(lfunclist, tyslist, engine=engine,
-                                            minivect_dispatcher=minivect_dispatcher,
-                                            cuda_dispatcher=cuda_dispatcher)
+        return self._from_func(minivect_dispatcher=minivect_dispatcher,
+                               cuda_dispatcher=cuda_dispatcher)
 
 class ParallelASTVectorize(_common.GenericASTVectorize, ParallelVectorize):
     pass
