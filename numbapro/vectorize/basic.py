@@ -54,9 +54,7 @@ class _BasicVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
     def build(self, lfunc, dtypes):
         def_buf = BasicUFunc(CFuncRef(lfunc))
         func = def_buf(lfunc.module)
-
         _common.post_vectorize_optimize(func)
-
         return func
 
 basic_vectorize_from_func = _BasicVectorizeFromFunc()
@@ -70,6 +68,16 @@ class BasicVectorize(_common.GenericVectorize):
         return basic_vectorize_from_func(lfunclist, tyslist, engine=engine,
                                          minivect_dispatcher=minivect_dispatcher,
                                          cuda_dispatcher=cuda_dispatcher)
+
+    def build_ufunc_core(self):
+        '''Build the ufunc core function and returns the pointer to the ufunc.
+        '''
+        assert self.translates, "No translation"
+        lfunclist = self._get_lfunc_list()
+        tyslist = self._get_tys_list()
+        engine = self._get_ee()
+        return basic_vectorize_from_func._prepare_prototypes_and_pointers(
+                                            lfunclist, tyslist, engine)
 
 
 class BasicASTVectorize(_common.GenericASTVectorize, BasicVectorize):

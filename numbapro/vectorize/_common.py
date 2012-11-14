@@ -10,6 +10,12 @@ from numbapro import _internal
 from numbapro.translate import Translate
 from llvm.passes import PassManager, PassManagerBuilder
 
+try:
+    ptr_t = long
+except:
+    ptr_t = int
+    assert False, "Have not check this yet" # Py3.0?
+
 _llvm_ty_str_to_numpy = {
             'i8'     : np.int8,
             'i16'    : np.int16,
@@ -66,7 +72,6 @@ class CommonVectorizeFromFrunc(object):
         except TypeError:
             lfunclist = [lfunclist]
 
-
         ptrlist = self._prepare_pointers(lfunclist, tyslist, engine, **kws)
 
         fntype = lfunclist[0].type.pointee
@@ -86,29 +91,27 @@ class CommonVectorizeFromFrunc(object):
                                    cuda_dispatcher)
         return ufunc
 
-    def _prepare_pointers(self, lfunclist, tyslist, engine, **kws):
-        # build all functions
-        # spuflist = [self.build(lfunc, **kws) for lfunc in lfunclist]
+    def _prepare_ufunc_core(self, lfunclist, tyslist, **kws):
         spuflist = []
         for i, (lfunc, dtypes) in enumerate(zip(lfunclist, tyslist)):
             spuflist.append(self.build(lfunc, dtypes, **kws))
+        return spuflist
 
-        # We have an engine, build ufunc
+    def _get_pointer_from_ufunc_core(self, spuf, engine):
+        fptr = engine.get_pointer_to_function(spuf)
+        return ptr_t(fptr)
 
-        try:
-            ptr_t = long
-        except:
-            ptr_t = int
-            assert False, "Have not check this yet" # Py3.0?
-
-        ptrlist = []
-        tyslist = []
-        datlist = []
-        for i, spuf in enumerate(spuflist):
-            fptr = engine.get_pointer_to_function(spuf)
-            ptrlist.append(ptr_t(fptr))
-
+    def _prepare_pointers(self, lfunclist, tyslist, engine, **kws):
+        spuflist = self._prepare_ufunc_core(lfunclist, tyslist, **kws)
+        ptrlist = [self._get_pointer_from_ufunc_core(spuf, engine)
+                   for spuf in spuflist]
         return ptrlist
+
+    def _prepare_prototypes_and_pointers(self, lfunclist, tyslist, engine):
+        spuflist = self._prepare_ufunc_core(lfunclist, tyslist)
+        ptrlist = [self._get_pointer_from_ufunc_core(spuf, engine)
+                   for spuf in spuflist]
+        return zip(spuflist, ptrlist)
 
 class GenericVectorize(object):
     def __init__(self, func):
