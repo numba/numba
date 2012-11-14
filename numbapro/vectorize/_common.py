@@ -50,7 +50,7 @@ def _numbatypes_to_numpy(ty):
     ret = _numbatypes_str_to_numpy[str(ty)]
     return ret
 
-class CommonVectorizeFromFrunc(object):
+class CommonVectorizeFromFunc(object):
     def build(self, lfunc, dtypes):
         raise NotImplementedError
 

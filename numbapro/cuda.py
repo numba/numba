@@ -62,6 +62,29 @@ def jit(restype=void, argtypes=None, backend='ast', **kws):
 
 
 _device_functions = {}
+
+def _ast_jit(func, argtypes, inline, llvm_module, **kws):
+    kws['nopython'] = True          # override nopython option
+    if not hasattr(func, '_is_numba_func'):
+        func._is_numba_func = True
+        func._numba_compile_only = True
+    func._numba_inline = inline
+    assert func._numba_compile_only
+    result = function_cache.compile_function(func, argtypes,
+                                             ctypes=True,
+                                             llvm_module=llvm_module,
+                                             _llvm_ee=None,
+                                             **kws)
+    signature, lfunc, unused = result
+    assert unused is None               # Just to be sure
+
+    # XXX: temp fix for PyIncRef and PyDecRef in lfunc.
+    # IS this still necessary?
+    # Yes, as of Oct 22 2012
+    _temp_fix_to_remove_python_specifics(lfunc)
+
+    return signature, lfunc
+
 def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
     if restype == None: restype = void
     assert device or restype == void,\
@@ -69,38 +92,17 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
     if kws.pop('_llvm_ee', None) is not None:
         raise Exception("_llvm_ee should not be defined.")
     assert not inline or device
-    kws['nopython'] = True # override nopython option
     def _jit2(func):
         llvm_module = (kws.pop('llvm_module', None)
                        or _lc.Module.new('ptx_%s' % func))
-        if not hasattr(func, '_is_numba_func'):
-            func._is_numba_func = True
-            func._numba_compile_only = True
-        func._numba_inline = inline
-
-        assert kws.get('nopython')
-        assert func._numba_compile_only
-
-        result = function_cache.compile_function(func, argtypes,
-                                                 ctypes=True,
-                                                 llvm_module=llvm_module,
-                                                 _llvm_ee=None,
-                                                 **kws)
-
-        signature, lfunc, unused = result
-        assert unused is None               # Just to be sure
-
-        # XXX: temp fix for PyIncRef and PyDecRef in lfunc.
-        # IS this still necessary?
-        # Yes, as of Oct 22 2012
-        _temp_fix_to_remove_python_specifics(lfunc)
-
+        
+        signature, lfunc = _ast_jit(func, argtypes, inline, llvm_module, **kws)
+        
         if device:
             assert lfunc.name not in _device_functions, 'Device function name already used'
             _device_functions[lfunc.name] = func, lfunc
             return CudaDeviceFunction(func, signature=signature, lfunc=lfunc)
         else:
-            _link_device_function(lfunc)
             return CudaNumbaFunction(func, signature=signature, lfunc=lfunc)
     return _jit2
 
@@ -124,8 +126,7 @@ CUDA_MATH_INTRINSICS_2 = {
 
 CUDA_MATH_INTRINSICS_3 = CUDA_MATH_INTRINSICS_2.copy()
 CUDA_MATH_INTRINSICS_3.update({
-
-
+                              # intentionally empty
 })
 
 
@@ -266,6 +267,29 @@ class CudaBaseFunction(numba.decorators.NumbaFunction):
         '''
         return self.configure(*args)
 
+
+def _generate_ptx(module, kernels):
+    from numbapro._cuda import nvvm, default
+    cc_major = default.device.COMPUTE_CAPABILITY[0]
+
+    for kernel in kernels:
+        _link_device_function(kernel)
+        nvvm.set_cuda_kernel(kernel)
+    _link_llvm_math_intrinsics(module, cc_major)
+
+    arch = 'compute_%d0' % cc_major
+
+    nvvm.fix_data_layout(module)
+
+    pmb = _lp.PassManagerBuilder.new()
+    pmb.opt_level = 2 # O3 causes bar.sync to be duplicated in unrolled loop
+    pm = _lp.PassManager.new()
+    pmb.populate(pm)
+    pm.run(module)
+
+    return nvvm.llvm_to_ptx(str(module), arch=arch)
+
+
 class CudaNumbaFunction(CudaBaseFunction):
     def __init__(self, py_func, wrapper=None, ctypes_func=None,
                  signature=None, lfunc=None, extra=None):
@@ -275,89 +299,18 @@ class CudaNumbaFunction(CudaBaseFunction):
         self.module = lfunc.module
         self.extra = extra
 
-        def apply_typemap(ty):
-            if isinstance(ty, _lc.IntegerType):
-                return 'i'
-            elif ty == _lc.Type.float():
-                return 'f'
-            elif ty == _lc.Type.double():
-                return 'd'
-            else:
-                return '_'
-
-        argtys = lfunc.type.pointee.args
-        typemap_string = ''.join(map(apply_typemap, argtys))
-
-        self.typemap = typemap_string
-
         func_name = lfunc.name
 
-        #### The Old Way that uses LLVM PTX and NVPTX
-        #    wrapper.calling_convention = _lc.CC_PTX_KERNEL
-
-        #    # optimize
-        #    pmb = _lp.PassManagerBuilder.new()
-        #    pmb.opt_level = 3
-
-        #    pm = _lp.PassManager.new()
-
-        #    pm.run(self.module)
-
-        #    device_number = -1
-        #    # TODO: Too be refacted. Copied from numbapro.vectorize.cuda
-        #    cc = 'sm_%d%d' % _cuda_device.COMPUTE_CAPABILITY
-        #    self._cc = cc
-
-        #    if _lc.HAS_PTX:
-        #        arch = 'ptx%d' % _llvm_cbuilder_types.intp.width # select by host pointer size
-        #    elif _lc.HAS_NVPTX:
-        #        arch = {32: 'nvptx', 64: 'nvptx64'}[C.intp.width]
-        #    else:
-        #        raise Exception("llvmpy does not have PTX/NVPTX support")
-
-        #    self._arch = arch
-
-        #    assert _llvm_cbuilder_types.intp.width in [32, 64]
-
-        #    # generate PTX
-        #    ptxtm = _le.TargetMachine.lookup(arch, cpu=cc, opt=3)
-        #    ptxasm = ptxtm.emit_assembly(self.module)
-        #    self._ptxasm = ptxasm
-
-        # print self.module
-        
         # FIXME: this function is called multiple times on the same lfunc.
         #        As a result, it has a long list of nvvm.annotation of the
         #        same data.
-        from numbapro._cuda import nvvm, default
-        cc_major = default.device.COMPUTE_CAPABILITY[0]
 
-        # link all math intrinsics
-        user_funcs = filter(lambda x: not x.is_declaration and \
-                                      not x.name.startswith('llvm.'),
-                            self.module.functions)
-
-        _link_llvm_math_intrinsics(self.module, cc_major)
-        
-        # prepare for ptx generation
-        arch = 'compute_%d0' % cc_major
-
-        nvvm.fix_data_layout(self.module)
-        nvvm.set_cuda_kernel(lfunc)
-
-        pmb = _lp.PassManagerBuilder.new()
-        pmb.opt_level = 2 # O3 causes bar.sync to be duplicated in unrolled loop
-        pm = _lp.PassManager.new()
-        pmb.populate(pm)
-        pm.run(self.module)
-#        print self.module
-        # generate ptx
-        self._ptxasm = nvvm.llvm_to_ptx(str(self.module), arch=arch)
-        
+        self._ptxasm = _generate_ptx(lfunc.module, [lfunc])
+                
         from numbapro import _cudadispatch
         self.dispatcher = _cudadispatch.CudaNumbaFuncDispatcher(self._ptxasm,
                                                                 func_name,
-                                                                typemap_string)
+                                                                lfunc.type)
 
     def __call__(self, *args):
         '''Call the CUDA kernel.
@@ -366,16 +319,6 @@ class CudaNumbaFunction(CudaBaseFunction):
         In another words, this function will return only upon the completion
         of the CUDA kernel.
         '''
-        # Cast scalar arguments to match the prototype.
-        def convert(ty, val):
-            if ty == 'f' or ty == 'd':
-                return float(val)
-            elif ty == 'i':
-                return int(val)
-            else:
-                return val
-
-        args = [convert(ty, val) for ty, val in zip(self.typemap, args)]
         return self.dispatcher(args, self._griddim, self._blockdim,
                                stream=self._stream)
 
@@ -390,12 +333,16 @@ class CudaNumbaFunction(CudaBaseFunction):
     #        '''The LLVM target mcahine backend used to generate the PTX.
     #        '''
     #        return self._arch
-
+    #
     @property
     def ptx(self):
         '''Returns the PTX assembly for this function.
         '''
         return self._ptxasm
+
+    @property
+    def device(self):
+        return self.dispatcher.device
 
 class CudaAutoJitNumbaFunction(CudaBaseFunction):
 

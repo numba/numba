@@ -2,7 +2,6 @@ import numpy as np
 from numba import *
 from numbapro import cuda
 
-
 def array_copy(src, dst, n):
     tid = cuda.threadIdx.x
     blkid = cuda.blockIdx.x
@@ -70,7 +69,6 @@ def main():
     test_array_scale()
 
 if __name__ == '__main__':
-#    main()
     for i in range(100):
-        #print cuda.cached
         main()
+    print 'ok'

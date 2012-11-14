@@ -2,8 +2,8 @@ from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm.core import *
 from llvm.passes import *
-from llvm.ee import *
 import numpy as np
+from numba import llvm_types
 from . import _common
 from ._common import _llvm_ty_to_numpy
 
@@ -11,6 +11,7 @@ from numba.minivect import minitypes
 
 from numbapro._cuda.error import CudaSupportError
 from numbapro._cuda import nvvm
+from numbapro import cuda
 try:
     from numbapro import _cudadispatch
 except CudaSupportError: # ignore missing cuda dependency
@@ -18,7 +19,7 @@ except CudaSupportError: # ignore missing cuda dependency
 
 from numbapro.translate import Translate
 from numbapro.vectorize import minivectorize, basic
-
+from numba.ndarray_helpers import PyArrayAccessor
 
 class _CudaStagingCaller(CDefinition):
     def body(self, *args, **kwargs):
@@ -43,30 +44,43 @@ class _CudaStagingCaller(CDefinition):
         blkid = self.var_copy(ctaid_x())
 
         i = tid + blkdim * blkid
+
         with self.ifelse( i >= ct ) as ifelse: # stop condition
             with ifelse.then():
                 self.ret()
 
-        res = worker(*map(lambda x: x[i], inputs), inline=True)
-        output[i].assign(res)
+        dataptrs = []
+        for inary, ty in zip(inputs, self.ArgTypes):
+            acc = PyArrayAccessor(self.builder, inary.value)
+            casted_data = self.builder.bitcast(acc.data, ty)
+            dataptrs.append(CArray(self, casted_data))
+
+        res = worker(*[x[i] for x in dataptrs], inline=True)
+
+        acc = PyArrayAccessor(self.builder, output.value)
+        casted_data = self.builder.bitcast(acc.data, self.RetType)
+        outary = CArray(self, casted_data)
+        outary[i] = res
 
         self.ret()
 
     @classmethod
     def specialize(cls, worker, fntype):
-        cls._name_ = ("_cukernel_%s" % worker).replace('.', '_2E_')
-
+        cls._name_ = ("_cukernel_%s" % worker).replace('.', ('_%X_' % ord('.')))
+        
         args = cls._argtys_ = []
         inargs = cls.InArgs = []
+        cls.ArgTypes = map(cls._pointer, fntype.args)
+        cls.RetType = cls._pointer(fntype.return_type)
 
         # input arguments
         for i, ty in enumerate(fntype.args):
-            cur = ('in%d' % i, cls._pointer(ty))
+            cur = ('in%d' % i, cls._pointer(llvm_types._numpy_struct))
             args.append(cur)
             inargs.append(cur)
 
         # output arguments
-        cur = ('out', cls._pointer(fntype.return_type))
+        cur = ('out', cls._pointer(llvm_types._numpy_struct))
         args.append(cur)
         cls.OutArg = cur
 
@@ -92,85 +106,55 @@ def get_dtypes(restype, argtypes):
 class CudaVectorize(_common.GenericVectorize):
     def __init__(self, func):
         super(CudaVectorize, self).__init__(func)
-        self.module = Module.new("ptx_%s" % func.func_name)
+        self.module = Module.new('ptx_%s' % func)
         self.signatures = []
 
     def add(self, restype, argtypes, **kwargs):
-        kwargs.update({'module': self.module})
         self.signatures.append((restype, argtypes, kwargs))
-        t = Translate(self.pyfunc, restype=restype, argtypes=argtypes,
-                      **kwargs)
-        t.translate()
-        self.translates.append(t)
+        translate = cuda._ast_jit(self.pyfunc, argtypes, inline=False,
+                                  llvm_module=self.module, **kwargs)
+        self.translates.append(translate)
         self.args_restypes.append(argtypes + [restype])
 
-    def _build_ufunc(self):
+    def _get_lfunc_list(self):
+        return [lfunc for sig, lfunc in self.translates]
+
+    def _get_sig_list(self):
+        return [sig for sig, lfunc in self.translates]
+
+    def _get_ee(self):
+        raise NotImplementedError
+
+    def build_ufunc(self):
         lfunclist = self._get_lfunc_list()
-
-        # setup optimizer for the staging caller
-        fpm = FunctionPassManager.new(self.module)
-        pmbldr = PassManagerBuilder.new()
-        pmbldr.opt_level = 3
-        pmbldr.populate(fpm)
-
-        types_to_name = {}
-
-        lcaller_list = []
-        for (restype, argtypes, _), lfunc in zip(self.signatures, lfunclist):
+        signatures = self._get_sig_list()
+        types_to_retty_kernel = {}
+        
+        for (restype, argtypes, _), lfunc, sig in zip(self.signatures,
+                                                      lfunclist,
+                                                      signatures):
             ret_dtype, arg_dtypes = get_dtypes(restype, argtypes)
             # generate a caller for all functions
-            lcaller = self._build_caller(lfunc)
-            assert lcaller.module is lfunc.module
-            fpm.run(lcaller)    # run the optimizer
-            lcaller_list.append(lcaller)
+            cukernel = self._build_caller(lfunc)
+            assert cukernel.module is lfunc.module
+
 
             # unicode problem?
-            fname = lcaller.name
+            fname = cukernel.name
             if isinstance(fname, unicode):
                 fname = fname.encode('utf-8')
 
-            types_to_name[arg_dtypes] = ret_dtype, fname
+            cuf = cuda.CudaNumbaFunction(self.pyfunc,
+                                         signature=sig,
+                                         lfunc=cukernel)
 
-        #        # force inlining & trim internal functions
-        #        pm = PassManager.new()
-        #        pm.add(PASS_INLINE)
-        #        pm.run(self.module)
-
-        #        # generate ptx asm for all functions
-
-        #        # Note. Oddly, the llvm ptx backend does not have compute capacility
-        #        #       beyound 2.0, but it has the streaming-multiprocessor,
-        #        #       which is the same.
-        #        cc = 'sm_%d%d' % _cudadispatch.compute_capability()
-        #        if HAS_PTX:
-        #            arch = 'ptx%d' % C.intp.width # select by host pointer size
-        #        elif HAS_NVPTX:
-        #            arch = {32: 'nvptx', 64: 'nvptx64'}[C.intp.width]
-        #        else:
-        #            raise Exception("llvmpy does not have PTX/NVPTX support")
-
-        #        assert C.intp.width in [32, 64]
-        #        ptxtm = TargetMachine.lookup(arch, cpu=cc, opt=3) # TODO: ptx64 option
-        #        ptxasm = ptxtm.emit_assembly(self.module)
-
-
-        nvvm.fix_data_layout(self.module)
-        for lfunc in lcaller_list:
-            nvvm.set_cuda_kernel(lfunc)
+            types_to_retty_kernel[arg_dtypes] = ret_dtype, cuf
 
         for lfunc in lfunclist:
             lfunc.delete()
 
-        ptxasm = nvvm.llvm_to_ptx(str(self.module))
-        dispatcher = _cudadispatch.CudaUFuncDispatcher(ptxasm, types_to_name)
+        dispatcher = _cudadispatch.CudaUFuncDispatcher(types_to_retty_kernel)
         return dispatcher
-
-    def build_ufunc(self):
-        dispatcher = self._build_ufunc()
-        ufunc, lfuncs = minivectorize.fallback_vectorize(
-                    basic.BasicVectorize, self.pyfunc, self.signatures,
-                    minivect_dispatcher=None, cuda_dispatcher=dispatcher)
-        return ufunc
 
     def build_ufunc_core(self):
         # TODO: implement this after the refactoring of cuda dispatcher

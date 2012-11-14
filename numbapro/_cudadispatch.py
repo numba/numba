@@ -1,101 +1,107 @@
 # Raise ImportError if we cannot find CUDA Driver.
 
+from llvm import core as _lc
 import numpy as np
 from ctypes import *
 from numbapro._cuda import driver as _cuda
 from numbapro._cuda import default as _cudadefaults
-from numbapro._cuda.ndarray import ndarray_to_device_memory, \
+from numbapro._cuda.ndarray import ndarray_to_device_memory,      \
                                    ndarray_data_to_device_memory, \
                                    NumpyStructure
+from numbapro._cuda.devicearray import DeviceNDArray
+from numbapro import cuda
 import math
 
 def compute_capability():
     "Get the CUDA compute capability of the device"
     return _cudadefaults.device.COMPUTE_CAPABILITY
 
-
 class CudaUFuncDispatcher(object):
     """
     Invoke the CUDA ufunc specialization for the given inputs.
     """
-    def __init__(self, ptx_code, types_to_name):
-        cu_module = _cuda.Module(ptx_code)
-
-        self.functions = {}
-        self.name_to_func = {}
-        for dtypes, (result_dtype, name) in types_to_name.items():
-            func = _cuda.Function(cu_module, name)
-            self.functions[dtypes] = (result_dtype, func)
-            self.name_to_func[name] = func
+    def __init__(self, types_to_retty_kernels):
+        self.functions = types_to_retty_kernels
 
     def broadcast_inputs(self, args):
         # prepare broadcasted contiguous arrays
         # TODO: Allow strided memory (use mapped memory + strides?)
         # TODO: don't perform actual broadcasting, pass in strides
         args = [np.ascontiguousarray(a) for a in args]
+        first_ary = args[0]
         broadcast_arrays = np.broadcast_arrays(*args)
         return broadcast_arrays
 
     def allocate_output(self, broadcast_arrays, result_dtype):
         # return np.empty_like(broadcast_arrays[0], dtype=result_dtype)
         # for numpy1.5
-        return np.zeros(broadcast_arrays[0].shape, dtype=result_dtype)
+        return np.empty(broadcast_arrays[0].shape, dtype=result_dtype)
 
-    def __call__(self, ufunc, *args):
+    def __call__(self, *args, **kws):
+        assert not kws or 'stream' in kws
+        stream = kws.get('stream', 0)
         dtypes = tuple(a.dtype for a in args)
         if dtypes not in self.functions:
             raise TypeError("Input dtypes not supported by ufunc %s" % (dtypes,))
 
+        # find the fitting function
         result_dtype, cuda_func = self.functions[dtypes]
-
-        broadcast_arrays = self.broadcast_inputs(args)
-        element_count = np.prod(broadcast_arrays[0].shape)
-
-        out = self.allocate_output(broadcast_arrays, result_dtype)
-
         MAX_THREAD = cuda_func.device.MAX_THREADS_PER_BLOCK
-        thread_count =  min(MAX_THREAD, element_count)
-        block_count = int(math.ceil(float(element_count) / MAX_THREAD))
 
-        # TODO: Dispatch from actual ufunc
-        assert all(isinstance(array, np.ndarray) for array in broadcast_arrays)
+        is_device_ndarray = [isinstance(x, DeviceNDArray) for x in args]
 
-        stream = _cuda.Stream()
-        with stream.auto_synchronize():
-            kernel_args = [dvmem for _, dvmem
-                                 in map(ndarray_data_to_device_memory,
-                                        broadcast_arrays)]
-            retriever, output_args = ndarray_data_to_device_memory(out)
-            kernel_args.append(output_args)
-            kernel_args.append(c_int(element_count))
+        if all(is_device_ndarray):
+            # NOTE: When using DeviceNDArray,
+            #       it is assumed to be properly broadcasted.
+            assert args[0].ndim == 1
+            assert all(x.shape == args.shape for x in args)
 
-            griddim = (block_count,)
-            blockdim = (thread_count,)
+            element_count = args[0].shape[0]
+            out = np.empty(args[0].shape[0], dtype=result_dtype)
+            nctaid, ntid = self.determine_dimensions(element_count, MAX_THREAD)
+            
+            griddim = (nctaid,)
+            blockdim = (ntid,)
 
-            cu_func = cuda_func.configure(griddim, blockdim, stream=stream)
-            cu_func(*kernel_args)
+            device_out = cuda.to_device(out, stream)
 
-            retriever() # only retrive the last one
-        return out
+            kernel_args = device_ins + [device_out, element_count]
 
-    def build_datalist(self, func_names):
-        """
+            cuda_func[griddim, blockdim, stream](*kernel_args)
 
-        This is called for generalized CUDA ufuncs. They do not go through
-        __call__, but rather call the functions directly. Our function needs
-        some extra info which we build here.
-        """
-        # XXX: why is this here if it is only used by generalized CUDA ufuncs?
-        nops = len(self.functions.keys()[0])
-        self.info = (CudaFunctionAndData * len(func_names))()
-        result = []
-        for i, func_name in enumerate(func_names):
-            func = self.name_to_func[func_name]
-            self.info[i].cu_func = func._handle
-            self.info[i].nops = nops
-            result.append(long(addressof(self.info[i])))
+            device_out.to_host(stream) # only retrive the last one
 
-        return result
+        elif not any(is_device_ndarray):
+            broadcast_arrays = self.broadcast_inputs(args)
+            element_count = np.prod(broadcast_arrays[0].shape)
+
+            out = self.allocate_output(broadcast_arrays, result_dtype)
+            nctaid, ntid = self.determine_dimensions(element_count, MAX_THREAD)
+
+            assert all(isinstance(array, np.ndarray) for array in broadcast_arrays)
+
+            device_ins = [cuda.to_device(x, stream) for x in broadcast_arrays]
+            device_out = cuda.to_device(out, stream)
+
+            kernel_args = device_ins + [device_out, element_count]
+
+            griddim = (nctaid,)
+            blockdim = (ntid,)
+            
+            cuda_func[griddim, blockdim, stream](*kernel_args)
+            
+            device_out.to_host(stream) # only retrive the last one
+
+        else:
+            raise ValueError("Cannot mix DeviceNDArray and ndarray as args")
+
+        return device_out
+
+    def determine_dimensions(self, n, max_thread):
+        # determine grid and block dimension
+        thread_count =  min(max_thread, n)
+        block_count = int(math.ceil(float(n) / max_thread))
+        return block_count, thread_count
 
 class CudaFunctionAndData(Structure):
     _fields_ = [
@@ -219,17 +225,47 @@ class CudaGeneralizedUFuncDispatcher(CudaUFuncDispatcher):
 
         arrays = [np.asarray(a) for a in args]
 
+def _apply_typemap(lfunctype):
+    argtys = lfunctype.pointee.args
+    def convert(ty):
+        if isinstance(ty, _lc.IntegerType):
+            return 'i'
+        elif ty == _lc.Type.float():
+            return 'f'
+        elif ty == _lc.Type.double():
+            return 'd'
+        else:
+            return '_'
+    return ''.join(map(convert, argtys))
+
 class CudaNumbaFuncDispatcher(object):
 
-    def __init__(self, ptx_code, func_name, typemap):
+    def __init__(self, ptx_code, func_name, lfunctype):
         cu_module = _cuda.Module(ptx_code)
         self.cu_function = _cuda.Function(cu_module, func_name)
-        self.typemap = typemap
+        self.typemap = _apply_typemap(lfunctype)
         # default to prefer cache
         # self.cu_function.cache_config(prefer_shared=True)
 
+    @property
+    def device(self):
+        return self.cu_function.device
+
+    def _cast_args(self, args):
+        # Cast scalar arguments to match the prototype.
+        def convert(ty, val):
+            if ty == 'f' or ty == 'd':
+                return float(val)
+            elif ty == 'i':
+                return int(val)
+            else:
+                return val
+        return [convert(ty, val) for ty, val in zip(self.typemap, args)]
+
     def __call__(self, args, griddim, blkdim, stream=0):
         from ._cuda.devicearray import DeviceNDArray
+        args = self._cast_args(args)
+
         kernel_args = []
 
         retrievers = []
@@ -245,7 +281,6 @@ class CudaNumbaFuncDispatcher(object):
                        'd': c_double,
                        'i': c_int,
                        '_': ndarray_gpu}
-
 
         for ty, arg in zip(self.typemap, args):
             kernel_args.append(_typemapper[ty](arg))
