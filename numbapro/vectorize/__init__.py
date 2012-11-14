@@ -52,7 +52,7 @@ backends = {
     'mini': mini_vectorizers,
 }
 
-def Vectorize(func, backend='bytecode', target='cpu'):
+def Vectorize(func, backend='ast', target='cpu'):
     """
     Instantiate a vectorizer given the backend and target.
 
@@ -81,7 +81,7 @@ ast_guvectorizers = {
     'gpu': CudaGUFuncASTVectorize,
 }
 
-def GUVectorize(func, signature, backend='bytecode', target='cpu'):
+def GUVectorize(func, signature, backend='ast', target='cpu'):
     assert backend in ('bytecode', 'ast')
     assert target in ('cpu', 'gpu')
 
