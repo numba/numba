@@ -22,7 +22,7 @@ from numbapro.vectorize import cuda
 import numpy as np
 import llvm.core
 
-class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFrunc):
+class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
     def datalist(self, lfunclist, ptrlist, cuda_dispatcher):
         """
         Return a list of data pointers to the kernels.

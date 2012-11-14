@@ -93,7 +93,7 @@ class StreamUFunc(BasicUFunc):
         cls.Granularity = granularity
         cls.FuncDef = func_def
 
-class _StreamVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
+class _StreamVectorizeFromFunc(_common.CommonVectorizeFromFunc):
     def build(self, lfunc, dtypes, granularity):
         def_buf = StreamUFunc(CFuncRef(lfunc), granularity)
         func = def_buf(lfunc.module)

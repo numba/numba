@@ -503,7 +503,7 @@ else:
 class ParallelUFuncPlatform(ParallelUFunc, ParallelMixin):
     pass
 
-class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFrunc):
+class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFunc):
     def build(self, lfunc, dtypes):
         import multiprocessing
         NUM_CPU = multiprocessing.cpu_count()
