@@ -1,3 +1,5 @@
+# -*- coding: UTF-8 -*-
+
 """
 Control flow for the AST backend.
 
@@ -14,7 +16,7 @@ import subprocess
 from meta import asttools
 
 import numba
-from numba import error, transforms, closure, visitors, symtab
+from numba import error, transforms, closure, visitors, symtab, nodes
 from numba.utils import dump
 
 from numba import *
@@ -22,7 +24,7 @@ from numba import *
 logger = logging.getLogger(__name__)
 
 dot_output_graph = os.path.expanduser("~/cfg.dot")
-dot_output_graph = False
+# dot_output_graph = False
 
 class ControlBlock(object):
     """
@@ -50,7 +52,9 @@ class ControlBlock(object):
 
     _fields = ['body']
 
-    def __init__(self, label='empty'):
+    def __init__(self, id, label='empty', have_code=True):
+        self.id = id
+
         self.children = set()
         self.parents = set()
         self.positions = set()
@@ -67,9 +71,20 @@ class ControlBlock(object):
 
         self.body = []
         self.label = label
+        self.have_code = have_code
+
+        # TODO: Make these bits
+        # Set of blocks that dominate this block
+        self.dominators = set()
+        # Set of blocks where our dominance stops
+        self.dominance_frontier = set()
+        # SSA Φ locations. Maps Variables to a list of (basic_block, definition)
+        # There can be only one reaching definition, since each variable is
+        # assigned only once
+        self.phis = {}
 
     def empty(self):
-        return (not self.stats and not self.positions)
+        return (not self.stats and not self.positions and not self.phis)
 
     def detach(self):
         """Detach block from parents and children."""
@@ -83,6 +98,9 @@ class ControlBlock(object):
     def add_child(self, block):
         self.children.add(block)
         block.parents.add(self)
+
+    def __repr__(self):
+        return 'Block(%d)' % self.id
 
 
 class ExitBlock(ControlBlock):
@@ -114,42 +132,52 @@ class ControlFlow(object):
     def __init__(self, source_descr):
         self.source_descr = source_descr
 
-        self.blocks = set()
+        self.blocks = []
         self.entries = set()
         self.loops = []
         self.exceptions = []
 
-        self.entry_point = ControlBlock(label='entry')
-        self.exit_point = ExitBlock(label='exit')
-        self.blocks.add(self.exit_point)
+        self.entry_point = ControlBlock(-1, label='entry')
+        self.exit_point = ExitBlock(0, label='exit')
         self.block = self.entry_point
 
-    def newblock(self, parent=None, label='empty'):
+    def newblock(self, parent=None, label='empty', have_code=True):
         """
         Create floating block linked to `parent` if given.
         Does NOT set the current block to the new block.
         """
-        block = ControlBlock(label=label)
-        self.blocks.add(block)
+        block = ControlBlock(len(self.blocks), label=label, have_code=have_code)
+        self.blocks.append(block)
         if parent:
             parent.add_child(block)
 
         return block
 
-    def nextblock(self, parent=None, label='empty'):
+    def nextblock(self, parent=None, label='empty', have_code=True):
         """
         Create child block linked to current or `parent` if given.
         Sets the current block to the new block.
         """
-        block = ControlBlock(label=label)
-        self.blocks.add(block)
-        if parent:
-            parent.add_child(block)
-        elif self.block:
+        block = self.newblock(parent, label, have_code)
+        if not parent and self.block:
             self.block.add_child(block)
 
         self.block = block
-        return self.block
+        return block
+
+    def exit_block(self, parent=None, label='empty'):
+        """
+        Create a floating exit block. This can later be added to self.blocks.
+        This is useful to ensure topological order.
+        """
+        block = self.newblock(parent, label, have_code=False)
+        self.blocks.pop()
+        return block
+
+    def add_exit(self, exit_block):
+        "Add an exit block after visiting the body"
+        exit_block.id = len(self.blocks)
+        self.blocks.append(exit_block)
 
     def is_tracked(self, entry):
         return True
@@ -194,6 +222,7 @@ class ControlFlow(object):
 
     def normalize(self):
         """Delete unreachable and orphan blocks."""
+        blocks = set(self.blocks)
         queue = set([self.entry_point])
         visited = set()
         while queue:
@@ -202,7 +231,7 @@ class ControlFlow(object):
             for child in root.children:
                 if child not in visited:
                     queue.add(child)
-        unreachable = self.blocks - visited
+        unreachable = blocks - visited
         for block in unreachable:
             block.detach()
         visited.remove(self.entry_point)
@@ -213,7 +242,8 @@ class ControlFlow(object):
                         parent.add_child(child)
                 block.detach()
                 unreachable.add(block)
-        self.blocks -= unreachable
+        blocks -= unreachable
+        self.blocks = [block for block in self.blocks if block in blocks]
 
     def initialize(self):
         """Set initial state, map assignments to bits."""
@@ -262,6 +292,103 @@ class ControlFlow(object):
                 ret.add(assmt)
         return ret
 
+    def compute_dominators(self):
+        """
+        Compute the dominators for the CFG, i.e. for each basic block the
+        set of basic blocks that dominate that block. This mean from the
+        entry block to that block must go through the blocks in the dominator
+        set.
+
+        dominators(x) = {x} ∪ (∩ dominators(y) for y ∈ preds(x))
+        ∅
+        """
+        blocks = set(self.blocks)
+        for block in self.blocks:
+            block.dominators = blocks
+
+        changed = True
+        while changed:
+            changed = False
+            for block in self.blocks:
+                parent_dominators = [parent.dominators for parent in block.parents]
+                new_doms = set.intersection(block.dominators, *parent_dominators)
+                new_doms.add(block)
+
+                if new_doms != block.dominators:
+                    block.dominators = new_doms
+                    changed = True
+
+    def immediate_dominator(self, x):
+        """
+        The dominator of x that is dominated by all other dominators of x.
+        This is the block that has the largest dominator set.
+        """
+        candidates = x.dominators - set([x])
+        if not candidates:
+            return None
+
+        result = max(candidates, key=lambda b: len(b.dominators))
+        ndoms = len(result.dominators)
+        assert len([b for b in candidates if len(b.dominators) == ndoms]) == 1
+        return result
+
+    def compute_dominance_frontier(self):
+        """
+        Compute the dominance frontier for all blocks. This indicates for
+        each block where dominance stops in the CFG. We use this as the place
+        to insert Φ functions, since at the dominance frontier there are
+        multiple control flow paths to the block, which means multiple
+        variable definitions can reach there.
+        """
+        for block in self.blocks:
+            print block.id, sorted(block.dominators, key=lambda b: b.id)
+
+        for block in self.blocks:
+            block.idom = self.immediate_dominator(block)
+
+        for x in self.blocks[::-1]:
+            for y in x.children:
+                if y.idom is not x:
+                    # We are not an immediate dominator of our successor, add
+                    # to frontier
+                    x.dominance_frontier.add(y)
+
+            for z in self.blocks:
+                if z.idom is x:
+                    for y in z.dominance_frontier:
+                        if y.idom is not x:
+                            x.dominance_frontier.add(y)
+
+    def update_phis(self, dominator, dominatee):
+        changed = False
+        for variable, assignment in dominator.gen.iteritems():
+            phi = dominatee.phis.get(variable, None)
+            if phi is None:
+                phi = PhiNode(dominatee, variable)
+                dominatee.phis[variable] = phi
+
+            phi.add(dominator, assignment)
+            dominatee.gen[variable] = phi
+
+#            if variable not in dominatee.gen:
+#                dominatee.gen[variable] = phi
+#                changed = True
+
+        return changed
+
+    def update_for_ssa(self):
+        for block in self.blocks:
+            print 'DF(%d) =' % block.id, block.dominance_frontier
+
+        for block in self.blocks:
+            block.processed = True
+            for dominatee in block.dominance_frontier:
+                self.update_phis(block, dominatee)
+
+        for block in self.blocks:
+            if block in block.dominance_frontier:
+                self.update_phis(block, block)
+
     def reaching_definitions(self):
         """Per-block reaching definitions analysis."""
         dirty = True
@@ -277,6 +404,29 @@ class ControlFlow(object):
                 block.i_input = i_input
                 block.i_output = i_output
 
+class PhiNode(nodes.Node):
+
+    def __init__(self, block, variable):
+        self.block = block
+        self.variable = variable
+        self.phis = set()
+
+    def add(self, block, assmnt):
+        self.phis.add((block, assmnt))
+
+    def __str__(self):
+        def format(block, assmnt):
+            if isinstance(assmnt, NameAssignment):
+                return "Block(%d, pos=%s)" % (
+                        block.id, error.format_pos(assmnt.lhs).rstrip(": "))
+            else:
+                assert isinstance(assmnt, PhiNode)
+                return "phi(%s, %s)" % (assmnt.block.id, assmnt.variable.name)
+
+        assmnts = [format(b, assmnt)
+                       for b, assmnt in self.phis]
+        result = "%s = phi(%s)" % (self.variable.name, ", ".join(assmnts))
+        return result
 
 class LoopDescr(object):
     def __init__(self, next_block, loop_block):
@@ -447,21 +597,33 @@ class GV(object):
         self.name = name
         self.flow = flow
 
+    def format_phis(self, block):
+        result = "\\l".join(str(phi) for var, phi in block.phis.iteritems())
+        return result
+
     def render(self, fp, ctx, annotate_defs=False):
         fp.write(' subgraph %s {\n' % self.name)
         for block in self.flow.blocks:
-            label = ctx.extract_sources(block)
-            if annotate_defs:
-                for stat in block.stats:
-                    if isinstance(stat, NameAssignment):
-                        label += '\n %s [definition]' % stat.entry.name
-                    elif isinstance(stat, NameReference):
-                        if stat.entry:
-                            label += '\n %s [reference]' % stat.entry.name
-            if not label:
-                label = block.label
-            elif block.label != 'empty':
-                label = '%s: %s' % (block.label, label)
+            if block.have_code:
+                code = ctx.extract_sources(block)
+                if annotate_defs:
+                    for stat in block.stats:
+                        if isinstance(stat, NameAssignment):
+                            code += '\n %s [definition]' % stat.entry.name
+                        elif isinstance(stat, NameReference):
+                            if stat.entry:
+                                code += '\n %s [reference]' % stat.entry.name
+            else:
+                code = ""
+
+            if block.have_code and block.label == 'empty':
+                label = ''
+            else:
+                label = '%s: ' % block.label
+
+            phis = self.format_phis(block)
+            label = '%d\\l%s%s\\n%s' % (block.id, label, phis, code)
+
             pid = ctx.nodeid(block)
             fp.write('  %s [label="%s"];\n' % (pid, ctx.escape(label)))
         for block in self.flow.blocks:
@@ -650,6 +812,9 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
     """
     Control flow analysis pass that builds the CFG and injects the blocks
     into the AST.
+
+    The CFG must be build in topological DFS order, e.g. the 'if' condition
+    block must precede the clauses and the clauses must precede the exit.
     """
 
     graphviz = False
@@ -711,14 +876,17 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.visitlist(node.body)
 
         # Exit point
+        self.flow.add_exit(self.flow.exit_point)
         if self.flow.block:
             self.flow.block.add_child(self.flow.exit_point)
 
         # Cleanup graph
         self.flow.normalize()
-
         check_definitions(self.flow, self.current_directives)
-        # self.flow.blocks.add(self.flow.entry_point)
+
+        self.flow.compute_dominators()
+        self.flow.compute_dominance_frontier()
+        self.flow.update_for_ssa()
 
         if self.graphviz:
             self._render_gv(node)
@@ -828,8 +996,17 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.visitchildren(node)
         return node
 
+    def exit_block(self, exit_block, node):
+        self.flow.add_exit(exit_block)
+        if exit_block.parents:
+            self.flow.block = exit_block
+        else:
+            self.flow.block = None
+
+        return node
+
     def visit_If(self, node):
-        exit_block = self.flow.newblock(label='exit_if')
+        exit_block = self.flow.exit_block(label='exit_if')
 
         # Condition
         condition_block = self.flow.nextblock(self.flow.block,
@@ -851,12 +1028,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         else:
             condition_block.add_child(exit_block)
 
-        if exit_block.parents:
-            self.flow.block = exit_block
-        else:
-            self.flow.block = None
-
-        return node
+        return self.exit_block(exit_block, node)
 
     def _visit_loop_body(self, condition_block, exit_block, node):
         """
@@ -880,21 +1052,17 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         else:
             condition_block.add_child(exit_block)
 
-        if exit_block.parents:
-            self.flow.block = exit_block
-        else:
-            self.flow.block = None
+        return self.exit_block(exit_block, node)
 
     def visit_While(self, node):
         condition_block = self.flow.nextblock()
-        exit_block = self.flow.newblock(label='exit_while')
+        exit_block = self.flow.exit_block(label='exit_while')
 
         # Condition block
         self.flow.loops.append(LoopDescr(exit_block, condition_block))
         self.visit(node.test)
 
-        self._visit_loop_body(condition_block, exit_block, node)
-        return node
+        return self._visit_loop_body(condition_block, exit_block, node)
 
     def visit_For(self, node):
         condition_block = self.flow.nextblock()
@@ -907,8 +1075,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         # Target assignment
         self.flow.nextblock()
         self.mark_assignment(node.target)
-        self._visit_loop_body(condition_block, exit_block, node)
-        return node
+        return self._visit_loop_body(condition_block, exit_block, node)
 
     def visit_WithStatNode(self, node):
         self.visit(node.context_expr)
@@ -927,7 +1094,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.flow.block = None
         return node
 
-    def visit_ReturnStatNode(self, node):
+    def visit_Return(self, node):
         self.visitchildren(node)
 
         for exception in self.flow.exceptions[::-1]:
