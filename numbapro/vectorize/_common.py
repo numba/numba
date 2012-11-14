@@ -107,8 +107,8 @@ class CommonVectorizeFromFrunc(object):
                    for spuf in spuflist]
         return ptrlist
 
-    def _prepare_prototypes_and_pointers(self, lfunclist, tyslist, engine):
-        spuflist = self._prepare_ufunc_core(lfunclist, tyslist)
+    def _prepare_prototypes_and_pointers(self, lfunclist, tyslist, engine, **kws):
+        spuflist = self._prepare_ufunc_core(lfunclist, tyslist, **kws)
         ptrlist = [self._get_pointer_from_ufunc_core(spuf, engine)
                    for spuf in spuflist]
         return zip(spuflist, ptrlist)
@@ -154,7 +154,7 @@ class GenericVectorize(object):
         return self._from_func_factory(lfunclist, tyslist, engine=engine, **kws)
 
 
-    def build_ufunc_core(self):
+    def build_ufunc_core(self, **kws):
         '''Build the ufunc core functions and returns the prototype and pointer.
         The return value is a list of tuples (prototype, pointer).
         '''
@@ -163,7 +163,7 @@ class GenericVectorize(object):
         tyslist = self._get_tys_list()
         engine = self._get_ee()
         get_proto_ptr = self._from_func_factory._prepare_prototypes_and_pointers
-        return get_proto_ptr(lfunclist, tyslist, engine)
+        return get_proto_ptr(lfunclist, tyslist, engine, **kws)
 
 class ASTVectorizeMixin(object):
 
