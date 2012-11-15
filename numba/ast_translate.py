@@ -490,6 +490,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # Try to find the function of the specified name in the current module.
         # If it is found, we can return immediately.
         # Otherwise, continue to translate.
+        self.local_scopes = [self.symtab]
         self.lfunc = None
         try:
             self.lfunc = self.mod.get_function_named(self.func_name)
@@ -537,6 +538,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             if self.lfunc is not None:
                 self.lfunc.delete()
             raise
+
+    def update_phis(self):
+        for block in self.ast.cfg_blocks:
+            for var, phi_node in block.phis.iteritems():
+                phi = phi_node.llvm_value
+                ltype = phi.type.to_llvm(self.context)
+                for parent in block.parents:
+                    lvalue = parent.symtab[var.name].lvalue
+                    assert lvalue is not None
+                    phi.add_incoming(lvalue, parent.llvm_basic_block)
 
     def get_ctypes_func(self, llvm=True):
         ee = self.ee
@@ -958,33 +969,48 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 
+    def visit_ControlBlock(self, block, body=None, is_condition_block=False):
+        "Return a new basic block and handle phis"
+        bb = self.builder.basic_block
+        node.llvm_basic_block = self.append_basic_block(node.label)
+        if is_condition_block:
+            self.builder.branch(node.llvm_basic_block)
+
+        self.builder.position_at_end(node.llvm_basic_block)
+
+        for variable, phi_node in node.phis.iteritems():
+            self.builder.phi(phi_node.type)
+
+        result = None
+        if body is not None:
+            self.local_scopes.append(node.symtab)
+            if isinstance(body, list):
+                result = self.visitlist(body)
+            else:
+                result = self.visit(body)
+            self.local_scopes.pop()
+
+        return result, node.llvm_basic_block
+
     def visit_If(self, node):
-        test = self.visit(node.test)
+        # Visit condition
+        test, cond_bb = self.visit_ControlBlock(node.condition_block, node.test,
+                                                is_condition_block=True)
         if test.type != _int1:
             test = self._generate_test(test)
-        iftrue_body = node.body
-        orelse_body = node.orelse
 
-        bb_true = self.append_basic_block('if.true')
-        bb_false = self.append_basic_block('if.false')
-        bb_endif = self.append_basic_block('if.end')
+        # Visit if clauses and exit block
+        bb_true, if_body = self.visit_ControlBlock(node.if_block, node.body)
+        bb_false, else_body = self.visit_ControlBlock(node.else_block, node.orelse)
+        bb_endif, exit_body = self.visit_ControlBlock(node.exit_block)
+
+        # Branch to block from condition
+        self.builder.position_at_end(cond_bb)
         self.builder.cbranch(test, bb_true, bb_false)
 
-        # if true then
-        self.builder.position_at_end(bb_true)
-        for stmt in iftrue_body:
-            self.visit(stmt)
-        else: # close the block
-            if not self.is_block_terminated():
-                self.builder.branch(bb_endif)
-
-        # else
-        self.builder.position_at_end(bb_false)
-        for stmt in orelse_body:
-            self.visit(stmt)
-        else: # close the block
-            if not self.is_block_terminated():
-                self.builder.branch(bb_endif)
+        # Terminate unterminated blocks
+        self.terminate_block(bb_true, bb_endif)
+        self.terminate_block(bb_false, bb_endif)
 
         # endif
         self.builder.position_at_end(bb_endif)
@@ -1029,13 +1055,25 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # else:
         #     self.builder.ret_void()
 
-    def is_block_terminated(self):
+    @property
+    def cur_bb(self):
+        return self.builder.basic_block
+
+    def is_block_terminated(self, basic_block=None):
         '''
         Check if the current basicblock is properly terminated.
         That means the basicblock is ended with a branch or return
         '''
-        instructions = self.builder.basic_block.instructions
+        basic_block = basic_block or self.cur_bb
+        instructions = basic_block.instructions
         return instructions and instructions[-1].is_terminator
+
+    def terminate_block(self, block, end_block):
+        if not self.is_block_terminated(block):
+            bb = self.cur_bb
+            self.builder.position_at_end(block)
+            self.builder.branch(end_block)
+            self.builder.position_at_end(bb)
 
     def setup_loop(self, bb_cond, bb_exit):
         self.loop_beginnings.append(bb_cond)
@@ -1055,10 +1093,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         Implements simple for loops over range or xrange
         """
         # assert isinstance(target.ctx, ast.Store)
-        bb_cond = self.append_basic_block('for.cond')
-        bb_incr = self.append_basic_block('for.incr')
-        bb_body = self.append_basic_block('for.body')
-        bb_exit = self.append_basic_block('for.exit')
+        bb_cond = self.visit(node.condition_block)
+        bb_incr = self.visit(node.target_block)
+        bb_body = self.visit(node.body_block)
+        bb_exit = self.visit(node.exit_block)
+
         self.setup_loop(bb_cond, bb_exit)
 
         target = self.visit(node.target)
@@ -1093,9 +1132,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.teardown_loop()
 
     def visit_While(self, node):
-        bb_cond = self.append_basic_block('while.cond')
-        bb_body = self.append_basic_block('while.body')
-        bb_exit = self.append_basic_block('while.exit')
+        bb_cond = self.visit(node.condition_block)
+        bb_body = self.visit(node.body_block)
+        bb_exit = self.visit(node.exit_block)
         self.setup_loop(bb_cond, bb_exit)
 
         self.builder.branch(bb_cond)

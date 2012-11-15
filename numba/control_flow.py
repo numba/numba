@@ -11,6 +11,7 @@ import ast
 import sys
 import inspect
 import logging
+import itertools
 import subprocess
 
 from meta import asttools
@@ -46,11 +47,11 @@ class ControlBlock(object):
         stats = [Assignment(a), NameReference(a), NameReference(c),
                      Assignment(b)]
         gen = {Entry(a): Assignment(a), Entry(b): Assignment(b)}
-        bounded = set([Entry(a), Entry(c)])
+        bound = set([Entry(a), Entry(c)])
 
     """
 
-    _fields = ['body']
+    _fields = []
 
     def __init__(self, id, label='empty', have_code=True):
         self.id = id
@@ -62,6 +63,10 @@ class ControlBlock(object):
         self.stats = []
         self.gen = {}
         self.bound = set()
+
+        # Same as i_input/i_output but for reaching defs with sets
+        self.input = set()
+        self.output = set()
 
         self.i_input = 0
         self.i_output = 0
@@ -258,8 +263,9 @@ class ControlFlow(object):
             offset += 1
 
         for block in self.blocks:
+            block.stats = block.phis.values() + block.stats
             for stat in block.stats:
-                if isinstance(stat, NameAssignment):
+                if isinstance(stat, (PhiNode, NameAssignment)):
                     stat.bit = 1 << offset
                     assmts = self.assmts[stat.entry]
                     assmts.stats.append(stat)
@@ -283,6 +289,7 @@ class ControlFlow(object):
         self.entry_point.i_output = self.entry_point.i_gen
 
     def map_one(self, istate, entry):
+        "Map the bitstate of a variable to the definitions it represents"
         ret = set()
         assmts = self.assmts[entry]
         if istate & assmts.bit:
@@ -291,6 +298,43 @@ class ControlFlow(object):
             if istate & assmt.bit:
                 ret.add(assmt)
         return ret
+
+    def reaching_definitions(self):
+        """Per-block reaching definitions analysis."""
+        dirty = True
+        while dirty:
+            dirty = False
+            for block in self.blocks:
+                i_input = 0
+                for parent in block.parents:
+                    i_input |= parent.i_output
+                i_output = (i_input & ~block.i_kill) | block.i_gen
+                if i_output != block.i_output:
+                    dirty = True
+                block.i_input = i_input
+                block.i_output = i_output
+
+    def initialize_sets(self):
+        """
+        Set initial state, run after SSA. There is only ever one live
+        definition of a variable in a block, so we can simply track input
+        and output definitions as the Variable/Entry they came as.
+        """
+        for block in self.blocks:
+            # Insert phi nodes from SSA stage into the assignments of the block
+            for phi in block.phis:
+                block.gen.setdefault(phi, []).insert(0, phi)
+
+            # Update the kill set with the variables that are assigned to in
+            # the block
+            block.kill = set(block.gen)
+            block.output = set(block.gen)
+            #for entry in block.bound:
+            #    block.i_kill |= self.assmts[entry].bit
+
+        for assmts in self.assmts.itervalues():
+            self.entry_point.i_gen |= assmts.bit
+        self.entry_point.i_output = self.entry_point.i_gen
 
     def compute_dominators(self):
         """
@@ -345,8 +389,21 @@ class ControlFlow(object):
 
         for block in self.blocks:
             block.idom = self.immediate_dominator(block)
+            block.visited = False
 
-        for x in self.blocks[::-1]:
+        def visit(block, result):
+            block.visited = True
+            for child in block.children:
+                if not child.visited:
+                    visit(child, result)
+            result.append(block)
+
+        # postorder = self.blocks[::-1]
+        postorder = []
+        visit(self.blocks[0], postorder)
+
+        # Compute dominance frontier
+        for x in postorder:
             for y in x.children:
                 if y.idom is not x:
                     # We are not an immediate dominator of our successor, add
@@ -359,74 +416,86 @@ class ControlFlow(object):
                         if y.idom is not x:
                             x.dominance_frontier.add(y)
 
-    def update_phis(self, dominator, dominatee):
-        changed = False
-        for variable, assignment in dominator.gen.iteritems():
-            phi = dominatee.phis.get(variable, None)
-            if phi is None:
-                phi = PhiNode(dominatee, variable)
-                dominatee.phis[variable] = phi
+    def update_for_ssa(self, symbol_table):
+        """
+        1) Compute phi nodes
 
-            phi.add(dominator, assignment)
-            dominatee.gen[variable] = phi
+            for each variable v
+                1) insert empty phi nodes in dominance frontier of each block
+                   that defines v
+                2) this phi defines a new assignment in each block in which
+                   it is inserted, so propagate (recursively)
 
-#            if variable not in dominatee.gen:
-#                dominatee.gen[variable] = phi
-#                changed = True
+        2) Reaching definitions
 
-        return changed
+            Set block-local symbol table for each block.
+            This is a rudimentary form of reaching definitions, but we can
+            do it in a single pass because all assignments are known (since
+            we inserted the phi functions, which also count as assignments).
+            This means the output set is known up front for each block
+            and never changes. After setting all output sets, we can compute
+            the input sets in a single pass:
 
-    def update_for_ssa(self):
+                1) compute output sets for each block
+                2) compute input sets for each block
+
+        3) Update phis with incoming variables
+        """
+        # Print dominance frontier
         for block in self.blocks:
-            print 'DF(%d) =' % block.id, block.dominance_frontier
+            logger.info('DF(%d) = %s', block.id, block.dominance_frontier)
+
+        #
+        ### 1) Insert phi nodes in the right places
+        #
+        for name, variable in symbol_table.iteritems():
+            defining = []
+            for b in self.blocks:
+                if variable in b.gen:
+                    defining.append(b)
+
+            for defining_block in defining:
+                for f in defining_block.dominance_frontier:
+                    phi = f.phis.get(variable, None)
+                    if phi is None:
+                        phi = PhiNode(f, variable)
+                        f.phis[variable] = phi
+                        defining.append(f)
+
+        #
+        ### 2) Reaching definitions
+        #
+        self.blocks[0].new_symtab = symbol_table
+        for var_name, var in symbol_table.iteritems():
+            var.block = self.blocks[0]
+
+        for block in self.blocks[1:]:
+            block.new_symtab = {}
+            for var in itertools.chain(block.phis, block.gen):
+                if var not in block.new_symtab:
+                    new_var = symtab.Variable.from_variable(var)
+                    block.new_symtab[var.name] = new_var
+                    new_var.parent_var = var
+                    new_var.block = block
 
         for block in self.blocks:
-            block.processed = True
-            for dominatee in block.dominance_frontier:
-                self.update_phis(block, dominatee)
-
-        for block in self.blocks:
-            if block in block.dominance_frontier:
-                self.update_phis(block, block)
-
-    def reaching_definitions(self):
-        """Per-block reaching definitions analysis."""
-        dirty = True
-        while dirty:
-            dirty = False
-            for block in self.blocks:
-                i_input = 0
-                for parent in block.parents:
-                    i_input |= parent.i_output
-                i_output = (i_input & ~block.i_kill) | block.i_gen
-                if i_output != block.i_output:
-                    dirty = True
-                block.i_input = i_input
-                block.i_output = i_output
-
-class PhiNode(nodes.Node):
-
-    def __init__(self, block, variable):
-        self.block = block
-        self.variable = variable
-        self.phis = set()
-
-    def add(self, block, assmnt):
-        self.phis.add((block, assmnt))
-
-    def __str__(self):
-        def format(block, assmnt):
-            if isinstance(assmnt, NameAssignment):
-                return "Block(%d, pos=%s)" % (
-                        block.id, error.format_pos(assmnt.lhs).rstrip(": "))
+            if block.idom:
+                idom_symtab = block.idom.symtab
             else:
-                assert isinstance(assmnt, PhiNode)
-                return "phi(%s, %s)" % (assmnt.block.id, assmnt.variable.name)
+                idom_symtab = ()
 
-        assmnts = [format(b, assmnt)
-                       for b, assmnt in self.phis]
-        result = "%s = phi(%s)" % (self.variable.name, ", ".join(assmnts))
-        return result
+            block.symtab = symtab.Symtab(dict(idom_symtab, **block.new_symtab))
+
+        #
+        ### 3)Update the phis with all incoming entries
+        #
+        for block in self.blocks:
+            for variable, phi in block.phis.iteritems():
+                for parent in block.parents:
+                    phi.incoming.add(parent.symtab[variable.name])
+
+class StatementDescr(object):
+    is_assignment = False
 
 class LoopDescr(object):
     def __init__(self, next_block, loop_block):
@@ -450,6 +519,9 @@ class ExceptionDescr(object):
 
 
 class NameAssignment(object):
+
+    is_assignment = True
+
     def __init__(self, lhs, rhs, entry):
         if not hasattr(lhs, 'cf_state'):
             lhs.cf_state = set()
@@ -463,6 +535,8 @@ class NameAssignment(object):
         self.refs = set()
         self.is_arg = False
         self.is_deletion = False
+
+        self.llvm_value = None
 
     def __repr__(self):
         return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
@@ -479,6 +553,44 @@ class Argument(NameAssignment):
         NameAssignment.__init__(self, lhs, rhs, entry)
         self.is_arg = True
 
+
+class PhiNode(nodes.Node):
+
+    def __init__(self, block, variable):
+        self.block = block
+        self.variable = variable
+        # self.incoming_blocks = []
+        self.incoming = set()
+        self.phis = set()
+        self.llvm_value = None
+
+    @property
+    def entry(self):
+        return self.variable
+
+    def add_incoming_block(self, block):
+        self.incoming_blocks.append(block)
+
+    def add(self, block, assmnt):
+        if assmnt is not self:
+            self.phis.add((block, assmnt))
+
+    def __str__(self):
+        def format(block, assmnt):
+            if isinstance(assmnt, NameAssignment):
+                return "Block(%d, pos=%s)" % (
+                    block.id, error.format_pos(assmnt.lhs).rstrip(": "))
+            else:
+                assert isinstance(assmnt, PhiNode)
+                return "phi(%s, %s)" % (assmnt.block.id, assmnt.variable.name)
+
+        assmnts = [format(b, assmnt)
+                   for b, assmnt in self.phis]
+        result = "%s = phi(%s)" % (self.variable.name, ", ".join(assmnts))
+        return result
+
+    def __str__(self):
+        return "phi(%s)" % ", ".join(str(var_in) for var_in in self.incoming)
 
 class NameDeletion(NameAssignment):
     def __init__(self, lhs, entry):
@@ -850,8 +962,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
     def visit(self, node):
         if hasattr(node, 'lineno'):
             self.mark_position(node)
-        if self.flow.block:
-            self.flow.block.body.append(node)
         return super(ControlFlowAnalysis, self).visit(node)
 
     def visit_FunctionDef(self, node):
@@ -886,7 +996,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         self.flow.compute_dominators()
         self.flow.compute_dominance_frontier()
-        self.flow.update_for_ssa()
+        self.flow.update_for_ssa(self.symtab)
 
         if self.graphviz:
             self._render_gv(node)
@@ -953,6 +1063,11 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             self.mark_assignment(target, node.value)
         return node
 
+    def visit_AugAssign(self, node):
+        node.value = self.visit(node.value)
+        self.mark_assignment(node.target, node.value)
+        return node
+
     def visit_Name(self, node):
         # Set some defaults
         node.cf_maybe_null = True
@@ -996,86 +1111,87 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.visitchildren(node)
         return node
 
-    def exit_block(self, exit_block, node):
-        self.flow.add_exit(exit_block)
-        if exit_block.parents:
-            self.flow.block = exit_block
+    def exit_block(self, node):
+        self.flow.add_exit(node.exit_block)
+        if node.exit_block.parents:
+            self.flow.block = node.exit_block
         else:
             self.flow.block = None
 
         return node
 
     def visit_If(self, node):
-        exit_block = self.flow.exit_block(label='exit_if')
+        node.exit_block = self.flow.exit_block(label='exit_if')
 
         # Condition
-        condition_block = self.flow.nextblock(self.flow.block,
-                                              label='if_cond')
+        node.cond_block = condition_block = self.flow.nextblock(
+                                self.flow.block, label='if_cond')
         self.visit(node.test)
 
         # Body
-        self.flow.nextblock(label='if_body')
+        node.if_block = self.flow.nextblock(label='if_body')
+        node.else_block = None
         self.visitlist(node.body)
         if self.flow.block:
-            self.flow.block.add_child(exit_block)
+            self.flow.block.add_child(node.exit_block)
 
         # Else clause
         if node.orelse:
-            self.flow.nextblock(condition_block, label='else_body')
+            node.else_block = self.flow.nextblock(condition_block,
+                                                  label='else_body')
             self.visitlist(node.orelse)
             if self.flow.block:
-                self.flow.block.add_child(exit_block)
+                self.flow.block.add_child(node.exit_block)
         else:
-            condition_block.add_child(exit_block)
+            condition_block.add_child(node.exit_block)
 
-        return self.exit_block(exit_block, node)
+        return self.exit_block(node)
 
-    def _visit_loop_body(self, condition_block, exit_block, node):
+    def _visit_loop_body(self, node):
         """
         Visit body of while and for loops and handle 'else' clause
         """
-        self.flow.nextblock(label='loop_body')
+        node.body_block = self.flow.nextblock(label='loop_body')
         self.visitlist(node.body)
         self.flow.loops.pop()
 
         if self.flow.block:
             # Add back-edge
-            self.flow.block.add_child(condition_block)
-            self.flow.block.add_child(exit_block)
+            self.flow.block.add_child(node.condition_block)
 
         # Else clause
         if node.orelse:
-            self.flow.nextblock(parent=condition_block)
+            self.flow.nextblock(parent=node.condition_block)
             self.visit(node.orelse)
             if self.flow.block:
-                self.flow.block.add_child(exit_block)
+                self.flow.block.add_child(node.exit_block)
         else:
-            condition_block.add_child(exit_block)
+            node.condition_block.add_child(node.exit_block)
 
-        return self.exit_block(exit_block, node)
+        return self.exit_block(node)
 
     def visit_While(self, node):
-        condition_block = self.flow.nextblock()
-        exit_block = self.flow.exit_block(label='exit_while')
+        node.condition_block = self.flow.nextblock()
+        node.exit_block = self.flow.exit_block(label='exit_while')
 
         # Condition block
-        self.flow.loops.append(LoopDescr(exit_block, condition_block))
+        self.flow.loops.append(LoopDescr(node.exit_block, node.condition_block))
         self.visit(node.test)
 
-        return self._visit_loop_body(condition_block, exit_block, node)
+        return self._visit_loop_body(node)
 
     def visit_For(self, node):
-        condition_block = self.flow.nextblock()
-        exit_block = self.flow.newblock(label='exit_for')
+        node.condition_block = self.flow.nextblock()
+        node.exit_block = self.flow.newblock(label='exit_for')
 
         # Condition with iterator
-        self.flow.loops.append(LoopDescr(exit_block, condition_block))
+        self.flow.loops.append(LoopDescr(node.exit_block, node.condition_block))
         self.visit(node.iter)
 
         # Target assignment
-        self.flow.nextblock()
+        node.target_block = self.flow.nextblock()
         self.mark_assignment(node.target)
-        return self._visit_loop_body(condition_block, exit_block, node)
+        return self._visit_loop_body(node)
 
     def visit_WithStatNode(self, node):
         self.visit(node.context_expr)

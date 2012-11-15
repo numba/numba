@@ -26,6 +26,9 @@ class Variable(object):
         self.promotable_type = promotable_type
         self.deleted = False
 
+        self.parent_var = None
+        self.block = None
+
         self.is_local = is_local
         self.is_arg = is_arg
         self.is_cellvar = False
@@ -87,6 +90,8 @@ class Variable(object):
             args.append("is_freevar=True")
         if self.is_cellvar:
             args.append("is_cellvar=True")
+        if self.block:
+            args.append("block=%d" % self.block.id)
         if self.lvalue:
             args.append("llvm=%s" % (self.lvalue,))
 
@@ -119,6 +124,9 @@ class Symtab(object):
 
     def __setitem__(self, name, variable):
         self.symtab[name] = variable
+
+    def __iter__(self):
+        return iter(self.symtab)
 
     def __getattr__(self, attr):
         return getattr(self.symtab, attr)
