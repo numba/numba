@@ -29,6 +29,7 @@ class NumbaVisitorMixin(CooperativeBase):
         self.symtab = symtab
         self.func_signature = func_signature
         self.nopython = nopython
+        self.local_scopes = [self.symtab]
 
         self.func = func
         if func is None:
@@ -148,6 +149,33 @@ class NumbaVisitorMixin(CooperativeBase):
     def visit_CloneNode(self, node):
         return node
 
+    @property
+    def current_scope(self):
+        return self.local_scopes[-1]
+
+    def visit_ControlBlock(self, node):
+        assert self.local_scopes[0] is self.symtab
+        self.local_scopes.append(node.symtab)
+        self.visitlist(node.body)
+        self.local_scopes.pop()
+        return node
+
+    @property
+    def type(self):
+        assert self.is_expr and len(node.body) == 1
+        return node.body[0].type
+
+    @property
+    def variable(self):
+        assert self.is_expr and len(node.body) == 1
+        return node.body[0].variable
+
+x = 0
+for i in range(10):
+    if x > 1:
+        print x
+    y = 14.2
+    x = x * y
 
 class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
     "Non-mutating visitor"

@@ -523,6 +523,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 self.builder.branch(self.cleanup_label)
 
             self.terminate_cleanup_blocks()
+            self.update_phis()
 
             # Done code generation
             del self.builder  # release the builder to make GC happy
@@ -540,6 +541,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             raise
 
     def update_phis(self):
+        """
+        Update all our phi nodes after translation is done and all Variables
+        have their llvm values set.
+        """
         for block in self.ast.cfg_blocks:
             for var, phi_node in block.phis.iteritems():
                 phi = phi_node.llvm_value
@@ -969,7 +974,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 
-    def visit_ControlBlock(self, block, body=None, is_condition_block=False):
+    def visit_ControlBlock(self, node, body=None, is_condition_block=False):
         "Return a new basic block and handle phis"
         bb = self.builder.basic_block
         node.llvm_basic_block = self.append_basic_block(node.label)
@@ -979,7 +984,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.position_at_end(node.llvm_basic_block)
 
         for variable, phi_node in node.phis.iteritems():
-            self.builder.phi(phi_node.type)
+            self.builder.phi(phi_node.type.to_llvm(self.context))
 
         result = None
         if body is not None:
@@ -1093,7 +1098,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         Implements simple for loops over range or xrange
         """
         # assert isinstance(target.ctx, ast.Store)
-        bb_cond = self.visit(node.condition_block)
+        bb_cond = self.visit(node.cond_block)
         bb_incr = self.visit(node.target_block)
         bb_body = self.visit(node.body_block)
         bb_exit = self.visit(node.exit_block)

@@ -28,9 +28,11 @@ class Pipeline(object):
 
     order = [
         'cfg',
+        #'dump_cfg',
         'const_folding',
         'type_infer',
         'type_set',
+        'dump_cfg',
         'closure_type_inference',
         'transform_for',
         'specialize',
@@ -129,7 +131,16 @@ class Pipeline(object):
     def cfg(self, ast):
         transform = self.make_specializer(
                 control_flow.ControlFlowAnalysis, ast, **self.kwargs)
-        return transform.visit(ast)
+        ast = transform.visit(ast)
+        self.symtab = transform.symtab
+        ast.flow = transform.flow
+        self.cfg_transform = transform
+        return ast
+
+    def dump_cfg(self, ast):
+        if self.cfg_transform.graphviz:
+            self.cfg_transform._render_gv(ast)
+        return ast
 
     def const_folding(self, ast):
         const_marker = self.make_specializer(constant_folding.ConstantMarker,

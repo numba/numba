@@ -27,9 +27,10 @@ logger = logging.getLogger(__name__)
 dot_output_graph = os.path.expanduser("~/cfg.dot")
 # dot_output_graph = False
 
-class ControlBlock(object):
+class ControlBlock(nodes.Node):
     """
     Control flow graph node. Sequence of assignments and name references.
+    This is simultaneously an AST node.
 
        children  set of children nodes
        parents   set of parent nodes
@@ -51,9 +52,9 @@ class ControlBlock(object):
 
     """
 
-    _fields = []
+    _fields = ['body']
 
-    def __init__(self, id, label='empty', have_code=True):
+    def __init__(self, id, label='empty', have_code=True, is_expr=False):
         self.id = id
 
         self.children = set()
@@ -75,6 +76,7 @@ class ControlBlock(object):
         self.i_state = 0
 
         self.body = []
+        self.is_expr = is_expr
         self.label = label
         self.have_code = have_code
 
@@ -146,24 +148,24 @@ class ControlFlow(object):
         self.exit_point = ExitBlock(0, label='exit')
         self.block = self.entry_point
 
-    def newblock(self, parent=None, label='empty', have_code=True):
+    def newblock(self, parent=None, **kwargs):
         """
         Create floating block linked to `parent` if given.
         Does NOT set the current block to the new block.
         """
-        block = ControlBlock(len(self.blocks), label=label, have_code=have_code)
+        block = ControlBlock(len(self.blocks), **kwargs)
         self.blocks.append(block)
         if parent:
             parent.add_child(block)
 
         return block
 
-    def nextblock(self, parent=None, label='empty', have_code=True):
+    def nextblock(self, parent=None, **kwargs):
         """
         Create child block linked to current or `parent` if given.
         Sets the current block to the new block.
         """
-        block = self.newblock(parent, label, have_code)
+        block = self.newblock(parent, **kwargs)
         if not parent and self.block:
             self.block.add_child(block)
 
@@ -175,7 +177,7 @@ class ControlFlow(object):
         Create a floating exit block. This can later be added to self.blocks.
         This is useful to ensure topological order.
         """
-        block = self.newblock(parent, label, have_code=False)
+        block = self.newblock(parent, label=label, have_code=False)
         self.blocks.pop()
         return block
 
@@ -559,6 +561,7 @@ class PhiNode(nodes.Node):
     def __init__(self, block, variable):
         self.block = block
         self.variable = variable
+        self.type = float_ #None
         # self.incoming_blocks = []
         self.incoming = set()
         self.phis = set()
@@ -908,9 +911,9 @@ def check_definitions(flow, compiler_directives):
     messages.report()
 
     for node in assmt_nodes:
-        node.cf_state = ControlFlowState(node.cf_state)
+        node.cf_state = None #ControlFlowState(node.cf_state)
     for node in references:
-        node.cf_state = ControlFlowState(node.cf_state)
+        node.cf_state = None #ControlFlowState(node.cf_state)
 
 
 def initialize_symtab(local_names, symbols):
@@ -962,6 +965,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
     def visit(self, node):
         if hasattr(node, 'lineno'):
             self.mark_position(node)
+        assert self.flow.block
+        self.flow.block.body.append(node)
         return super(ControlFlowAnalysis, self).visit(node)
 
     def visit_FunctionDef(self, node):
@@ -997,9 +1002,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.flow.compute_dominators()
         self.flow.compute_dominance_frontier()
         self.flow.update_for_ssa(self.symtab)
-
-        if self.graphviz:
-            self._render_gv(node)
 
         return node
 
@@ -1111,41 +1113,45 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.visitchildren(node)
         return node
 
-    def exit_block(self, node):
+    def exit_block(self, exit_block, node):
+        node.exit_block = exit_block
         self.flow.add_exit(node.exit_block)
         if node.exit_block.parents:
-            self.flow.block = node.exit_block
+            self.flow.block = exit_block
         else:
             self.flow.block = None
 
+        exit_block.body = [node]
+        node = exit_block
         return node
 
     def visit_If(self, node):
-        node.exit_block = self.flow.exit_block(label='exit_if')
+        exit_block = self.flow.exit_block(label='exit_if')
 
         # Condition
-        node.cond_block = condition_block = self.flow.nextblock(
-                                self.flow.block, label='if_cond')
+        condition_block = self.flow.nextblock(self.flow.block,
+                                              label='if_cond', is_expr=True)
         self.visit(node.test)
 
         # Body
-        node.if_block = self.flow.nextblock(label='if_body')
-        node.else_block = None
+        if_block = self.flow.nextblock(label='if_body')
         self.visitlist(node.body)
+        node.body = [if_block]
         if self.flow.block:
-            self.flow.block.add_child(node.exit_block)
+            self.flow.block.add_child(exit_block)
 
         # Else clause
         if node.orelse:
-            node.else_block = self.flow.nextblock(condition_block,
-                                                  label='else_body')
+            else_block = self.flow.nextblock(condition_block,
+                                             label='else_body')
             self.visitlist(node.orelse)
+            node.orelse = [else_block]
             if self.flow.block:
-                self.flow.block.add_child(node.exit_block)
+                self.flow.block.add_child(exit_block)
         else:
-            condition_block.add_child(node.exit_block)
+            condition_block.add_child(exit_block)
 
-        return self.exit_block(node)
+        return self.exit_block(exit_block, node)
 
     def _visit_loop_body(self, node):
         """
@@ -1157,35 +1163,35 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         if self.flow.block:
             # Add back-edge
-            self.flow.block.add_child(node.condition_block)
+            self.flow.block.add_child(node.cond_block)
 
         # Else clause
         if node.orelse:
-            self.flow.nextblock(parent=node.condition_block)
+            self.flow.nextblock(parent=node.cond_block)
             self.visit(node.orelse)
             if self.flow.block:
                 self.flow.block.add_child(node.exit_block)
         else:
-            node.condition_block.add_child(node.exit_block)
+            node.cond_block.add_child(node.exit_block)
 
         return self.exit_block(node)
 
     def visit_While(self, node):
-        node.condition_block = self.flow.nextblock()
+        node.cond_block = self.flow.nextblock()
         node.exit_block = self.flow.exit_block(label='exit_while')
 
         # Condition block
-        self.flow.loops.append(LoopDescr(node.exit_block, node.condition_block))
+        self.flow.loops.append(LoopDescr(node.exit_block, node.cond_block))
         self.visit(node.test)
 
         return self._visit_loop_body(node)
 
     def visit_For(self, node):
-        node.condition_block = self.flow.nextblock()
+        node.cond_block = self.flow.nextblock()
         node.exit_block = self.flow.newblock(label='exit_for')
 
         # Condition with iterator
-        self.flow.loops.append(LoopDescr(node.exit_block, node.condition_block))
+        self.flow.loops.append(LoopDescr(node.exit_block, node.cond_block))
         self.visit(node.iter)
 
         # Target assignment

@@ -20,22 +20,22 @@ def func(x):
     print i
     print y
 
-@jit(void())
+#@jit(void())
 def _for_loop_fn_0():
     acc = 0.
     for value in range(10):
         acc += value
     return acc
 
-#@jit(void(int_))
+@jit(void(int_, float_))
 def func(a, b):
     if a:
         c = 2
     if a:
         c = 4
-    while a < 4:
-        for i in range(10):
-            b = 9
+    #while a < 4:
+    #    for i in range(10):
+    #        b = 9
     print b
 
 if __name__ == '__main__':

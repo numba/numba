@@ -383,12 +383,15 @@ class TransformForIterable(visitors.NumbaTransformer):
             body.insert(0, s2)
             zero = nodes.const(0, nsteps.type)
             one = nodes.const(1, nsteps.type)
-            return ast.Suite([s1, nodes.ForRangeNode(index=temp.load(),
-                                                     target=temp.store(),
-                                                     start=zero,
-                                                     stop=nsteps.load(),
-                                                     step=one,
-                                                     body=body)])
+            range_node = nodes.ForRangeNode(index=temp.load(),
+                                            target=temp.store(), start=zero,
+                                            stop=nsteps.load(), step=one,
+                                            body=body,
+                                            cond_block=node.cond_block,
+                                            target_block=node.target_block,
+                                            body_block=node.body_block,
+                                            exit_block=node.exit_block)
+            return ast.Suite([s1, range_node])
         elif node.iter.type.is_array and node.iter.type.ndim == 1:
             # Convert 1D array iteration to for-range and indexing
             logger.debug(ast.dump(node))

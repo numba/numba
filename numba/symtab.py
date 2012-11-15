@@ -19,7 +19,6 @@ class Variable(object):
                  name=None, lvalue=None, constant_value=None,
                  promotable_type=True, is_arg=False):
         self.name = name
-        self.type = type
         self.is_constant = is_constant
         self.constant_value = constant_value
         self.lvalue = lvalue
@@ -41,6 +40,22 @@ class Variable(object):
         # position of first definition
         self.lineno = -1
         self.col_offset = -1
+
+    @classmethod
+    def make_shared_property(cls, name):
+        def _get(self):
+            if self.parent_var:
+                return getattr(self.parent_var, name)
+            return getattr(self, '_' + name)
+
+        def _set(self, value):
+            if self.parent_var:
+                setattr(self.parent_var, name, value)
+            else:
+                setattr(self, '_' + name, value)
+
+        setattr(cls, '_' + name, None)
+        setattr(cls, name, property(_get, _set))
 
     def _type_get(self):
         return self._type
@@ -106,6 +121,13 @@ class Variable(object):
         else:
             return "<Variable(type=%s%s)>" % (self.type, extra_info)
 
+
+Variable.make_shared_property('type')
+Variable.make_shared_property('is_cellvar')
+Variable.make_shared_property('is_freevar')
+Variable.make_shared_property('need_arg_copy')
+
+
 class Symtab(object):
     def __init__(self, symtab_dict=None, parent=None):
         self.symtab = symtab_dict or {}
@@ -116,6 +138,9 @@ class Symtab(object):
         if result is None and self.parent is not None:
             result = self.parent.lookup(self, name)
         return result
+
+    def __repr__(self):
+        return "symtab(%s)" % self.symtab
 
     def __getitem__(self, name):
         result = self.lookup(name)

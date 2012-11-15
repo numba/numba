@@ -365,10 +365,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         super(TypeInferer, self).__init__(context, func, ast, **kwds)
 
         self.locals = locals or {}
-        #for local in self.locals:
-        #    if local not in self.local_names:
-        #        raise error.NumbaError("Not a local variable: %r" % (local,))
-
         self.given_return_type = self.func_signature.return_type
         self.return_variables = []
         self.return_type = None
@@ -428,16 +424,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def init_locals(self):
         arg_types = self.func_signature.args
-        if len(arg_types) > len(self.local_names):
-            raise error.NumbaError("Too many types specified in @jit()")
-
-        for i, arg_type in enumerate(arg_types):
-            varname = self.local_names[i]
-            self.symtab[varname] = Variable(arg_type, is_local=True,
-                                            name=varname)
-
-        for varname in self.local_names[len(arg_types):]:
-            self.symtab[varname] = Variable(None, is_local=True, name=varname)
+        if len(arg_types) != len(self.ast.args.args):
+            raise error.NumbaError(
+                    "Incorrect number of types specified in @jit()")
 
         self.symtab['None'] = Variable(numba_types.none, is_constant=True,
                                        constant_value=None)
@@ -454,6 +443,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if local_name in self.argnames:
                 idx = self.argnames.index(local_name)
                 arg_types[idx] = local_type
+
+        for var_name, arg_type in zip(self.local_names, arg_types):
+            self.symtab[var_name].type = arg_type
 
         self.func_signature.args = tuple(arg_types)
 
@@ -563,7 +555,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         rhs_var = node.value.variable
         if isinstance(target, ast.Name):
             # Variable's type may be promoted later!
-            node.value = nodes.DeferredCoercionNode(node.value, lhs_var)
+            node.value = nodes.CoercionNode(node.value, lhs_var.type)
         elif lhs_var.type != rhs_var.type:
             if lhs_var.type.is_array and rhs_var.type.is_array:
                 # Let other code handle array coercions
@@ -589,13 +581,16 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if lhs_var.type is None:
             lhs_var.type = rhs_var.type
         elif lhs_var.type != rhs_var.type:
-            self.assert_assignable(lhs_var.type, rhs_var.type)
-            if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
-                    lhs_var.promotable_type):
-                lhs_var.type = self.promote_types(lhs_var.type, rhs_var.type)
-
-            if rhs_node:
-                return nodes.CoercionNode(rhs_node, lhs_var.type)
+            if lhs_var.name in self.locals:
+                self.assert_assignable(lhs_var.type, rhs_var.type)
+                if rhs_node:
+                    rhs_node = nodes.CoercionNode(rhs_node, lhs_var.type)
+                #if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
+                #        lhs_var.promotable_type):
+                #    lhs_var.type = self.promote_types(lhs_var.type, rhs_var.type)
+            else:
+                # Override type with new assignment
+                lhs_var.type = rhs_var.type
 
         lhs_var.deleted = False
         return rhs_node
@@ -673,17 +668,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_Name(self, node):
         from numba import functions
 
-        node.name = node.id
-        variable = self.symtab.get(node.id)
+        variable = self.current_scope.lookup(node.id)
+        print node.id, node.ctx, self.current_scope
         if variable:
-            # local variable
-            uninitialized = (variable.type is None or
-                             variable.type.is_deferred or
-                             variable.deleted)
-            if (uninitialized and variable.is_local and
-                    isinstance(node.ctx, ast.Load)):
-                raise error.NumbaError(node, "Local variable  %r is "
-                                             "not bound yet" % variable.name)
+            pass
         elif (self.closure_scope and node.id in self.closure_scope and not
                   self.is_store(node.ctx)):
             closure_var = self.closure_scope[node.id]
