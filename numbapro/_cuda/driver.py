@@ -456,17 +456,22 @@ class DeviceMemory(finalizer.OwnerMixin):
     The lifetime of the object is tied to the GPU memory handle; that is the
     memory is released when this object is released.
     '''
-    def __init__(self, bytesize):
+    def __init__(self, bytesize=None):
         self._depends = []
         self.context = Driver().current_context()
-        self._handle = cu_device_ptr()
-        error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
-        self.driver.check_error(error, 'Failed to allocate memory')
-        self._finalizer_track(self._handle)
+        if bytesize is not None:
+            self.allocate(bytesize)
 
     def _finalize(self):
         error = self.driver.cuMemFree(self._handle)
         self.driver.check_error(error, 'Failed to free memory', exit=True)
+
+    def allocate(self, bytesize):
+        assert not hasattr(self, '_handle')
+        self._handle = cu_device_ptr()
+        error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
+        self.driver.check_error(error, 'Failed to allocate memory')
+        self._finalizer_track(self._handle)
 
     def to_device_raw(self, src, size, stream=None):
         if stream:
@@ -481,6 +486,14 @@ class DeviceMemory(finalizer.OwnerMixin):
         else:
             error = self.driver.cuMemcpyDtoH(dst, self._handle, size)
         self.driver.check_error(error, "Failed to copy memory D->H")
+
+    def offset(self, offset):
+        handle = cu_device_ptr(self._handle.value + offset)
+        # create new instance without allocation
+        devmem = type(self)()
+        devmem._handle = handle
+        devmem.add_dependencies(self) # avoid free the parent pointer
+        return devmem
 
     def memset(self, val, size, stream=None):
         if stream:
