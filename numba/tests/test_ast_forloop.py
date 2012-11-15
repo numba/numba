@@ -8,7 +8,6 @@ Test the Numba compiler on a simple for loop over an iterable object.
 
 import numba
 from numba import *
-from numba import jit2 as numba_compile
 from numba.decorators import autojit
 
 from numba.minivect import minitypes

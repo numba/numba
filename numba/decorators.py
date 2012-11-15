@@ -1,4 +1,4 @@
-__all__ = ['autojit', 'jit2', 'jit', 'export', 'exportmany']
+__all__ = ['autojit', 'jit', 'export', 'exportmany']
 
 import functools
 import logging
@@ -230,6 +230,12 @@ def _autojit(target, nopython):
     return _autojit_decorator
 
 def autojit(backend='ast', target='cpu', nopython=False, locals=None):
+    """
+    Creates a function that dispatches to type-specialized LLVM
+    functions based on the input argument types.  If no specialized
+    function exists for a set of input argument types, the dispatcher
+    creates and caches a new specialized function at call time.
+    """
     if backend not in ('bytecode', 'ast'):
         if callable(backend):
             func = backend
@@ -332,9 +338,27 @@ def _process_sig(sigstr, name=None):
 def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False,
         _llvm_module=None, _llvm_ee=None, **kws):
     """
-    Compile a function given the input and return types. If backend='bytecode'
-    the bytecode translator is used, if backend='ast' the AST translator is
-    used.
+    Compile a function given the input and return types.
+
+    There are multiple ways to specify the type signature:
+
+    * Using the restype and argtypes arguments, passing Numba types.
+
+    * By constructing a Numba function type and passing that as the
+      first argument to the decorator.  You can create a function type
+      by calling an exisiting Numba type, which is the return type,
+      and the arguments to that call define the argument types.  For
+      example, ``f8(f8)`` would create a Numba function type that
+      takes a single double-precision floating point value argument,
+      and returns a double-precision floating point value.
+
+    * As above, but using a string instead of a constructed function
+      type.  Example: ``jit("f8(f8)")``.
+
+    If backend='bytecode' the bytecode translator is used, if
+    backend='ast' the AST translator is used.  By default, the AST
+    translator is used.  *Note that the bytecode translator is
+    deprecated as of the 0.3 release.*
     """
     kws.update(llvm_module=_llvm_module, llvm_ee=_llvm_ee,
                nopython=nopython, backend=backend)

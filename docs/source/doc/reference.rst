@@ -8,11 +8,12 @@ Contents:
    :titlesonly:
    :maxdepth: 2
 
+   modules/numba.rst
    modules/ast_constant_folding.rst
    modules/ast_translate.rst
    modules/ast_type_inference.rst
    modules/cfg.rst
-   modules/closures.rst
+   modules/closure.rst
    modules/decorators.rst
    modules/functions.rst
    modules/llvm_types.rst
