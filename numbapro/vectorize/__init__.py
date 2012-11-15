@@ -32,13 +32,13 @@ vectorizers = {
     'cpu': BasicVectorize,
     'parallel': ParallelVectorize,
     'stream': StreamVectorize,
-    'gpu': CudaVectorize,
 }
 
 ast_vectorizers = {
     'cpu': BasicASTVectorize,
     'parallel': ParallelASTVectorize,
     'stream': StreamASTVectorize,
+    'gpu': CudaVectorize,
 }
 
 mini_vectorizers = {
@@ -63,10 +63,11 @@ def Vectorize(func, backend='ast', target='cpu'):
             Default: 'basic'
     """
     assert backend in backends, tuple(backends)
-    assert target in vectorizers, tuple(vectorizers)
+    targets = backends[backend]
+    assert target in targets, tuple(targets)
 
-    if target in backends[backend]:
-        return backends[backend][target](func)
+    if target in targets:
+        return targets[target](func)
     else:
         # Use the default bytecode backend
         return vectorizers[target](func)
@@ -81,13 +82,13 @@ ast_guvectorizers = {
     'gpu': CudaGUFuncASTVectorize,
 }
 
+guvectorizers_backends = {
+    'bytecode': guvectorizers,
+    'ast':      ast_guvectorizers,
+}
+
 def GUVectorize(func, signature, backend='ast', target='cpu'):
-    assert backend in ('bytecode', 'ast')
-    assert target in ('cpu', 'gpu')
-
-    if backend == 'bytecode':
-        vs = guvectorizers
-    else:
-        vs = ast_guvectorizers
-
-    return vs[target](func, signature)
+    assert backend in guvectorizers_backends
+    targets = guvectorizers_backends[backend]
+    assert target in targets
+    return targets[target](func, signature)
