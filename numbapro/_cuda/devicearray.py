@@ -7,10 +7,12 @@ assert not hasattr(np.ndarray, 'free_device')
 assert not hasattr(np.ndarray, 'device_memory')
 
 class DeviceNDArray(np.ndarray):
-    def to_device(self, stream=0):
+    def to_device(self, stream=0, copy=True):
         assert not hasattr(self, '__device_memory')
         assert not hasattr(self, '__gpu_readback')
-        retriever, device_memory = ndarray_to_device_memory(self, stream=stream)
+        retriever, device_memory = ndarray_to_device_memory(self,
+                                                            stream=stream,
+                                                            copy=copy)
         self.__device_memory = device_memory
         self.__gpu_readback = retriever
 

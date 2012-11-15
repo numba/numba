@@ -38,7 +38,20 @@ class CudaUFuncDispatcher(object):
         return np.empty(broadcast_arrays[0].shape, dtype=result_dtype)
 
     def __call__(self, *args, **kws):
-        assert not kws or 'stream' in kws
+        '''
+        *args: numpy arrays or DeviceNDArray (created by cuda.to_device).
+               Cannot mix the two types in one call.
+
+        **kws:
+            stream -- cuda stream; when defined, asynchronous mode is used.
+            out    -- output array. Can be a numpy array or DeviceNDArray
+                      depending on the input arguments.  Type must match
+                      the input arguments.
+        '''
+        accepted_kws = 'stream', 'out'
+        unknown_kws = [k for k in kws if k not in accepted_kws]
+        assert not unknown_kws, ("Unknown keyword args %s" % unknown_kws)
+
         stream = kws.get('stream', 0)
         dtypes = tuple(a.dtype for a in args)
         if dtypes not in self.functions:
@@ -54,34 +67,44 @@ class CudaUFuncDispatcher(object):
             # NOTE: When using DeviceNDArray,
             #       it is assumed to be properly broadcasted.
             assert args[0].ndim == 1
-            assert all(x.shape == args.shape for x in args)
+            assert all(x.shape == args[0].shape for x in args)
 
             element_count = args[0].shape[0]
-            out = np.empty(args[0].shape[0], dtype=result_dtype)
             nctaid, ntid = self.determine_dimensions(element_count, MAX_THREAD)
             
             griddim = (nctaid,)
             blockdim = (ntid,)
 
-            device_out = cuda.to_device(out, stream)
-
-            kernel_args = device_ins + [device_out, element_count]
+            if 'out' not in kws:
+                out = np.empty(args[0].shape[0], dtype=result_dtype)
+                device_out = cuda.to_device(out, stream, copy=False)
+            else:
+                device_out = kws['out']
+                assert isinstance(device_out, DeviceNDArray)
+            kernel_args = list(args) + [device_out, element_count]
 
             cuda_func[griddim, blockdim, stream](*kernel_args)
 
-            device_out.to_host(stream) # only retrive the last one
+            return device_out
 
         elif not any(is_device_ndarray):
             broadcast_arrays = self.broadcast_inputs(args)
             element_count = np.prod(broadcast_arrays[0].shape)
 
-            out = self.allocate_output(broadcast_arrays, result_dtype)
+            if 'out' not in kws:
+                out = self.allocate_output(broadcast_arrays, result_dtype)
+            else:
+                out = kws['out']
+                assert not isinstance(device_out, DeviceNDArray)
+                assert out.shape[0] >= broadcast_arrays[0].shape[0]
+                    
             nctaid, ntid = self.determine_dimensions(element_count, MAX_THREAD)
 
-            assert all(isinstance(array, np.ndarray) for array in broadcast_arrays)
+            assert all(isinstance(array, np.ndarray)
+                       for array in broadcast_arrays)
 
             device_ins = [cuda.to_device(x, stream) for x in broadcast_arrays]
-            device_out = cuda.to_device(out, stream)
+            device_out = cuda.to_device(out, stream, copy=False)
 
             kernel_args = device_ins + [device_out, element_count]
 
@@ -91,17 +114,40 @@ class CudaUFuncDispatcher(object):
             cuda_func[griddim, blockdim, stream](*kernel_args)
             
             device_out.to_host(stream) # only retrive the last one
-
+            return out
         else:
             raise ValueError("Cannot mix DeviceNDArray and ndarray as args")
-
-        return device_out
 
     def determine_dimensions(self, n, max_thread):
         # determine grid and block dimension
         thread_count =  min(max_thread, n)
         block_count = int(math.ceil(float(n) / max_thread))
         return block_count, thread_count
+
+    def reduce(self, arg, out=None, stream=0):
+        assert len(self.functions.keys()[0]) == 2, "Must be a binary ufunc"
+        assert arg.ndim == 1
+
+        n = arg.shape[0]
+        out = np.array(arg[:n / 2], copy=True)
+        device_left = cuda.to_device(out, stream)
+        device_right = cuda.to_device(arg[n / 2:], stream)
+
+        while n > 1:
+            print device_left.shape, device_right.shape
+
+            self(device_left, device_right, out=device_left)
+            n /= 2
+            device_left.to_host(stream)
+            print 'n', n
+            print out
+            out = out[:n]
+            if n == 1:
+                return out[0]
+            device_left = cuda.to_device(out[:n / 2], stream)
+            device_right = cuda.to_device(out[n / 2:], stream)
+
+
 
 class CudaFunctionAndData(Structure):
     _fields_ = [

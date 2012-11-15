@@ -31,8 +31,10 @@ _numpy_fields = _pyobject_head_fields + \
 class NumpyStructure(Structure):
     _fields_ = _numpy_fields
 
-def ndarray_to_device_memory(ary, stream=0):
-    retriever, gpu_data = ndarray_data_to_device_memory(ary, stream=stream)
+def ndarray_to_device_memory(ary, stream=0, copy=True):
+    retriever, gpu_data = ndarray_data_to_device_memory(ary,
+                                                        stream=stream,
+                                                        copy=copy)
 
     dims = ary.ctypes.shape
     gpu_dims = _cuda.DeviceMemory(sizeof(dims))
@@ -59,12 +61,14 @@ def ndarray_to_device_memory(ary, stream=0):
 
     return retriever, gpu_struct
 
-def ndarray_data_to_device_memory(ary, stream=0):
+def ndarray_data_to_device_memory(ary, stream=0, copy=True):
     dataptr = ary.ctypes.data_as(c_void_p)
     datasize = ary.shape[0] * ary.strides[0]
 
     gpu_data = _cuda.DeviceMemory(datasize)
-    gpu_data.to_device_raw(dataptr, datasize, stream=stream)
+
+    if copy:
+        gpu_data.to_device_raw(dataptr, datasize, stream=stream)
 
     def retriever(stream=0):
         gpu_data.from_device_raw(dataptr, datasize, stream=stream)

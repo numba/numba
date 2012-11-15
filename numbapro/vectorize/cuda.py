@@ -23,6 +23,11 @@ from numba.ndarray_helpers import PyArrayAccessor
 
 class _CudaStagingCaller(CDefinition):
     def body(self, *args, **kwargs):
+        for arg in self.function.args[:-1]: # set noalias
+            arg.add_attribute(ATTR_NO_ALIAS)
+            arg.add_attribute(ATTR_NO_CAPTURE)
+
+        # begin implementation
         worker = self.depends(self.WorkerDef)
         inputs = args[:-2]
         output, ct = args[-2:]
@@ -66,7 +71,8 @@ class _CudaStagingCaller(CDefinition):
 
     @classmethod
     def specialize(cls, worker, fntype):
-        cls._name_ = ("_cukernel_%s" % worker).replace('.', ('_%X_' % ord('.')))
+        hexcode_of_dot = '_%X_' % ord('.')
+        cls._name_ = ("_cukernel_%s" % worker).replace('.', hexcode_of_dot)
         
         args = cls._argtys_ = []
         inargs = cls.InArgs = []

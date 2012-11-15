@@ -1,6 +1,7 @@
 import numpy as np
 from numba import *
 from numbapro.vectorize import Vectorize
+from numbapro import cuda
 from timing import time
 
 def vector_add(a, b):
@@ -10,7 +11,7 @@ def vector_add(a, b):
 pv = Vectorize(vector_add, target='gpu')
 pv.add(restype=int32, argtypes=[int32, int32])
 pv.add(restype=f4, argtypes=[f4, f4])
-#pv.add(restype=d, argtypes=[d, d])
+pv.add(restype=f8, argtypes=[f8, f8])
 cuda_ufunc = pv.build_ufunc()
 
 test_dtypes = np.float32, np.int32
@@ -22,7 +23,7 @@ def test_1d():
     # test it out
     def test(ty):
         print("Test %s" % ty)
-        data = np.linspace(0., 10000., 500*501).astype(ty)
+        data = np.array(np.random.random(1e+6 + 1), dtype=ty)
 
         ts = time()
         result = cuda_ufunc(data, data)
@@ -41,19 +42,50 @@ def test_1d():
             print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
 
 
-        for expect, got in zip(gold, result):
-            if got == 0:
-                err = abs(expect - got)
-            else:
-                err = abs(expect - got)/float(got)
-            if err > 1e-5:
-                raise ValueError(expect, got, err)
+        np.allclose(gold, result)
 
-    #test(np.double)
+    test(np.double)
     test(np.float32)
     test(np.int32)
 
-    print('All good')
+
+def test_1d_async():
+    # build python ufunc
+    np_ufunc = np.add
+
+    # test it out
+    def test(ty):
+        print("Test %s" % ty)
+        data = np.array(np.random.random(1e+6 + 1), dtype=ty)
+
+        ts = time()
+        stream = cuda.stream()
+        device_data = cuda.to_device(data, stream)
+        result = cuda_ufunc(device_data, device_data, stream=stream)
+        stream.synchronize()
+
+        tnumba = time() - ts
+
+        ts = time()
+        gold = np_ufunc(data, data)
+        tnumpy = time() - ts
+
+        print("Numpy time: %fs" % tnumpy)
+        print("Numba time: %fs" % tnumba)
+
+        if tnumba < tnumpy:
+            print("Numba is FASTER by %fx" % (tnumpy/tnumba))
+        else:
+            print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
+
+
+        np.allclose(gold, result)
+
+    test(np.double)
+    test(np.float32)
+    test(np.int32)
+
+
 
 def test_nd():
     def test(dtype, order, nd, size=10):
@@ -73,9 +105,13 @@ def test_nd():
                 test(dtype, order, nd)
 
 def test_ufunc_attrib():
-    assert cuda_ufunc.reduce(np.arange(10, dtype=np.int32)) == 45
+    x = np.arange(8, dtype=np.int32)
+    gold = np.add.reduce(x)
+    result = cuda_ufunc.reduce(x)
+    assert result == gold, (result, gold)
 
 if __name__ == '__main__':
     test_ufunc_attrib()
     test_nd()
     test_1d()
+    test_1d_async()
