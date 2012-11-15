@@ -6,6 +6,7 @@ assert not hasattr(np.ndarray, 'to_host')
 assert not hasattr(np.ndarray, 'free_device')
 assert not hasattr(np.ndarray, 'device_memory')
 assert not hasattr(np.ndarray, 'device_partition')
+assert not hasattr(np.ndarray, 'copy_to_host')
 
 class DeviceNDArray(np.ndarray):
     def to_device(self, stream=0, copy=True):
@@ -23,6 +24,10 @@ class DeviceNDArray(np.ndarray):
     def to_host(self, stream=0):
         self.__gpu_readback(stream=stream)
 
+    def copy_to_host(self, array, size, stream=0):
+        self.__device_data.from_device_raw(array.ctypes.data, size,
+                                           stream=stream)
+
     def free_device(self):
         '''
         May not always release the device memory immediately.  This only release
@@ -36,18 +41,19 @@ class DeviceNDArray(np.ndarray):
         assert self.ndim == 1
         n = self.shape[0]
         elemsz = self.strides[0]
-        halfn = n / 2
-        halfsz = halfn * elemsz
-
-        left = DeviceNDArray(buffer=self, shape=halfn, dtype=self.dtype)
-        right = DeviceNDArray(buffer=self, offset=halfsz, shape=halfn,
+        leftn = idx
+        rightn = n - leftn
+        offset = leftn * elemsz
+        
+        left = DeviceNDArray(buffer=self, shape=leftn, dtype=self.dtype)
+        right = DeviceNDArray(buffer=self, offset=offset, shape=rightn,
                               dtype=self.dtype)
 
-        left.__from_custom_data(self.__device_data, (halfn,), self.strides,
+        left.__from_custom_data(self.__device_data, (leftn,), self.strides,
                                 stream=stream)
 
-        offsetted = self.__device_data.offset(halfsz)
-        right.__from_custom_data(offsetted, (halfn,), self.strides,
+        offsetted = self.__device_data.offset(offset)
+        right.__from_custom_data(offsetted, (rightn,), self.strides,
                                  stream=stream)
 
         # add dependencies to prevent free the base data pointer

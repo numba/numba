@@ -124,30 +124,58 @@ class CudaUFuncDispatcher(object):
         block_count = int(math.ceil(float(n) / max_thread))
         return block_count, thread_count
 
-    def reduce(self, arg, out=None, stream=0):
+    def reduce(self, arg, stream=0):
         assert len(self.functions.keys()[0]) == 2, "Must be a binary ufunc"
         assert arg.ndim == 1
 
         n = arg.shape[0]
-        out = np.array(arg[:n / 2], copy=True)
-        device_left = cuda.to_device(out, stream)
-        device_right = cuda.to_device(arg[n / 2:], stream)
+        gpu_mems = []
 
-        while n > 1:
-            print device_left.shape, device_right.shape
+        if n == 0:
+            raise TypeError("Reduction on an empty array.")
+        elif n == 1:    # nothing to do
+            return arg[0]
 
-            self(device_left, device_right, out=device_left)
-            n /= 2
-            device_left.to_host(stream)
-            print 'n', n
-            print out
-            out = out[:n]
-            if n == 1:
-                return out[0]
-            device_left = cuda.to_device(out[:n / 2], stream)
-            device_right = cuda.to_device(out[n / 2:], stream)
+        # always use a stream
+        stream = stream or cuda.stream()
+        with stream.auto_synchronize():
+            # transfer memory to device if necessary
+            if isinstance(arg, DeviceNDArray):
+                mem = arg
+            else:
+                mem = cuda.to_device(arg, stream)
+            # do reduction
+            out = self.__reduce(mem, gpu_mems, stream)
+            # use a small buffer to store the result element
+            buf = np.array((1,), dtype=arg.dtype)
+            out.copy_to_host(buf, buf.shape[0] * buf.strides[0], stream=stream)
+
+        return buf[0]
 
 
+    def __reduce(self, mem, gpu_mems, stream):
+        from math import log, floor
+        n = mem.shape[0]
+        if n % 2 != 0: # odd?
+            fatcut, thincut = mem.device_partition(n - 1)
+            # prevent freeing during async mode
+            gpu_mems.append(fatcut)
+            gpu_mems.append(thincut)
+            # execute the kernel
+            out = self.__reduce(fatcut, gpu_mems, stream)
+            gpu_mems.append(out)
+            return self(out, thincut, out=out, stream=stream)
+        else: # even?
+            left, right = mem.device_partition(n / 2)
+            # prevent freeing during async mode
+            gpu_mems.append(left)
+            gpu_mems.append(right)
+            # execute the kernel
+            self(left, right, out=left, stream=stream)
+            if n / 2 > 1:
+                return self.__reduce(left, gpu_mems, stream)
+            else:
+                return left
 
 class CudaFunctionAndData(Structure):
     _fields_ = [

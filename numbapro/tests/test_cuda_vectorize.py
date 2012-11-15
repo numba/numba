@@ -105,10 +105,28 @@ def test_nd():
                 test(dtype, order, nd)
 
 def test_ufunc_attrib():
-    x = np.arange(8, dtype=np.int32)
+    test_reduce(8)
+    test_reduce(100)
+    test_reduce(2**10 + 1)
+    test_reduce2(8)
+    test_reduce2(100)
+    test_reduce2(2**10 + 1)
+
+def test_reduce(n):
+    x = np.arange(n, dtype=np.int32)
     gold = np.add.reduce(x)
     result = cuda_ufunc.reduce(x)
     assert result == gold, (result, gold)
+
+
+def test_reduce2(n):
+    x = np.arange(n, dtype=np.int32)
+    gold = np.add.reduce(x)
+    stream = cuda.stream()
+    dx = cuda.to_device(x, stream)
+    result = cuda_ufunc.reduce(x, stream=stream)
+    assert result == gold, (result, gold)
+
 
 if __name__ == '__main__':
     test_ufunc_attrib()
