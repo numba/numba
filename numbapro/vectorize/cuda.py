@@ -109,16 +109,18 @@ def get_dtypes(restype, argtypes):
                            for arg_type in argtypes)
     return ret_dtype, arg_dtypes
 
-class CudaVectorize(_common.GenericVectorize):
+class CudaASTVectorize(_common.GenericASTVectorize):
+
     def __init__(self, func):
-        super(CudaVectorize, self).__init__(func)
+        super(CudaASTVectorize, self).__init__(func)
         self.module = Module.new('ptx_%s' % func)
         self.signatures = []
 
     def add(self, restype, argtypes, **kwargs):
         self.signatures.append((restype, argtypes, kwargs))
         translate = cuda._ast_jit(self.pyfunc, argtypes, inline=False,
-                                  llvm_module=self.module, **kwargs)
+                                  llvm_module=self.module,
+                                  **kwargs)
         self.translates.append(translate)
         self.args_restypes.append(argtypes + [restype])
 
@@ -130,6 +132,9 @@ class CudaVectorize(_common.GenericVectorize):
 
     def _get_ee(self):
         raise NotImplementedError
+
+    def _filter_input_args(self, arg_dtypes):
+        return arg_dtypes
 
     def build_ufunc(self):
         lfunclist = self._get_lfunc_list()
@@ -143,7 +148,6 @@ class CudaVectorize(_common.GenericVectorize):
             # generate a caller for all functions
             cukernel = self._build_caller(lfunc)
             assert cukernel.module is lfunc.module
-
 
             # unicode problem?
             fname = cukernel.name
@@ -159,8 +163,10 @@ class CudaVectorize(_common.GenericVectorize):
         for lfunc in lfunclist:
             lfunc.delete()
 
-        dispatcher = _cudadispatch.CudaUFuncDispatcher(types_to_retty_kernel)
-        return dispatcher
+        return self._make_dispatcher(types_to_retty_kernel)
+
+    def _make_dispatcher(self, types_to_retty_kernel):
+        return _cudadispatch.CudaUFuncDispatcher(types_to_retty_kernel)
 
     def build_ufunc_core(self):
         # TODO: implement this after the refactoring of cuda dispatcher

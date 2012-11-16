@@ -5,22 +5,22 @@ __all__ = [
     'StreamVectorize',
     'GUFuncVectorize',
     'GUFuncASTVectorize',
-    'CudaVectorize',
-    'CudaGUFuncVectorize',
+    'CudaASTVectorize',
+    'CudaGUFuncASTVectorize',
     'MiniVectorize',
     'ParallelMiniVectorize',
 ]
-
+import logging
 from .basic import BasicVectorize, BasicASTVectorize
 from .parallel import ParallelVectorize, ParallelASTVectorize
 from .stream import StreamVectorize, StreamASTVectorize
-
 from .gufunc import GUFuncVectorize, GUFuncASTVectorize
+from numbapro._cuda.error import CudaSupportError
 
 try:
-    from .cuda import  CudaVectorize
-    from .gufunc import CudaGUFuncVectorize, CudaGUFuncASTVectorize
-except ImportError, e:
+    from .cuda import  CudaASTVectorize
+    from .gufunc import CudaGUFuncASTVectorize
+except CudaSupportError, e:
     logging.warning("Cuda vectorizers not available, using fallbacks")
     CudaVectorize = BasicVectorize
     CUDAGUFuncVectorize = GUFuncVectorize
@@ -38,7 +38,7 @@ ast_vectorizers = {
     'cpu': BasicASTVectorize,
     'parallel': ParallelASTVectorize,
     'stream': StreamASTVectorize,
-    'gpu': CudaVectorize,
+    'gpu': CudaASTVectorize,
 }
 
 mini_vectorizers = {
@@ -74,7 +74,6 @@ def Vectorize(func, backend='ast', target='cpu'):
 
 guvectorizers = {
     'cpu': GUFuncVectorize,
-    'gpu': CudaGUFuncVectorize,
 }
 
 ast_guvectorizers = {

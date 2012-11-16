@@ -42,7 +42,7 @@ def test_1d():
             print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
 
 
-        np.allclose(gold, result)
+        assert np.allclose(gold, result), (gold, result)
 
     test(np.double)
     test(np.float32)
@@ -62,8 +62,8 @@ def test_1d_async():
         stream = cuda.stream()
         device_data = cuda.to_device(data, stream)
         result = cuda_ufunc(device_data, device_data, stream=stream)
+        result.to_host()
         stream.synchronize()
-
         tnumba = time() - ts
 
         ts = time()
@@ -79,7 +79,7 @@ def test_1d_async():
             print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
 
 
-        np.allclose(gold, result)
+        assert np.allclose(gold, result), (gold, result)
 
     test(np.double)
     test(np.float32)

@@ -65,11 +65,12 @@ _device_functions = {}
 
 def _ast_jit(func, argtypes, inline, llvm_module, **kws):
     kws['nopython'] = True          # override nopython option
+
     if not hasattr(func, '_is_numba_func'):
         func._is_numba_func = True
         func._numba_compile_only = True
-    func._numba_inline = inline
     assert func._numba_compile_only
+    func._numba_inline = inline
     result = function_cache.compile_function(func, argtypes,
                                              ctypes=True,
                                              llvm_module=llvm_module,

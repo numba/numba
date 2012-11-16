@@ -4,8 +4,6 @@ import numpy as np
 import numpy.core.umath_tests as ut
 from numbapro.vectorize import GUVectorize
 
-f = float_
-
 def matmulcore(A, B, C):
     m, n = A.shape
     n, p = B.shape
@@ -14,7 +12,6 @@ def matmulcore(A, B, C):
             C[i, j] = 0
             for k in range(n):
                 C[i, j] += A[i, k] * B[k, j]
-
 
 
 def test_numba():
@@ -44,45 +41,21 @@ def _test_gufunc(backend, target):
     C = gufunc(A, B)
     Gold = ut.matrix_multiply(A, B)
 
-    # print(A)
-    # print(B)
-    # print(C)
-    # print(Gold)
-
-    for i, (got, expect) in enumerate(zip(C.flatten(), Gold.flatten())):
-        '''
-        CUDA floating point arithmetic has different rounding errors than
-        intel/amd cpu. We cannot use `==` to compare.  Instead,
-        compute the relative error and expect that to be no greater than
-        a certain threshold (1e-6 in this test).
-        '''
-        error = abs(got - expect) / expect
-        if error > 1e-6:
-            raise ValueError(i, got, expect)
+#     print(A)
+#     print(B)
+#    print(C)
+#    print(Gold)
+    assert np.allclose(C, Gold)
 
 
 def test_gufunc():
-    _test_gufunc('bytecode', 'cpu')
+    #_test_gufunc('bytecode', 'cpu')
     _test_gufunc('ast', 'cpu')
 
-def test_cuda_gufunc():
-    _test_gufunc('bytecode', 'gpu')
-    #_test_gufunc('ast', 'gpu')
-
 def main():
-    test_numba()
-    test_gufunc()
-    try:
-        from numbapro import _cudadispatch
-    except ImportError:
-        print 'skipped CUDA gufunc test'
-    else:
-        test_cuda_gufunc()
-
-        # stress test
-        for i in range(100):
-            test_gufunc()
-            test_cuda_gufunc()
+    for i in range(10):
+        test_numba()
+        test_gufunc()
     print 'ok'
 
 if __name__ == '__main__':
