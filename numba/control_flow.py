@@ -22,10 +22,14 @@ from numba.utils import dump
 
 from numba import *
 
+debug = False
+debug = True
 logger = logging.getLogger(__name__)
-
-dot_output_graph = os.path.expanduser("~/cfg.dot")
-# dot_output_graph = False
+if debug:
+    logger.setLevel(logging.DEBUG)
+    dot_output_graph = os.path.expanduser("~/cfg.dot")
+else:
+    dot_output_graph = False
 
 class ControlBlock(nodes.Node):
     """
@@ -199,11 +203,11 @@ class ControlFlow(object):
             pos = (src_descr,) + getpos(node)
             self.block.positions.add(pos)
 
-    def mark_assignment(self, lhs, rhs, entry):
+    def mark_assignment(self, lhs, rhs, entry, assignment):
         if self.block:
             if not self.is_tracked(entry):
                 return
-            assignment = NameAssignment(lhs, rhs, entry)
+            assignment = NameAssignment(lhs, rhs, entry, assignment)
             self.block.stats.append(assignment)
             self.block.gen[entry] = assignment
             self.entries.add(entry)
@@ -478,12 +482,13 @@ class ControlFlow(object):
         self.blocks[0].symtab = symbol_table
         for var_name, var in symbol_table.items():
             symbol_table.rename(var, self.blocks[0])
-
         self.rename_assignments(self.blocks[0])
+
         for block in self.blocks[1:]:
             block.symtab = symtab.Symtab(parent=block.idom.symtab)
             for var, phi_node in block.phis.iteritems():
                 phi_node.variable = block.symtab.rename(var, block)
+                phi_node.variable.name_assignment = phi_node
 
             self.rename_assignments(block)
 
@@ -504,8 +509,9 @@ class ControlFlow(object):
     def rename_assignments(self, block):
         lastvars = dict(block.symtab)
         for stat in block.stats:
-            if isinstance(stat, NameAssignment):
+            if isinstance(stat, NameAssignment) and stat.assignment_node:
                 stat.lhs.variable = block.symtab.rename(stat.entry, block)
+                stat.lhs.variable.name_assignment = stat
             elif isinstance(stat, NameReference):
                 current_var = block.symtab.lookup_most_recent(stat.entry.name)
                 stat.node.variable = current_var
@@ -541,7 +547,7 @@ class NameAssignment(object):
 
     is_assignment = True
 
-    def __init__(self, lhs, rhs, entry):
+    def __init__(self, lhs, rhs, entry, assignment_node):
         if not hasattr(lhs, 'cf_state'):
             lhs.cf_state = set()
         if not hasattr(lhs, 'cf_is_null'):
@@ -549,13 +555,13 @@ class NameAssignment(object):
 
         self.lhs = lhs
         self.rhs = rhs
+        self.assignment_node = assignment_node
+
         self.entry = entry
         self.pos = getpos(lhs)
         self.refs = set()
         self.is_arg = False
         self.is_deletion = False
-
-        self.llvm_value = None
 
     def __repr__(self):
         return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
@@ -583,7 +589,6 @@ class PhiNode(nodes.Node):
         # self.incoming_blocks = []
         self.incoming = set()
         self.phis = set()
-        self.llvm_value = None
 
     @property
     def entry(self):
@@ -1049,7 +1054,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             finally:
                 fp.close()
 
-    def mark_assignment(self, lhs, rhs=None):
+    def mark_assignment(self, lhs, rhs=None, assignment=None):
+        assert assignment
         assert self.flow.block
 
         if self.flow.exceptions:
@@ -1062,7 +1068,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         self.visit(lhs)
         if isinstance(lhs, ast.Name):
-            self.flow.mark_assignment(lhs, rhs, self.symtab[lhs.name])
+            self.flow.mark_assignment(lhs, rhs, self.symtab[lhs.name],
+                                      assignment)
 
         if self.flow.exceptions:
             exc_descr = self.flow.exceptions[-1]
@@ -1080,12 +1087,12 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                                                  (ast.Tuple, ast.List)):
             node.targets = node.targets[0].elts
         for target in node.targets:
-            self.mark_assignment(target, node.value)
+            self.mark_assignment(target, node.value, assignment=node)
         return node
 
     def visit_AugAssign(self, node):
         node.value = self.visit(node.value)
-        self.mark_assignment(node.target, node.value)
+        self.mark_assignment(node.target, node.value, assignment=node)
         return node
 
     def visit_Name(self, node):
@@ -1098,7 +1105,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         if isinstance(node.ctx, ast.Param):
             var = self.symtab[node.name]
             var.is_arg = True
-            self.flow.mark_assignment(node, None, var)
+            self.flow.mark_assignment(node, None, var, assignment=None)
         elif isinstance(node.ctx, ast.Load):
             var = self.symtab.lookup(node.name)
             if var:
@@ -1126,7 +1133,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
     def visit_ImportFrom(self, node):
         for name, target in node.names:
             if name != "*":
-                self.mark_assignment(target)
+                self.mark_assignment(target, assignment=node)
 
         self.visitchildren(node)
         return node
@@ -1211,7 +1218,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         # Target assignment
         node.target_block = self.flow.nextblock()
-        self.mark_assignment(node.target)
+        self.mark_assignment(node.target, assignment=node)
         return self._visit_loop_body(node)
 
     def visit_WithStatNode(self, node):

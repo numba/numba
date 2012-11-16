@@ -331,14 +331,34 @@ class ClosureScopeType(ExtensionType):
         else:
             self.scope_prefix = self.parent_scope.scope_prefix + "0"
 
-class PromotionType(NumbaType):
+#
+### Types participating in type graph cycles
+#
+class UnresolvedType(NumbaType):
+
+    is_unresolved = True
+    rank = 1
+
+    def __init__(self, variable, **kwds):
+        super(UnresolvedType, self).__init__(**kwds)
+        self.variable = variable
+
+    def simplify(self):
+        return self.resolve() is self
+
+    def resolve(self):
+        return self.variable.type
+
+class PromotionType(UnresolvedType):
+
     is_promotion = True
 
-    def __init__(self, types, **kwds):
-        super(PromotionType, self).__init__(**kwds)
+    def __init__(self, variable, context, types, **kwds):
+        super(PromotionType, self).__init__(variable, **kwds)
+        self.context = context
         self.types = types
 
-    def resolve(self, seen=None):
+    def simplify(self, seen=None):
         """
         Simplify a promotion type tree:
 
@@ -355,62 +375,88 @@ class PromotionType(NumbaType):
             seen = set()
 
         # Find all types in the type graph and eliminate nested promotion types
-        types = set()
+        types = set([self])
         seen.add(self)
         for type in self.types:
             if type in seen:
                 continue
 
+            if type.is_unresolved:
+                type = type.resolve()
+
             if type.is_promotion:
-                types.update(type.resolve(seen))
-            elif type.is_deferred:
+                type.simplify(seen)
+                types.update(type.types)
+            elif type.is_unresolved:
                 # Get the resolved type or the type itself from the deferred
                 # type
                 types.add(type.variable.type)
             else:
                 types.add(type)
 
-        result_type_candidates = [type for type in types if not type.is_deferred]
-        deferred_types = [type for type in types if type.is_deferred]
-        if not result_type_candidates:
+        types.remove(self)
+        resolved_types = [type for type in types if not type.is_unresolved]
+        unresolved_types = [type for type in types if type.is_deferred]
+
+        self.variable.type = self
+        if not resolved_types:
             # Everything is deferred
-            return PromotionType(deferred_types)
+            return False
         else:
             # Simplify as much as possible
-            result_type = result_type_candidates[0]
-            for type in result_type_candidates[1:]:
-                result_type = self.context.promote(result_type, type)
+            result_type = resolved_types[0]
+            for type in resolved_types[1:]:
+                result_type = self.context.promote_types(result_type, type)
 
-            if len(result_type_candidates) == len(types):
-                return result_type
+            if len(resolved_types) == len(types):
+                self.variable.type = result_type
             else:
-                return PromotionType([result_type] + deferred_types)
+                self.types = set([result_type] + unresolved_types)
 
-class DeferredType(NumbaType):
-    is_deferred = True
-    rank = 1
-    resolved_type = None
+            return True
 
-    def __init__(self, variable, **kwds):
-        super(DeferredType, self).__init__(**kwds)
-        self.variable = variable
+    @classmethod
+    def promote(cls, *types):
+        var = Variable(None)
+        type = PromotionType(var, types)
+        type.resolve()
+        return type.variable.type
 
     def __repr__(self):
-        if self.resolved_type:
-            typestr = ", %s" % self.resolved_type
-        else:
-            typestr = ""
-        return "<deferred(%s)>" % (self.variable,)
+        return "promote(%s)" % ", ".join(str(type) for type in self.types)
+
+class DeferredType(UnresolvedType):
+    """
+    We don't know what the type is at the point we need a type, so we create
+    a deferred type.
+
+        Depends on: self.variable.type
+
+    Example:
+
+        def func():
+            for i in range(10):
+                # type(x) = phi(undef, deferred(x_1)) = phi(deferred(x_1))
+                if i > 1:
+                    print x   # type is deferred(x_1)
+                x = ...       # resolve deferred(x_1) to type(...)
+    """
+
+    is_deferred = True
+
+    def __repr__(self):
+        return "<deferred(%s)>" % (self.variable.unmangled_name,)
 
     def to_llvm(self, context):
         assert self.resolved_type, self
         return self.resolved_type.to_llvm(context)
 
-    def resolve(self):
-        if self.resolved_type:
-            return self.resolved_type
-        return self
+class UnanalyzableType(UnresolvedType):
+    """
+    A type that indicates the statement cannot be analyzed without
+    """
 
+    is_unanalyzable = True
 
 tuple_ = TupleType()
 phi = PHIType()

@@ -31,6 +31,9 @@ def _for_loop_fn_0():
 def func(a, b):
     if a:
         c = 2
+    else:
+        c = double(4)
+
     if a:
         c = 4
     #while a < 4:

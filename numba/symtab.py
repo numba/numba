@@ -36,6 +36,10 @@ class Variable(object):
         self.is_freevar = False
         self.need_arg_copy = True
 
+        # The control_flow.NameAssignment that defines this
+        # variable (or PhiNode if a phi)
+        self.name_assignment = None
+
         self.cf_assignments = []
         self.cf_references = [] # def-use chain
 
@@ -95,6 +99,7 @@ class Variable(object):
         The ctypes type for the type of this variable.
         """
 
+    @property
     def unmangled_name(self):
         name = self.renamed_name.lstrip("__numba_renamed_")
         counter, sep, var_name = name.partition('_')
@@ -125,7 +130,7 @@ class Variable(object):
 
         if self.name:
             if self.renamed_name:
-                name = self.unmangled_name()
+                name = self.unmangled_name
             else:
                 name = self.name
             return "<Variable(name=%r, type=%s%s)>" % (name, self.type,

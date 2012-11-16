@@ -8,7 +8,7 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import error, transforms, closure
+from numba import error, transforms, closure, control_flow
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as numba_types
 from .symtab import Variable
@@ -22,7 +22,12 @@ import numpy
 import numpy as np
 
 import logging
+
+debug = False
+debug = True
 logger = logging.getLogger(__name__)
+if debug:
+    logger.setLevel(logging.DEBUG)
 
 def _parse_args(call_node, arg_names):
     result = dict.fromkeys(arg_names)
@@ -451,9 +456,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         # Propagate argument types to first rename of the variable in the block
         for var in self.symtab.itervalues():
             if var.parent_var and not var.parent_var.parent_var:
-                var.type = var.parent_var.type
+                var.type = var.parent_var.type or numba_types.uninitialized
 
         self.func_signature.args = tuple(arg_types)
+        self.resolve_variable_types()
+
+        if debug:
+            for block in self.ast.flow.blocks:
+                for var in block.symtab.values():
+                    print "Variable after analysis: %s" % var
 
     def is_object(self, type):
         return type.is_object or type.is_array
@@ -481,11 +492,127 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def type_from_pyval(self, pyval):
         return self.context.typemapper.from_python(pyval)
 
+    def handle_NameAssignment(self, assignment_node):
+        if assignment_node is None:
+            # ast.Name parameter to the function
+            return
+
+        if isinstance(assignment_node, nodes.For):
+            # Analyse target variable assignment
+            self.visit_For(assignment_node, visit_body=False)
+            #print "handled", assignment_node.target.variable
+        else:
+            self.visit(assignment_node)
+            #print "handled", assignment_node.targets[0].variable
+
+    def handle_phi(self, node):
+        if not node.variable.cf_references:
+            # Unused phi
+            node.block.symtab.pop(node.variable.name)
+            return None
+
+        # Merge point for different definitions
+        incoming = [v for v in node.incoming
+                          if v.type is not numba_types.uninitialized]
+        assert incoming
+
+        for v in incoming:
+            if v.type is None:
+                # We have not analyzed this definition yet, delay the type
+                # resolution
+                v.type = numba_types.DeferredType(v)
+
+        incoming_types = [v.type for v in incoming]
+        promoted_type = numba_types.PromotionType(node.variable, self.context,
+                                                  incoming_types)
+        promoted_type.simplify()
+        node.variable.type = promoted_type.resolve()
+        #print "handled", node.variable
+        return node
+
+    def analyse_assignments(self):
+        cfg = self.ast.flow
+        # visitor = visitors.VariableFindingVisitor()
+        for block in cfg.blocks:
+            phis = []
+            for phi in block.phi_nodes:
+                phi = self.handle_phi(phi)
+                if phi is not None:
+                    phis.append(phi)
+            block.phi_nodes = phis
+
+            for stat in block.stats:
+                if isinstance(stat, control_flow.NameAssignment):
+                    #visitor.referenced = {}
+                    #visitor.visit(stat.rhs)
+                    #parents = [name_node.variable
+                    #    for name_node in visitor.referenced.itervalues()]
+                    self.handle_NameAssignment(stat.assignment_node)
+
+    def resolve_variable_types(self):
+        """
+        Resolve the types for all variable assignments. We run type inference
+        on each assignment which builds a type graph in case of dependencies.
+        The dependencies are resolved after type inference completes.
+        """
+        self.analyse_assignments()
+
+        # Find all unresolved variables
+        unresolved = set()
+        for block in self.ast.flow.blocks:
+            for variable in block.symtab.itervalues():
+                print variable
+                if variable.parent_var: # renamed variable
+                    if variable.type.is_unresolved:
+                        unresolved.add(variable)
+
+        # Iteratively update types until everything is resolved or until we
+        # can't infer anything more
+        # TODO: It would be more efficient to construct a condensation graph
+        # TODO: by and do a topological sort, and then resolving the cycle
+        # TODO: in each condensed node
+        had_unresolved = bool(unresolved)
+        changed = True
+        iterations = 0
+        while changed and unresolved:
+            iterations += 1
+            changed = False
+            for variable in unresolved:
+                if variable.type.is_unanalyzable:
+                    # Re-analayze statement
+                    self.handle_NameAssignment(variable.assignment_node)
+                else:
+                    changed |= variable.type.simplify()
+
+                if not variable.type.is_unresolved:
+                    unresolved -= variable
+
+        logger.info("converged in %d steps" % iterations)
+
+        if unresolved:
+            var = unresolved.pop()
+            self.error(var.name_assignment.assignment_node,
+                       "Unable to infer type for this statement, insert a "
+                       "cast or initialize the variable.")
+
+        if had_unresolved:
+            # We had some unresolved types assignment statements, re-analyze
+            # to ensure the correct transformations are performed
+            self.analyse_assignments()
+
+    #
+    ### Visit methods
+    #
+
     def visit(self, node):
         if node is Ellipsis:
             node = ast.Ellipsis()
         result = super(TypeInferer, self).visit(node)
         return result
+
+    def visit_PhiNode(self, node):
+        # Already handled
+        return node
 
     def visit_AugAssign(self, node):
         """
@@ -600,26 +727,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         lhs_var.deleted = False
         return rhs_node
 
-    def visit_PhiNode(self, node):
-        if not node.variable.cf_references:
-            # Unused phi
-            return None
-
-        # Merge point for different definitions
-        incoming = [v for v in node.incoming
-                          if v.type is not numba_types.uninitialized]
-        assert incoming
-
-        for v in incoming:
-            if v.type is None:
-                # We have not analyzed this definition yet, delay the type
-                # resolution
-                v.type = numba_types.DeferredType(v)
-
-        promoted_type = numba_types.PromotionType([v.type for v in incoming])
-        phi_node.variable.type = promoted_type.resolve()
-        return phi_node
-
     def _get_iterator_type(self, node, iterator_type, target_type):
         "Get the type of an iterator Variable"
         if iterator_type.is_iterator:
@@ -695,7 +802,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         # variable = self.current_scope.lookup(node.id)
         if node.id in self.symtab:
-            if isinstance(node.ctx, ast.Param):
+            if isinstance(node.ctx, ast.Param) or node.id == 'None':
                 variable = self.symtab[node.id]
             else:
                 # Local variable
