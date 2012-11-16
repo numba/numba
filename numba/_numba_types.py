@@ -75,6 +75,9 @@ class IteratorType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "iterator<%s>" % (self.base_type,)
 
+class UninitializedType(NumbaType):
+    is_uninitialized = True
+
 class PHIType(NumbaType):
     """
     Type for phi() values.
@@ -328,23 +331,76 @@ class ClosureScopeType(ExtensionType):
         else:
             self.scope_prefix = self.parent_scope.scope_prefix + "0"
 
+class PromotionType(NumbaType):
+    is_promotion = True
+
+    def __init__(self, types, **kwds):
+        super(PromotionType, self).__init__(**kwds)
+        self.types = types
+
+    def resolve(self, seen=None):
+        """
+        Simplify a promotion type tree:
+
+            promote(int_, float_)
+                -> float_
+
+            promote(deferred(x), promote(float_, double), int_, promote(<self>))
+                -> promote(deferred(x), double)
+
+            promote(deferred(x), deferred(y))
+                -> promote(deferred(x), deferred(y))
+        """
+        if seen is None:
+            seen = set()
+
+        # Find all types in the type graph and eliminate nested promotion types
+        types = set()
+        seen.add(self)
+        for type in self.types:
+            if type in seen:
+                continue
+
+            if type.is_promotion:
+                types.update(type.resolve(seen))
+            elif type.is_deferred:
+                # Get the resolved type or the type itself from the deferred
+                # type
+                types.add(type.variable.type)
+            else:
+                types.add(type)
+
+        result_type_candidates = [type for type in types if not type.is_deferred]
+        deferred_types = [type for type in types if type.is_deferred]
+        if not result_type_candidates:
+            # Everything is deferred
+            return PromotionType(deferred_types)
+        else:
+            # Simplify as much as possible
+            result_type = result_type_candidates[0]
+            for type in result_type_candidates[1:]:
+                result_type = self.context.promote(result_type, type)
+
+            if len(result_type_candidates) == len(types):
+                return result_type
+            else:
+                return PromotionType([result_type] + deferred_types)
 
 class DeferredType(NumbaType):
     is_deferred = True
     rank = 1
     resolved_type = None
 
-    def __init__(self, name, **kwds):
+    def __init__(self, variable, **kwds):
         super(DeferredType, self).__init__(**kwds)
-        self.name = name
-        self.candidates = []
+        self.variable = variable
 
     def __repr__(self):
         if self.resolved_type:
             typestr = ", %s" % self.resolved_type
         else:
             typestr = ""
-        return "<deferred(%s%s)>" % (self.name, typestr)
+        return "<deferred(%s)>" % (self.variable,)
 
     def to_llvm(self, context):
         assert self.resolved_type, self
@@ -359,6 +415,7 @@ class DeferredType(NumbaType):
 tuple_ = TupleType()
 phi = PHIType()
 none = NoneType()
+uninitialized = UninitializedType()
 
 intp = minitypes.npy_intp
 

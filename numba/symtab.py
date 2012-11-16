@@ -37,7 +37,7 @@ class Variable(object):
         self.need_arg_copy = True
 
         self.cf_assignments = []
-        self.cf_references = []
+        self.cf_references = [] # def-use chain
 
         # position of first definition
         self.lineno = -1
@@ -157,9 +157,19 @@ class Symtab(object):
             result = self.parent.lookup(name)
         return result
 
+    def lookup_most_recent(self, name):
+        """
+        Look up the most recent definition of a variable.
+        This is used during the renaming process.
+        """
+        last_count = self.counters[name]
+        renamed_name = self.renamed_name(name, last_count)
+        return self[renamed_name]
+
     def lookup_last(self, name):
         """
         Look up the last definition in the block for a variable.
+        This is used after the renaming process.
         """
         last_count = self._counters[name]
         renamed_name = self.renamed_name(name, last_count)

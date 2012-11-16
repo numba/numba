@@ -49,12 +49,12 @@ class ControlBlock(nodes.Node):
                      Assignment(b)]
         gen = {Entry(a): Assignment(a), Entry(b): Assignment(b)}
         bound = set([Entry(a), Entry(c)])
-
     """
 
-    _fields = ['body']
+    _fields = ['phi_nodes']
 
-    def __init__(self, id, label='empty', have_code=True, is_expr=False):
+    def __init__(self, id, label='empty', have_code=True,
+                 is_expr=False, is_exit=False):
         self.id = id
 
         self.children = set()
@@ -75,8 +75,10 @@ class ControlBlock(nodes.Node):
         self.i_kill = 0
         self.i_state = 0
 
+        # AST body. Φ nodes at the right points
         self.body = []
         self.is_expr = is_expr
+        self.is_exit = is_exit
         self.label = label
         self.have_code = have_code
 
@@ -89,9 +91,6 @@ class ControlBlock(nodes.Node):
         # There can be only one reaching definition, since each variable is
         # assigned only once
         self.phis = {}
-
-        #
-        self.phi_nodes = None
 
     def empty(self):
         return (not self.stats and not self.positions and not self.phis)
@@ -180,7 +179,8 @@ class ControlFlow(object):
         Create a floating exit block. This can later be added to self.blocks.
         This is useful to ensure topological order.
         """
-        block = self.newblock(parent, label=label, have_code=False)
+        block = self.newblock(parent, label=label,
+                              have_code=False, is_exit=True)
         self.blocks.pop()
         return block
 
@@ -491,15 +491,25 @@ class ControlFlow(object):
         ### 3) Update the phis with all incoming entries
         #
         for block in self.blocks:
+            # Insert phis in AST
+            block.phi_nodes = block.phis.values()
             for variable, phi in block.phis.iteritems():
-                block.phi_nodes = block.phis.values()
                 for parent in block.parents:
-                    phi.incoming.add(parent.symtab.lookup_last(variable.name))
+                    incoming_var = parent.symtab.lookup_last(variable.name)
+                    phi.incoming.add(incoming_var)
+
+                    # Update def-use chain
+                    incoming_var.cf_references.append(phi)
 
     def rename_assignments(self, block):
+        lastvars = dict(block.symtab)
         for stat in block.stats:
             if isinstance(stat, NameAssignment):
-                block.symtab.rename(stat.entry, block)
+                stat.lhs.variable = block.symtab.rename(stat.entry, block)
+            elif isinstance(stat, NameReference):
+                current_var = block.symtab.lookup_most_recent(stat.entry.name)
+                stat.node.variable = current_var
+                current_var.cf_references.append(stat.node)
 
         block.symtab._counters = dict(block.symtab.counters)
 
@@ -974,7 +984,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         if hasattr(node, 'lineno'):
             self.mark_position(node)
         assert self.flow.block
-        self.flow.block.body.append(node)
+        # self.flow.block.body.append(node)
         return super(ControlFlowAnalysis, self).visit(node)
 
     def visit_FunctionDef(self, node):
@@ -1129,35 +1139,32 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         else:
             self.flow.block = None
 
-        exit_block.body = [node]
-        node = exit_block
         return node
 
     def visit_If(self, node):
         exit_block = self.flow.exit_block(label='exit_if')
 
         # Condition
-        condition_block = self.flow.nextblock(self.flow.block,
-                                              label='if_cond', is_expr=True)
+        node.cond_block = self.flow.nextblock(self.flow.block, label='if_cond',
+                                              is_expr=True)
         self.visit(node.test)
 
         # Body
-        if_block = self.flow.nextblock(label='if_body')
+        node.if_block = self.flow.nextblock(label='if_body')
         self.visitlist(node.body)
-        node.body = [if_block]
         if self.flow.block:
             self.flow.block.add_child(exit_block)
 
         # Else clause
         if node.orelse:
-            else_block = self.flow.nextblock(condition_block,
+            node.else_block = self.flow.nextblock(node.cond_block,
                                              label='else_body')
             self.visitlist(node.orelse)
-            node.orelse = [else_block]
             if self.flow.block:
                 self.flow.block.add_child(exit_block)
         else:
-            condition_block.add_child(exit_block)
+            node.cond_block.add_child(exit_block)
+            node.else_block = None
 
         return self.exit_block(exit_block, node)
 

@@ -444,8 +444,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 idx = self.argnames.index(local_name)
                 arg_types[idx] = local_type
 
+        # Initialize argument types
         for var_name, arg_type in zip(self.local_names, arg_types):
             self.symtab[var_name].type = arg_type
+
+        # Propagate argument types to first rename of the variable in the block
+        for var in self.symtab.itervalues():
+            if var.parent_var and not var.parent_var.parent_var:
+                var.type = var.parent_var.type
 
         self.func_signature.args = tuple(arg_types)
 
@@ -554,7 +560,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         lhs_var = target.variable
         rhs_var = node.value.variable
         if isinstance(target, ast.Name):
-            # Variable's type may be promoted later!
             node.value = nodes.CoercionNode(node.value, lhs_var.type)
         elif lhs_var.type != rhs_var.type:
             if lhs_var.type.is_array and rhs_var.type.is_array:
@@ -594,6 +599,26 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         lhs_var.deleted = False
         return rhs_node
+
+    def visit_PhiNode(self, node):
+        if not node.variable.cf_references:
+            # Unused phi
+            return None
+
+        # Merge point for different definitions
+        incoming = [v for v in node.incoming
+                          if v.type is not numba_types.uninitialized]
+        assert incoming
+
+        for v in incoming:
+            if v.type is None:
+                # We have not analyzed this definition yet, delay the type
+                # resolution
+                v.type = numba_types.DeferredType(v)
+
+        promoted_type = numba_types.PromotionType([v.type for v in incoming])
+        phi_node.variable.type = promoted_type.resolve()
+        return phi_node
 
     def _get_iterator_type(self, node, iterator_type, target_type):
         "Get the type of an iterator Variable"
@@ -639,8 +664,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if node.orelse:
             raise error.NumbaError(node.orelse,
                                    'Else in for-loop is not implemented.')
+        self.generic_visit(node)
         node.test = nodes.CoercionNode(self.visit(node.test), minitypes.bool_)
-        node.body = self.visitlist(node.body)
         return node
 
     def visit_With(self, node):
@@ -668,12 +693,16 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_Name(self, node):
         from numba import functions
 
-        variable = self.current_scope.lookup(node.id)
-        print node.id, node.ctx, self.current_scope
-        if variable:
-            pass
+        # variable = self.current_scope.lookup(node.id)
+        if node.id in self.symtab:
+            if isinstance(node.ctx, ast.Param):
+                variable = self.symtab[node.id]
+            else:
+                # Local variable
+                variable = node.variable
         elif (self.closure_scope and node.id in self.closure_scope and not
                   self.is_store(node.ctx)):
+            # Free variable
             closure_var = self.closure_scope[node.id]
             closure_var.is_cellvar = True
 
@@ -684,19 +713,19 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             variable.promotable_type = False
             self.symtab[node.id] = variable
         else:
+            # Global or builtin
             variable = self.init_global(node.id)
-
-        if variable.type and not variable.type.is_deferred:
-            if variable.type.is_global: # or variable.type.is_module:
-                # TODO: look up globals in dict at call time
-                obj = self.func_globals[node.name]
-                if not functions.is_numba_func(obj):
-                    type = self.context.typemapper.from_python(obj)
-                    return nodes.const(obj, type)
-            elif variable.type.is_builtin:
-                # Rewrite builtin-ins later on, give other code the chance
-                # to handle them first
-                pass
+            if variable.type and not variable.type.is_deferred:
+                if variable.type.is_global: # or variable.type.is_module:
+                    # TODO: look up globals in dict at call time
+                    obj = self.func_globals[node.name]
+                    if not functions.is_numba_func(obj):
+                        type = self.context.typemapper.from_python(obj)
+                        return nodes.const(obj, type)
+                elif variable.type.is_builtin:
+                    # Rewrite builtin-ins later on, give other code the chance
+                    # to handle them first
+                    pass
 
         node.variable = variable
         return node

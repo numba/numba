@@ -974,7 +974,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 
-    def visit_ControlBlock(self, node, body=None, is_condition_block=False):
+    def visit_ControlBlock(self, node, is_condition_block=False):
         "Return a new basic block and handle phis"
         bb = self.builder.basic_block
         node.llvm_basic_block = self.append_basic_block(node.label)
@@ -984,30 +984,25 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.position_at_end(node.llvm_basic_block)
 
         for variable, phi_node in node.phis.iteritems():
-            self.builder.phi(phi_node.type.to_llvm(self.context))
+            phi = self.builder.phi(phi_node.type.to_llvm(self.context))
+            phi_node.variable.llvm_value = phi
 
-        result = None
-        if body is not None:
-            self.local_scopes.append(node.symtab)
-            if isinstance(body, list):
-                result = self.visitlist(body)
-            else:
-                result = self.visit(body)
-            self.local_scopes.pop()
-
-        return result, node.llvm_basic_block
+        return node.llvm_basic_block
 
     def visit_If(self, node):
         # Visit condition
-        test, cond_bb = self.visit_ControlBlock(node.condition_block, node.test,
-                                                is_condition_block=True)
+        cond_bb = self.visit_ControlBlock(node.cond_block,
+                                          is_condition_block=True)
+        test = self.visit(node.test)
         if test.type != _int1:
             test = self._generate_test(test)
 
         # Visit if clauses and exit block
-        bb_true, if_body = self.visit_ControlBlock(node.if_block, node.body)
-        bb_false, else_body = self.visit_ControlBlock(node.else_block, node.orelse)
-        bb_endif, exit_body = self.visit_ControlBlock(node.exit_block)
+        bb_true = self.visit_ControlBlock(node.if_block)
+        self.visit(node.body)
+        bb_false = self.visit_ControlBlock(node.else_block)
+        self.visit(node.orelse)
+        bb_endif = self.visit_ControlBlock(node.exit_block)
 
         # Branch to block from condition
         self.builder.position_at_end(cond_bb)

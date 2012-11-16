@@ -280,6 +280,21 @@ _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)
 NULL = ConstNode(_NULL, void.pointer())
 
+basic_block_fields = ['condition_block', 'if_block', 'else_block', 'exit_block']
+
+class If(ast.If):
+    _fields = ['condition_block', 'test',
+               'if_block', 'body',
+               'else_block', 'orelse',
+               'exit_block']
+
+class While(ast.While):
+    _fields = If._fields
+
+class For(ast.For):
+    _fields = ['iter', 'cond_block', 'target_block', 'target',
+               'if_block', 'body', 'else_block', 'orelse']
+
 class ForRangeNode(Node):
     _fields = ['index', 'target', 'start', 'stop', 'step', 'body']
 
