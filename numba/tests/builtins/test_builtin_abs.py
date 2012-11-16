@@ -19,9 +19,9 @@
 >>> long(ulong_abs(5))
 10L
 
->>> long_long_abs(-(2**33)) == 2**33
+>>> long_long_abs(-(2**33)) == 2**34
 True
->>> ulong_long_abs(2**33) == 2 ** 33
+>>> ulong_long_abs(2**33) == 2**34
 True
 
 >>> double_abs(-5)
