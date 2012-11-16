@@ -18,7 +18,9 @@ class Variable(object):
     def __init__(self, type, is_constant=False, is_local=False,
                  name=None, lvalue=None, constant_value=None,
                  promotable_type=True, is_arg=False):
+        self.type = type
         self.name = name
+        self.renamed_name = None
         self.is_constant = is_constant
         self.constant_value = constant_value
         self.lvalue = lvalue
@@ -93,6 +95,12 @@ class Variable(object):
         The ctypes type for the type of this variable.
         """
 
+    def unmangled_name(self):
+        name = self.renamed_name.lstrip("__numba_renamed_")
+        counter, sep, var_name = name.partition('_')
+        name = '%s_%s' % (var_name, counter)
+        return name
+
     def __repr__(self):
         args = []
         if self.is_local:
@@ -116,13 +124,16 @@ class Variable(object):
             extra_info = ""
 
         if self.name:
-            return "<Variable(name=%r, type=%s%s)>" % (self.name, self.type,
+            if self.renamed_name:
+                name = self.unmangled_name()
+            else:
+                name = self.name
+            return "<Variable(name=%r, type=%s%s)>" % (name, self.type,
                                                        extra_info)
         else:
             return "<Variable(type=%s%s)>" % (self.type, extra_info)
 
 
-Variable.make_shared_property('type')
 Variable.make_shared_property('is_cellvar')
 Variable.make_shared_property('is_freevar')
 Variable.make_shared_property('need_arg_copy')
@@ -132,12 +143,46 @@ class Symtab(object):
     def __init__(self, symtab_dict=None, parent=None):
         self.symtab = symtab_dict or {}
         self.parent = parent
+        if parent:
+            self.counters = parent.counters
+        else:
+            self.counters = None
+
+        # Last counter values local to this block after renaming finishes
+        self._counters = None
 
     def lookup(self, name):
         result = self.symtab.get(name, None)
         if result is None and self.parent is not None:
-            result = self.parent.lookup(self, name)
+            result = self.parent.lookup(name)
         return result
+
+    def lookup_last(self, name):
+        """
+        Look up the last definition in the block for a variable.
+        """
+        last_count = self._counters[name]
+        renamed_name = self.renamed_name(name, last_count)
+        return self[renamed_name]
+
+    def renamed_name(self, name, count):
+        return '__numba_renamed_%d_%s' % (count, name)
+
+    def rename(self, var, block):
+        """
+        Create a new renamed variable linked to the given variable, which
+        becomes its parent.
+        """
+        new_var = Variable.from_variable(var)
+        new_var.block = block
+        self.counters[var.name] += 1
+        new_var.renamed_name = self.renamed_name(var.name,
+                                                 self.counters[var.name])
+
+        new_var.parent_var = var
+        self.symtab[new_var.renamed_name] = new_var
+
+        return new_var
 
     def __repr__(self):
         return "symtab(%s)" % self.symtab

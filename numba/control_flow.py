@@ -90,6 +90,9 @@ class ControlBlock(nodes.Node):
         # assigned only once
         self.phis = {}
 
+        #
+        self.phi_nodes = None
+
     def empty(self):
         return (not self.stats and not self.positions and not self.phis)
 
@@ -346,7 +349,6 @@ class ControlFlow(object):
         set.
 
         dominators(x) = {x} ∪ (∩ dominators(y) for y ∈ preds(x))
-        ∅
         """
         blocks = set(self.blocks)
         for block in self.blocks:
@@ -441,7 +443,8 @@ class ControlFlow(object):
                 1) compute output sets for each block
                 2) compute input sets for each block
 
-        3) Update phis with incoming variables
+        3) Update phis with incoming variables. The incoming variables are
+           last assignments of the predecessor blocks in the CFG.
         """
         # Print dominance frontier
         for block in self.blocks:
@@ -465,36 +468,40 @@ class ControlFlow(object):
                         defining.append(f)
 
         #
-        ### 2) Reaching definitions
+        ### 2) Reaching definitions and variable renaming
         #
-        self.blocks[0].new_symtab = symbol_table
-        for var_name, var in symbol_table.iteritems():
-            var.block = self.blocks[0]
 
+        # Set originating block for each variable (as if each variable were
+        # initialized at the start of the function) and start renaming of
+        # variables
+        symbol_table.counters = dict.fromkeys(symbol_table, -1) # var_name -> counter
+        self.blocks[0].symtab = symbol_table
+        for var_name, var in symbol_table.items():
+            symbol_table.rename(var, self.blocks[0])
+
+        self.rename_assignments(self.blocks[0])
         for block in self.blocks[1:]:
-            block.new_symtab = {}
-            for var in itertools.chain(block.phis, block.gen):
-                if var not in block.new_symtab:
-                    new_var = symtab.Variable.from_variable(var)
-                    block.new_symtab[var.name] = new_var
-                    new_var.parent_var = var
-                    new_var.block = block
+            block.symtab = symtab.Symtab(parent=block.idom.symtab)
+            for var, phi_node in block.phis.iteritems():
+                phi_node.variable = block.symtab.rename(var, block)
 
-        for block in self.blocks:
-            if block.idom:
-                idom_symtab = block.idom.symtab
-            else:
-                idom_symtab = ()
-
-            block.symtab = symtab.Symtab(dict(idom_symtab, **block.new_symtab))
+            self.rename_assignments(block)
 
         #
-        ### 3)Update the phis with all incoming entries
+        ### 3) Update the phis with all incoming entries
         #
         for block in self.blocks:
             for variable, phi in block.phis.iteritems():
+                block.phi_nodes = block.phis.values()
                 for parent in block.parents:
-                    phi.incoming.add(parent.symtab[variable.name])
+                    phi.incoming.add(parent.symtab.lookup_last(variable.name))
+
+    def rename_assignments(self, block):
+        for stat in block.stats:
+            if isinstance(stat, NameAssignment):
+                block.symtab.rename(stat.entry, block)
+
+        block.symtab._counters = dict(block.symtab.counters)
 
 class StatementDescr(object):
     is_assignment = False
@@ -560,8 +567,9 @@ class PhiNode(nodes.Node):
 
     def __init__(self, block, variable):
         self.block = block
+        # Unrenamed variable. This will be replaced by the renamed version
         self.variable = variable
-        self.type = float_ #None
+        self.type = None
         # self.incoming_blocks = []
         self.incoming = set()
         self.phis = set()
