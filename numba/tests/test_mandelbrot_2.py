@@ -1,19 +1,13 @@
 #! /usr/bin/env python
-# ______________________________________________________________________
 '''test_mandelbrot_2
 
 Test the Numba compiler on several variants of Mandelbrot set membership
 computations.
 '''
-# ______________________________________________________________________
-
 from numba import *
-
 import unittest
-
 import numpy as np
 
-# ______________________________________________________________________
 
 def mandel_1(real_coord, imag_coord, max_iters):
     '''Given a the real and imaginary parts of a complex number,
@@ -64,6 +58,7 @@ def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
 mandel_driver_1c = jit('void(f8,f8,f8,i4,i1[:,:],i1[:,:,:])')(
     mandel_driver_1)
 
+
 def make_palette():
     '''Shamefully stolen from
     http://wiki.cython.org/examples/mandelbrot, though we did correct
@@ -77,7 +72,58 @@ def make_palette():
         colors.append( (0, i*15, 48), )
     return np.array(colors, dtype=np.uint8)
 
-# ______________________________________________________________________
+
+def mandel_2(x, max_iterations):
+    z = complex(0)
+    for i in range(max_iterations):
+        z = z**2 + x
+        if abs(z) >= 2:
+            return i
+    return -1
+
+mandel_2c = jit(i4(c16,i4))(mandel_2)
+
+def mandel_driver_2(min_x, max_x, min_y, nb_iterations, colors, image):
+    nb_colors = len(colors)
+    width = image.shape[0]
+    height = image.shape[1]
+    pixel_size = (max_x - min_x) / width
+    dy = pixel_size * 1j
+    for x in range(width):
+        coord = complex(min_x + x * pixel_size, min_y)
+        for y in range(height):
+            color = mandel_2(coord, nb_iterations)
+            image[x,y,:] = colors[color % nb_colors,:]
+            coord += dy
+
+mandel_driver_2c = jit(void(f8,f8,f8,i4,u1[:,:],u1[:,:,:]))(mandel_driver_2)
+
+
+def benchmark(dx = 500, dy = 500):
+    import time
+    min_x = -1.5
+    max_x =  0
+    min_y = -1.5
+    colors = make_palette()
+    nb_iterations = colors.shape[0]
+    img0 = np.zeros((dx, dy, 3), dtype=np.uint8) + 125
+    start = time.time()
+    mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, img0)
+    dt0 = time.time() - start
+    img1 = np.zeros((dx, dy, 3), dtype=np.uint8) + 125
+    start = time.time()
+    mandel_driver_1c(min_x, max_x, min_y, nb_iterations, colors, img1)
+    dt1 = time.time() - start
+    img2 = np.zeros((dx, dy, 3), dtype=np.uint8) + 125
+    start = time.time()
+    mandel_driver_2(min_x, max_x, min_y, nb_iterations, colors, img2)
+    dt2 = time.time() - start
+    img3 = np.zeros((dx, dy, 3), dtype=np.uint8) + 125
+    start = time.time()
+    mandel_driver_2c(min_x, max_x, min_y, nb_iterations, colors, img3)
+    dt3 = time.time() - start
+    return (dt0, dt1, dt2, dt3), (img0, img1, img2, img3)
+
 
 class TestMandelbrot(unittest.TestCase):
     def test_mandel_1_sanity(self):
@@ -100,10 +146,16 @@ class TestMandelbrot(unittest.TestCase):
         image_diff = control_image - test_image
         self.assertTrue((image_diff == 0).all())
 
-# ______________________________________________________________________
+    def test_mandel_driver_2(self):
+        palette = make_palette()
+        control_image = np.zeros((50, 50, 3), dtype = np.uint8)
+        mandel_driver_2(-1., 1., -1., len(palette), palette, control_image)
+        test_image = np.zeros_like(control_image)
+        self.assertTrue((control_image - test_image == control_image).all())
+        mandel_driver_2c(-1., 1., -1., len(palette), palette, test_image)
+        image_diff = control_image - test_image
+        self.assertTrue((image_diff == 0).all())
+
 
 if __name__ == "__main__":
     unittest.main()
-
-# ______________________________________________________________________
-# End of test_mandelbrot.py
