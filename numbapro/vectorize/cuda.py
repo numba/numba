@@ -1,24 +1,18 @@
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm.core import *
-from llvm.passes import *
 import numpy as np
 from numba import llvm_types
 from . import _common
-from ._common import _llvm_ty_to_numpy
-
 from numba.minivect import minitypes
 
 from numbapro._cuda.error import CudaSupportError
-from numbapro._cuda import nvvm
 from numbapro import cuda
 try:
     from numbapro import _cudadispatch
 except CudaSupportError: # ignore missing cuda dependency
     pass
 
-from numbapro.translate import Translate
-from numbapro.vectorize import minivectorize, basic
 from numba.ndarray_helpers import PyArrayAccessor
 
 class _CudaStagingCaller(CDefinition):

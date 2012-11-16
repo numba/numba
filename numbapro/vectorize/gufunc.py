@@ -2,8 +2,6 @@ from . import _common
 
 from numba import *
 from numba import llvm_types
-import numba.decorators
-from numba.minivect import minitypes
 
 from llvm.core import Type, inline_function, ATTR_NO_ALIAS, ATTR_NO_CAPTURE
 from llvm_cbuilder import *
@@ -20,7 +18,7 @@ except CudaSupportError: # ignore missing cuda dependency
 
 from numbapro.vectorize import cuda
 import numpy as np
-import llvm.core
+
 
 class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
     def datalist(self, lfunclist, ptrlist, cuda_dispatcher):
@@ -356,69 +354,4 @@ class _CudaStagingCaller(CDefinition):
     @classmethod
     def _pointer(cls, ty):
         return C.pointer(ty)
-
-def _ltype(minitype):
-    return minitype.to_llvm(numba.decorators.context)
-
-def get_cuda_outer_loop(builder):
-    """
-    Build an llvm_func that references _cuda.c:cuda_outer_loop
-    """
-    context = numba.decorators.context
-
-    argtypes = [
-        char.pointer().pointer(), # char **args
-        npy_intp.pointer(),       # npy_intp *dimensions
-        npy_intp.pointer(),       # npy_intp *steps
-        void.pointer(),           # void *func
-        object_.pointer(),        # PyObject *arrays
-    ]
-    signature = minitypes.FunctionType(return_type=void, args=argtypes)
-    lfunc_type = _ltype(signature.pointer())
-
-    func_addr = _cudadispatch.get_cuda_outer_loop_addr()
-    func_int_addr = llvm.core.Constant.int(int64.to_llvm(context), func_addr)
-    func_pointer = builder.inttoptr(func_int_addr, lfunc_type)
-    lfunc = func_pointer
-    return lfunc
-
-num_wrappers = 0
-class GUFuncCUDAEntry(GUFuncEntry):
-    """
-    This function is invoked by NumPy and sets up the fake PyArrayObjects and
-    calls _cuda.c:cuda_outer_loop
-    """
-
-    def _outer_loop(self, args, dimensions, py_arrays, steps, info):
-        """
-        The outer loop is implemented by _cuda.c:cuda_outer_loop, call it
-        from this wrapper.
-        """
-        llvm_builder = args.parent.builder
-        cbuilder = args.parent
-
-        cuda_outer_loop = get_cuda_outer_loop(llvm_builder)
-        # array_list = cbuilder.array(PyArray.llvm_type(), len(py_arrays))
-        array_list = cbuilder.array(llvm_types._numpy_array, len(py_arrays))
-        for i, py_array in enumerate(py_arrays):
-            array_list[i].assign(py_array.reference())
-
-        largs = [llvm_builder.load(arg.handle) for arg in (args, dimensions,
-                                                           steps, info)]
-        array_list = array_list.cast(_ltype(object_.pointer()))
-        largs.append(array_list.handle)
-
-        #NOTE: why does it work on some platform (OSX) without explicit type casting?
-        largs = [llvm_builder.bitcast(v, t)
-                 for v, t in zip(largs, cuda_outer_loop.type.pointee.args)]
-
-        llvm_builder.call(cuda_outer_loop, largs)
-
-    def specialize(self, dtypes, signature, func_def):
-        '''specialize to a workload
-        '''
-        global num_wrappers
-        super(GUFuncCUDAEntry, self).specialize(dtypes, signature, func_def)
-        self._name_ = 'cuda_outer_loop_wrapper_%d' % num_wrappers
-        num_wrappers += 1
 
