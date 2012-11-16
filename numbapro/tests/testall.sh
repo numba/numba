@@ -13,6 +13,22 @@ function run_test_in
   cd ..
 }
 
+function run_doctest_in
+{
+    echo "== Testing $1"
+    cd $1
+    for f in ./*.py
+      do
+        if ! python -m doctest -v $f
+          then
+            echo "== Fail test in $1"
+            exit
+        fi
+    done
+    cd ..
+}
+
+
 function run_test
 {
     echo "== Testing $1"
@@ -27,6 +43,9 @@ run_test_in llvm_cbuilder_tests
 run_test_in basic_vectorize
 run_test_in parallel_vectorize
 run_test_in stream_vectorize
+run_doctest_in prange
+echo "== SKIP array_exprs"
+#run_doctest_in array_exprs # known failure due to numpy 1.5 missing API
 
 run_test test_basic_vectorize.py
 run_test test_parallel_vectorize.py
@@ -37,6 +56,8 @@ run_test test_mini_vectorize.py
 
 if [ "$1" == "-cuda" ]
   then
+    run_test_in cuda
     run_test test_cuda_vectorize.py
+    run_test test_cuda_gufunc.py
     run_test test_cuda_jit.py
 fi
