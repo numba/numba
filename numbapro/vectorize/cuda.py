@@ -116,7 +116,7 @@ class CudaASTVectorize(_common.GenericASTVectorize):
                                   llvm_module=self.module,
                                   **kwargs)
         self.translates.append(translate)
-        self.args_restypes.append(argtypes + [restype])
+        self.args_restypes.append(list(argtypes) + [restype])
 
     def _get_lfunc_list(self):
         return [lfunc for sig, lfunc in self.translates]

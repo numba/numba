@@ -1,4 +1,6 @@
 __all__ = [
+    'vectorize',
+    'guvectorize',
     'Vectorize',
     'BasicVectorize',
     'ParallelVectorize',
@@ -16,6 +18,7 @@ from .parallel import ParallelVectorize, ParallelASTVectorize
 from .stream import StreamVectorize, StreamASTVectorize
 from .gufunc import GUFuncVectorize, GUFuncASTVectorize
 from numbapro._cuda.error import CudaSupportError
+from numba.decorators import _process_sig
 
 try:
     from .cuda import  CudaASTVectorize
@@ -91,3 +94,40 @@ def GUVectorize(func, signature, backend='ast', target='cpu'):
     targets = guvectorizers_backends[backend]
     assert target in targets
     return targets[target](func, signature)
+
+def _prepare_sig(sig):
+    if isinstance(sig, str):
+        _name, restype, argtypes = _process_sig(str(sig), None)
+    else:
+        argtypes = sig.args
+        restype = sig.return_type
+
+    kws = {}
+    if restype is not None:
+        kws['restype'] = restype
+    if argtypes is not None:
+        kws['argtypes'] = argtypes
+
+    return kws
+
+def vectorize(signatures, backend='ast', target='cpu'):
+    def _vectorize(fn):
+        vect = Vectorize(fn, backend=backend, target=target)
+        for sig in signatures:
+            kws = _prepare_sig(sig)
+            vect.add(**kws)
+        ufunc = vect.build_ufunc()
+        return ufunc
+
+    return _vectorize
+
+def guvectorize(fnsigs, gusig, backend='ast', target='cpu'):
+    def _guvectorize(fn):
+        vect = GUVectorize(fn, gusig, backend=backend, target=target)
+        for sig in fnsigs:
+            kws = _prepare_sig(sig)
+            vect.add(**kws)
+        ufunc = vect.build_ufunc()
+        return ufunc
+
+    return _guvectorize

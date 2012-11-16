@@ -53,6 +53,7 @@ run_test test_stream_vectorize.py
 
 run_test test_gufunc.py
 run_test test_mini_vectorize.py
+run_test_in vectorize_decorator
 
 if [ "$1" == "-cuda" ]
   then
@@ -60,4 +61,5 @@ if [ "$1" == "-cuda" ]
     run_test test_cuda_vectorize.py
     run_test test_cuda_gufunc.py
     run_test test_cuda_jit.py
+    run_test_in cuda_vectorize_decorator
 fi

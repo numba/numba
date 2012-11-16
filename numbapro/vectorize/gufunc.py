@@ -80,7 +80,8 @@ class GUFuncVectorize(object):
         self.signature = sig
         self.gufunc_from_func = _GeneralizedUFuncFromFunc()
 
-    def add(self, argtypes):
+    def add(self, argtypes, restype=void):
+        assert restype == void or restype is None
         t = Translate(self.pyfunc, argtypes=argtypes)
         t.translate()
         self.translates.append(t)
@@ -267,8 +268,8 @@ class CudaGUFuncASTVectorize(CudaASTVectorize):
         super(CudaGUFuncASTVectorize, self).__init__(func)
         self.signature = sig
 
-    def add(self, argtypes, **kwargs):
-        restype = void
+    def add(self, argtypes, restype=void, **kwargs):
+        assert restype == void or restype is None
         super(CudaGUFuncASTVectorize, self).add(restype, argtypes, **kwargs)
 
     def _build_caller(self, lfunc):

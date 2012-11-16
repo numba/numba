@@ -88,3 +88,7 @@ try:
 except ImportError:
     pass
 
+#
+# vectorize decorator
+#
+from .vectorize import vectorize, guvectorize
