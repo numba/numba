@@ -74,6 +74,17 @@ This may be accomplished as follows::
 
     gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', target='gpu')
 
+Or, through the one line decorator syntax::
+
+    from numbapro import guvectorize
+    from numba import *
+    
+    @guvectorize([void(f4[:,:], f4[:,:], f4[:,:])], '(m,n),(n,p)->(m,p)', target='gpu')
+    def matmulcore(A, B, C):
+        ...
+
+**Note:** `GUVectorize(..., target='gpu').build_ufunc` returns an *ufunc-like* object.  See `documentation for CUDA ufunc <CUDAufunc.html>`_ for detail.
+
 Generalized ufuncs with Array Expressions
 =========================================
 If your generalized ufunc kernel contains array expressions, you will need to use the 'ast' Numba backend.

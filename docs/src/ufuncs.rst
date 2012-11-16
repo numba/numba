@@ -47,6 +47,28 @@ Lastly, we call basic_ufunc with two NumPy array as arguments
 
 	data = np.array(np.random.random(100))
 	result = basic_ufunc(data, data)
+    
+    
+ufunc from @vectorize
+---------------------------
+
+An alternative syntax is available through the use of the `vectorize` decorator::
+
+    from numbapro import vectorize
+    from numba import *
+    import math
+
+    pi = math.pi
+
+    @vectorize([f4(f4, f4), f8(f8, f8)], target='cpu')
+    def sinc(x):
+        if x == 0.0:
+            return 1.0
+        else:
+            return math.sin(x*pi)/(pi*x)
+            
+The `vectorize` decorator takes a list of function signature and an optional `target` keyword argument (default to 'cpu').  The example above generate a `sinc` ufunc that is overloaded to accept float and double.  This syntax replaces calls to `Vectorize.add` and `Vectorize.build_ufunc`.
+
 
 Universal Function Types
 ------------------------
@@ -97,6 +119,8 @@ StreamVectorize         StreamVectorize aims to provide a cache optimized versio
 CudaVectorize           CUDAVectorize uses translated code from Numba and converts it to
                         `PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_,
                         which is then compiled by CUDA and loaded on the device when called with array inputs.
+                        
+                        **Note:** `vectorizer.build_ufunc` returns an *ufunc-like* object.  See `documentation for CUDA ufunc <CUDAufunc.html>`_ for detail.
 
                         **Usage:**
 

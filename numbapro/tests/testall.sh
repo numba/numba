@@ -62,4 +62,5 @@ if [ "$1" == "-cuda" ]
     run_test test_cuda_gufunc.py
     run_test test_cuda_jit.py
     run_test_in cuda_vectorize_decorator
+    run_test_in cuda_vectorize_device
 fi

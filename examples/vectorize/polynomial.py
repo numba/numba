@@ -4,30 +4,55 @@ Example vectorize usage.
 
 import numpy as np
 from numba import *
-from numbapro.vectorize.basic import BasicVectorize
-from numbapro.vectorize.cuda import CudaVectorize
-from time import time
-from math import sqrt
+from numbapro import vectorize
+from timeit import default_timer as time
+import math
+from itertools import izip
+import sys
+
+def generate_input(n, dtype):
+    A = np.array(np.random.sample(n), dtype=dtype)
+    B = np.array(np.random.sample(n) + 10, dtype=dtype)
+    C = np.array(np.random.sample(n), dtype=dtype)
+    return A, B, C
+
+def check_answer(ans, A, B, C):
+    for d, a, b, c in izip(ans, A, B, C):
+        gold = discriminant(a, b, c)
+        assert np.allclose(d, gold), (d, gold)
+
 def discriminant(a, b, c):
     '''a ufunc kernel to compute the discriminant of quadratic equation
     '''
-    return sqrt(b ** 2 - 4 * a * c)
+    return math.sqrt(b ** 2 - 4 * a * c)
 
-def ufunc_discriminant(vecttype=BasicVectorize):
-    '''generate a ufunc from discriminant(a, b, c)
 
-    vecttype -- (defaults to BasicVectorize)
-                The type of vectorize builder to use.
-                For CudaVectorize, the output ufunc can only support float32.
-    '''
-    vect = vecttype(discriminant)
+def main():
 
-    if vecttype is CudaVectorize:
-        # only works well for float
-        supported_types = [f]
-    else:
-        supported_types = [int32, int64, f, d]
-    for ty in supported_types:
-        vect.add(restype=ty, argtypes=[ty] * 3)
-    return vect.build_ufunc()
+    N = 1e+8 // 2
+    print 'Data size', N
+    for target in ['cpu', 'stream', 'parallel']:
+        print '== Target', target
+        vect_discriminant = vectorize([f4(f4, f4, f4), f8(f8, f8, f8)],
+                                    target=target)(discriminant)
 
+        A, B, C = generate_input(N, dtype=np.float32)
+        D = np.empty(A.shape, dtype=A.dtype)
+
+        ts = time()
+        D = vect_discriminant(A, B, C)
+        te = time()
+
+        total_time = (te - ts)
+
+        print 'Execution time %.4f' % total_time
+        print 'Throughput %.4f' % (N / total_time)
+
+
+
+        if '-verify' in sys.argv[1:]:
+            check_answer(D, A, B, C)
+
+
+if __name__ == '__main__':
+    main()
