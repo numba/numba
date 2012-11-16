@@ -18,6 +18,10 @@ def matmulcore(A, B, C):
 gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', target='gpu')
 gufunc.add(argtypes=[f4[:,:], f4[:,:], f4[:,:]])
 gufunc = gufunc.build_ufunc()
+gufunc.max_blocksize = 512
+
+non_stream_speedups = []
+stream_speedups = []
 
 def _test_gufunc():
     matrix_ct = 1001 # an odd number to test thread/block division in CUDA
@@ -32,7 +36,7 @@ def _test_gufunc():
     Gold = ut.matrix_multiply(A, B)
     tcpu = time() - ts
 
-    print 'CUDA speedup %.2f' % (tcpu / tcuda)
+    non_stream_speedups.append(tcpu / tcuda)
     assert np.allclose(C, Gold)
 
 def _test_gufunc_stream():
@@ -53,13 +57,15 @@ def _test_gufunc_stream():
     Gold = ut.matrix_multiply(A, B)
     tcpu = time() - ts
 
-    print 'CUDA speedup %.2f' % (tcpu / tcuda)
+    stream_speedups.append(tcpu / tcuda)
     assert np.allclose(C, Gold)
 
 def test_cuda_gufunc():
-    for _ in range(10):
+    for _ in range(100):
         _test_gufunc()
         _test_gufunc_stream()
+    print 'CUDA speedup: %f' % max(non_stream_speedups)
+    print 'CUDA streamed speedup: %f' % max(stream_speedups)
 
 def main():
     test_cuda_gufunc()

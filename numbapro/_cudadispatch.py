@@ -24,6 +24,21 @@ class CudaUFuncDispatcher(object):
     def __init__(self, types_to_retty_kernels):
         self.functions = types_to_retty_kernels
 
+    def _set_max_blocksize(self, blksz):
+        self.__max_blocksize = blksz
+
+    def _get_max_blocksize(self):
+        try:
+            return self.__max_blocksize
+        except AttributeError:
+            return 2**30 # a very large number
+
+    def _del_max_blocksize(self, blksz):
+        del self.__max_blocksize
+
+    max_blocksize = property(_get_max_blocksize, _set_max_blocksize,
+                             _del_max_blocksize)
+
     def _prepare_inputs(self, args):
         # prepare broadcasted contiguous arrays
         # TODO: Allow strided memory (use mapped memory + strides?)
@@ -58,7 +73,8 @@ class CudaUFuncDispatcher(object):
 
         # find the fitting function
         result_dtype, cuda_func = self._get_function_by_dtype(dtypes)
-        MAX_THREAD = cuda_func.device.MAX_THREADS_PER_BLOCK
+        MAX_THREAD = min(cuda_func.device.MAX_THREADS_PER_BLOCK,
+                         self.max_blocksize)
 
         is_device_ndarray = [isinstance(x, DeviceNDArray) for x in args]
 
