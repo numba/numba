@@ -160,7 +160,7 @@ class NumbaFunction(object):
             nargs = self.py_func.func_code.co_argcount
             if len(args) != nargs:
                 raise error.NumbaError("Expected %d arguments, got %d" % (
-                                                        len(args), nargs))
+                                                        nargs, len(args)))
             return self.wrapper(self, *args, **kwargs)
 
     def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
