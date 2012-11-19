@@ -78,6 +78,9 @@ class IteratorType(NumbaType, minitypes.ObjectType):
 class UninitializedType(NumbaType):
     is_uninitialized = True
 
+    def __repr__(self):
+        return "<uninitialized>"
+
 class PHIType(NumbaType):
     """
     Type for phi() values.
@@ -344,9 +347,11 @@ class UnresolvedType(NumbaType):
         self.variable = variable
 
     def simplify(self):
-        return self.resolve() is self
+        return not (self.resolve() is self)
 
     def resolve(self):
+        if not self.variable.type:
+            self.variable.type = self
         return self.variable.type
 
 class PromotionType(UnresolvedType):
@@ -392,7 +397,8 @@ class PromotionType(UnresolvedType):
                 # type
                 types.add(type.variable.type)
             else:
-                types.add(type)
+                if not type == uninitialized:
+                    types.add(type)
 
         types.remove(self)
         resolved_types = [type for type in types if not type.is_unresolved]
@@ -549,8 +555,20 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             type = copy.copy(array_type)
             type.dtype = self.promote_types(array_type.dtype, other_type)
             return type
-        elif type1.is_deferred or type2.is_deferred:
-            return [type1, type2][type2.is_deferred]
+        elif type1.is_unresolved or type2.is_unresolved:
+            if type1.is_unresolved:
+                type1 = type1.resolve()
+            if type2.is_unresolved:
+                type2 = type2.resolve()
+
+            if type1.is_unresolved or type2.is_unresolved:
+                # The Variable is really only important for ast.Name, fabricate
+                # one
+                from numba import symtab
+                var = symtab.Variable(None)
+                return PromotionType(var, self.context, [type1, type2])
+            else:
+                return self.promote_types(type1, type2)
 
         return super(NumbaTypeMapper, self).promote_types(type1, type2)
 

@@ -1,4 +1,5 @@
 from . import utils
+import collections
 
 class Variable(object):
     """
@@ -148,13 +149,12 @@ class Symtab(object):
     def __init__(self, symtab_dict=None, parent=None):
         self.symtab = symtab_dict or {}
         self.parent = parent
+        self.local_counters = {}
         if parent:
             self.counters = parent.counters
+            self.local_counters.update(parent.local_counters)
         else:
             self.counters = None
-
-        # Last counter values local to this block after renaming finishes
-        self._counters = None
 
     def lookup(self, name):
         result = self.symtab.get(name, None)
@@ -164,19 +164,14 @@ class Symtab(object):
 
     def lookup_most_recent(self, name):
         """
-        Look up the most recent definition of a variable.
-        This is used during the renaming process.
+        Look up the most recent definition of a variable in this block.
         """
-        last_count = self.counters[name]
-        renamed_name = self.renamed_name(name, last_count)
-        return self[renamed_name]
+        if name in self.local_counters:
+            last_count = self.local_counters[name]
+        else:
+            assert self.parent
+            return self.parent.lookup_most_recent(name)
 
-    def lookup_last(self, name):
-        """
-        Look up the last definition in the block for a variable.
-        This is used after the renaming process.
-        """
-        last_count = self._counters[name]
         renamed_name = self.renamed_name(name, last_count)
         return self[renamed_name]
 
@@ -191,6 +186,7 @@ class Symtab(object):
         new_var = Variable.from_variable(var)
         new_var.block = block
         self.counters[var.name] += 1
+        self.local_counters[var.name] = self.counters[var.name]
         new_var.renamed_name = self.renamed_name(var.name,
                                                  self.counters[var.name])
 

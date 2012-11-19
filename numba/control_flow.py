@@ -392,8 +392,10 @@ class ControlFlow(object):
         multiple control flow paths to the block, which means multiple
         variable definitions can reach there.
         """
-        for block in self.blocks:
-            print block.id, sorted(block.dominators, key=lambda b: b.id)
+        if debug:
+            print "Dominator sets:"
+            for block in self.blocks:
+                print block.id, sorted(block.dominators, key=lambda b: b.id)
 
         for block in self.blocks:
             block.idom = self.immediate_dominator(block)
@@ -451,8 +453,10 @@ class ControlFlow(object):
            last assignments of the predecessor blocks in the CFG.
         """
         # Print dominance frontier
-        for block in self.blocks:
-            logger.info('DF(%d) = %s', block.id, block.dominance_frontier)
+        if debug:
+            print "Dominance frontier:"
+            for block in self.blocks:
+                print 'DF(%d) = %s' % (block.id, block.dominance_frontier)
 
         #
         ### 1) Insert phi nodes in the right places
@@ -500,7 +504,7 @@ class ControlFlow(object):
             block.phi_nodes = block.phis.values()
             for variable, phi in block.phis.iteritems():
                 for parent in block.parents:
-                    incoming_var = parent.symtab.lookup_last(variable.name)
+                    incoming_var = parent.symtab.lookup_most_recent(variable.name)
                     phi.incoming.add(incoming_var)
 
                     # Update def-use chain
@@ -517,7 +521,6 @@ class ControlFlow(object):
                 stat.node.variable = current_var
                 current_var.cf_references.append(stat.node)
 
-        block.symtab._counters = dict(block.symtab.counters)
 
 class StatementDescr(object):
     is_assignment = False
@@ -616,7 +619,11 @@ class PhiNode(nodes.Node):
         return result
 
     def __str__(self):
-        return "phi(%s)" % ", ".join(str(var_in) for var_in in self.incoming)
+        lhs = self.variable.name
+        if self.variable.renamed_name:
+            lhs = self.variable.unmangled_name
+        incoming = ", ".join(str(var_in) for var_in in self.incoming)
+        return "%s = phi(%s)" % (lhs, incoming)
 
 class NameDeletion(NameAssignment):
     def __init__(self, lhs, entry):
@@ -1196,7 +1203,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         else:
             node.cond_block.add_child(node.exit_block)
 
-        return self.exit_block(node)
+        return self.exit_block(node.exit_block, node)
 
     def visit_While(self, node):
         node.cond_block = self.flow.nextblock()

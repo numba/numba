@@ -577,15 +577,17 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         while changed and unresolved:
             iterations += 1
             changed = False
-            for variable in unresolved:
+            for variable in list(unresolved):
                 if variable.type.is_unanalyzable:
                     # Re-analayze statement
                     self.handle_NameAssignment(variable.assignment_node)
                 else:
                     changed |= variable.type.simplify()
+                    if variable.type.is_unresolved:
+                        variable.type = variable.type.resolve()
 
                 if not variable.type.is_unresolved:
-                    unresolved -= variable
+                    unresolved.remove(variable)
 
         logger.info("converged in %d steps" % iterations)
 
@@ -702,14 +704,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if rhs_var is None:
             rhs_var = rhs_node.variable
 
-        if lhs_var.type and lhs_var.type.is_deferred:
-            # TODO: complete this
-            if lhs_var.type.resolved_type:
-                lhs_var.type = lhs_var.type.resolved_type
-            else:
-                lhs_var.type.resolved_type = rhs_var.type
-                lhs_var.type = rhs_var.type
-
         if lhs_var.type is None:
             lhs_var.type = rhs_var.type
         elif lhs_var.type != rhs_var.type:
@@ -748,7 +742,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return base_type
 
-    def visit_For(self, node):
+    def visit_For(self, node, visit_body=True):
         if node.orelse:
             raise error.NumbaError(node.orelse,
                                    'Else in for-loop is not implemented.')
@@ -764,7 +758,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                             node.target.variable.type)
         self.assign(node.target, None, rhs_var=Variable(base_type))
 
-        self.visitlist(node.body)
+        if visit_body:
+            self.visitlist(node.body)
+
         return node
 
     def visit_While(self, node):
