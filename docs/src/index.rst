@@ -29,6 +29,7 @@ GPU support is rapidly improving but still an area where you may encounter
 difficulties.   Please let us know if you have any trouble with our GPU
 support.
 
+See `release notes <releases.html>`_ for a summary of changes in each release.
 
 Current Features
 ----------------
