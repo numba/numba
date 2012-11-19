@@ -12,24 +12,21 @@ import sys
 
 def generate_input(n, dtype):
     A = np.array(np.random.sample(n), dtype=dtype)
-    B = np.array(np.random.sample(n) + 10, dtype=dtype)
-    C = np.array(np.random.sample(n), dtype=dtype)
-    return A, B, C
+    B = np.array(np.random.sample(n), dtype=dtype)
+    return A, B
 
 def check_answer(ans, A, B, C):
-    for d, a, b, c in izip(ans, A, B, C):
-        gold = discriminant(a, b, c)
+    for d, a, b in izip(ans, A, B):
+        gold = sum(a, b)
         assert np.allclose(d, gold), (d, gold)
 
-def discriminant(a, b, c):
-    '''a ufunc kernel to compute the discriminant of quadratic equation
-    '''
-    return math.sqrt(b ** 2 - 4 * a * c)
+def sum(a, b):
+    return a + b
 
 
 def main():
 
-    N = 1e+8 // 2
+    N = 1e+7
     print 'Data size', N
 
     targets = ['cpu', 'stream', 'parallel']
@@ -42,14 +39,14 @@ def main():
 
     for target in targets:
         print '== Target', target
-        vect_discriminant = vectorize([f4(f4, f4, f4), f8(f8, f8, f8)],
-                                    target=target)(discriminant)
+        vect_sum = vectorize([f4(f4, f4), f8(f8, f8)],
+                             target=target)(sum)
 
-        A, B, C = generate_input(N, dtype=np.float32)
+        A, B = generate_input(N, dtype=np.float32)
         D = np.empty(A.shape, dtype=A.dtype)
 
         ts = time()
-        D = vect_discriminant(A, B, C)
+        D = vect_sum(A, B)
         te = time()
 
         total_time = (te - ts)
