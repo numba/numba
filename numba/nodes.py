@@ -286,6 +286,9 @@ class ConstNode(Node):
         self.type = dst_type
         self.variable.type = dst_type
 
+    def __repr__(self):
+        return "const(%s, %s)" % (self.pyval, self.type)
+
 _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)
 NULL = ConstNode(_NULL, void.pointer())
@@ -363,6 +366,14 @@ class NativeCallNode(FunctionCallNode):
             arg = self.args[i]
             self.args[i] = CoercionNode(arg, dst_type,
                                         name='func_%s_arg%d' % (self.name, i))
+
+    def __repr__(self):
+        if self.name:
+            name = self.name
+        else:
+            name = "<unknown(%s)>" % self.signature
+
+        return "%s(%s)" % (name, self.args)
 
 class NativeFunctionCallNode(NativeCallNode):
     """
@@ -548,6 +559,9 @@ class ObjectInjectNode(Node):
         self.variable = Variable(self.type, is_constant=True,
                                  constant_value=object)
 
+    def __repr__(self):
+        return "<inject(%s)>" % self.object
+
 NoneNode = ObjectInjectNode(None, object_)
 
 class ObjectTempNode(Node):
@@ -602,6 +616,9 @@ class CloneableNode(Node):
     def clone(self):
         return CloneNode(self)
 
+    def __repr__(self):
+        return "cloneable(%s)" % self.node
+
 class CloneNode(Node):
     """
     Clone a CloneableNode. This allows the node's sub-expressions to be
@@ -622,6 +639,9 @@ class CloneNode(Node):
 
         self.llvm_value = None
 
+    def __repr__(self):
+        return "clone(%s)" % self.node.node
+
 class ExpressionNode(Node):
     """
     Node that allows an expression to execute a bunch of statements first.
@@ -634,6 +654,9 @@ class ExpressionNode(Node):
         self.stmts = stmts
         self.expr = expr
         self.type = expr.variable.type
+
+    def __repr__(self):
+        return "exprstat(..., %s)" % self.expr
 
 class LLVMValueRefNode(Node):
     """
@@ -650,6 +673,8 @@ class BadValue(LLVMValueRefNode):
     def __init__(self, type):
         super(BadValue, self).__init__(type, None)
 
+    def __repr__(self):
+        return "bad(%s)" % self.type
 
 class TempNode(Node): #, ast.Name):
     """
@@ -695,7 +720,7 @@ class DecrefNode(IncrefNode):
 
 class DataPointerNode(Node):
 
-    _fields = ['node', 'index']
+    _fields = ['node', 'slice']
 
     def __init__(self, node, slice, ctx):
         self.node = node
@@ -752,6 +777,8 @@ class DataPointerNode(Node):
         ptr = builder.bitcast(dptr_plus_offset, data_ptr_ty)
         return ptr
 
+    def __repr__(self):
+        return "%s.data" % self.node
 
 class ArrayAttributeNode(Node):
     is_read_only = True
@@ -774,6 +801,9 @@ class ArrayAttributeNode(Node):
             raise error._UnknownAttribute(attribute_name)
 
         self.type = type
+
+    def __repr__(self):
+        return "%s.%s" % (self.array, self.attr_name)
 
 class ShapeAttributeNode(ArrayAttributeNode):
     # NOTE: better do this at code generation time, and not depend on
@@ -829,6 +859,9 @@ class ExtTypeAttribute(Node):
         self.ctx = ctx
         self.ext_type = ext_type
 
+    def __repr__(self):
+        return "%s.%s" % (self.value, self.attr)
+
 class NewExtObjectNode(Node):
     """
     Instantiate an extension type. Currently unused.
@@ -858,6 +891,7 @@ class StructAttribute(ExtTypeAttribute):
 
         self.type = self.attr_type
         self.variable = Variable(self.type, promotable_type=False)
+
 
 class StructVariable(Node):
     """
@@ -906,6 +940,9 @@ class ExtensionMethod(Node):
         self.type = minitypes.FunctionType(return_type=method_type.return_type,
                                            args=method_type.args,
                                            is_bound_method=True)
+
+    def __repr__(self):
+        return "%s.%s" % (self.value, self.attr)
 
 #class ExtensionMethodCall(Node):
 #    """
@@ -1080,6 +1117,8 @@ class DereferenceNode(Node):
         self.pointer = pointer
         self.type = pointer.type.base_type
 
+    def __repr__(self):
+        return "*%s" % (self.pointer,)
 
 class PointerFromObject(Node):
     """
@@ -1094,6 +1133,8 @@ class PointerFromObject(Node):
         super(PointerFromObject, self).__init__(**kwargs)
         self.node = node
 
+    def __repr__(self):
+        return "((void *) %s)" % (self.node,)
 
 #
 ### Nodes for NumPy calls
