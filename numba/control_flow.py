@@ -1077,7 +1077,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         if not rhs:
             rhs = None
 
-        self.visit(lhs)
+        lhs = self.visit(lhs)
         if isinstance(lhs, ast.Name):
             self.flow.mark_assignment(lhs, rhs, self.symtab[lhs.name],
                                       assignment)
@@ -1086,6 +1086,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             exc_descr = self.flow.exceptions[-1]
             self.flow.block.add_child(exc_descr.entry_point)
             self.flow.nextblock()
+
+        return lhs
 
     def mark_position(self, node):
         """Mark position if DOT output is enabled."""
@@ -1097,8 +1099,9 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         if len(node.targets) == 1 and isinstance(node.targets[0],
                                                  (ast.Tuple, ast.List)):
             node.targets = node.targets[0].elts
-        for target in node.targets:
-            self.mark_assignment(target, node.value, assignment=node)
+        for i, target in enumerate(node.targets):
+            node.targets[i] = self.mark_assignment(target, node.value,
+                                                   assignment=node)
         return node
 
     def visit_AugAssign(self, node):
@@ -1121,7 +1124,10 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         assignment.inplace_op = node.op
         return self.visit(assignment)
 
-    def visit_Name(self, node):
+    def visit_Name(self, old_node):
+        node = nodes.Name(old_node.id, old_node.ctx)
+        ast.copy_location(node, old_node)
+
         # Set some defaults
         node.cf_maybe_null = True
         node.cf_is_null = False
@@ -1249,7 +1255,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         # Target assignment
         node.target_block = self.flow.nextblock()
-        self.mark_assignment(node.target, assignment=node)
+        node.target = self.mark_assignment(node.target, assignment=node)
         self._visit_loop_body(node)
         return nodes.For(**vars(node))
 

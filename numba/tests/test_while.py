@@ -184,7 +184,8 @@ class TestASTWhile(test_support.ASTTestCase):
 
 if __name__ == "__main__":
     #TestASTWhile("test_while_loop_fn_1").debug()
-    compiled_fn = jit(argtypes = [double, double])(while_loop_fn_5)
+    compiled_fn = jit(argtypes = (long_, long_, long_),
+                           restype = long_)(while_loop_fn_4)
     test_support.main()
 
 # ______________________________________________________________________

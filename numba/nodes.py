@@ -143,7 +143,6 @@ class CoercionNode(Node):
             # in __init__ being called
             return
 
-        self.dst_type = dst_type
         self.type = dst_type
         self.name = name
 
@@ -165,6 +164,14 @@ class CoercionNode(Node):
         node.type = object_
         return node
 
+    @property
+    def dst_type(self):
+        """
+        dst_type is always the same as type, and 'type' is kept consistent
+        with Variable.type
+        """
+        return self.type
+
     @classmethod
     def coerce(cls, node_or_nodes, dst_type):
         if isinstance(node_or_nodes, list):
@@ -183,6 +190,9 @@ class CoercionNode(Node):
                 node = CoercionNode(node, complex128)
 
         return node
+
+    def __repr__(self):
+        return "Coerce(%s, %s)" % (self.type, self.node)
 
 
 class CoerceToObject(CoercionNode):
@@ -300,6 +310,19 @@ class While(ast.While):
 class For(ast.For):
     _fields = ['iter', 'cond_block', 'target_block', 'target',
                'if_block', 'body', 'else_block', 'orelse']
+
+class Name(ast.Name):
+
+    def __init__(self, name, ctx, *args, **kwargs):
+        super(Name, self).__init__(*args, **kwargs)
+        self.id = self.name = name
+        self.ctx = ctx
+
+    def __repr__(self):
+        type = getattr(self, 'type', "")
+        if type:
+            type = ', %s' % type
+        return "name(%s%s)" % (self.id, type)
 
 class ForRangeNode(Node):
     _fields = ['index', 'target', 'start', 'stop', 'step', 'body']
