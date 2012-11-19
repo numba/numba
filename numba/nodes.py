@@ -289,6 +289,11 @@ class If(ast.If):
                'else_block', 'orelse',
                'exit_block']
 
+    cond_block = None
+    if_block = None
+    else_block = None
+    exit_block = None
+
 class While(ast.While):
     _fields = If._fields
 

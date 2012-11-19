@@ -591,7 +591,10 @@ def badval(type):
     elif type.is_float:
         value = nodes.ConstNode(float('nan'), type=type)
     elif type.is_int or type.is_complex:
-        value = nodes.ConstNode(0xbadbadbad, type=type)
+        # TODO: adjust for type.itemsize
+        bad = 0xbadbad # This pattern is hard to detect in llvm code
+        bad = 123456789
+        value = nodes.ConstNode(bad, type=type)
     else:
         value = nodes.BadValue(type)
 
@@ -1090,7 +1093,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                            comparators=[badval])
         test.right = badval
 
-        check = ast.If(test=test, body=[node.raise_node], orelse=[])
+        check = nodes.If(test=test, body=[node.raise_node], orelse=[])
         return self.visit(check)
 
     def visit_Name(self, node):

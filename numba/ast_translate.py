@@ -23,7 +23,7 @@ import logging
 logger = logging.getLogger(__name__)
 debug_conversion = False
 
-#logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 #debug_conversion = True
 
 _int32_zero = lc.Constant.int(_int32, 0)
@@ -449,7 +449,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                           self.func_signature.args):
             larg.name = argname
             # Set value on first definition of the variable
-            variable = self.symtab.lookup_renamed(argname, 0)
+            if self.have_cfg:
+                variable = self.symtab.lookup_renamed(argname, 0)
+            else:
+                variable = self.symtab[argname]
+
             variable.lvalue = larg
 
             # TODO: incref objects in structs
@@ -488,6 +492,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
 
     def setup_func(self):
+        self.have_cfg = getattr(self.ast, 'flow', False)
         have_return = getattr(self.ast, 'have_return', None)
         if have_return is not None:
             if not have_return and not self.func_signature.return_type.is_void:
@@ -502,7 +507,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         
         # Add entry block for alloca.
         entry = self.append_basic_block('entry')
-        self.ast.body_block.llvm_basic_block = entry
+        if self.have_cfg:
+            self.ast.body_block.llvm_basic_block = entry
 
         self.builder = lc.Builder.new(entry)
         self.caster = _LLVMCaster(self.builder)
@@ -573,7 +579,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # Done code generation
             del self.builder  # release the builder to make GC happy
 
-            print self.lfunc
             logger.debug("ast translated function: %s" % self.lfunc)
             # Verify code generation
             self.mod.verify()  # only Module level verification checks everything.
@@ -591,6 +596,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         Update all our phi nodes after translation is done and all Variables
         have their llvm values set.
         """
+        if not self.have_cfg:
+            return
+
         for block in self.ast.flow.blocks:
             for phi_node in block.phi_nodes:
                 phi = phi_node.variable.lvalue
@@ -1031,15 +1039,25 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_ControlBlock(self, node, is_condition_block=False):
         "Return a new basic block and handle phis"
-        # bb = self.builder.basic_block
-        node.llvm_basic_block = self.append_basic_block(node.label)
+        if node is None:
+            # Fabricated If statement
+            label = 'fabricated_basic_block'
+        else:
+            label = node.label
+
+        llvm_basic_block = self.append_basic_block(label)
         if is_condition_block:
-            self.builder.branch(node.llvm_basic_block)
+            self.builder.branch(llvm_basic_block)
 
-        self.builder.position_at_end(node.llvm_basic_block)
+        self.builder.position_at_end(llvm_basic_block)
+        if node is None:
+            return llvm_basic_block
 
-        for variable, phi_node in node.phis.iteritems():
-            phi = self.builder.phi(phi_node.variable.type.to_llvm(self.context))
+        # Set basic block and initialize LLVM phis
+        node.llvm_basic_block = llvm_basic_block
+        for phi_node in node.phi_nodes:
+            ltype = phi_node.variable.type.to_llvm(self.context)
+            phi = self.builder.phi(ltype, phi_node.variable.unmangled_name)
             phi_node.variable.lvalue = phi
 
         return node.llvm_basic_block
@@ -1187,12 +1205,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.teardown_loop()
 
     def visit_While(self, node):
-        bb_cond = self.visit(node.cond_block)
+        bb_cond = self.visit_ControlBlock(node.cond_block,
+                                          is_condition_block=True)
         bb_body = self.visit(node.body_block)
         bb_exit = self.visit(node.exit_block)
         self.setup_loop(bb_cond, bb_exit)
-
-        self.builder.branch(bb_cond)
 
         # condition
         self.builder.position_at_end(bb_cond)

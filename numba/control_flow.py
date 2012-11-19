@@ -1212,7 +1212,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.exit_block(node.exit_block, node)
 
     def visit_While(self, node):
-        node.cond_block = self.flow.nextblock()
+        node.cond_block = self.flow.nextblock(label='while_condition')
         node.exit_block = self.flow.exit_block(label='exit_while')
 
         # Condition block

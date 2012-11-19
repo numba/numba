@@ -7,6 +7,7 @@ def func(x):
     i = 0
     #y = 12
     h = 30
+    print i
     while i < 10:
         if x > i:
             print x
