@@ -390,6 +390,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.return_variable = Variable(None)
         self.ast = self.visit(self.ast)
 
+        # Pop original variables from the symtab
+        for var in self.symtab.values():
+            if not var.parent_var:
+                self.symtab.pop(var.name, None)
+
         self.return_type = self.return_variable.type or void
         ret_type = self.func_signature.return_type
 
@@ -454,9 +459,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             self.symtab[var_name].type = arg_type
 
         # Propagate argument types to first rename of the variable in the block
-        for var in self.symtab.itervalues():
+        for var in self.symtab.values():
             if var.parent_var and not var.parent_var.parent_var:
-                var.type = var.parent_var.type or numba_types.uninitialized
+                var.type = var.parent_var.type
+                if not var.type:
+                    var.type = numba_types.UninitializedType(None)
 
         self.func_signature.args = tuple(arg_types)
         self.resolve_variable_types()
@@ -464,7 +471,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if debug:
             for block in self.ast.flow.blocks:
                 for var in block.symtab.values():
-                    print "Variable after analysis: %s" % var
+                    if var.type and var.cf_references:
+#                        if var.type.is_uninitialized:
+#                            assert var.next_rename
+#                            var.type.base_type = var.next_rename.type
+#                            var.type = var.next_rename.type
+
+                        assert not var.type.is_unresolved
+                        print "Variable after analysis: %s" % var
 
     def is_object(self, type):
         return type.is_object or type.is_array
@@ -513,7 +527,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         # Merge point for different definitions
         incoming = [v for v in node.incoming
-                          if v.type is not numba_types.uninitialized]
+                          if not v.type or not v.type.is_uninitialized]
         assert incoming
 
         for v in incoming:
@@ -571,7 +585,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         # TODO: It would be more efficient to construct a condensation graph
         # TODO: by and do a topological sort, and then resolving the cycle
         # TODO: in each condensed node
-        had_unresolved = bool(unresolved)
+        were_unresolved = set(unresolved)
         changed = True
         iterations = 0
         while changed and unresolved:
@@ -583,9 +597,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     self.handle_NameAssignment(variable.assignment_node)
                 else:
                     changed |= variable.type.simplify()
-                    if variable.type.is_unresolved:
-                        variable.type = variable.type.resolve()
 
+                if variable.type.is_unresolved:
+                    variable.type = variable.type.resolve()
                 if not variable.type.is_unresolved:
                     unresolved.remove(variable)
 
@@ -597,10 +611,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                        "Unable to infer type for this statement, insert a "
                        "cast or initialize the variable.")
 
-        if had_unresolved:
+#        if were_unresolved:
             # We had some unresolved types assignment statements, re-analyze
             # to ensure the correct transformations are performed
-            self.analyse_assignments()
+#            self.analyse_assignments()
 
     #
     ### Visit methods
@@ -1418,9 +1432,8 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
     def visit(self, node):
         if hasattr(node, 'variable'):
             node.type = node.variable.type
-            if node.type.is_deferred:
-                assert node.type.resolved_type, node.type
-                node.type = node.type.resolved_type
+            if node.type.is_unresolved:
+                node.type = node.type.resolve()
         return super(TypeSettingVisitor, self).visit(node)
 
     def visit_ExtSlice(self, node):

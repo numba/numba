@@ -381,68 +381,111 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     # __________________________________________________________________________
 
-    def _allocate_arg_local(self, name, argtype, larg):
-        """
-        Allocate a local variable on the stack.
-        """
-        stackspace = self.alloca(argtype)
-        stackspace.name = name
-
-        if (minitypes.pass_by_ref(argtype) and
-                self.func_signature.struct_by_reference):
-            larg = self.builder.load(larg)
-
-        self.builder.store(larg, stackspace)
-        return stackspace
+#    def _allocate_arg_local(self, name, argtype, larg):
+#        """
+#        Allocate a local variable on the stack.
+#        """
+#        stackspace = self.alloca(argtype)
+#        stackspace.name = name
+#
+#        if (minitypes.pass_by_ref(argtype) and
+#                self.func_signature.struct_by_reference):
+#            larg = self.builder.load(larg)
+#
+#        self.builder.store(larg, stackspace)
+#        return stackspace
+#
+#    def _init_args(self):
+#        for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
+#                                          self.func_signature.args):
+#            larg.name = argname
+#            variable = self.symtab[argname]
+#
+#            if not variable.need_arg_copy:
+#                assert not is_obj(argtype)
+#                variable.lvalue = larg
+#                continue
+#
+#            # Store away arguments in locals
+#            stackspace = self._allocate_arg_local(argname, argtype, larg)
+#            variable.lvalue = stackspace
+#
+#            # TODO: incref objects in structs
+#            if not (self.nopython or argtype.is_closure_scope):
+#                if is_obj(variable.type) and self.refcount_args:
+#                    self.incref(self.builder.load(stackspace))
+#
+#    def _allocate_locals(self):
+#        for name, var in self.symtab.items():
+#            if var.deleted:
+#                self.symtab.pop(name)
+#                continue
+#
+#            # FIXME: 'None' should be handled as a special case (probably).
+#            if name not in self.argnames and var.is_local:
+#                # Not argument and not builtin type.
+#                # Allocate storage for all variables.
+#                name = 'var_%s' % var.name
+#                if is_obj(var.type):
+#                    stackspace = self._null_obj_temp(name, type=var.ltype)
+#                else:
+#                    stackspace = self.builder.alloca(var.ltype, name=name)
+#
+#                if var.type.is_struct:
+#                    # TODO: memset struct to 0
+#                    pass
+#                elif var.type.is_carray:
+#                    ltype = var.type.base_type.pointer().to_llvm(self.context)
+#                    pointer = self.builder.alloca(ltype, name=name + "_p")
+#                    p = self.builder.gep(stackspace, [llvm_types.constant_int(0),
+#                                                      llvm_types.constant_int(0)])
+#                    self.builder.store(p, pointer)
+#                    stackspace = pointer
+#
+#                var.lvalue = stackspace
 
     def _init_args(self):
         for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
                                           self.func_signature.args):
             larg.name = argname
-            variable = self.symtab[argname]
-
-            if not variable.need_arg_copy:
-                assert not is_obj(argtype)
-                variable.lvalue = larg
-                continue
-
-            # Store away arguments in locals
-            stackspace = self._allocate_arg_local(argname, argtype, larg)
-            variable.lvalue = stackspace
+            # Set value on first definition of the variable
+            variable = self.symtab.lookup_renamed(argname, 0)
+            variable.lvalue = larg
 
             # TODO: incref objects in structs
             if not (self.nopython or argtype.is_closure_scope):
                 if is_obj(variable.type) and self.refcount_args:
-                    self.incref(self.builder.load(stackspace))
+                    self.incref(larg)
 
     def _allocate_locals(self):
         for name, var in self.symtab.items():
-            if var.deleted:
-                self.symtab.pop(name)
-                continue
-
             # FIXME: 'None' should be handled as a special case (probably).
-            if name not in self.argnames and var.is_local:
-                # Not argument and not builtin type.
-                # Allocate storage for all variables.
-                name = 'var_%s' % var.name
-                if is_obj(var.type):
-                    stackspace = self._null_obj_temp(name, type=var.ltype)
-                else:
-                    stackspace = self.builder.alloca(var.ltype, name=name)
+            if var.type.is_uninitialized and var.cf_references:
+                assert var.uninitialized_value, var
+                var.lvalue = self.visit(var.uninitialized_value)
 
-                if var.type.is_struct:
-                    # TODO: memset struct to 0
-                    pass
-                elif var.type.is_carray:
-                    ltype = var.type.base_type.pointer().to_llvm(self.context)
-                    pointer = self.builder.alloca(ltype, name=name + "_p")
-                    p = self.builder.gep(stackspace, [llvm_types.constant_int(0),
-                                                      llvm_types.constant_int(0)])
-                    self.builder.store(p, pointer)
-                    stackspace = pointer
+#            if name not in self.argnames and var.is_local:
+#                # Not argument and not builtin type.
+#                # Allocate storage for all variables.
+#                name = 'var_%s' % var.name
+#                if is_obj(var.type):
+#                    stackspace = self._null_obj_temp(name, type=var.ltype)
+#                else:
+#                    stackspace = self.builder.alloca(var.ltype, name=name)
+#
+#                if var.type.is_struct:
+#                    # TODO: memset struct to 0
+#                    pass
+#                elif var.type.is_carray:
+#                    ltype = var.type.base_type.pointer().to_llvm(self.context)
+#                    pointer = self.builder.alloca(ltype, name=name + "_p")
+#                    p = self.builder.gep(stackspace, [llvm_types.constant_int(0),
+#                                                      llvm_types.constant_int(0)])
+#                    self.builder.store(p, pointer)
+#                    stackspace = pointer
+#
+#                var.lvalue = stackspace
 
-                var.lvalue = stackspace
 
     def setup_func(self):
         have_return = getattr(self.ast, 'have_return', None)
@@ -459,6 +502,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         
         # Add entry block for alloca.
         entry = self.append_basic_block('entry')
+        self.ast.body_block.llvm_basic_block = entry
+
         self.builder = lc.Builder.new(entry)
         self.caster = _LLVMCaster(self.builder)
         self.object_coercer = ObjectCoercer(self)
@@ -528,6 +573,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # Done code generation
             del self.builder  # release the builder to make GC happy
 
+            print self.lfunc
             logger.debug("ast translated function: %s" % self.lfunc)
             # Verify code generation
             self.mod.verify()  # only Module level verification checks everything.
@@ -545,14 +591,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         Update all our phi nodes after translation is done and all Variables
         have their llvm values set.
         """
-        for block in self.ast.cfg_blocks:
-            for var, phi_node in block.phis.iteritems():
-                phi = phi_node.llvm_value
-                ltype = phi.type.to_llvm(self.context)
-                for parent in block.parents:
-                    lvalue = parent.symtab[var.name].lvalue
-                    assert lvalue is not None
-                    phi.add_incoming(lvalue, parent.llvm_basic_block)
+        for block in self.ast.flow.blocks:
+            for phi_node in block.phi_nodes:
+                phi = phi_node.variable.lvalue
+                ltype = phi_node.type.to_llvm(self.context)
+                for parent_block in block.parents:
+                    parent_var = parent_block.symtab.lookup_most_recent(
+                                                    phi_node.variable.name)
+                    phi.add_incoming(parent_var.lvalue,
+                                     parent_block.llvm_basic_block)
 
     def get_ctypes_func(self, llvm=True):
         ee = self.ee
@@ -794,15 +841,20 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return self.visit(node.node)
 
     def visit_Assign(self, node):
-        target_node = node.targets[0]
-
-        target = self.visit(target_node)
         value = self.visit(node.value)
 
+        target_node = node.targets[0]
         object = is_obj(target_node.type)
-        self.generate_assign(value, target, decref=object, incref=object)
         if object:
             self.incref(value)
+
+        if isinstance(target_node, ast.Name):
+            # self.decref(target)
+            target_node.variable.lvalue = value
+        else:
+            target = self.visit(target_node)
+            self.decref(target)
+            self.generate_assign(value, target)
 
     def generate_assign(self, lvalue, ltarget, decref=False, incref=False):
         '''
@@ -831,8 +883,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         if not node.variable.is_local:
             raise error.NumbaError(node, "global variables:", node.id)
 
-        lvalue = self.symtab[node.id].lvalue
-        return self._handle_ctx(node, lvalue)
+        var = node.variable
+        assert var.lvalue
+        return var.lvalue
+        #lvalue = self.symtab[node.id].lvalue
+        #return self._handle_ctx(node, lvalue)
 
     def _handle_ctx(self, node, lptr, name=''):
         if isinstance(node.ctx, ast.Load):
@@ -976,7 +1031,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_ControlBlock(self, node, is_condition_block=False):
         "Return a new basic block and handle phis"
-        bb = self.builder.basic_block
+        # bb = self.builder.basic_block
         node.llvm_basic_block = self.append_basic_block(node.label)
         if is_condition_block:
             self.builder.branch(node.llvm_basic_block)
@@ -984,8 +1039,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.position_at_end(node.llvm_basic_block)
 
         for variable, phi_node in node.phis.iteritems():
-            phi = self.builder.phi(phi_node.type.to_llvm(self.context))
-            phi_node.variable.llvm_value = phi
+            phi = self.builder.phi(phi_node.variable.type.to_llvm(self.context))
+            phi_node.variable.lvalue = phi
 
         return node.llvm_basic_block
 
@@ -999,9 +1054,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # Visit if clauses and exit block
         bb_true = self.visit_ControlBlock(node.if_block)
-        self.visit(node.body)
+        self.visitlist(node.body)
         bb_false = self.visit_ControlBlock(node.else_block)
-        self.visit(node.orelse)
+        self.visitlist(node.orelse)
         bb_endif = self.visit_ControlBlock(node.exit_block)
 
         # Branch to block from condition
@@ -1132,7 +1187,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.teardown_loop()
 
     def visit_While(self, node):
-        bb_cond = self.visit(node.condition_block)
+        bb_cond = self.visit(node.cond_block)
         bb_body = self.visit(node.body_block)
         bb_exit = self.visit(node.exit_block)
         self.setup_loop(bb_cond, bb_exit)
@@ -1528,6 +1583,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return node.obj_temp_node.llvm_temp
 
     def visit_LLVMValueRefNode(self, node):
+        return node.llvm_value
+
+    def visit_BadValue(self, node):
+        ltype = node.type.to_llvm(self.context)
+        node.llvm_value = llvm.Constant.undef(ltype)
         return node.llvm_value
 
     def visit_CloneNode(self, node):

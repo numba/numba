@@ -28,8 +28,15 @@ class Variable(object):
         self.promotable_type = promotable_type
         self.deleted = False
 
+        self.set_uninitialized = False
+        self.uninitialized_value = None
+
+        self.killing_def = None # The definition that kills us, or None
+        self.killed_def = None  # The definition that we killed
+
         self.parent_var = None
         self.block = None
+        self.is_phi = False
 
         self.is_local = is_local
         self.is_arg = is_arg
@@ -119,6 +126,8 @@ class Variable(object):
             args.append("is_freevar=True")
         if self.is_cellvar:
             args.append("is_cellvar=True")
+        if self.is_phi:
+            args.append("is_phi=True")
         if self.block:
             args.append("block=%d" % self.block.id)
         if self.lvalue:
@@ -134,6 +143,7 @@ class Variable(object):
                 name = self.unmangled_name
             else:
                 name = self.name
+
             return "<Variable(name=%r, type=%s%s)>" % (name, self.type,
                                                        extra_info)
         else:
@@ -172,11 +182,14 @@ class Symtab(object):
             assert self.parent
             return self.parent.lookup_most_recent(name)
 
-        renamed_name = self.renamed_name(name, last_count)
-        return self[renamed_name]
+        return self.lookup_renamed(name, last_count)
 
     def renamed_name(self, name, count):
         return '__numba_renamed_%d_%s' % (count, name)
+
+    def lookup_renamed(self, name, version):
+        renamed_name = self.renamed_name(name, version)
+        return self[renamed_name]
 
     def rename(self, var, block):
         """
@@ -185,7 +198,12 @@ class Symtab(object):
         """
         new_var = Variable.from_variable(var)
         new_var.block = block
+        new_var.cf_references = []
         self.counters[var.name] += 1
+        if self.counters[var.name]:
+            previous_var = self.lookup_most_recent(var.name)
+            previous_var.killing_def = new_var
+            new_var.killed_def = previous_var
         self.local_counters[var.name] = self.counters[var.name]
         new_var.renamed_name = self.renamed_name(var.name,
                                                  self.counters[var.name])
@@ -193,6 +211,7 @@ class Symtab(object):
         new_var.parent_var = var
         self.symtab[new_var.renamed_name] = new_var
 
+        # print "renaming %s to %s" % (var, new_var)
         return new_var
 
     def __repr__(self):

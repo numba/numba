@@ -76,7 +76,17 @@ class IteratorType(NumbaType, minitypes.ObjectType):
         return "iterator<%s>" % (self.base_type,)
 
 class UninitializedType(NumbaType):
+
     is_uninitialized = True
+    subtypes = ['base_type']
+
+    def __init__(self, base_type, **kwds):
+        super(UninitializedType, self).__init__(**kwds)
+        self.base_type = base_type
+
+    def to_llvm(self, context):
+        ltype = self.base_type.to_llvm(context)
+        return ltype
 
     def __repr__(self):
         return "<uninitialized>"
@@ -397,7 +407,7 @@ class PromotionType(UnresolvedType):
                 # type
                 types.add(type.variable.type)
             else:
-                if not type == uninitialized:
+                if not type.is_uninitialized:
                     types.add(type)
 
         types.remove(self)
@@ -467,7 +477,6 @@ class UnanalyzableType(UnresolvedType):
 tuple_ = TupleType()
 phi = PHIType()
 none = NoneType()
-uninitialized = UninitializedType()
 
 intp = minitypes.npy_intp
 

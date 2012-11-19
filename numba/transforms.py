@@ -583,11 +583,24 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
         return new_node
 
+def badval(type):
+    if type.is_object or type.is_array:
+        value = nodes.NULL_obj
+    elif type.is_void:
+        value = None
+    elif type.is_float:
+        value = nodes.ConstNode(float('nan'), type=type)
+    elif type.is_int or type.is_complex:
+        value = nodes.ConstNode(0xbadbadbad, type=type)
+    else:
+        value = nodes.BadValue(type)
+
+    return value
+
 class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                       LateBuiltinResolverMixin, visitors.NoPythonContextMixin):
 
     def visit_FunctionDef(self, node):
-#        self.generic_visit(node)
         node.decorator_list = self.visitlist(node.decorator_list)
         node.body = self.visitlist(node.body)
 
@@ -600,16 +613,9 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             #    raise error.NumbaError(
             #            node, "Function cannot return object in "
             #                  "nopython context")
-            value = nodes.NULL_obj
-        elif ret_type.is_void:
-            value = None
-        elif ret_type.is_float:
-            value = nodes.ConstNode(float('nan'), type=ret_type)
-        elif ret_type.is_int or ret_type.is_complex:
-            value = nodes.ConstNode(0xbadbadbad, type=ret_type)
-        else:
-            value = None
+            pass
 
+        value = badval(ret_type)
         if value is not None:
             value = nodes.CoercionNode(value, dst_type=ret_type).cloneable
 
@@ -618,6 +624,20 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             error_return = nodes.WithPythonNode(body=[error_return])
 
         node.error_return = error_return
+        return node
+
+    def visit_PhiNode(self, node):
+        for incoming_var in node.incoming:
+            if incoming_var.type.is_uninitialized:
+                incoming_type = incoming_var.type.base_type or node.type
+                bad = badval(incoming_type)
+                incoming_var.type.base_type = incoming_type
+                incoming_var.uninitialized_value = self.visit(bad)
+
+        return node
+
+    def visit_While(self, node):
+        self.generic_visit(node)
         return node
 
     def check_context(self, node):

@@ -2,7 +2,7 @@ from numba import *
 
 #@jit(void(int_)) # directives={'control_flow.dot_output': 'out.dot'})
 #@jit(void, [int_], backend='bytecode')
-@jit(void(int_))
+@jit(void(int_), nopython=True)
 def func(x):
     i = 0
     #y = 12

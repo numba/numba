@@ -156,6 +156,7 @@ class NumbaVisitorMixin(CooperativeBase):
     def visit_ControlBlock(self, node):
         assert self.local_scopes[0] is self.symtab
         self.local_scopes.append(node.symtab)
+        self.visitlist(node.phi_nodes)
         self.visitlist(node.body)
         self.local_scopes.pop()
         return node
