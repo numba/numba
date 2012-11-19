@@ -393,11 +393,10 @@ class PromotionType(UnresolvedType):
         types = set([self])
         seen.add(self)
         for type in self.types:
-            if type in seen:
-                continue
-
             if type.is_unresolved:
                 type = type.resolve()
+            if type in seen:
+                continue
 
             if type.is_promotion:
                 type.simplify(seen)

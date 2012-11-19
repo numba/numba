@@ -625,7 +625,8 @@ class PhiNode(nodes.Node):
         lhs = self.variable.name
         if self.variable.renamed_name:
             lhs = self.variable.unmangled_name
-        incoming = ", ".join(str(var_in) for var_in in self.incoming)
+        incoming = ", ".join("var(%s, %s)" % (var_in.unmangled_name, var_in.type)
+                                 for var_in in self.incoming)
         return "%s = phi(%s)" % (lhs, incoming)
 
 class NameDeletion(NameAssignment):

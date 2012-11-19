@@ -597,7 +597,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 if variable.type.is_unanalyzable:
                     # Re-analayze statement
                     self.handle_NameAssignment(variable.assignment_node)
-                else:
+                elif variable.type.is_unresolved:
                     changed |= variable.type.simplify()
 
                 if variable.type.is_unresolved:
