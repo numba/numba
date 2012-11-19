@@ -9,6 +9,7 @@ Adapted from Cython/Compiler/FlowControl.py
 import os
 import ast
 import sys
+import copy
 import inspect
 import logging
 import itertools
@@ -1100,9 +1101,24 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         return node
 
     def visit_AugAssign(self, node):
-        node.value = self.visit(node.value)
-        self.mark_assignment(node.target, node.value, assignment=node)
-        return node
+        """
+        Inplace assignment.
+
+        Resolve a += b to a = a + b. Set 'inplace_op' attribute of the
+        Assign node so later stages may recognize inplace assignment.
+
+        Do this now, so that we can correctly mark the RHS reference.
+        """
+        target = node.target
+
+        rhs_target = copy.deepcopy(target)
+        rhs_target.ctx = ast.Load()
+        ast.fix_missing_locations(rhs_target)
+
+        bin_op = ast.BinOp(rhs_target, node.op, node.value)
+        assignment = ast.Assign([target], bin_op)
+        assignment.inplace_op = node.op
+        return self.visit(assignment)
 
     def visit_Name(self, node):
         # Set some defaults

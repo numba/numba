@@ -513,16 +513,16 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if isinstance(assignment_node, nodes.For):
             # Analyse target variable assignment
-            self.visit_For(assignment_node, visit_body=False)
+            return self.visit_For(assignment_node, visit_body=False)
             #print "handled", assignment_node.target.variable
         else:
-            self.visit(assignment_node)
+            return self.visit(assignment_node)
             #print "handled", assignment_node.targets[0].variable
 
     def handle_phi(self, node):
         if not node.variable.cf_references:
             # Unused phi
-            node.block.symtab.pop(node.variable.name)
+            node.block.symtab.pop(node.variable.renamed_name)
             return None
 
         # Merge point for different definitions
@@ -561,7 +561,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     #visitor.visit(stat.rhs)
                     #parents = [name_node.variable
                     #    for name_node in visitor.referenced.itervalues()]
-                    self.handle_NameAssignment(stat.assignment_node)
+                    assmnt = self.handle_NameAssignment(stat.assignment_node)
+                    # TODO: inject back in AST...
+                    stat.assignment_node = assmnt
 
     def resolve_variable_types(self):
         """
@@ -629,24 +631,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_PhiNode(self, node):
         # Already handled
         return node
-
-    def visit_AugAssign(self, node):
-        """
-        Inplace assignment.
-
-        Resolve a += b to a = a + b. Set 'inplace_op' attribute of the
-        Assign node so later stages may recognize inplace assignment.
-        """
-        target = node.target
-
-        rhs_target = copy.deepcopy(target)
-        rhs_target.ctx = ast.Load()
-        ast.fix_missing_locations(rhs_target)
-
-        bin_op = ast.BinOp(rhs_target, node.op, node.value)
-        assignment = ast.Assign([target], bin_op)
-        assignment.inplace_op = node.op
-        return self.visit(assignment)
 
     def _handle_unpacking(self, node):
         """

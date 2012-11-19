@@ -114,6 +114,9 @@ class Variable(object):
         name = '%s_%s' % (var_name, counter)
         return name
 
+    def __deepcopy__(self, memo):
+        return self
+
     def __repr__(self):
         args = []
         if self.is_local:

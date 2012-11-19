@@ -28,11 +28,11 @@ class Pipeline(object):
 
     order = [
         'cfg',
-        #'dump_cfg',
+        'dump_cfg',
         'const_folding',
         'type_infer',
         'type_set',
-        'dump_cfg',
+        #'dump_cfg',
         'closure_type_inference',
         'transform_for',
         'specialize',
