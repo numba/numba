@@ -1,7 +1,7 @@
 import sys
 import logging
 
-__version__ = '0.5'
+__version__ = '0.3.2'
 
 # NOTE: Be sure to keep the logging level commented out before commiting.  See:
 #   https://github.com/numba/numba/issues/31
