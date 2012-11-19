@@ -637,6 +637,15 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                 incoming_var.type.base_type = incoming_type
                 incoming_var.uninitialized_value = self.visit(bad)
 
+            if not incoming_var.type == node.type:
+                name_node = nodes.Name(id=incoming_var.renamed_name,
+                                       ctx=ast.Load())
+                name_node.variable = incoming_var
+                name_node.type = incoming_var.type
+                promotion = name_node.coerce(node.type)
+                incoming_var.block.promotions[
+                        incoming_var.renamed_name, node.type] = promotion
+
         return node
 
     def visit_While(self, node):

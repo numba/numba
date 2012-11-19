@@ -97,6 +97,10 @@ class ControlBlock(nodes.Node):
         # assigned only once
         self.phis = {}
 
+        # Promotions at the end of the block to have a consistent promoted
+        # Φ type at one of our children.
+        self.promotions = {} # (renamed_var_name, dst_type) -> promotion_node
+
     def empty(self):
         return (not self.stats and not self.positions and not self.phis)
 

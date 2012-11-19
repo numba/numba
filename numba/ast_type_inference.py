@@ -1422,6 +1422,15 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
                 node.type = node.type.resolve()
         return super(TypeSettingVisitor, self).visit(node)
 
+    def visit_PhiNode(self, node):
+        for incoming_var in node.incoming:
+            if incoming_var.type.is_unresolved:
+                incoming_var.type = incoming_var.type.resolve()
+        return node
+
+    def visit_Name(self, node):
+        return node
+
     def visit_ExtSlice(self, node):
         self.generic_visit(node)
         types = [n.type for n in node.dims]
@@ -1436,4 +1445,3 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
         "Resolve deferred coercions"
         self.generic_visit(node)
         return nodes.CoercionNode(node.node, node.variable.type)
-

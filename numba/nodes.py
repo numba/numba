@@ -296,7 +296,7 @@ NULL = ConstNode(_NULL, void.pointer())
 
 basic_block_fields = ['condition_block', 'if_block', 'else_block', 'exit_block']
 
-class If(ast.If):
+class If(ast.If, Node):
     _fields = ['cond_block', 'test',
                'if_block', 'body',
                'else_block', 'orelse',
@@ -307,25 +307,28 @@ class If(ast.If):
     else_block = None
     exit_block = None
 
-class While(ast.While):
+class While(ast.While, Node):
     _fields = If._fields
 
-class For(ast.For):
+class For(ast.For, Node):
     _fields = ['iter', 'cond_block', 'target_block', 'target',
                'if_block', 'body', 'else_block', 'orelse']
 
-class Name(ast.Name):
+class Name(ast.Name, Node):
 
-    def __init__(self, name, ctx, *args, **kwargs):
+    def __init__(self, id, ctx, *args, **kwargs):
         super(Name, self).__init__(*args, **kwargs)
-        self.id = self.name = name
+        self.id = self.name = id
         self.ctx = ctx
 
     def __repr__(self):
         type = getattr(self, 'type', "")
         if type:
             type = ', %s' % type
-        return "name(%s%s)" % (self.id, type)
+        name = self.name
+        if hasattr(self, 'variable') and self.variable.renamed_name:
+            name = self.variable.unmangled_name
+        return "name(%s%s)" % (name, type)
 
 class ForRangeNode(Node):
     _fields = ['index', 'target', 'start', 'stop', 'step', 'body']

@@ -288,18 +288,15 @@ class RefcountingMixin(object):
         assert not self.nopython
         return self.decref(value, func='Py_IncRef')
 
+    # TODO: generate efficient refcounting code, distinguish between dec/xdec
+    xdecref = decref
+    xincref = incref
+
     def xdecref_temp(self, temp, decref=None):
         "Py_XDECREF a temporary"
         assert not self.nopython
         decref = decref or self.decref
-
-        def cleanup(b, bb_true, bb_endif):
-            decref(b.load(temp))
-            b.branch(bb_endif)
-
-        self.object_coercer.check_err(self.builder.load(temp),
-                                      callback=cleanup,
-                                      cmp=llvm.core.ICMP_NE)
+        decref(self.builder.load(temp))
 
     def xincref_temp(self, temp):
         "Py_XINCREF a temporary"
@@ -805,7 +802,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 if (var.is_local and is_obj(var.type) and not
                         var.type.is_closure_scope):
                     if self.refcount_args or not name in self.argnames:
-                        self.xdecref_temp(var.lvalue)
+                        self.xdecref(var.lvalue)
 
         if self.is_void_return:
             self.builder.ret_void()
@@ -1730,7 +1727,7 @@ class ObjectCoercer(object):
         Check for errors. If the result is NULL, and error should have been set
         Jumps to translator.error_label if an exception occurred.
         """
-        assert llvm_result.type.kind == llvm.core.TYPE_POINTER
+        assert llvm_result.type.kind == llvm.core.TYPE_POINTER, llvm_result.type
         int_result = self.translator.builder.ptrtoint(llvm_result,
                                                        llvm_types._intp)
         NULL = llvm.core.Constant.int(int_result.type, 0)
