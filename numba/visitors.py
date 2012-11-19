@@ -153,13 +153,13 @@ class NumbaVisitorMixin(CooperativeBase):
     def current_scope(self):
         return self.local_scopes[-1]
 
-    def visit_ControlBlock(self, node):
-        assert self.local_scopes[0] is self.symtab
-        self.local_scopes.append(node.symtab)
-        self.visitlist(node.phi_nodes)
-        self.visitlist(node.body)
-        self.local_scopes.pop()
-        return node
+#    def visit_ControlBlock(self, node):
+#        assert self.local_scopes[0] is self.symtab
+#        self.local_scopes.append(node.symtab)
+#        self.visitlist(node.phi_nodes)
+#        self.visitlist(node.body)
+#        self.local_scopes.pop()
+#        return node
 
     @property
     def type(self):

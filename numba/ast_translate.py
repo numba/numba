@@ -1071,22 +1071,33 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             test = self._generate_test(test)
 
         # Visit if clauses and exit block
+        bb_endif = self.visit_ControlBlock(node.exit_block)
         bb_true = self.visit_ControlBlock(node.if_block)
         self.visitlist(node.body)
-        bb_false = self.visit_ControlBlock(node.else_block)
-        self.visitlist(node.orelse)
-        bb_endif = self.visit_ControlBlock(node.exit_block)
+        true_endblock = self.builder.basic_block
+        if node.orelse:
+            bb_false = self.visit_ControlBlock(node.else_block)
+            self.visitlist(node.orelse)
+            false_endblock = self.builder.basic_block
+        else:
+            bb_false = bb_endif
+            false_endblock = None
 
         # Branch to block from condition
         self.builder.position_at_end(cond_bb)
         self.builder.cbranch(test, bb_true, bb_false)
 
         # Terminate unterminated blocks
-        self.terminate_block(bb_true, bb_endif)
-        self.terminate_block(bb_false, bb_endif)
+        self.terminate_block(true_endblock, bb_endif)
+        if false_endblock:
+            self.terminate_block(false_endblock, bb_endif)
 
-        # endif
+        # Terminate any exit blocks and continue at endif
+        self.terminate_block(self.builder.basic_block, bb_endif)
         self.builder.position_at_end(bb_endif)
+
+    def visit_and_terminate(self, node, end_block):
+        pass
 
     def append_basic_block(self, name='unamed'):
         idx = len(self.blocks)

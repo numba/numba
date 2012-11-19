@@ -1028,7 +1028,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             self.flow.block.add_child(self.flow.exit_point)
 
         # Cleanup graph
-        self.flow.normalize()
+        # self.flow.normalize()
         check_definitions(self.flow, self.current_directives)
 
         self.flow.compute_dominators()
