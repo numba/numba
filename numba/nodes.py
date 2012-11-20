@@ -195,6 +195,17 @@ class CoercionNode(Node):
     def __repr__(self):
         return "Coerce(%s, %s)" % (self.type, self.node)
 
+class PromotionNode(Node):
+    """
+    Coerces a variable of some type to another type for a phi node in a
+    successor block.
+    """
+
+    _fields = ['node']
+
+    def __init__(self, **kwargs):
+        super(PromotionNode, self).__init__(**kwargs)
+        self.variable = self.node.variable
 
 class CoerceToObject(CoercionNode):
     "Coerce native values to objects"
@@ -313,10 +324,33 @@ class FlowNode(Node):
                 setattr(self, field_name, control_flow.ControlBlock(-1))
 
 class If(ast.If, FlowNode):
-    _fields = ['cond_block', 'test',
-               'if_block', 'body',
-               'else_block', 'orelse',
-               'exit_block']
+
+    _fields = [
+#        'cond_block',
+        'test',
+#        'if_block',
+        'body',
+#        'else_block',
+        'orelse',
+#        'exit_block',
+    ]
+
+def build_if(*args, **kwargs):
+    node = If(*args, **kwargs)
+    bodies = ['test', 'body', 'orelse']
+    for bb_name, body_name in zip(basic_block_fields, bodies):
+        bb = getattr(node, bb_name)
+        if not bb.body:
+            body = getattr(node, body_name)
+            if isinstance(body, list):
+                bb.body.extend(body)
+            else:
+                bb.body.append(body)
+
+        setattr(node, body_name, bb)
+
+    return node
+    # return ast.Suite([node, node.exit_block])
 
 class While(ast.While, FlowNode):
     _fields = If._fields

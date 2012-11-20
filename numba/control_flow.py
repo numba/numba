@@ -56,7 +56,7 @@ class ControlBlock(nodes.Node):
         bound = set([Entry(a), Entry(c)])
     """
 
-    _fields = ['phi_nodes']
+    _fields = ['phi_nodes', 'body']
 
     def __init__(self, id, label='empty', have_code=True,
                  is_expr=False, is_exit=False, pos=None):
@@ -111,6 +111,7 @@ class ControlBlock(nodes.Node):
         self.entry_block = None
         self.phi_block = None
         self.exit_block = None
+        self.promotions = set()
 
     def empty(self):
         return (not self.stats and not self.positions and not self.phis)
@@ -130,6 +131,22 @@ class ControlBlock(nodes.Node):
 
     def __repr__(self):
         return 'Block(%d)' % self.id
+
+    def __getattr__(self, attr):
+        if attr in ('variable', 'type'):
+            return getattr(self.body[0], attr)
+        raise AttributeError
+
+    def __getattr__(self, attr):
+        if attr in ('variable', 'type'):
+            return getattr(self.body[0], attr)
+        raise AttributeError
+
+    def __setattr__(self, attr, value):
+        if attr in ('variable', 'type'):
+            setattr(self.body[0], attr, value)
+        else:
+            super(ControlBlock, self).__setattr__(attr, value)
 
 
 class ExitBlock(ControlBlock):
@@ -1221,10 +1238,10 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             cond_block.add_child(exit_block)
             else_block = None
 
-        node = nodes.If(cond_block=cond_block, test=node.test,
-                        if_block=if_block, body=node.body,
-                        else_block=else_block, orelse=node.orelse,
-                        exit_block=exit_block)
+        node = nodes.build_if(cond_block=cond_block, test=node.test,
+                              if_block=if_block, body=node.body,
+                              else_block=else_block, orelse=node.orelse,
+                              exit_block=exit_block)
         return self.exit_block(exit_block, node)
 
     def _visit_loop_body(self, node):

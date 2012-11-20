@@ -637,23 +637,33 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                 incoming_var.type.base_type = incoming_type
                 incoming_var.uninitialized_value = self.visit(bad)
 
-            if not incoming_var.type == node.type:
+            if (not incoming_var.type == node.type and
+                (incoming_var, node.type) not in node.block.promotions):
                 # Create promotions for variables with phi nodes in successor
                 # blocks.
+
+                # Make sure we only coerce once for each destination type and
+                # each variable
+                incoming_var.block.promotions.add((incoming_var, node.type))
+
                 name_node = nodes.Name(id=incoming_var.renamed_name,
                                        ctx=ast.Load())
                 name_node.variable = incoming_var
                 name_node.type = incoming_var.type
-                promotion = self.visit(name_node.coerce(node.type))
-                incoming_var.block.promotions[incoming_var, node.type] = promotion
+                coercion = self.visit(name_node.coerce(node.type))
+                promotion = nodes.PromotionNode(node=coercion)
 
-                # Replace variable with promoted variable
-                promotion_var = incoming_var.block.symtab.rename(
-                                 incoming_var, incoming_var.block)
-                promotion.variable = promotion_var
-                #node.incoming.remove(incoming_var)
-                #node.incoming.add(promotion.variable)
-                #promotion.variable.block = incoming_var.block
+                # Replace variable with promoted variable, so that successor
+                # blocks will use this definition as the outgoing definition
+                # to successor phis (which kill it)
+                #promotion_var = incoming_var.block.symtab.rename(
+                #                 incoming_var, incoming_var.block)
+                #promotion.variable = promotion_var
+                node.incoming.remove(incoming_var)
+                node.incoming.add(promotion.variable)
+
+                promotion.variable.block = incoming_var.block
+                incoming_var.block.body.append(promotion)
 
         return node
 
@@ -1111,7 +1121,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                            comparators=[badval])
         test.right = badval
 
-        check = nodes.If(test=test, body=[node.raise_node], orelse=[])
+        check = nodes.build_if(test=test, body=[node.raise_node], orelse=[])
         return self.visit(check)
 
     def visit_Name(self, node):
