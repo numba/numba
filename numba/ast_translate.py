@@ -491,6 +491,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def setup_func(self):
         self.have_cfg = getattr(self.ast, 'flow', False)
         have_return = getattr(self.ast, 'have_return', None)
+        if self.have_cfg:
+            self.flow_block = self.ast.flow.blocks[1]
+        else:
+            self.flow_block = None
+
         if have_return is not None:
             if not have_return and not self.func_signature.return_type.is_void:
                 self.error(self.ast, "Function with non-void return does "
@@ -505,7 +510,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # Add entry block for alloca.
         entry = self.append_basic_block('entry')
         if self.have_cfg:
-            self.ast.body_block.llvm_basic_block = entry
+            self.ast.body_block.entry_block = entry
 
         self.builder = lc.Builder.new(entry)
         self.caster = _LLVMCaster(self.builder)
@@ -600,11 +605,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             for phi_node in block.phi_nodes:
                 phi = phi_node.variable.lvalue
                 ltype = phi_node.type.to_llvm(self.context)
-                for parent_block in block.parents:
-                    parent_var = parent_block.symtab.lookup_most_recent(
-                                                    phi_node.variable.name)
-                    phi.add_incoming(parent_var.lvalue,
-                                     parent_block.llvm_basic_block)
+                #for parent_block in block.parents:
+                    #parent_var = parent_block.symtab.lookup_most_recent(
+                    #                                phi_node.variable.name)
+                for incoming_var in phi_node.incoming:
+                    assert incoming_var.lvalue, incoming_var
+                    phi.add_incoming(incoming_var.lvalue,
+                                     incoming_var.block.exit_block)
 
     def get_ctypes_func(self, llvm=True):
         ee = self.ee
@@ -1034,135 +1041,134 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 
-    def visit_ControlBlock(self, node, is_condition_block=False):
-        "Return a new basic block and handle phis"
+    def _handle_promotions(self, node):
+        "Handle promotions at the end of a basic block"
+        if node and node.promotions:
+            for (var, type), promotion_node in node.promotions.iteritems():
+                lvalue = self.visit(promotion_node)
+                promotion_node.variable.lvalue = lvalue
+
+            node.promotions = {}
+
+        node.exit_block = self.builder.basic_block
+
+    def _init_phis(self, node):
+        "Set basic block and initialize LLVM phis"
+        for phi_node in node.phi_nodes:
+            ltype = phi_node.variable.type.to_llvm(self.context)
+            phi = self.builder.phi(ltype, phi_node.variable.unmangled_name)
+            phi_node.variable.lvalue = phi
+
+    def _handle_bb_body(self, body, block):
+        if body is not None:
+            if isinstance(body, list):
+                result = self.visitlist(body)
+            else:
+                result = self.visit(body)
+        else:
+            self.flow_block = block
+            result = None
+
+        block.exit_block = self.builder.basic_block
+        return result
+
+    def visit_ControlBlock(self, node, body=None, is_condition_block=False):
+        """
+        Return a new basic block and handle phis and promotions. Promotions
+        are needed at merge (phi) points to have a consistent type.
+
+        If the block (node) is given, but body is None, promotions will be
+        handled by the successors of the block if they contain phis.
+        """
+        if self.flow_block:
+            # handle pending promotions
+            self._handle_promotions(self.flow_block)
+            self.flow_block = None
+
+        #
+        ### Create entry basic block
+        #
         if node is None:
             # Fabricated If statement
             label = 'fabricated_basic_block'
         else:
             label = node.label
 
-        llvm_basic_block = self.append_basic_block(label)
+        node.entry_block = self.append_basic_block(label)
         if is_condition_block:
-            self.builder.branch(llvm_basic_block)
+            self.builder.branch(node.entry_block)
 
-        self.builder.position_at_end(llvm_basic_block)
-        if node is None:
-            return llvm_basic_block
+        self.builder.position_at_end(node.entry_block)
+        self._init_phis(node)
+        lbody = self._handle_bb_body(body, node)
+        if body:
+            self._handle_promotions(node)
 
-        # Set basic block and initialize LLVM phis
-        node.llvm_basic_block = llvm_basic_block
-        for phi_node in node.phi_nodes:
-            ltype = phi_node.variable.type.to_llvm(self.context)
-            phi = self.builder.phi(ltype, phi_node.variable.unmangled_name)
-            phi_node.variable.lvalue = phi
+        return lbody
 
-        return node.llvm_basic_block
-
-    def visit_If(self, node):
+    def visit_If(self, node, is_while=False):
         # Visit condition
-        cond_bb = self.visit_ControlBlock(node.cond_block,
-                                          is_condition_block=True)
-        test = self.visit(node.test)
+        test = self.visit_ControlBlock(node.cond_block, node.test,
+                                       is_condition_block=True)
+        bb_cond = node.cond_block.entry_block
+        # test = self.visit(node.test)
+        self.visit_ControlBlock(node.exit_block)
+        bb_endif = node.exit_block.entry_block
+        if is_while:
+            self.setup_loop(bb_cond, bb_endif)
+
         if test.type != _int1:
             test = self._generate_test(test)
 
-        cond_bb = self.builder.basic_block
-
-        # Visit if clauses and exit block
-        bb_endif = self.visit_ControlBlock(node.exit_block)
-        bb_true = self.visit_ControlBlock(node.if_block)
-        self.visitlist(node.body)
-        self.term_block(bb_endif)
+        # Visit if clauses
+        self.visit_ControlBlock(node.if_block, node.body)
+        bb_true = node.if_block.entry_block
+        if is_while:
+            self.builder.branch(bb_cond)
+        else:
+            self.term_block(bb_endif)
 
         if node.orelse:
-            bb_false = self.visit_ControlBlock(node.else_block)
-            self.visitlist(node.orelse)
+            self.visit_ControlBlock(node.else_block, node.orelse)
+            bb_false = node.else_block.entry_block
             self.term_block(bb_endif)
         else:
             bb_false = bb_endif
 
         # Branch to block from condition
-        self.builder.position_at_end(cond_bb)
+        self.builder.position_at_end(node.cond_block.exit_block)
         self.builder.cbranch(test, bb_true, bb_false)
         self.builder.position_at_end(bb_endif)
 
-    def term_block(self, end_block):
-        if not self.is_block_terminated():
-            self.terminate_block(self.builder.basic_block, end_block)
+        if is_while:
+            self.teardown_loop()
 
-    def append_basic_block(self, name='unamed'):
-        idx = len(self.blocks)
-        #bb = self.lfunc.append_basic_block('%s_%d'%(name, idx))
-        bb = self.lfunc.append_basic_block(name)
-        self.blocks[idx] = bb
-        return bb
+    def visit_While(self, node):
+        self.visit_If(node, is_while=True)
 
-    def visit_Return(self, node):
-        if node.value is not None:
-            value_type = node.value.type
-            rettype = self.func_signature.return_type
-
-            retval = self.visit(node.value)
-            if is_obj(rettype) or rettype.is_pointer:
-                retval = self.builder.bitcast(retval,
-                                              self.return_value.type.pointee)
-
-            if not retval.type == self.return_value.type.pointee:
-                dump(node)
-                logger.debug('%s != %s (in node %s)' % (
-                        self.return_value.type.pointee, retval.type,
-                        utils.pformat_ast(node)))
-                raise error.NumbaError(
-                    node, 'Expected %s type in return, got %s!' %
-                    (self.return_value.type.pointee, retval.type))
-
-            self.builder.store(retval, self.return_value)
-
-            ret_type = self.func_signature.return_type
-            if is_obj(rettype):
-                self.xincref_temp(self.return_value)
-
-        if not self.is_block_terminated():
-            self.builder.branch(self.cleanup_label)
-
-        # if node.value is not None:
-        #     self.builder.ret(self.visit(node.value))
-        # else:
-        #     self.builder.ret_void()
-
-    @property
-    def cur_bb(self):
-        return self.builder.basic_block
-
-    def is_block_terminated(self, basic_block=None):
-        '''
-        Check if the current basicblock is properly terminated.
-        That means the basicblock is ended with a branch or return
-        '''
-        basic_block = basic_block or self.cur_bb
-        instructions = basic_block.instructions
-        return instructions and instructions[-1].is_terminator
-
-    def terminate_block(self, block, end_block):
-        if not self.is_block_terminated(block):
-            bb = self.cur_bb
-            self.builder.position_at_end(block)
-            self.builder.branch(end_block)
-            self.builder.position_at_end(bb)
-
-    def setup_loop(self, bb_cond, bb_exit):
-        self.loop_beginnings.append(bb_cond)
-        self.loop_exits.append(bb_exit)
-        self.in_loop += 1
-
-    def teardown_loop(self):
-        self.loop_beginnings.pop()
-        self.loop_exits.pop()
-        self.in_loop -= 1
-
-    def visit_For(self, node):
-        raise error.NumbaError(node, "This node should have been replaced")
+#        bb_cond = self.visit_ControlBlock(node.cond_block,
+#                                          node.test,
+#                                          is_condition_block=True)
+#        bb_body = self.visit(node.body_block)
+#        bb_exit = self.visit(node.exit_block)
+#        self.setup_loop(bb_cond, bb_exit)
+#
+#        # condition
+#        self.builder.position_at_end(bb_cond)
+#        cond = self.visit(node.test)
+#        if cond.type != _int1:
+#            cond = self._generate_test(cond)
+#        self.builder.cbranch(cond, bb_body, bb_exit)
+#
+#        # body
+#        self.builder.position_at_end(bb_body)
+#        self.visitlist(node.body)
+#        self.term_block(node.body_block, bb_exit)
+#
+#        # loop or exit
+#        self.builder.branch(bb_cond)
+#        self.builder.position_at_end(bb_exit)
+#        self.teardown_loop()
 
     def visit_ForRangeNode(self, node):
         """
@@ -1207,29 +1213,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.position_at_end(bb_exit)
         self.teardown_loop()
 
-    def visit_While(self, node):
-        bb_cond = self.visit_ControlBlock(node.cond_block,
-                                          is_condition_block=True)
-        bb_body = self.visit(node.body_block)
-        bb_exit = self.visit(node.exit_block)
-        self.setup_loop(bb_cond, bb_exit)
-
-        # condition
-        self.builder.position_at_end(bb_cond)
-        cond = self.visit(node.test)
-        if cond.type != _int1:
-            cond = self._generate_test(cond)
-        self.builder.cbranch(cond, bb_body, bb_exit)
-
-        # body
-        self.builder.position_at_end(bb_body)
-        self.visitlist(node.body)
-
-        # loop or exit
-        self.builder.branch(bb_cond)
-        self.builder.position_at_end(bb_exit)
-        self.teardown_loop()
-
     def visit_Continue(self, node):
         assert self.loop_beginnings # Python syntax should ensure this
         self.builder.branch(self.loop_beginnings[-1])
@@ -1237,6 +1220,83 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_Break(self, node):
         assert self.loop_exits # Python syntax should ensure this
         self.builder.branch(self.loop_exits[-1])
+
+    def term_block(self, end_block):
+        if not self.is_block_terminated():
+            self.terminate_block(self.builder.basic_block, end_block)
+
+    def append_basic_block(self, name='unamed'):
+        idx = len(self.blocks)
+        #bb = self.lfunc.append_basic_block('%s_%d'%(name, idx))
+        bb = self.lfunc.append_basic_block(name)
+        self.blocks[idx] = bb
+        return bb
+
+    @property
+    def cur_bb(self):
+        return self.builder.basic_block
+
+    def is_block_terminated(self, basic_block=None):
+        '''
+        Check if the current basicblock is properly terminated.
+        That means the basicblock is ended with a branch or return
+        '''
+        basic_block = basic_block or self.cur_bb
+        instructions = basic_block.instructions
+        return instructions and instructions[-1].is_terminator
+
+    def terminate_block(self, block, end_block):
+        if not self.is_block_terminated(block):
+            bb = self.cur_bb
+            self.builder.position_at_end(block)
+            self.builder.branch(end_block)
+            self.builder.position_at_end(bb)
+
+    def setup_loop(self, bb_cond, bb_exit):
+        self.loop_beginnings.append(bb_cond)
+        self.loop_exits.append(bb_exit)
+        self.in_loop += 1
+
+    def teardown_loop(self):
+        self.loop_beginnings.pop()
+        self.loop_exits.pop()
+        self.in_loop -= 1
+
+    def visit_For(self, node):
+        raise error.NumbaError(node, "This node should have been replaced")
+
+    def visit_Return(self, node):
+        if node.value is not None:
+            value_type = node.value.type
+            rettype = self.func_signature.return_type
+
+            retval = self.visit(node.value)
+            if is_obj(rettype) or rettype.is_pointer:
+                retval = self.builder.bitcast(retval,
+                                              self.return_value.type.pointee)
+
+            if not retval.type == self.return_value.type.pointee:
+                dump(node)
+                logger.debug('%s != %s (in node %s)' % (
+                        self.return_value.type.pointee, retval.type,
+                        utils.pformat_ast(node)))
+                raise error.NumbaError(
+                    node, 'Expected %s type in return, got %s!' %
+                    (self.return_value.type.pointee, retval.type))
+
+            self.builder.store(retval, self.return_value)
+
+            ret_type = self.func_signature.return_type
+            if is_obj(rettype):
+                self.xincref_temp(self.return_value)
+
+        if not self.is_block_terminated():
+            self.builder.branch(self.cleanup_label)
+
+        # if node.value is not None:
+        #     self.builder.ret(self.visit(node.value))
+        # else:
+        #     self.builder.ret_void()
 
     def visit_Suite(self, node):
         self.visitlist(node.body)

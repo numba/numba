@@ -309,10 +309,18 @@ class If(ast.If, Node):
 
 class While(ast.While, Node):
     _fields = If._fields
+    cond_block = None
+    if_block = None
+    else_block = None
+    exit_block = None
 
 class For(ast.For, Node):
     _fields = ['iter', 'cond_block', 'target_block', 'target',
                'if_block', 'body', 'else_block', 'orelse']
+    cond_block = None
+    if_block = None
+    else_block = None
+    exit_block = None
 
 class Name(ast.Name, Node):
 

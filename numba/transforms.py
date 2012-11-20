@@ -630,7 +630,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         return node
 
     def visit_PhiNode(self, node):
-        for incoming_var in node.incoming:
+        for i, incoming_var in enumerate(node.incoming):
             if incoming_var.type.is_uninitialized:
                 incoming_type = incoming_var.type.base_type or node.type
                 bad = badval(incoming_type)
@@ -638,13 +638,19 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                 incoming_var.uninitialized_value = self.visit(bad)
 
             if not incoming_var.type == node.type:
+                # Create promotions for variables with phi nodes in successor
+                # blocks.
                 name_node = nodes.Name(id=incoming_var.renamed_name,
                                        ctx=ast.Load())
                 name_node.variable = incoming_var
                 name_node.type = incoming_var.type
-                promotion = name_node.coerce(node.type)
-                incoming_var.block.promotions[
-                        incoming_var.renamed_name, node.type] = promotion
+                promotion = self.visit(name_node.coerce(node.type))
+                incoming_var.block.promotions[incoming_var, node.type] = promotion
+
+                # Replace variable with promoted variable
+                node.incoming.remove(incoming_var)
+                node.incoming.add(promotion.variable)
+                promotion.variable.block = incoming_var.block
 
         return node
 
