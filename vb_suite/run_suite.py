@@ -52,7 +52,7 @@ python setup.py build_ext --inplace
 """
 dependencies = ['pandas_vb_common.py']
 
-START_DATE = datetime(2012, 10, 13)
+START_DATE = datetime(2012, 11, 11)
 
 repo = GitRepo(REPO_PATH)
 

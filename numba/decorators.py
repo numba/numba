@@ -404,10 +404,13 @@ def _process_sig(sigstr, name=None):
     parts = sigstr.split()
     types_dict = dict(globals(), d=double, i=int_)    
     loc = {}
-    if len(parts) < 2:
+    # FIXME:  Need something more robust to differentiate between
+    #   name ret(arg1,arg2)
+    #   and ret(arg1, arg2) or ret ( arg1, arg2 )
+    if len(parts) < 2 or '(' in parts[0] or '[' in parts[0] or '('==parts[1][0]
         signature = eval(sigstr, loc, types_dict)
         signature.name = None
-    else:
+    else: # Signature has a name
         signature = eval(' '.join(parts[1:]), loc, types_dict)
         signature.name = parts[0]
     if name is not None:

@@ -1,6 +1,7 @@
 from numba import double
 from numba.decorators import jit as jit
 
+@autojit
 def sum2d(arr):
     M, N = arr.shape
     result = 0.0
