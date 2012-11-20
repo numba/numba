@@ -194,7 +194,7 @@ class Symtab(object):
         renamed_name = self.renamed_name(name, version)
         return self[renamed_name]
 
-    def rename(self, var, block):
+    def rename(self, var, block, kills_previous_def=True):
         """
         Create a new renamed variable linked to the given variable, which
         becomes its parent.
@@ -203,10 +203,11 @@ class Symtab(object):
         new_var.block = block
         new_var.cf_references = []
         self.counters[var.name] += 1
-        if self.counters[var.name]:
+        if self.counters[var.name] and kills_previous_def:
             previous_var = self.lookup_most_recent(var.name)
             previous_var.killing_def = new_var
             new_var.killed_def = previous_var
+
         self.local_counters[var.name] = self.counters[var.name]
         new_var.renamed_name = self.renamed_name(var.name,
                                                  self.counters[var.name])

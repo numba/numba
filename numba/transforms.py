@@ -648,9 +648,12 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                 incoming_var.block.promotions[incoming_var, node.type] = promotion
 
                 # Replace variable with promoted variable
-                node.incoming.remove(incoming_var)
-                node.incoming.add(promotion.variable)
-                promotion.variable.block = incoming_var.block
+                promotion_var = incoming_var.block.symtab.rename(
+                                 incoming_var, incoming_var.block)
+                promotion.variable = promotion_var
+                #node.incoming.remove(incoming_var)
+                #node.incoming.add(promotion.variable)
+                #promotion.variable.block = incoming_var.block
 
         return node
 

@@ -144,6 +144,7 @@ class CoercionNode(Node):
             return
 
         self.type = dst_type
+        self.variable = Variable(dst_type)
         self.name = name
 
         self.node = self.verify_conversion(dst_type, node)
@@ -294,33 +295,35 @@ NULL_obj = ConstNode(_NULL, object_)
 NULL = ConstNode(_NULL, void.pointer())
 
 
-basic_block_fields = ['condition_block', 'if_block', 'else_block', 'exit_block']
+basic_block_fields = ['cond_block', 'if_block', 'else_block', 'exit_block']
 
-class If(ast.If, Node):
+class FlowNode(Node):
+
+    cond_block = None
+    if_block = None
+    else_block = None
+    exit_block = None
+
+    def __init__(self, **kwargs):
+        super(FlowNode, self).__init__(**kwargs)
+
+        from numba import control_flow
+        for field_name in basic_block_fields:
+            if not getattr(self, field_name):
+                setattr(self, field_name, control_flow.ControlBlock(-1))
+
+class If(ast.If, FlowNode):
     _fields = ['cond_block', 'test',
                'if_block', 'body',
                'else_block', 'orelse',
                'exit_block']
 
-    cond_block = None
-    if_block = None
-    else_block = None
-    exit_block = None
-
-class While(ast.While, Node):
+class While(ast.While, FlowNode):
     _fields = If._fields
-    cond_block = None
-    if_block = None
-    else_block = None
-    exit_block = None
 
-class For(ast.For, Node):
+class For(ast.For, FlowNode):
     _fields = ['iter', 'cond_block', 'target_block', 'target',
                'if_block', 'body', 'else_block', 'orelse']
-    cond_block = None
-    if_block = None
-    else_block = None
-    exit_block = None
 
 class Name(ast.Name, Node):
 

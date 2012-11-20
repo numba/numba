@@ -602,16 +602,25 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return
 
         for block in self.ast.flow.blocks:
+            self._handle_promotions(block)
+
+        for block in self.ast.flow.blocks:
             for phi_node in block.phi_nodes:
                 phi = phi_node.variable.lvalue
                 ltype = phi_node.type.to_llvm(self.context)
-                #for parent_block in block.parents:
-                    #parent_var = parent_block.symtab.lookup_most_recent(
-                    #                                phi_node.variable.name)
-                for incoming_var in phi_node.incoming:
-                    assert incoming_var.lvalue, incoming_var
+                for parent_block in block.parents:
+                    assert parent_block.exit_block, parent_block
+
+                    incoming_var = parent_block.symtab.lookup_most_recent(
+                                                    phi_node.variable.name)
+                    assert incoming_var.lvalue, (incoming_var, str(phi_node))
                     phi.add_incoming(incoming_var.lvalue,
-                                     incoming_var.block.exit_block)
+                                     parent_block.exit_block)
+
+                #for incoming_var in phi_node.incoming:
+                #    assert incoming_var.lvalue, incoming_var
+                #    phi.add_incoming(incoming_var.lvalue,
+                #                     incoming_var.block.exit_block)
 
     def get_ctypes_func(self, llvm=True):
         ee = self.ee
@@ -1048,10 +1057,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 lvalue = self.visit(promotion_node)
                 promotion_node.variable.lvalue = lvalue
 
-            node.promotions = {}
-
-        node.exit_block = self.builder.basic_block
-
     def _init_phis(self, node):
         "Set basic block and initialize LLVM phis"
         for phi_node in node.phi_nodes:
@@ -1062,15 +1067,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def _handle_bb_body(self, body, block):
         if body is not None:
             if isinstance(body, list):
-                result = self.visitlist(body)
+                return self.visitlist(body)
             else:
-                result = self.visit(body)
-        else:
-            self.flow_block = block
-            result = None
+                return self.visit(body)
 
-        block.exit_block = self.builder.basic_block
-        return result
+        return None
+
+    def setblock(self, cfg_basic_block):
+        old = self.flow_block
+        self.flow_block = cfg_basic_block
+        if old:
+            old.exit_block = self.builder.basic_block
 
     def visit_ControlBlock(self, node, body=None, is_condition_block=False):
         """
@@ -1080,11 +1087,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         If the block (node) is given, but body is None, promotions will be
         handled by the successors of the block if they contain phis.
         """
-        if self.flow_block:
-            # handle pending promotions
-            self._handle_promotions(self.flow_block)
-            self.flow_block = None
-
         #
         ### Create entry basic block
         #
@@ -1098,12 +1100,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         if is_condition_block:
             self.builder.branch(node.entry_block)
 
+        self.setblock(node)
         self.builder.position_at_end(node.entry_block)
         self._init_phis(node)
         lbody = self._handle_bb_body(body, node)
-        if body:
-            self._handle_promotions(node)
-
         return lbody
 
     def visit_If(self, node, is_while=False):
@@ -1112,13 +1112,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                        is_condition_block=True)
         bb_cond = node.cond_block.entry_block
         # test = self.visit(node.test)
+        if test.type != _int1:
+            test = self._generate_test(test)
+
+        # Create exit block
         self.visit_ControlBlock(node.exit_block)
         bb_endif = node.exit_block.entry_block
         if is_while:
             self.setup_loop(bb_cond, bb_endif)
-
-        if test.type != _int1:
-            test = self._generate_test(test)
 
         # Visit if clauses
         self.visit_ControlBlock(node.if_block, node.body)
@@ -1136,6 +1137,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             bb_false = bb_endif
 
         # Branch to block from condition
+        self.setblock(node.exit_block)
         self.builder.position_at_end(node.cond_block.exit_block)
         self.builder.cbranch(test, bb_true, bb_false)
         self.builder.position_at_end(bb_endif)
