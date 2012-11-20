@@ -10,11 +10,6 @@ import math
 from itertools import izip
 import sys
 
-def generate_input(n, dtype):
-    A = np.array(np.random.sample(n), dtype=dtype)
-    B = np.array(np.random.sample(n), dtype=dtype)
-    return A, B
-
 def check_answer(ans, A, B, C):
     for d, a, b in izip(ans, A, B):
         gold = sum(a, b)
@@ -23,12 +18,7 @@ def check_answer(ans, A, B, C):
 def sum(a, b):
     return a + b
 
-
 def main():
-
-    N = 1e+7
-    print 'Data size', N
-
     targets = ['cpu', 'stream', 'parallel']
     
     # run just one target if is specified in the argument
@@ -42,8 +32,15 @@ def main():
         vect_sum = vectorize([f4(f4, f4), f8(f8, f8)],
                              target=target)(sum)
 
-        A, B = generate_input(N, dtype=np.float32)
+        A = np.fromfile('inputA.dat', dtype=np.float32)
+        B = np.fromfile('inputB.dat', dtype=np.float32)
+        assert A.shape == B.shape
+        assert A.dtype ==  B.dtype
+        assert len(A.shape) == 1
+        N = A.shape[0]
         D = np.empty(A.shape, dtype=A.dtype)
+
+        print 'Data size', N
 
         ts = time()
         D = vect_sum(A, B)
