@@ -9,7 +9,7 @@ def simple():
     >>> jitv(simple)
     Traceback (most recent call last):
         ...
-    NumbaError: 15:10: local variable 'a' referenced before assignment
+    NumbaError: 14:10: local variable 'a' referenced before assignment
     """
     print a
 

@@ -489,9 +489,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
 
     def setup_func(self):
-        self.have_cfg = getattr(self.ast, 'flow', False)
         have_return = getattr(self.ast, 'have_return', None)
-
         if have_return is not None:
             if not have_return and not self.func_signature.return_type.is_void:
                 self.error(self.ast, "Function with non-void return does "
@@ -582,7 +580,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # Done code generation
             del self.builder  # release the builder to make GC happy
 
-            print self.lfunc
             logger.debug("ast translated function: %s" % self.lfunc)
             # Verify code generation
             self.mod.verify()  # only Module level verification checks everything.
@@ -778,7 +775,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             node.body = None
             result_node = func_call
 
-        self.puts("calling wrapped function %r" % node.orig_py_func.__name__)
+        # self.puts("calling wrapped function %r" % node.orig_py_func.__name__)
         node.return_result = ast.Return(
                     value=nodes.CoercionNode(result_node, object_))
 

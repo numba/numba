@@ -24,7 +24,7 @@ from numba.utils import dump
 from numba import *
 
 debug = False
-debug = True
+#debug = True
 logger = logging.getLogger(__name__)
 if debug:
     logger.setLevel(logging.DEBUG)
@@ -867,8 +867,7 @@ class MessageCollection:
 
 def warning(node, message):
     # printing allows us to test the code
-    lineno, col = getpos(node)
-    print "Warning %s%s" % (error.format_postup((lineno - 1, col)), message)
+    print "Warning %s%s" % (error.format_pos(node), message)
     # logger.warning("Warning %s: %s", error.format_postup(getpos(node)), message)
 
 def allow_null(node):

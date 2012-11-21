@@ -638,6 +638,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
     def visit_FunctionDef(self, node):
         self.cleanup_symtab()
+        self.handle_phis()
 
         node.decorator_list = self.visitlist(node.decorator_list)
         node.body = self.visitlist(node.body)
@@ -664,7 +665,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         node.error_return = error_return
         return node
 
-    def visit_PhiNode(self, node):
+    def handle_phi(self, node):
         """
         Handle phi nodes:
 
@@ -691,6 +692,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                 bad = badval(incoming_type)
                 incoming_var.type.base_type = incoming_type
                 incoming_var.uninitialized_value = self.visit(bad)
+                # print incoming_var
 
             elif not incoming_var.type == node.type:
                 # Create promotions for variables with phi nodes in successor

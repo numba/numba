@@ -24,7 +24,8 @@ import numpy as np
 import logging
 
 debug = False
-debug = True
+#debug = True
+
 logger = logging.getLogger(__name__)
 if debug:
     logger.setLevel(logging.DEBUG)
@@ -790,8 +791,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         from numba import functions
 
         var = self.current_scope.lookup(node.id)
-        if var and var.is_local:
-            if isinstance(node.ctx, ast.Param) or node.id == 'None':
+        is_none = var and node.id == 'None'
+        if var and (var.is_local or is_none):
+            if isinstance(node.ctx, ast.Param) or is_none:
                 variable = self.symtab[node.id]
             else:
                 # Local variable

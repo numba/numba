@@ -29,7 +29,14 @@ class NumbaVisitorMixin(CooperativeBase):
         self.symtab = symtab
         self.func_signature = func_signature
         self.nopython = nopython
-        self.local_scopes = [self.symtab]
+        #self.local_scopes = [self.symtab]
+        self.current_scope = symtab
+        self.have_cfg = getattr(self.ast, 'flow', False)
+
+        if self.have_cfg:
+            self.flow_block = self.ast.flow.blocks[1]
+        else:
+            self.flow_block = None
 
         self.func = func
         if func is None:
@@ -149,16 +156,39 @@ class NumbaVisitorMixin(CooperativeBase):
     def visit_CloneNode(self, node):
         return node
 
-    @property
-    def current_scope(self):
-        return self.local_scopes[-1]
+    #@property
+    #def current_scope(self):
+    #    return self.local_scopes[-1]
 
     def visit_ControlBlock(self, node):
-        self.local_scopes.append(node.symtab)
+        #self.local_scopes.append(node.symtab)
+        self.setblock(node)
         self.visitlist(node.phi_nodes)
         self.visitlist(node.body)
-        self.local_scopes.pop()
+        #self.local_scopes.pop()
         return node
+
+    def setblock(self, cfg_basic_block):
+        if cfg_basic_block.is_fabricated:
+            return
+
+        old = self.flow_block
+        self.flow_block = cfg_basic_block
+
+        if old is not cfg_basic_block:
+            self.current_scope = cfg_basic_block.symtab
+
+        self.changed_block(old, cfg_basic_block)
+
+    def changed_block(self, old_block, new_block):
+        """
+        Callback for when a new cfg block is encountered.
+        """
+
+    def handle_phis(self):
+        for block in self.ast.flow.blocks:
+            for phi_node in block.phi_nodes:
+                self.handle_phi(phi_node)
 
     @property
     def type(self):
