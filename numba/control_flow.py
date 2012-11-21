@@ -658,7 +658,11 @@ class PhiNode(nodes.Node):
             lhs = self.variable.unmangled_name
         incoming = ", ".join("var(%s, %s)" % (var_in.unmangled_name, var_in.type)
                                  for var_in in self.incoming)
-        return "%s = phi(%s)" % (lhs, incoming)
+        if self.variable.type:
+            type = str(self.variable.type)
+        else:
+            type = ""
+        return "%s %s = phi(%s)" % (type, lhs, incoming)
 
 class NameDeletion(NameAssignment):
     def __init__(self, lhs, entry):
@@ -1031,7 +1035,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         if hasattr(node, 'lineno'):
             self.mark_position(node)
         assert self.flow.block
-        # self.flow.block.body.append(node)
         return super(ControlFlowAnalysis, self).visit(node)
 
     def visit_FunctionDef(self, node):
@@ -1054,7 +1057,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             self.visit_Name(arg)
 
         self.visitlist(node.body)
-        # node.body = [node.body_block]
 
         # Exit point
         self.flow.add_exit(self.flow.exit_point)
@@ -1278,7 +1280,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         node.test = self.visit(node.test)
 
         self._visit_loop_body(node)
-        return nodes.While(**vars(node))
+        return nodes.build_while(**vars(node))
 
     def visit_For(self, node):
         node.cond_block = self.flow.nextblock(label='for_condition',

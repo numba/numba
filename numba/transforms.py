@@ -630,6 +630,26 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         return node
 
     def visit_PhiNode(self, node):
+        """
+        Handle phi nodes:
+
+            1) Handle incoming variables which are not initialized. Set
+               incoming_variable.uninitialized_value to a constant 'bad'
+               value (e.g. 0xbad for integers, NaN for floats, NULL for
+               objects)
+
+            2) Handle incoming variables which need promotions. An incoming
+               variable needs a promotion if it has a different type than
+               the the phi. The promotion happens in each ancestor block that
+               defines the variable which reaches us.
+
+               Promotions are set separately in the symbol table, since the
+               ancestor may not be our immediate parent, we cannot introduce
+               a rename and look up the latest version since there may be
+               multiple different promotions. So during codegen, we first
+               check whether incoming_type == phi_type, and otherwise we
+               look up the promotion in the parent block or an ancestor.
+        """
         for i, incoming_var in enumerate(node.incoming):
             if incoming_var.type.is_uninitialized:
                 incoming_type = incoming_var.type.base_type or node.type
@@ -637,33 +657,34 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                 incoming_var.type.base_type = incoming_type
                 incoming_var.uninitialized_value = self.visit(bad)
 
-            if (not incoming_var.type == node.type and
-                (incoming_var, node.type) not in node.block.promotions):
+            elif not incoming_var.type == node.type:
                 # Create promotions for variables with phi nodes in successor
                 # blocks.
 
-                # Make sure we only coerce once for each destination type and
-                # each variable
-                incoming_var.block.promotions.add((incoming_var, node.type))
+                incoming_symtab = incoming_var.block.symtab
+                if (incoming_var, node.type) not in node.block.promotions:
+                    # Make sure we only coerce once for each destination type and
+                    # each variable
+                    incoming_var.block.promotions.add((incoming_var, node.type))
 
-                name_node = nodes.Name(id=incoming_var.renamed_name,
-                                       ctx=ast.Load())
-                name_node.variable = incoming_var
-                name_node.type = incoming_var.type
-                coercion = self.visit(name_node.coerce(node.type))
-                promotion = nodes.PromotionNode(node=coercion)
+                    # Create promotion node
+                    name_node = nodes.Name(id=incoming_var.renamed_name,
+                                           ctx=ast.Load())
+                    name_node.variable = incoming_var
+                    name_node.type = incoming_var.type
+                    coercion = self.visit(name_node.coerce(node.type))
+                    promotion = nodes.PromotionNode(node=coercion)
 
-                # Replace variable with promoted variable, so that successor
-                # blocks will use this definition as the outgoing definition
-                # to successor phis (which kill it)
-                #promotion_var = incoming_var.block.symtab.rename(
-                #                 incoming_var, incoming_var.block)
-                #promotion.variable = promotion_var
-                node.incoming.remove(incoming_var)
-                node.incoming.add(promotion.variable)
+                    # Add promotion node to block body
+                    incoming_var.block.body.append(promotion)
+                    promotion.variable.block = incoming_var.block
 
-                promotion.variable.block = incoming_var.block
-                incoming_var.block.body.append(promotion)
+                    # Update symtab
+                    incoming_symtab.promotions[incoming_var.name,
+                                               node.type] = promotion
+                else:
+                    promotion = incoming_symtab.lookup_promotion(
+                                     incoming_var.name, node.type)
 
         return node
 

@@ -536,7 +536,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if v.type is None:
                 # We have not analyzed this definition yet, delay the type
                 # resolution
-                v.type = numba_types.DeferredType(v)
+                v.type = v.deferred_type
 
         incoming_types = [v.type for v in incoming]
         promoted_type = numba_types.PromotionType(node.variable, self.context,
@@ -579,7 +579,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         unresolved = set()
         for block in self.ast.flow.blocks:
             for variable in block.symtab.itervalues():
-                print variable
                 if variable.parent_var: # renamed variable
                     if variable.type.is_unresolved:
                         unresolved.add(variable)
@@ -612,8 +611,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if unresolved:
             var = unresolved.pop()
             self.error(var.name_assignment.assignment_node,
-                       "Unable to infer type for this statement, insert a "
-                       "cast or initialize the variable.")
+                       "Unable to infer type for this statement (var=%s),"
+                       " insert a cast or initialize the variable." % var.name)
 
 #        if were_unresolved:
             # We had some unresolved types assignment statements, re-analyze
@@ -1415,17 +1414,32 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
     Allows for deferred coercions (may be removed in the future).
     """
 
+    def visit_FunctionDef(self, node):
+        self.generic_visit(node)
+        if node.flow:
+            for block in node.flow.blocks:
+                for phi in block.phi_nodes:
+                    self.handle_phi(phi)
+
+        return node
+
     def visit(self, node):
         if hasattr(node, 'variable'):
             node.type = node.variable.type
             if node.type.is_unresolved:
                 node.type = node.type.resolve()
+                if node.type.is_promotion:
+                    node.type.simplify()
+                    node.type = node.type.resolve()
+
+                assert not node.type.is_unresolved
         return super(TypeSettingVisitor, self).visit(node)
 
-    def visit_PhiNode(self, node):
+    def handle_phi(self, node):
         for incoming_var in node.incoming:
             if incoming_var.type.is_unresolved:
                 incoming_var.type = incoming_var.type.resolve()
+        node.type = node.variable.type
         return node
 
     def visit_Name(self, node):

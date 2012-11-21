@@ -491,10 +491,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def setup_func(self):
         self.have_cfg = getattr(self.ast, 'flow', False)
         have_return = getattr(self.ast, 'have_return', None)
-        if self.have_cfg:
-            self.flow_block = self.ast.flow.blocks[1]
-        else:
-            self.flow_block = None
 
         if have_return is not None:
             if not have_return and not self.func_signature.return_type.is_void:
@@ -506,11 +502,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
         assert self.func_name == self.lfunc.name, \
                "Redefinition of function %s" % self.func_name
-        
-        # Add entry block for alloca.
+
         entry = self.append_basic_block('entry')
         if self.have_cfg:
-            self.ast.body_block.entry_block = entry
+            block0 = self.ast.flow.blocks[0]
+            block0.entry_block = block0.exit_block = entry
+            self.flow_block = None
+            # self.visitlist(block0.body) # uninitialize constants for variables
+            self.flow_block = self.ast.flow.blocks[1]
+        else:
+            self.flow_block = None
 
         self.builder = lc.Builder.new(entry)
         self.caster = _LLVMCaster(self.builder)
@@ -575,7 +576,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 # self.builder.ret_void()
                 self.builder.branch(self.cleanup_label)
 
-            self.update_phis()
+            self.handle_phis()
             self.terminate_cleanup_blocks()
 
             # Done code generation
@@ -593,18 +594,18 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 self.lfunc.delete()
             raise
 
-    def _handle_promotions(self, node):
-        "Handle promotions at the end of a basic block"
-        if node and node.promotions:
-            for (var, type), promotion_node in node.promotions.iteritems():
-                bb = promotion_node.variable.block.exit_block
-                self.builder.position_before(bb.instructions[-1])
-                lvalue = self.visit(promotion_node)
-                promotion_node.variable.lvalue = lvalue
+#    def _handle_promotions(self, node):
+#        "Handle promotions at the end of a basic block"
+#        if node and node.promotions:
+#            for (var, type), promotion_node in node.promotions.iteritems():
+#                bb = promotion_node.variable.block.exit_block
+#                self.builder.position_before(bb.instructions[-1])
+#                lvalue = self.visit(promotion_node)
+#                promotion_node.variable.lvalue = lvalue
+#
+#            node.promotions = {}
 
-            node.promotions = {}
-
-    def update_phis(self):
+    def handle_phis(self):
         """
         Update all our phi nodes after translation is done and all Variables
         have their llvm values set.
@@ -612,26 +613,36 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         if not self.have_cfg:
             return
 
-        #for block in self.ast.flow.blocks:
-        #    self._handle_promotions(block)
-
         for block in self.ast.flow.blocks:
             for phi_node in block.phi_nodes:
                 phi = phi_node.variable.lvalue
                 ltype = phi_node.variable.type.to_llvm(self.context)
                 for parent_block in block.parents:
                     assert parent_block.exit_block, parent_block
+                    name = phi_node.variable.name
+                    incoming_var = parent_block.symtab.lookup_most_recent(name)
+                    if incoming_var.type.is_uninitialized:
+                        if incoming_var.lvalue is None:
+                            lval = self.visit(incoming_var.uninitialized_value)
+                            incoming_var.lvalue = lval
+                    elif not incoming_var.type == phi_node.type:
+                        promotion = parent_block.symtab.lookup_promotion(
+                                        phi_node.variable.name, phi_node.type)
+                        incoming_var = promotion.variable
 
-                    incoming_var = parent_block.symtab.lookup_most_recent(
-                                                    phi_node.variable.name)
-                    assert incoming_var.lvalue, (incoming_var, str(phi_node))
+                    #msg = (incoming_var, phi_node.variable)
+                    assert incoming_var.lvalue, incoming_var
+                    # assert incoming_var.type == phi_node.type, msg
                     phi.add_incoming(incoming_var.lvalue,
                                      parent_block.exit_block)
 
-                #for incoming_var in phi_node.incoming:
-                #    assert incoming_var.lvalue, incoming_var
-                #    phi.add_incoming(incoming_var.lvalue,
-                #                     incoming_var.block.exit_block)
+#                for incoming_var in phi_node.incoming:
+#                    if incoming_var.lvalue is None and incoming_var.type.is_uninitialized:
+#                        incoming_var.lvalue = self.visit(incoming_var.uninitialized_value)
+#
+#                    assert incoming_var.lvalue, incoming_var
+#                    phi.add_incoming(incoming_var.lvalue,
+#                                     incoming_var.block.exit_block)
 
     def get_ctypes_func(self, llvm=True):
         ee = self.ee
@@ -1071,12 +1082,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def setblock(self, cfg_basic_block):
         old = self.flow_block
         self.flow_block = cfg_basic_block
-#        if old:
-#            old.exit_block = self.builder.basic_block
-#            self._handle_promotions(node)
+        if old and not old.exit_block:
+            if old.id == 1:
+                # Handle promotions from the entry block. This is somewhat
+                # of a hack, and needed since the CFG isn't properly merged
+                # in the AST
+                self.visitlist(old.body)
+            old.exit_block = self.builder.basic_block
 
     def visit_PromotionNode(self, node):
-        node.variable.lvalue = self.visit(node.node)
+        lvalue = self.visit(node.node)
+        node.variable.lvalue = lvalue
 
     def visit_ControlBlock(self, node, body=None, is_condition_block=False):
         """
@@ -1095,11 +1111,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             label = node.label
 
+        self.setblock(node)
+        node.prev_block = self.builder.basic_block
         node.entry_block = self.append_basic_block(label)
         if is_condition_block:
             self.builder.branch(node.entry_block)
 
-        self.setblock(node)
         self.builder.position_at_end(node.entry_block)
         self._init_phis(node)
 
@@ -1109,12 +1126,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             self.visitlist(node.body)
             lbody = None
 
-        node.exit_block = self.builder.basic_block
+        if not node.exit_block:
+            node.exit_block = self.builder.basic_block
+
         return lbody
 
     def visit_If(self, node, is_while=False):
         # Visit condition
-        bb = self.builder.basic_block
         test = self.visit(node.test)
 
         bb_cond = node.cond_block.entry_block
@@ -1144,8 +1162,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             bb_false = bb_endif
 
         # Branch to block from condition
-        #self.setblock(node.exit_block)
-        self.builder.position_at_end(bb)
+        self.builder.position_at_end(node.cond_block.prev_block)
         self.builder.branch(bb_cond)
 
         self.builder.position_at_end(node.cond_block.exit_block)
@@ -1537,7 +1554,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             lfunc = node.llvm_func
 
         if not node.signature.return_type.is_void:
-            kwargs = dict(name=node.name)
+            kwargs = dict(name=node.name + '_result')
         else:
             kwargs = {}
 

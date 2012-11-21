@@ -55,6 +55,8 @@ class Variable(object):
         self.lineno = -1
         self.col_offset = -1
 
+        self._deferred_type = None
+
     @classmethod
     def make_shared_property(cls, name):
         def _get(self):
@@ -70,6 +72,15 @@ class Variable(object):
 
         setattr(cls, '_' + name, None)
         setattr(cls, name, property(_get, _set))
+
+    @property
+    def deferred_type(self):
+        if self._deferred_type:
+            return self._deferred_type
+
+        from numba import _numba_types as numba_types
+        self._deferred_type = numba_types.DeferredType(self)
+        return self._deferred_type
 
     def _type_get(self):
         return self._type
@@ -109,6 +120,8 @@ class Variable(object):
 
     @property
     def unmangled_name(self):
+        if not self.renamed_name:
+            return self.name or "<unnamed>"
         name = self.renamed_name.lstrip("__numba_renamed_")
         counter, sep, var_name = name.partition('_')
         name = '%s_%s' % (var_name, counter)
@@ -163,6 +176,7 @@ class Symtab(object):
         self.symtab = symtab_dict or {}
         self.parent = parent
         self.local_counters = {}
+        self.promotions = {}
         if parent:
             self.counters = parent.counters
             self.local_counters.update(parent.local_counters)
@@ -186,6 +200,13 @@ class Symtab(object):
             return self.parent.lookup_most_recent(name)
 
         return self.lookup_renamed(name, last_count)
+
+    def lookup_promotion(self, var_name, dst_type):
+        if (var_name, dst_type) in self.promotions:
+            return self.promotions[var_name, dst_type]
+
+        assert self.parent
+        return self.parent.lookup_promotion(var_name, dst_type)
 
     def renamed_name(self, name, count):
         return '__numba_renamed_%d_%s' % (count, name)

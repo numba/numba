@@ -141,7 +141,8 @@ class TestIf(unittest.TestCase):
 
 if __name__ == "__main__":
 #    if_fn_1c = jit(restype=f4, argtypes=[f4], backend='ast')(if_fn_1)
-    #if_fn_5c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_5)
+#    if_fn_4c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_4)
+#    if_fn_5c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_5)
 #    if_fn_7c = jit(restype=i4, argtypes=[i4], backend='ast')(if_fn_7)
     unittest.main()
 

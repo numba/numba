@@ -356,10 +356,23 @@ class UnresolvedType(NumbaType):
         super(UnresolvedType, self).__init__(**kwds)
         self.variable = variable
 
+    def __hash__(self):
+        return hash(self.variable)
+
+    def __eq__(self, other):
+        return (isinstance(other, UnresolvedType) and
+                self.variable == other.variable and
+                self.is_deferred == other.is_deferred and
+                self.is_promotion == other.is_promotion and
+                self.is_unanalyzable == other.is_unanalyzable)
+
     def simplify(self):
         return not (self.resolve() is self)
 
     def resolve(self):
+#        if self.variable.name and self.variable.unmangled_name == 'acc_2':
+#            print self.variable.type
+#            print '...'
         if not self.variable.type:
             self.variable.type = self
         return self.variable.type
@@ -372,6 +385,33 @@ class PromotionType(UnresolvedType):
         super(PromotionType, self).__init__(variable, **kwds)
         self.context = context
         self.types = types
+
+    def add_type(self, seen, type, types):
+        if type not in seen:
+            if type.is_unresolved:
+                seen.add(type)
+                new_type = type.resolve()
+                if new_type is not type:
+                    seen.add(new_type)
+                    self.add_type(seen, new_type, types)
+                    type = new_type
+                else:
+                    types.add(type)
+            else:
+                types.add(type)
+
+            return type
+
+    def dfs(self, types, seen):
+        for type in self.types:
+            if type not in seen:
+                if type.is_unresolved:
+                    type = type.resolve()
+                seen.add(type)
+                if type.is_promotion:
+                    type.dfs(types, seen)
+                elif not type.is_uninitialized:
+                    types.add(type)
 
     def simplify(self, seen=None):
         """
@@ -392,26 +432,12 @@ class PromotionType(UnresolvedType):
         # Find all types in the type graph and eliminate nested promotion types
         types = set([self])
         seen.add(self)
-        for type in self.types:
-            if type.is_unresolved:
-                type = type.resolve()
-            if type in seen:
-                continue
-
-            if type.is_promotion:
-                type.simplify(seen)
-                types.update(type.types)
-            elif type.is_unresolved:
-                # Get the resolved type or the type itself from the deferred
-                # type
-                types.add(type.variable.type)
-            else:
-                if not type.is_uninitialized:
-                    types.add(type)
-
+        seen.add(self.variable.deferred_type)
+        self.dfs(types, seen)
         types.remove(self)
+
         resolved_types = [type for type in types if not type.is_unresolved]
-        unresolved_types = [type for type in types if type.is_deferred]
+        unresolved_types = [type for type in types if type.is_unresolved]
 
         self.variable.type = self
         if not resolved_types:
@@ -437,8 +463,30 @@ class PromotionType(UnresolvedType):
         type.resolve()
         return type.variable.type
 
+    repr_seen = None
+    repr_count = 0
+
     def __repr__(self):
-        return "promote(%s)" % ", ".join(str(type) for type in self.types)
+        if not self.repr_seen:
+            self.repr_seen = set()
+
+        self.repr_seen.add(self)
+        self.repr_count += 1
+
+        types = []
+        for type in self.types:
+            if type not in self.repr_seen:
+                types.append(type)
+                self.repr_seen.add(type)
+            else:
+                types.append("...")
+
+        result = "promote(%s)" % ", ".join(map(str, types))
+        self.repr_count -= 1
+        if not self.repr_count:
+            self.repr_seen = None
+
+        return result
 
 class DeferredType(UnresolvedType):
     """

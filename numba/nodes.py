@@ -335,13 +335,15 @@ class If(ast.If, FlowNode):
 #        'exit_block',
     ]
 
-def build_if(*args, **kwargs):
-    node = If(*args, **kwargs)
+def build_if(cls=If, **kwargs):
+    node = cls(**kwargs)
     bodies = ['test', 'body', 'orelse']
     for bb_name, body_name in zip(basic_block_fields, bodies):
+        body = getattr(node, body_name)
+        if not body:
+            continue
         bb = getattr(node, bb_name)
         if not bb.body:
-            body = getattr(node, body_name)
             if isinstance(body, list):
                 bb.body.extend(body)
             else:
@@ -351,6 +353,9 @@ def build_if(*args, **kwargs):
 
     return node
     # return ast.Suite([node, node.exit_block])
+
+def build_while(**kwargs):
+    return build_if(cls=While, **kwargs)
 
 class While(ast.While, FlowNode):
     _fields = If._fields
@@ -421,7 +426,7 @@ class NativeCallNode(FunctionCallNode):
         else:
             name = "<unknown(%s)>" % self.signature
 
-        return "%s(%s)" % (name, self.args)
+        return "%s(%s)" % (name, ", ".join(str(arg) for arg in self.args))
 
 class NativeFunctionCallNode(NativeCallNode):
     """

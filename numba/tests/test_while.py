@@ -184,7 +184,7 @@ class TestASTWhile(test_support.ASTTestCase):
 
 if __name__ == "__main__":
 #    TestASTWhile("test_while_loop_fn_1").debug()
-    #autojit(while_loop_fn_2)(numpy.array([1., 2., 3.]))
+#    autojit(while_loop_fn_2)(numpy.array([1., 2., 3.]))
 #    jit(argtypes = [long_])(while_loop_fn_3)
 #    jit(argtypes = (long_, long_, long_),
 #        restype = long_)(while_loop_fn_4)
