@@ -247,11 +247,12 @@ class ControlFlow(object):
             pos = (src_descr,) + getpos(node)
             self.block.positions.add(pos)
 
-    def mark_assignment(self, lhs, rhs, entry, assignment):
+    def mark_assignment(self, lhs, rhs, entry, assignment, warn_unused=True):
         if self.block:
             if not self.is_tracked(entry):
                 return
-            assignment = NameAssignment(lhs, rhs, entry, assignment)
+            assignment = NameAssignment(lhs, rhs, entry, assignment,
+                                        warn_unused=warn_unused)
             self.block.stats.append(assignment)
             self.block.gen[entry] = assignment
             self.entries.add(entry)
@@ -596,7 +597,7 @@ class NameAssignment(object):
 
     is_assignment = True
 
-    def __init__(self, lhs, rhs, entry, assignment_node):
+    def __init__(self, lhs, rhs, entry, assignment_node, warn_unused=True):
         if not hasattr(lhs, 'cf_state'):
             lhs.cf_state = set()
         if not hasattr(lhs, 'cf_is_null'):
@@ -611,6 +612,10 @@ class NameAssignment(object):
         self.refs = set()
         self.is_arg = False
         self.is_deletion = False
+
+        # NOTE: this is imperfect, since it means warnings are disabled for
+        # *all* definitions in the function...
+        self.entry.warn_unused = warn_unused
 
     def __repr__(self):
         return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
@@ -983,7 +988,7 @@ def check_definitions(flow, compiler_directives):
                     messages.warning(entry, "Unused argument '%s'" %
                                      entry.name)
             else:
-                if warn_unused:
+                if warn_unused and entry.warn_unused:
                     messages.warning(entry, "Unused variable '%s'" %
                                      entry.name)
             entry.cf_used = False
@@ -1110,7 +1115,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             finally:
                 fp.close()
 
-    def mark_assignment(self, lhs, rhs=None, assignment=None):
+    def mark_assignment(self, lhs, rhs=None, assignment=None, warn_unused=True):
         assert assignment
         assert self.flow.block
 
@@ -1125,7 +1130,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         lhs = self.visit(lhs)
         if isinstance(lhs, ast.Name):
             self.flow.mark_assignment(lhs, rhs, self.symtab[lhs.name],
-                                      assignment)
+                                      assignment, warn_unused=warn_unused)
 
         if self.flow.exceptions:
             exc_descr = self.flow.exceptions[-1]
@@ -1310,7 +1315,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         if_block = self.flow.nextblock(label='loop_body', pos=node.body[0])
         #node.target_block = self.flow.nextblock(label='for_target',
         #                                        pos=node.target)
-        node.target = self.mark_assignment(node.target, assignment=node)
+        node.target = self.mark_assignment(node.target, assignment=node,
+                                           warn_unused=False)
         self._visit_loop_body(node, if_block=if_block)
         return nodes.For(**vars(node))
 

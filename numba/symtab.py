@@ -15,6 +15,7 @@ class Variable(object):
     """
 
     _type = None
+    warn_unused = True
 
     def __init__(self, type, is_constant=False, is_local=False,
                  name=None, lvalue=None, constant_value=None,
