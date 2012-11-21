@@ -24,9 +24,13 @@ def for_loop_fn_0 (iterable):
 # ______________________________________________________________________
 
 def for_loop_fn_1 (start, stop, inc):
+    print "start"
     acc = 0
+    print "..."
     for value in range(start, stop, inc):
+        print "in loop"
         acc += value
+    print "returning"
     return acc
 
 # ______________________________________________________________________
@@ -148,6 +152,16 @@ class TestForLoop(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+#    compiled_for_loop_fn = jit(argtypes = [i4, i4, i4],
+#                               restype = i4, backend='ast', nopython=True)(for_loop_fn_1)
+#    result = compiled_for_loop_fn(1, 4, 1)
+#    compiled_for_loop_fn = jit(argtypes = [i4],
+#                               restype = i4, backend='ast')(for_loop_fn_3)
+#    result = compiled_for_loop_fn(3)
+#    compiled = jit('i4(i4,f8,i4,f8[:])')(for_loop_fn_4)
+#    args0 = 5, 1.0, 2, numpy.ones(10)
+#    print compiled(*args0)
+#    print for_loop_fn_4(*args0)
     unittest.main()
 
 # ______________________________________________________________________

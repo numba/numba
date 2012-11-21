@@ -390,11 +390,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.return_variable = Variable(None)
         self.ast = self.visit(self.ast)
 
-        # Pop original variables from the symtab
-        for var in self.symtab.values():
-            if not var.parent_var:
-                self.symtab.pop(var.name, None)
-
         self.return_type = self.return_variable.type or void
         ret_type = self.func_signature.return_type
 
@@ -434,7 +429,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def init_locals(self):
         arg_types = self.func_signature.args
-        if len(arg_types) != len(self.ast.args.args):
+        if (isinstance(self.ast, ast.FunctionDef) and
+                len(arg_types) != len(self.ast.args.args)):
             raise error.NumbaError(
                     "Incorrect number of types specified in @jit()")
 
@@ -466,17 +462,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     var.type = numba_types.UninitializedType(None)
 
         self.func_signature.args = tuple(arg_types)
-        self.resolve_variable_types()
 
-        if debug:
+        self.have_cfg = hasattr(self.ast, 'flow')
+        if self.have_cfg:
+            self.resolve_variable_types()
+
+        if debug and self.have_cfg:
             for block in self.ast.flow.blocks:
                 for var in block.symtab.values():
                     if var.type and var.cf_references:
-#                        if var.type.is_uninitialized:
-#                            assert var.next_rename
-#                            var.type.base_type = var.next_rename.type
-#                            var.type = var.next_rename.type
-
                         assert not var.type.is_unresolved
                         print "Variable after analysis: %s" % var
 
@@ -795,8 +789,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_Name(self, node):
         from numba import functions
 
-        # variable = self.current_scope.lookup(node.id)
-        if node.id in self.symtab:
+        var = self.current_scope.lookup(node.id)
+        if var and var.is_local:
             if isinstance(node.ctx, ast.Param) or node.id == 'None':
                 variable = self.symtab[node.id]
             else:

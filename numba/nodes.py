@@ -79,6 +79,14 @@ def print_(translator, node):
 def print_llvm(translator, type, llvm_value):
     return print_(translator, LLVMValueRefNode(type, llvm_value))
 
+def is_name(node):
+    """
+    Returns whether the given node is a Name
+    """
+    if isinstance(node, CloneableNode):
+        node = node.node
+    return isinstance(node, ast.Name)
+
 #
 ### AST nodes
 #
@@ -305,7 +313,6 @@ _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)
 NULL = ConstNode(_NULL, void.pointer())
 
-
 basic_block_fields = ['cond_block', 'if_block', 'else_block', 'exit_block']
 
 class FlowNode(Node):
@@ -321,23 +328,19 @@ class FlowNode(Node):
         from numba import control_flow
         for field_name in basic_block_fields:
             if not getattr(self, field_name):
-                setattr(self, field_name, control_flow.ControlBlock(-1))
+                block = control_flow.ControlBlock(-1, is_fabricated=True)
+                setattr(self, field_name, block)
 
 class If(ast.If, FlowNode):
+    pass
 
-    _fields = [
-#        'cond_block',
-        'test',
-#        'if_block',
-        'body',
-#        'else_block',
-        'orelse',
-#        'exit_block',
-    ]
+class While(ast.While, FlowNode):
+    pass
 
-def build_if(cls=If, **kwargs):
-    node = cls(**kwargs)
-    bodies = ['test', 'body', 'orelse']
+class For(ast.For, FlowNode):
+    pass
+
+def merge_cfg_in_ast(basic_block_fields, bodies, node):
     for bb_name, body_name in zip(basic_block_fields, bodies):
         body = getattr(node, body_name)
         if not body:
@@ -346,23 +349,26 @@ def build_if(cls=If, **kwargs):
         if not bb.body:
             if isinstance(body, list):
                 bb.body.extend(body)
+                bb = [bb]
             else:
                 bb.body.append(body)
 
         setattr(node, body_name, bb)
 
+def build_if(cls=If, **kwargs):
+    node = cls(**kwargs)
+    bodies = ['test', 'body', 'orelse']
+    merge_cfg_in_ast(basic_block_fields, bodies, node)
     return node
-    # return ast.Suite([node, node.exit_block])
 
 def build_while(**kwargs):
     return build_if(cls=While, **kwargs)
 
-class While(ast.While, FlowNode):
-    _fields = If._fields
-
-class For(ast.For, FlowNode):
-    _fields = ['iter', 'cond_block', 'target_block', 'target',
-               'if_block', 'body', 'else_block', 'orelse']
+def build_for(**kwargs):
+    result = For(**kwargs)
+    merge_cfg_in_ast(basic_block_fields, ['iter', 'body', 'orelse'], result)
+    merge_cfg_in_ast(['target_block'], ['target'], result)
+    return result
 
 class Name(ast.Name, Node):
 

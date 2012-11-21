@@ -59,7 +59,8 @@ class ControlBlock(nodes.Node):
     _fields = ['phi_nodes', 'body']
 
     def __init__(self, id, label='empty', have_code=True,
-                 is_expr=False, is_exit=False, pos=None):
+                 is_expr=False, is_exit=False, pos=None,
+                 is_fabricated=False):
         self.id = id
 
         self.children = set()
@@ -98,7 +99,7 @@ class ControlBlock(nodes.Node):
         # There can be only one reaching definition, since each variable is
         # assigned only once
         self.phis = {}
-        self.phi_nodes = ()
+        self.phi_nodes = []
 
         # Promotions at the end of the block to have a consistent promoted
         # Φ type at one of our children.
@@ -112,6 +113,9 @@ class ControlBlock(nodes.Node):
         self.phi_block = None
         self.exit_block = None
         self.promotions = set()
+
+        self.symtab = None
+        self.is_fabricated = is_fabricated
 
     def empty(self):
         return (not self.stats and not self.positions and not self.phis)
@@ -129,6 +133,14 @@ class ControlBlock(nodes.Node):
         self.children.add(block)
         block.parents.add(self)
 
+    def reparent(self, new_block):
+        """
+        Re-parent all children to the new block
+        """
+        for child in self.children:
+            child.parents.remove(self)
+            new_block.add_child(child)
+
     def __repr__(self):
         return 'Block(%d)' % self.id
 
@@ -138,7 +150,7 @@ class ControlBlock(nodes.Node):
         raise AttributeError
 
     def __getattr__(self, attr):
-        if attr in ('variable', 'type'):
+        if attr in ('variable', 'type', 'ctx'):
             return getattr(self.body[0], attr)
         raise AttributeError
 
@@ -1246,11 +1258,15 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                               exit_block=exit_block)
         return self.exit_block(exit_block, node)
 
-    def _visit_loop_body(self, node):
+    def _visit_loop_body(self, node, if_block=None):
         """
         Visit body of while and for loops and handle 'else' clause
         """
-        node.if_block = self.flow.nextblock(label='loop_body', pos=node.body[0])
+        if if_block:
+           node.if_block = if_block
+        else:
+            node.if_block = self.flow.nextblock(label='loop_body',
+                                                pos=node.body[0])
         self.visitlist(node.body)
         self.flow.loops.pop()
 
@@ -1292,10 +1308,11 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         node.iter = self.visit(node.iter)
 
         # Target assignment
-        node.target_block = self.flow.nextblock(label='for_target',
-                                                pos=node.target)
+        if_block = self.flow.nextblock(label='loop_body', pos=node.body[0])
+        #node.target_block = self.flow.nextblock(label='for_target',
+        #                                        pos=node.target)
         node.target = self.mark_assignment(node.target, assignment=node)
-        self._visit_loop_body(node)
+        self._visit_loop_body(node, if_block=if_block)
         return nodes.For(**vars(node))
 
     def visit_With(self, node):

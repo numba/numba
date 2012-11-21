@@ -23,7 +23,7 @@ import logging
 logger = logging.getLogger(__name__)
 debug_conversion = False
 
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 #debug_conversion = True
 
 _int32_zero = lc.Constant.int(_int32, 0)
@@ -582,6 +582,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # Done code generation
             del self.builder  # release the builder to make GC happy
 
+            print self.lfunc
             logger.debug("ast translated function: %s" % self.lfunc)
             # Verify code generation
             self.mod.verify()  # only Module level verification checks everything.
@@ -777,7 +778,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             node.body = None
             result_node = func_call
 
-        # self.puts("calling wrapped function %r" % node.orig_py_func.__name__)
+        self.puts("calling wrapped function %r" % node.orig_py_func.__name__)
         node.return_result = ast.Return(
                     value=nodes.CoercionNode(result_node, object_))
 
@@ -896,7 +897,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             target_node.variable.lvalue = value
         else:
             target = self.visit(target_node)
-            self.decref(target)
+            if object:
+                self.decref(target)
             self.generate_assign(value, target)
 
     def generate_assign(self, lvalue, ltarget, decref=False, incref=False):
@@ -1080,6 +1082,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             phi_node.variable.lvalue = phi
 
     def setblock(self, cfg_basic_block):
+        if cfg_basic_block.is_fabricated:
+            return
+
         old = self.flow_block
         self.flow_block = cfg_basic_block
         if old and not old.exit_block:
@@ -1132,6 +1137,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return lbody
 
     def visit_If(self, node, is_while=False):
+        if not hasattr(node, 'cond_block'):
+            # We have a synthetic 'if' without a cfg, fabricate fake blocks
+            node = nodes.build_if(**vars(node))
+
         # Visit condition
         test = self.visit(node.test)
 
@@ -1147,7 +1156,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             self.setup_loop(bb_cond, bb_endif)
 
         # Visit if clauses
-        self.visit(node.body)
+        self.visitlist(node.body)
         bb_true = node.if_block.entry_block
         if is_while:
             self.builder.branch(bb_cond)
@@ -1155,7 +1164,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             self.term_block(bb_endif)
 
         if node.orelse:
-            self.visit(node.orelse)
+            self.visitlist(node.orelse)
             bb_false = node.else_block.entry_block
             self.term_block(bb_endif)
         else:
@@ -1175,44 +1184,22 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_While(self, node):
         self.visit_If(node, is_while=True)
 
-#        bb_cond = self.visit_ControlBlock(node.cond_block,
-#                                          node.test,
-#                                          is_condition_block=True)
-#        bb_body = self.visit(node.body_block)
-#        bb_exit = self.visit(node.exit_block)
-#        self.setup_loop(bb_cond, bb_exit)
-#
-#        # condition
-#        self.builder.position_at_end(bb_cond)
-#        cond = self.visit(node.test)
-#        if cond.type != _int1:
-#            cond = self._generate_test(cond)
-#        self.builder.cbranch(cond, bb_body, bb_exit)
-#
-#        # body
-#        self.builder.position_at_end(bb_body)
-#        self.visitlist(node.body)
-#        self.term_block(node.body_block, bb_exit)
-#
-#        # loop or exit
-#        self.builder.branch(bb_cond)
-#        self.builder.position_at_end(bb_exit)
-#        self.teardown_loop()
-
     def visit_ForRangeNode(self, node):
         """
         Implements simple for loops over range or xrange
         """
+        start, stop, step = self.visitlist([node.start, node.stop, node.step])
+        target = self.visit(node.target)
+
         # assert isinstance(target.ctx, ast.Store)
-        bb_cond = self.visit(node.cond_block)
+        self.visit(node.cond_block)
         bb_incr = self.visit(node.target_block)
-        bb_body = self.visit(node.body_block)
-        bb_exit = self.visit(node.exit_block)
+        bb_body = self.visit(node.body)
+        bb_exit = self.visit(node.orelse)
 
         self.setup_loop(bb_cond, bb_exit)
 
-        target = self.visit(node.target)
-        start, stop, step = self.visitlist([node.start, node.stop, node.step])
+        self.visit(node.cond_block)
 
         # generate initializer
         self.generate_assign(start, target)

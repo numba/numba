@@ -82,6 +82,7 @@ import copy
 import opcode
 import types
 import ctypes
+import textwrap
 import __builtin__ as builtins
 
 if __debug__:
@@ -346,6 +347,9 @@ class TransformForIterable(visitors.NumbaTransformer):
             raise error.NumbaError(node, 'Else in for-loop is not implemented.')
 
         if node.iter.type.is_range:
+            #
+            ### Handle range iteration
+            #
             self.generic_visit(node)
 
             temp = nodes.TempNode(node.target.type)
@@ -361,37 +365,60 @@ class TransformForIterable(visitors.NumbaTransformer):
                                      for n in (start, stop, step)]
 
             if have_step:
-                s1 = self.run_template(
-                        "{{nsteps}} = ({{stop}} - {{start}} + {{step}} + {{step}} / {{step}}) / {{step}}",
-                        start=start, stop=stop, step=step,
-                        nsteps=nsteps.store())
-                step = step.clone
+                compute_nsteps = """
+                    $length = {{stop}} - {{start}}
+                    {{nsteps}} = $length / {{step}}
+                    if $length % {{step}}:
+                        {{nsteps}} = {{nsteps_load}} + 1
+                """
             else:
-                s1 = self.run_template(
-                    "{{nsteps}} = {{stop}} - {{start}}",
-                    start=start, stop=stop, nsteps=nsteps.store())
+                compute_nsteps = "{{nsteps}} = {{stop}} - {{start}}"
 
-            # Rely on LLVM strength reduction. It's easier this way, or we
-            # need to make the assignment to 'target' conditional for zero
-            # iterations
-            s2 = self.run_template(
-                    "{{target}} = {{start}} + {{temp}} * {{step}}",
-                    target=node.target, start=start.clone, stop=stop.clone,
-                    step=step, temp=temp.load())
+            if node.orelse:
+                else_clause = "else: {{else_body}}"
+            else:
+                else_clause = ""
 
-            body = node.body
-            body.insert(0, s2)
-            zero = nodes.const(0, nsteps.type)
-            one = nodes.const(1, nsteps.type)
-            range_node = nodes.ForRangeNode(index=temp.load(),
-                                            target=temp.store(), start=zero,
-                                            stop=nsteps.load(), step=one,
-                                            body=body,
-                                            cond_block=node.cond_block,
-                                            target_block=node.target_block,
-                                            body_block=node.body_block,
-                                            exit_block=node.exit_block)
-            return ast.Suite([s1, range_node])
+            templ = textwrap.dedent("""
+                %s
+                {{temp}} = 0
+                while {{temp_load}} < {{nsteps_load}}:
+                    {{target}} = {{start}} + {{temp_load}} * {{step}}
+                    {{body}}
+                    {{temp}} = {{temp_load}} + 1
+                %s
+            """) % (textwrap.dedent(compute_nsteps), else_clause)
+
+            # Leave the bodies empty, they are already analyzed
+            body = ast.Suite(body=[])
+            else_body = ast.Suite(body=[])
+
+            # Substitute template and type infer
+            result = self.run_template(
+                templ, vars=dict(length=Py_ssize_t),
+                start=start, stop=stop, step=step,
+                nsteps=nsteps.store(), nsteps_load=nsteps.load(),
+                temp=temp.store(), temp_load=temp.load(),
+                target=node.target,
+                body=body, else_body=else_body)
+
+            # Patch the body and else clause
+            body.body.extend(node.body)
+            else_body.body.extend(node.orelse)
+
+            # Patch cfg block of target variable to the 'body' block of the
+            # while
+            node.target.variable.block = node.if_block
+
+            # Patch the while with the For nodes cfg blocks
+            while_node = result.body[-1]
+            assert isinstance(while_node, ast.While)
+            attrs = dict(vars(node), **vars(while_node))
+            while_node = nodes.build_while(**attrs)
+            result.body[-1] = while_node
+
+            return result
+
         elif node.iter.type.is_array and node.iter.type.ndim == 1:
             # Convert 1D array iteration to for-range and indexing
             logger.debug(ast.dump(node))
@@ -603,7 +630,15 @@ def badval(type):
 class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                       LateBuiltinResolverMixin, visitors.NoPythonContextMixin):
 
+    def cleanup_symtab(self):
+        "Pop original variables from the symtab"
+        for var in self.symtab.values():
+            if not var.parent_var:
+                self.symtab.pop(var.name, None)
+
     def visit_FunctionDef(self, node):
+        self.cleanup_symtab()
+
         node.decorator_list = self.visitlist(node.decorator_list)
         node.body = self.visitlist(node.body)
 
