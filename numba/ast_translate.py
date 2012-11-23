@@ -1163,7 +1163,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         bb_true = node.if_block.entry_block
         if is_while:
-            self.builder.branch(bb_cond)
+            if not self.is_block_terminated():
+                self.builder.branch(bb_cond)
             self.teardown_loop()
         else:
             self.term_block(bb_endif)
