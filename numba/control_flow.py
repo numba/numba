@@ -25,9 +25,14 @@ from numba import *
 
 debug = False
 #debug = True
+debug_cfg = False
+debug_cfg = True
+
 logger = logging.getLogger(__name__)
 if debug:
     logger.setLevel(logging.DEBUG)
+
+if debug_cfg:
     dot_output_graph = os.path.expanduser("~/cfg.dot")
 else:
     dot_output_graph = False
@@ -455,9 +460,9 @@ class ControlFlow(object):
                     visit(child, result)
             result.append(block)
 
-        # postorder = self.blocks[::-1]
-        postorder = []
-        visit(self.blocks[0], postorder)
+        #postorder = []
+        #visit(self.blocks[0], postorder)
+        postorder = self.blocks[::-1]
 
         # Compute dominance frontier
         for x in postorder:
@@ -1328,7 +1333,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         node.exit_block = self.flow.exit_block(label='exit_for', pos=node)
 
         # Increment temporary variable, continue should branch here
-        node.incr_block = self.flow.newblock(label="for_increment")
+        node.incr_block = self.flow.newblock(label="for_increment", pos=node)
         node.incr_block.branch_here = True
 
         self.flow.loops.append(LoopDescr(node.exit_block, node.incr_block))

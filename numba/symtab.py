@@ -245,7 +245,8 @@ class Symtab(object):
 
     def __getitem__(self, name):
         result = self.lookup(name)
-        assert result is not None
+        if result is None:
+            raise KeyError(name)
         return result
 
     def __setitem__(self, name, variable):

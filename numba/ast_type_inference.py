@@ -27,6 +27,7 @@ debug = False
 #debug = True
 
 logger = logging.getLogger(__name__)
+#logger.setLevel(logging.INFO)
 if debug:
     logger.setLevel(logging.DEBUG)
 
@@ -516,16 +517,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             #print "handled", assignment_node.targets[0].variable
 
     def handle_phi(self, node):
-        if not node.variable.cf_references:
-            # Unused phi
-            node.block.symtab.pop(node.variable.renamed_name)
-            for incoming_var in node.incoming:
-                # A single definition can reach a block multiple times, remove
-                # all references
-                incoming_var.cf_references = [
-                    ref for ref in incoming_var.cf_references if ref != node]
-            return None
-
         # Merge point for different definitions
         incoming = [v for v in node.incoming
                           if not v.type or not v.type.is_uninitialized]
@@ -545,9 +536,41 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         #print "handled", node.variable
         return node
 
+    def kill_unused_phis(self, cfg):
+        """
+        Kill phis which are not referenced. We need to do this bottom-up,
+        i.e. in reverse topological dominator-tree order, since in SSA
+        a definition always lexically precedes a reference.
+
+        This is important, since it kills any unnecessary promotions (e.g.
+        ones to object, which LLVM wouldn't be able to optimize out).
+        """
+        for block in cfg.blocks[::-1]:
+            phi_nodes = []
+            for i, phi in enumerate(block.phi_nodes):
+                if phi.variable.cf_references:
+                    # Used phi
+                    phi_nodes.append(phi)
+                else:
+                    # Unused phi
+                    logging.info("Killing phi: %s", phi)
+                    block.symtab.pop(phi.variable.renamed_name)
+                    for incoming_var in phi.incoming:
+                        # A single definition can reach a block multiple times,
+                        # remove= all references
+                        refs = [ref for ref in incoming_var.cf_references
+                                        if ref.variable is not phi.variable]
+                        incoming_var.cf_references = refs
+
+            block.phi_nodes = phi_nodes
+
     def analyse_assignments(self):
+        """
+        Analyze all variable assignments and phis.
+        """
         cfg = self.ast.flow
-        # visitor = visitors.VariableFindingVisitor()
+        self.kill_unused_phis(cfg)
+
         for block in cfg.blocks:
             phis = []
             for phi in block.phi_nodes:
@@ -585,8 +608,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         # Iteratively update types until everything is resolved or until we
         # can't infer anything more
         # TODO: It would be more efficient to construct a condensation graph
-        # TODO: by and do a topological sort, and then resolving the cycle
-        # TODO: in each condensed node
+        # TODO: and do a topological sort, and then resolve the cycle
+        # TODO: in each SCC (the condensed nodes)
         were_unresolved = set(unresolved)
         changed = True
         iterations = 0

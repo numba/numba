@@ -95,7 +95,9 @@ class Node(ast.AST):
     """
     Superclass for Numba AST nodes
     """
+
     _fields = []
+    _attributes = ('lineno', 'col_offset')
 
     def __init__(self, **kwargs):
         vars(self).update(kwargs)
@@ -450,7 +452,9 @@ class NativeCallNode(FunctionCallNode):
                                         name='func_%s_arg%d' % (self.name, i))
 
     def __repr__(self):
-        if self.name:
+        if self.llvm_func:
+            name = self.llvm_func.name
+        elif self.name:
             name = self.name
         else:
             name = "<unknown(%s)>" % self.signature
@@ -659,6 +663,9 @@ class ObjectTempNode(Node):
         self.llvm_temp = None
         self.type = getattr(node, 'type', node.variable.type)
         self.incref = incref
+
+    def __repr__(self):
+        return "objtemp(%s)" % self.node
 
 class NoneNode(Node):
     """

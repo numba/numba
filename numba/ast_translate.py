@@ -891,6 +891,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         if isinstance(target_node, ast.Name):
             # self.decref(target)
+            # print "Assigning", target_node.variable, error.format_pos(node).rstrip(": ")
             target_node.variable.lvalue = value
         else:
             target = self.visit(target_node)
@@ -926,6 +927,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             raise error.NumbaError(node, "global variables:", node.id)
 
         var = node.variable
+        # print "Referencing", var, error.format_pos(node).rstrip(": ")
         assert var.lvalue
         return var.lvalue
         #lvalue = self.symtab[node.id].lvalue
@@ -1095,6 +1097,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_PromotionNode(self, node):
         lvalue = self.visit(node.node)
         node.variable.lvalue = lvalue
+        # Update basic block in case the promotion created a new block
+        self.flow_block.exit_block = self.builder.basic_block
 
     def visit_ControlBlock(self, node):
         """
@@ -1694,7 +1698,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_BadValue(self, node):
         ltype = node.type.to_llvm(self.context)
-        node.llvm_value = llvm.Constant.undef(ltype)
+        node.llvm_value = llvm.core.Constant.undef(ltype)
         return node.llvm_value
 
     def visit_CloneNode(self, node):
