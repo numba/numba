@@ -520,7 +520,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # Unused phi
             node.block.symtab.pop(node.variable.renamed_name)
             for incoming_var in node.incoming:
-                incoming_var.cf_references.remove(node)
+                # A single definition can reach a block multiple times, remove
+                # all references
+                incoming_var.cf_references = [
+                    ref for ref in incoming_var.cf_references if ref != node]
             return None
 
         # Merge point for different definitions

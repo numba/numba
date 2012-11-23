@@ -659,21 +659,7 @@ class PhiNode(nodes.Node):
         if assmnt is not self:
             self.phis.add((block, assmnt))
 
-    def __str__(self):
-        def format(block, assmnt):
-            if isinstance(assmnt, NameAssignment):
-                return "Block(%d, pos=%s)" % (
-                    block.id, error.format_pos(assmnt.lhs).rstrip(": "))
-            else:
-                assert isinstance(assmnt, PhiNode)
-                return "phi(%s, %s)" % (assmnt.block.id, assmnt.variable.name)
-
-        assmnts = [format(b, assmnt)
-                   for b, assmnt in self.phis]
-        result = "%s = phi(%s)" % (self.variable.name, ", ".join(assmnts))
-        return result
-
-    def __str__(self):
+    def __repr__(self):
         lhs = self.variable.name
         if self.variable.renamed_name:
             lhs = self.variable.unmangled_name
@@ -879,6 +865,10 @@ def warning(node, message):
     print "Warning %s%s" % (error.format_pos(node), message)
     # logger.warning("Warning %s: %s", error.format_postup(getpos(node)), message)
 
+def warn_unreachable(node):
+    if hasattr(node, 'lineno'):
+        print "Warning, unreachable code at %s" % error.format_pos(node).rstrip(': ')
+
 def allow_null(node):
     return False
 
@@ -1054,7 +1044,13 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
     def visit(self, node):
         if hasattr(node, 'lineno'):
             self.mark_position(node)
-        assert self.flow.block
+        if not self.flow.block:
+            # Unreachable code
+            # NOTE: removing this here means there is no validation of the
+            # unreachable code!
+            warn_unreachable(node)
+            return None
+
         return super(ControlFlowAnalysis, self).visit(node)
 
     def visit_FunctionDef(self, node):
