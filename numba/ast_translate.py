@@ -1164,6 +1164,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         bb_true = node.if_block.entry_block
         if is_while:
             self.builder.branch(bb_cond)
+            self.teardown_loop()
         else:
             self.term_block(bb_endif)
 
@@ -1181,10 +1182,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.position_at_end(node.cond_block.exit_block)
         self.builder.cbranch(test, bb_true, bb_false)
         self.builder.position_at_end(bb_endif)
-
-        if is_while:
-            self.teardown_loop()
-
         self.setblock(node.exit_block)
 
     def visit_While(self, node):
@@ -1204,7 +1201,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         bb_exit = self.visit(node.orelse)
 
         self.setup_loop(bb_cond, bb_exit)
-
         self.visit(node.cond_block)
 
         # generate initializer

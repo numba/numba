@@ -381,6 +381,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         ast.closures = []
 
         self.function_level = kwds.get('function_level', 0)
+
         self.init_locals()
         ast.have_return = False
 
@@ -750,7 +751,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if visit_body:
             self.visitlist(node.body)
-        if node.orelse:
+        if visit_body and node.orelse:
             self.visitlist(node.orelse)
 
         return node

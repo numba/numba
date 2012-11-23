@@ -208,8 +208,35 @@ def test_return():
     print
     return "FAILED!"
 
+@autojit
+def test_return2():
+    """
+    >>> test_return2()
+    0
+    1
+    2
+    2L
+    """
+    n = 5
+    for i in range(n):
+        print i
+        n = 0
+        for j in range(n):
+            return 0
+        else:
+            if i < 2:
+                continue
+            elif i == 2:
+                for j in range(i):
+                    return i
+                print "FAILED!"
+            print "FAILED!"
+        print "FAILED!"
+    return -1
+
 #print test_negindex()
 #test_else_clause2()
 #test_else_clause3()
 #test_else_clause4()
+#test_return2()
 testmod()
