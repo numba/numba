@@ -32,7 +32,7 @@ if debug:
 else:
     dot_output_graph = False
 
-class ControlBlock(nodes.Node):
+class ControlBlock(nodes.LowLevelBasicBlockNode):
     """
     Control flow graph node. Sequence of assignments and name references.
     This is simultaneously an AST node.
@@ -61,6 +61,10 @@ class ControlBlock(nodes.Node):
     def __init__(self, id, label='empty', have_code=True,
                  is_expr=False, is_exit=False, pos=None,
                  is_fabricated=False):
+        if pos:
+            label = "%s_%s" % (label, error.format_pos(pos).rstrip(": "))
+        super(ControlBlock, self).__init__(body=[], label=label)
+
         self.id = id
 
         self.children = set()
@@ -81,13 +85,8 @@ class ControlBlock(nodes.Node):
         self.i_kill = 0
         self.i_state = 0
 
-        # AST body. Φ nodes at the right points
-        self.body = []
         self.is_expr = is_expr
         self.is_exit = is_exit
-        self.label = label
-        if pos:
-            self.label = "%s_%s" % (label, error.format_pos(pos).rstrip(": "))
         self.have_code = have_code
 
         # TODO: Make these bits
@@ -108,8 +107,7 @@ class ControlBlock(nodes.Node):
         # LLVM entry and exit blocks. The entry block is the block before the
         # body is evaluated, the exit block the block after the body is
         # evaluated.
-        # The exit block of loop bodies is incorrect
-        self.entry_block = None
+        self.exit_block = None
         self.phi_block = None
         self.exit_block = None
         self.promotions = set()
@@ -781,7 +779,7 @@ class GVContext(object):
             return ''
         #lines[0] = lines[0][begin_col:]
         #lines[-1] = lines[-1][:end_col]
-        return '\\n'.join([line.strip() for line in lines])
+        return '\\n'.join([line.strip() for line in lines if line.strip()])
 
     def render(self, fp, name, annotate_defs=False):
         """Render graphviz dot graph"""
@@ -1089,6 +1087,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         # self.flow.normalize()
         check_definitions(self.flow, self.current_directives)
 
+        # self._render_gv(node)
+
         self.flow.compute_dominators()
         self.flow.compute_dominance_frontier()
         self.flow.update_for_ssa(self.ast, self.symtab)
@@ -1274,17 +1274,22 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         """
         Visit body of while and for loops and handle 'else' clause
         """
+        loop_name = "for" if is_for else "while"
         if if_block:
            node.if_block = if_block
         else:
-            node.if_block = self.flow.nextblock(label='loop_body',
+            node.if_block = self.flow.nextblock(label="%s_body" % loop_name,
                                                 pos=node.body[0])
         self.visitlist(node.body)
         self.flow.loops.pop()
 
         if is_for:
-            node.for_incr = self.flow.nextblock(label="for_increment")
-            node.for_incr.branch_here = True
+            if self.flow.block:
+                self.flow.block.add_child(node.incr_block)
+            # Ensure topological dominator order
+            self.flow.blocks.pop(node.incr_block.id)
+            self.flow.blocks.append(node.incr_block)
+            self.flow.block = node.incr_block
 
         if self.flow.block:
             # Add back-edge
@@ -1292,8 +1297,11 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         # Else clause
         if node.orelse:
-            node.else_block = self.flow.nextblock(parent=node.cond_block,
-                                                  pos=node.orelse[0])
+
+            node.else_block = self.flow.nextblock(
+                        parent=node.cond_block,
+                        label="else_clause_%s" % loop_name,
+                        pos=node.orelse[0])
             self.visitlist(node.orelse)
             if self.flow.block:
                 self.flow.block.add_child(node.exit_block)
@@ -1322,7 +1330,12 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         node.cond_block = self.flow.nextblock(label='for_condition',
                                               pos=node.iter)
         node.exit_block = self.flow.exit_block(label='exit_for', pos=node)
-        self.flow.loops.append(LoopDescr(node.exit_block, node.cond_block))
+
+        # Increment temporary variable, continue should branch here
+        node.incr_block = self.flow.newblock(label="for_increment")
+        node.incr_block.branch_here = True
+
+        self.flow.loops.append(LoopDescr(node.exit_block, node.incr_block))
 
         # Target assignment
         if_block = self.flow.nextblock(label='loop_body', pos=node.body[0])

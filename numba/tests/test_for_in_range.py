@@ -98,6 +98,99 @@ def test_break():
     return i, n
 
 @autojit
+def test_else_clause1():
+    """
+    >>> test_else_clause1()
+    0
+    1
+    2
+    """
+    for i in range(10):
+        if i > 2:
+            break
+        print i
+    else:
+        print "else clause"
+
+@autojit
+def test_else_clause2():
+    """
+    >>> test_else_clause2()
+    0
+    1
+    2
+    else clause
+    """
+    for i in range(10):
+        if i > 2:
+            continue
+        print i
+    else:
+        print "else clause"
+
+@autojit
+def test_else_clause3():
+    """
+    >>> test_else_clause3()
+    0
+    1
+    2
+    else clause
+    """
+    for i in range(3):
+        if i > 2 and i < 2:
+            continue
+        print i
+    else:
+        print "else clause"
+
+@autojit
+def test_else_clause4():
+    """
+    >>> test_else_clause4()
+    Warning 184:43: local variable 'k' might be referenced before assignment
+    Warning 187:36: local variable 'j' might be referenced before assignment
+    inner 0
+    i 0
+    else clause 1 0 9
+    i 1
+    else clause 2 0 9
+    i 2
+    else clause 3 0 9
+    i 3
+    else clause 4 0 9
+    i 4
+    else clause 5 0 9
+    i 5
+    else clause 6 0 9
+    i 6
+    else clause 7 0 9
+    i 7
+    else clause 8 0 9
+    i 8
+    else clause 9 0 9
+    i 9
+    else clause
+    """
+    for i in range(10):
+        for j in range(10):
+            for k in range(10):
+                if i == j and j == k:
+                    print "inner", i
+                    break
+                else:
+                    continue
+            else:
+                print "else clause", i, j, k
+            break
+        else:
+            print "else clause", i, j
+
+        print "i", i
+    else:
+        print "else clause"
+
+@autojit
 def test_return():
     """
     >>> test_return()
@@ -116,4 +209,7 @@ def test_return():
     return "FAILED!"
 
 #print test_negindex()
+#test_else_clause2()
+#test_else_clause3()
+#test_else_clause4()
 testmod()

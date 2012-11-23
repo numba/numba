@@ -23,7 +23,7 @@ import logging
 logger = logging.getLogger(__name__)
 debug_conversion = False
 
-#logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 #debug_conversion = True
 
 _int32_zero = lc.Constant.int(_int32, 0)
@@ -1112,7 +1112,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         self.setblock(node)
         node.prev_block = self.builder.basic_block
-        node.entry_block = self.append_basic_block(label)
+        node.entry_block = node.create_block(self, label)
         if node.branch_here and not self.is_block_terminated():
             self.builder.branch(node.entry_block)
 
@@ -1129,6 +1129,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             node.exit_block = self.builder.basic_block
 
         return lbody
+
+    def visit_LowLevelBasicBlockNode(self, node):
+        llvm_block = node.create_block(self)
+        if not self.is_block_terminated():
+            self.builder.branch(llvm_block)
+        self.builder.position_at_end(llvm_block)
+        return self.visit(node.body)
 
     def visit_If(self, node, is_while=False):
         if not hasattr(node, 'cond_block'):
@@ -1284,13 +1291,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_For(self, node):
         raise error.NumbaError(node, "This node should have been replaced")
-
-    def visit_LowLevelBasicBlockNode(self, node):
-        llvm_block = node.create_block(self)
-        if not self.is_block_terminated():
-            self.builder.branch(llvm_block)
-        self.builder.position_at_end(llvm_block)
-        return self.visit(node.node)
 
     def visit_Return(self, node):
         if node.value is not None:
@@ -1637,7 +1637,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_TempNode(self, node):
         if node.llvm_temp is None:
-            value = self.alloca(node.type)
+            kwds = {}
+            if node.name:
+                kwds['name'] = node.name
+            value = self.alloca(node.type, **kwds)
             node.llvm_temp = value
 
         return node.llvm_temp

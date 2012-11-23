@@ -417,9 +417,9 @@ class TransformForIterable(visitors.NumbaTransformer):
             assert isinstance(target_increment, ast.Assign)
             #incr_block = nodes.LowLevelBasicBlockNode(node=target_increment,
             #                                          name='for_increment')
-            node.for_incr.body = [target_increment]
-            while_node.body[-1] = node.for_incr
-           #  while_node.continue_block = incr_block
+            node.incr_block.body = [target_increment]
+            while_node.body[-1] = node.incr_block
+            while_node.continue_block = node.incr_block
 
             # Patch the while with the For nodes cfg blocks
             attrs = dict(vars(node), **vars(while_node))

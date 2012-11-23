@@ -380,18 +380,18 @@ class LowLevelBasicBlockNode(Node):
     Evaluate a statement or expression in a new LLVM basic block.
     """
 
-    _fields = ['node']
+    _fields = ['body']
 
-    def __init__(self, node, name='unnamed', **kwargs):
+    def __init__(self, body, label='unnamed', **kwargs):
         super(LowLevelBasicBlockNode, self).__init__(**kwargs)
-        self.node = node
-        self.name = name
-        self.llvm_block = None
+        self.body = body
+        self.label = label
+        self.entry_block = None
 
-    def create_block(self, translator):
-        if self.llvm_block is None:
-            self.llvm_block = translator.append_basic_block(self.name)
-        return self.llvm_block
+    def create_block(self, translator, label=None):
+        if self.entry_block is None:
+            self.entry_block = translator.append_basic_block(label or self.label)
+        return self.entry_block
 
 class Name(ast.Name, Node):
 
