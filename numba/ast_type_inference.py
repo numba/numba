@@ -506,7 +506,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # ast.Name parameter to the function
             return
 
-        if isinstance(assignment_node, nodes.For):
+        if isinstance(assignment_node, ast.For):
             # Analyse target variable assignment
             return self.visit_For(assignment_node, visit_body=False)
             #print "handled", assignment_node.target.variable
@@ -606,7 +606,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if unresolved:
             var = unresolved.pop()
             self.error(var.name_assignment.assignment_node,
-                       "Unable to infer type for this statement (var=%s),"
+                       "Unable to infer type for assignment to %s,"
                        " insert a cast or initialize the variable." % var.name)
 
 #        if were_unresolved:
@@ -737,10 +737,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return base_type
 
     def visit_For(self, node, visit_body=True):
-        if node.orelse:
-            raise error.NumbaError(node.orelse,
-                                   'Else in for-loop is not implemented.')
-
         target = node.target
         #if not isinstance(target, ast.Name):
         #    self.error(node.target,
@@ -754,13 +750,12 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if visit_body:
             self.visitlist(node.body)
+        if node.orelse:
+            self.visitlist(node.orelse)
 
         return node
 
     def visit_While(self, node):
-        if node.orelse:
-            raise error.NumbaError(node.orelse,
-                                   'Else in for-loop is not implemented.')
         self.generic_visit(node)
         node.test = nodes.CoercionNode(self.visit(node.test), minitypes.bool_)
         return node

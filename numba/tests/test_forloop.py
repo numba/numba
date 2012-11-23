@@ -24,13 +24,9 @@ def for_loop_fn_0 (iterable):
 # ______________________________________________________________________
 
 def for_loop_fn_1 (start, stop, inc):
-    print "start"
     acc = 0
-    print "..."
     for value in range(start, stop, inc):
-        print "in loop"
         acc += value
-    print "returning"
     return acc
 
 # ______________________________________________________________________

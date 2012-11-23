@@ -1096,13 +1096,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         lvalue = self.visit(node.node)
         node.variable.lvalue = lvalue
 
-    def visit_ControlBlock(self, node, body=None, is_condition_block=False):
+    def visit_ControlBlock(self, node):
         """
         Return a new basic block and handle phis and promotions. Promotions
         are needed at merge (phi) points to have a consistent type.
-
-        If the block (node) is given, but body is None, promotions will be
-        handled by the successors of the block if they contain phis.
         """
         #
         ### Create entry basic block
@@ -1116,7 +1113,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.setblock(node)
         node.prev_block = self.builder.basic_block
         node.entry_block = self.append_basic_block(label)
-        if is_condition_block:
+        if node.branch_here and not self.is_block_terminated():
             self.builder.branch(node.entry_block)
 
         self.builder.position_at_end(node.entry_block)
@@ -1150,10 +1147,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.visit_ControlBlock(node.exit_block)
         bb_endif = node.exit_block.entry_block
         if is_while:
-            self.setup_loop(bb_cond, bb_endif)
+            self.setup_loop(node.continue_block, bb_cond, bb_endif)
 
         # Visit if clauses
         self.visitlist(node.body)
+        #if self.have_cfg:
+        #    self.flow_block.exit_block = self.builder.basic_block
+
         bb_true = node.if_block.entry_block
         if is_while:
             self.builder.branch(bb_cond)
@@ -1177,6 +1177,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         if is_while:
             self.teardown_loop()
+
+        self.setblock(node.exit_block)
 
     def visit_While(self, node):
         self.visit_If(node, is_while=True)
@@ -1265,7 +1267,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             self.builder.branch(end_block)
             self.builder.position_at_end(bb)
 
-    def setup_loop(self, bb_cond, bb_exit):
+    def setup_loop(self, continue_block, bb_cond, bb_exit):
+        if continue_block:
+            # Jump to target index increment block instead of while condition
+            # block for 'for i in range(...):' loops
+            bb_cond = continue_block.create_block(self)
+
         self.loop_beginnings.append(bb_cond)
         self.loop_exits.append(bb_exit)
         self.in_loop += 1
@@ -1277,6 +1284,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_For(self, node):
         raise error.NumbaError(node, "This node should have been replaced")
+
+    def visit_LowLevelBasicBlockNode(self, node):
+        llvm_block = node.create_block(self)
+        if not self.is_block_terminated():
+            self.builder.branch(llvm_block)
+        self.builder.position_at_end(llvm_block)
+        return self.visit(node.node)
 
     def visit_Return(self, node):
         if node.value is not None:

@@ -335,7 +335,11 @@ class If(ast.If, FlowNode):
     pass
 
 class While(ast.While, FlowNode):
-    pass
+
+    # Place to jump to when we see a 'continue'. The default is
+    # 'the condition block'. For 'for' loops we set this to
+    # 'the counter increment block'
+    continue_block = None
 
 class For(ast.For, FlowNode):
     pass
@@ -369,6 +373,25 @@ def build_for(**kwargs):
     merge_cfg_in_ast(basic_block_fields, ['iter', 'body', 'orelse'], result)
     merge_cfg_in_ast(['target_block'], ['target'], result)
     return result
+
+
+class LowLevelBasicBlockNode(Node):
+    """
+    Evaluate a statement or expression in a new LLVM basic block.
+    """
+
+    _fields = ['node']
+
+    def __init__(self, node, name='unnamed', **kwargs):
+        super(LowLevelBasicBlockNode, self).__init__(**kwargs)
+        self.node = node
+        self.name = name
+        self.llvm_block = None
+
+    def create_block(self, translator):
+        if self.llvm_block is None:
+            self.llvm_block = translator.append_basic_block(self.name)
+        return self.llvm_block
 
 class Name(ast.Name, Node):
 
@@ -742,8 +765,9 @@ class TempNode(Node): #, ast.Name):
 
     temp_counter = 0
 
-    def __init__(self, type):
+    def __init__(self, type, name=None):
         self.type = type
+        self.name = name
         self.variable = Variable(type, name='___numba_%d' % self.temp_counter,
                                  is_local=True)
         TempNode.temp_counter += 1
@@ -755,6 +779,13 @@ class TempNode(Node): #, ast.Name):
     def store(self):
         return TempStoreNode(temp=self)
 
+    def __repr__(self):
+        if self.name:
+            name = ", %s" % self.name
+        else:
+            name = ""
+        return "temp(%s%s)" % (self.type, name)
+
 class TempLoadNode(Node):
     _fields = ['temp']
 
@@ -763,8 +794,14 @@ class TempLoadNode(Node):
         self.type = temp.type
         self.variable = Variable(self.type)
 
+    def __repr__(self):
+        return "load(%s)" % self.temp
+
 class TempStoreNode(TempLoadNode):
     _fields = ['temp']
+
+    def __repr__(self):
+        return "store(%s)" % self.temp
 
 class IncrefNode(Node):
 

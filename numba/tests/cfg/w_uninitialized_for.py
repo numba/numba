@@ -86,9 +86,8 @@ __doc__ = """
 >>> jitfunc(simple_for)
 Warning 8:11: local variable 'a' might be referenced before assignment
 >>> jitfunc(simple_for_break)
-Warning 8:12: local variable 'a' might be referenced before assignment
+Warning 14:11: local variable 'a' might be referenced before assignment
 >>> jitfunc(simple_for_pos)
-Warning 14:12: local variable 'a' might be referenced before assignment
 >>> jitfunc(simple_target)
 Warning 26:11: local variable 'i' might be referenced before assignment
 >>> jitfunc(simple_target_f)
@@ -106,5 +105,7 @@ Warning 66:19: local variable 'x' might be referenced before assignment
 """
 
 if __name__ == "__main__":
+    #    jitfunc(simple_for_break)
+    #    jitfunc(simple_for_pos)
     import doctest
     doctest.testmod()

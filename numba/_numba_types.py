@@ -405,6 +405,7 @@ class PromotionType(UnresolvedType):
     def dfs(self, types, seen):
         for type in self.types:
             if type not in seen:
+                seen.add(type)
                 if type.is_unresolved:
                     type = type.resolve()
                 seen.add(type)

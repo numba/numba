@@ -116,6 +116,9 @@ class ControlBlock(nodes.Node):
 
         self.symtab = None
         self.is_fabricated = is_fabricated
+        # If set to True, branch from the previous basic block to this basic
+        # block
+        self.branch_here = False
 
     def empty(self):
         return (not self.stats and not self.positions and not self.phis)
@@ -256,6 +259,7 @@ class ControlFlow(object):
             self.block.stats.append(assignment)
             self.block.gen[entry] = assignment
             self.entries.add(entry)
+            return assignment
 
     def mark_argument(self, lhs, rhs, entry):
         if self.block and self.is_tracked(entry):
@@ -643,6 +647,8 @@ class PhiNode(nodes.Node):
         # self.incoming_blocks = []
         self.incoming = set()
         self.phis = set()
+
+        self.assignment_node = self
 
     @property
     def entry(self):
@@ -1041,7 +1047,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
     def set_default_directives(self):
         self.current_directives.setdefault('warn.maybe_uninitialized', True)
-        self.current_directives.setdefault('warn.unused_result', True)
+        self.current_directives.setdefault('warn.unused_result', False)
         self.current_directives.setdefault('warn.unused', True)
         self.current_directives.setdefault('warn.unused_arg', True)
         self.current_directives.setdefault('control_flow.dot_output', dot_output_graph)
@@ -1116,7 +1122,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                 fp.close()
 
     def mark_assignment(self, lhs, rhs=None, assignment=None, warn_unused=True):
-        assert assignment
         assert self.flow.block
 
         if self.flow.exceptions:
@@ -1128,16 +1133,18 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             rhs = None
 
         lhs = self.visit(lhs)
+        name_assignment = None
         if isinstance(lhs, ast.Name):
-            self.flow.mark_assignment(lhs, rhs, self.symtab[lhs.name],
-                                      assignment, warn_unused=warn_unused)
+            name_assignment = self.flow.mark_assignment(
+                    lhs, rhs, self.symtab[lhs.name], assignment,
+                    warn_unused=warn_unused)
 
         if self.flow.exceptions:
             exc_descr = self.flow.exceptions[-1]
             self.flow.block.add_child(exc_descr.entry_point)
             self.flow.nextblock()
 
-        return lhs
+        return lhs, name_assignment
 
     def mark_position(self, node):
         """Mark position if DOT output is enabled."""
@@ -1150,8 +1157,9 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                                                  (ast.Tuple, ast.List)):
             node.targets = node.targets[0].elts
         for i, target in enumerate(node.targets):
-            node.targets[i] = self.mark_assignment(target, node.value,
-                                                   assignment=node)
+            lhs, name_assignment = self.mark_assignment(target, node.value,
+                                                        assignment=node)
+            node.targets[i] = lhs
         return node
 
     def visit_AugAssign(self, node):
@@ -1262,7 +1270,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                               exit_block=exit_block)
         return self.exit_block(exit_block, node)
 
-    def _visit_loop_body(self, node, if_block=None):
+    def _visit_loop_body(self, node, if_block=None, is_for=None):
         """
         Visit body of while and for loops and handle 'else' clause
         """
@@ -1273,6 +1281,10 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                                                 pos=node.body[0])
         self.visitlist(node.body)
         self.flow.loops.pop()
+
+        if is_for:
+            node.for_incr = self.flow.nextblock(label="for_increment")
+            node.for_incr.branch_here = True
 
         if self.flow.block:
             # Add back-edge
@@ -1303,22 +1315,26 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         return nodes.build_while(**vars(node))
 
     def visit_For(self, node):
+        # Evaluate iterator in previous block
+        node.iter = self.visit(node.iter)
+
+        # Start condition block
         node.cond_block = self.flow.nextblock(label='for_condition',
                                               pos=node.iter)
-        node.exit_block = self.flow.newblock(label='exit_for', pos=node)
-
-        # Condition with iterator
+        node.exit_block = self.flow.exit_block(label='exit_for', pos=node)
         self.flow.loops.append(LoopDescr(node.exit_block, node.cond_block))
-        node.iter = self.visit(node.iter)
 
         # Target assignment
         if_block = self.flow.nextblock(label='loop_body', pos=node.body[0])
         #node.target_block = self.flow.nextblock(label='for_target',
         #                                        pos=node.target)
-        node.target = self.mark_assignment(node.target, assignment=node,
-                                           warn_unused=False)
-        self._visit_loop_body(node, if_block=if_block)
-        return nodes.For(**vars(node))
+        node.target, name_assignment = self.mark_assignment(
+                    node.target, assignment=None, warn_unused=False)
+        self._visit_loop_body(node, if_block=if_block, is_for=True)
+        node = nodes.For(**vars(node))
+        if name_assignment:
+            name_assignment.assignment_node = node
+        return node
 
     def visit_With(self, node):
         node.context_expr = self.visit(node.context_expr)
@@ -1368,6 +1384,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         else:
             self.flow.block.add_child(loop.next_block)
 
+        #self.flow.nextblock(parent=loop.next_block)
         self.flow.block = None
         return node
 

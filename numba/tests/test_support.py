@@ -5,7 +5,11 @@ import functools
 
 from nose.tools import nottest
 import nose.plugins.skip
-from numba.decorators import jit as jit_, autojit
+import numba
+from numba import *
+import doctest_support
+
+jit_ = jit
 
 import __builtin__
 
@@ -38,4 +42,15 @@ class StdoutReplacer(object):
     def __exit__(self, *args):
         sys.stdout = self.out
 
-from .bytecode.test_support import ByteCodeTestCase
+from bytecode.test_support import ByteCodeTestCase
+
+def testmod():
+    """
+    Tests a doctest modules with numba functions. When run in nosetests, only
+    populates module.__test__, when run as main, runs the doctests.
+    """
+    modname = sys._getframe(1).f_globals['__name__']
+    mod = __import__(modname)
+    doctest_support.testmod(mod, run_doctests=modname == '__main__')
+    #if modname == '__main__':
+    #    numba.nose_run(mod)

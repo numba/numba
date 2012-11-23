@@ -343,17 +343,14 @@ class TransformForIterable(visitors.NumbaTransformer):
     """
 
     def visit_For(self, node):
-        if node.orelse:
-            raise error.NumbaError(node, 'Else in for-loop is not implemented.')
-
         if node.iter.type.is_range:
             #
             ### Handle range iteration
             #
             self.generic_visit(node)
 
-            temp = nodes.TempNode(node.target.type)
-            nsteps = nodes.TempNode(Py_ssize_t)
+            temp = nodes.TempNode(node.target.type, 'target_temp')
+            nsteps = nodes.TempNode(Py_ssize_t, 'nsteps')
             start, stop, step = unpack_range_args(node.iter)
 
             if isinstance(step, nodes.ConstNode):
@@ -368,8 +365,10 @@ class TransformForIterable(visitors.NumbaTransformer):
                 compute_nsteps = """
                     $length = {{stop}} - {{start}}
                     {{nsteps}} = $length / {{step}}
-                    if $length % {{step}}:
+                    if {{nsteps_load}} * {{step}} != $length: #$length % {{step}}:
+                        # Test for truncation
                         {{nsteps}} = {{nsteps_load}} + 1
+                    # print "nsteps", {{nsteps_load}}
                 """
             else:
                 compute_nsteps = "{{nsteps}} = {{stop}} - {{start}}"
@@ -410,9 +409,19 @@ class TransformForIterable(visitors.NumbaTransformer):
             # while
             node.target.variable.block = node.if_block
 
-            # Patch the while with the For nodes cfg blocks
+            # Create the place to jump to for 'continue'
             while_node = result.body[-1]
             assert isinstance(while_node, ast.While)
+
+            target_increment = while_node.body[-1]
+            assert isinstance(target_increment, ast.Assign)
+            #incr_block = nodes.LowLevelBasicBlockNode(node=target_increment,
+            #                                          name='for_increment')
+            node.for_incr.body = [target_increment]
+            while_node.body[-1] = node.for_incr
+           #  while_node.continue_block = incr_block
+
+            # Patch the while with the For nodes cfg blocks
             attrs = dict(vars(node), **vars(while_node))
             while_node = nodes.build_while(**attrs)
             result.body[-1] = while_node
