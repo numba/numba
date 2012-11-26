@@ -600,10 +600,13 @@ class BoolType(NamedType):
     name = "bool"
 
     def __repr__(self):
-        return "int %s" % " ".join(self.qualifiers)
+        return ("int %s" % " ".join(self.qualifiers)).rstrip()
+
+    def __str__(self):
+        return ("bool %s" % " ".join(self.qualifiers)).rstrip()
 
     def to_llvm(self, context):
-        return int8.to_llvm(context)
+        return llvm.core.Type.int(1)
 
 class NumericType(NamedType):
     """

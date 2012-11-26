@@ -924,9 +924,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_Name(self, node):
         var = node.variable
-        assert var.lvalue
+        assert var.lvalue, var
 
-        if not node.variable.is_local:
+        if not node.variable.is_local and not node.variable.is_constant:
             raise error.NumbaError(node, "global variables:", node.id)
 
         if getattr(node, 'check_unbound', None):
@@ -1195,8 +1195,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.branch(bb_cond)
 
         self.builder.position_at_end(node.cond_block.exit_block)
+        # assert not self.is_block_terminated()
         self.builder.cbranch(test, bb_true, bb_false)
-        self.builder.position_at_end(bb_endif)
+        self.builder.position_at_end(node.exit_block.exit_block)
         self.setblock(node.exit_block)
 
     def visit_While(self, node):

@@ -154,6 +154,36 @@ def test_circular_compare2():
 
     return x, y
 
+@autojit(warn=False)
+def test_circular_compare3():
+    """
+    >>> test_circular_compare3()
+    1
+    2
+    3
+    4
+    (False, 10L)
+    >>> sig, syms = infer(test_circular_compare3.py_func,
+    ...                   functype(None, []), warn=False)
+    >>> map(str, types(syms, 'cond', 'x'))
+    ['bool', 'Py_ssize_t']
+    """
+    x = 1
+    cond = True
+    for i in range(10):
+        if cond:
+            x = i
+        else:
+            x = i + 1
+        cond = x > 1 and x < 5
+        if cond:
+            x = cond or x < i
+            cond = x
+            x = i
+            print i
+
+    return cond, x
+
 #
 ### Test indexing
 #
@@ -303,5 +333,4 @@ def test_circular_error():
         else:
             y = x
 
-#print test_delayed_string_indexing()
 testmod()

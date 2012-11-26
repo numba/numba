@@ -565,6 +565,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
             args = [nodes.CoercionNode(node.node, int64),
                     nodes.ObjectInjectNode(ctypes_pointer_type, object_)]
             new_node = nodes.call_pyfunc(ctypes.cast, args)
+        elif node_type.is_bool:
+            new_node = self.function_cache.call("PyBool_FromLong", node.node)
 
         self.generic_visit(new_node)
         return new_node
@@ -1200,6 +1202,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
         if (is_obj(node.type) and isinstance(node.ctx, ast.Load) and
                 getattr(node, 'cf_maybe_null', False)):
+            # Check for unbound objects and raise UnboundLocalError if so
             value = nodes.LLVMValueRefNode(Py_uintptr_t, None)
             node.loaded_name = value
 

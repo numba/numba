@@ -437,8 +437,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             raise error.NumbaError(
                     "Incorrect number of types specified in @jit()")
 
-        self.symtab['None'] = Variable(numba_types.none, is_constant=True,
-                                       constant_value=None)
+        self.symtab['None'] = Variable(numba_types.none, name='None',
+                                       is_constant=True, constant_value=None)
+        self.symtab['True'] = Variable(bool_, name='True', is_constant=True,
+                                       constant_value=True)
+        self.symtab['False'] = Variable(bool_, name='False', is_constant=True,
+                                       constant_value=False)
+
 
         arg_types = list(arg_types)
         for local_name, local_type in self.locals.iteritems():
@@ -818,7 +823,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         from numba import functions
 
         var = self.current_scope.lookup(node.id)
-        is_none = var and node.id == 'None'
+        is_none = var and node.id in ('None', 'True', 'False')
         if var and (var.is_local or is_none):
             if isinstance(node.ctx, ast.Param) or is_none:
                 variable = self.symtab[node.id]
@@ -1468,7 +1473,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def visit_If(self, node):
         self.generic_visit(node)
-        node.test = nodes.CoercionNode(node.test, minitypes.bool_)
+        if isinstance(node.test, control_flow.ControlBlock):
+            node.test.body[0] = nodes.CoercionNode(
+                                node.test.body[0], minitypes.bool_)
+        else:
+            node.test = nodes.CoercionNode(node.test, minitypes.bool_)
         return node
 
     #

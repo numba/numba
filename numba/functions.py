@@ -659,6 +659,10 @@ class PyFloat_FromString(ExternalFunction):
     arg_types = [object_, c_string_type.pointer()]
     return_type = object_
 
+class PyBool_FromLong(ExternalFunction):
+    arg_types = [long_]
+    return_type = object_
+
 #
 ### Conversion of native types to object
 #
