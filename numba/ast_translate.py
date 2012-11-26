@@ -923,12 +923,21 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return self.generate_constant_complex(node.n)
 
     def visit_Name(self, node):
+        var = node.variable
+        assert var.lvalue
+
         if not node.variable.is_local:
             raise error.NumbaError(node, "global variables:", node.id)
 
-        var = node.variable
+        if getattr(node, 'check_unbound', None):
+            # Path the LLVMValueRefNode, we don't want a Name since it would
+            # check for unbound variables recursively
+            int_type = Py_uintptr_t.to_llvm(self.context)
+            value_p = self.builder.ptrtoint(var.lvalue, int_type)
+            node.loaded_name.llvm_value = value_p
+            self.visit(node.check_unbound)
+
         # print "Referencing", var, error.format_pos(node).rstrip(": ")
-        assert var.lvalue
         return var.lvalue
         #lvalue = self.symtab[node.id].lvalue
         #return self._handle_ctx(node, lvalue)

@@ -11,7 +11,7 @@ import numba
 from numba import llvm_types, extension_types
 from numba.minivect.minitypes import *
 from numba.minivect.minitypes import map_dtype
-from numba.minivect import minitypes
+from numba.minivect import minitypes, minierror
 from numba.minivect.ctypes_conversion import (convert_from_ctypes,
                                               convert_to_ctypes)
 
@@ -381,10 +381,11 @@ class PromotionType(UnresolvedType):
 
     is_promotion = True
 
-    def __init__(self, variable, context, types, **kwds):
+    def __init__(self, variable, context, types, assignment=False, **kwds):
         super(PromotionType, self).__init__(variable, **kwds)
         self.context = context
         self.types = types
+        self.assignment = assignment
 
     def add_type(self, seen, type, types):
         if type not in seen:
@@ -414,7 +415,7 @@ class PromotionType(UnresolvedType):
                 elif not type.is_uninitialized:
                     types.add(type)
 
-    def simplify(self, seen=None):
+    def _simplify(self, seen=None):
         """
         Simplify a promotion type tree:
 
@@ -446,9 +447,11 @@ class PromotionType(UnresolvedType):
             return False
         else:
             # Simplify as much as possible
-            result_type = resolved_types[0]
-            for type in resolved_types[1:]:
-                result_type = self.context.promote_types(result_type, type)
+            if self.assignment:
+                result_type = promote_for_assignment(self.context, resolved_types,
+                                                     self.variable.name)
+            else:
+                result_type = promote_for_arithmetic(self.context, resolved_types)
 
             if len(resolved_types) == len(types):
                 self.variable.type = result_type
@@ -456,6 +459,18 @@ class PromotionType(UnresolvedType):
                 self.types = set([result_type] + unresolved_types)
 
             return True
+
+    def simplify(self, seen=None):
+        try:
+            return self._simplify(seen)
+        except minierror.UnpromotableTypeError, e:
+            raise
+            if self.variable.name:
+                name = "variable %s" % self.variable.name
+            else:
+                name = "subexpression"
+            raise TypeError(
+                        "Cannot promote types %s for %s" % (e.args[0], name))
 
     @classmethod
     def promote(cls, *types):
@@ -629,6 +644,51 @@ class NumbaTypeMapper(minitypes.TypeMapper):
 
         return super(NumbaTypeMapper, self).promote_types(type1, type2)
 
+
+def _validate_array_types(array_types):
+    first_array_type = array_types[0]
+    for array_type in array_types[1:]:
+        if array_type.ndim != first_array_type.ndim:
+            raise TypeError(
+                "Cannot unify arrays with distinct dimensionality: "
+                "%d and %d" % (first_array_type.ndim, array_type.ndim))
+        elif array_type.dtype != first_array_type.dtype:
+            raise TypeError("Cannot unify arrays with distinct dtypes: "
+                            "%s and %s" % (first_array_type.dtype,
+                                           array_type.dtype))
+
+
+def promote_for_arithmetic(context, types):
+    result_type = types[0]
+    for type in types[1:]:
+        result_type = context.promote_types(result_type, type)
+
+    return result_type
+
+def promote_for_assignment(context, types, var_name):
+    """
+    Promote a list of types for assignment (e.g. in a phi node).
+    If there are any objects, the result will always be an object.
+    """
+    obj_types = [type for type in types if context.is_object(type)]
+    if obj_types:
+        array_types = [obj_type for obj_type in obj_types if obj_type.is_array]
+        non_array_types = [type for type in types if not type.is_array]
+        if array_types:
+            _validate_array_types(array_types)
+            if len(array_types) < len(types):
+                raise TypeError(
+                        "Arrays must have consistent types in assignment "
+                        "for variable %r: '%s' and '%s'" % (
+                            var_name, array_types[0], non_array_types[0]))
+            resolved_types = array_types
+        else:
+            # resolved_types = obj_types
+            return object_
+    else:
+        resolved_types = types
+
+    return promote_for_arithmetic(context, resolved_types)
 
 if __name__ == '__main__':
     import doctest

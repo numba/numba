@@ -1,3 +1,5 @@
+import numpy as np
+
 from numba.tests.test_support import *
 from numba.minivect import minitypes
 from numba import pipeline, decorators, functions
@@ -88,6 +90,38 @@ def test_if_reassign(obj1, obj2):
 
     return obj1, obj2
 
+@autojit
+def test_if_reassign2(value, obj1, obj2):
+    """
+    >>> test_if_reassign2(0, *values[:2])
+    (4.0, 5.0, 'egel')
+    >>> test_if_reassign2(1, *values[:2])
+    ('hello', 'world', 'hedgehog')
+    >>> test_if_reassign2(2, *values[:2])
+    ([Value(0)], Value(12), 'igel')
+
+    >>> sig, syms = infer(test_if_reassign2.py_func,
+    ...                   functype(None, [int_, object_, object_]))
+    >>> types(syms, 'obj1', 'obj2', 'obj3')
+    (object_, object_, const char *)
+    """
+    x = 4.0
+    y = 5.0
+    z = "hedgehog"
+    if value < 1:
+        obj1 = x
+        obj2 = y
+        obj3 = "egel"
+    elif value < 2:
+        obj1 = "hello"
+        obj2 = "world"
+        obj3 = z
+    else:
+        obj1 = [obj1]
+        obj2 = Value(12)
+        obj3 = "igel"
+
+    return obj1, obj2, obj3
 
 @autojit
 def test_for_reassign(obj1, obj2, obj3, obj4):
@@ -154,5 +188,39 @@ def test_while_reassign(obj1, obj2, obj3, obj4):
         obj4 = 0
 
     return obj1, obj2, obj3, obj4
+
+
+@autojit
+def test_conditional_assignment(value):
+    """
+    >>> test_conditional_assignment(0)
+    Warning 208:11: local variable 'obj1' might be referenced before assignment
+    array([ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.], dtype=float32)
+
+    >>> test_conditional_assignment(1)
+    Traceback (most recent call last):
+        ...
+    UnboundLocalError: 208:11: obj1
+    """
+    if value < 1:
+        obj1 = np.ones(10, dtype=np.float32)
+
+    return obj1
+
+#
+### Test for errors
+#
+@autojit
+def test_error_array_variable1(value, obj1):
+    """
+    >>> test_error_array_variable1(0, object())
+    Traceback (most recent call last):
+        ...
+    TypeError: Arrays must have consistent types in assignment for variable 'obj1': 'float[:]' and 'object_'
+    """
+    if value < 1:
+        obj1 = np.empty(10, dtype=np.float32)
+
+    return obj1
 
 testmod()

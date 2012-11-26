@@ -186,6 +186,7 @@ class TypeMapper(object):
         else:
             raise minierror.UnpromotableTypeError((type1, type2))
 
+
 def map_dtype(dtype):
     """
     Map a NumPy dtype to a minitype.

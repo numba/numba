@@ -530,7 +530,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         incoming_types = [v.type for v in incoming]
         promoted_type = numba_types.PromotionType(node.variable, self.context,
-                                                  incoming_types)
+                                                  incoming_types, assignment=True)
         promoted_type.simplify()
         node.variable.type = promoted_type.resolve()
         #print "handled", node.variable

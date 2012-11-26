@@ -26,7 +26,7 @@ from numba import *
 debug = False
 #debug = True
 debug_cfg = False
-debug_cfg = True
+#debug_cfg = True
 
 logger = logging.getLogger(__name__)
 if debug:

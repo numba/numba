@@ -397,6 +397,11 @@ class LowLevelBasicBlockNode(Node):
 
 class Name(ast.Name, Node):
 
+    cf_maybe_null = False
+    raise_unbound_node = None
+
+    _fields = ['check_unbound']
+
     def __init__(self, id, ctx, *args, **kwargs):
         super(Name, self).__init__(*args, **kwargs)
         self.id = self.name = id

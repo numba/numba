@@ -622,6 +622,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
 def badval(type):
     if type.is_object or type.is_array:
         value = nodes.NULL_obj
+        if type != object_:
+            value = value.coerce(type)
     elif type.is_void:
         value = None
     elif type.is_float:
@@ -1195,6 +1197,21 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         if node.type.is_builtin and not node.variable.is_local:
             obj = getattr(builtins, node.name)
             return nodes.ObjectInjectNode(obj, node.type)
+
+        if (is_obj(node.type) and isinstance(node.ctx, ast.Load) and
+                getattr(node, 'cf_maybe_null', False)):
+            value = nodes.LLVMValueRefNode(Py_uintptr_t, None)
+            node.loaded_name = value
+
+            exc_msg = node.variable.name
+            if hasattr(node, 'lineno'):
+               exc_msg = '%s%s' % (error.format_pos(node), exc_msg)
+
+            check_unbound = nodes.CheckErrorNode(
+                    value, badval=nodes.const(0, Py_uintptr_t),
+                    exc_type=UnboundLocalError,
+                    exc_msg=exc_msg)
+            node.check_unbound = self.visit(check_unbound)
 
         return super(LateSpecializer, self).visit_Name(node)
 
