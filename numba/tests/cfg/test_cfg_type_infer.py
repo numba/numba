@@ -2,7 +2,7 @@ import numpy as np
 
 from numba.tests.test_support import *
 from numba.minivect import minitypes
-from numba import pipeline, decorators, functions
+from numba import pipeline, decorators, functions, error
 
 order = pipeline.Pipeline.order
 order = order[:order.index('dump_cfg') + 1]
@@ -23,10 +23,11 @@ def lookup(block, var_name):
 def types(symtab, *varnames):
     return tuple(symtab[varname].type for varname in varnames)
 
-def infer(func, signature=functype()):
+def infer(func, signature=functype(), warn=True):
     ast = functions._get_ast(func)
     pipe, (signature, symtab, ast) = pipeline.run_pipeline(
-                        decorators.context, func, ast, signature, order=order)
+                        decorators.context, func, ast, signature,
+                        order=order, warn=warn)
 
     last_block = ast.flow.blocks[-2]
     symbols = {}
@@ -207,6 +208,7 @@ def test_conditional_assignment(value):
 
     return obj1
 
+
 #
 ### Test for errors
 #
@@ -222,5 +224,6 @@ def test_error_array_variable1(value, obj1):
         obj1 = np.empty(10, dtype=np.float32)
 
     return obj1
+
 
 testmod()

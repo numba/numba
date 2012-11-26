@@ -1094,7 +1094,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return
 
         old = self.flow_block
-        self.flow_block = cfg_basic_block
         if old and not old.exit_block:
             if old.id == 1:
                 # Handle promotions from the entry block. This is somewhat
@@ -1102,6 +1101,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 # in the AST
                 self.visitlist(old.body)
             old.exit_block = self.builder.basic_block
+
+        self.flow_block = cfg_basic_block
 
     def visit_PromotionNode(self, node):
         lvalue = self.visit(node.node)

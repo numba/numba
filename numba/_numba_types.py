@@ -8,7 +8,7 @@ import numpy as np
 # from numpy.ctypeslib import _typecodes
 
 import numba
-from numba import llvm_types, extension_types
+from numba import llvm_types, extension_types, error
 from numba.minivect.minitypes import *
 from numba.minivect.minitypes import map_dtype
 from numba.minivect import minitypes, minierror
@@ -254,7 +254,6 @@ class CastType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "<cast(%s)>" % self.dst_type
 
-
 class ExtensionType(NumbaType, minitypes.ObjectType):
 
     is_extension = True
@@ -355,6 +354,7 @@ class UnresolvedType(NumbaType):
     def __init__(self, variable, **kwds):
         super(UnresolvedType, self).__init__(**kwds)
         self.variable = variable
+        self.assertions = []
 
     def __hash__(self):
         return hash(self.variable)
@@ -369,13 +369,24 @@ class UnresolvedType(NumbaType):
     def simplify(self):
         return not (self.resolve() is self)
 
+    def make_assertion(self, assertion_attr, node, msg):
+        def assertion(result_type):
+            if not getattr(result_type, assertion_attr):
+                raise error.NumbaError(node, msg)
+        self.assertions.append(assertion)
+
+    def process_assertions(self, result_type):
+        for assertion in self.assertions:
+            assertion(result_type)
+
+        del self.assertions[:]
+
     def resolve(self):
-#        if self.variable.name and self.variable.unmangled_name == 'acc_2':
-#            print self.variable.type
-#            print '...'
         if not self.variable.type:
             self.variable.type = self
-        return self.variable.type
+        result = self.variable.type
+        self.process_assertions(result)
+        return result
 
 class PromotionType(UnresolvedType):
 
@@ -529,6 +540,32 @@ class DeferredType(UnresolvedType):
     def to_llvm(self, context):
         assert self.resolved_type, self
         return self.resolved_type.to_llvm(context)
+
+class ArrayIndexType(UnresolvedType):
+    """
+    Used when array indices have unresolved types.
+    """
+
+    def __init__(self, type_inferer, array_node, slice_nodes,
+                 subscript_node, **kwds):
+        super(ArrayIndexType, self).__init__(subscript_node.variable, **kwds)
+        self.type_inferer = type_inferer
+        self.array_node = array_node
+        self.slice_nodes = slice_nodes
+        self.subscript_node = subscript_node
+
+    def simplify(self):
+        for index in self.slice_nodes:
+            if index.variable.type.is_unresolved:
+                index.variable.type.simplify()
+                index.variable.type = index.variable.type.resolve()
+            if index.variable.type.is_unresolved:
+                return False
+
+        result_type, self.subscript_node.value = self.type_inferer._unellipsify(
+                self.array_node, self.slice_nodes, self.subscript_node)
+        self.variable.type = result_type
+        return True
 
 class UnanalyzableType(UnresolvedType):
     """

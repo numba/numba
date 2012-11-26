@@ -1025,6 +1025,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                                                   *args, **kwargs)
         self.visitchildren = self.generic_visit
         self.current_directives = kwargs.get('directives', None) or {}
+        self.current_directives['warn'] = kwargs.get('warn', True)
         self.set_default_directives()
         symtab = kwargs.get('symtab', None) or {}
         self.symtab = initialize_symtab(self.local_names, self.symtab)
@@ -1039,10 +1040,11 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.flow = ControlFlow(self.source_descr)
 
     def set_default_directives(self):
-        self.current_directives.setdefault('warn.maybe_uninitialized', True)
+        warn = self.current_directives['warn']
+        self.current_directives.setdefault('warn.maybe_uninitialized', warn)
         self.current_directives.setdefault('warn.unused_result', False)
-        self.current_directives.setdefault('warn.unused', True)
-        self.current_directives.setdefault('warn.unused_arg', True)
+        self.current_directives.setdefault('warn.unused', warn)
+        self.current_directives.setdefault('warn.unused_arg', warn)
         self.current_directives.setdefault('control_flow.dot_output', dot_output_graph)
         self.current_directives.setdefault('control_flow.dot_annotate_defs', False)
 
