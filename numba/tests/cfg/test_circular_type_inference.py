@@ -113,15 +113,18 @@ def test_circular_binop():
 
     return x, y, z, a
 
+#
+### Test indexing
+#
 @autojit(warn=False)
-def test_delayed_indexing():
+def test_delayed_array_indexing():
     """
-    >>> test_delayed_indexing()
-    array([ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9.])
-    >>> sig, syms = infer(test_delayed_indexing.py_func,
+    >>> test_delayed_array_indexing()
+    (array([ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9.]), 1.0, 10L)
+    >>> sig, syms = infer(test_delayed_array_indexing.py_func,
     ...                   functype(None, []), warn=False)
-    >>> types(syms, 'array', 'x')
-    (double[:], int)
+    >>> types(syms, 'array', 'var', 'x')
+    (double[:], double, int)
     """
     array = np.ones(10, dtype=np.double)
     x = 0
@@ -130,7 +133,119 @@ def test_delayed_indexing():
         array[x] = var * x
         x = int(i * 1.0)
 
-    return array
+    return array, var, x
+
+@autojit(warn=False)
+def test_delayed_array_slicing():
+    """
+    >>> test_delayed_array_slicing()
+    [[ 0.  1.  1.  1.  1.  1.  1.  1.  1.  1.]
+     [ 1.  1.  1.  1.  1.  1.  1.  1.  1.  1.]
+     [ 1.  1.  2.  1.  1.  1.  1.  1.  1.  1.]
+     [ 1.  1.  1.  3.  1.  1.  1.  1.  1.  1.]
+     [ 1.  1.  1.  1.  4.  1.  1.  1.  1.  1.]
+     [ 1.  1.  1.  1.  1.  5.  1.  1.  1.  1.]
+     [ 1.  1.  1.  1.  1.  1.  6.  1.  1.  1.]
+     [ 1.  1.  1.  1.  1.  1.  1.  7.  1.  1.]]
+    [ 1.  1.  1.  1.  1.  1.  1.  7.  1.  1.]
+    >>> sig, syms = infer(test_delayed_array_slicing.py_func,
+    ...                   functype(None, []), warn=False)
+    >>> types(syms, 'array', 'row')
+    (double[:, :], double[:])
+    """
+    array = np.ones((8, 10), dtype=np.double)
+    for i in range(8):
+        row = array[i, :]
+        array[i, i] = row[i] * i
+        array = array[:, :]
+
+    print array
+    print row
+
+
+@autojit(warn=False)
+def test_delayed_array_slicing2():
+    """
+    >>> test_delayed_array_slicing2()
+    [[ 0.  1.  1.  1.  1.  1.  1.  1.  1.  1.]
+     [ 1.  1.  1.  1.  1.  1.  1.  1.  1.  1.]
+     [ 1.  1.  2.  1.  1.  1.  1.  1.  1.  1.]
+     [ 1.  1.  1.  3.  1.  1.  1.  1.  1.  1.]
+     [ 1.  1.  1.  1.  4.  1.  1.  1.  1.  1.]
+     [ 1.  1.  1.  1.  1.  5.  1.  1.  1.  1.]
+     [ 1.  1.  1.  1.  1.  1.  6.  1.  1.  1.]
+     [ 1.  1.  1.  1.  1.  1.  1.  7.  1.  1.]]
+    [ 1.  1.  1.  1.  1.  1.  1.  7.  1.  1.]
+    >>> sig, syms = infer(test_delayed_array_slicing.py_func,
+    ...                   functype(None, []), warn=False)
+    >>> types(syms, 'array', 'row')
+    (double[:, :], double[:])
+    """
+    for i in range(8):
+        if i == 0:
+            array = np.ones((8, 10), dtype=np.double)
+
+        row = array[i, :]
+        array[i, i] = row[i] * i
+        array = array[:, :]
+
+    print array
+    print row
+
+
+@autojit(warn=False)
+def test_delayed_string_indexing():
+    """
+    >>> test_delayed_string_indexing()
+    ('ham eggs', 3L)
+    >>> sig, syms = infer(test_delayed_string_indexing.py_func,
+    ...                   functype(None, []), warn=False)
+    >>> types(syms, 's', 'x')
+    (const char *, Py_ssize_t)
+    """
+    s = "spam ham eggs"
+    for i in range(4):
+        if i < 3:
+            x = i
+            tmp1 = s[x:]
+            tmp2 = tmp1
+            s = tmp2
+        elif i < 5:
+            s = tmp1[x:]
+        else:
+            s = "hello"
+
+        x = i
+
+    return s, x
+
+@autojit(warn=False)
+def test_delayed_string_indexing2():
+    """
+    >>> test_delayed_string_indexing2()
+    ('ham eggs', 3L)
+    >>> sig, syms = infer(test_delayed_string_indexing2.py_func,
+    ...                   functype(None, []), warn=False)
+    >>> types(syms, 's', 'x')
+    (const char *, Py_ssize_t)
+    """
+    for i in range(4):
+        if i == 0:
+            s = "spam ham eggs"
+
+        if i < 3:
+            x = i
+            tmp1 = s[x:]
+            tmp2 = tmp1
+            s = tmp2
+        elif i < 5:
+            s = tmp1[x:]
+        else:
+            s = "hello"
+
+        x = i
+
+    return s, x
 
 @autojit
 def test_circular_error():
@@ -147,5 +262,5 @@ def test_circular_error():
         else:
             y = x
 
-#test_delayed_indexing()
+#print test_delayed_string_indexing()
 testmod()

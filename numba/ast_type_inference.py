@@ -621,6 +621,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     # Re-analayze statement
                     self.handle_NameAssignment(variable.assignment_node)
                 elif variable.type.is_unresolved:
+                    old_changed = changed
                     changed |= variable.type.simplify()
 
                 if variable.type.is_unresolved:
@@ -852,6 +853,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     pass
 
         node.variable = variable
+        if variable.type and variable.type.is_unresolved:
+            variable.type = variable.type.resolve()
         return node
 
     def visit_BoolOp(self, node):
@@ -952,14 +955,43 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif not type.is_int:
             self.error(node, "Excepted an integer")
 
-    def visit_Subscript(self, node):
-        node.value = self.visit(node.value)
-        node.slice = self.visit(node.slice)
+    def get_resolved_type(self, type):
+        if type.is_unresolved:
+            type.simplify()
+            type = type.resolve()
+            if type.is_promotion and len(type.types) == 2:
+                type1, type2 = type.types
+                if type1.is_deferred and type2.is_deferred:
+                    return type
+                elif type1.is_deferred:
+                    return type2, type1
+                elif type2.is_deferred:
+                    return type1, type2
+                else:
+                    return None, type
+        else:
+            return type, None
+
+    def visit_Subscript(self, node, visitchildren=True):
+        if visitchildren:
+            node.value = self.visit(node.value)
+            node.slice = self.visit(node.slice)
+
+        # Initialize to unanalyzable
+        node.variable = Variable(None)
+        # node.variable.type = numba_types.UnanalyzableType(node.variable)
 
         value_type = node.value.variable.type
+        if value_type.is_unresolved:
+            node.variable.type = numba_types.DeferredIndexType(
+                                        node.variable, self, node)
+            return node
+        #partial_type, delayed_type = self.get_resolved_type(value_type)
+
         slice_variable = node.slice.variable
+        slice_type = slice_variable.type
         if value_type.is_array:
-            slice_type = slice_variable.type
+            # Handle array indexing
             if (slice_type.is_tuple and
                     isinstance(node.slice, ast.Index)):
                 node.slice = node.slice.value
@@ -986,7 +1018,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                     self, node.value, slices, node)
                 node.variable.type.simplify()
                 return node
+
         elif value_type.is_carray:
+            # Handle C array indexing
             if (not slice_variable.type.is_int and not
                     slice_variable.type.is_unresolved):
                 self.error(node.slice, "Can only index with an int")
@@ -995,24 +1029,38 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
             # node.slice = node.slice.value
             result_type = value_type.base_type
+
         elif value_type.is_struct:
             node = self._handle_struct_index(node, value_type)
             return self.visit(node)
+
         elif value_type.is_pointer:
             self.assert_index(slice_variable.type)
             result_type = type.base_type
+
         elif value_type.is_object:
             result_type = object_
-        elif value_type.is_c_string:
-            if index_type.is_int:
-                result_type = char
-            else:
-                result_type = c_string_type
-        else:
-            op = ('sliced', 'indexed')[index_type.is_int]
-            raise error.NumbaError(node, "object of type %s cannot be %s" % (type, op))
 
-        node.variable = Variable(result_type)
+        elif value_type.is_c_string:
+            # Handle string indexing
+            if slice_type.is_int:
+                result_type = char
+            elif slice_type.is_slice:
+                result_type = c_string_type
+            elif slice_type.is_unresolved:
+                return node
+            else:
+                # TODO: check for insanity
+                node.value = nodes.CoercionNode(node.value, object_)
+                node.slice = nodes.CoercionNode(node.slice, object_)
+                result_type = object_
+
+        else:
+            op = ('sliced', 'indexed')[slice_variable.type.is_int]
+            raise error.NumbaError(node, "object of type %s cannot be %s" %
+                                                            (value_type, op))
+
+        node.variable.type = result_type
         return node
 
     def visit_Index(self, node):

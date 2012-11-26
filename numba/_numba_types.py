@@ -385,12 +385,14 @@ class UnresolvedType(NumbaType):
         if not self.variable.type:
             self.variable.type = self
         result = self.variable.type
-        self.process_assertions(result)
+        if not result.is_unresolved:
+            self.process_assertions(result)
         return result
 
 class PromotionType(UnresolvedType):
 
     is_promotion = True
+    resolved_type = None
 
     def __init__(self, variable, context, types, assignment=False, **kwds):
         super(PromotionType, self).__init__(variable, **kwds)
@@ -455,21 +457,25 @@ class PromotionType(UnresolvedType):
         self.variable.type = self
         if not resolved_types:
             # Everything is deferred
+            self.resolved_type = None
             return False
         else:
             # Simplify as much as possible
             if self.assignment:
-                result_type = promote_for_assignment(self.context, resolved_types,
-                                                     self.variable.name)
+                result_type, unresolved_types = promote_for_assignment(
+                        self.context, resolved_types, unresolved_types,
+                        self.variable.name)
             else:
                 result_type = promote_for_arithmetic(self.context, resolved_types)
 
-            if len(resolved_types) == len(types):
+            self.resolved_type = result_type
+            if len(resolved_types) == len(types) or not unresolved_types:
                 self.variable.type = result_type
+                return True
             else:
+                old_types = self.types
                 self.types = set([result_type] + unresolved_types)
-
-            return True
+                return old_types != self.types
 
     def simplify(self, seen=None):
         try:
@@ -567,12 +573,59 @@ class ArrayIndexType(UnresolvedType):
         self.variable.type = result_type
         return True
 
+class DeferredIndexType(UnresolvedType):
+    def __init__(self, variable, type_inferer, index_node, **kwds):
+        super(DeferredIndexType, self).__init__(variable, **kwds)
+        self.type_inferer = type_inferer
+        self.index_node = index_node
+
+    def retry_infer(self):
+        node = self.type_inferer.visit_Subscript(self.index_node,
+                                                 visitchildren=False)
+        changed = node.variable.type != self.variable.type
+        self.variable.type = node.variable.type
+        return changed
+
+    def simplify(self):
+        value_var = self.index_node.value.variable
+        resolve_var(value_var)
+
+        if value_var.type.is_promotion:
+            # If we have a circular dependence, try feeding in what we have
+            # now and see if we get anywhere
+            type = value_var.type.resolved_type
+            if type:
+                from numba import symtab
+                self.index_node.value.variable = symtab.Variable(type)
+                changed = self.retry_infer()
+                self.index_node.value.variable = value_var
+                return changed
+
+        if value_var.type.is_unresolved:
+            return False
+
+        return self.retry_infer()
+
+    @property
+    def comparison_type_list(self):
+        return super(DeferredIndexType, self).comparison_type_list()
+
+
 class UnanalyzableType(UnresolvedType):
     """
-    A type that indicates the statement cannot be analyzed without
+    A type that indicates the statement cannot be analyzed without first
+    analysing its dependencies.
     """
 
     is_unanalyzable = True
+
+def resolve_var(var):
+    if var.type.is_unresolved:
+        var.type.simplify()
+    if var.type.is_unresolved:
+        var.type = var.type.resolve()
+    return var.type
+
 
 tuple_ = TupleType()
 phi = PHIType()
@@ -702,30 +755,56 @@ def promote_for_arithmetic(context, types):
 
     return result_type
 
-def promote_for_assignment(context, types, var_name):
+def promote_arrays(array_types, non_array_types, types,
+                   unresolved_types, var_name):
+    """
+    This promotes arrays for assignments. Arrays must have a single consistent
+    type in an assignment (phi). Any promotion of delayed types are immediately
+    resolved.
+    """
+    _validate_array_types(array_types)
+
+    # TODO: figure out whether result is C/F/inner contig
+    result_type = array_types[0].strided
+
+    def assert_equal(other_type):
+        if result_type != other_type:
+            raise TypeError(
+                "Arrays must have consistent types in assignment "
+                "for variable %r: '%s' and '%s'" % (
+                    var_name, result_type, other_type))
+
+        if len(array_types) < len(types):
+            assert_equal(non_array_types[0])
+
+    # Add delayed assertion that triggers when the delayed types are resolved
+    for unresolved_type in unresolved_types:
+        unresolved_type.assertions.append(assert_equal)
+
+    return result_type, []
+
+def promote_for_assignment(context, types, unresolved_types, var_name):
     """
     Promote a list of types for assignment (e.g. in a phi node).
-    If there are any objects, the result will always be an object.
+
+        - if there are any objects, the result will always be an object
+        - if there is an array, all types must be of that array type
+              (minus any contiguity constraints)
     """
     obj_types = [type for type in types if context.is_object(type)]
     if obj_types:
         array_types = [obj_type for obj_type in obj_types if obj_type.is_array]
         non_array_types = [type for type in types if not type.is_array]
         if array_types:
-            _validate_array_types(array_types)
-            if len(array_types) < len(types):
-                raise TypeError(
-                        "Arrays must have consistent types in assignment "
-                        "for variable %r: '%s' and '%s'" % (
-                            var_name, array_types[0], non_array_types[0]))
-            resolved_types = array_types
+            return promote_arrays(array_types, non_array_types, types,
+                                  unresolved_types, var_name)
         else:
             # resolved_types = obj_types
-            return object_
+            return object_, []
     else:
         resolved_types = types
 
-    return promote_for_arithmetic(context, resolved_types)
+    return promote_for_arithmetic(context, resolved_types), unresolved_types
 
 if __name__ == '__main__':
     import doctest

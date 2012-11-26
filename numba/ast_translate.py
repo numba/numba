@@ -1400,9 +1400,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             logger.debug(ast.dump(node))
             raise error.NumbaError(
                     node, "Binary operations %s on values typed %s and %s "
-                          "not (yet) supported)" % (self.opname(op),
-                                                    node.left.type,
-                                                    node.right.type))
+                          "not (yet) supported" % (self.opname(op),
+                                                   node.left.type,
+                                                   node.right.type))
 
         return result
 
