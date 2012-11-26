@@ -114,6 +114,47 @@ def test_circular_binop():
     return x, y, z, a
 
 #
+### Test delayed inference for comparisons and boolops
+#
+@autojit(warn=False)
+def test_circular_compare():
+    """
+    >>> test_circular_compare()
+    (5.0, 1.0)
+    >>> sig, syms = infer(test_circular_compare.py_func,
+    ...                   functype(None, []), warn=False)
+    >>> types(syms, 'x', 'y')
+    (double, double)
+    """
+    x = 1
+    for i in range(10):
+        if i == 0:
+            y = float(x)
+        if x < 5:
+            x += y
+
+    return x, y
+
+@autojit(warn=False)
+def test_circular_compare2():
+    """
+    >>> test_circular_compare2()
+    (2.0, 1.0)
+    >>> sig, syms = infer(test_circular_compare.py_func,
+    ...                   functype(None, []), warn=False)
+    >>> types(syms, 'x', 'y')
+    (double, double)
+    """
+    x = 1
+    for i in range(10):
+        if i == 0:
+            y = float(x)
+        if x < 5 and (x > 2 or i == 0):
+            x += y
+
+    return x, y
+
+#
 ### Test indexing
 #
 @autojit(warn=False)
