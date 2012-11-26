@@ -407,7 +407,7 @@ def _process_sig(sigstr, name=None):
     # FIXME:  Need something more robust to differentiate between
     #   name ret(arg1,arg2)
     #   and ret(arg1, arg2) or ret ( arg1, arg2 )
-    if len(parts) < 2 or '(' in parts[0] or '[' in parts[0] or '('==parts[1][0]
+    if len(parts) < 2 or '(' in parts[0] or '[' in parts[0] or '('==parts[1][0]:
         signature = eval(sigstr, loc, types_dict)
         signature.name = None
     else: # Signature has a name
