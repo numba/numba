@@ -594,6 +594,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     # TODO: inject back in AST...
                     stat.assignment_node = assmnt
 
+    def candidates(self, unvisited):
+        return [type for type in unvisited if len(type.parents) == 0]
+
     def resolve_variable_types(self):
         """
         Resolve the types for all variable assignments. We run type inference
@@ -608,7 +611,30 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             for variable in block.symtab.itervalues():
                 if variable.parent_var: # renamed variable
                     if variable.type.is_unresolved:
-                        unresolved.add(variable)
+                        unresolved.add(variable.type)
+
+        # Find the strongly connected components (build a condensation graph)
+        unvisited = set()
+        strongly_connected = {}
+        while unresolved:
+            start_type = unresolved.pop()
+            sccs = {}
+            numba_types.kosaraju_strongly_connected(start_type,
+                                                    strongly_connected)
+            unvisited -= set(sccs)
+            strongly_connected.update(sccs)
+
+        # Now process the dependencies in topological order. Handle strongly
+        # connected components specially
+
+        unvisited = set([strongly_connected[type] for type in unresolved])
+        start_points = self.candidates(unvisited)
+        assert start_points
+        while start_points:
+            start_point = start_points.pop()
+            start_point.simplify()
+            start_point.resolve()
+            start_points.extend(self.candidates(start_point.children))
 
         # Iteratively update types until everything is resolved or until we
         # can't infer anything more
@@ -982,16 +1008,12 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             node.value = self.visit(node.value)
             node.slice = self.visit(node.slice)
 
-        # Initialize to unanalyzable
         node.variable = Variable(None)
-        # node.variable.type = numba_types.UnanalyzableType(node.variable)
-
         value_type = node.value.variable.type
+        deferred_type = numba_types.DeferredIndexType(node.variable, self, node)
         if value_type.is_unresolved:
-            node.variable.type = numba_types.DeferredIndexType(
-                                        node.variable, self, node)
+            node.variable.type = deferred_type
             return node
-        #partial_type, delayed_type = self.get_resolved_type(value_type)
 
         slice_variable = node.slice.variable
         slice_type = slice_variable.type
@@ -1017,12 +1039,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     result_type = minitypes.object_
                 else:
                     result_type = minitypes.object_
+            elif any(slice_node.variable.type.is_unresolved for slice_node in slices):
+                for slice_node in slices:
+                    if slice_type.variable.type.is_unresolved:
+                        deferred_type.dependences.append(slice_node)
+                result_type = deferred_type
             else:
-                node.variable = Variable(None)
-                node.variable.type = numba_types.ArrayIndexType(
-                                    self, node.value, slices, node)
-                node.variable.type.simplify()
-                return node
+                result_type, node.value = self._unellipsify(
+                                    node.value, slices, node)
 
         elif value_type.is_carray:
             # Handle C array indexing
@@ -1053,7 +1077,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             elif slice_type.is_slice:
                 result_type = c_string_type
             elif slice_type.is_unresolved:
-                return node
+                deferred_type.dependences.append(node.slice)
+                result_type = deferred_type
             else:
                 # TODO: check for insanity
                 node.value = nodes.CoercionNode(node.value, object_)
@@ -1187,24 +1212,40 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return func
 
-    def _resolve_external_call(self, call_node, py_func, arg_types=None):
+    def _resolve_external_call(self, call_node, func_type, py_func, arg_types):
         """
         Resolve a call to a function. If we know about the function,
         generate a native call, otherwise go through PyObject_Call().
         """
-        signature, llvm_func, py_func = \
-                self.function_cache.compile_function(py_func, arg_types)
+        if any(arg_type.is_unresolved for arg_type in arg_types) and not func_type.is_object:
+            result = self.function_cache.get_function(py_func, arg_types)
+            if result is not None:
+                signature, llvm_func, py_func = result
+            else:
+                numba_types.MiscellaneousCallNode
+        else:
+            signature, llvm_func, py_func = \
+                    self.function_cache.compile_function(py_func, arg_types)
 
         if llvm_func is not None:
-            return nodes.NativeCallNode(signature, call_node.args,
-                                        llvm_func, py_func)
+            new_node = nodes.NativeCallNode(signature, call_node.args,
+                                            llvm_func, py_func)
         elif not call_node.keywords and self._is_math_function(
                                         call_node.args, py_func):
-            return self._resolve_math_call(call_node, py_func)
+            new_node = self._resolve_math_call(call_node, py_func)
         else:
-            return nodes.ObjectCallNode(signature, call_node.func,
-                                        call_node.args, call_node.keywords,
-                                        py_func)
+            new_node = nodes.ObjectCallNode(signature, call_node.func,
+                                            call_node.args, call_node.keywords,
+                                            py_func)
+
+        if not func_type.is_object:
+            raise error.NumbaError(
+                call_node, "Cannot call object of type %s" % (func_type,))
+
+        if new_node.type.is_object:
+            new_node = self._resolve_return_type(func_type, new_node, call_node)
+
+        return new_node
 
     def _resolve_method_calls(self, func_type, new_node, node):
         "Resolve special method calls"
@@ -1281,6 +1322,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         func = self._resolve_function(func_type, func_variable.name)
 
+        # TODO: Resolve variable types based on how they are used as arguments
+        # TODO: in calls with known signatures
         new_node = None
         if func_type.is_builtin:
             # Call to Python built-in function
@@ -1329,14 +1372,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # 3) call to special numpy functions (np.empty, etc)
             # 4) generic call using PyObject_Call
             arg_types = [a.variable.type for a in node.args]
-            new_node = self._resolve_external_call(node, func, arg_types)
-
-            if not func_type.is_object:
-                raise error.NumbaError(
-                    node, "Cannot call object of type %s" % (func_type,))
-
-            if new_node.type.is_object:
-                new_node = self._resolve_return_type(func_type, new_node, node)
+            new_node = self._resolve_external_call(node, func_type, func, arg_types)
 
         return new_node
 

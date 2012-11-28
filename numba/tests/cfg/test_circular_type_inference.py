@@ -263,7 +263,6 @@ def test_delayed_array_slicing2():
     print array
     print row
 
-
 @autojit(warn=False)
 def test_delayed_string_indexing():
     """
@@ -289,6 +288,8 @@ def test_delayed_string_indexing():
         x = i
 
     return s, x
+
+test_delayed_string_indexing()
 
 @autojit(warn=False)
 def test_delayed_string_indexing2():
@@ -333,4 +334,4 @@ def test_circular_error():
         else:
             y = x
 
-testmod()
+#testmod()
