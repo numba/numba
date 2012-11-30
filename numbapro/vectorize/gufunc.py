@@ -7,7 +7,7 @@ from llvm.core import Type, inline_function, ATTR_NO_ALIAS, ATTR_NO_CAPTURE
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm_cbuilder import builder
-from numbapro.translate import Translate
+from numba.vectorize._translate import Translate
 from numbapro import _internal
 from numbapro._cuda.error import CudaSupportError
 from .cuda import CudaASTVectorize

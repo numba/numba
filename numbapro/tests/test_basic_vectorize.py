@@ -12,8 +12,8 @@ def main(backend):
     bv = Vectorize(vector_add, backend=backend)
     bv.add(restype=int32, argtypes=[int32, int32])
     bv.add(restype=uint32, argtypes=[uint32, uint32])
-    bv.add(restype=f, argtypes=[f, f])
-    bv.add(restype=d, argtypes=[d, d])
+    bv.add(restype=f4, argtypes=[f4, f4])
+    bv.add(restype=f8, argtypes=[f8, f8])
     basic_ufunc = bv.build_ufunc()
 
     # build python ufunc

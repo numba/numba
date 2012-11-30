@@ -13,12 +13,13 @@ __all__ = [
     'ParallelMiniVectorize',
 ]
 import logging
-from .basic import BasicVectorize, BasicASTVectorize
+from numba.vectorize import *
+from numba.vectorize import install_vectorizer, _prepare_sig
+
 from .parallel import ParallelVectorize, ParallelASTVectorize
 from .stream import StreamVectorize, StreamASTVectorize
 from .gufunc import GUFuncVectorize, GUFuncASTVectorize
 from numbapro._cuda.error import CudaSupportError
-from numba.decorators import _process_sig
 
 try:
     from .cuda import  CudaASTVectorize
@@ -31,95 +32,35 @@ except CudaSupportError, e:
 
 from .minivectorize import MiniVectorize, ParallelMiniVectorize
 
-vectorizers = {
-    'cpu': BasicVectorize,
-    'parallel': ParallelVectorize,
-    'stream': StreamVectorize,
-}
+install_vectorizer('bytecode', 'parallel', ParallelVectorize)
+install_vectorizer('bytecode', 'stream', StreamVectorize)
 
-ast_vectorizers = {
-    'cpu': BasicASTVectorize,
-    'parallel': ParallelASTVectorize,
-    'stream': StreamASTVectorize,
-    'gpu': CudaASTVectorize,
-}
+install_vectorizer('ast', 'parallel', ParallelASTVectorize)
+install_vectorizer('ast', 'stream', StreamASTVectorize)
+install_vectorizer('ast', 'gpu', CudaASTVectorize)
 
-mini_vectorizers = {
-    'cpu': MiniVectorize,
-    'parallel': ParallelMiniVectorize,
-}
+install_vectorizer('mini', 'cpu', MiniVectorize)
+install_vectorizer('mini', 'parallel', ParallelMiniVectorize)
 
-backends = {
-    'bytecode': vectorizers,
-    'ast': ast_vectorizers,
-    'mini': mini_vectorizers,
-}
-
-def Vectorize(func, backend='ast', target='cpu'):
-    """
-    Instantiate a vectorizer given the backend and target.
-
-    func: the function to vectorize
-    backend: 'bytecode', 'ast' or 'mini'.
-             Default: 'bytecode'
-    target: 'basic', 'parallel', 'stream' or 'gpu'
-            Default: 'basic'
-    """
-    assert backend in backends, tuple(backends)
-    targets = backends[backend]
-    assert target in targets, tuple(targets)
-
-    if target in targets:
-        return targets[target](func)
-    else:
-        # Use the default bytecode backend
-        return vectorizers[target](func)
-
-guvectorizers = {
+_bytecode_guvectorizers = {
     'cpu': GUFuncVectorize,
 }
 
-ast_guvectorizers = {
+_ast_guvectorizers = {
     'cpu': GUFuncASTVectorize,
     'gpu': CudaGUFuncASTVectorize,
 }
 
-guvectorizers_backends = {
-    'bytecode': guvectorizers,
-    'ast':      ast_guvectorizers,
+_guvectorizers = {
+    'bytecode': _bytecode_guvectorizers,
+    'ast':      _ast_guvectorizers,
 }
 
 def GUVectorize(func, signature, backend='ast', target='cpu'):
-    assert backend in guvectorizers_backends
-    targets = guvectorizers_backends[backend]
+    assert backend in _guvectorizers
+    targets = _guvectorizers[backend]
     assert target in targets
     return targets[target](func, signature)
-
-def _prepare_sig(sig):
-    if isinstance(sig, str):
-        _name, restype, argtypes = _process_sig(str(sig), None)
-    else:
-        argtypes = sig.args
-        restype = sig.return_type
-
-    kws = {}
-    if restype is not None:
-        kws['restype'] = restype
-    if argtypes is not None:
-        kws['argtypes'] = argtypes
-
-    return kws
-
-def vectorize(signatures, backend='ast', target='cpu'):
-    def _vectorize(fn):
-        vect = Vectorize(fn, backend=backend, target=target)
-        for sig in signatures:
-            kws = _prepare_sig(sig)
-            vect.add(**kws)
-        ufunc = vect.build_ufunc()
-        return ufunc
-
-    return _vectorize
 
 def guvectorize(fnsigs, gusig, backend='ast', target='cpu'):
     def _guvectorize(fn):
