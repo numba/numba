@@ -1152,6 +1152,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         result_type = None
         if attribute is numpy.newaxis:
             result_type = numba_types.NewAxisType()
+        elif attribute is numba.NULL:
+            return numba_types.null_type
         elif type.is_numpy_module or type.is_numpy_attribute:
             result_type = numba_types.NumpyAttributeType(module=type.module,
                                                          attr=node.attr)

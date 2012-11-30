@@ -41,10 +41,11 @@ def _config_logger():
 
 _config_logger()
 
-from . import _numba_types
+from . import _numba_types, special
 from ._numba_types import *
 from . import decorators
 from .decorators import *
+from numba.special import NULL
 
 def test():
     import os
@@ -74,4 +75,4 @@ def nose_run():
     config.verbosity = 3
     nose.run(config=config)
 
-__all__ = _numba_types.__all__ + decorators.__all__
+__all__ = _numba_types.__all__ + decorators.__all__ + special.__all__

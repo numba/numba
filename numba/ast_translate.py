@@ -23,7 +23,7 @@ import logging
 logger = logging.getLogger(__name__)
 debug_conversion = False
 
-#logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 #debug_conversion = True
 
 _int32_zero = lc.Constant.int(_int32, 0)
