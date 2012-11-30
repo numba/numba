@@ -1,4 +1,5 @@
 import ctypes
+import numba
 from numba import *
 
 #intp = ctypes.POINTER(ctypes.c_int)
@@ -19,9 +20,11 @@ def test_compare_null_attribute():
     """
     >>> test_compare_null()
     """
-    return voidp(0) == numba.NULL
+    return voidp(Py_uintptr_t(0)) == numba.NULL
 
 if __name__ == '__main__':
     test_compare_null()
+    test_compare_null_attribute()
+
 #    import doctest
 #    doctest.testmod()

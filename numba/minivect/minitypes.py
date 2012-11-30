@@ -602,7 +602,7 @@ class BoolType(NamedType):
         return "int %s" % " ".join(self.qualifiers)
 
     def to_llvm(self, context):
-        return int8.to_llvm(context)
+        return llvm.core.Type.int(1)
 
 class NumericType(NamedType):
     """
