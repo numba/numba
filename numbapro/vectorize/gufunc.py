@@ -8,7 +8,7 @@ from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm_cbuilder import builder
 from numba.vectorize._translate import Translate
-from numbapro import _internal
+from numba.vectorize import _internal
 from numbapro._cuda.error import CudaSupportError
 from .cuda import CudaASTVectorize
 try:
@@ -21,7 +21,7 @@ import numpy as np
 
 
 class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
-    def datalist(self, lfunclist, ptrlist, cuda_dispatcher):
+    def datalist(self, lfunclist, ptrlist):
         """
         Return a list of data pointers to the kernels.
         """
@@ -36,6 +36,7 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
 
         return a function object which can be called from python.
         '''
+        assert cuda_dispatcher is None
         kws['signature'] = signature
 
         try:
@@ -47,7 +48,7 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
         ptrlist = self._prepare_pointers(lfunclist, tyslist, engine, **kws)
         inct = len(tyslist[0]) - 1
         outct = 1
-        datlist = self.datalist(lfunclist, ptrlist, cuda_dispatcher)
+        datlist = self.datalist(lfunclist, ptrlist)
 
         # Becareful that fromfunc does not provide full error checking yet.
         # If typenum is out-of-bound, we have nasty memory corruptions.
@@ -58,7 +59,7 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
         # Hold on to the vectorizer while the ufunc lives
         tyslist = self.get_dtype_nums(tyslist)
         gufunc = _internal.fromfuncsig(ptrlist, tyslist, inct, outct, datlist,
-                                       signature, cuda_dispatcher, vectorizer)
+                                       signature, vectorizer)
 
         return gufunc
 

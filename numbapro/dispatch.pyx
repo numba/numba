@@ -15,7 +15,7 @@ from numba.minivect import (miniast,
                             ctypes_conversion)
 from numba import decorators, utils, functions
 
-from numba import _internal
+from numba.vectorize import _internal
 
 import numpy as np
 
@@ -23,19 +23,15 @@ include "miniutils.pyx"
 
 cdef extern from "_internal.h":
     ctypedef struct PyDynUFuncObject:
-        PyObject *minivect_dispatcher
-        PyObject *cuda_dispatcher
-
-def set_dispatchers(ufunc, mini_dispatcher, cuda_dispatcher):
+        PyObject* dispatcher
+        
+def set_dispatchers(ufunc, dispatcher):
     assert isinstance(ufunc, _internal.dyn_ufunc)
 
-    if mini_dispatcher is not None:
-        (<PyDynUFuncObject *> ufunc).minivect_dispatcher = <PyObject *> mini_dispatcher
-        Py_INCREF(mini_dispatcher)
+    if dispatcher is not None:
+        (<PyDynUFuncObject *> ufunc).dispatcher = <PyObject *> dispatcher
+        Py_INCREF(dispatcher)
 
-    if cuda_dispatcher is not None:
-        (<PyDynUFuncObject *> ufunc).cuda_dispatcher = <PyObject *> cuda_dispatcher
-        Py_INCREF(cuda_dispatcher)
 
 cdef class Function(object):
     "Wraps a minivect or cuda function"

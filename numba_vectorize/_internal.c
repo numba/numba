@@ -22,8 +22,7 @@
 #endif
 
 PyObject *
-PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher,
-               PyObject *cuda_dispatcher, int use_cuda_gufunc)
+PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *dispatcher)
 {
     /* PyDynUFuncObject *result = PyDynUFunc_Type.tp_base->tp_new(type, args, kw); */
     PyDynUFuncObject *result = PyObject_New(PyDynUFuncObject, &PyDynUFunc_Type);
@@ -38,12 +37,8 @@ PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *minivect_dispatcher,
     ufunc_size = sizeof(PyUFuncObject) - offsetof(PyUFuncObject, nin);
     memcpy(&result->ufunc.nin, &ufunc->nin, ufunc_size);
     result->ufunc_original = ufunc;
-    result->minivect_dispatcher = minivect_dispatcher;
-    Py_XINCREF(minivect_dispatcher);
-    result->cuda_dispatcher = cuda_dispatcher;
-    Py_XINCREF(cuda_dispatcher);
-    result->use_cuda_gufunc = use_cuda_gufunc;
-
+    result->dispatcher = dispatcher;
+    Py_XINCREF(dispatcher);
     return (PyObject *) result;
 }
 
@@ -52,9 +47,8 @@ static void
 dyn_dealloc(PyDynUFuncObject *self)
 {
     PyUFuncObject *ufunc = self->ufunc_original;
-    Py_XDECREF(self->minivect_dispatcher);
-    Py_XDECREF(self->cuda_dispatcher);
-
+    Py_XDECREF(self->dispatcher);
+    
     if (ufunc->functions)
         PyArray_free(ufunc->functions);
     if (ufunc->types)
@@ -66,93 +60,13 @@ dyn_dealloc(PyDynUFuncObject *self)
 }
 
 static PyObject *
-_dispatch_cuda(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
-{
-    int i;
-    /* Insert 'ufunc' ('self') as the first argument */
-    PyObject *new_args = PyTuple_New(PyTuple_GET_SIZE(args) + 1);
-    PyObject *result;
-
-    if (!new_args)
-        return NULL;
-
-    Py_INCREF(self);
-    PyTuple_SET_ITEM(new_args, 0, (PyObject *) self);
-    for (i = 1; i < PyTuple_GET_SIZE(args) + 1; i++) {
-        PyObject *obj = PyTuple_GET_ITEM(args, i - 1);
-        Py_INCREF(obj);
-        PyTuple_SET_ITEM(new_args, i, obj);
-    }
-
-    result = PyObject_Call(self->cuda_dispatcher, new_args, kw);
-    Py_DECREF(new_args);
-    return result;
-}
-
-static PyObject *
-_dispatch_gufunc(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
-{
-    int i;
-    PyArrayObject *mps[NPY_MAXARGS] = { NULL };
-    PyObject *retobj[NPY_MAXARGS];
-    PyObject *result;
-    PyUFuncObject *ufunc = &self->ufunc;
-
-//    /* Call ufunc */
-//    if (PyUFunc_GeneralizedFunction(ufunc, args, kw, mps) < 0) {
-//        /* Free everything, take care of NPY_ARRAY_UPDATEIFCOPY */
-//        for (i = 0; i < ufunc->nargs; i++) {
-//            PyArray_XDECREF_ERR(mps[i]);
-//        }
-//        return NULL;
-//
-//    }
-
-    /* Free the input references */
-    for (i = 0; i < ufunc->nin; i++) {
-        Py_XDECREF(mps[i]);
-    }
-
-    /* Build return value(s) */
-    for (i = 0; i < ufunc->nout; i++) {
-        int j = ufunc->nin+i;
-        /* default behavior */
-        retobj[i] = PyArray_Return(mps[j]);
-    }
-
-    if (ufunc->nout == 1) {
-        result = retobj[0];
-    } else {
-        result = PyTuple_New(ufunc->nout);
-        if (!result) {
-            PyErr_NoMemory();
-            goto fail;
-        }
-        for (i = 0; i < ufunc->nout; i++) {
-            PyTuple_SET_ITEM(result, i, retobj[i]);
-        }
-    }
-
-    return result;
-fail:
-    for (i = ufunc->nin; i < ufunc->nargs; i++) {
-        Py_XDECREF(mps[i]);
-    }
-    return NULL;
-}
-
-static PyObject *
 dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
 {
-    if (self->minivect_dispatcher) {
-        return PyObject_Call(self->minivect_dispatcher, args, kw);
-    } else if (self->cuda_dispatcher && !self->use_cuda_gufunc) {
-        return _dispatch_cuda(self, args, kw);
-    } else if (0 && self->ufunc.core_enabled && self->use_cuda_gufunc) {
-        /* Generalized ufunc */
-        /* return _dispatch_gufunc(self, args, kw); */
+    if (self->dispatcher) {
+        return PyObject_Call(self->dispatcher, args, kw);
+    } else{
+        return PyDynUFunc_Type.tp_base->tp_call((PyObject *) self, args, kw);
     }
-    return PyDynUFunc_Type.tp_base->tp_call((PyObject *) self, args, kw);
 }
 
 /* NPY_NO_EXPORT */ PyTypeObject PyDynUFunc_Type = {
@@ -162,7 +76,7 @@ dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
     PyObject_HEAD_INIT(NULL)
     0,                                          /* ob_size */
 #endif
-    "numbapro.dyn_ufunc",                       /* tp_name*/
+    "numba.dyn_ufunc",                       /* tp_name*/
     sizeof(PyDynUFuncObject),                 /* tp_basicsize*/
     0,                                          /* tp_itemsize */
     /* methods */

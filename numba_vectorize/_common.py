@@ -6,7 +6,7 @@ import llvm.ee
 from numba import decorators, ast_translate
 from numba.minivect import minitypes
 from llvm_cbuilder import shortnames as _C
-from numba import _internal
+from numba.vectorize import _internal
 from ._translate import Translate
 from llvm.passes import PassManager, PassManagerBuilder
 

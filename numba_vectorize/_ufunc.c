@@ -12,8 +12,7 @@ PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
                            char *types, int ntypes,
                            int nin, int nout, int identity,
                            char *name, char *doc, PyObject *object,
-                           PyObject *minivect_dispatcher,
-                           PyObject *cuda_dispatcher)
+                           PyObject *dispatcher)
 {
     PyUFuncObject *ufunc = NULL;
     PyObject *result;
@@ -27,7 +26,7 @@ PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
     /* Kind of a gross-hack  */
     /* Py_TYPE(ufunc) = &PyDynUFunc_Type; */
 
-    result = PyDynUFunc_New(ufunc, minivect_dispatcher, cuda_dispatcher, 0);
+    result = PyDynUFunc_New(ufunc, dispatcher);
     if (!result)
         goto err;
 
@@ -54,8 +53,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     PyObject *type_obj;
     PyObject *data_obj;
     PyObject *object=NULL; /* object to hold on to while ufunc is alive */
-    PyObject *minivect_dispatcher = NULL;
-    PyObject *cuda_dispatcher = NULL;
+    PyObject *dispatcher = NULL;
 
     int i, j;
     int custom_dtype = 0;
@@ -64,20 +62,16 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     void **data;
     PyObject *ufunc;
 
-    if (!PyArg_ParseTuple(args, "O!O!iiO|OOO", &PyList_Type, &func_list,
+    if (!PyArg_ParseTuple(args, "O!O!iiO|OO", &PyList_Type, &func_list,
                                                &PyList_Type, &type_list,
                                                &nin, &nout, &data_list,
-                                               &minivect_dispatcher,
-                                               &cuda_dispatcher,
+                                               &dispatcher,
                                                &object)) {
         return NULL;
     }
 
-    if (minivect_dispatcher == Py_None)
-        minivect_dispatcher = NULL;
-
-    if (cuda_dispatcher == Py_None)
-        cuda_dispatcher = NULL;
+    if (dispatcher == Py_None)
+        dispatcher = NULL;
 
     nfuncs = PyList_Size(func_list);
 
@@ -180,15 +174,32 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
             }
         }
         PyArray_free(types);
-        ufunc = PyDynUFunc_FromFuncAndData((PyUFuncGenericFunction*) funcs, data, (char*) char_types, nfuncs,
-                                           nin, nout, PyUFunc_None, "test", (char*) "test", object,
-                                           minivect_dispatcher, cuda_dispatcher);
+        ufunc = PyDynUFunc_FromFuncAndData((PyUFuncGenericFunction*) funcs,
+                                           data,
+                                           (char*) char_types,
+                                           nfuncs,
+                                           nin,
+                                           nout,
+                                           PyUFunc_None,
+                                           "test", (char*)
+                                           "test", object,
+                                           dispatcher);
     }
     else {
-        ufunc = PyDynUFunc_FromFuncAndData(0,0,0,0, nin, nout, PyUFunc_None,
-                                           "test", (char*) "test", object,
-                                           minivect_dispatcher, cuda_dispatcher);
-        PyUFunc_RegisterLoopForType((PyUFuncObject*)ufunc,custom_dtype,funcs[0],types,0);
+        ufunc = PyDynUFunc_FromFuncAndData(0, 0, 0, 0,
+                                           nin,
+                                           nout,
+                                           PyUFunc_None,
+                                           "test",
+                                           (char*) "test",
+                                           object,
+                                           dispatcher);
+        
+        PyUFunc_RegisterLoopForType((PyUFuncObject*)ufunc,
+                                    custom_dtype,
+                                    funcs[0],
+                                    types,
+                                    0);
         PyArray_free(funcs);
         PyArray_free(types);
         PyArray_free(data);

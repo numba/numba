@@ -16,7 +16,8 @@ from numba.minivect import (miniast,
                             ctypes_conversion)
 from numba import decorators, utils, functions
 
-from numbapro import _internal, dispatch
+from numba.vectorize import _internal
+from numbapro import dispatch
 from numbapro.vectorize import _common, basic, parallel
 
 import numpy as np
@@ -295,7 +296,7 @@ class MiniVectorize(object):
 
         # Create minivect dispatcher, and set as attribute of the dyn_ufunc
         dispatcher = self.minivect(minivect_asts, parallel)
-        dispatch.set_dispatchers(dyn_ufunc, dispatcher, None)
+        dispatch.set_dispatchers(dyn_ufunc, dispatcher)
         return dyn_ufunc
 
     def _debug(self, minifunc):

@@ -1,6 +1,3 @@
-# as _internal contains the license checking code, we import it here
-from . import _internal
-
 __version__ = '0.7.3'
 
 def test(verbosity=2, failfast=False):
