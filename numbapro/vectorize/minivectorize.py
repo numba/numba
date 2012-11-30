@@ -72,8 +72,7 @@ def getop(ast_op):
         raise UnicodeTranslateError("Invalid element-wise operator")
     return opmap[ast_op]
 
-def fallback_vectorize(fallback_cls, pyfunc, signatures,
-                       minivect_dispatcher, cuda_dispatcher, **kw):
+def fallback_vectorize(fallback_cls, pyfunc, signatures, dispatcher, **kw):
     """
     Build an actual ufunc, but dispatch to the given dispatcher for
     element-wise operations.
@@ -87,7 +86,7 @@ def fallback_vectorize(fallback_cls, pyfunc, signatures,
         kwargs = dict(kwargs, **kw)
         vectorizer.add(restype=restype, argtypes=argtypes, **kwargs)
 
-    ufunc = vectorizer.build_ufunc(minivect_dispatcher, cuda_dispatcher)
+    ufunc = vectorizer.build_ufunc(dispatcher)
     return ufunc, vectorizer._get_lfunc_list()
 
 def build_kernel_call(lfunc, signature, miniargs, b=b):
@@ -358,7 +357,7 @@ class MiniVectorize(object):
     def fallback_vectorize(self, minivect_dispatcher, **kwargs):
         "Build an actual ufunc"
         return fallback_vectorize(self.fallback, self.pyfunc, self.signatures,
-                                  minivect_dispatcher, None, **kwargs)
+                                  minivect_dispatcher, **kwargs)
 
 class ParallelMiniVectorize(MiniVectorize):
 

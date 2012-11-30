@@ -523,9 +523,8 @@ class ParallelVectorize(_common.GenericVectorize):
 
     _from_func_factory = parallel_vectorize_from_func
 
-    def build_ufunc(self, minivect_dispatcher=None, cuda_dispatcher=None):
-        return self._from_func(minivect_dispatcher=minivect_dispatcher,
-                               cuda_dispatcher=cuda_dispatcher)
+    def build_ufunc(self, dispatcher=None):
+        return self._from_func(dispatcher=dispatcher)
 
 class ParallelASTVectorize(_common.GenericASTVectorize, ParallelVectorize):
     pass

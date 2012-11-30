@@ -27,8 +27,8 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
         """
         return [None] * len(lfunclist)
 
-    def __call__(self, lfunclist, tyslist, signature, engine, use_cuda,
-                 vectorizer, cuda_dispatcher=None, **kws):
+    def __call__(self, lfunclist, tyslist, signature, engine,
+                 vectorizer, **kws):
         '''create generailized ufunc from a llvm.core.Function
 
         lfunclist : a single or iterable of llvm.core.Function instance
@@ -36,7 +36,7 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
 
         return a function object which can be called from python.
         '''
-        assert cuda_dispatcher is None
+        assert 'cuda_dispatcher' not in kws, "Temporary check for mismatch API"
         kws['signature'] = signature
 
         try:
@@ -106,14 +106,14 @@ class GUFuncVectorize(object):
     def _get_ee(self):
         return self.translates[0]._get_ee()
 
-    def build_ufunc(self, use_cuda=False):
+    def build_ufunc(self):
         assert self.translates, "No translation"
         lfunclist = self._get_lfunc_list()
         tyslist = self._get_tys_list()
         engine = self._get_ee()
         return self.gufunc_from_func(
             lfunclist, tyslist, self.signature, engine,
-            vectorizer=self, use_cuda=use_cuda)
+            vectorizer=self)
 
 class GUFuncASTVectorize(_common.ASTVectorizeMixin, GUFuncVectorize):
     "Use the AST numba backend to compile the gufunc"

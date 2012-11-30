@@ -58,7 +58,7 @@ class CommonVectorizeFromFunc(object):
         return [[dtype.num for dtype in dtypes] for dtypes in tyslist]
 
     def __call__(self, lfunclist, tyslist, engine,
-                 minivect_dispatcher=None, cuda_dispatcher=None,
+                 dispatcher=None,
                  **kws):
         '''create ufunc from a llvm.core.Function
 
@@ -87,8 +87,7 @@ class CommonVectorizeFromFunc(object):
         # there will also memory corruption. (Seems like code rewrite.)
         tyslist = self.get_dtype_nums(tyslist)
         ufunc = _internal.fromfunc(ptrlist, tyslist, inct, outct,
-                                   datlist, minivect_dispatcher,
-                                   cuda_dispatcher)
+                                   datlist, dispatcher)
         return ufunc
 
     def _prepare_ufunc_core(self, lfunclist, tyslist, **kws):
