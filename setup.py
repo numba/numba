@@ -16,7 +16,6 @@ kwds = {}
 
 kwds['long_description'] = open('README').read()
 
-
 def find_packages(where='.', exclude=()):
     out = []
     stack=[(convert_path(where), '')]
@@ -32,6 +31,7 @@ def find_packages(where='.', exclude=()):
     for pat in list(exclude) + ['ez_setup', 'distribute_setup']:
         out = [item for item in out if not fnmatchcase(item, pat)]
     return out
+
 
 setup(
     name = "numba",
@@ -54,11 +54,28 @@ setup(
     scripts = ['numba/pycc/pycc'],
     package_data = {
         'numba.minivect' : ['include/*'],
-    },
+        'numba.vectorize': ['*.h'],
+      },
     ext_modules = [
 #        Extension(name = "numba._ext",
 #                  sources = ["numba/_ext.c"],
 #                  include_dirs=[numpy.get_include()]),
+
+
+        # Vectorize (ufunc) support
+        Extension(
+                 name = "numba.vectorize._internal",
+                 sources = ["numba/vectorize/_internal.c",
+                            "numba/vectorize/_ufunc.c",
+                            "numba/vectorize/_gufunc.c"],
+                 include_dirs = [numpy.get_include(),
+                                 "numba/minivect/include/",
+                                 "numba/vectorize/"],
+                 depends = ["numba/vectorize/vectorize.h",
+                            "numba/minivect/include/miniutils.h"],
+                 ),
+
+                   
         CythonExtension(
             name = "numba.extension_types",
             sources = ["numba/extension_types.pyx", "numba/cyfunction.c"],

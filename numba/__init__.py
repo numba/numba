@@ -75,4 +75,8 @@ def nose_run():
     config.verbosity = 3
     nose.run(config=config)
 
+def get_include():
+    from os.path import abspath, dirname, join
+    return abspath(join(dirname(__file__), ".."))
+
 __all__ = _numba_types.__all__ + decorators.__all__ + special.__all__
