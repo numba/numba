@@ -922,16 +922,24 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         raise error.NumbaError(node, "Unary operator %s" % node.op)
 
     def visit_Compare(self, node):
-        lhs = node.left
-        # The number of comparisons is also checked in type inference.
-        # We are coding defensively since Compare nodes might be
-        # injected by other stages of the transformation pipeline.
-        if len(node.comparators) != 1:
-            raise error.NumbaError(
-                node, 'Multiple comparison operators not supported')
-        rhs, = node.comparators
-        lhs_lvalue, rhs_lvalue = self.visitlist([lhs, rhs])
+        # TODO: Maybe it's more efficient to generate phi nodes instead of
+        #       emitting code to perform all comparisions and 'and'ing them
+        left = node.left
+        results = []
+        for op, right in zip(node.ops, node.comparators):
+            result = self._compare(op, left, right)
+            results.append(result)
+            left = right
+        if len(results) > 1:
+            result = reduce(self.builder.and_, results)
+        else:
+            result = results.pop()
+        return result
 
+
+    def _compare(self, op, lhs, rhs):
+        lhs_lvalue = self.visit(lhs)
+        rhs_lvalue = self.visit(rhs)
         op_map = {
             ast.Gt    : '>',
             ast.Lt    : '<',
@@ -940,8 +948,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             ast.Eq    : '==',
             ast.NotEq : '!=',
         }
+        op = op_map[type(op)]
 
-        op = op_map[type(node.ops[0])]
         if lhs.type.is_float and rhs.type.is_float:
             lfunc = self.builder.fcmp
             lop = _compare_mapping_float[op]
@@ -955,7 +963,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             lop = _compare_mapping_sint[op]
         else:
             raise TypeError(lhs.type)
-
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 
     def visit_If(self, node):
