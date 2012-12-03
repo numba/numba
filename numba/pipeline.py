@@ -7,6 +7,7 @@ import ast as ast_module
 import logging
 import functools
 import pprint
+from timeit import default_timer as _timer
 
 import numba.closure
 from numba import error
@@ -110,15 +111,24 @@ class Pipeline(object):
         cls.mixins[pipeline_stage] = before_mixins, after_mixins
 
     def run_pipeline(self):
+        # Uses a special logger for logging profiling information.
+        logger = logging.getLogger("numba.pipeline.profiler")
         ast = self.ast
+        talpha = _timer() # for profiling complete pipeline
         for method_name in self.order:
+            ts = _timer() # for profiling individual stage
             if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
                 stage_tuple = (method_name, utils.ast2tree(ast))
                 logger.debug(pprint.pformat(stage_tuple))
 
             self._current_pipeline_stage = method_name
             ast = getattr(self, method_name)(ast)
-
+            te = _timer() #  for profileing individual stage
+            logger.info("%X pipeline stage %30s:\t%.3fms",
+                        id(self), method_name, (te - ts) * 1000)
+        tomega = _timer() # for profiling complete pipeline
+        logger.info("%X pipeline entire:\t\t\t\t\t%.3fms",
+                    id(self), (tomega - talpha) * 1000)
         return self.func_signature, self.symtab, ast
 
     #
