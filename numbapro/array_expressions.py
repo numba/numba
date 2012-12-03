@@ -7,7 +7,7 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import error, pipeline, nodes
+from numba import error, pipeline, nodes, ufunc_builder
 from numba.minivect import minierror, minitypes, specializers, miniast
 from numba import translate, utils, functions, nodes, transforms
 from numba.symtab import Variable
@@ -42,9 +42,9 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         if lhs is not None:
             lhs.ctx = ast.Load()
 
-        ufunc_builder = UFuncBuilder(self.context, self.func, node)
-        tree = ufunc_builder.visit(node)
-        ufunc_ast = ufunc_builder.build_ufunc_ast(tree)
+        builder = ufunc_builder.UFuncConverter(self.context, self.func, node)
+        tree = builder.visit(node)
+        ufunc_ast = builder.build_ufunc_ast(tree)
 
         if print_ufunc:
             from meta import asttools
@@ -57,10 +57,10 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
             restype = lhs.type.dtype
 
         argtypes = [op.type.dtype if op.type.is_array else op.type
-                    for op in ufunc_builder.operands]
+                        for op in builder.operands]
         signature = restype(*argtypes)
 
-        return ufunc_ast, signature, ufunc_builder
+        return ufunc_ast, signature, builder
 
     def get_py_ufunc(self, lhs, node):
         ufunc_ast, signature, ufunc_builder = self.get_py_ufunc_ast(lhs, node)
@@ -119,82 +119,6 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         return self.visit_elementwise(elementwise, node)
 
     visit_UnaryOp = visit_BinOp
-
-ufunc_count = 0
-class UFuncBuilder(visitors.NumbaTransformer):
-    """
-    Create a Python ufunc AST function. Demote the types of arrays to scalars
-    in the ufunc and generate a return.
-    """
-
-    ufunc_counter = 0
-
-    def __init__(self, context, func, ast):
-        # super(UFuncBuilder, self).__init__(context, func, ast)
-        self.operands = []
-
-    def demote_type(self, node):
-        node.type = self.demote(node.type)
-        if hasattr(node, 'variable'):
-            node.variable.type = node.type
-
-    def demote(self, type):
-        if type.is_array:
-            return type.dtype
-        return type
-
-    def visit_BinOp(self, node):
-        self.demote_type(node)
-        node.left = self.visit(node.left)
-        node.right = self.visit(node.right)
-        return node
-
-    def visit_UnaryOp(self, node):
-        self.demote_type(node)
-        node.op = self.visit(node.op)
-        return node
-
-    def visit_MathNode(self, node):
-        self.demote_type(node)
-        node.arg = self.visit(node.arg)
-
-        # Demote math signature
-        argtypes = [self.demote(argtype) for argtype in node.signature.args]
-        signature = self.demote(node.signature.return_type)(*argtypes)
-        node.signature = signature
-
-        return node
-
-    def visit_CoercionNode(self, node):
-        return self.visit(node.node)
-
-    def _generic_visit(self, node):
-        super(UFuncBuilder, self).generic_visit(node)
-
-    def generic_visit(self, node):
-        """
-        Register Name etc as operands to the ufunc
-        """
-        self.operands.append(node)
-        result = ast.Name(id='op%d' % (len(self.operands) - 1), ctx=ast.Load())
-        result.type = node.type
-        self.demote_type(result)
-        return result
-
-    def build_ufunc_ast(self, tree):
-        args = [ast.Name(id='op%d' % i, ctx=ast.Param())
-                    for i, op in enumerate(self.operands)]
-        arguments = ast.arguments(args, # args
-                                  None, # vararg
-                                  None, # kwarg
-                                  [],   # defaults
-        )
-        body = ast.Return(value=tree)
-        func = ast.FunctionDef(name='ufunc%d' % self.ufunc_counter,
-                               args=arguments, body=[body], decorator_list=[])
-        UFuncBuilder.ufunc_counter += 1
-        # print ast.dump(func)
-        return func
 
 
 class ArrayExpressionRewriteUfunc(ArrayExpressionRewrite):
