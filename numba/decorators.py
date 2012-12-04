@@ -167,6 +167,10 @@ class NumbaFunction(object):
         return compiled_numba_func(*args, **kwargs)
 
 def jit_extension_class(py_class, translator_kwargs):
+    llvm_module = translator_kwargs.get('llvm_module')
+    if llvm_module is None:
+        llvm_module = _lc.Module.new('tmp.extension_class.%X' % id(py_class))
+        translator_kwargs['llvm_module'] = llvm_module
     return extension_type_inference.create_extension(
                         context, py_class, translator_kwargs)
 

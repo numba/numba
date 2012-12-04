@@ -179,7 +179,13 @@ class LLVMContextManager(object):
             self.pass_manager.run(lfunc.module)
             # link module
             func_name = lfunc.name
-
+#
+#            print 'lfunc.module'.center(80, '-')
+#            print lfunc.module
+#
+#            print 'self.module'.center(80, '-')
+#            print self.module
+#
             # XXX: Better safe than sorry.
             #      Check duplicated function definitions and remove them.
             #      This problem should not exists.
@@ -191,7 +197,11 @@ class LLVMContextManager(object):
                                   "when compiling %s" % (func.name, lfunc.name))
                     func.delete()
         
-            self.module.link_in(lfunc.module, True)
+            self.module.link_in(lfunc.module, preserve=False)
+#
+#            print 'linked'.center(80, '=')
+#            print self.module
+
             lfunc = self.module.get_function_named(func_name)
 
         assert lfunc.module is self.module
@@ -208,8 +218,9 @@ class LLVMContextManager(object):
             for instr in bb.instructions:
                 if isinstance(instr, lc.CallOrInvokeInstruction):
                     callee = instr.called_function
-                    assert callee.module is lfunc.module, \
-                        "Inter module call for call to %s" % callee.name
+                    if callee is not None:
+                        assert callee.module is lfunc.module, \
+                            "Inter module call for call to %s" % callee.name
 
 class ComplexSupportMixin(object):
     "Support for complex numbers"
