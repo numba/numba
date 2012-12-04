@@ -65,9 +65,7 @@ class Pipeline(object):
         if symtab is None:
             self.symtab = {}
 
-        self.llvm_module = kwargs.get('llvm_module', None)
-        if self.llvm_module is None:
-            self.llvm_module = self.context.function_cache.module
+        self.llvm_module = kwargs.pop('llvm_module')
 
         self.nopython = nopython
         self.locals = locals
@@ -88,9 +86,11 @@ class Pipeline(object):
             name = '__'.join(cls.__name__ for cls in classes)
             cls = type(name, classes, {})
 
+        assert 'llvm_module' not in kwds
         return cls(self.context, self.func, ast,
                    func_signature=self.func_signature, nopython=self.nopython,
-                   symtab=self.symtab, func_name=self.func_name, **kwds)
+                   symtab=self.symtab, func_name=self.func_name,
+                   llvm_module=self.llvm_module, **kwds)
 
     def insert_specializer(self, name, after):
         "Insert a new transform or visitor into the pipeline"

@@ -164,6 +164,7 @@ class NumbaFunction(object):
             return self.wrapper(self, *args, **kwargs)
 
     def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
+        print compiled_numba_func
         return compiled_numba_func(*args, **kwargs)
 
 def jit_extension_class(py_class, translator_kwargs):
@@ -263,6 +264,10 @@ def _jit2(restype=None, argtypes=None, nopython=False,
         if not hasattr(func, 'live_objects'):
             func.live_objects = []
         func._is_numba_func = True
+
+        if kwargs.get('llvm_module') is None:
+            kwargs['llvm_module'] = _lc.Module.new('tmp.module.%x' % id(func))
+        assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
         result = function_cache.compile_function(func, argtys,
                                                  nopython=nopython,
                                                  ctypes=False,

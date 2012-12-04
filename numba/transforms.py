@@ -533,7 +533,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
             #      cls = functions.PyComplex_FromCComplex
 
             if cls:
-                new_node = self.function_cache.call(cls.__name__, node.node)
+                new_node = self.function_cache.call(
+                                            cls.__name__,
+                                            node.node,
+                                            llvm_module=self.llvm_module)
         elif node_type.is_pointer and not node_type.is_string():
             # Create ctypes pointer object
             ctypes_pointer_type = node_type.to_ctypes()

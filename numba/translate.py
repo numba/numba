@@ -505,7 +505,7 @@ class _LLVMModuleUtils(object):
             ret_val = module.add_global_variable(lconst_str.type, "__STR_%d" %
                                                  (len(cls.__string_constants),))
             ret_val.initializer = lconst_str
-            ret_val.linkage = lc.LINKAGE_INTERNAL
+            ret_val.linkage = lc.LINKAGE_LINKONCE_ODR
             cls.__string_constants[(module, const_str)] = ret_val
         return ret_val
 
