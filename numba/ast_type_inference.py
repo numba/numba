@@ -97,7 +97,8 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
                     nodes.ObjectTempNode(
                         self.function_cache.call(
                             'PyInt_FromString', arg1,
-                            nodes.NULL, arg2)),
+                            nodes.NULL, arg2,
+                            llvm_module=self.llvm_module)),
                     dst_type=dst_type)
             return None
 

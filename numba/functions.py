@@ -129,9 +129,8 @@ class FunctionCache(object):
     """
     Cache for compiler functions, declared external functions and constants.
     """
-    def __init__(self, context, module=None):
+    def __init__(self, context):
         self.context = context
-        self.module = module or context.llvm_context.get_default_module()
 
         # All numba-compiled functions
         # (py_func, arg_types) -> (signature, llvm_func, ctypes_func)
@@ -145,7 +144,6 @@ class FunctionCache(object):
 
     def get_function(self, py_func, argtypes=None):
         result = None
-
         if argtypes is not None:
             result = self.compiled_functions.get((py_func, tuple(argtypes)))
 
@@ -179,12 +177,17 @@ class FunctionCache(object):
                 func = getattr(func, '_numba_func', func)
                 compile_only = getattr(func, '_numba_compile_only', False)
                 kwds['compile_only'] = kwds.get('compile_only', compile_only)
+                if kwds.get('llvm_module') is None:
+                    # By default, create a temporary module.
+                    # This is for calling autojit'ed functions.
+                    kwds['llvm_module'] = llvm.core.Module.new("tmp.module.%X" % id(func))
                 # numba function, compile
                 func_signature, translator, ctypes_func = pipeline.compile(
                                 self.context, func, restype, argtypes,
                                 ctypes=ctypes, **kwds)
                 self.compiled_functions[func, tuple(func_signature.args)] = (
                                       func_signature, translator, ctypes_func)
+                
                 return func_signature, translator.lfunc, ctypes_func
 
         # print func, getattr(func, '_is_numba_func', False)
@@ -192,15 +195,18 @@ class FunctionCache(object):
         signature = ofunc(argtypes=ofunc.arg_types * len(argtypes)).signature
         return signature, None, func
 
-    def function_by_name(self, name, module=None, **kws):
+    def function_by_name(self, name, module, **kws):
         """
         Return the signature and LLVM function given a name. The function must
         either already be compiled, or it must be defined in this module.
         """
+        assert module is not None
         if name in self.external_functions:
             extfunc = self.external_functions[name]
-            if module is None or extfunc.module == module:
+            if extfunc.module is module:
                 return extfunc
+            else:
+                return module.add_function(extfunc.type, name)
 
         declared_func = globals()[name](**kws)
         lfunc = self.build_function(declared_func, module=module)
@@ -208,7 +214,8 @@ class FunctionCache(object):
 
     def call(self, name, *args, **kw):
         temp_name = kw.pop('temp_name', name)
-        sig, lfunc = self.function_by_name(name, **kw)
+        llvm_module = kw.pop('llvm_module')
+        sig, lfunc = self.function_by_name(name, llvm_module, **kw)
 
         if name in globals():
             external_func = globals()[name]
@@ -224,12 +231,12 @@ class FunctionCache(object):
                                       **exc_check)
         return result
 
-    def build_function(self, external_function, module=None):
+    def build_function(self, external_function, module):
         """
         Build a function given it's signature information. See the
         `ExternalFunction` class.
         """
-        module = module or self.module
+        assert module is not None
         try:
             lfunc = module.get_function_named(external_function.name)
         except llvm.LLVMException:
@@ -240,7 +247,7 @@ class FunctionCache(object):
             lfunc_type = func_type.to_llvm(self.context)
             lfunc = module.add_function(lfunc_type, external_function.name)
 
-            if external_function.linkage == llvm.core.LINKAGE_INTERNAL:
+            if external_function.linkage == llvm.core.LINKAGE_LINKONCE_ODR:
                 lfunc.linkage = external_function.linkage
                 external_function.implementation(module, lfunc)
 
@@ -254,7 +261,7 @@ class FunctionCache(object):
             ret_val = module.add_global_variable(lconst_str.type, "__STR_%d" %
                                                  (len(self.string_constants),))
             ret_val.initializer = lconst_str
-            ret_val.linkage = llvm.core.LINKAGE_INTERNAL
+            ret_val.linkage = llvm.core.LINKAGE_LINKEONCE_ODR
             self.string_constants[(module, const_str)] = ret_val
 
         return ret_val
@@ -418,7 +425,7 @@ class ExternalFunction(object):
         return None
 
 class InternalFunction(ExternalFunction):
-    linkage = llvm.core.LINKAGE_INTERNAL
+    linkage = llvm.core.LINKAGE_LINKONCE_ODR
 
 class ofunc(ExternalFunction):
     arg_types = [object_]
