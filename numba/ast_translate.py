@@ -146,15 +146,16 @@ class LLVMContextManager(object):
         '''
         inst = cls.__singleton
         if not inst:
-            inst = cls.__singleton = object.__new__(cls)
+            inst = object.__new__(cls)
             inst.__initialize(opt, cg, inline)
+            cls.__singleton = inst
         return inst
 
     def __initialize(self, opt, cg, inline):
+        assert self.__singleton is None
         m = self.__module = lc.Module.new("numba_executable_module")
         self.__engine = le.EngineBuilder.new(m).opt(cg).create()
         self.__pm = lp.PassManager.new()
-
         # populate pass manager
         pmb = lp.PassManagerBuilder.new()
         pmb.use_inliner_with_threshold(inline)
@@ -174,18 +175,27 @@ class LLVMContextManager(object):
         return self.__pm
 
     def link(self, lfunc):
-        if lfunc.module.id is not self.module.id:
+        if lfunc.module is not self.module:
             self.pass_manager.run(lfunc.module)
             # link module
             func_name = lfunc.name
-            print ">>> link"
-            self.module.link_in(lfunc.module.clone())
-            print ">>> done link"
+
+            # XXX: Better safe than sorry.
+            #      Check duplicated function definitions and remove them.
+            #      This problem should not exists.
+            registered = set(f.name for f in self.module.functions)
+            for func in lfunc.module.functions:
+                if not func.is_declaration and func.name in registered:
+                    import warnings
+                    warnings.warn("Duplicated funciton definition: %s "\
+                                  "when compiling %s" % (func.name, lfunc.name))
+                    func.delete()
+        
+            self.module.link_in(lfunc.module, True)
 
             lfunc = self.module.get_function_named(func_name)
 
         assert lfunc.module is self.module
-        print lfunc.module
         self.verify(lfunc)
         return lfunc
 
@@ -1312,7 +1322,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # call PyObject_Call
         largs = [lfunc_addr, args_tuple, kwargs_dict]
-        _, pyobject_call = self.function_cache.function_by_name('PyObject_Call')
+        _, pyobject_call = self.function_cache.function_by_name('PyObject_Call',
+                                                                self.llvm_module)
 
         res = self.builder.call(pyobject_call, largs, name=node.name)
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))

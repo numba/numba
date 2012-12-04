@@ -289,7 +289,8 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
             if argtype.signed:
                 type = promote_closest(self.context, argtype, [long_, longlong])
                 funcs = {long_: 'labs', longlong: 'llabs'}
-                return self.function_cache.call(funcs[type], node.args[0])
+                return self.function_cache.call(funcs[type], node.args[0],
+                                                llvm_module=self.llvm_module)
             else:
                 # abs() on unsigned integral value
                 return node.args[0]
@@ -575,7 +576,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
             if cls:
                 # TODO: error checking!
-                new_node = self.function_cache.call(cls.__name__, node.node)
+                new_node = self.function_cache.call(cls.__name__, node.node,
+                                                    llvm_module=self.llvm_module)
         elif node_type.is_pointer:
             raise error.NumbaError(node, "Obtaining pointers from objects "
                                          "is not yet supported")
@@ -693,7 +695,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
     def visit_Tuple(self, node):
         self.check_context(node)
 
-        sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack')
+        sig, lfunc = self.function_cache.function_by_name('PyTuple_Pack', self.llvm_module)
         objs = self.visitlist(nodes.CoercionNode.coerce(node.elts, object_))
         n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
         args = [n] + objs

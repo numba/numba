@@ -248,6 +248,7 @@ def compile(context, func, restype=None, argtypes=None, ctypes=False,
         - run type inference using the given input types
         - compile the function to LLVM
     """
+    assert 'llvm_module' in kwds
     pipeline, (func_signature, symtab, ast) = _infer_types(
                 context, func, restype, argtypes, codegen=True, **kwds)
     t = pipeline.translator

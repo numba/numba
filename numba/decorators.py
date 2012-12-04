@@ -164,7 +164,6 @@ class NumbaFunction(object):
             return self.wrapper(self, *args, **kwargs)
 
     def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
-        print compiled_numba_func
         return compiled_numba_func(*args, **kwargs)
 
 def jit_extension_class(py_class, translator_kwargs):
