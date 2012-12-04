@@ -27,6 +27,9 @@ def main():
     if '-d' in sys.argv:
         logging.getLogger().setLevel(logging.DEBUG)
         sys.argv.remove('-d')
+    if '-D' in sys.argv:
+        logging.getLogger().setLevel(logging.NOTSET)
+        sys.argv.remove('-D')
     unittest.main()
 
 class StdoutReplacer(object):
