@@ -3,6 +3,7 @@ This module contains the Pipeline class which provides a pluggable way to
 define the transformations and the order in which they run on the AST.
 """
 
+import inspect
 import ast as ast_module
 import logging
 import functools
@@ -54,7 +55,8 @@ class Pipeline(object):
         self.func_name = kwargs.get('name')
         if not self.func_name:
             if func:
-                name = func.__name__
+                module_name = inspect.getmodule(func).__name__
+                name = '.'.join([module_name, func.__name__])
             else:
                 name = ast.name
 
