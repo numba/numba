@@ -210,7 +210,6 @@ class FunctionCache(object):
 
         declared_func = globals()[name](**kws)
         lfunc = self.build_function(declared_func, module=module)
-        assert lfunc.module is module
         return declared_func.signature, lfunc
 
     def call(self, name, *args, **kw):

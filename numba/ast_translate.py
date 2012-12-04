@@ -185,7 +185,7 @@ class LLVMContextManager(object):
 #
 #            print 'self.module'.center(80, '-')
 #            print self.module
-#
+
             # XXX: Better safe than sorry.
             #      Check duplicated function definitions and remove them.
             #      This problem should not exists.
