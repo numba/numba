@@ -192,7 +192,6 @@ class LLVMContextManager(object):
                     func.delete()
         
             self.module.link_in(lfunc.module, True)
-
             lfunc = self.module.get_function_named(func_name)
 
         assert lfunc.module is self.module
@@ -1152,7 +1151,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def _handle_mod(self, node, lhs, rhs):
         _, func = self.function_cache.function_by_name(
             'PyModulo',
-            module=self.mod,
+            self.llvm_module,
             arg_types = (node.type, node.type),
             return_type = node.type)
         return self.builder.call(func, (lhs, rhs))
@@ -1383,15 +1382,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             ltypes = [largs[0].type]
         else:
             ltypes = []
-        node.llvm_func = llvm.core.Function.intrinsic(self.mod, intr, ltypes)
+        node.llvm_func = llvm.core.Function.intrinsic(self.llvm_module,
+                                                      intr,
+                                                      ltypes)
         return self.visit_NativeCallNode(node, largs=largs)
 
     def visit_MathCallNode(self, node):
-        try:
-            lfunc = self.mod.get_function_named(node.name)
-        except llvm.LLVMException:
-            lfunc_type = node.signature.to_llvm(self.context)
-            lfunc = self.mod.add_function(lfunc_type, node.name)
+        lfunc_type = node.signature.to_llvm(self.context)
+        lfunc = self.llvm_module.get_or_insert_function(lfunc_type, node.name)
 
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)

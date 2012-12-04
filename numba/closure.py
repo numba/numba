@@ -284,7 +284,7 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
             # Process inner functions and determine cellvars and freevars
             # codes = [c for c in self.constants
             #                if isinstance(c, types.CodeType)]
-            process_closures(self.context, node, self.symtab)
+            process_closures(self.context, node, self.symtab, self.llvm_module)
 
         # cellvars are the variables we own
         cellvars = dict((name, var) for name, var in self.symtab.iteritems()
@@ -370,7 +370,7 @@ def get_locals(symtab):
     return dict((name, var) for name, var in symtab.iteritems()
                     if var.is_local)
 
-def process_closures(context, outer_func_def, outer_symtab):
+def process_closures(context, outer_func_def, outer_symtab, llvm_module):
     """
     Process closures recursively and for each variable in each function
     determine whether it is a freevar, a cellvar, a local or otherwise.
@@ -394,13 +394,14 @@ def process_closures(context, outer_func_def, outer_symtab):
                     context, closure.py_func, closure.func_def,
                     closure.type.signature,
                     closure_scope=closure_scope,
-                    symtab=symtab)
+                    symtab=symtab,
+                    llvm_module=llvm_module)
 
         _, _, ast = result
         closure.symtab = symtab
         closure.type_inferred_ast = ast
 
-        process_closures(context, closure.func_def, symtab)
+        process_closures(context, closure.func_def, symtab, llvm_module)
 
 
 class ClosureCompilingMixin(ClosureBaseVisitor):
@@ -474,6 +475,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
                     self.context, node.py_func, node.type_inferred_ast,
                     node.type.signature, symtab=node.symtab,
                     order=order, # skip type inference
+                    llvm_module=self.llvm_module,
                     )
 
         node.lfunc = p.translator.lfunc
