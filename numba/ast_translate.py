@@ -206,6 +206,7 @@ class LLVMContextManager(object):
 
         assert lfunc.module is self.module
         self.verify(lfunc)
+#        print lfunc
         return lfunc
 
     def get_pointer_to_function(self, lfunc):

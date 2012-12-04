@@ -47,7 +47,9 @@ These scopes are instances of a numba extension class.
 import ast
 import types
 import ctypes
+import inspect
 
+import llvm.core as lc
 import numba.decorators
 from numba import *
 from numba import error, visitors, nodes
@@ -284,7 +286,7 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
             # Process inner functions and determine cellvars and freevars
             # codes = [c for c in self.constants
             #                if isinstance(c, types.CodeType)]
-            process_closures(self.context, node, self.symtab, self.llvm_module)
+            process_closures(self.context, node, self.symtab)
 
         # cellvars are the variables we own
         cellvars = dict((name, var) for name, var in self.symtab.iteritems()
@@ -370,7 +372,7 @@ def get_locals(symtab):
     return dict((name, var) for name, var in symtab.iteritems()
                     if var.is_local)
 
-def process_closures(context, outer_func_def, outer_symtab, llvm_module):
+def process_closures(context, outer_func_def, outer_symtab):
     """
     Process closures recursively and for each variable in each function
     determine whether it is a freevar, a cellvar, a local or otherwise.
@@ -390,18 +392,19 @@ def process_closures(context, outer_func_def, outer_symtab, llvm_module):
                      closure.func_def.name)
         closure.make_pyfunc()
         symtab = {}
+
         p, result = numba.pipeline.infer_types_from_ast_and_sig(
                     context, closure.py_func, closure.func_def,
                     closure.type.signature,
                     closure_scope=closure_scope,
                     symtab=symtab,
-                    llvm_module=llvm_module)
+                    llvm_module=None)
 
         _, _, ast = result
         closure.symtab = symtab
         closure.type_inferred_ast = ast
 
-        process_closures(context, closure.func_def, symtab, llvm_module)
+        process_closures(context, closure.func_def, symtab)
 
 
 class ClosureCompilingMixin(ClosureBaseVisitor):
@@ -471,11 +474,22 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         # Compile inner function, skip type inference
         order = numba.pipeline.Pipeline.order
         order = order[order.index('type_infer') + 1:]
+
+        ns = '.'.join([inspect.getmodule(self.func).__name__,
+                       self.func.__name__])
+        closure_name = node.py_func.__name__
+        fullname = "%s.__closure__.%s" % (ns, closure_name)
+
+        decorated = naming.specialized_mangle(fullname, node.type.signature.args)
+
+        # closure uses its own module
+        closure_module = lc.Module.new('tmp.closure.%X' % id(node))
         p, result = numba.pipeline.run_pipeline(
                     self.context, node.py_func, node.type_inferred_ast,
                     node.type.signature, symtab=node.symtab,
                     order=order, # skip type inference
-                    llvm_module=self.llvm_module,
+                    llvm_module=closure_module,
+                    name=decorated,
                     )
 
         node.lfunc = p.translator.lfunc
