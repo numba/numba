@@ -922,19 +922,33 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         raise error.NumbaError(node, "Unary operator %s" % node.op)
 
     def visit_Compare(self, node):
-        # TODO: Maybe it's more efficient to generate phi nodes instead of
-        #       emitting code to perform all comparisions and 'and'ing them
+        blocks_false = []
+
+        end_block = self.append_basic_block('compare.end')
+
+        cur_block = self.append_basic_block('compare.cmp')
+        self.builder.branch(cur_block)
+        next_block = None
         left = node.left
-        results = []
         for op, right in zip(node.ops, node.comparators):
-            result = self._compare(op, left, right)
-            results.append(result)
+            blocks_false.append(cur_block)
+            self.builder.position_at_end(cur_block)
+            test = self._compare(op, left, right)
+            next_block = self.append_basic_block('compare.cmp')
+            self.builder.cbranch(test, next_block, end_block)
             left = right
-        if len(results) > 1:
-            result = reduce(self.builder.and_, results)
-        else:
-            result = results.pop()
-        return result
+            cur_block = next_block
+
+        self.builder.position_at_end(next_block)
+        self.builder.branch(end_block)
+
+        self.builder.position_at_end(end_block)
+        booltype = _int1
+        phi = self.builder.phi(booltype)
+        phi.add_incoming(lc.Constant.int(booltype, 1), next_block)
+        for b in blocks_false:
+            phi.add_incoming(lc.Constant.int(booltype, 0), b)
+        return phi
 
 
     def _compare(self, op, lhs, rhs):
