@@ -48,6 +48,20 @@ class UFuncBuilder(object):
         # print ast.dump(func)
         return func
 
+    def save(self):
+        """
+        Save the state of the builder to allow processing other parts of
+        the tree.
+        """
+        state = self.operands
+        self.operands = []
+        return state
+
+    def restore(self, state):
+        "Restore saved state"
+        self.operands = state
+
+
 class UFuncConverter(UFuncBuilder, visitors.NumbaTransformer):
     """
     Convert a Python array expression AST to a scalar ufunc kernel by demoting
