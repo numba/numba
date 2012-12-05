@@ -3,6 +3,7 @@ This module contains the Pipeline class which provides a pluggable way to
 define the transformations and the order in which they run on the AST.
 """
 
+import inspect
 import ast as ast_module
 import logging
 import functools
@@ -54,7 +55,8 @@ class Pipeline(object):
         self.func_name = kwargs.get('name')
         if not self.func_name:
             if func:
-                name = func.__name__
+                module_name = inspect.getmodule(func).__name__
+                name = '.'.join([module_name, func.__name__])
             else:
                 name = ast.name
 
@@ -65,9 +67,7 @@ class Pipeline(object):
         if symtab is None:
             self.symtab = {}
 
-        self.llvm_module = kwargs.get('llvm_module', None)
-        if self.llvm_module is None:
-            self.llvm_module = self.context.function_cache.module
+        self.llvm_module = kwargs.pop('llvm_module')
 
         self.nopython = nopython
         self.locals = locals
@@ -88,9 +88,11 @@ class Pipeline(object):
             name = '__'.join(cls.__name__ for cls in classes)
             cls = type(name, classes, {})
 
+        assert 'llvm_module' not in kwds
         return cls(self.context, self.func, ast,
                    func_signature=self.func_signature, nopython=self.nopython,
-                   symtab=self.symtab, func_name=self.func_name, **kwds)
+                   symtab=self.symtab, func_name=self.func_name,
+                   llvm_module=self.llvm_module, **kwds)
 
     def insert_specializer(self, name, after):
         "Insert a new transform or visitor into the pipeline"
@@ -248,6 +250,7 @@ def compile(context, func, restype=None, argtypes=None, ctypes=False,
         - run type inference using the given input types
         - compile the function to LLVM
     """
+    assert 'llvm_module' in kwds
     pipeline, (func_signature, symtab, ast) = _infer_types(
                 context, func, restype, argtypes, codegen=True, **kwds)
     t = pipeline.translator

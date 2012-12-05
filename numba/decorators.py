@@ -167,6 +167,10 @@ class NumbaFunction(object):
         return compiled_numba_func(*args, **kwargs)
 
 def jit_extension_class(py_class, translator_kwargs):
+    llvm_module = translator_kwargs.get('llvm_module')
+    if llvm_module is None:
+        llvm_module = _lc.Module.new('tmp.extension_class.%X' % id(py_class))
+        translator_kwargs['llvm_module'] = llvm_module
     return extension_type_inference.create_extension(
                         context, py_class, translator_kwargs)
 
@@ -263,6 +267,10 @@ def _jit2(restype=None, argtypes=None, nopython=False,
         if not hasattr(func, 'live_objects'):
             func.live_objects = []
         func._is_numba_func = True
+
+        if kwargs.get('llvm_module') is None:
+            kwargs['llvm_module'] = _lc.Module.new('tmp.module.%x' % id(func))
+        assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
         result = function_cache.compile_function(func, argtys,
                                                  nopython=nopython,
                                                  ctypes=False,

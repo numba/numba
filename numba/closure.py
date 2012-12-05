@@ -52,7 +52,9 @@ These scopes are instances of a numba extension class.
 import ast
 import types
 import ctypes
+import inspect
 
+import llvm.core as lc
 import numba.decorators
 from numba import *
 from numba import error, visitors, nodes
@@ -395,11 +397,13 @@ def process_closures(context, outer_func_def, outer_symtab):
                      closure.func_def.name)
         closure.make_pyfunc()
         symtab = {}
+
         p, result = numba.pipeline.infer_types_from_ast_and_sig(
                     context, closure.py_func, closure.func_def,
                     closure.type.signature,
                     closure_scope=closure_scope,
-                    symtab=symtab)
+                    symtab=symtab,
+                    llvm_module=None)
 
         _, _, ast = result
         closure.symtab = symtab
@@ -475,10 +479,22 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         # Compile inner function, skip type inference
         order = numba.pipeline.Pipeline.order
         order = order[order.index('type_infer') + 1:]
+
+        ns = '.'.join([inspect.getmodule(self.func).__name__,
+                       self.func.__name__])
+        closure_name = node.py_func.__name__
+        fullname = "%s.__closure__.%s" % (ns, closure_name)
+
+        decorated = naming.specialized_mangle(fullname, node.type.signature.args)
+
+        # closure uses its own module
+        closure_module = lc.Module.new('tmp.closure.%X' % id(node))
         p, result = numba.pipeline.run_pipeline(
                     self.context, node.py_func, node.type_inferred_ast,
                     node.type.signature, symtab=node.symtab,
                     order=order, # skip type inference
+                    llvm_module=closure_module,
+                    name=decorated,
                     )
 
         node.lfunc = p.translator.lfunc
