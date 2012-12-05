@@ -1,6 +1,6 @@
 import ast
 
-from numba import visitors, nodes, error
+from numba import visitors, nodes, error, functions
 
 class UFuncBuilder(object):
     """
@@ -47,6 +47,19 @@ class UFuncBuilder(object):
         UFuncBuilder.ufunc_counter += 1
         # print ast.dump(func)
         return func
+
+    def compile_to_pyfunc(self, ufunc_ast):
+        "Compile the ufunc ast to a function"
+        # Build ufunc AST module
+        module = ast.Module(body=[ufunc_ast])
+        functions.fix_ast_lineno(module)
+
+        # Create Python ufunc function
+        d = {}
+        exec compile(module, '<ast>', 'exec') in d, d
+        py_ufunc = d['ufunc']
+
+        return py_ufunc
 
     def save(self):
         """
