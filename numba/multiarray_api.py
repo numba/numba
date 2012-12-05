@@ -116,7 +116,7 @@ class MultiarrayAPI (object):
             api = module.add_global_variable(_void_star_star, "PyArray_API")
             api.initializer = lc.Constant.inttoptr(
                 lc.Constant.int(_intp, self.api_addr), _void_star_star)
-            api.linkage = lc.LINKAGE_LINKONCE_ODR
+            api.linkage = lc.LINKAGE_INTERNAL
 
 # ______________________________________________________________________
 # End of multiarray_api.py

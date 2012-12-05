@@ -59,8 +59,7 @@ class TestConstFolding(unittest.TestCase):
         source = inspect.getsource(func)
         astree = ast.parse(source)
         pipeline = decorators.context.numba_pipeline(decorators.context,
-                                                     func, astree, func_sig,
-                                                     llvm_module=None)
+                                                     func, astree, func_sig)
         return pipeline.const_folding(astree)
 
     def iter_all(self, astree, target):

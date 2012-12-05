@@ -169,15 +169,18 @@ class ASTVectorizeMixin(object):
     def __init__(self, *args, **kwargs):
         super(ASTVectorizeMixin, self).__init__(*args, **kwargs)
         self.llvm_context = ast_translate.LLVMContextManager()
+        self.mod = self.llvm_context.get_default_module()
+        self.ee = self.llvm_context.get_execution_engine()
         self.args_restypes = getattr(self, 'args_restypes', [])
         self.signatures = []
-        self.ee = self.llvm_context.execution_engine
 
     def _get_ee(self):
         return self.ee
 
     def add(self, restype=None, argtypes=None):
-        dec = decorators.jit2(restype, argtypes)
+        dec = decorators.jit2(restype, argtypes,
+                              _llvm_module=self.mod,
+                              _llvm_ee=self.ee)
         numba_func = dec(self.pyfunc)
         self.args_restypes.append(list(numba_func.signature.args) +
                                    [numba_func.signature.return_type])

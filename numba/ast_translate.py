@@ -134,94 +134,76 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
 
 
 class LLVMContextManager(object):
+    # TODO: make these instance attributes and create a singleton global object
+    _ee = None          # execution engine
+    _mods = {}          # module's name => module instance
+    _fpass = {}         # module => function passes
+    _DEFAULT_MODULE = 'default'
 
-    __singleton = None
-    
-    def __new__(cls, opt=3, cg=3, inline=1000):
+    def __init__(self, opt=3):
+        self._initialize(opt=opt)
+
+    @classmethod
+    def _initialize(cls, opt=3):
+        if not cls._mods: # no modules yet
+            # Create default module
+            default_mod = cls._init_module(cls._DEFAULT_MODULE, opt=opt)
+
+            # Create execution engine
+            # NOTE: EE owns all registered modules
+            cls._ee = le.ExecutionEngine.new(default_mod)
+
+    @classmethod
+    def _init_module(cls, name, opt=3):
         '''
-        opt --- Optimization level for LLVM optimization pass [0 - 3].
-        cg  --- Optimization level for code generator [0 - 3].
-        Use `3` for SSE support on Intel.
-        inline --- Inliner threshold.
+        Initialize a module with the given name;
+        Prepare pass managers for it.
         '''
-        inst = cls.__singleton
-        if not inst:
-            inst = object.__new__(cls)
-            inst.__initialize(opt, cg, inline)
-            cls.__singleton = inst
-        return inst
-
-    def __initialize(self, opt, cg, inline):
-        assert self.__singleton is None
-        m = self.__module = lc.Module.new("numba_executable_module")
-        self.__engine = le.EngineBuilder.new(m).opt(cg).create()
-        self.__pm = lp.PassManager.new()
-        # populate pass manager
-        pmb = lp.PassManagerBuilder.new()
-        pmb.use_inliner_with_threshold(inline)
-        pmb.opt_level = opt
-        pmb.populate(self.__pm)
-
-    @property
-    def module(self):
-        return self.__module
-
-    @property
-    def execution_engine(self):
-        return self.__engine
-
-    @property
-    def pass_manager(self):
-        return self.__pm
-
-    def link(self, lfunc):
-        if lfunc.module is not self.module:
-            self.pass_manager.run(lfunc.module)
-            # link module
-            func_name = lfunc.name
-#
-#            print 'lfunc.module'.center(80, '-')
-#            print lfunc.module
-#
-#            print 'self.module'.center(80, '-')
-#            print self.module
-
-            # XXX: Better safe than sorry.
-            #      Check duplicated function definitions and remove them.
-            #      This problem should not exists.
-            registered = set(f.name for f in self.module.functions)
-            for func in lfunc.module.functions:
-                if not func.is_declaration and func.name in registered:
-                    import warnings
-                    warnings.warn("Duplicated funciton definition: %s "\
-                                  "when compiling %s" % (func.name, lfunc.name))
-                    func.delete()
+        mod = lc.Module.new(name)
+        cls._mods[name] = mod
         
-            self.module.link_in(lfunc.module, preserve=False)
-#
-#            print 'linked'.center(80, '=')
-#            print self.module
+        pmb = lp.PassManagerBuilder.new()
+        pmb.opt_level = opt 
+        fpm = lp.FunctionPassManager.new(mod)
+        pmb.populate(fpm)
+        
+        cls._fpass[mod] = fpm
 
-            lfunc = self.module.get_function_named(func_name)
+        return mod
 
-        assert lfunc.module is self.module
-        self.verify(lfunc)
-#        print lfunc
-        return lfunc
+    def create_module(self, name, opt=3):
+        '''
+        Create a llvm Module and add it to the execution engine.
 
-    def get_pointer_to_function(self, lfunc):
-        return self.execution_engine.get_pointer_to_function(lfunc)
+        NOTE: Will we ever need this?
+        '''
+        mod = self._init_module(name, opt)
+        self._ee.add_module(mod)
+        return mod
 
-    def verify(self, lfunc):
-        lfunc.module.verify()
-        # XXX: remove the following extra checking before release
-        for bb in lfunc.basic_blocks:
-            for instr in bb.instructions:
-                if isinstance(instr, lc.CallOrInvokeInstruction):
-                    callee = instr.called_function
-                    if callee is not None:
-                        assert callee.module is lfunc.module, \
-                            "Inter module call for call to %s" % callee.name
+    def get_default_module(self):
+        return self.get_module(self._DEFAULT_MODULE)
+
+    def get_function_pass_manager(self, name_or_mod):
+        if isinstance(name_or_mod, basestring):
+            mod = name_or_mod
+        else:
+            mod = name_or_mod
+                
+        if mod in self._fpass:
+            fpm = self._fpass[mod]
+        else:
+            fpm = lp.FunctionPassManager.new(mod)
+            self._fpass[mod] = fpm
+            #fpm.initialize()  # not necessary
+
+        return fpm
+
+    def get_module(self, name):
+        return self._mods[name]
+
+    def get_execution_engine(self):
+        return self._ee
 
 class ComplexSupportMixin(object):
     "Support for complex numbers"
@@ -297,9 +279,8 @@ class RefcountingMixin(object):
         "Py_DECREF a value"
         assert not self.nopython
         object_ltype = object_.to_llvm(self.context)
+        sig, py_decref = self.function_cache.function_by_name(func)
         b = self.builder
-        mod = b.basic_block.function.module
-        sig, py_decref = self.function_cache.function_by_name(func, mod)
         return b.call(py_decref, [b.bitcast(value, object_ltype)])
 
     def incref(self, value):
@@ -349,16 +330,20 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def __init__(self, context, func, ast, func_signature, symtab,
                  optimize=True, nopython=False,
-                 llvm_module=None, refcount_args=True, **kwds):
+                 llvm_module=None, llvm_ee=None,
+                 refcount_args=True, **kwds):
 
         super(LLVMCodeGenerator, self).__init__(
                     context, func, ast, func_signature=func_signature,
-                    nopython=nopython, symtab=symtab,
-                    llvm_module=llvm_module)
+                    nopython=nopython, symtab=symtab)
 
         self.func_name = kwds.get('func_name', None)
         self.func_signature = func_signature
         self.blocks = {} # stores id => basic-block
+
+        # code generation attributes
+        self.mod = llvm_module or LLVMContextManager().get_default_module()
+        self.ee = llvm_ee or LLVMContextManager().get_execution_engine()
 
         self.refcount_args = refcount_args
 
@@ -468,7 +453,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         self.lfunc_type = self.to_llvm(self.func_signature)
 
-        self.lfunc = self.llvm_module.add_function(self.lfunc_type, self.func_name)
+        self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
         assert self.func_name == self.lfunc.name, \
                "Redefinition of function %s" % self.func_name
         
@@ -477,7 +462,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder = lc.Builder.new(entry)
         self.caster = _LLVMCaster(self.builder)
         self.object_coercer = ObjectCoercer(self)
-        self.multiarray_api.set_PyArray_API(self.llvm_module)
+        self.multiarray_api.set_PyArray_API(self.mod)
 
         self._init_args()
         self._allocate_locals()
@@ -502,9 +487,20 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return type.to_llvm(self.context)
 
     def translate(self):
+        # Try to find the function of the specified name in the current module.
+        # If it is found, we can return immediately.
+        # Otherwise, continue to translate.
         self.lfunc = None
         try:
+            self.lfunc = self.mod.get_function_named(self.func_name)
+        except llvm.LLVMException:
+            pass
+        else:
+            assert not self.lfunc.is_declaration
+            return # we are done, escape now.
+        try:
             self.setup_func()
+
             if isinstance(self.ast, ast.FunctionDef):
                 # Handle the doc string for the function
                 # FIXME: Ignoring it for now
@@ -532,12 +528,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
             logger.debug("ast translated function: %s" % self.lfunc)
             # Verify code generation
-            self.llvm_module.verify()  # only Module level verification checks everything.
-
-            # link into the global module
-
-            self.lfunc = LLVMContextManager().link(self.lfunc)
-            del self.llvm_module
+            self.mod.verify()  # only Module level verification checks everything.
+            if self.optimize:
+                fp = LLVMContextManager().get_function_pass_manager(self.mod)
+                fp.run(self.lfunc)
         except:
             # Delete the function to prevent an invalid function from living in the module
             if self.lfunc is not None:
@@ -599,9 +593,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         error_return = ast.Return(nodes.CoercionNode(nodes.NULL_obj,
                                                      object_))
         wrapper_call.error_return = error_return
-
         t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
-                              symtab, llvm_module=LLVMContextManager().module,
+                              symtab, llvm_module=self.mod, llvm_ee=self.ee,
                               refcount_args=False, func_name=func.__name__)
         t.translate()
 
@@ -664,9 +657,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # Check for error using PyErr_Occurred()
             # TODO: make this an option in CheckErrorNode
             check_err = nodes.CheckErrorNode(
-                    nodes.ptrtoint(self.function_cache.call(
-                                            'PyErr_Occurred',
-                                            llvm_module=self.llvm_module)),
+                    nodes.ptrtoint(self.function_cache.call('PyErr_Occurred')),
                     goodval=nodes.ptrtoint(nodes.NULL))
             func_call = func_call.cloneable
             func_call = nodes.ExpressionNode(stmts=[func_call, check_err],
@@ -689,14 +680,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # return types, etc)
         pipeline_ = pipeline.Pipeline(self.context, node.fake_pyfunc,
                                       node, self.func_signature,
-                                      order=['late_specializer'],
-                                      llvm_module=self.llvm_module)
+                                      order=['late_specializer'])
         sig, symtab, return_stmt_ast = pipeline_.run_pipeline()
         self.generic_visit(return_stmt_ast)
 
     @property
     def lfunc_pointer(self):
-        return LLVMContextManager().get_pointer_to_function(self.lfunc)
+        return self.ee.get_pointer_to_function(self.lfunc)
 
     def _null_obj_temp(self, name, type=None):
         lhs = self.llvm_alloca(type or llvm_types._pyobject_head_struct_p,
@@ -1163,7 +1153,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def _handle_mod(self, node, lhs, rhs):
         _, func = self.function_cache.function_by_name(
             'PyModulo',
-            self.llvm_module,
+            module=self.mod,
             arg_types = (node.type, node.type),
             return_type = node.type)
         return self.builder.call(func, (lhs, rhs))
@@ -1333,8 +1323,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # call PyObject_Call
         largs = [lfunc_addr, args_tuple, kwargs_dict]
-        _, pyobject_call = self.function_cache.function_by_name('PyObject_Call',
-                                                                self.llvm_module)
+        _, pyobject_call = self.function_cache.function_by_name('PyObject_Call')
 
         res = self.builder.call(pyobject_call, largs, name=node.name)
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
@@ -1355,8 +1344,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return_value = llvm_codegen.handle_struct_passing(
                             self.builder, self.alloca, largs, node.signature)
 
-        if hasattr(node.llvm_func, 'module') and node.llvm_func.module != self.llvm_module:
-            lfunc = self.llvm_module.get_or_insert_function(node.llvm_func.type.pointee,
+        if hasattr(node.llvm_func, 'module') and node.llvm_func.module != self.mod:
+            lfunc = self.mod.get_or_insert_function(node.llvm_func.type.pointee,
                                                     node.llvm_func.name)
         else:
             lfunc = node.llvm_func
@@ -1394,14 +1383,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             ltypes = [largs[0].type]
         else:
             ltypes = []
-        node.llvm_func = llvm.core.Function.intrinsic(self.llvm_module,
-                                                      intr,
-                                                      ltypes)
+        node.llvm_func = llvm.core.Function.intrinsic(self.mod, intr, ltypes)
         return self.visit_NativeCallNode(node, largs=largs)
 
     def visit_MathCallNode(self, node):
-        lfunc_type = node.signature.to_llvm(self.context)
-        lfunc = self.llvm_module.get_or_insert_function(lfunc_type, node.name)
+        try:
+            lfunc = self.mod.get_function_named(node.name)
+        except llvm.LLVMException:
+            lfunc_type = node.signature.to_llvm(self.context)
+            lfunc = self.mod.add_function(lfunc_type, node.name)
 
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)
@@ -1604,16 +1594,12 @@ class ObjectCoercer(object):
         self.context = translator.context
         self.translator = translator
         self.builder = translator.builder
-        self.llvm_module = self.builder.basic_block.function.module
         sig, self.py_buildvalue = translator.function_cache.function_by_name(
-                                                              'Py_BuildValue',
-                                                              self.llvm_module)
+                                                              'Py_BuildValue')
         sig, self.pyarg_parsetuple = translator.function_cache.function_by_name(
-                                                              'PyArg_ParseTuple',
-                                                              self.llvm_module)
+                                                              'PyArg_ParseTuple')
         sig, self.pyerr_clear = translator.function_cache.function_by_name(
-                                                            'PyErr_Clear',
-                                                            self.llvm_module)
+                                                            'PyErr_Clear')
         self.function_cache = translator.function_cache
         self.NULL = self.translator.visit(nodes.NULL_obj)
 

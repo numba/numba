@@ -250,7 +250,7 @@ class ConstNode(Node):
             raise NotImplementedError("Use ObjectInjectNode")
         elif type.is_c_string:
             lvalue = translate._LLVMModuleUtils.get_string_constant(
-                                            translator.llvm_module, constant)
+                                            translator.mod, constant)
             type_char_p = numba_types.c_string_type.to_llvm(translator.context)
             lvalue = translator.builder.bitcast(lvalue, type_char_p)
         elif type.is_function:

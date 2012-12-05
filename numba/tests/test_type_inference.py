@@ -85,8 +85,7 @@ def none_newaxis(a):
 
 def infer(func, argtypes):
     sig, symtab, ast = pipeline.infer_types(decorators.context, func,
-                                            argtypes=argtypes,
-                                            llvm_module=None)
+                                            argtypes=argtypes)
     return sig, symtab
 
 class TestTypeInference(unittest.TestCase):

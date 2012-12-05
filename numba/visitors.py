@@ -29,7 +29,6 @@ class NumbaVisitorMixin(CooperativeBase):
         self.symtab = symtab
         self.func_signature = func_signature
         self.nopython = nopython
-        self.llvm_module = kwargs.pop('llvm_module')
 
         self.func = func
         if func is None:
@@ -112,8 +111,7 @@ class NumbaVisitorMixin(CooperativeBase):
                 templ.temp_var(name, type)
 
         symtab, tree = templ.template_type_infer(substitutions,
-                                                 symtab=self.symtab,
-                                                 llvm_module=self.llvm_module)
+                                                 symtab=self.symtab)
         self.symtab.update(templ.get_vars_symtab())
         return tree
 
