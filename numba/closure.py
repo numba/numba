@@ -402,8 +402,7 @@ def process_closures(context, outer_func_def, outer_symtab):
                     context, closure.py_func, closure.func_def,
                     closure.type.signature,
                     closure_scope=closure_scope,
-                    symtab=symtab,
-                    llvm_module=None)
+                    symtab=symtab)
 
         _, _, ast = result
         closure.symtab = symtab
@@ -487,13 +486,10 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
 
         decorated = naming.specialized_mangle(fullname, node.type.signature.args)
 
-        # closure uses its own module
-        closure_module = lc.Module.new('tmp.closure.%X' % id(node))
         p, result = numba.pipeline.run_pipeline(
                     self.context, node.py_func, node.type_inferred_ast,
                     node.type.signature, symtab=node.symtab,
                     order=order, # skip type inference
-                    llvm_module=closure_module,
                     name=decorated,
                     )
 

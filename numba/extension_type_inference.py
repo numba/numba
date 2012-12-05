@@ -113,8 +113,7 @@ def _type_infer_method(context, ext_type, method, method_name, class_dict,
 
     class_dict[method_name] = method
     func_signature, symtab, ast = pipeline.infer_types(
-                        context, method.py_func, restype, argtypes,
-                        llvm_module=llvm_module)
+                        context, method.py_func, restype, argtypes)
     ext_type.add_method(method_name, func_signature)
 
 def _type_infer_init_method(context, class_dict, ext_type, llvm_module):
@@ -152,8 +151,7 @@ def _compile_methods(class_dict, context, ext_type, lmethods, method_pointers,
         # TODO: delayed types and circular calls/variable assignments
         sig, translator, wrapper = pipeline.compile(context, method.py_func,
                                                     func_signature.return_type,
-                                                    func_signature.args,
-                                                    llvm_module=llvm_module)
+                                                    func_signature.args)
         lmethods.append(translator.lfunc)
         method_pointers.append((method_name, translator.lfunc_pointer))
         class_dict[method_name] = method.result(wrapper)

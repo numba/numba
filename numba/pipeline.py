@@ -10,6 +10,8 @@ import functools
 import pprint
 from timeit import default_timer as _timer
 
+import llvm.core as lc
+
 import numba.closure
 from numba import error
 from numba import functions, naming, transforms, visitors
@@ -67,7 +69,10 @@ class Pipeline(object):
         if symtab is None:
             self.symtab = {}
 
-        self.llvm_module = kwargs.pop('llvm_module')
+        # Let the pipeline create a module for the function it is compiling
+        # and the user will link that in.
+        assert 'llvm_module' not in kwargs
+        self.llvm_module = lc.Module.new('tmp.module.%x' % id(func))
 
         self.nopython = nopython
         self.locals = locals
@@ -250,7 +255,7 @@ def compile(context, func, restype=None, argtypes=None, ctypes=False,
         - run type inference using the given input types
         - compile the function to LLVM
     """
-    assert 'llvm_module' in kwds
+    assert 'llvm_module' not in kwds
     pipeline, (func_signature, symtab, ast) = _infer_types(
                 context, func, restype, argtypes, codegen=True, **kwds)
     t = pipeline.translator

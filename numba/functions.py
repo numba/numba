@@ -177,10 +177,8 @@ class FunctionCache(object):
                 func = getattr(func, '_numba_func', func)
                 compile_only = getattr(func, '_numba_compile_only', False)
                 kwds['compile_only'] = kwds.get('compile_only', compile_only)
-                if kwds.get('llvm_module') is None:
-                    # By default, create a temporary module.
-                    # This is for calling autojit'ed functions.
-                    kwds['llvm_module'] = llvm.core.Module.new("tmp.module.%X" % id(func))
+
+                assert kwds.get('llvm_module') is None, kwds.get('llvm_module')
                 # numba function, compile
                 func_signature, translator, ctypes_func = pipeline.compile(
                                 self.context, func, restype, argtypes,

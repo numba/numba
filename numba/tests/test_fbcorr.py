@@ -62,7 +62,7 @@ class TestFbcorr(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    unittest.main(*sys.argv[1:])
+    unittest.main()
 
 # ______________________________________________________________________
 # End of test_filter2d.py

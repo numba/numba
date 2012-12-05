@@ -534,15 +534,22 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # Verify code generation
             self.llvm_module.verify()  # only Module level verification checks everything.
 
-            # link into the global module
-
-            self.lfunc = LLVMContextManager().link(self.lfunc)
+            # Reove reference to self.llvm_module
+            # This may be destroyed later due to linkage
             del self.llvm_module
+
+            self.link()
+
         except:
             # Delete the function to prevent an invalid function from living in the module
             if self.lfunc is not None:
                 self.lfunc.delete()
             raise
+
+    def link(self):
+        '''Link the lfunc into the execution context
+        '''
+        self.lfunc = LLVMContextManager().link(self.lfunc)
 
     def get_ctypes_func(self, llvm=True):
         ee = self.ee
@@ -689,8 +696,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # return types, etc)
         pipeline_ = pipeline.Pipeline(self.context, node.fake_pyfunc,
                                       node, self.func_signature,
-                                      order=['late_specializer'],
-                                      llvm_module=self.llvm_module)
+                                      order=['late_specializer'])
         sig, symtab, return_stmt_ast = pipeline_.run_pipeline()
         self.generic_visit(return_stmt_ast)
 

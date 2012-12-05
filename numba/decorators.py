@@ -255,8 +255,7 @@ def autojit(backend='ast', target='cpu', nopython=False, locals=None):
         return _autojit2(target, nopython, locals=locals)
 
 def _jit2(restype=None, argtypes=None, nopython=False,
-          _llvm_module=None, _llvm_ee=None, **kwargs):
-    kwargs.update(llvm_module=_llvm_module, llvm_ee=_llvm_ee)
+          _llvm_module=None, **kwargs):
     def _jit2_decorator(func):
         argtys = argtypes
         if func.func_code.co_argcount == 0 and argtys is None:
@@ -268,8 +267,7 @@ def _jit2(restype=None, argtypes=None, nopython=False,
             func.live_objects = []
         func._is_numba_func = True
 
-        if kwargs.get('llvm_module') is None:
-            kwargs['llvm_module'] = _lc.Module.new('tmp.module.%x' % id(func))
+        assert kwargs.get('llvm_module') is None # TODO link to user module
         assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
         result = function_cache.compile_function(func, argtys,
                                                  nopython=nopython,
@@ -344,7 +342,7 @@ def _process_sig(sigstr, name=None):
     return signature.name, signature.return_type, signature.args
 
 def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False,
-        _llvm_module=None, _llvm_ee=None, **kws):
+        **kws):
     """
     Compile a function given the input and return types.
 
@@ -368,8 +366,7 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
     translator is used.  *Note that the bytecode translator is
     deprecated as of the 0.3 release.*
     """
-    kws.update(llvm_module=_llvm_module, llvm_ee=_llvm_ee,
-               nopython=nopython, backend=backend)
+    kws.update(nopython=nopython, backend=backend)
     if isinstance(restype, type):
         cls = restype
         return jit_extension_class(cls, kws)
