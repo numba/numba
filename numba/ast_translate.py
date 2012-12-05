@@ -538,8 +538,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # This may be destroyed later due to linkage
             del self.llvm_module
 
-            self.link()
-
         except:
             # Delete the function to prevent an invalid function from living in the module
             if self.lfunc is not None:
@@ -552,7 +550,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.lfunc = LLVMContextManager().link(self.lfunc)
 
     def get_ctypes_func(self, llvm=True):
-        ee = self.ee
         import ctypes
         sig = self.func_signature
         restype = _types.convert_to_ctypes(sig.return_type)

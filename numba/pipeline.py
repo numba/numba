@@ -263,6 +263,7 @@ def compile(context, func, restype=None, argtypes=None, ctypes=False,
     if compile_only:
         return func_signature, t, None
 
+    t.link()
     return func_signature, t, get_wrapper(t, ctypes)
 
 def compile_from_sig(context, func, signature, **kwds):

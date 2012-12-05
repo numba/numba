@@ -492,7 +492,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
                     order=order, # skip type inference
                     name=decorated,
                     )
-
+        p.translator.link()
         node.lfunc = p.translator.lfunc
         node.lfunc_pointer = p.translator.lfunc_pointer
 
