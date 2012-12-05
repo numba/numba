@@ -1,4 +1,5 @@
 import ast
+import types
 
 from numba import visitors, nodes, error, functions
 
@@ -57,7 +58,10 @@ class UFuncBuilder(object):
         # Create Python ufunc function
         d = {}
         exec compile(module, '<ast>', 'exec') in d, d
-        py_ufunc = d['ufunc']
+        d.pop('__builtins__')
+        py_ufunc = d[ufunc_ast.name]
+
+        assert isinstance(py_ufunc, types.FunctionType), py_ufunc
 
         return py_ufunc
 
