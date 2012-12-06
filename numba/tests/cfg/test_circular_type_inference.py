@@ -289,8 +289,6 @@ def test_delayed_string_indexing():
 
     return s, x
 
-test_delayed_string_indexing()
-
 @autojit(warn=False)
 def test_delayed_string_indexing2():
     """
@@ -335,3 +333,4 @@ def test_circular_error():
             y = x
 
 #testmod()
+test_delayed_string_indexing()

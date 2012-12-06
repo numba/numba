@@ -473,6 +473,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         self.have_cfg = hasattr(self.ast, 'flow')
         if self.have_cfg:
+            self.deferred_types = []
             self.resolve_variable_types()
 
         if debug and self.have_cfg:
@@ -532,6 +533,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 # We have not analyzed this definition yet, delay the type
                 # resolution
                 v.type = v.deferred_type
+                self.deferred_types.append(v.type)
 
         incoming_types = [v.type for v in incoming]
         promoted_type = numba_types.PromotionType(node.variable, self.context,
@@ -605,62 +607,72 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         """
         self.analyse_assignments()
 
+        for deferred_type in self.deferred_types:
+            deferred_type.update()
+
         # Find all unresolved variables
         unresolved = set()
         for block in self.ast.flow.blocks:
             for variable in block.symtab.itervalues():
                 if variable.parent_var: # renamed variable
                     if variable.type.is_unresolved:
-                        unresolved.add(variable.type)
+                        variable.type.resolve()
+                        if variable.type.is_unresolved:
+                            unresolved.add(variable.type)
 
         # Find the strongly connected components (build a condensation graph)
-        unvisited = set()
+        unvisited = set(unresolved)
         strongly_connected = {}
         while unresolved:
             start_type = unresolved.pop()
             sccs = {}
-            numba_types.kosaraju_strongly_connected(start_type,
-                                                    strongly_connected)
-            unvisited -= set(sccs)
+            numba_types.kosaraju_strongly_connected(start_type, sccs)
+            unresolved -= set(sccs)
             strongly_connected.update(sccs)
 
         # Now process the dependencies in topological order. Handle strongly
         # connected components specially
 
-        unvisited = set([strongly_connected[type] for type in unresolved])
-        start_points = self.candidates(unvisited)
-        assert start_points
-        while start_points:
-            start_point = start_points.pop()
-            start_point.simplify()
-            start_point.resolve()
-            start_points.extend(self.candidates(start_point.children))
+        if unvisited:
+            sccs = dict((k, v) for k, v in strongly_connected.iteritems() if k is not v)
+            unvisited = set([strongly_connected[type] for type in unvisited])
+            start_points = self.candidates(unvisited)
+            if not start_points:
+                p = list(unvisited)[0]
+                print p
+            assert start_points
+            while start_points:
+                start_point = start_points.pop()
+                start_point.simplify()
+                if not start_point.is_scc:
+                    assert not start_point.resolve().is_unresolved
+                start_points.extend(self.candidates(start_point.children))
 
         # Iteratively update types until everything is resolved or until we
         # can't infer anything more
         # TODO: It would be more efficient to construct a condensation graph
         # TODO: and do a topological sort, and then resolve the cycle
         # TODO: in each SCC (the condensed nodes)
-        were_unresolved = set(unresolved)
-        changed = True
-        iterations = 0
-        while changed and unresolved:
-            iterations += 1
-            changed = False
-            for variable in list(unresolved):
-                if variable.type.is_unanalyzable:
-                    # Re-analayze statement
-                    self.handle_NameAssignment(variable.assignment_node)
-                elif variable.type.is_unresolved:
-                    old_changed = changed
-                    changed |= variable.type.simplify()
-
-                if variable.type.is_unresolved:
-                    variable.type = variable.type.resolve()
-                if not variable.type.is_unresolved:
-                    unresolved.remove(variable)
-
-        logger.info("converged in %d steps" % iterations)
+#        were_unresolved = set(unresolved)
+#        changed = True
+#        iterations = 0
+#        while changed and unresolved:
+#            iterations += 1
+#            changed = False
+#            for variable in list(unresolved):
+#                if variable.type.is_unanalyzable:
+#                    # Re-analayze statement
+#                    self.handle_NameAssignment(variable.assignment_node)
+#                elif variable.type.is_unresolved:
+#                    old_changed = changed
+#                    changed |= variable.type.simplify()
+#
+#                if variable.type.is_unresolved:
+#                    variable.type = variable.type.resolve()
+#                if not variable.type.is_unresolved:
+#                    unresolved.remove(variable)
+#
+#        logger.info("converged in %d steps" % iterations)
 
         if unresolved:
             # var = unresolved.pop()
@@ -771,6 +783,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 #if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
                 #        lhs_var.promotable_type):
                 #    lhs_var.type = self.promote_types(lhs_var.type, rhs_var.type)
+            elif lhs_var.type.is_deferred:
+                # Override type with new assignment of a deferred LHS and
+                # update the type graph to link it together correctly
+                assert lhs_var is lhs_var.type.variable
+                deferred_type = lhs_var.type
+                lhs_var.type = rhs_var.type
+                deferred_type.update()
             else:
                 # Override type with new assignment
                 lhs_var.type = rhs_var.type
@@ -1012,6 +1031,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         value_type = node.value.variable.type
         deferred_type = numba_types.DeferredIndexType(node.variable, self, node)
         if value_type.is_unresolved:
+            deferred_type.dependences.append(node.value)
+            deferred_type.update()
             node.variable.type = deferred_type
             return node
 
@@ -1043,6 +1064,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 for slice_node in slices:
                     if slice_type.variable.type.is_unresolved:
                         deferred_type.dependences.append(slice_node)
+
+                deferred_type.update()
                 result_type = deferred_type
             else:
                 result_type, node.value = self._unellipsify(
@@ -1078,6 +1101,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 result_type = c_string_type
             elif slice_type.is_unresolved:
                 deferred_type.dependences.append(node.slice)
+                deferred_type.update()
                 result_type = deferred_type
             else:
                 # TODO: check for insanity

@@ -190,7 +190,6 @@ def test_while_reassign(obj1, obj2, obj3, obj4):
 
     return obj1, obj2, obj3, obj4
 
-
 @autojit
 def test_conditional_assignment(value):
     """
@@ -208,7 +207,6 @@ def test_conditional_assignment(value):
 
     return obj1
 
-
 #
 ### Test for errors
 #
@@ -224,6 +222,5 @@ def test_error_array_variable1(value, obj1):
         obj1 = np.empty(10, dtype=np.float32)
 
     return obj1
-
 
 testmod()

@@ -408,12 +408,36 @@ class PromotionType(UnresolvedType):
     is_promotion = True
     resolved_type = None
 
+    count = 0 # for debugging
+
     def __init__(self, variable, context, types, assignment=False, **kwds):
         super(PromotionType, self).__init__(variable, **kwds)
         self.context = context
         self.types = types
-        self.add_parents(types)
         self.assignment = assignment
+
+        self.add_parents(type for type in types if type.is_unresolved)
+        #self.update_parents()
+
+        self.count = PromotionType.count
+        PromotionType.count += 1
+
+    @property
+    def ps(self):
+        return list(self.parents)
+
+    @property
+    def t(self):
+        # for debugging only
+        return list(self.types)
+
+    def update_parents(self):
+        for parent in self.parents:
+            parent.children.remove(self)
+        self.parents.clear()
+
+        unresolved = [t for t in self.types if t.is_unresolved]
+        self.add_parents(unresolved)
 
     def add_type(self, seen, type, types):
         if type not in seen:
@@ -461,6 +485,12 @@ class PromotionType(UnresolvedType):
 
         return types
 
+    def get_partial_types(self, unresolved_types):
+        for unresolved_type in unresolved_types:
+            if (unresolved_type.is_reanalyse_circular and
+                    unresolved_type.resolved_type):
+                unresolved_types.append(unresolved_type)
+
     def _simplify(self, seen=None):
         """
         Simplify a promotion type tree:
@@ -485,6 +515,7 @@ class PromotionType(UnresolvedType):
 
         resolved_types = [type for type in types if not type.is_unresolved]
         unresolved_types = [type for type in types if type.is_unresolved]
+        self.get_partial_types(unresolved_types)
 
         self.variable.type = self
         if not resolved_types:
@@ -503,10 +534,12 @@ class PromotionType(UnresolvedType):
             self.resolved_type = result_type
             if len(resolved_types) == len(types) or not unresolved_types:
                 self.variable.type = result_type
+                # self.update_parents()
                 return True
             else:
                 old_types = self.types
                 self.types = set([result_type] + unresolved_types)
+                #self.update_parents()
                 return old_types != self.types
 
     def simplify(self, seen=None):
@@ -546,7 +579,7 @@ class PromotionType(UnresolvedType):
             else:
                 types.append("...")
 
-        result = "promote(%s)" % ", ".join(map(str, types))
+        result = "promote%d(%s)" % (self.count, ", ".join(map(str, types)))
         self.repr_count -= 1
         if not self.repr_count:
             self.repr_seen = None
@@ -571,9 +604,56 @@ class DeferredType(UnresolvedType):
     """
 
     is_deferred = True
+    updated = False
+
+#    _empty = frozenset()
+#
+#    def __init__(self, variable, **kwds):
+#        self.variable = variable
+#        self.assertions = []
+#
+#    @property
+#    def parents(self):
+#        if self.variable.type is self:
+#            return self._parents
+#        else:
+#            return self.variable.type.parents
+#
+#    @property
+#    def children(self):
+#        if self.variable.type is self:
+#            return self._empty
+#        else:
+#            return self.variable.type.children
+
+    def update(self):
+        assert self.variable.type is not self
+        self.updated = True
+
+        type = self.variable.type
+        if not type.is_unresolved:
+            # Type is a scalar or otherwise resolved type tree, and doesn't
+            # need to participate in the graph
+            return
+
+        for parent in self.parents:
+            if self in parent.children:
+                parent.children.remove(self)
+            parent.children.add(type)
+
+        for child in self.children:
+            if self in child.parents:
+                child.parents.remove(self)
+            child.parents.add(type)
+
+        type.parents.update(self.parents)
+        type.children.update(self.children)
 
     def __repr__(self):
-        return "<deferred(%s)>" % (self.variable.unmangled_name,)
+        if self.variable.type is self:
+            return "<deferred(%s)>" % (self.variable.unmangled_name,)
+
+        return "<deferred(%s)>" % self.variable.type
 
     def to_llvm(self, context):
         assert self.resolved_type, self
@@ -625,6 +705,9 @@ class ReanalyzeCircularType(UnresolvedType):
         self.dependences = []
 
     def simplify(self):
+        """
+        Try substituting resolved parts of promotions and reinfer the types.
+        """
         from numba import symtab
 
         if not self.variable.type.is_unresolved:
@@ -639,19 +722,17 @@ class ReanalyzeCircularType(UnresolvedType):
 
         if old_vars:
             result_type = self.retry_infer(self.type_inferer)
-            for node, old_var in old_vars:
-                old_var.type.types.pop(self)
-                old_var.type.types.add(result_type)
-                new_type = node.variable.type
-                old_var.type = new_type
-                node.variable = old_var
-
+            if not result_type.is_unresolved:
+                self.resolved_type = result_type
             return result_type is not self
 
+        # We cannot substitute any promotion candidates, see if we can resolve
+        # anyhow (this should be a cheap operation anyway if it fails)
         new_type = self.retry_infer(self.type_inferer)
         if not new_type.is_unresolved:
             self.variable.type = new_type
             return True
+
         return False
 
     def substitution_candidate(self, variable):
@@ -660,14 +741,9 @@ class ReanalyzeCircularType(UnresolvedType):
 
         if variable.type.is_promotion:
             p = resolve_var(variable)
-            if p.is_promotion:
-                if not p.resolved_type:
-                    raise error.NumbaError(
-                        self.variable.assignment_node,
-                        "No input types for this assignment were "
-                        "found, a cast is needed")
-
+            if p.is_promotion and p.resolved_type:
                 return p.resolved_type
+
         return None
 
     def retry_infer(self, type_inferer):
@@ -685,12 +761,17 @@ class DeferredIndexType(ReanalyzeCircularType):
         super(DeferredIndexType, self).__init__(variable, type_inferer, **kwds)
         self.type_inferer = type_inferer
         self.index_node = index_node
-        self.dependences.append(index_node)
+
+    def update(self):
+        self.add_parents(node.variable.type for node in self.dependences)
 
     def retry_infer(self, type_inferer):
         node = type_inferer.visit_Subscript(self.index_node,
                                             visitchildren=False)
         return node.variable.type
+
+    def __repr__(self):
+        return "<deferred_index(%s)" % ", ".join(map(str, self.parents))
 
 class StronglyConnectedCircularType(UnresolvedType):
     """
@@ -702,14 +783,18 @@ class StronglyConnectedCircularType(UnresolvedType):
     """
 
     converged = False
+    is_scc = True
 
     def __init__(self, scc, **kwds):
         super(StronglyConnectedCircularType, self).__init__(None, **kwds)
         self.scc = scc
-        for type in scc:
-            self.add_children(type.children)
-            self.add_parents(type.parents)
 
+        types = set(scc)
+        for type in scc:
+            self.add_children(type.children - types)
+            self.add_parents(type.parents - types)
+
+        self.types = scc
         self.promotions = [type for type in scc if type.is_promotion]
         self.reanalyzeable = [type for type in scc if type.is_reanalyze_circular]
 
@@ -718,30 +803,40 @@ class StronglyConnectedCircularType(UnresolvedType):
             if reanalyzeable.resolve().is_unresolved:
                 reanalyzeable.simplify()
 
+    def err_no_input(self):
+        raise error.NumbaError(self.variable.assignment_node,
+                               "No input types for this assignment were "
+                               "found, a cast is needed")
+
     def retry_infer(self):
         candidates = []
+        no_input = []
         for promotion in self.promotions:
             p = resolve_var(promotion.variable)
             if p.is_promotion:
-                if not p.resolved_type:
-                    raise error.NumbaError(
-                        self.variable.assignment_node,
-                        "No input types for this assignment were "
-                        "found, a cast is needed")
-
-                candidates.append(p)
+                if p.resolved_type:
+                    candidates.append(p)
+                else:
+                    no_input.append(p)
 
         if not candidates:
+            if no_input:
+                self.err_no_input()
+
             # All types are resolved, resolve all delayed types
             self.retry_infer_reanalyzable()
             return
 
+        # Re-infer re-analyzable statements until we converge
         changed = True
         while changed:
             self.retry_infer_reanalyzable()
             changed = False
             for p in self.promotions:
                 changed |= p.simplify()
+
+        for promotion in self.promotions:
+            promotion.variable.type = promotion.variable.resolved_type
 
     def resolve_promotion_cycles(self):
         p = self.promotions[0]
@@ -759,7 +854,26 @@ class StronglyConnectedCircularType(UnresolvedType):
         else:
             assert False
 
-def dfs(start_type, stack, seen, parents=False):
+    def resolve(self):
+        # We don't have a type, we are only an aggregation of circular types
+        raise TypeError
+
+def verify(start_type, seen):
+    seen.add(start_type)
+    for c in start_type.children:
+        if c not in seen:
+            assert start_type in c.parents
+            verify(c, seen)
+
+def verify2(start_type, seen):
+    seen.add(start_type)
+    for c in start_type.parents:
+        if c not in seen:
+            assert start_type in c.children
+            verify2(c, seen)
+
+def dfs(start_type, stack, seen, graph=None, parents=False):
+    seen.add(start_type)
     if parents:
         children = start_type.parents
     else:
@@ -767,9 +881,8 @@ def dfs(start_type, stack, seen, parents=False):
 
     for child_type in children:
         if child_type not in seen and child_type.is_unresolved:
-            seen.add(start_type)
-            dfs(start_type, seen)
-            stack.append(child_type)
+            if not graph or child_type in graph:
+                dfs(child_type, stack, seen, graph, parents=parents)
 
     stack.append(start_type)
 
@@ -778,14 +891,18 @@ def kosaraju_strongly_connected(start_type, strongly_connected):
     Find the strongly connected components in the connected graph starting at
     start_type.
     """
+    verify(start_type, set())
+    verify2(start_type, set())
+
     stack = []
     seen = set()
     dfs(start_type, stack, seen)
 
+    graph = set(stack)
     while stack:
         start = stack[-1]
         scc = []
-        dfs(start, scc, set(strongly_connected), parents=True)
+        dfs(start, scc, set(strongly_connected), graph, parents=True)
         if len(scc) > 1:
             scc_type = StronglyConnectedCircularType(scc)
             for type in scc_type.types:
@@ -959,8 +1076,8 @@ def promote_arrays(array_types, non_array_types, types,
                 "for variable %r: '%s' and '%s'" % (
                     var_name, result_type, other_type))
 
-        if len(array_types) < len(types):
-            assert_equal(non_array_types[0])
+    if len(array_types) < len(types):
+        assert_equal(non_array_types[0])
 
     # Add delayed assertion that triggers when the delayed types are resolved
     for unresolved_type in unresolved_types:
