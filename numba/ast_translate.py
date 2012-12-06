@@ -578,8 +578,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             return prototype(self.func)
 
-    def _build_wrapper_function_ast(self, fake_pyfunc):
-        wrapper = nodes.FunctionWrapperNode(self.lfunc,
+    def _build_wrapper_function_ast(self, fake_pyfunc, llvm_module = None):
+        if llvm_module is None:
+            lfunc = self.lfunc
+        else:
+            lfunc = llvm_module.get_or_insert_function(
+                self.func_signature.to_llvm(self.context), self.lfunc.name)
+        wrapper = nodes.FunctionWrapperNode(lfunc,
                                             self.func_signature,
                                             self.func,
                                             fake_pyfunc)
@@ -587,11 +592,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         wrapper.cellvars = []
         return wrapper
 
-    def build_wrapper_function(self, get_lfunc=False):
+    def _build_wrapper_translation(self):
         # PyObject *(*)(PyObject *self, PyObject *args)
         def func(self, args):
             pass
         func.live_objects = self.func.live_objects
+
+        wrapper_context = LLVMContextManager()
+        wrapper_module = wrapper_context.module
 
         # Create wrapper code generator and wrapper AST
         func.__name__ = '__numba_wrapper_%s' % self.func_name
@@ -599,17 +607,31 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                            args=[void.pointer(), object_])
         symtab = dict(self=Variable(object_, is_local=True),
                       args=Variable(object_, is_local=True))
-        wrapper_call = self._build_wrapper_function_ast(func)
+        wrapper_call = self._build_wrapper_function_ast(
+            func, llvm_module=wrapper_module)
         error_return = ast.Return(nodes.CoercionNode(nodes.NULL_obj,
                                                      object_))
         wrapper_call.error_return = error_return
 
         t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
-                              symtab, llvm_module=LLVMContextManager().module,
+                              symtab, llvm_module=wrapper_module,
                               refcount_args=False, func_name=func.__name__)
         t.translate()
-
         func.live_objects.append(t.lfunc)
+        return wrapper_context, t
+
+    def build_wrapper_function(self, get_lfunc=False):
+        '''
+        Build a wrapper function for the currently translated function.
+
+        By default, or if get_lfunc is false, return the
+        interpreter-level wrapper function.
+
+        If the optional get_lfunc argument is true, return the
+        interpreter-level wrapper function, the LLVM wrapper function,
+        and the method definition record.
+        '''
+        _, t = self._build_wrapper_translation()
 
         # Return a PyCFunctionObject holding the wrapper
         func_pointer = t.lfunc_pointer
@@ -620,6 +642,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return wrapper, t.lfunc, methoddef
 
         return wrapper
+
+    def build_wrapper_module(self):
+        '''
+        Build a wrapper function for the currently translated
+        function, and return a tuple containing the separate LLVM
+        module, and the LLVM wrapper function.
+        '''
+        ctx, t = self._build_wrapper_translation()
+        logger.debug('Wrapper module: %s' % ctx.module)
+        return ctx.module, t.lfunc
 
     def insert_closure_scope_arg(self, args, node):
         """
