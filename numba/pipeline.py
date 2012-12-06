@@ -269,3 +269,177 @@ def compile(context, func, restype=None, argtypes=None, ctypes=False,
 def compile_from_sig(context, func, signature, **kwds):
     return compile(context, func, signature.return_type, signature.args,
                    **kwds)
+
+class PipelineStage(object):
+    def preconditions(self, ast, env):
+        return True
+
+    def postconditions(self, ast, env):
+        return True
+
+    def transform(self, ast, env):
+        raise NotImplementedError('%r does not implement transform!' %
+                                  type(self))
+
+    def make_specializer(self, cls, ast, env, **kws):
+        return cls(env.context, env.crnt.func, ast,
+                   func_signature=env.crnt.func_signature,
+                   nopython=env.crnt.nopython,
+                   symtab=env.crnt.symtab,
+                   func_name=env.crnt.func_name,
+                   llvm_module=env.crnt.llvm_module,
+                   **kws)
+
+    def __call__(self, ast, env):
+        assert self.preconditions(ast, env)
+        ast = self.transform(ast, env)
+        assert self.postconditions(ast, env)
+        return ast
+
+class ConstFolding(PipelineStage):
+    def preconditions(self, ast, env):
+        return not hasattr(env.crnt, 'constvars')
+
+    def postconditions(self, ast, env):
+        return hasattr(env.crnt, 'constvars')
+
+    def transform(self, ast, env):
+        const_marker = self.make_specializer(constant_folding.ConstantMarker,
+                                             ast, env)
+        const_marker.visit(ast)
+        constvars = const_marker.get_constants()
+        env.crnt.constvars = constvars
+        const_folder = self.make_specializer(constant_folding.ConstantFolder,
+                                             ast, env, constvars=constvars)
+        return const_folder.visit(ast)
+
+class TypeInfer(PipelineStage):
+    def preconditions(self, ast, env):
+        return env.crnt.symtab is not None
+
+    def transform(self, ast, env):
+        type_inferer = self.make_specializer(type_inference.TypeInferer,
+                                             ast, env, locals=env.crnt.locals,
+                                             **env.crnt.kwargs)
+        type_inferer.infer_types()
+        env.crnt.func_signature = type_inferer.func_signature
+        logger.debug("signature for %s: %s", env.crnt.func_name,
+                     env.crnt.func_signature)
+        env.crnt.symtab = type_inferer.symtab
+        return ast
+
+class TypeSet(PipelineStage):
+    def transform(self, ast, env):
+        visitor = self.make_specializer(type_inference.TypeSettingVisitor, ast,
+                                        env)
+        visitor.visit(ast)
+        return ast
+
+class ClosureTypeInference(PipelineStage):
+    def transform(self, ast, env):
+        type_inferer = self.make_specializer(
+                            numba.closure.ClosureTypeInferer, ast, env)
+        return type_inferer.visit(ast)
+
+class TransformFor(PipelineStage):
+    def transform(self, ast, env):
+        transform = self.make_specializer(transforms.TransformForIterable, ast,
+                                          env)
+        return transform.visit(ast)
+
+class Specialize(PipelineStage):
+    def transform(self, ast, env):
+        return ast
+
+class LateSpecializer(PipelineStage):
+    def transform(self, ast, env):
+        specializer = self.make_specializer(transforms.LateSpecializer, ast,
+                                            env)
+        return specializer.visit(ast)
+
+class FixASTLocations(PipelineStage):
+    def transform(self, ast, env):
+        fixer = self.make_specializer(FixMissingLocations, ast, env)
+        fixer.visit(ast)
+        return ast
+
+class CodeGen(PipelineStage):
+    def transform(self, ast, env):
+        env.crnt.translator = self.make_specializer(
+            ast_translate.LLVMCodeGenerator, ast, env, **env.crnt.kwargs)
+        env.crnt.translator.translate()
+        return ast
+
+class PipelineEnvironment(object):
+    init_stages=[
+        ConstFolding,
+        TypeInfer,
+        TypeSet,
+        ClosureTypeInference,
+        TransformFor,
+        Specialize,
+        LateSpecializer,
+        FixASTLocations,
+        CodeGen,
+        ]
+
+    def __init__(self, parent=None):
+        self.parent = parent
+
+    @classmethod
+    def init_env(cls, context, **kws):
+        ret_val = cls()
+        ret_val.context = context
+        for stage in cls.init_stages:
+            setattr(ret_val, stage.__name__, stage)
+        pipe = cls.init_stages[:]
+        pipe.reverse()
+        ret_val.pipeline = reduce(compose_stages, pipe)
+        ret_val.__dict__.update(kws)
+        ret_val.crnt = cls(ret_val)
+        return ret_val
+
+    def init_func(self, func, ast, func_signature, **kws):
+        assert self.parent is not None
+        self.func = func
+        self.ast = ast
+        self.func_signature = func_signature
+        self.func_name = kws.get('name')
+        if not self.func_name:
+            if func:
+                module_name = inspect.getmodule(func).__name__
+                name = '.'.join([module_name, func.__name__])
+            else:
+                name = ast.name
+            self.func_name = naming.specialized_mangle(
+                name, self.func_signature.args)
+        self.symtab = kws.get('symtab', {})
+        self.llvm_module = kws.get('llvm_module')
+        if self.llvm_module is None:
+            self.llvm_module = self.parent.context.llvm_module
+        self.nopython = kws.get('nopython')
+        self.locals = kws.get('locals')
+        self.kwargs = kws
+
+def check_stage(stage):
+    if isinstance(stage, str):
+        def _stage(ast, env):
+            return getattr(env, stage)(ast, env)
+        name = stage
+        _stage.__name__ = stage
+        stage = _stage
+    elif isinstance(stage, type) and issubclass(stage, PipelineStage):
+        name = stage.__name__
+        stage = stage()
+    else:
+        name = stage.__name__
+    return name, stage
+
+def compose_stages(f0, f1):
+    f0_name, f0 = check_stage(f0)
+    f1_name, f1 = check_stage(f1)
+    def _numba_pipeline_composition(ast, env):
+        return f0(f1(ast, env), env)
+    name = '_o_'.join((f0_name, f1_name))
+    _numba_pipeline_composition.__name__ = name
+    return _numba_pipeline_composition
