@@ -6,6 +6,7 @@ def _make_test(f):
         f_ = autojit(f)
         for args in product(range(3), range(3)):
             assert f_(*args)==f(*args)
+    test_ifexp.func_name = f.func_name
     return test_ifexp
 
 @_make_test
