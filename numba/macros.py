@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 def c_string_slice_2 (func_cache, builder, c_string, lb, ub = None):
     module = builder.basic_block.function.module
     logger.debug((func_cache, builder, c_string, lb, ub))
-    _, CStringSlice2Len = func_cache.function_by_name('CStringSlice2Len',
+    _, CStringSlice2Len = func_cache.external_function_by_name('CStringSlice2Len',
                                                       module=module)
-    _, CStringSlice2 = func_cache.function_by_name('CStringSlice2',
+    _, CStringSlice2 = func_cache.external_function_by_name('CStringSlice2',
                                                    module=module)
-    _, strlen = func_cache.function_by_name('strlen',
+    _, strlen = func_cache.external_function_by_name('strlen',
                                             module=module)
     c_str_len = builder.call(strlen, [c_string])
     if ub is None:

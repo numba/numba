@@ -95,7 +95,7 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
                 assert dst_type.is_int
                 return nodes.CoercionNode(
                     nodes.ObjectTempNode(
-                        self.function_cache.call(
+                        self.function_cache.external_call(
                             'PyInt_FromString', arg1,
                             nodes.NULL, arg2,
                             llvm_module=self.llvm_module)),

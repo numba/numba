@@ -299,7 +299,7 @@ class RefcountingMixin(object):
         object_ltype = object_.to_llvm(self.context)
         b = self.builder
         mod = b.basic_block.function.module
-        sig, py_decref = self.function_cache.function_by_name(func, mod)
+        sig, py_decref = self.function_cache.external_function_by_name(func, mod)
         return b.call(py_decref, [b.bitcast(value, object_ltype)])
 
     def incref(self, value):
@@ -700,7 +700,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # Check for error using PyErr_Occurred()
             # TODO: make this an option in CheckErrorNode
             check_err = nodes.CheckErrorNode(
-                    nodes.ptrtoint(self.function_cache.call(
+                    nodes.ptrtoint(self.function_cache.external_call(
                                             'PyErr_Occurred',
                                             llvm_module=self.llvm_module)),
                     goodval=nodes.ptrtoint(nodes.NULL))
@@ -741,11 +741,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def puts(self, msg):
         const = nodes.ConstNode(msg, c_string_type)
-        self.visit(self.function_cache.call('puts', const))
+        self.visit(self.function_cache.external_call('puts', const))
 
     def puts_llvm(self, llvm_string):
         const = nodes.LLVMValueRefNode(c_string_type, llvm_string)
-        self.visit(self.function_cache.call('puts', const))
+        self.visit(self.function_cache.external_call('puts', const))
 
     def setup_return(self):
         # Assign to this value which will be returned
@@ -1196,7 +1196,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return op.__name__.lower()
 
     def _handle_mod(self, node, lhs, rhs):
-        _, func = self.function_cache.function_by_name(
+        _, func = self.function_cache.external_function_by_name(
             'PyModulo',
             self.llvm_module,
             arg_types = (node.type, node.type),
@@ -1368,7 +1368,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # call PyObject_Call
         largs = [lfunc_addr, args_tuple, kwargs_dict]
-        _, pyobject_call = self.function_cache.function_by_name('PyObject_Call',
+        _, pyobject_call = self.function_cache.external_function_by_name('PyObject_Call',
                                                                 self.llvm_module)
 
         res = self.builder.call(pyobject_call, largs, name=node.name)
@@ -1640,13 +1640,13 @@ class ObjectCoercer(object):
         self.translator = translator
         self.builder = translator.builder
         self.llvm_module = self.builder.basic_block.function.module
-        sig, self.py_buildvalue = translator.function_cache.function_by_name(
+        sig, self.py_buildvalue = translator.function_cache.external_function_by_name(
                                                               'Py_BuildValue',
                                                               self.llvm_module)
-        sig, self.pyarg_parsetuple = translator.function_cache.function_by_name(
+        sig, self.pyarg_parsetuple = translator.function_cache.external_function_by_name(
                                                               'PyArg_ParseTuple',
                                                               self.llvm_module)
-        sig, self.pyerr_clear = translator.function_cache.function_by_name(
+        sig, self.pyerr_clear = translator.function_cache.external_function_by_name(
                                                             'PyErr_Clear',
                                                             self.llvm_module)
         self.function_cache = translator.function_cache

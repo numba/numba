@@ -193,27 +193,33 @@ class FunctionCache(object):
         signature = ofunc(argtypes=ofunc.arg_types * len(argtypes)).signature
         return signature, None, func
 
-    def function_by_name(self, name, module, **kws):
+    def external_function_by_name(self, name, module, **kws):
         """
-        Return the signature and LLVM function given a name. The function must
-        either already be compiled, or it must be defined in this module.
+        Return the signature and LLVM function given a external function name. 
+        The function is compiled in every module once.  External functions of
+        the same definition is combined during linkage by the use of
+        LINKONCE_ODR linkage type.
         """
         assert module is not None
-        if name in self.external_functions:
-            extfunc = self.external_functions[name]
-            if extfunc.module is module:
-                return extfunc
-            else:
-                return module.add_function(extfunc.type, name)
+
+        # No caching of external function.
+        # Let them be compiled into every module to allow inlining.
+
+        #    if name in self.external_functions:
+        #        extfunc = self.external_functions[name]
+        #        if extfunc.module is module:
+        #            return extfunc
+        #        else:
+        #            return module.add_function(extfunc.type, name)
 
         declared_func = globals()[name](**kws)
-        lfunc = self.build_function(declared_func, module=module)
+        lfunc = self.build_external_function(declared_func, module=module)
         return declared_func.signature, lfunc
 
-    def call(self, name, *args, **kw):
+    def external_call(self, name, *args, **kw):
         temp_name = kw.pop('temp_name', name)
         llvm_module = kw.pop('llvm_module')
-        sig, lfunc = self.function_by_name(name, llvm_module, **kw)
+        sig, lfunc = self.external_function_by_name(name, llvm_module, **kw)
 
         if name in globals():
             external_func = globals()[name]
@@ -229,10 +235,10 @@ class FunctionCache(object):
                                       **exc_check)
         return result
 
-    def build_function(self, external_function, module):
+    def build_external_function(self, external_function, module):
         """
-        Build a function given it's signature information. See the
-        `ExternalFunction` class.
+        Build an external function given it's signature information. 
+        See the `ExternalFunction` class.
         """
         assert module is not None
         try:
@@ -245,24 +251,25 @@ class FunctionCache(object):
             lfunc_type = func_type.to_llvm(self.context)
             lfunc = module.add_function(lfunc_type, external_function.name)
 
-            if external_function.linkage == llvm.core.LINKAGE_LINKONCE_ODR:
+            if isinstance(external_function, InternalFunction):
                 lfunc.linkage = external_function.linkage
                 external_function.implementation(module, lfunc)
 
         return lfunc
 
-    def get_string_constant(self, const_str):
-        if (module, const_str) in self.string_constants:
-            ret_val = self.string_constants[(module, const_str)]
-        else:
-            lconst_str = llvm.core.Constant.stringz(const_str)
-            ret_val = module.add_global_variable(lconst_str.type, "__STR_%d" %
-                                                 (len(self.string_constants),))
-            ret_val.initializer = lconst_str
-            ret_val.linkage = llvm.core.LINKAGE_LINKEONCE_ODR
-            self.string_constants[(module, const_str)] = ret_val
-
-        return ret_val
+    # DEAD CODE?
+    #def get_string_constant(self, const_str):
+    #    if (module, const_str) in self.string_constants:
+    #        ret_val = self.string_constants[(module, const_str)]
+    #    else:
+    #        lconst_str = llvm.core.Constant.stringz(const_str)
+    #        ret_val = module.add_global_variable(lconst_str.type, "__STR_%d" %
+    #                                             (len(self.string_constants),))
+    #        ret_val.initializer = lconst_str
+    #        ret_val.linkage = llvm.core.LINKAGE_LINKEONCE_ODR
+    #        self.string_constants[(module, const_str)] = ret_val
+    #
+    #    return ret_val
 
 
 class _LLVMModuleUtils(object):

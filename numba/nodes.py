@@ -59,8 +59,8 @@ def ptrfromint(intval, dst_ptr_type):
 printing = False
 
 def inject_print(function_cache, node):
-    node = function_cache.call('PyObject_Str', node)
-    node = function_cache.call('puts', node)
+    node = function_cache.external_call('PyObject_Str', node)
+    node = function_cache.external_call('puts', node)
     return node
 
 def print_(translator, node):
