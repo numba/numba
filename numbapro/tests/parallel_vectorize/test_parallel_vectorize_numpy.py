@@ -4,7 +4,8 @@ Uses the work load from test_parallel_vectorize.
 '''
 
 from numbapro.vectorize.parallel import *
-from numba.vectorize._internal import fromfunc
+#from numba.vectorize._internal import fromfunc
+from numbapro.vectorize._numba_vectorize._internal import fromfunc
 import numpy as np
 import unittest
 from test_parallel_vectorize import Work_D_D

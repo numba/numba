@@ -24,14 +24,24 @@ miniutils_dep = miniutils + ".pyx"
 miniutils_header_dep = miniutils + ".h"
 
 ext_modules = [
+#    Extension(
+#        name = "numba.vectorize._internal",
+#        sources = ["numba_vectorize/_internal.c",
+#                   "numba_vectorize/_ufunc.c",
+#                   "numba_vectorize/_gufunc.c"],
+#        include_dirs = [numpy.get_include(), minivect.get_include()],
+#        depends = ["numba_vectorize/_internal.h", miniutils_header_dep],
+#    ),
+
     Extension(
-        name = "numba.vectorize._internal",
-        sources = ["numba_vectorize/_internal.c",
-                   "numba_vectorize/_ufunc.c",
-                   "numba_vectorize/_gufunc.c"],
-        include_dirs = [numpy.get_include(), minivect.get_include()],
-        depends = ["numba_vectorize/_internal.h", miniutils_header_dep],
-    ),
+             name = "numbapro.vectorize._numba_vectorize._internal",
+             sources = ["numbapro/vectorize/_numba_vectorize/_internal.c",
+                        "numbapro/vectorize/_numba_vectorize/_ufunc.c",
+                        "numbapro/vectorize/_numba_vectorize/_gufunc.c"],
+             include_dirs = [numpy.get_include(), minivect.get_include()],
+             depends = ["numbapro/vectorize/_numba_vectorize/_internal.h", miniutils_header_dep],
+             ),
+
 
     CythonExtension(
         name = "numbapro._minidispatch",
@@ -45,7 +55,7 @@ ext_modules = [
     CythonExtension(
         name = "numbapro.dispatch",
         sources = ["numbapro/dispatch.pyx"],
-        include_dirs = [numpy.get_include(), "numba_vectorize"],
+        include_dirs = [numpy.get_include(), "numbapro/vectorize/_numba_vectorize"],
         depends = [miniutils_dep, "numbapro/dispatch.pxd"],
         extra_compile_args = OMP_ARGS + ['-D_FORTIFY_SOURCE=0'],
         extra_link_args = OMP_LINK,
@@ -70,7 +80,6 @@ setup(
     license = "Proprietary",
     description = "compile Python code",
     ext_modules = ext_modules,
-      package_dir = {'numba.vectorize': 'numba_vectorize'},
     packages = ['numbapro', 'numbapro.vectorize',
                 'numbapro._cuda',
                 'numbapro._utils',
@@ -79,7 +88,7 @@ setup(
                 'numbapro.tests.parallel_vectorize',
                 'numbapro.tests.stream_vectorize',
                 'numbapro.tests.cuda', 'numbapro.tests.cuda.fail'] + [
-                'numba.vectorize'
+                'numbapro.vectorize._numba_vectorize' # staging for opensourcing
                 ],
     version = "0.7.3",
     cmdclass={'build_ext': build_ext},

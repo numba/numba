@@ -15,7 +15,8 @@ from numba.minivect import (miniast,
                             ctypes_conversion)
 from numba import decorators, utils, functions
 
-from numba.vectorize import _internal
+#from numba.vectorize import _internal
+from vectorize._numba_vectorize import _internal
 
 import numpy as np
 

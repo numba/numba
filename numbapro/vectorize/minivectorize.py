@@ -16,7 +16,7 @@ from numba.minivect import (miniast,
                             ctypes_conversion)
 from numba import decorators, utils, functions
 
-from numba.vectorize import _internal
+from _numba_vectorize import _internal
 from numbapro import dispatch
 from numbapro.vectorize import _common, basic, parallel
 
