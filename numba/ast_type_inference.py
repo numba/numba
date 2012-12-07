@@ -536,10 +536,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 self.deferred_types.append(v.type)
 
         incoming_types = [v.type for v in incoming]
-        promoted_type = numba_types.PromotionType(node.variable, self.context,
-                                                  incoming_types, assignment=True)
-        promoted_type.simplify()
-        node.variable.type = promoted_type.resolve()
+        if len(incoming_types) > 1:
+            promoted_type = numba_types.PromotionType(
+                node.variable, self.context,incoming_types, assignment=True)
+            promoted_type.simplify()
+            node.variable.type = promoted_type.resolve()
+        else:
+            node.variable.type = incoming_types[0]
+
         #print "handled", node.variable
         return node
 
@@ -597,7 +601,23 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     stat.assignment_node = assmnt
 
     def candidates(self, unvisited):
+        "Types with in-degree zero"
         return [type for type in unvisited if len(type.parents) == 0]
+
+    def add_resolved_parents(self, unvisited, start_points):
+        "Check for immediate resolved parents"
+        for type in unvisited:
+            for parent in type.parents:
+                if self.is_resolved(parent):
+                    start_points.append(parent)
+
+    def is_resolved(self, t):
+        return not t.is_unresolved or t.is_scc or (t.is_unresolved and not
+                                                   t.resolve().is_unresolved)
+
+    def is_trivial_cycle(self, type):
+        "Return whether the type directly refers to itself"
+        return len(type.children) == 1 and list(type.children)[0] is type
 
     def resolve_variable_types(self):
         """
@@ -635,18 +655,54 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if unvisited:
             sccs = dict((k, v) for k, v in strongly_connected.iteritems() if k is not v)
+
             unvisited = set([strongly_connected[type] for type in unvisited])
-            start_points = self.candidates(unvisited)
-            if not start_points:
-                p = list(unvisited)[0]
-                print p
-            assert start_points
-            while start_points:
-                start_point = start_points.pop()
-                start_point.simplify()
-                if not start_point.is_scc:
-                    assert not start_point.resolve().is_unresolved
-                start_points.extend(self.candidates(start_point.children))
+            visited = set()
+
+            while unvisited:
+                L = list(unvisited)
+                start_points = self.candidates(unvisited)
+                self.add_resolved_parents(unvisited, start_points)
+                if not start_points:
+                    # Find and resolve any final reduced self-referential
+                    # portions in the graph
+                    for u in list(unvisited):
+                        if self.is_trivial_cycle(u):
+                            u.simplify()
+                            if not u.resolve().is_unresolved:
+                                unvisited.remove(u)
+
+                    break
+
+                while start_points:
+                    start_point = start_points.pop()
+                    visited.add(start_point)
+                    if start_point in unvisited:
+                        unvisited.remove(start_point)
+
+                    if start_point.is_scc:
+                        print "scc", start_point, start_point.types
+                    else:
+                        print start_point
+
+                    start_point.simplify()
+
+                    if not (start_point.is_scc or start_point.is_deferred):
+                        r = start_point
+                        while r.is_unresolved:
+                            resolved = r.resolve()
+                            if resolved is r:
+                                break
+                            r = resolved
+                        assert not r.is_unresolved
+
+                    for child in start_point.children:
+                        if start_point in child.parents:
+                            child.parents.remove(start_point)
+
+                    children = (c for c in start_point.children
+                                      if c not in visited)
+                    start_points.extend(self.candidates(children))
 
         # Iteratively update types until everything is resolved or until we
         # can't infer anything more
@@ -674,20 +730,24 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 #
 #        logger.info("converged in %d steps" % iterations)
 
-        if unresolved:
+        if unvisited:
             # var = unresolved.pop()
-            def pos(var):
-                assmnt = var.name_assignment.assignment_node
-                return error.format_pos(assmnt) or 'na'
-            var = sorted(unresolved, key=pos)[0]
-            self.error(var.name_assignment.assignment_node,
-                       "Unable to infer type for assignment to %s,"
-                       " insert a cast or initialize the variable." % var.name)
+            def getvar(type):
+                if type.is_scc:
+                    return type.scc[0].variable
+                else:
+                    return type.variable
 
-#        if were_unresolved:
-            # We had some unresolved types assignment statements, re-analyze
-            # to ensure the correct transformations are performed
-#            self.analyse_assignments()
+            def pos(type):
+                assmnt = getvar(type).name_assignment
+                if assmnt:
+                    assmnt_node = assmnt.assignment_node
+                    return error.format_pos(assmnt_node) or 'na'
+                else:
+                    return 'na'
+
+            type = sorted(unvisited, key=pos)[0]
+            numba_types.error_circular(getvar(type))
 
     #
     ### Visit methods
@@ -1030,7 +1090,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.variable = Variable(None)
         value_type = node.value.variable.type
         deferred_type = numba_types.DeferredIndexType(node.variable, self, node)
-        if value_type.is_unresolved:
+        if value_type and value_type.is_unresolved:
             deferred_type.dependences.append(node.value)
             deferred_type.update()
             node.variable.type = deferred_type
@@ -1563,22 +1623,21 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
 
         return node
 
+    def resolve(self, variable):
+        if variable.type.is_unresolved:
+            variable.type = variable.type.resolve()
+            assert not variable.type.is_unresolved
+
     def visit(self, node):
         if hasattr(node, 'variable'):
+            self.resolve(node.variable)
             node.type = node.variable.type
-            if node.type.is_unresolved:
-                node.type = node.type.resolve()
-                if node.type.is_promotion:
-                    node.type.simplify()
-                    node.type = node.type.resolve()
-
-                assert not node.type.is_unresolved
         return super(TypeSettingVisitor, self).visit(node)
 
     def handle_phi(self, node):
         for incoming_var in node.incoming:
-            if incoming_var.type.is_unresolved:
-                incoming_var.type = incoming_var.type.resolve()
+            self.resolve(incoming_var)
+        self.resolve(node.variable)
         node.type = node.variable.type
         return node
 
