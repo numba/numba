@@ -672,8 +672,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return node
 
     def visit_Name(self, node):
-        from numba import functions
-
         node.name = node.id
         variable = self.symtab.get(node.id)
         if variable:
@@ -703,7 +701,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if variable.type.is_global: # or variable.type.is_module:
                 # TODO: look up globals in dict at call time
                 obj = self.func_globals[node.name]
-                if not functions.is_numba_func(obj):
+                if not self.function_cache.is_numba_func(obj):
                     type = self.context.typemapper.from_python(obj)
                     return nodes.const(obj, type)
             elif variable.type.is_builtin:
@@ -998,16 +996,20 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         Resolve a call to a function. If we know about the function,
         generate a native call, otherwise go through PyObject_Call().
         """
-        signature, llvm_func, py_func = \
-                self.function_cache.compile_function(py_func, arg_types)
+#        signature = self.function_cache.get_signature(arg_types)
 
-        if llvm_func is not None:
-            return nodes.NativeCallNode(signature, call_node.args,
-                                        llvm_func, py_func)
+        if self.function_cache.is_numba_func(py_func):
+            fn_info = self.function_cache.compile_function(py_func, arg_types)
+            signature, llvm_func, py_func = fn_info
+            assert llvm_func is not None
+            return nodes.NativeCallNode(signature, call_node.args, llvm_func,
+                                        py_func)
         elif not call_node.keywords and self._is_math_function(
                                         call_node.args, py_func):
             return self._resolve_math_call(call_node, py_func)
         else:
+            assert arg_types is not None
+            signature = self.function_cache.get_signature(arg_types)
             return nodes.ObjectCallNode(signature, call_node.func,
                                         call_node.args, call_node.keywords,
                                         py_func)

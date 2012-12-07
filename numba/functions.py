@@ -22,9 +22,6 @@ except Exception, exn:
 
 import llvm.core
 
-def is_numba_func(func):
-    return getattr(func, '_is_numba_func', False)
-
 def fix_ast_lineno(tree):
     # NOTE: A hack to fix assertion error in debug mode due to bad lineno.
     #       Lineno must increase monotonically for co_lnotab,
@@ -136,22 +133,26 @@ class FunctionCache(object):
         # (py_func, arg_types) -> (signature, llvm_func, ctypes_func)
         self.compiled_functions = {}
 
-        # All external functions: (py_func or name) -> (signature, llvm_func)
-        # Only callable from numba-compiled functions
-        self.external_functions = {}
-
-        self.string_constants = {}
-
     def get_function(self, py_func, argtypes=None):
+        '''Get a compiled function in the the function cache.
+        The function must not be an external function
+        '''
         result = None
-        if argtypes is not None:
-            result = self.compiled_functions.get((py_func, tuple(argtypes)))
 
-        if result is None and py_func in self.external_functions:
-            signature, lfunc = self.external_functions[py_func]
-            result = signature, lfunc, None
+        #if argtypes is not None:
+        assert argtypes is not None
+        result = self.compiled_functions.get((py_func, tuple(argtypes)))
+
+        #if result is None and py_func in self.external_functions:
+        #    signature, lfunc = self.external_functions[py_func]
+        #    result = signature, lfunc, None
 
         return result
+
+
+    def is_numba_func(self, func):
+        return getattr(func, '_is_numba_func', False)
+
 
     def compile_function(self, func, argtypes, restype=None,
                          ctypes=False, **kwds):
@@ -165,33 +166,35 @@ class FunctionCache(object):
         `python_callable` may be the original function, or a ctypes callable
         if the function was compiled.
         """
-        if func is not None:
-            result = self.get_function(func, argtypes)
-            if result is not None:
-                sig, trans, pycall = result
-                return sig, trans.lfunc, pycall
+        assert self.is_numba_func(func)
 
-            if is_numba_func(func):
-                from numba import pipeline
+        # Search in cache
+        result = self.get_function(func, argtypes)
+        if result is not None:
+            sig, trans, pycall = result
+            return sig, trans.lfunc, pycall
 
-                func = getattr(func, '_numba_func', func)
-                compile_only = getattr(func, '_numba_compile_only', False)
-                kwds['compile_only'] = kwds.get('compile_only', compile_only)
+        # Compile the function
+        from numba import pipeline
 
-                assert kwds.get('llvm_module') is None, kwds.get('llvm_module')
-                # numba function, compile
-                func_signature, translator, ctypes_func = pipeline.compile(
-                                self.context, func, restype, argtypes,
-                                ctypes=ctypes, **kwds)
-                self.compiled_functions[func, tuple(func_signature.args)] = (
-                                      func_signature, translator, ctypes_func)
-                
-                return func_signature, translator.lfunc, ctypes_func
+        func = getattr(func, '_numba_func', func)
+        compile_only = getattr(func, '_numba_compile_only', False)
+        kwds['compile_only'] = kwds.get('compile_only', compile_only)
 
-        # print func, getattr(func, '_is_numba_func', False)
-        # create a signature taking N objects and returning an object
-        signature = ofunc(argtypes=ofunc.arg_types * len(argtypes)).signature
-        return signature, None, func
+        assert kwds.get('llvm_module') is None, kwds.get('llvm_module')
+        compiled = pipeline.compile(self.context, func, restype, argtypes,
+                                    ctypes=ctypes, **kwds)
+        func_signature, translator, ctypes_func = compiled
+        self.compiled_functions[func, tuple(func_signature.args)] = compiled
+        return func_signature, translator.lfunc, ctypes_func
+
+
+    def get_signature(self, argtypes):
+        '''Get the signature base on the argtypes
+
+        create a signature taking N objects and returning an object
+        '''
+        return ofunc(argtypes=ofunc.arg_types * len(argtypes)).signature
 
     def external_function_by_name(self, name, module, **kws):
         """
