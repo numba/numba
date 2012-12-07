@@ -54,28 +54,12 @@ setup(
     scripts = ['numba/pycc/pycc'],
     package_data = {
         'numba.minivect' : ['include/*'],
-        'numba.vectorize': ['*.h'],
       },
     ext_modules = [
 #        Extension(name = "numba._ext",
 #                  sources = ["numba/_ext.c"],
 #                  include_dirs=[numpy.get_include()]),
 
-
-        # Vectorize (ufunc) support
-        Extension(
-                 name = "numba.vectorize._internal",
-                 sources = ["numba/vectorize/_internal.c",
-                            "numba/vectorize/_ufunc.c",
-                            "numba/vectorize/_gufunc.c"],
-                 include_dirs = [numpy.get_include(),
-                                 "numba/minivect/include/",
-                                 "numba/vectorize/"],
-                 depends = ["numba/vectorize/vectorize.h",
-                            "numba/minivect/include/miniutils.h"],
-                 ),
-
-                   
         CythonExtension(
             name = "numba.extension_types",
             sources = ["numba/extension_types.pyx", "numba/cyfunction.c"],
