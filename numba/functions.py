@@ -134,17 +134,20 @@ class FunctionCache(object):
         # (py_func) -> (arg_types, flags) -> (signature, llvm_func, ctypes_func)
         self.__compiled_funcs = defaultdict(dict)
 
-    def get_function(self, py_func, argtypes=None):
+    def get_function(self, py_func, argtypes, flags):
         '''Get a compiled function in the the function cache.
-        The function must not be an external function
+        The function must not be an external function.
+            
+        For an external function, is_registered() must return False.
         '''
         result = None
 
-        #if argtypes is not None:
         assert argtypes is not None
-        argtypes_flags = tuple(argtypes), None
+        flags = None # TODO: stub
+        argtypes_flags = tuple(argtypes), flags
         result = self.__compiled_funcs[py_func].get(argtypes_flags)
 
+        # DEAD CODE?
         #if result is None and py_func in self.external_functions:
         #    signature, lfunc = self.external_functions[py_func]
         #    result = signature, lfunc, None
@@ -152,9 +155,15 @@ class FunctionCache(object):
         return result
 
     def is_registered(self, func):
+        '''Check if a function is registed to the FunctionCache instance.
+        '''
         return getattr(func, 'py_func', func) in self.__compiled_funcs
 
     def register(self, func):
+        '''Register a function to the FunctionCache.  
+
+        It is necessary before calling compile_function().
+        '''
         self.__compiled_funcs[func]
         
     def compile_function(self, func, argtypes, restype=None,
@@ -168,11 +177,15 @@ class FunctionCache(object):
         `python_callable` may be the original function, or a ctypes callable
         if the function was compiled.
         """
+        # For NumbaFunction, we get the original python function.
         func = getattr(func, 'py_func', func)
         assert func in self.__compiled_funcs, func
 
+        # get the compile flags
+        flags = None # stub
+
         # Search in cache
-        result = self.get_function(func, argtypes)
+        result = self.get_function(func, argtypes, flags)
         if result is not None:
             sig, trans, pycall = result
             return sig, trans.lfunc, pycall
@@ -184,10 +197,12 @@ class FunctionCache(object):
         kwds['compile_only'] = kwds.get('compile_only', compile_only)
 
         assert kwds.get('llvm_module') is None, kwds.get('llvm_module')
+
         compiled = pipeline.compile(self.context, func, restype, argtypes,
                                     ctypes=ctypes, **kwds)
         func_signature, translator, ctypes_func = compiled
-        argtypes_flags = tuple(func_signature.args), None
+    
+        argtypes_flags = tuple(func_signature.args), flags
         self.__compiled_funcs[func][argtypes_flags] = compiled
         return func_signature, translator.lfunc, ctypes_func
 
@@ -223,6 +238,8 @@ class FunctionCache(object):
         return declared_func.signature, lfunc
 
     def external_call(self, name, *args, **kw):
+        '''Builds a call node for an external function.
+        '''
         temp_name = kw.pop('temp_name', name)
         llvm_module = kw.pop('llvm_module')
         sig, lfunc = self.external_function_by_name(name, llvm_module, **kw)
