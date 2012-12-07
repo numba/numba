@@ -1,6 +1,7 @@
 import ast, inspect, os
 import textwrap
 
+from collections import defaultdict
 from numba import *
 from . import naming
 from .minivect import minitypes
@@ -130,8 +131,8 @@ class FunctionCache(object):
         self.context = context
 
         # All numba-compiled functions
-        # (py_func, arg_types) -> (signature, llvm_func, ctypes_func)
-        self.compiled_functions = {}
+        # (py_func) -> (arg_types, flags) -> (signature, llvm_func, ctypes_func)
+        self.__compiled_funcs = defaultdict(dict)
 
     def get_function(self, py_func, argtypes=None):
         '''Get a compiled function in the the function cache.
@@ -141,7 +142,8 @@ class FunctionCache(object):
 
         #if argtypes is not None:
         assert argtypes is not None
-        result = self.compiled_functions.get((py_func, tuple(argtypes)))
+        argtypes_flags = tuple(argtypes), None
+        result = self.__compiled_funcs[py_func].get(argtypes_flags)
 
         #if result is None and py_func in self.external_functions:
         #    signature, lfunc = self.external_functions[py_func]
@@ -149,24 +151,25 @@ class FunctionCache(object):
 
         return result
 
+    def is_registered(self, func):
+        return getattr(func, 'py_func', func) in self.__compiled_funcs
 
-    def is_numba_func(self, func):
-        return getattr(func, '_is_numba_func', False)
-
-
+    def register(self, func):
+        self.__compiled_funcs[func]
+        
     def compile_function(self, func, argtypes, restype=None,
                          ctypes=False, **kwds):
         """
         Compile a python function given the argument types. Compile only
-        if not compiled already, and only if an annotated numba function
-        (in the future, use heuristics to determine whether a function
-        should be compiled or not).
+        if not compiled already, and only if it is registered to the function
+        cache.
 
         Returns a triplet of (signature, llvm_func, python_callable)
         `python_callable` may be the original function, or a ctypes callable
         if the function was compiled.
         """
-        assert self.is_numba_func(func)
+        func = getattr(func, 'py_func', func)
+        assert func in self.__compiled_funcs, func
 
         # Search in cache
         result = self.get_function(func, argtypes)
@@ -177,7 +180,6 @@ class FunctionCache(object):
         # Compile the function
         from numba import pipeline
 
-        func = getattr(func, '_numba_func', func)
         compile_only = getattr(func, '_numba_compile_only', False)
         kwds['compile_only'] = kwds.get('compile_only', compile_only)
 
@@ -185,7 +187,8 @@ class FunctionCache(object):
         compiled = pipeline.compile(self.context, func, restype, argtypes,
                                     ctypes=ctypes, **kwds)
         func_signature, translator, ctypes_func = compiled
-        self.compiled_functions[func, tuple(func_signature.args)] = compiled
+        argtypes_flags = tuple(func_signature.args), None
+        self.__compiled_funcs[func][argtypes_flags] = compiled
         return func_signature, translator.lfunc, ctypes_func
 
 

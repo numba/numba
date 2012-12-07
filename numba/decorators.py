@@ -38,7 +38,7 @@ def _internal_export(name=None, restype=double, argtypes=[double], backend='ast'
             if func.func_code.co_argcount == 0 and artypes is None:
                 artypes = []
             func.live_objects = []
-            func._is_numba_func = True
+            function_cache.register(func)
             result = function_cache.compile_function(func, artypes,
                                                 nopython=True,
                                                 compile_only=True,
@@ -138,10 +138,6 @@ class NumbaFunction(object):
         self.func_doc = self.__doc__ = py_func.__doc__
         self.__module__ = py_func.__module__
 
-        if ctypes_func is None:
-            self._is_numba_func = True
-            self._numba_func = py_func
-
     def __repr__(self):
         if self.ctypes_func:
             compiled = 'compiled numba function (%s)' % self.signature
@@ -194,6 +190,7 @@ def _autojit2(target, nopython, **translator_kwargs):
 
         f.live_objects = []
         numba_func = numba_function_autojit_targets[target](f, wrapper=wrapper)
+        function_cache.register(f)
         return numba_func
 
     return _autojit2_decorator
@@ -265,7 +262,8 @@ def _jit2(restype=None, argtypes=None, nopython=False,
 
         if not hasattr(func, 'live_objects'):
             func.live_objects = []
-        func._is_numba_func = True
+
+        function_cache.register(func)
 
         assert kwargs.get('llvm_module') is None # TODO link to user module
         assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
