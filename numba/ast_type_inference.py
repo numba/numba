@@ -1283,6 +1283,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.test = nodes.CoercionNode(node.test, minitypes.bool_)
         return node
 
+    def visit_IfExp(self, node):
+        self.generic_visit(node)
+        type_ = self.promote(node.body.variable, node.orelse.variable)
+        node.variable = Variable(type_)
+        node.test = nodes.CoercionNode(node.test, minitypes.bool_)
+        node.orelse = nodes.CoercionNode(node.orelse, type_)
+        node.body = nodes.CoercionNode(node.body, type_)
+        return node
+
     #
     ### Unsupported nodes
     #
