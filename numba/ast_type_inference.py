@@ -26,7 +26,7 @@ import logging
 debug = False
 #debug = True
 
-logger = logging.getLogger(__name__)
+#logger = logging.getLogger(__name__)
 #logger.setLevel(logging.INFO)
 if debug:
     logger.setLevel(logging.DEBUG)
@@ -619,6 +619,12 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         "Return whether the type directly refers to itself"
         return len(type.parents) == 1 and list(type.parents)[0] is type
 
+    def _debug_type(self, start_point):
+        if start_point.is_scc:
+            print "scc", start_point, start_point.types
+        else:
+            print start_point
+
     def resolve_variable_types(self):
         """
         Resolve the types for all variable assignments. We run type inference
@@ -630,7 +636,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         for deferred_type in self.deferred_types:
             deferred_type.update()
 
+        #-------------------------------------------------------------------
         # Find all unresolved variables
+        #-------------------------------------------------------------------
         unresolved = set()
         for block in self.ast.flow.blocks:
             for variable in block.symtab.itervalues():
@@ -640,7 +648,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                         if variable.type.is_unresolved:
                             unresolved.add(variable.type)
 
+        #-------------------------------------------------------------------
         # Find the strongly connected components (build a condensation graph)
+        #-------------------------------------------------------------------
         unvisited = set(unresolved)
         strongly_connected = {}
         while unresolved:
@@ -650,8 +660,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             unresolved -= set(sccs)
             strongly_connected.update(sccs)
 
-        # Now process the dependencies in topological order. Handle strongly
-        # connected components specially
+        #-------------------------------------------------------------------
+        # Process type dependencies in topological order. Handle strongly
+        # connected components specially.
+        #-------------------------------------------------------------------
 
         original_unvisited = set(unvisited)
 
@@ -685,10 +697,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     if start_point in unvisited:
                         unvisited.remove(start_point)
 
-#                    if start_point.is_scc:
-#                        print "scc", start_point, start_point.types
-#                    else:
-#                        print start_point
+                    # self._debug_type(start_point)
 
                     if not self.is_resolved(start_point):
                         start_point.simplify()
@@ -711,26 +720,31 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     start_points.extend(self.candidates(children))
 
         if unvisited:
-            def getvar(type):
-                if type.is_scc:
-                    return type.scc[0].variable
-                else:
-                    return type.variable
+            self.error_unresolved_types()
 
-            def pos(type):
-                assmnt = getvar(type).name_assignment
-                if assmnt:
-                    assmnt_node = assmnt.assignment_node
-                    return error.format_pos(assmnt_node) or 'na'
-                else:
-                    return 'na'
+    def error_unresolved_types(self):
+        "Raise an exception for a circular dependence we can't resolve"
+        def getvar(type):
+            if type.is_scc:
+                return type.scc[0].variable
+            else:
+                return type.variable
 
-            type = sorted(unvisited, key=pos)[0]
-            numba_types.error_circular(getvar(type))
+        def pos(type):
+            assmnt = getvar(type).name_assignment
+            if assmnt:
+                assmnt_node = assmnt.assignment_node
+                return error.format_pos(assmnt_node) or 'na'
+            else:
+                return 'na'
 
-    #
-    ### Visit methods
-    #
+        type = sorted(unvisited, key=pos)[0]
+        numba_types.error_circular(getvar(type))
+
+
+    #------------------------------------------------------------------------
+    # Visit methods
+    #------------------------------------------------------------------------
 
     def visit(self, node):
         if node is Ellipsis:
@@ -741,6 +755,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_PhiNode(self, node):
         # Already handled
         return node
+
+    #------------------------------------------------------------------------
+    # Assignments
+    #------------------------------------------------------------------------
 
     def _handle_unpacking(self, node):
         """
@@ -836,6 +854,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         lhs_var.deleted = False
         return rhs_node
 
+    #------------------------------------------------------------------------
+    # Loops
+    #------------------------------------------------------------------------
+
     def _get_iterator_type(self, node, iterator_type, target_type):
         "Get the type of an iterator Variable"
         if iterator_type.is_iterator:
@@ -881,6 +903,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.test = nodes.CoercionNode(self.visit(node.test), minitypes.bool_)
         return node
 
+    #------------------------------------------------------------------------
+    # 'with' statement
+    #------------------------------------------------------------------------
+
     def visit_With(self, node):
         if (not isinstance(node.context_expr, ast.Name) or
                 node.context_expr.id not in ('python', 'nopython')):
@@ -902,6 +928,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             node.body = node.body[1:]
 
         return node
+
+    #------------------------------------------------------------------------
+    # Variable Assignments and Laods + Closure cellvar/freevar determination
+    #------------------------------------------------------------------------
 
     def visit_Name(self, node):
         from numba import functions
@@ -945,6 +975,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if variable.type and variable.type.is_unresolved:
             variable.type = variable.type.resolve()
         return node
+
+    #------------------------------------------------------------------------
+    # Binary and Unary operations
+    #------------------------------------------------------------------------
 
     def visit_BoolOp(self, node):
         "and/or expression"
@@ -1012,6 +1046,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         node.variable = Variable(minitypes.bool_)
         return node
+
+    #------------------------------------------------------------------------
+    # Indexing and Slicing
+    #------------------------------------------------------------------------
 
     def _handle_struct_index(self, node, value_type):
         slice_type = node.slice.variable.type
@@ -1205,6 +1243,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.variable = Variable(minitypes.object_)
         return node
 
+    #------------------------------------------------------------------------
+    # Constants
+    #------------------------------------------------------------------------
+
     def visit_Num(self, node):
         return nodes.ConstNode(node.n)
 
@@ -1267,6 +1309,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         node.variable = variable
         return node
+
+    #------------------------------------------------------------------------
+    # Function and Method Calls
+    #------------------------------------------------------------------------
 
     def _resolve_function(self, func_type, func_name):
         func = None
@@ -1456,6 +1502,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return new_node
 
+    #------------------------------------------------------------------------
+    # Attributes
+    #------------------------------------------------------------------------
+
     def _resolve_module_attribute(self, node, type):
         "Resolve attributes of the numpy module or a submodule"
         attribute = getattr(type.module, node.attr)
@@ -1554,6 +1604,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def visit_ClosureScopeLoadNode(self, node):
         return node
+
+    #------------------------------------------------------------------------
+    # Return
+    #------------------------------------------------------------------------
 
     def visit_Return(self, node):
         if node.value is not None:
