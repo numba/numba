@@ -244,7 +244,7 @@ class ControlFlow(object):
         self.blocks.append(exit_block)
 
     def is_tracked(self, entry):
-        return True
+        return entry.renameable
 
     def mark_position(self, node):
         """Mark position, will be used to draw graph nodes."""
@@ -514,6 +514,9 @@ class ControlFlow(object):
         ### 1) Insert phi nodes in the right places
         #
         for name, variable in symbol_table.iteritems():
+            if not variable.renameable:
+                continue
+
             defining = []
             for b in self.blocks:
                 if variable in b.gen:
@@ -537,8 +540,10 @@ class ControlFlow(object):
         symbol_table.counters = dict.fromkeys(symbol_table, -1) # var_name -> counter
         self.blocks[0].symtab = symbol_table
         for var_name, var in symbol_table.items():
-            new_var = symbol_table.rename(var, self.blocks[0])
-            new_var.set_uninitialized = True
+            if var.renameable:
+                new_var = symbol_table.rename(var, self.blocks[0])
+                new_var.set_uninitialized = True
+
         self.rename_assignments(self.blocks[0])
 
         for block in self.blocks[1:]:
@@ -1000,10 +1005,12 @@ def check_definitions(flow, compiler_directives):
         node.cf_state = None #ControlFlowState(node.cf_state)
 
 
-def initialize_symtab(local_names, symbols):
+def initialize_symtab(local_names, symbols, locals_dict, argnames):
     symbols = symtab.Symtab(symbols)
     for var_name in local_names:
-        symbols[var_name] = symtab.Variable(None, name=var_name, is_local=True)
+        variable = symtab.Variable(None, name=var_name, is_local=True)
+        variable.renameable = var_name not in locals_dict
+        symbols[var_name] = variable
 
     return symbols
 
@@ -1028,7 +1035,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.current_directives['warn'] = kwargs.get('warn', True)
         self.set_default_directives()
         symtab = kwargs.get('symtab', None) or {}
-        self.symtab = initialize_symtab(self.local_names, self.symtab)
+        self.symtab = initialize_symtab(self.local_names, self.symtab,
+                                        self.locals, self.argnames)
 
         self.graphviz = self.current_directives['control_flow.dot_output']
         if self.graphviz:

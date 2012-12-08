@@ -19,7 +19,7 @@ class CooperativeBase(object):
 class NumbaVisitorMixin(CooperativeBase):
     _overloads = None
     def __init__(self, context, func, ast, func_signature=None, nopython=0,
-                 symtab=None, **kwargs):
+                 symtab=None, locals=None, **kwargs):
         super(NumbaVisitorMixin, self).__init__(
                                 context, func, ast, func_signature,
                                 nopython, symtab, **kwargs)
@@ -29,6 +29,7 @@ class NumbaVisitorMixin(CooperativeBase):
         self.symtab = symtab
         self.func_signature = func_signature
         self.nopython = nopython
+        self.locals = locals or {}
         #self.local_scopes = [self.symtab]
         self.current_scope = symtab
         self.have_cfg = getattr(self.ast, 'flow', False)
@@ -61,6 +62,11 @@ class NumbaVisitorMixin(CooperativeBase):
 
             self.argnames = f_code.co_varnames[:f_code.co_argcount]
             self.func_globals = func.func_globals
+
+        # Add variables declared in locals=dict(...)
+        self.local_names.extend(
+                local_name for local_name in self.locals
+                               if local_name not in self.local_names)
 
         if self.is_closure(func_signature):
             from numba import closure

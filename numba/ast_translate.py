@@ -332,7 +332,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         super(LLVMCodeGenerator, self).__init__(
                     context, func, ast, func_signature=func_signature,
-                    nopython=nopython, symtab=symtab)
+                    nopython=nopython, symtab=symtab, **kwds)
 
         self.func_name = kwds.get('func_name', None)
         self.func_signature = func_signature
@@ -378,20 +378,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     # __________________________________________________________________________
 
-#    def _allocate_arg_local(self, name, argtype, larg):
-#        """
-#        Allocate a local variable on the stack.
-#        """
-#        stackspace = self.alloca(argtype)
-#        stackspace.name = name
-#
-#        if (minitypes.pass_by_ref(argtype) and
-#                self.func_signature.struct_by_reference):
-#            larg = self.builder.load(larg)
-#
-#        self.builder.store(larg, stackspace)
-#        return stackspace
-#
+    def _load_arg(self, argtype, larg):
+        if (minitypes.pass_by_ref(argtype) and
+            self.func_signature.struct_by_reference):
+            larg = self.builder.load(larg)
+
+        return larg
+
 #    def _init_args(self):
 #        for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
 #                                          self.func_signature.args):
@@ -441,21 +434,29 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 #
 #                var.lvalue = stackspace
 
+    def _allocate_arg_local(self, name, argtype, larg):
+        """
+        Allocate a local variable on the stack.
+        """
+        stackspace = self.alloca(argtype)
+        stackspace.name = name
+        self.builder.store(larg, stackspace)
+        return stackspace
+
     def _init_args(self):
         for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
                                           self.func_signature.args):
             larg.name = argname
-            # Set value on first definition of the variable
-            if self.have_cfg:
+
+            if self.have_cfg and argname not in self.locals:
+                # Set value on first definition of the variable
                 variable = self.symtab.lookup_renamed(argname, 0)
+                larg = self._load_arg(argtype, larg)
+                variable.lvalue = larg
             else:
+                # Allocate on stack
                 variable = self.symtab[argname]
-
-            if (self.func_signature.struct_by_reference and
-                    minitypes.pass_by_ref(argtype)):
-                larg = self.builder.load(larg)
-
-            variable.lvalue = larg
+                self._allocate_arg_local(argname, argtype, larg)
 
             # TODO: incref objects in structs
             if not (self.nopython or argtype.is_closure_scope):
@@ -468,28 +469,25 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             if var.type.is_uninitialized and var.cf_references:
                 assert var.uninitialized_value, var
                 var.lvalue = self.visit(var.uninitialized_value)
+            elif name in self.locals and name not in self.argnames:
+                name = 'var_%s' % var.name
+                if is_obj(var.type):
+                    stackspace = self._null_obj_temp(name, type=var.ltype)
+                else:
+                    stackspace = self.builder.alloca(var.ltype, name=name)
 
-#            if name not in self.argnames and var.is_local:
-#                # Not argument and not builtin type.
-#                # Allocate storage for all variables.
-#                name = 'var_%s' % var.name
-#                if is_obj(var.type):
-#                    stackspace = self._null_obj_temp(name, type=var.ltype)
-#                else:
-#                    stackspace = self.builder.alloca(var.ltype, name=name)
-#
-#                if var.type.is_struct:
-#                    # TODO: memset struct to 0
-#                    pass
-#                elif var.type.is_carray:
-#                    ltype = var.type.base_type.pointer().to_llvm(self.context)
-#                    pointer = self.builder.alloca(ltype, name=name + "_p")
-#                    p = self.builder.gep(stackspace, [llvm_types.constant_int(0),
-#                                                      llvm_types.constant_int(0)])
-#                    self.builder.store(p, pointer)
-#                    stackspace = pointer
-#
-#                var.lvalue = stackspace
+                if var.type.is_struct:
+                    # TODO: memset struct to 0
+                    pass
+                elif var.type.is_carray:
+                    ltype = var.type.base_type.pointer().to_llvm(self.context)
+                    pointer = self.builder.alloca(ltype, name=name + "_p")
+                    p = self.builder.gep(stackspace, [llvm_types.constant_int(0),
+                                                      llvm_types.constant_int(0)])
+                    self.builder.store(p, pointer)
+                    stackspace = pointer
+
+                var.lvalue = stackspace
 
 
     def setup_func(self):
@@ -896,7 +894,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         if isinstance(target_node, ast.Name):
             # self.decref(target)
             # print "Assigning", target_node.variable, error.format_pos(node).rstrip(": ")
-            target_node.variable.lvalue = value
+            if target_node.variable.renameable:
+                # phi nodes are in place for the variable
+                target_node.variable.lvalue = value
+            else:
+                # The variable is stack allocated
+                self.builder.store(value, target_node.variable.lvalue)
         else:
             target = self.visit(target_node)
             if object:
@@ -941,10 +944,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             node.loaded_name.llvm_value = value_p
             self.visit(node.check_unbound)
 
-        # print "Referencing", var, error.format_pos(node).rstrip(": ")
+        if not var.renameable and isinstance(node.ctx, ast.Load):
+            # Not a renamed but an alloca'd variable
+            return self.builder.load(var.lvalue)
+
         return var.lvalue
-        #lvalue = self.symtab[node.id].lvalue
-        #return self._handle_ctx(node, lvalue)
 
     def _handle_ctx(self, node, lptr, name=''):
         if isinstance(node.ctx, ast.Load):

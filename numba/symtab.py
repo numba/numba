@@ -27,7 +27,10 @@ class Variable(object):
                  promotable_type=True, is_arg=False):
         self.type = type
         self.name = name
+
+        self.renameable = True
         self.renamed_name = None
+
         self.is_constant = is_constant
         self.constant_value = constant_value
         self.lvalue = lvalue

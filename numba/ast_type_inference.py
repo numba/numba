@@ -368,10 +368,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     See transform.py for an overview of AST transformations.
     """
 
-    def __init__(self, context, func, ast, locals, closure_scope=None, **kwds):
+    def __init__(self, context, func, ast, closure_scope=None, **kwds):
         super(TypeInferer, self).__init__(context, func, ast, **kwds)
 
-        self.locals = locals or {}
         self.given_return_type = self.func_signature.return_type
         self.return_variables = []
         self.return_type = None
@@ -604,11 +603,12 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         "Types with in-degree zero"
         return [type for type in unvisited if len(type.parents) == 0]
 
-    def add_resolved_parents(self, unvisited, start_points):
+    def add_resolved_parents(self, unvisited, start_points, strongly_connected):
         "Check for immediate resolved parents"
         for type in unvisited:
             for parent in type.parents:
-                if self.is_resolved(parent):
+                parent = strongly_connected.get(parent, parent)
+                if self.is_resolved(parent) or len(parent.parents) == 0:
                     start_points.append(parent)
 
     def is_resolved(self, t):
@@ -624,6 +624,12 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             print "scc", start_point, start_point.types
         else:
             print start_point
+
+    def remove_resolved_type(self, start_point):
+        "Remove a resolved type from the type graph"
+        for child in start_point.children:
+            if start_point in child.parents:
+                child.parents.remove(start_point)
 
     def resolve_variable_types(self):
         """
@@ -665,18 +671,18 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         # connected components specially.
         #-------------------------------------------------------------------
 
-        original_unvisited = set(unvisited)
-
         if unvisited:
             sccs = dict((k, v) for k, v in strongly_connected.iteritems() if k is not v)
 
-            unvisited = set([strongly_connected[type] for type in unvisited])
+            # unvisited = set([strongly_connected[type] for type in unvisited])
+            unvisited = set(strongly_connected.itervalues())
+            original_unvisited = set(unvisited)
             visited = set()
 
             while unvisited:
                 L = list(unvisited)
                 start_points = self.candidates(unvisited)
-                self.add_resolved_parents(unvisited, start_points)
+                self.add_resolved_parents(unvisited, start_points, strongly_connected)
                 if not start_points:
                     # Find and resolve any final reduced self-referential
                     # portions in the graph
@@ -711,21 +717,25 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                             r = resolved
                         assert not r.is_unresolved
 
-                    for child in start_point.children:
-                        if start_point in child.parents:
-                            child.parents.remove(start_point)
+                    self.remove_resolved_type(start_point)
+                    if start_point.is_scc:
+                        for type in start_point.types:
+                            self.remove_resolved_type(type)
 
-                    children = (c for c in start_point.children
-                                      if c not in visited)
+                    children = (strongly_connected.get(c, c)
+                                    for c in start_point.children
+                                        if c not in visited)
                     start_points.extend(self.candidates(children))
 
         if unvisited:
-            self.error_unresolved_types()
+            t = list(unvisited)[0] # for debugging
+            self.error_unresolved_types(unvisited)
 
-    def error_unresolved_types(self):
+    def error_unresolved_types(self, unvisited):
         "Raise an exception for a circular dependence we can't resolve"
         def getvar(type):
             if type.is_scc:
+                candidates = [type for type in type.scc if not type.is_scc]
                 return type.scc[0].variable
             else:
                 return type.variable
@@ -943,7 +953,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 variable = self.symtab[node.id]
             else:
                 # Local variable
-                variable = node.variable
+                if node.id in self.locals:
+                    variable = self.symtab[node.id]
+                else:
+                    variable = node.variable
         elif (self.closure_scope and node.id in self.closure_scope and not
                   self.is_store(node.ctx)):
             # Free variable
@@ -1169,8 +1182,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             return self.visit(node)
 
         elif value_type.is_pointer:
-            self.assert_index(slice_variable.type)
-            result_type = type.base_type
+            self.assert_index(slice_variable.type, node.slice)
+            result_type = value_type.base_type
 
         elif value_type.is_object:
             result_type = object_
@@ -1670,6 +1683,12 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
             for block in node.flow.blocks:
                 for phi in block.phi_nodes:
                     self.handle_phi(phi)
+
+        rettype = self.func_signature.return_type
+        if rettype.is_unresolved:
+            rettype = rettype.resolve()
+            assert not rettype.is_unresolved
+            self.func_signature.return_type = rettype
 
         return node
 

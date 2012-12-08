@@ -371,6 +371,14 @@ class UnresolvedType(NumbaType):
     is_unresolved = True
     rank = 1
 
+    @property
+    def ps(self):
+        return list(self.parents)
+
+    @property
+    def cs(self):
+        return list(self.children)
+
     def __init__(self, variable, **kwds):
         super(UnresolvedType, self).__init__(**kwds)
         self.variable = variable
@@ -440,10 +448,6 @@ class PromotionType(UnresolvedType):
 
         self.count = PromotionType.count
         PromotionType.count += 1
-
-    @property
-    def ps(self):
-        return list(self.parents)
 
     @property
     def t(self):
@@ -837,7 +841,7 @@ class StronglyConnectedCircularType(UnresolvedType):
     to feed into the re-inference process, so we issue an error.
     """
 
-    converged = False
+    is_resolved = False
     is_scc = True
 
     def __init__(self, scc, **kwds):
@@ -920,9 +924,17 @@ class StronglyConnectedCircularType(UnresolvedType):
         else:
             assert False
 
+        self.is_resolved = True
+
     def resolve(self):
         # We don't have a type, we are only an aggregation of circular types
         raise TypeError
+
+    def __hash__(self):
+        return hash(id(self))
+
+    def __eq__(self, other):
+        return id(self) == id(other)
 
 
 def dfs(start_type, stack, seen, graph=None, parents=False):

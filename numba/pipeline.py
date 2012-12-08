@@ -92,7 +92,8 @@ class Pipeline(object):
 
         return cls(self.context, self.func, ast,
                    func_signature=self.func_signature, nopython=self.nopython,
-                   symtab=self.symtab, func_name=self.func_name, **kwds)
+                   symtab=self.symtab, func_name=self.func_name,
+                   locals=self.locals, **kwds)
 
     def insert_specializer(self, name, after):
         "Insert a new transform or visitor into the pipeline"
@@ -153,8 +154,7 @@ class Pipeline(object):
 
     def type_infer(self, ast):
         type_inferer = self.make_specializer(
-                    type_inference.TypeInferer, ast, locals=self.locals,
-                    **self.kwargs)
+                    type_inference.TypeInferer, ast, **self.kwargs)
         type_inferer.infer_types()
 
         self.func_signature = type_inferer.func_signature
@@ -232,7 +232,7 @@ def infer_types(context, func, restype=None, argtypes=None, **kwargs):
     Like run_pipeline, but takes restype and argtypes instead of a FunctionType
     """
     pipeline, (sig, symtab, ast) = _infer_types(context, func, restype,
-                                                argtypes, order=['type_infer'],
+                                                argtypes, order=['cfg', 'type_infer'],
                                                 **kwargs)
     return sig, symtab, ast
 
