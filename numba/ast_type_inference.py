@@ -617,7 +617,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def is_trivial_cycle(self, type):
         "Return whether the type directly refers to itself"
-        return len(type.children) == 1 and list(type.children)[0] is type
+        return len(type.parents) == 1 and list(type.parents)[0] is type
 
     def resolve_variable_types(self):
         """
@@ -652,6 +652,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         # Now process the dependencies in topological order. Handle strongly
         # connected components specially
+
+        original_unvisited = set(unvisited)
 
         if unvisited:
             sccs = dict((k, v) for k, v in strongly_connected.iteritems() if k is not v)
@@ -1059,18 +1061,23 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         else:
             return type, None
 
+    def create_deferred(self, node, deferred_cls):
+        variable = Variable(None)
+        deferred_type = deferred_cls(variable, self, node)
+        variable.type = deferred_type
+        node.variable = variable
+        return deferred_type
+
     def visit_Subscript(self, node, visitchildren=True):
         if visitchildren:
             node.value = self.visit(node.value)
             node.slice = self.visit(node.slice)
 
-        node.variable = Variable(None)
         value_type = node.value.variable.type
-        deferred_type = numba_types.DeferredIndexType(node.variable, self, node)
+        deferred_type = self.create_deferred(node, numba_types.DeferredIndexType)
         if value_type and value_type.is_unresolved:
             deferred_type.dependences.append(node.value)
             deferred_type.update()
-            node.variable.type = deferred_type
             return node
 
         slice_variable = node.slice.variable
@@ -1273,17 +1280,28 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return func
 
+    def _create_deferred_call(self, arg_types, call_node):
+        "Set the statement as uninferable for now"
+        deferred_type = self.create_deferred(call_node,
+                                             numba_types.DeferredCallType)
+        for arg, arg_type in zip(call_node.args, arg_types):
+            if arg_type.is_unresolved:
+                deferred_type.dependences.append(arg)
+
+        deferred_type.update()
+        return call_node
+
     def _resolve_external_call(self, call_node, func_type, py_func, arg_types):
         """
         Resolve a call to a function. If we know about the function,
         generate a native call, otherwise go through PyObject_Call().
         """
-        if any(arg_type.is_unresolved for arg_type in arg_types) and not func_type.is_object:
+        if any(arg_type.is_unresolved for arg_type in arg_types) and not func_type == object_:
             result = self.function_cache.get_function(py_func, arg_types)
             if result is not None:
                 signature, llvm_func, py_func = result
             else:
-                numba_types.MiscellaneousCallNode
+                return self._create_deferred_call(arg_types, call_node)
         else:
             signature, llvm_func, py_func = \
                     self.function_cache.compile_function(py_func, arg_types)
@@ -1370,13 +1388,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         new_node = nodes.const(signature, numba_types.CastType(signature))
         return new_node
 
-    def visit_Call(self, node):
+    def visit_Call(self, node, visitchildren=True):
         if node.starargs or node.kwargs:
             raise error.NumbaError("star or keyword arguments not implemented")
 
-        node.func = self.visit(node.func)
-        self.visitlist(node.args)
-        self.visitlist(node.keywords)
+        if self.visitchildren:
+            node.func = self.visit(node.func)
+            self.visitlist(node.args)
+            self.visitlist(node.keywords)
 
         func_variable = node.func.variable
         func_type = func_variable.type

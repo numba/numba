@@ -48,7 +48,7 @@ def fix_module_doctest(module):
     for name in dir(module):
         value = getattr(module, name)
         if (isinstance(value, numba.decorators.NumbaFunction) and
-                _from_module(module, value.py_func)):
+                _from_module(module, value.py_func) and value.py_func.__doc__):
             module.__test__[name] = value.py_func.__doc__
         elif (inspect.isbuiltin(value) and isinstance(value.__doc__, str) and
                   _from_module(module, value)):

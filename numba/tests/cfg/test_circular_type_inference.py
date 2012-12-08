@@ -103,9 +103,10 @@ def test_simple_circular_binop_promotion():
 
     return x, y
 
-#
-### Test delayed inference for unops and binops
-#
+#------------------------------------------------------------------------
+# Test Unary/Binary Operations and Comparisons
+#------------------------------------------------------------------------
+
 @autojit(warn=False)
 def test_circular_binop():
     """
@@ -129,9 +130,6 @@ def test_circular_binop():
 
     return x, y, z, a
 
-#
-### Test delayed inference for comparisons and boolops
-#
 @autojit(warn=False)
 def test_circular_compare():
     """
@@ -200,9 +198,10 @@ def test_circular_compare3():
 
     return cond, x
 
-#
-### Test indexing
-#
+#------------------------------------------------------------------------
+# Test Indexing
+#------------------------------------------------------------------------
+
 @autojit(warn=False)
 def test_delayed_array_indexing():
     """
@@ -396,5 +395,82 @@ def test_string_indexing_valid():
         s = s[i]
 
     return s
+
+#------------------------------------------------------------------------
+# Test circular Calling of functions
+#------------------------------------------------------------------------
+
+@autojit
+def simple_func(x):
+    y = x * x + 4
+    return y
+
+@autojit(warn=False)
+def test_simple_call():
+    """
+    >>> test_simple_call()
+    1091100052L
+    >>> infer_simple(test_simple_call, 'x')
+    (int,)
+    """
+    x = 0
+    for i in range(10):
+        x = simple_func(x)
+
+    return x
+
+@autojit
+def func_with_promotion(x):
+    y = x * x + 4.0
+    return y
+
+@autojit(warn=False)
+def test_simple_call_promotion():
+    """
+    >>> test_simple_call_promotion()
+    26640768404.0
+    >>> infer_simple(test_simple_call_promotion, 'x')
+    (double,)
+    """
+    x = 0
+    for i in range(5):
+        x = func_with_promotion(x)
+
+    return x
+
+#print test_simple_call_promotion.py_func()
+
+@autojit
+def func_with_promotion2(x):
+    y = x * x + 4.0
+    return np.sqrt(y) + 1j
+
+@autojit(warn=False)
+def test_simple_call_promotion2():
+    """
+    >>> result =test_simple_call_promotion2()
+    >>> round(result.real, 4)
+    3.9818
+    >>> round(result.imag, 4)
+    3.9312
+    >>> infer_simple(test_simple_call_promotion2, 'x')
+    (complex128,)
+    """
+    x = 0
+    for i in range(5):
+        x = func_with_promotion2(x)
+
+    return x
+
+#print test_simple_call_promotion2.py_func()
+
+#------------------------------------------------------------------------
+# Test Utilities
+#------------------------------------------------------------------------
+
+def infer_simple(numba_func, *varnames):
+    sig, syms = infer(numba_func.py_func, functype(None, []), warn=False)
+    return types(syms, *varnames)
+
 
 testmod()

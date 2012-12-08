@@ -451,6 +451,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             else:
                 variable = self.symtab[argname]
 
+            if (self.func_signature.struct_by_reference and
+                    minitypes.pass_by_ref(argtype)):
+                larg = self.builder.load(larg)
+
             variable.lvalue = larg
 
             # TODO: incref objects in structs
@@ -1563,10 +1567,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             lfunc = node.llvm_func
 
-        if not node.signature.return_type.is_void:
-            kwargs = dict(name=node.name + '_result')
-        else:
+
+        if node.signature.return_type.is_void or return_value is not None:
             kwargs = {}
+        else:
+            kwargs = dict(name=node.name + '_result')
 
         result = self.builder.call(lfunc, largs, **kwargs)
 

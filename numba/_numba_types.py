@@ -209,6 +209,10 @@ class NewAxisType(NumbaType, minitypes.ObjectType):
 
 class GlobalType(NumbaType, minitypes.ObjectType):
     is_global = True
+    name = None
+
+    def __repr__(self):
+        return "global(%s)" % self.name
 
 class BuiltinType(NumbaType, minitypes.ObjectType):
     is_builtin = True
@@ -218,8 +222,14 @@ class BuiltinType(NumbaType, minitypes.ObjectType):
         self.name = name
         self.func = getattr(__builtin__, name)
 
+    def __repr__(self):
+        return "builtin(%s)" % self.name
+
 class RangeType(NumbaType, minitypes.ObjectType):
     is_range = True
+
+    def __repr__(self):
+        return "range(...)"
 
 class NoneType(NumbaType, minitypes.ObjectType):
     is_none = True
@@ -550,7 +560,7 @@ class PromotionType(UnresolvedType):
             else:
                 name = "subexpression"
 
-            types = sorted(e.args[0], key=minitypes._sort_types_key)
+            types = sorted(e.args[0], key=str)
             types = tuple(types)
             raise TypeError("Cannot promote types %s for %s" % (types, name))
 
@@ -691,6 +701,12 @@ class ReanalyzeCircularType(UnresolvedType):
         self.type_inferer = type_inferer
         self.dependences = []
 
+    def update(self):
+        "Update the graph after having updated the dependences"
+        self.add_parents(node.variable.type
+                            for node in self.dependences
+                                if node.variable.type.is_unresolved)
+
     def _reinfer(self):
         result_type = self.retry_infer()
         if not result_type.is_unresolved:
@@ -765,6 +781,7 @@ class ReanalyzeCircularType(UnresolvedType):
     def substitute_variables(self, substitutions):
         "Try to set the new variables and retry type inference"
 
+
 class DeferredIndexType(ReanalyzeCircularType):
     """
     Used when we don't know the type of the variable being indexed.
@@ -775,11 +792,6 @@ class DeferredIndexType(ReanalyzeCircularType):
         self.type_inferer = type_inferer
         self.index_node = index_node
 
-    def update(self):
-        self.add_parents(node.variable.type
-                            for node in self.dependences
-                                if node.variable.type.is_unresolved)
-
     def retry_infer(self):
         node = self.type_inferer.visit_Subscript(self.index_node,
                                                  visitchildren=False)
@@ -788,6 +800,27 @@ class DeferredIndexType(ReanalyzeCircularType):
     def __repr__(self):
         return "<deferred_index(%s, %s)" % (self.index_node,
                                             ", ".join(map(str, self.parents)))
+
+class DeferredCallType(ReanalyzeCircularType):
+    """
+    Used when we don't know the type of the expression being called, or when
+    we have an autojitting function and don't know all the argument types.
+    """
+
+    def __init__(self, variable, type_inferer, call_node, **kwds):
+        super(DeferredCallType, self).__init__(variable, type_inferer, **kwds)
+        self.type_inferer = type_inferer
+        self.call_node = call_node
+
+    def retry_infer(self):
+        node = self.type_inferer.visit_Call(self.call_node,
+                                            visitchildren=False)
+        return node.variable.type
+
+    def __repr__(self):
+        return "<deferred_call(%s, %s)" % (self.call_node,
+                                           ", ".join(map(str, self.parents)))
+
 
 def error_circular(var):
     raise error.NumbaError(
