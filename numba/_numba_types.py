@@ -727,15 +727,21 @@ class ReanalyzeCircularType(UnresolvedType):
         if not self.variable.type.is_unresolved:
             return False
 
+        # Find substitutions and save original variables
         old_vars = []
         for node in self.dependences:
             sub_type = self.substitution_candidate(node.variable)
             if sub_type:
                 old_vars.append((node, node.variable))
-                node.variable = symtab.Variable(sub_type)
+                node.variable = symtab.Variable(sub_type, name='<substitute>')
 
         if old_vars:
-            return self._reinfer()
+            # We have some substitutions, retry type inference
+            result = self._reinfer()
+            # Reset our original variables!
+            for node, old_var in old_vars:
+                node.variable = old_var
+            return result
 
         # We cannot substitute any promotion candidates, see if we can resolve
         # anyhow (this should be a cheap operation anyway if it fails)
@@ -836,7 +842,6 @@ class StronglyConnectedCircularType(UnresolvedType):
     def retry_infer_reanalyzable(self):
         for reanalyzeable in self.reanalyzeable:
             if reanalyzeable.resolve().is_unresolved:
-                print reanalyzeable
                 reanalyzeable.substitute_and_reinfer()
 
     def err_no_input(self):

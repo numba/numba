@@ -612,8 +612,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     start_points.append(parent)
 
     def is_resolved(self, t):
-        return not t.is_unresolved or t.is_scc or (t.is_unresolved and not
-                                                   t.resolve().is_unresolved)
+        return not t.is_unresolved or (t.is_unresolved and not t.is_scc and not
+                                       t.resolve().is_unresolved)
 
     def is_trivial_cycle(self, type):
         "Return whether the type directly refers to itself"
@@ -676,16 +676,20 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
                 while start_points:
                     start_point = start_points.pop()
+                    assert (len(start_point.parents) == 0 or
+                            self.is_trivial_cycle(start_point) or
+                            self.is_resolved(start_point))
                     visited.add(start_point)
                     if start_point in unvisited:
                         unvisited.remove(start_point)
 
-                    if start_point.is_scc:
-                        print "scc", start_point, start_point.types
-                    else:
-                        print start_point
+#                    if start_point.is_scc:
+#                        print "scc", start_point, start_point.types
+#                    else:
+#                        print start_point
 
-                    start_point.simplify()
+                    if not self.is_resolved(start_point):
+                        start_point.simplify()
 
                     if not (start_point.is_scc or start_point.is_deferred):
                         r = start_point
@@ -704,34 +708,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                       if c not in visited)
                     start_points.extend(self.candidates(children))
 
-        # Iteratively update types until everything is resolved or until we
-        # can't infer anything more
-        # TODO: It would be more efficient to construct a condensation graph
-        # TODO: and do a topological sort, and then resolve the cycle
-        # TODO: in each SCC (the condensed nodes)
-#        were_unresolved = set(unresolved)
-#        changed = True
-#        iterations = 0
-#        while changed and unresolved:
-#            iterations += 1
-#            changed = False
-#            for variable in list(unresolved):
-#                if variable.type.is_unanalyzable:
-#                    # Re-analayze statement
-#                    self.handle_NameAssignment(variable.assignment_node)
-#                elif variable.type.is_unresolved:
-#                    old_changed = changed
-#                    changed |= variable.type.simplify()
-#
-#                if variable.type.is_unresolved:
-#                    variable.type = variable.type.resolve()
-#                if not variable.type.is_unresolved:
-#                    unresolved.remove(variable)
-#
-#        logger.info("converged in %d steps" % iterations)
-
         if unvisited:
-            # var = unresolved.pop()
             def getvar(type):
                 if type.is_scc:
                     return type.scc[0].variable
@@ -1624,8 +1601,22 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
         return node
 
     def resolve(self, variable):
+        """
+        Resolve any resolved types, and resolve any final disconnected
+        type graphs that haven't been simplified. This can be the case if
+        the type of a variable does not depend on the type of a sub-expression
+        which may be unresolved, e.g.:
+
+            y = 0
+            for i in range(...):
+                x = int(y + 4)  # y is unresolved here, so we have
+                                # promote(deferred(y), int)
+                y += 1
+        """
         if variable.type.is_unresolved:
             variable.type = variable.type.resolve()
+            if variable.type.is_unresolved:
+                variable.type = numba_types.resolve_var(variable)
             assert not variable.type.is_unresolved
 
     def visit(self, node):

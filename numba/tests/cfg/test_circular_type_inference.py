@@ -1,10 +1,27 @@
 from numba.tests.cfg.test_cfg_type_infer import *
 
 @autojit
+def test_circular_error():
+    """
+    >>> try:
+    ...     test_circular_error()
+    ... except error.NumbaError, e:
+    ...     print str(e).replace('var1', '<var>').replace('var2', '<var>')
+    Warning 16:19: local variable 'var2' might be referenced before assignment
+    Warning 18:19: local variable 'var1' might be referenced before assignment
+    Unable to infer type for assignment to <var>, insert a cast or initialize the variable.
+    """
+    for i in range(10):
+        if i > 5:
+            var1 = var2
+        else:
+            var2 = var1
+
+@autojit
 def test_simple_circular():
     """
     >>> test_simple_circular()
-    Warning 12:16: local variable 'y' might be referenced before assignment
+    Warning 29:16: local variable 'y' might be referenced before assignment
     """
     x = 2.0
     for i in range(10):
@@ -17,7 +34,7 @@ def test_simple_circular():
 def test_simple_circular2():
     """
     >>> test_simple_circular2()
-    Warning 27:16: local variable 'x' might be referenced before assignment
+    Warning 44:16: local variable 'x' might be referenced before assignment
     """
     y = 2.0
     for i in range(10):
@@ -25,7 +42,6 @@ def test_simple_circular2():
             x = y
         else:
             y = x
-
 
 @autojit
 def test_simple_circular3():
@@ -264,6 +280,26 @@ def test_delayed_array_slicing2():
     print row
 
 @autojit(warn=False)
+def test_delayed_string_indexing_simple():
+    """
+    >>> test_delayed_string_indexing_simple()
+    ('eggs', 3L)
+    >>> sig, syms = infer(test_delayed_string_indexing_simple.py_func,
+    ...                   functype(None, []), warn=False)
+    >>> types(syms, 's', 'x')
+    (const char *, Py_ssize_t)
+    """
+    s = "spam ham eggs"
+    for i in range(4):
+        if i < 3:
+            x = i + i
+
+        s = s[x:]
+        x = i
+
+    return s[1:], x
+
+@autojit(warn=False)
 def test_delayed_string_indexing():
     """
     >>> test_delayed_string_indexing()
@@ -317,20 +353,4 @@ def test_delayed_string_indexing2():
 
     return s, x
 
-@autojit
-def test_circular_error():
-    """
-    >>> try: test_circular_error()
-    ... except error.NumbaError, e: print e
-    Warning 61:16: local variable 'y' might be referenced before assignment
-    Warning 63:16: local variable 'x' might be referenced before assignment
-    61:12: Unable to infer type for assignment to x, insert a cast or initialize the variable.
-    """
-    for i in range(10):
-        if i > 5:
-            x = y
-        else:
-            y = x
-
-#testmod()
-test_delayed_string_indexing()
+testmod()
