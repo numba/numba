@@ -353,4 +353,48 @@ def test_delayed_string_indexing2():
 
     return s, x
 
+@autojit(warn=False)
+def test_string_indexing_error():
+    """
+    >>> test_string_indexing_error()
+    Traceback (most recent call last):
+        ...
+    TypeError: Cannot promote types (char, const char *) for variable s
+    """
+    for i in range(4):
+        if i == 0:
+            s = "spam ham eggs"
+
+        if i < 3:
+            s = s[i]
+        elif i < 5:
+            s = s[i:]
+
+@autojit(warn=False)
+def test_string_indexing_error2():
+    """
+    >>> chr(test_string_indexing_error2())
+    Traceback (most recent call last):
+        ...
+    TypeError: Cannot promote types (char, const char *) for variable s
+    """
+    for i in range(4):
+        if i == 0:
+            s = "spam ham eggs"
+        s = s[i]
+
+    return s
+
+@autojit(warn=False)
+def test_string_indexing_valid():
+    """
+    >>> chr(test_string_indexing_valid())
+    'm'
+    """
+    for i in range(4):
+        s = "spam ham eggs"
+        s = s[i]
+
+    return s
+
 testmod()

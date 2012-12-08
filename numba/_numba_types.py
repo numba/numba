@@ -545,13 +545,14 @@ class PromotionType(UnresolvedType):
         try:
             return self._simplify(seen)
         except minierror.UnpromotableTypeError, e:
-            raise
             if self.variable.name:
                 name = "variable %s" % self.variable.name
             else:
                 name = "subexpression"
-            raise TypeError(
-                        "Cannot promote types %s for %s" % (e.args[0], name))
+
+            types = sorted(e.args[0], key=minitypes._sort_types_key)
+            types = tuple(types)
+            raise TypeError("Cannot promote types %s for %s" % (types, name))
 
     @classmethod
     def promote(cls, *types):
@@ -604,26 +605,6 @@ class DeferredType(UnresolvedType):
 
     is_deferred = True
     updated = False
-
-#    _empty = frozenset()
-#
-#    def __init__(self, variable, **kwds):
-#        self.variable = variable
-#        self.assertions = []
-#
-#    @property
-#    def parents(self):
-#        if self.variable.type is self:
-#            return self._parents
-#        else:
-#            return self.variable.type.parents
-#
-#    @property
-#    def children(self):
-#        if self.variable.type is self:
-#            return self._empty
-#        else:
-#            return self.variable.type.children
 
     def update(self):
         assert self.variable.type is not self
