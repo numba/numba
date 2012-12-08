@@ -592,14 +592,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         wrapper.cellvars = []
         return wrapper
 
-    def _build_wrapper_translation(self):
+    def _build_wrapper_translation(self, llvm_module=None):
         # PyObject *(*)(PyObject *self, PyObject *args)
         def func(self, args):
             pass
         func.live_objects = self.func.live_objects
 
-        wrapper_context = LLVMContextManager()
-        wrapper_module = wrapper_context.module
+        if llvm_module:
+            wrapper_module = llvm_module
+        else:
+            wrapper_module = LLVMContextManager().module
 
         # Create wrapper code generator and wrapper AST
         func.__name__ = '__numba_wrapper_%s' % self.func_name
@@ -618,7 +620,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                               refcount_args=False, func_name=func.__name__)
         t.translate()
         func.live_objects.append(t.lfunc)
-        return wrapper_context, t
+        return t
 
     def build_wrapper_function(self, get_lfunc=False):
         '''
@@ -631,7 +633,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         interpreter-level wrapper function, the LLVM wrapper function,
         and the method definition record.
         '''
-        _, t = self._build_wrapper_translation()
+        t = self._build_wrapper_translation()
 
         # Return a PyCFunctionObject holding the wrapper
         func_pointer = t.lfunc_pointer
@@ -649,9 +651,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         function, and return a tuple containing the separate LLVM
         module, and the LLVM wrapper function.
         '''
-        ctx, t = self._build_wrapper_translation()
-        logger.debug('Wrapper module: %s' % ctx.module)
-        return ctx.module, t.lfunc
+        llvm_module = lc.Module.new('%s_wrapper_module' % self.func_name)
+        t = self._build_wrapper_translation(llvm_module=llvm_module)
+        logger.debug('Wrapper module: %s' % llvm_module)
+        return llvm_module, t.lfunc
 
     def insert_closure_scope_arg(self, args, node):
         """

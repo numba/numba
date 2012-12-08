@@ -15,39 +15,77 @@ from numba.utils import debugout
 from numba import double, int_
 import llvm.core as _lc
 
-default_module = _lc.Module.new('default')
-default_prototypes = []
+context = utils.get_minivect_context()
+context.llvm_context = translate.LLVMContextManager()
+context.numba_pipeline = pipeline.Pipeline
+function_cache = context.function_cache = functions.FunctionCache(context)
+pipeline_env = pipeline.PipelineEnvironment.init_env(
+    context, "Top-level compilation environment (in %s).\n" % __name__)
 
-def _internal_export(name=None, restype=double, argtypes=[double], backend='ast', **kws):
+_EXPORTS_DOC = '''pycc environment
+
+Includes flags, and modules for exported functions.
+
+wrap - Boolean flag used to indicate that Python wrappers should be
+generated for exported functions.
+
+function_signature_map - Map from function names to type signatures
+for the translated function (used for header generation).
+
+function_module_map - Map from function names to LLVM modules that
+define the translated function.
+
+function_wrapper_map - Map from function names to tuples containing
+LLVM wrapper functions and LLVM modules that define the wrapper
+function.
+'''
+
+def _init_exports(environment=pipeline_env):
+    '''
+    Initialize the sub-environment specific to exporting functions.
+    See environment documentation in decorators._EXPORTS_DOC.
+    '''
+    exports_env = pipeline.PipelineEnvironment(pipeline_env,
+                                               _EXPORTS_DOC)
+    environment.exports = exports_env
+    exports_env.wrap = False
+    exports_env.function_signature_map = {}
+    exports_env.function_module_map = {}
+    exports_env.function_wrapper_map = {}
+
+_init_exports()
+
+def _internal_export(name=None, restype=double, argtypes=[double],
+                     backend='ast', **kws):
     def _iexport(func):
         if backend == 'bytecode':
-            # FIXME:  This is causing segfault when the same module
-            #    is used
-            t = bytecode_translate.Translate(func, restype=restype,
-                                              argtypes=argtypes,
-                                              module=default_module,
-                                              name=name, **kws)
-            t.translate()
-            signature = minitypes.FunctionType(restype, argtypes, name=name)
-            # For headers if needed
-            default_prototypes.append(signature)
+            raise NotImplementedError(
+               'Bytecode translation has been removed for exported functions.')
         else:
             # to reassign need to setup this variable
             # with no 'nonlocal'
             artypes = argtypes
             if func.func_code.co_argcount == 0 and artypes is None:
                 artypes = []
+            function_signature = minitypes.FunctionType(restype, artypes,
+                                                        name=name)
+            llvm_module = _lc.Module.new('export_%s' % name)
             func.live_objects = []
-            function_cache.register(func)
-            result = function_cache.compile_function(func, artypes,
-                                                nopython=True,
-                                                compile_only=True,
-                                                llvm_module=default_module,
-                                                name=name,
-                                                restype=restype, **kws)
-            result[0].name = name
-            # For headers if needed
-            default_prototypes.append(result[0])
+            func._is_numba_func = True
+            func_ast = functions._get_ast(func)
+            func_ast.pipeline = pipeline_env.pipeline
+            pipeline_env.crnt.init_func(func, func_ast, function_signature,
+                                        name=name, llvm_module=llvm_module)
+            pipeline_env.pipeline(func_ast, pipeline_env)
+            func_env = pipeline_env.crnt
+            exports_env = pipeline_env.exports
+            exports_env.function_signature_map[name] = function_signature
+            exports_env.function_module_map[name] = llvm_module
+            if not exports_env.wrap:
+                exports_env.function_wrapper_map[name] = None
+            else:
+                wrapper_tup = func_env.translator.build_wrapper_module()
+                exports_env.function_wrapper_map[name] = wrapper_tup
     return _iexport
 
 def export(signature, **kws):
@@ -106,11 +144,6 @@ from numpy import vectorize
 # See: https://github.com/ContinuumIO/numba/issues/5
 
 __tr_map__ = {}
-
-context = utils.get_minivect_context()
-context.llvm_context = translate.LLVMContextManager()
-context.numba_pipeline = pipeline.Pipeline
-function_cache = context.function_cache = functions.FunctionCache(context)
 
 class NumbaFunction(object):
     """

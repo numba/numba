@@ -271,10 +271,10 @@ def compile_from_sig(context, func, signature, **kwds):
                    **kwds)
 
 class PipelineStage(object):
-    def preconditions(self, ast, env):
+    def check_preconditions(self, ast, env):
         return True
 
-    def postconditions(self, ast, env):
+    def check_postconditions(self, ast, env):
         return True
 
     def transform(self, ast, env):
@@ -291,17 +291,19 @@ class PipelineStage(object):
                    **kws)
 
     def __call__(self, ast, env):
-        assert self.preconditions(ast, env)
+        if env.stage_checks: self.check_preconditions(ast, env)
         ast = self.transform(ast, env)
-        assert self.postconditions(ast, env)
+        if env.stage_checks: self.check_postconditions(ast, env)
         return ast
 
 class ConstFolding(PipelineStage):
-    def preconditions(self, ast, env):
-        return not hasattr(env.crnt, 'constvars')
+    def check_preconditions(self, ast, env):
+        assert not hasattr(env.crnt, 'constvars')
+        return super(ConstFolding, self).check_preconditions(ast, env)
 
-    def postconditions(self, ast, env):
-        return hasattr(env.crnt, 'constvars')
+    def check_postconditions(self, ast, env):
+        assert hasattr(env.crnt, 'constvars')
+        return super(ConstFolding, self).check_postconditions(ast, env)
 
     def transform(self, ast, env):
         const_marker = self.make_specializer(constant_folding.ConstantMarker,
@@ -314,8 +316,9 @@ class ConstFolding(PipelineStage):
         return const_folder.visit(ast)
 
 class TypeInfer(PipelineStage):
-    def preconditions(self, ast, env):
-        return env.crnt.symtab is not None
+    def check_preconditions(self, ast, env):
+        assert env.crnt.symtab is not None
+        return super(TypeInfer, self).check_preconditions(ast, env)
 
     def transform(self, ast, env):
         type_inferer = self.make_specializer(type_inference.TypeInferer,
@@ -383,24 +386,31 @@ class PipelineEnvironment(object):
         CodeGen,
         ]
 
-    def __init__(self, parent=None):
-        self.parent = parent
+    def __init__(self, parent=None, doc='', *args, **kws):
+        self.reset(parent, doc, *args, **kws)
 
     @classmethod
-    def init_env(cls, context, **kws):
-        ret_val = cls()
+    def init_env(cls, context, doc='', **kws):
+        ret_val = cls(doc=doc)
         ret_val.context = context
         for stage in cls.init_stages:
             setattr(ret_val, stage.__name__, stage)
         pipe = cls.init_stages[:]
         pipe.reverse()
         ret_val.pipeline = reduce(compose_stages, pipe)
+        ret_val.stage_checks = kws.pop('stage_checks', True)
         ret_val.__dict__.update(kws)
         ret_val.crnt = cls(ret_val)
         return ret_val
 
+    def reset(self, parent=None, doc='', *args, **kws):
+        self.__dict__ = {}
+        super(PipelineEnvironment, self).__init__()
+        self.parent = parent
+        self.__doc__ = doc
+
     def init_func(self, func, ast, func_signature, **kws):
-        assert self.parent is not None
+        self.reset(self.parent, self.__doc__)
         self.func = func
         self.ast = ast
         self.func_signature = func_signature
@@ -413,12 +423,11 @@ class PipelineEnvironment(object):
                 name = ast.name
             self.func_name = naming.specialized_mangle(
                 name, self.func_signature.args)
-        self.symtab = kws.get('symtab', {})
-        self.llvm_module = kws.get('llvm_module')
-        if self.llvm_module is None:
-            self.llvm_module = self.parent.context.llvm_module
-        self.nopython = kws.get('nopython')
-        self.locals = kws.get('locals')
+        self.symtab = kws.pop('symtab', {})
+        self.llvm_module = kws.pop('llvm_module',
+                                   self.parent.context.llvm_module)
+        self.nopython = kws.pop('nopython', False)
+        self.locals = kws.pop('locals', None)
         self.kwargs = kws
 
 def check_stage(stage):
@@ -439,7 +448,9 @@ def compose_stages(f0, f1):
     f0_name, f0 = check_stage(f0)
     f1_name, f1 = check_stage(f1)
     def _numba_pipeline_composition(ast, env):
-        return f0(f1(ast, env), env)
+        f1_result = f1(ast, env)
+        f0_result = f0(f1_result, env)
+        return f0_result
     name = '_o_'.join((f0_name, f1_name))
     _numba_pipeline_composition.__name__ = name
     return _numba_pipeline_composition

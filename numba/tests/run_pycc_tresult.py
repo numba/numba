@@ -31,3 +31,16 @@ assert res == 987 * 321
 del lib
 if os.path.exists(cdll_modulename):
     os.unlink(cdll_modulename)
+
+pycc.main(args=['--python', modulename + '.py'])
+import numba.tests.compile_with_pycc as lib
+res = lib.mult(123, 321)
+print 'lib.mult(123, 321) =', res
+assert res == 123 * 321
+
+res = lib.multf(987, 321)
+print 'lib.multf(987, 321) =', res
+assert res == 987 * 321
+del lib
+if os.path.exists(cdll_modulename):
+    os.unlink(cdll_modulename)
