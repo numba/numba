@@ -320,7 +320,10 @@ class Driver(object):
         handle = cu_context()
         error = self.cuCtxGetCurrent(byref(handle))
         self.check_error(error, "Fail to get current context.")
-        return self._CONTEXTS[handle.value]
+        if handle.value is None:
+            raise CudaDriverError("No CUDA context was created.")
+        else:
+            return self._CONTEXTS[handle.value]
 
     def get_or_create_context(self, device=None):
         '''Returns the current context if exists, or get create a new one.

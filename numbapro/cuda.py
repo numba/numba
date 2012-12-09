@@ -15,6 +15,7 @@ from _cuda import ptx
 from numba.minivect import minitypes
 from numba import void
 import numba.decorators
+import _cuda.default # this creates the default context
 
 cached = {}
 def jit(restype=void, argtypes=None, backend='ast', **kws):
