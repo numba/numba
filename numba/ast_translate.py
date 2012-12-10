@@ -1152,6 +1152,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return lbody
 
+    def append_basic_block(self, name='unamed'):
+        idx = len(self.blocks)
+        #bb = self.lfunc.append_basic_block('%s_%d'%(name, idx))
+        bb = self.lfunc.append_basic_block(name)
+        self.blocks[idx] = bb
+        return bb
+
     def visit_LowLevelBasicBlockNode(self, node):
         llvm_block = node.create_block(self)
         if not self.is_block_terminated():
@@ -1207,6 +1214,31 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.cbranch(test, bb_true, bb_false)
         self.builder.position_at_end(node.exit_block.exit_block)
         self.setblock(node.exit_block)
+
+    def visit_IfExp(self, node):
+        test = self.visit(node.test)
+        if test.type != _int1:
+            test = self._generate_test(test)
+
+        then_block = self.append_basic_block('ifexp.then')
+        else_block = self.append_basic_block('ifexp.else')
+        merge_block = self.append_basic_block('ifexp.merge')
+
+        self.builder.cbranch(test, then_block, else_block)
+
+        self.builder.position_at_end(then_block)
+        then_value = self.visit(node.body)
+        self.builder.branch(merge_block)
+
+        self.builder.position_at_end(else_block)
+        else_value = self.visit(node.orelse)
+        self.builder.branch(merge_block)
+
+        self.builder.position_at_end(merge_block)
+        phi = self.builder.phi(then_value.type)
+        phi.add_incoming(then_value, then_block)
+        phi.add_incoming(else_value, else_block)
+        return phi
 
     def visit_While(self, node):
         self.visit_If(node, is_while=True)

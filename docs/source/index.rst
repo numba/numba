@@ -11,6 +11,7 @@ Contents:
    :titlesonly:
    :maxdepth: 2
 
+   doc/releases.rst
    doc/userguide.rst
    doc/examples.rst
    doc/pycc.rst

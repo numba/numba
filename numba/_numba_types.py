@@ -234,8 +234,19 @@ class RangeType(NumbaType, minitypes.ObjectType):
 class NoneType(NumbaType, minitypes.ObjectType):
     is_none = True
 
-    def __str__(self):
-        return "None Type"
+    def __repr__(self):
+        return "<type(None)>"
+
+class NULLType(NumbaType):
+    """
+    Null pointer type that can be compared or assigned to any other
+    pointer type.
+    """
+
+    is_null = True
+
+    def __repr__(self):
+        return "<type(NULL)>"
 
 class CTypesFunctionType(NumbaType, minitypes.ObjectType):
     is_ctypes_function = True
@@ -248,6 +259,12 @@ class CTypesFunctionType(NumbaType, minitypes.ObjectType):
 
     def __repr__(self):
         return "<ctypes function %s>" % (self.signature,)
+
+class CTypesPointerType(NumbaType):
+    def __init__(self, pointer_type, address, **kwds):
+        super(CTypesPointer, self).__init__(**kwds)
+        self.pointer_type = pointer_type
+        self.address = address
 
 class SizedPointerType(NumbaType, minitypes.PointerType):
     size = None
@@ -992,9 +1009,8 @@ def resolve_var(var):
 
 
 tuple_ = TupleType()
-phi = PHIType()
 none = NoneType()
-
+null_type = NULLType()
 intp = minitypes.npy_intp
 
 #
@@ -1065,8 +1081,21 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return CastType(dst_type=value)
         elif hasattr(type(value), '__numba_ext_type'):
             return type(value).__numba_ext_type
-        else:
-            return super(NumbaTypeMapper, self).from_python(value)
+        elif value is numba.NULL:
+            return null_type
+        elif hasattr(value, 'from_address') and hasattr(value, 'in_dll'):
+            # Try to detect ctypes pointers, or default to minivect
+            try:
+                ctypes.cast(value, ctypes.c_void_p)
+            except ctypes.ArgumentError:
+                pass
+            else:
+                pass
+                #type = convert_from_ctypes(value)
+                #value = ctypes.cast(value, ctypes.c_void_p).value
+                #return CTypesPointerType(type, value)
+
+        return super(NumbaTypeMapper, self).from_python(value)
 
     def promote_types(self, type1, type2):
         if (type1.is_array or type2.is_array) and not \
@@ -1095,6 +1124,9 @@ class NumbaTypeMapper(minitypes.TypeMapper):
                 return PromotionType(var, self.context, [type1, type2])
             else:
                 return self.promote_types(type1, type2)
+        elif (type1.is_pointer or type2.is_pointer) and (type1.is_null or
+                                                         type2.is_null):
+            return [type1, type2][type1.is_null]
 
         return super(NumbaTypeMapper, self).promote_types(type1, type2)
 

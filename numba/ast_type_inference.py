@@ -1527,6 +1527,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         result_type = None
         if attribute is numpy.newaxis:
             result_type = numba_types.NewAxisType()
+        elif attribute is numba.NULL:
+            return numba_types.null_type
         elif type.is_numpy_module or type.is_numpy_attribute:
             result_type = numba_types.NumpyAttributeType(module=type.module,
                                                          attr=node.attr)
@@ -1662,6 +1664,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                 node.test.body[0], minitypes.bool_)
         else:
             node.test = nodes.CoercionNode(node.test, minitypes.bool_)
+        return node
+
+    def visit_IfExp(self, node):
+        self.generic_visit(node)
+        type_ = self.promote(node.body.variable, node.orelse.variable)
+        node.variable = Variable(type_)
+        node.test = nodes.CoercionNode(node.test, minitypes.bool_)
+        node.orelse = nodes.CoercionNode(node.orelse, type_)
+        node.body = nodes.CoercionNode(node.body, type_)
         return node
 
     #

@@ -29,17 +29,22 @@ to share a single outer scope. E.g.
 
     def outer(a):
         def inner(b):
-            def closure():
+            def inner_inner():
                 print a, b
-            return closure
+            return inner_inner
 
         return inner(1), inner(2)
 
-We have three closure scopes here:
+We have three live closure scopes here:
 
-    scope_outer = { 'a': a }
-    scope_inner_1 = { 'scope_outer': scope_outer, 'b': 1 }
-    scope_inner_2 = { 'scope_outer': scope_outer, 'b': 2 }
+    scope_outer = { 'a': a }  # call to 'outer'
+    scope_inner_1 = { 'scope_outer': scope_outer, 'b': 1 } # call to 'inner' with b=1
+    scope_inner_2 = { 'scope_outer': scope_outer, 'b': 2 } # call to 'inner' with b=2
+
+Function 'inner_inner' defines no new scope, since it contains no cellvars.
+But it does contain a freevar from scope_outer and scope_inner, so it gets
+scope_inner passed as first argument. scope_inner has a reference to scope
+outer, so all variables can be resolved.
 
 These scopes are instances of a numba extension class.
 """

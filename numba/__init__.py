@@ -1,7 +1,7 @@
 import sys
 import logging
 
-__version__ = '0.5'
+__version__ = '0.3.2'
 
 # NOTE: Be sure to keep the logging level commented out before commiting.  See:
 #   https://github.com/numba/numba/issues/31
@@ -41,10 +41,11 @@ def _config_logger():
 
 _config_logger()
 
-from . import _numba_types
+from . import _numba_types, special
 from ._numba_types import *
 from . import decorators
 from .decorators import *
+from numba.special import NULL
 
 def test():
     import os
@@ -74,4 +75,4 @@ def nose_run(module=None):
     config.verbosity = 3
     nose.run(module=module, config=config)
 
-__all__ = _numba_types.__all__ + decorators.__all__
+__all__ = _numba_types.__all__ + decorators.__all__ + special.__all__

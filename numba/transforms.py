@@ -503,7 +503,15 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                         name=node.name)
             result = self.visit(node)
             return result
+        elif node_type.is_null:
+            if not dst_type.is_pointer:
+                raise error.NumbaError(node.node,
+                                       "NULL must be cast or implicitly "
+                                       "coerced to a pointer type")
+            return self.visit(nodes.NULL.coerce(dst_type))
         elif node_type.is_c_string and dst_type.is_numeric:
+            # TODO: int <-> string conversions are explicit, this should not
+            # TODO: be a coercion
             if self.nopython:
                 node = nodes.CoercionNode(
                     self.function_cache.call('atol' if dst_type.is_int
@@ -1229,6 +1237,11 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         return node
 
     def visit_Compare(self, node):
+        if node.left.type.is_pointer and node.comparators[0].type.is_pointer:
+            node.left = nodes.CoercionNode(node.left, Py_uintptr_t)
+            node.comparators = [nodes.CoercionNode(node.comparators[0],
+                                                   Py_uintptr_t)]
+
         self.generic_visit(node)
         return node
 
