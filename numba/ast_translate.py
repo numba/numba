@@ -508,14 +508,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                "Redefinition of function %s" % self.func_name
 
         entry = self.append_basic_block('entry')
-        if self.have_cfg:
-            block0 = self.ast.flow.blocks[0]
-            block0.entry_block = block0.exit_block = entry
-            self.flow_block = None
-            # self.visitlist(block0.body) # uninitialize constants for variables
-            self.flow_block = self.ast.flow.blocks[1]
-        else:
-            self.flow_block = None
 
         self.builder = lc.Builder.new(entry)
         self.caster = _LLVMCaster(self.builder)
@@ -527,6 +519,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # TODO: Put current function into symbol table for recursive call
         self.setup_return()
+
+        if self.have_cfg:
+            block0 = self.ast.flow.blocks[0]
+            block0.entry_block = entry
+            self.visitlist(block0.body)
+            block0.exit_block = self.builder.basic_block
+            self.flow_block = None
+            # self.visitlist(block0.body) # uninitialize constants for variables
+            self.flow_block = self.ast.flow.blocks[1]
+        else:
+            self.flow_block = None
 
         self.in_loop = 0
         self.loop_beginnings = []
