@@ -460,7 +460,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             else:
                 # Allocate on stack
                 variable = self.symtab[argname]
-                self._allocate_arg_local(argname, argtype, larg)
+                variable.lvalue = self._allocate_arg_local(argname, argtype, larg)
 
             # TODO: incref objects in structs
             if not (self.nopython or argtype.is_closure_scope):
@@ -935,6 +935,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_Name(self, node):
         var = node.variable
+        if var.lvalue is None and self.symtab[node.id].is_cellvar:
+            var = self.symtab[node.id]
+
         assert var.lvalue, var
 
         if not node.variable.is_local and not node.variable.is_constant:

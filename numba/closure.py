@@ -422,9 +422,8 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
 
     def _load_name(self, var_name, is_cellvar=False):
         src = ast.Name(var_name, ast.Load())
-        src.variable = self.symtab[var_name]
-        assert src.variable.is_cellvar
-        # src.variable.is_cellvar = is_cellvar
+        src.variable = Variable.from_variable(self.symtab[var_name])
+        src.variable.is_cellvar = is_cellvar
         src.type = src.variable.type
         return src
 
@@ -460,6 +459,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
             if arg.id in node.scope_type.unmangled_symtab:
                 dst = lookup_scope_attribute(scope, arg.id, ast.Store())
                 src = self._load_name(arg.id)
+                src.variable.assign_in_closure_scope = True
                 assmt = ast.Assign(targets=[dst], value=src)
                 stats.append(assmt)
 

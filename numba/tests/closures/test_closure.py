@@ -208,6 +208,7 @@ __doc__ += \
 1 3 5 7 13 18.0
 """
 
+
 @autojit
 def closure_arg_simple(a):
     @jit('object_(object_)')
@@ -310,5 +311,6 @@ NumbaError: 301:5: Expected 1 arguments type(s), got 0
 """
 
 if __name__ == '__main__':
+#    pass
     import doctest
     doctest.testmod()

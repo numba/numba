@@ -984,8 +984,8 @@ def check_definitions(flow, compiler_directives):
 
     # Unused entries
     for entry in flow.entries:
-        if not entry.cf_references: # and not entry.is_pyclass_attr
-                                    # and not entry.in_closure):
+        if (not entry.cf_references and not
+                entry.is_cellvar): # and not entry.is_pyclass_attr
             if entry.is_arg:
                 if warn_unused_arg:
                     messages.warning(entry, "Unused argument '%s'" %
