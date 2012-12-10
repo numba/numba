@@ -39,6 +39,7 @@ class Pipeline(object):
         'specialize',
         'late_specializer',
         'fix_ast_locations',
+        'cleanup_symtab',
         'codegen',
     ]
 
@@ -73,7 +74,7 @@ class Pipeline(object):
             self.llvm_module = self.context.function_cache.module
 
         self.nopython = nopython
-        self.locals = locals
+        self.locals = locals or {}
         self.kwargs = kwargs
 
         if order is None:
@@ -145,11 +146,11 @@ class Pipeline(object):
         ast = transform.visit(ast)
         self.symtab = transform.symtab
         ast.flow = transform.flow
-        self.cfg_transform = transform
+        self.ast.cfg_transform = transform
         return ast
 
     def dump_cfg(self, ast):
-        if self.cfg_transform.graphviz:
+        if self.ast.cfg_transform.graphviz:
             self.cfg_transform._render_gv(ast)
         return ast
 
@@ -197,6 +198,14 @@ class Pipeline(object):
     def fix_ast_locations(self, ast):
         fixer = self.make_specializer(FixMissingLocations, ast)
         fixer.visit(ast)
+        return ast
+
+    def cleanup_symtab(self, ast):
+        "Pop original variables from the symtab"
+        for var in ast.symtab.values():
+            if not var.parent_var and var.renameable:
+                ast.symtab.pop(var.name, None)
+
         return ast
 
     def codegen(self, ast):
@@ -248,7 +257,7 @@ def infer_types(context, func, restype=None, argtypes=None, **kwargs):
 
 def infer_types_from_ast_and_sig(context, dummy_func, ast, signature, **kwargs):
     return run_pipeline(context, dummy_func, ast, signature,
-                        order=['type_infer'], **kwargs)
+                        order=['cfg', 'type_infer'], **kwargs)
 
 def get_wrapper(translator, ctypes=False):
     if ctypes:

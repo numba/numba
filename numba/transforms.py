@@ -651,14 +651,7 @@ def badval(type):
 class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                       LateBuiltinResolverMixin, visitors.NoPythonContextMixin):
 
-    def cleanup_symtab(self):
-        "Pop original variables from the symtab"
-        for var in self.symtab.values():
-            if not var.parent_var and not var.name in self.locals:
-                self.symtab.pop(var.name, None)
-
     def visit_FunctionDef(self, node):
-        self.cleanup_symtab()
         self.handle_phis()
 
         node.decorator_list = self.visitlist(node.decorator_list)

@@ -42,7 +42,7 @@ class NumbaVisitorMixin(CooperativeBase):
         self.func = func
         if func is None:
             assert isinstance(ast, ast_module.FunctionDef)
-            locals, freevars = find_locals_and_freevars(context, ast)
+            locals, cellvars, freevars = determine_variable_status(context, ast)
             self.names = self.global_names = freevars
             self.argnames = [arg.id for arg in ast.args.args]
             argnames = set(self.argnames)
@@ -50,6 +50,9 @@ class NumbaVisitorMixin(CooperativeBase):
                                           if local_name not in argnames]
             self.varnames = self.local_names = self.argnames + local_names
             self.func_globals = kwargs.get('func_globals', {})
+
+            self.cellvars = cellvars
+            self.freevars = freevars
         else:
             f_code = self.func.func_code
             self.names = self.global_names = f_code.co_names
@@ -62,6 +65,9 @@ class NumbaVisitorMixin(CooperativeBase):
 
             self.argnames = f_code.co_varnames[:f_code.co_argcount]
             self.func_globals = func.func_globals
+
+            self.cellvars = set(f_code.co_cellvars)
+            self.freevars = set(f_code.co_freevars)
 
         # Add variables declared in locals=dict(...)
         self.local_names.extend(
@@ -246,9 +252,13 @@ class NoPythonContextMixin(object):
 
 class VariableFindingVisitor(NumbaVisitor):
     "Find referenced and assigned ast.Name nodes"
+
+    function_level = 0
+
     def __init__(self, *args, **kwargs):
         self.referenced = {}
         self.assigned = {}
+        self.func_defs = []
 
     def register_assignment(self, node, target):
         if isinstance(target, ast.Name):
@@ -265,12 +275,38 @@ class VariableFindingVisitor(NumbaVisitor):
     def visit_Name(self, node):
         self.referenced[node.id] = node
 
-def find_locals_and_freevars(context, ast):
+    def visit_FunctionDef(self, node):
+        if self.function_level == 0:
+            self.generic_visit(node)
+        else:
+            self.func_defs.append(node)
+
+        return node
+
+def determine_variable_status(context, ast):
     """
-    Find local variables and free variables (or globals) given an AST.
+    Determine what category referenced and assignment variables fall in:
+
+        - local variables
+        - free variables
+        - cell variables
     """
+    if hasattr(ast, 'variable_status_tuple'):
+        return ast.variable_status_tuple
+
     v = VariableFindingVisitor(context, None, ast)
     v.visit(ast)
+
     locals = set(v.assigned)
     freevars = set(v.referenced) - locals
+    cellvars = set()
+
+    # Compure cell variables
+    for func_def in v.func_defs:
+        inner_locals, inner_cellvars, inner_freevars = \
+                            determine_variable_status(context, func_def)
+        cellvars.update(locals.intersection(inner_freevars))
+
+    # Cache state
+    ast.variable_status_tuple = locals, cellvars, freevars
     return locals, freevars

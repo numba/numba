@@ -517,6 +517,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # Analyse target variable assignment
             return self.visit_For(assignment_node, visit_body=False)
             #print "handled", assignment_node.target.variable
+        #elif (isinstance(assignment_node, ast.Assign) and
+        #          isinstance(assignment_node.value, nodes.FuncDefExprNode)):
+            # Don't analyse inner functions at this point
+        #    pass
         else:
             return self.visit(assignment_node)
             #print "handled", assignment_node.targets[0].variable
@@ -581,6 +585,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         cfg = self.ast.flow
         self.kill_unused_phis(cfg)
 
+        self.function_level += 1
         for block in cfg.blocks:
             phis = []
             for phi in block.phi_nodes:
@@ -598,6 +603,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     assmnt = self.handle_NameAssignment(stat.assignment_node)
                     # TODO: inject back in AST...
                     stat.assignment_node = assmnt
+
+        self.function_level -= 1
 
     def candidates(self, unvisited):
         "Types with in-degree zero"
@@ -949,20 +956,22 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         var = self.current_scope.lookup(node.id)
         is_none = var and node.id in ('None', 'True', 'False')
+        in_closure_scope = self.closure_scope and node.id in self.closure_scope
         if var and (var.is_local or is_none):
             if isinstance(node.ctx, ast.Param) or is_none:
                 variable = self.symtab[node.id]
             else:
                 # Local variable
-                if node.id in self.locals:
-                    variable = self.symtab[node.id]
+                local_variable = self.symtab[node.id]
+                if (node.id in self.locals or local_variable.is_cellvar or
+                        local_variable.is_freevar):
+                    variable = local_variable
                 else:
                     variable = node.variable
-        elif (self.closure_scope and node.id in self.closure_scope and not
-                  self.is_store(node.ctx)):
+        elif in_closure_scope and not self.is_store(node.ctx):
             # Free variable
+            # print node.id, node.ctx, self.ast.name
             closure_var = self.closure_scope[node.id]
-            closure_var.is_cellvar = True
 
             variable = Variable.from_variable(closure_var)
             variable.is_local = False
@@ -1674,6 +1683,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.orelse = nodes.CoercionNode(node.orelse, type_)
         node.body = nodes.CoercionNode(node.body, type_)
         return node
+
+    def visit_FuncDefExprNode(self, node):
+        return self.visit(node.func_def)
 
     #
     ### Unsupported nodes

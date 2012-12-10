@@ -448,9 +448,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                           self.func_signature.args):
             larg.name = argname
 
-            if self.have_cfg and argname not in self.locals:
+            variable = self.symtab.get(argname, None)
+            if self.have_cfg and (not variable or variable.renameable):
                 # Set value on first definition of the variable
-                variable = self.symtab.lookup_renamed(argname, 0)
+                if argtype.is_closure_scope:
+                    variable = self.symtab[argname]
+                else:
+                    variable = self.symtab.lookup_renamed(argname, 0)
                 larg = self._load_arg(argtype, larg)
                 variable.lvalue = larg
             else:
@@ -835,10 +839,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.position_at_end(self.current_cleanup_bb)
 
         # Decref local variables
-        if not self.nopython:
+        if not self.nopython and False: # TODO: Re-enable refcounting !!
             for name, var in self.symtab.iteritems():
                 if (var.is_local and is_obj(var.type) and not
-                        var.type.is_closure_scope):
+                        var.type.is_closure_scope and var.renameable):
                     if self.refcount_args or not name in self.argnames:
                         self.xdecref(var.lvalue)
 

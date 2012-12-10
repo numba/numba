@@ -1066,7 +1066,6 @@ class ExtensionMethod(Node):
 #        self.signature = signature
 #        self.type = signature
 
-
 class ClosureNode(Node):
     """
     Inner functions or closures.
@@ -1159,6 +1158,7 @@ class ClosureCallNode(NativeCallNode):
         self.closure_type = closure_type
 
     def _resolve_keywords(self, closure_type, args, keywords):
+        "Map keyword arguments to positional arguments"
         func_def = closure_type.closure.func_def
         argnames = [name.id for name in func_def.args.args]
 

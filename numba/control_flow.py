@@ -638,7 +638,6 @@ class NameAssignment(object):
     def type_dependencies(self, scope):
         return self.rhs.type_dependencies(scope)
 
-
 class Argument(NameAssignment):
     def __init__(self, lhs, rhs, entry):
         NameAssignment.__init__(self, lhs, rhs, entry)
@@ -1005,14 +1004,12 @@ def check_definitions(flow, compiler_directives):
         node.cf_state = None #ControlFlowState(node.cf_state)
 
 
-def initialize_symtab(local_names, symbols, locals_dict, argnames):
-    symbols = symtab.Symtab(symbols)
-    for var_name in local_names:
-        variable = symtab.Variable(None, name=var_name, is_local=True)
-        variable.renameable = var_name not in locals_dict
-        symbols[var_name] = variable
+class FuncDefExprNode(nodes.Node):
+    """
+    Wraps an inner function node until the closure code kicks in.
+    """
 
-    return symbols
+    _fields = ['func_def']
 
 class ControlFlowAnalysis(visitors.NumbaTransformer):
     """
@@ -1037,8 +1034,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.current_directives['warn'] = kwargs.get('warn', True)
         self.set_default_directives()
         symtab = kwargs.get('symtab', None) or {}
-        self.symtab = initialize_symtab(self.local_names, self.symtab,
-                                        self.locals, self.argnames)
+        self.symtab = self.initialize_symtab()
 
         self.graphviz = self.current_directives['control_flow.dot_output']
         if self.graphviz:
@@ -1058,6 +1054,18 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.current_directives.setdefault('control_flow.dot_output', dot_output_graph)
         self.current_directives.setdefault('control_flow.dot_annotate_defs', False)
 
+    def initialize_symtab(self):
+        symbols = symtab.Symtab(self.symtab)
+        for var_name in self.local_names:
+            variable = symtab.Variable(None, name=var_name, is_local=True)
+            variable.is_cellvar = var_name in self.cellvars
+            # variable.is_freevar = var_name in self.freevars
+            variable.renameable = (var_name not in self.locals and not
+                                   (variable.is_cellvar or variable.is_freevar))
+            symbols[var_name] = variable
+
+        return symbols
+
     def visit(self, node):
         if hasattr(node, 'lineno'):
             self.mark_position(node)
@@ -1070,15 +1078,28 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         return super(ControlFlowAnalysis, self).visit(node)
 
+    def handle_inner_function(self, node):
+        "Create assignment code for inner functions and mark the assignment"
+        lhs = ast.Name(node.name, ast.Store())
+        ast.copy_location(lhs, node)
+
+        rhs = FuncDefExprNode(func_def=node)
+        ast.copy_location(rhs, node)
+
+        fields = rhs._fields
+        rhs._fields = []
+        assmnt = ast.Assign(targets=[lhs], value=rhs)
+        result = self.visit(assmnt)
+        rhs._fields = fields
+
+        return result
+
     def visit_FunctionDef(self, node):
         #for arg in node.args:
         #    if arg.default:
         #        self.visitchildren(arg)
         if self.function_level:
-            lhs = self.visit(ast.Name(node.name, ast.Store()))
-            ast.copy_location(lhs, node)
-            self.mark_assignment(lhs=lhs, rhs=node)
-            return node
+            return self.handle_inner_function(node)
 
         self.function_level += 1
 
