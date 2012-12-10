@@ -25,3 +25,16 @@ def test_multiple_comparators(a):
 @_make_test
 def test_multiple_comparators_mixed_types(a):
     return 0.0<a<=10
+
+@_make_test
+def test_compare_span_basic_blocks(a):
+    a = a + 1j
+    if abs(a) > 2:
+        return 0 < abs(a) < 10
+
+    return not a.real > 0
+
+if __name__ == "__main__":
+    # autojit(test_compare_span_basic_blocks)(5)
+    import numba
+    numba.nose_run()

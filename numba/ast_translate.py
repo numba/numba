@@ -1070,9 +1070,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         next_block = None
         left = node.left
         for op, right in zip(node.ops, node.comparators):
-            blocks_false.append(cur_block)
             self.builder.position_at_end(cur_block)
             test = self._compare(op, left, right)
+            cur_block = self.builder.basic_block
+            blocks_false.append(cur_block)
             next_block = self.append_basic_block('compare.cmp')
             self.builder.cbranch(test, next_block, end_block)
             left = right
