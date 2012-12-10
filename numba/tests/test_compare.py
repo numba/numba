@@ -34,7 +34,19 @@ def test_compare_span_basic_blocks(a):
 
     return not a.real > 0
 
+@_make_test
+def test_compare_while(a):
+    while 1:
+        while 1:
+            break
+        else:
+            print "hello"
+            return a * 3
+        break
+    return a * 2
+
 if __name__ == "__main__":
     # autojit(test_compare_span_basic_blocks)(5)
+#    autojit(test_compare_while)(10)
     import numba
     numba.nose_run()

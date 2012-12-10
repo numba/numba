@@ -1067,7 +1067,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         blocks_false = []
 
         end_block = self.append_basic_block('compare.end')
-
         cur_block = self.append_basic_block('compare.cmp')
         self.builder.branch(cur_block)
         next_block = None

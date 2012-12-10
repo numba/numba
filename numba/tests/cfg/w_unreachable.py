@@ -16,17 +16,22 @@ def simple_return():
 def simple_loops():
     """
     >>> result = jitv(simple_loops)
-    Warning, unreachable code at 27:8
-    Warning, unreachable code at 31:8
-    Warning, unreachable code at 36:12
-    Warning, unreachable code at 41:8
-    Warning, unreachable code at 45:4
+    Warning, unreachable code at 28:8
+    Warning, unreachable code at 32:8
+    Warning, unreachable code at 36:8
+    Warning, unreachable code at 41:12
+    Warning, unreachable code at 46:8
+    Warning, unreachable code at 50:4
     """
     for i in range(10):
         continue
         print 'Never be here'
 
     while True:
+        break
+        print 'Never be here'
+
+    while 1:
         break
         print 'Never be here'
 

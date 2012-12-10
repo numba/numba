@@ -872,7 +872,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return rhs_node
 
     #------------------------------------------------------------------------
-    # Loops
+    # Loops and Control Flow
     #------------------------------------------------------------------------
 
     def _get_iterator_type(self, node, iterator_type, target_type):
@@ -915,9 +915,63 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return node
 
+    def visit_booltest(self, node):
+        if isinstance(node.test, control_flow.ControlBlock):
+            node.test.body[0] = nodes.CoercionNode(
+                node.test.body[0], minitypes.bool_)
+        else:
+            node.test = nodes.CoercionNode(node.test, minitypes.bool_)
+
     def visit_While(self, node):
         self.generic_visit(node)
-        node.test = nodes.CoercionNode(self.visit(node.test), minitypes.bool_)
+        self.visit_booltest(node)
+        return node
+
+    visit_If = visit_While
+
+    def visit_IfExp(self, node):
+        self.generic_visit(node)
+        type_ = self.promote(node.body.variable, node.orelse.variable)
+        node.variable = Variable(type_)
+        node.test = nodes.CoercionNode(node.test, minitypes.bool_)
+        node.orelse = nodes.CoercionNode(node.orelse, type_)
+        node.body = nodes.CoercionNode(node.body, type_)
+        return node
+
+    #------------------------------------------------------------------------
+    # Return
+    #------------------------------------------------------------------------
+
+    def visit_Return(self, node):
+        if node.value is not None:
+            self.ast.have_return = True
+            value = self.visit(node.value)
+            type = value.variable.type
+            assert type is not None
+        else:
+            # This is possible when we do "return" without any value
+            value = None
+
+        if value is None or type.is_none:
+            # When returning None, set the return type to void.
+            # That way, we don't have to deal with the PyObject reference.
+            if self.return_variable.type is None:
+                self.return_variable.type = minitypes.VoidType()
+            value = None
+        elif self.return_variable.type is None:
+            self.return_variable.type = type
+        elif self.return_variable.type != type:
+            # todo: in case of unpromotable types, return object?
+            self.return_variable.type = self.promote_types_numeric(
+                                    self.return_variable.type, type)
+
+            # XXX: DeferredCoercionNode __init__ is not compatible
+            #      with CoercionNode __new__.
+            #      We go around the problem for test_if.test_if_fn_5
+            #      by not visiting this block if return_variable.type == type.
+            value = nodes.DeferredCoercionNode(value, self.return_variable)
+
+        node.value = value
         return node
 
     #------------------------------------------------------------------------
@@ -947,7 +1001,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return node
 
     #------------------------------------------------------------------------
-    # Variable Assignments and Laods + Closure cellvar/freevar determination
+    # Variable Assignments and References
     #------------------------------------------------------------------------
 
     def visit_Name(self, node):
@@ -1623,60 +1677,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return node
 
     def visit_ClosureScopeLoadNode(self, node):
-        return node
-
-    #------------------------------------------------------------------------
-    # Return
-    #------------------------------------------------------------------------
-
-    def visit_Return(self, node):
-        if node.value is not None:
-            self.ast.have_return = True
-            value = self.visit(node.value)
-            type = value.variable.type
-            assert type is not None
-        else:
-            # This is possible when we do "return" without any value
-            value = None
-
-        if value is None or type.is_none:
-            # When returning None, set the return type to void.
-            # That way, we don't have to deal with the PyObject reference.
-            if self.return_variable.type is None:
-                self.return_variable.type = minitypes.VoidType()
-            value = None
-        elif self.return_variable.type is None:
-            self.return_variable.type = type
-        elif self.return_variable.type != type:
-            # todo: in case of unpromotable types, return object?
-            self.return_variable.type = self.promote_types_numeric(
-                                    self.return_variable.type, type)
-            
-            # XXX: DeferredCoercionNode __init__ is not compatible
-            #      with CoercionNode __new__.
-            #      We go around the problem for test_if.test_if_fn_5
-            #      by not visiting this block if return_variable.type == type.
-            value = nodes.DeferredCoercionNode(value, self.return_variable)
-
-        node.value = value
-        return node
-
-    def visit_If(self, node):
-        self.generic_visit(node)
-        if isinstance(node.test, control_flow.ControlBlock):
-            node.test.body[0] = nodes.CoercionNode(
-                                node.test.body[0], minitypes.bool_)
-        else:
-            node.test = nodes.CoercionNode(node.test, minitypes.bool_)
-        return node
-
-    def visit_IfExp(self, node):
-        self.generic_visit(node)
-        type_ = self.promote(node.body.variable, node.orelse.variable)
-        node.variable = Variable(type_)
-        node.test = nodes.CoercionNode(node.test, minitypes.bool_)
-        node.orelse = nodes.CoercionNode(node.orelse, type_)
-        node.body = nodes.CoercionNode(node.body, type_)
         return node
 
     def visit_FuncDefExprNode(self, node):
