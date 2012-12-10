@@ -71,6 +71,7 @@ class TestASTSum2d(test_support.ASTTestCase):
         self._bad_sum2d()
 
 if __name__ == "__main__":
+    #TestASTSum2d('test_vectorized_sum2d').debug()
     unittest.main()
 
 # ______________________________________________________________________

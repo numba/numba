@@ -7,7 +7,7 @@ import textwrap
 
 import numba.decorators, numba.pipeline, numba.functions
 from numba import *
-from numba import error, visitors, nodes
+from numba import error, visitors, nodes, symtab as symtab_module
 from numba.minivect import  minitypes
 from numba import  _numba_types as numba_types
 from numba.symtab import Variable
@@ -109,7 +109,8 @@ class TemplateContext(object):
         # print s
         self.substituted_template = s
 
-        tree = template(s, substitutions)
+        # template_variables = dict((var.name, var) for var in self.variables)
+        tree = template(s, substitutions, self.get_vars_symtab())
         return tree
 
     def template_type_infer(self, substitutions, **kwargs):
@@ -119,7 +120,7 @@ class TemplateContext(object):
         if self.variables or symtab:
             vars = self.get_vars_symtab()
             symtab = dict(symtab or {}, **vars)
-            kwargs['symtab'] = symtab
+            kwargs['symtab'] = symtab_module.Symtab(symtab)
 
         return dummy_type_infer(self.context, tree, **kwargs)
 
@@ -134,7 +135,7 @@ def dummy_type_infer(context, tree, order=['type_infer', 'type_set'], **kwargs):
     pipeline, (sig, symtab, ast) = result
     return symtab, ast
 
-def template(s, substitutions):
+def template(s, substitutions, template_variables=None):
     s = textwrap.dedent(s)
     replaced = [0]
     def replace(ident):
@@ -145,7 +146,7 @@ def template(s, substitutions):
     tree = ast.parse(source)
 
     if replaced:
-        tree = Interpolate(substitutions).visit(tree)
+        tree = Interpolate(substitutions, template_variables).visit(tree)
 
     return ast.Suite(body=tree.body)
 
@@ -154,11 +155,14 @@ def template_simple(s, **substitutions):
 
 class Interpolate(ast.NodeTransformer):
 
-    def __init__(self, substitutions):
+    def __init__(self, substitutions, template_variables):
         self.substitutions = substitutions
+        self.template_variables = template_variables or {}
+
         for name, replacement in substitutions.iteritems():
             if (not isinstance(replacement, nodes.CloneableNode) and
-                    hasattr(replacement, 'type')):
+                    hasattr(replacement, 'type') and not
+                    isinstance(replacement, (ast.Name, nodes.TempLoadNode))):
                 substitutions[name] = nodes.CloneableNode(replacement)
 
     def visit_Name(self, node):
@@ -169,5 +173,7 @@ class Interpolate(ast.NodeTransformer):
                     isinstance(replacement, nodes.CloneableNode)):
                 self.substitutions[name] = replacement.clone
             return replacement
+        elif node.id in self.template_variables:
+            node.variable = self.template_variables[node.id]
 
         return node

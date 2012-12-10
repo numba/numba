@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
 
-from numba import double, long_
+from numba import *
 
 import numpy
 from nose.tools import nottest
@@ -183,7 +183,15 @@ class TestASTWhile(test_support.ASTTestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    #TestASTWhile("test_while_loop_fn_1").debug()
+#    TestASTWhile("test_while_loop_fn_1").debug()
+#    autojit(while_loop_fn_2)(numpy.array([1., 2., 3.]))
+#    jit(argtypes = [long_])(while_loop_fn_3)
+#    jit(argtypes = (long_, long_, long_),
+#        restype = long_)(while_loop_fn_4)
+#    jit(argtypes = [double, double])(while_loop_fn_5)
+#    jit(restype=double, argtypes=[double])(while_loop_fn_6)
+#    jit(restype=double, argtypes=[double])(while_loop_fn_7)
+#    jit(restype=double, argtypes=[double])(while_loop_fn_8)
     test_support.main()
 
 # ______________________________________________________________________

@@ -288,18 +288,15 @@ class RefcountingMixin(object):
         assert not self.nopython
         return self.decref(value, func='Py_IncRef')
 
+    # TODO: generate efficient refcounting code, distinguish between dec/xdec
+    xdecref = decref
+    xincref = incref
+
     def xdecref_temp(self, temp, decref=None):
         "Py_XDECREF a temporary"
         assert not self.nopython
         decref = decref or self.decref
-
-        def cleanup(b, bb_true, bb_endif):
-            decref(b.load(temp))
-            b.branch(bb_endif)
-
-        self.object_coercer.check_err(self.builder.load(temp),
-                                      callback=cleanup,
-                                      cmp=llvm.core.ICMP_NE)
+        decref(self.builder.load(temp))
 
     def xincref_temp(self, temp):
         "Py_XINCREF a temporary"
@@ -335,7 +332,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         super(LLVMCodeGenerator, self).__init__(
                     context, func, ast, func_signature=func_signature,
-                    nopython=nopython, symtab=symtab)
+                    nopython=nopython, symtab=symtab, **kwds)
 
         self.func_name = kwds.get('func_name', None)
         self.func_signature = func_signature
@@ -381,17 +378,68 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     # __________________________________________________________________________
 
+    def _load_arg(self, argtype, larg):
+        if (minitypes.pass_by_ref(argtype) and
+            self.func_signature.struct_by_reference):
+            larg = self.builder.load(larg)
+
+        return larg
+
+#    def _init_args(self):
+#        for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
+#                                          self.func_signature.args):
+#            larg.name = argname
+#            variable = self.symtab[argname]
+#
+#            if not variable.need_arg_copy:
+#                assert not is_obj(argtype)
+#                variable.lvalue = larg
+#                continue
+#
+#            # Store away arguments in locals
+#            stackspace = self._allocate_arg_local(argname, argtype, larg)
+#            variable.lvalue = stackspace
+#
+#            # TODO: incref objects in structs
+#            if not (self.nopython or argtype.is_closure_scope):
+#                if is_obj(variable.type) and self.refcount_args:
+#                    self.incref(self.builder.load(stackspace))
+#
+#    def _allocate_locals(self):
+#        for name, var in self.symtab.items():
+#            if var.deleted:
+#                self.symtab.pop(name)
+#                continue
+#
+#            # FIXME: 'None' should be handled as a special case (probably).
+#            if name not in self.argnames and var.is_local:
+#                # Not argument and not builtin type.
+#                # Allocate storage for all variables.
+#                name = 'var_%s' % var.name
+#                if is_obj(var.type):
+#                    stackspace = self._null_obj_temp(name, type=var.ltype)
+#                else:
+#                    stackspace = self.builder.alloca(var.ltype, name=name)
+#
+#                if var.type.is_struct:
+#                    # TODO: memset struct to 0
+#                    pass
+#                elif var.type.is_carray:
+#                    ltype = var.type.base_type.pointer().to_llvm(self.context)
+#                    pointer = self.builder.alloca(ltype, name=name + "_p")
+#                    p = self.builder.gep(stackspace, [llvm_types.constant_int(0),
+#                                                      llvm_types.constant_int(0)])
+#                    self.builder.store(p, pointer)
+#                    stackspace = pointer
+#
+#                var.lvalue = stackspace
+
     def _allocate_arg_local(self, name, argtype, larg):
         """
         Allocate a local variable on the stack.
         """
         stackspace = self.alloca(argtype)
         stackspace.name = name
-
-        if (minitypes.pass_by_ref(argtype) and
-                self.func_signature.struct_by_reference):
-            larg = self.builder.load(larg)
-
         self.builder.store(larg, stackspace)
         return stackspace
 
@@ -399,32 +447,33 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
                                           self.func_signature.args):
             larg.name = argname
-            variable = self.symtab[argname]
 
-            if not variable.need_arg_copy:
-                assert not is_obj(argtype)
+            variable = self.symtab.get(argname, None)
+            if self.have_cfg and (not variable or variable.renameable):
+                # Set value on first definition of the variable
+                if argtype.is_closure_scope:
+                    variable = self.symtab[argname]
+                else:
+                    variable = self.symtab.lookup_renamed(argname, 0)
+                larg = self._load_arg(argtype, larg)
                 variable.lvalue = larg
-                continue
-
-            # Store away arguments in locals
-            stackspace = self._allocate_arg_local(argname, argtype, larg)
-            variable.lvalue = stackspace
+            else:
+                # Allocate on stack
+                variable = self.symtab[argname]
+                variable.lvalue = self._allocate_arg_local(argname, argtype, larg)
 
             # TODO: incref objects in structs
             if not (self.nopython or argtype.is_closure_scope):
                 if is_obj(variable.type) and self.refcount_args:
-                    self.incref(self.builder.load(stackspace))
+                    self.incref(larg)
 
     def _allocate_locals(self):
         for name, var in self.symtab.items():
-            if var.deleted:
-                self.symtab.pop(name)
-                continue
-
             # FIXME: 'None' should be handled as a special case (probably).
-            if name not in self.argnames and var.is_local:
-                # Not argument and not builtin type.
-                # Allocate storage for all variables.
+            if var.type.is_uninitialized and var.cf_references:
+                assert var.uninitialized_value, var
+                var.lvalue = self.visit(var.uninitialized_value)
+            elif name in self.locals and name not in self.argnames:
                 name = 'var_%s' % var.name
                 if is_obj(var.type):
                     stackspace = self._null_obj_temp(name, type=var.ltype)
@@ -444,6 +493,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
                 var.lvalue = stackspace
 
+
     def setup_func(self):
         have_return = getattr(self.ast, 'have_return', None)
         if have_return is not None:
@@ -456,9 +506,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.lfunc = self.mod.add_function(self.lfunc_type, self.func_name)
         assert self.func_name == self.lfunc.name, \
                "Redefinition of function %s" % self.func_name
-        
-        # Add entry block for alloca.
+
         entry = self.append_basic_block('entry')
+        if self.have_cfg:
+            block0 = self.ast.flow.blocks[0]
+            block0.entry_block = block0.exit_block = entry
+            self.flow_block = None
+            # self.visitlist(block0.body) # uninitialize constants for variables
+            self.flow_block = self.ast.flow.blocks[1]
+        else:
+            self.flow_block = None
+
         self.builder = lc.Builder.new(entry)
         self.caster = _LLVMCaster(self.builder)
         self.object_coercer = ObjectCoercer(self)
@@ -490,6 +548,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # Try to find the function of the specified name in the current module.
         # If it is found, we can return immediately.
         # Otherwise, continue to translate.
+        self.local_scopes = [self.symtab]
         self.lfunc = None
         try:
             self.lfunc = self.mod.get_function_named(self.func_name)
@@ -521,6 +580,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 # self.builder.ret_void()
                 self.builder.branch(self.cleanup_label)
 
+            self.handle_phis()
             self.terminate_cleanup_blocks()
 
             # Done code generation
@@ -537,6 +597,56 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             if self.lfunc is not None:
                 self.lfunc.delete()
             raise
+
+#    def _handle_promotions(self, node):
+#        "Handle promotions at the end of a basic block"
+#        if node and node.promotions:
+#            for (var, type), promotion_node in node.promotions.iteritems():
+#                bb = promotion_node.variable.block.exit_block
+#                self.builder.position_before(bb.instructions[-1])
+#                lvalue = self.visit(promotion_node)
+#                promotion_node.variable.lvalue = lvalue
+#
+#            node.promotions = {}
+
+    def handle_phis(self):
+        """
+        Update all our phi nodes after translation is done and all Variables
+        have their llvm values set.
+        """
+        if not self.have_cfg:
+            return
+
+        for block in self.ast.flow.blocks:
+            for phi_node in block.phi_nodes:
+                phi = phi_node.variable.lvalue
+                ltype = phi_node.variable.type.to_llvm(self.context)
+                for parent_block in block.parents:
+                    assert parent_block.exit_block, parent_block
+                    name = phi_node.variable.name
+                    incoming_var = parent_block.symtab.lookup_most_recent(name)
+                    if incoming_var.type.is_uninitialized:
+                        if incoming_var.lvalue is None:
+                            lval = self.visit(incoming_var.uninitialized_value)
+                            incoming_var.lvalue = lval
+                    elif not incoming_var.type == phi_node.type:
+                        promotion = parent_block.symtab.lookup_promotion(
+                                        phi_node.variable.name, phi_node.type)
+                        incoming_var = promotion.variable
+
+                    #msg = (incoming_var, phi_node.variable)
+                    assert incoming_var.lvalue, incoming_var
+                    # assert incoming_var.type == phi_node.type, msg
+                    phi.add_incoming(incoming_var.lvalue,
+                                     parent_block.exit_block)
+
+#                for incoming_var in phi_node.incoming:
+#                    if incoming_var.lvalue is None and incoming_var.type.is_uninitialized:
+#                        incoming_var.lvalue = self.visit(incoming_var.uninitialized_value)
+#
+#                    assert incoming_var.lvalue, incoming_var
+#                    phi.add_incoming(incoming_var.lvalue,
+#                                     incoming_var.block.exit_block)
 
     def get_ctypes_func(self, llvm=True):
         ee = self.ee
@@ -729,12 +839,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.position_at_end(self.current_cleanup_bb)
 
         # Decref local variables
-        if not self.nopython:
+        if not self.nopython and False: # TODO: Re-enable refcounting !!
             for name, var in self.symtab.iteritems():
                 if (var.is_local and is_obj(var.type) and not
-                        var.type.is_closure_scope):
+                        var.type.is_closure_scope and var.renameable):
                     if self.refcount_args or not name in self.argnames:
-                        self.xdecref_temp(var.lvalue)
+                        self.xdecref(var.lvalue)
 
         if self.is_void_return:
             self.builder.ret_void()
@@ -778,15 +888,27 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return self.visit(node.node)
 
     def visit_Assign(self, node):
-        target_node = node.targets[0]
-
-        target = self.visit(target_node)
         value = self.visit(node.value)
 
+        target_node = node.targets[0]
         object = is_obj(target_node.type)
-        self.generate_assign(value, target, decref=object, incref=object)
         if object:
             self.incref(value)
+
+        if isinstance(target_node, ast.Name):
+            # self.decref(target)
+            # print "Assigning", target_node.variable, error.format_pos(node).rstrip(": ")
+            if target_node.variable.renameable:
+                # phi nodes are in place for the variable
+                target_node.variable.lvalue = value
+            else:
+                # The variable is stack allocated
+                self.builder.store(value, target_node.variable.lvalue)
+        else:
+            target = self.visit(target_node)
+            if object:
+                self.decref(target)
+            self.generate_assign(value, target)
 
     def generate_assign(self, lvalue, ltarget, decref=False, incref=False):
         '''
@@ -812,11 +934,28 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return self.generate_constant_complex(node.n)
 
     def visit_Name(self, node):
-        if not node.variable.is_local:
+        var = node.variable
+        if var.lvalue is None and self.symtab[node.id].is_cellvar:
+            var = self.symtab[node.id]
+
+        assert var.lvalue, var
+
+        if not node.variable.is_local and not node.variable.is_constant:
             raise error.NumbaError(node, "global variables:", node.id)
 
-        lvalue = self.symtab[node.id].lvalue
-        return self._handle_ctx(node, lvalue)
+        if getattr(node, 'check_unbound', None):
+            # Path the LLVMValueRefNode, we don't want a Name since it would
+            # check for unbound variables recursively
+            int_type = Py_uintptr_t.to_llvm(self.context)
+            value_p = self.builder.ptrtoint(var.lvalue, int_type)
+            node.loaded_name.llvm_value = value_p
+            self.visit(node.check_unbound)
+
+        if not var.renameable and isinstance(node.ctx, ast.Load):
+            # Not a renamed but an alloca'd variable
+            return self.builder.load(var.lvalue)
+
+        return var.lvalue
 
     def _handle_ctx(self, node, lptr, name=''):
         if isinstance(node.ctx, ast.Load):
@@ -958,36 +1097,130 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 
-    def visit_If(self, node):
+    def _init_phis(self, node):
+        "Set basic block and initialize LLVM phis"
+        for phi_node in node.phi_nodes:
+            ltype = phi_node.variable.type.to_llvm(self.context)
+            phi = self.builder.phi(ltype, phi_node.variable.unmangled_name)
+            phi_node.variable.lvalue = phi
+
+    def setblock(self, cfg_basic_block):
+        if cfg_basic_block.is_fabricated:
+            return
+
+        old = self.flow_block
+        if old and not old.exit_block:
+            if old.id == 1:
+                # Handle promotions from the entry block. This is somewhat
+                # of a hack, and needed since the CFG isn't properly merged
+                # in the AST
+                self.visitlist(old.body)
+            old.exit_block = self.builder.basic_block
+
+        self.flow_block = cfg_basic_block
+
+    def visit_PromotionNode(self, node):
+        lvalue = self.visit(node.node)
+        node.variable.lvalue = lvalue
+        # Update basic block in case the promotion created a new block
+        self.flow_block.exit_block = self.builder.basic_block
+
+    def visit_ControlBlock(self, node):
+        """
+        Return a new basic block and handle phis and promotions. Promotions
+        are needed at merge (phi) points to have a consistent type.
+        """
+        #
+        ### Create entry basic block
+        #
+        if node is None:
+            # Fabricated If statement
+            label = 'fabricated_basic_block'
+        else:
+            label = node.label
+
+        self.setblock(node)
+        node.prev_block = self.builder.basic_block
+        node.entry_block = node.create_block(self, label)
+        if node.branch_here and not self.is_block_terminated():
+            self.builder.branch(node.entry_block)
+
+        self.builder.position_at_end(node.entry_block)
+        self._init_phis(node)
+
+        if len(node.body) == 1:
+            lbody = self.visit(node.body[0])
+        else:
+            self.visitlist(node.body)
+            lbody = None
+
+        if not node.exit_block:
+            node.exit_block = self.builder.basic_block
+
+        return lbody
+
+    def append_basic_block(self, name='unamed'):
+        idx = len(self.blocks)
+        #bb = self.lfunc.append_basic_block('%s_%d'%(name, idx))
+        bb = self.lfunc.append_basic_block(name)
+        self.blocks[idx] = bb
+        return bb
+
+    def visit_LowLevelBasicBlockNode(self, node):
+        llvm_block = node.create_block(self)
+        if not self.is_block_terminated():
+            self.builder.branch(llvm_block)
+        self.builder.position_at_end(llvm_block)
+        return self.visit(node.body)
+
+    def visit_If(self, node, is_while=False):
+        if not hasattr(node, 'cond_block'):
+            # We have a synthetic 'if' without a cfg, fabricate fake blocks
+            node = nodes.build_if(**vars(node))
+
+        # Visit condition
         test = self.visit(node.test)
+
+        bb_cond = node.cond_block.entry_block
+        # test = self.visit(node.test)
         if test.type != _int1:
             test = self._generate_test(test)
-        iftrue_body = node.body
-        orelse_body = node.orelse
 
-        bb_true = self.append_basic_block('if.true')
-        bb_false = self.append_basic_block('if.false')
-        bb_endif = self.append_basic_block('if.end')
+        # Create exit block
+        self.visit_ControlBlock(node.exit_block)
+        bb_endif = node.exit_block.entry_block
+        if is_while:
+            self.setup_loop(node.continue_block, bb_cond, bb_endif)
+
+        # Visit if clauses
+        self.visitlist(node.body)
+        #if self.have_cfg:
+        #    self.flow_block.exit_block = self.builder.basic_block
+
+        bb_true = node.if_block.entry_block
+        if is_while:
+            if not self.is_block_terminated():
+                self.builder.branch(bb_cond)
+            self.teardown_loop()
+        else:
+            self.term_block(bb_endif)
+
+        if node.orelse:
+            self.visitlist(node.orelse)
+            bb_false = node.else_block.entry_block
+            self.term_block(bb_endif)
+        else:
+            bb_false = bb_endif
+
+        # Branch to block from condition
+        self.builder.position_at_end(node.cond_block.prev_block)
+        self.builder.branch(bb_cond)
+
+        self.builder.position_at_end(node.cond_block.exit_block)
+        # assert not self.is_block_terminated()
         self.builder.cbranch(test, bb_true, bb_false)
-
-        # if true then
-        self.builder.position_at_end(bb_true)
-        for stmt in iftrue_body:
-            self.visit(stmt)
-        else: # close the block
-            if not self.is_block_terminated():
-                self.builder.branch(bb_endif)
-
-        # else
-        self.builder.position_at_end(bb_false)
-        for stmt in orelse_body:
-            self.visit(stmt)
-        else: # close the block
-            if not self.is_block_terminated():
-                self.builder.branch(bb_endif)
-
-        # endif
-        self.builder.position_at_end(bb_endif)
+        self.builder.position_at_end(node.exit_block.exit_block)
+        self.setblock(node.exit_block)
 
     def visit_IfExp(self, node):
         test = self.visit(node.test)
@@ -1014,7 +1247,64 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         phi.add_incoming(else_value, else_block)
         return phi
 
+    def visit_While(self, node):
+        self.visit_If(node, is_while=True)
 
+    def visit_ForRangeNode(self, node):
+        """
+        Implements simple for loops over range or xrange
+        """
+        start, stop, step = self.visitlist([node.start, node.stop, node.step])
+        target = self.visit(node.target)
+
+        # assert isinstance(target.ctx, ast.Store)
+        self.visit(node.cond_block)
+        bb_incr = self.visit(node.target_block)
+        bb_body = self.visit(node.body)
+        bb_exit = self.visit(node.orelse)
+
+        self.setup_loop(bb_cond, bb_exit)
+        self.visit(node.cond_block)
+
+        # generate initializer
+        self.generate_assign(start, target)
+        self.builder.branch(bb_cond)
+
+        # generate condition
+        self.builder.position_at_end(bb_cond)
+        index = self.visit(node.index)
+        op = _compare_mapping_sint['<']
+        cond = self.builder.icmp(op, index, stop)
+        self.builder.cbranch(cond, bb_body, bb_exit)
+
+        # generate increment
+        self.builder.position_at_end(bb_incr)
+        self.builder.store(self.builder.add(index, step), target)
+        self.builder.branch(bb_cond)
+
+        # generate body
+        self.builder.position_at_end(bb_body)
+        for stmt in node.body:
+            self.visit(stmt)
+
+        if not self.is_block_terminated():
+            self.builder.branch(bb_incr)
+
+        # move to exit block
+        self.builder.position_at_end(bb_exit)
+        self.teardown_loop()
+
+    def visit_Continue(self, node):
+        assert self.loop_beginnings # Python syntax should ensure this
+        self.builder.branch(self.loop_beginnings[-1])
+
+    def visit_Break(self, node):
+        assert self.loop_exits # Python syntax should ensure this
+        self.builder.branch(self.loop_exits[-1])
+
+    def term_block(self, end_block):
+        if not self.is_block_terminated():
+            self.terminate_block(self.builder.basic_block, end_block)
 
     def append_basic_block(self, name='unamed'):
         idx = len(self.blocks)
@@ -1022,6 +1312,44 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         bb = self.lfunc.append_basic_block(name)
         self.blocks[idx] = bb
         return bb
+
+    @property
+    def cur_bb(self):
+        return self.builder.basic_block
+
+    def is_block_terminated(self, basic_block=None):
+        '''
+        Check if the current basicblock is properly terminated.
+        That means the basicblock is ended with a branch or return
+        '''
+        basic_block = basic_block or self.cur_bb
+        instructions = basic_block.instructions
+        return instructions and instructions[-1].is_terminator
+
+    def terminate_block(self, block, end_block):
+        if not self.is_block_terminated(block):
+            bb = self.cur_bb
+            self.builder.position_at_end(block)
+            self.builder.branch(end_block)
+            self.builder.position_at_end(bb)
+
+    def setup_loop(self, continue_block, bb_cond, bb_exit):
+        if continue_block:
+            # Jump to target index increment block instead of while condition
+            # block for 'for i in range(...):' loops
+            bb_cond = continue_block.create_block(self)
+
+        self.loop_beginnings.append(bb_cond)
+        self.loop_exits.append(bb_exit)
+        self.in_loop += 1
+
+    def teardown_loop(self):
+        self.loop_beginnings.pop()
+        self.loop_exits.pop()
+        self.in_loop -= 1
+
+    def visit_For(self, node):
+        raise error.NumbaError(node, "This node should have been replaced")
 
     def visit_Return(self, node):
         if node.value is not None:
@@ -1055,101 +1383,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         #     self.builder.ret(self.visit(node.value))
         # else:
         #     self.builder.ret_void()
-
-    def is_block_terminated(self):
-        '''
-        Check if the current basicblock is properly terminated.
-        That means the basicblock is ended with a branch or return
-        '''
-        instructions = self.builder.basic_block.instructions
-        return instructions and instructions[-1].is_terminator
-
-    def setup_loop(self, bb_cond, bb_exit):
-        self.loop_beginnings.append(bb_cond)
-        self.loop_exits.append(bb_exit)
-        self.in_loop += 1
-
-    def teardown_loop(self):
-        self.loop_beginnings.pop()
-        self.loop_exits.pop()
-        self.in_loop -= 1
-
-    def visit_For(self, node):
-        raise error.NumbaError(node, "This node should have been replaced")
-
-    def visit_ForRangeNode(self, node):
-        """
-        Implements simple for loops over range or xrange
-        """
-        # assert isinstance(target.ctx, ast.Store)
-        bb_cond = self.append_basic_block('for.cond')
-        bb_incr = self.append_basic_block('for.incr')
-        bb_body = self.append_basic_block('for.body')
-        bb_exit = self.append_basic_block('for.exit')
-        self.setup_loop(bb_cond, bb_exit)
-
-        target = self.visit(node.target)
-        start, stop, step = self.visitlist([node.start, node.stop, node.step])
-
-        # generate initializer
-        self.generate_assign(start, target)
-        self.builder.branch(bb_cond)
-
-        # generate condition
-        self.builder.position_at_end(bb_cond)
-        index = self.visit(node.index)
-        op = _compare_mapping_sint['<']
-        cond = self.builder.icmp(op, index, stop)
-        self.builder.cbranch(cond, bb_body, bb_exit)
-
-        # generate increment
-        self.builder.position_at_end(bb_incr)
-        self.builder.store(self.builder.add(index, step), target)
-        self.builder.branch(bb_cond)
-
-        # generate body
-        self.builder.position_at_end(bb_body)
-        for stmt in node.body:
-            self.visit(stmt)
-
-        if not self.is_block_terminated():
-            self.builder.branch(bb_incr)
-
-        # move to exit block
-        self.builder.position_at_end(bb_exit)
-        self.teardown_loop()
-
-    def visit_While(self, node):
-        bb_cond = self.append_basic_block('while.cond')
-        bb_body = self.append_basic_block('while.body')
-        bb_exit = self.append_basic_block('while.exit')
-        self.setup_loop(bb_cond, bb_exit)
-
-        self.builder.branch(bb_cond)
-
-        # condition
-        self.builder.position_at_end(bb_cond)
-        cond = self.visit(node.test)
-        if cond.type != _int1:
-            cond = self._generate_test(cond)
-        self.builder.cbranch(cond, bb_body, bb_exit)
-
-        # body
-        self.builder.position_at_end(bb_body)
-        self.visitlist(node.body)
-
-        # loop or exit
-        self.builder.branch(bb_cond)
-        self.builder.position_at_end(bb_exit)
-        self.teardown_loop()
-
-    def visit_Continue(self, node):
-        assert self.loop_beginnings # Python syntax should ensure this
-        self.builder.branch(self.loop_beginnings[-1])
-
-    def visit_Break(self, node):
-        assert self.loop_exits # Python syntax should ensure this
-        self.builder.branch(self.loop_exits[-1])
 
     def visit_Suite(self, node):
         self.visitlist(node.body)
@@ -1215,9 +1448,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             logger.debug(ast.dump(node))
             raise error.NumbaError(
                     node, "Binary operations %s on values typed %s and %s "
-                          "not (yet) supported)" % (self.opname(op),
-                                                    node.left.type,
-                                                    node.right.type))
+                          "not (yet) supported" % (self.opname(op),
+                                                   node.left.type,
+                                                   node.right.type))
 
         return result
 
@@ -1377,10 +1610,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             lfunc = node.llvm_func
 
-        if not node.signature.return_type.is_void:
-            kwargs = dict(name=node.name)
-        else:
+
+        if node.signature.return_type.is_void or return_value is not None:
             kwargs = {}
+        else:
+            kwargs = dict(name=node.name + '_result')
 
         result = self.builder.call(lfunc, largs, **kwargs)
 
@@ -1463,7 +1697,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_TempNode(self, node):
         if node.llvm_temp is None:
-            value = self.alloca(node.type)
+            kwds = {}
+            if node.name:
+                kwds['name'] = node.name
+            value = self.alloca(node.type, **kwds)
             node.llvm_temp = value
 
         return node.llvm_temp
@@ -1516,6 +1753,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return node.obj_temp_node.llvm_temp
 
     def visit_LLVMValueRefNode(self, node):
+        return node.llvm_value
+
+    def visit_BadValue(self, node):
+        ltype = node.type.to_llvm(self.context)
+        node.llvm_value = llvm.core.Constant.undef(ltype)
         return node.llvm_value
 
     def visit_CloneNode(self, node):
@@ -1635,7 +1877,7 @@ class ObjectCoercer(object):
         Check for errors. If the result is NULL, and error should have been set
         Jumps to translator.error_label if an exception occurred.
         """
-        assert llvm_result.type.kind == llvm.core.TYPE_POINTER
+        assert llvm_result.type.kind == llvm.core.TYPE_POINTER, llvm_result.type
         int_result = self.translator.builder.ptrtoint(llvm_result,
                                                        llvm_types._intp)
         NULL = llvm.core.Constant.int(int_result.type, 0)

@@ -72,14 +72,15 @@ def _get_ast(func):
         return decompile_func(func)
     else:
         source = textwrap.dedent(source)
-        if source.startswith('@'):
+        # Split off decorators
+        decorators = 0
+        while not source.startswith('def'): # decorator can have multiple lines
             decorator, sep, source = source.partition('\n')
-            while not source.startswith('def'): # decorator can have multiple lines
-                decorator, sep, source = source.partition('\n')
+            decorators += 1
         module_ast = ast.parse(source)
 
         # fix line numbering
-        lineoffset = func.func_code.co_firstlineno
+        lineoffset = func.func_code.co_firstlineno + decorators
         ast.increment_lineno(module_ast, lineoffset)
 
         assert len(module_ast.body) == 1
@@ -656,6 +657,10 @@ class PyInt_FromString(ExternalFunction):
 
 class PyFloat_FromString(ExternalFunction):
     arg_types = [object_, c_string_type.pointer()]
+    return_type = object_
+
+class PyBool_FromLong(ExternalFunction):
+    arg_types = [long_]
     return_type = object_
 
 #
