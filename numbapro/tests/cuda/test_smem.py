@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from numba import *
 from numbapro import cuda
-
+import support
 
 @jit(argtypes=[f4[:]], target='gpu')
 def cu_array_double(dst):
@@ -24,7 +24,7 @@ def cu_array_double_2d(dst):
     dst[j, i] = smem[j, i] * 2      # use smem
 
 
-class TestCudaSMem(unittest.TestCase):
+class TestCudaSMem(support.CudaTestCase):
     def test_array_double(self):
         A = np.array(np.random.random(256), dtype=np.float32)
         Gold = A * 2

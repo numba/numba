@@ -9,6 +9,20 @@ from ctypes import *
 from .error import *
 from numbapro._utils import finalizer
 
+#------------------
+# Configuration
+
+# debug memory
+debug_memory = False
+debug_memory_alloc = 0
+debug_memory_free = 0
+
+def print_debug_memory():
+    print "CUDA allocation: %d" % (debug_memory_alloc)
+    print "CUDA free:       %d" % (debug_memory_free)
+
+
+#------------------
 # CUDA specific typedefs
 cu_device = c_int
 cu_device_attribute = c_int     # enum
@@ -404,11 +418,12 @@ class _Context(finalizer.OwnerMixin):
                                 'Failed to create context on %s' % self.device)
         self._finalizer_track(self._handle)
 
-    def _finalize(self):
-        error = self.driver.cuCtxDestroy(self._handle)
-        self.driver.check_error(error,
-                                'Failed to destroy context on %s' % self.device,
-                                exit=True)
+    @classmethod
+    def _finalize(cls, handle):
+        driver = Driver()
+        error = driver.cuCtxDestroy(handle)
+        driver.check_error(error, 'Failed to destroy context %s' % handle,
+                           exit=True)
 
     @property
     def driver(self):
@@ -425,9 +440,12 @@ class Stream(finalizer.OwnerMixin):
         self.driver.check_error(error, 'Failed to create stream on %s' % self.context)
         self._finalizer_track(self._handle)
 
-    def _finalize(self):
-        error = self.driver.cuStreamDestroy(self._handle)
-        self.driver.check_error(error, 'Failed to destory stream %s' % self, exit=True)
+    @classmethod
+    def _finalize(cls, handle):
+        driver = Driver()
+        error = driver.cuStreamDestroy(handle)
+        driver.check_error(error, 'Failed to destory stream %s' % handle,
+                           exit=True)
 
     def __str__(self):
         return 'Stream %d on %s' % (self, self.context)
@@ -465,9 +483,14 @@ class DeviceMemory(finalizer.OwnerMixin):
         if bytesize is not None:
             self.allocate(bytesize)
 
-    def _finalize(self):
-        error = self.driver.cuMemFree(self._handle)
-        self.driver.check_error(error, 'Failed to free memory', exit=True)
+    @classmethod
+    def _finalize(cls, handle):
+        driver = Driver()
+        error = driver.cuMemFree(handle)
+        driver.check_error(error, 'Failed to free memory', exit=True)
+        if debug_memory:
+            global debug_memory_free
+            debug_memory_free += 1
 
     def allocate(self, bytesize):
         assert not hasattr(self, '_handle')
@@ -475,6 +498,10 @@ class DeviceMemory(finalizer.OwnerMixin):
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
         self.driver.check_error(error, 'Failed to allocate memory')
         self._finalizer_track(self._handle)
+
+        if debug_memory:
+            global debug_memory_alloc
+            debug_memory_alloc += 1
 
     def to_device_raw(self, src, size, stream=None):
         if stream:
@@ -546,9 +573,11 @@ class Module(finalizer.OwnerMixin):
 
         self.info_log = c_info_log_buffer[:c_info_log_n.value]
 
-    def _finalize(self):
-        error =  self.driver.cuModuleUnload(self._handle)
-        self.driver.check_error(error, 'Failed to unload module', exit=True)
+    @classmethod
+    def _finalize(cls, handle):
+        driver = Driver()
+        error =  driver.cuModuleUnload(handle)
+        driver.check_error(error, 'Failed to unload module', exit=True)
 
     @property
     def driver(self):

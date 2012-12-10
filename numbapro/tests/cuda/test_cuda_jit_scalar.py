@@ -3,11 +3,13 @@ import numpy as np
 from numba import *
 from numbapro import cuda
 
+import support
+
 def cu_scalar_dummy(x):
     pass
 
 
-class TestCudaJitScalar(unittest.TestCase):
+class TestCudaJitScalar(support.CudaTestCase):
     def test_scalar_i4(self):
         cufunc = jit(argtypes=[i4])(cu_scalar_dummy)
         cufunc(100)

@@ -2,6 +2,7 @@ from numba import *
 from numbapro import cuda
 import numpy as np
 import unittest
+import support
 
 @cuda.jit(argtypes=[f4[:], f4[:], f4[:]])
 def cu_kernel_add(A, B, C):
@@ -10,7 +11,7 @@ def cu_kernel_add(A, B, C):
     b = B[i]
     C[i] = a + b
 
-class TestCudaAsync(unittest.TestCase):
+class TestCudaAsync(support.CudaTestCase):
     def test_cuda_async(self):
         A = np.arange(100, dtype=np.float32)
         B = A.copy()

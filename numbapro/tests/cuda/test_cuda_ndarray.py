@@ -6,7 +6,9 @@ from numbapro._cuda.ndarray import *
 from numbapro import cuda
 from ctypes import *
 
-class TestCudaNDArray(unittest.TestCase):
+import support
+
+class TestCudaNDArray(support.CudaTestCase):
     def test_ndarray(self):
         array = np.arange(100, dtype=np.float32)
         original = array.copy()
@@ -46,6 +48,7 @@ class TestCudaNDArray(unittest.TestCase):
         self.assertTrue((right == original[N/2:]).all())
 
         self.assertTrue((array == original).all())
+
 
 if __name__ == '__main__':
     unittest.main()

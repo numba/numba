@@ -157,9 +157,11 @@ class CompilationUnit(finalizer.OwnerMixin):
         self.driver.check_error(err, 'Failed to create CU')
         self._finalizer_track(self._handle)
 
-    def _finalize(self):
-        err = self.driver.nvvmDestroyCU(byref(self._handle))
-        self.driver.check_error(err, 'Failed to destroy CU', exit=True)
+    @classmethod
+    def _finalize(cls, handle):
+        driver = NVVM()
+        err = driver.nvvmDestroyCU(byref(handle))
+        driver.check_error(err, 'Failed to destroy CU', exit=True)
 
     def add_module(self, llvmir):
         '''

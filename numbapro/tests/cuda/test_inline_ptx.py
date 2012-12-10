@@ -4,9 +4,10 @@ import math
 from numba import *
 from numbapro._cuda import nvvm
 from llvm.core import *
+import support
 #import logging; logging.getLogger().setLevel(1)
 
-class TestCudaInlineAsm(unittest.TestCase):
+class TestCudaInlineAsm(support.CudaTestCase):
     def test_inline_rsqrt(self):
         mod = Module.new(__name__)
         fnty = Type.function(Type.void(), [Type.pointer(Type.float())])

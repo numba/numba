@@ -1,6 +1,6 @@
 import unittest
 from numbapro._cuda.driver import *
-
+import support 
 ptx1 = '''
 	.version 1.4
 	.target sm_10, map_f64_to_f32
@@ -53,8 +53,9 @@ ptx2 = '''
 }
 '''
 
-class TestCudaDriver(unittest.TestCase):
+class TestCudaDriver(support.CudaTestCase):
     def setUp(self):
+        super(TestCudaDriver, self).setUp()
         driver = Driver()
         self.assertTrue(driver.get_device_count())
         device = Device(0)

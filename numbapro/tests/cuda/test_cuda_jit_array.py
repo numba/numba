@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 from numba import *
 from numbapro import cuda
+import support
 
 @jit(argtypes=[f4[:]], target='gpu')
 def cu_array_double(dst):
@@ -20,7 +21,7 @@ def cu_array_scalar_assign(dst, scalar):
     dst[i] += scalar
 
 
-class TestCudaJitArray(unittest.TestCase):
+class TestCudaJitArray(support.CudaTestCase):
     def test_array_double(self):
         A = np.array(np.random.random(256), dtype=np.float32)
         Gold = A * 2

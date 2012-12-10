@@ -34,6 +34,7 @@ def track(owner, item, finalizer):
     ``owner`` is destroyed by the garbage collector.
     """
     ref = OwnerRef(owner, _run_finalizer)
+    ref.owner = weakref.ref(owner)
     ref.item = item
     ref.finalizer = finalizer
     _finalize_refs[id(ref)] = ref
@@ -42,4 +43,4 @@ class OwnerMixin(object):
     def _finalizer_track(self, item):
         if not hasattr(self, '_finalize'):
             raise AttributeError("%s must define a _finalize method" % self)
-        track(self, item, self._finalize)
+        track(self, item, type(self)._finalize)

@@ -3,6 +3,7 @@ import numpy as np
 import math
 from numba import *
 from numbapro import cuda
+import support
 #import logging; logging.getLogger('numbapro').setLevel(1)
 
 
@@ -28,7 +29,7 @@ def cu_pow(A, B):
 
 N = 10
 
-class TestCudaMath(unittest.TestCase):
+class TestCudaMath(support.CudaTestCase):
     def _template_f4(self, func, npfunc):
         cufunc = jit(argtypes=[f4[:]], target='gpu')(func)
         A = np.array(np.random.random(N), dtype=np.float32)

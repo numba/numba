@@ -56,10 +56,6 @@ class DeviceNDArray(np.ndarray):
         right.__from_custom_data(offsetted, (rightn,), self.strides,
                                  stream=stream)
 
-        # add dependencies to prevent free the base data pointer
-        left.__device_data.add_dependencies(self.__device_data)
-        right.__device_data.add_dependencies(self.__device_data)
-
         return left, right
 
     def __from_custom_data(self, data, shape, strides, stream=0):
@@ -74,9 +70,9 @@ class DeviceNDArray(np.ndarray):
         self.__device_data = data
 
         size = shape[0] * strides[0]
+        host_data = self.ctypes.data
         def readback(stream=0):
-            self.__device_data.from_device_raw(self.ctypes.data, size,
-                                               stream=stream)
+            data.from_device_raw(host_data, size, stream=stream)
 
         self.__gpu_readback = readback
         return self

@@ -3,10 +3,11 @@ import unittest, os
 from numbapro._cuda.nvvm import *
 from ctypes import c_size_t, c_uint64, sizeof
 from llvm.core import *
+import support
 
 is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 
-class TestNvvmDriver(unittest.TestCase):
+class TestNvvmDriver(support.CudaTestCase):
 
     def get_ptx(self):
         directory = os.path.dirname(__file__)

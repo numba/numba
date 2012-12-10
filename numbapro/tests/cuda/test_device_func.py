@@ -3,6 +3,7 @@ from numbapro import cuda
 import numpy as np
 import unittest
 import math
+import support
 
 @cuda.jit(restype=f4, argtypes=[f4, f4], device=True, inline=True)
 def cu_device_add(a, b):
@@ -28,7 +29,7 @@ def cu_kernel_exp(A):
     i = cuda.grid(1)
     A[i] = cu_device_exp(A[i])
 
-class TestDeviceFunction(unittest.TestCase):
+class TestDeviceFunction(support.CudaTestCase):
     def test_device_inlined(self):
         A = np.arange(10, dtype=np.float32)
         B = A.copy()
