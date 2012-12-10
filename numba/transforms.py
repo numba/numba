@@ -509,6 +509,9 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                        "NULL must be cast or implicitly "
                                        "coerced to a pointer type")
             return self.visit(nodes.NULL.coerce(dst_type))
+        elif node_type.is_numeric and dst_type.is_bool:
+            return self.visit(ast.Compare(node.node, [ast.NotEq()],
+                                          [nodes.const(0, node_type)]))
         elif node_type.is_c_string and dst_type.is_numeric:
             # TODO: int <-> string conversions are explicit, this should not
             # TODO: be a coercion
