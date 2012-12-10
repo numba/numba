@@ -82,6 +82,7 @@ import copy
 import opcode
 import types
 import ctypes
+import textwrap
 import __builtin__ as builtins
 
 if __debug__:
@@ -342,14 +343,14 @@ class TransformForIterable(visitors.NumbaTransformer):
     """
 
     def visit_For(self, node):
-        if node.orelse:
-            raise error.NumbaError(node, 'Else in for-loop is not implemented.')
-
         if node.iter.type.is_range:
+            #
+            ### Handle range iteration
+            #
             self.generic_visit(node)
 
-            temp = nodes.TempNode(node.target.type)
-            nsteps = nodes.TempNode(Py_ssize_t)
+            temp = nodes.TempNode(node.target.type, 'target_temp')
+            nsteps = nodes.TempNode(Py_ssize_t, 'nsteps')
             start, stop, step = unpack_range_args(node.iter)
 
             if isinstance(step, nodes.ConstNode):
@@ -361,40 +362,72 @@ class TransformForIterable(visitors.NumbaTransformer):
                                      for n in (start, stop, step)]
 
             if have_step:
-                s1 = self.run_template(
-                        """
-                            $length = {{stop}} - {{start}}
-                            {{nsteps}} = $length / {{step}}
-                            if $length % {{step}}:
-                                {{nsteps}} = {{nsteps_load}} + 1
-                        """,
-                        vars=dict(length=Py_ssize_t),
-                        start=start, stop=stop, step=step,
-                        nsteps=nsteps.store(), nsteps_load=nsteps.load())
-                step = step.clone
+                compute_nsteps = """
+                    $length = {{stop}} - {{start}}
+                    {{nsteps}} = $length / {{step}}
+                    if {{nsteps_load}} * {{step}} != $length: #$length % {{step}}:
+                        # Test for truncation
+                        {{nsteps}} = {{nsteps_load}} + 1
+                    # print "nsteps", {{nsteps_load}}
+                """
             else:
-                s1 = self.run_template(
-                    "{{nsteps}} = {{stop}} - {{start}}",
-                    start=start, stop=stop, nsteps=nsteps.store())
+                compute_nsteps = "{{nsteps}} = {{stop}} - {{start}}"
 
-            # Rely on LLVM strength reduction. It's easier this way, or we
-            # need to make the assignment to 'target' conditional for zero
-            # iterations
-            s2 = self.run_template(
-                    "{{target}} = {{start}} + {{temp}} * {{step}}",
-                    target=node.target, start=start.clone, stop=stop.clone,
-                    step=step, temp=temp.load())
+            if node.orelse:
+                else_clause = "else: {{else_body}}"
+            else:
+                else_clause = ""
 
-            body = node.body
-            body.insert(0, s2)
-            zero = nodes.const(0, nsteps.type)
-            one = nodes.const(1, nsteps.type)
-            return ast.Suite([s1, nodes.ForRangeNode(index=temp.load(),
-                                                     target=temp.store(),
-                                                     start=zero,
-                                                     stop=nsteps.load(),
-                                                     step=one,
-                                                     body=body)])
+            templ = textwrap.dedent("""
+                %s
+                {{temp}} = 0
+                while {{temp_load}} < {{nsteps_load}}:
+                    {{target}} = {{start}} + {{temp_load}} * {{step}}
+                    {{body}}
+                    {{temp}} = {{temp_load}} + 1
+                %s
+            """) % (textwrap.dedent(compute_nsteps), else_clause)
+
+            # Leave the bodies empty, they are already analyzed
+            body = ast.Suite(body=[])
+            else_body = ast.Suite(body=[])
+
+            # Substitute template and type infer
+            result = self.run_template(
+                templ, vars=dict(length=Py_ssize_t),
+                start=start, stop=stop, step=step,
+                nsteps=nsteps.store(), nsteps_load=nsteps.load(),
+                temp=temp.store(), temp_load=temp.load(),
+                target=node.target,
+                body=body, else_body=else_body)
+
+            # Patch the body and else clause
+            body.body.extend(node.body)
+            else_body.body.extend(node.orelse)
+
+            # Patch cfg block of target variable to the 'body' block of the
+            # while
+            node.target.variable.block = node.if_block
+
+            # Create the place to jump to for 'continue'
+            while_node = result.body[-1]
+            assert isinstance(while_node, ast.While)
+
+            target_increment = while_node.body[-1]
+            assert isinstance(target_increment, ast.Assign)
+            #incr_block = nodes.LowLevelBasicBlockNode(node=target_increment,
+            #                                          name='for_increment')
+            node.incr_block.body = [target_increment]
+            while_node.body[-1] = node.incr_block
+            while_node.continue_block = node.incr_block
+
+            # Patch the while with the For nodes cfg blocks
+            attrs = dict(vars(node), **vars(while_node))
+            while_node = nodes.build_while(**attrs)
+            result.body[-1] = while_node
+
+            return result
+
         elif node.iter.type.is_array and node.iter.type.ndim == 1:
             # Convert 1D array iteration to for-range and indexing
             logger.debug(ast.dump(node))
@@ -540,6 +573,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
             args = [nodes.CoercionNode(node.node, int64),
                     nodes.ObjectInjectNode(ctypes_pointer_type, object_)]
             new_node = nodes.call_pyfunc(ctypes.cast, args)
+        elif node_type.is_bool:
+            new_node = self.function_cache.call("PyBool_FromLong", node.node)
 
         self.generic_visit(new_node)
         return new_node
@@ -594,11 +629,31 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
         return new_node
 
+def badval(type):
+    if type.is_object or type.is_array:
+        value = nodes.NULL_obj
+        if type != object_:
+            value = value.coerce(type)
+    elif type.is_void:
+        value = None
+    elif type.is_float:
+        value = nodes.ConstNode(float('nan'), type=type)
+    elif type.is_int or type.is_complex:
+        # TODO: adjust for type.itemsize
+        bad = 0xbadbad # This pattern is hard to detect in llvm code
+        bad = 123456789
+        value = nodes.ConstNode(bad, type=type)
+    else:
+        value = nodes.BadValue(type)
+
+    return value
+
 class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                       LateBuiltinResolverMixin, visitors.NoPythonContextMixin):
 
     def visit_FunctionDef(self, node):
-#        self.generic_visit(node)
+        self.handle_phis()
+
         node.decorator_list = self.visitlist(node.decorator_list)
         node.body = self.visitlist(node.body)
 
@@ -611,16 +666,9 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             #    raise error.NumbaError(
             #            node, "Function cannot return object in "
             #                  "nopython context")
-            value = nodes.NULL_obj
-        elif ret_type.is_void:
-            value = None
-        elif ret_type.is_float:
-            value = nodes.ConstNode(float('nan'), type=ret_type)
-        elif ret_type.is_int or ret_type.is_complex:
-            value = nodes.ConstNode(0xbadbadbad, type=ret_type)
-        else:
-            value = None
+            pass
 
+        value = badval(ret_type)
         if value is not None:
             value = nodes.CoercionNode(value, dst_type=ret_type).cloneable
 
@@ -629,6 +677,70 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             error_return = nodes.WithPythonNode(body=[error_return])
 
         node.error_return = error_return
+        return node
+
+    def handle_phi(self, node):
+        """
+        Handle phi nodes:
+
+            1) Handle incoming variables which are not initialized. Set
+               incoming_variable.uninitialized_value to a constant 'bad'
+               value (e.g. 0xbad for integers, NaN for floats, NULL for
+               objects)
+
+            2) Handle incoming variables which need promotions. An incoming
+               variable needs a promotion if it has a different type than
+               the the phi. The promotion happens in each ancestor block that
+               defines the variable which reaches us.
+
+               Promotions are set separately in the symbol table, since the
+               ancestor may not be our immediate parent, we cannot introduce
+               a rename and look up the latest version since there may be
+               multiple different promotions. So during codegen, we first
+               check whether incoming_type == phi_type, and otherwise we
+               look up the promotion in the parent block or an ancestor.
+        """
+        for i, incoming_var in enumerate(node.incoming):
+            if incoming_var.type.is_uninitialized:
+                incoming_type = incoming_var.type.base_type or node.type
+                bad = badval(incoming_type)
+                incoming_var.type.base_type = incoming_type
+                incoming_var.uninitialized_value = self.visit(bad)
+                # print incoming_var
+
+            elif not incoming_var.type == node.type:
+                # Create promotions for variables with phi nodes in successor
+                # blocks.
+
+                incoming_symtab = incoming_var.block.symtab
+                if (incoming_var, node.type) not in node.block.promotions:
+                    # Make sure we only coerce once for each destination type and
+                    # each variable
+                    incoming_var.block.promotions.add((incoming_var, node.type))
+
+                    # Create promotion node
+                    name_node = nodes.Name(id=incoming_var.renamed_name,
+                                           ctx=ast.Load())
+                    name_node.variable = incoming_var
+                    name_node.type = incoming_var.type
+                    coercion = self.visit(name_node.coerce(node.type))
+                    promotion = nodes.PromotionNode(node=coercion)
+
+                    # Add promotion node to block body
+                    incoming_var.block.body.append(promotion)
+                    promotion.variable.block = incoming_var.block
+
+                    # Update symtab
+                    incoming_symtab.promotions[incoming_var.name,
+                                               node.type] = promotion
+                else:
+                    promotion = incoming_symtab.lookup_promotion(
+                                     incoming_var.name, node.type)
+
+        return node
+
+    def visit_While(self, node):
+        self.generic_visit(node)
         return node
 
     def check_context(self, node):
@@ -1081,13 +1193,29 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                            comparators=[badval])
         test.right = badval
 
-        check = ast.If(test=test, body=[node.raise_node], orelse=[])
+        check = nodes.build_if(test=test, body=[node.raise_node], orelse=[])
         return self.visit(check)
 
     def visit_Name(self, node):
         if node.type.is_builtin and not node.variable.is_local:
             obj = getattr(builtins, node.name)
             return nodes.ObjectInjectNode(obj, node.type)
+
+        if (is_obj(node.type) and isinstance(node.ctx, ast.Load) and
+                getattr(node, 'cf_maybe_null', False)):
+            # Check for unbound objects and raise UnboundLocalError if so
+            value = nodes.LLVMValueRefNode(Py_uintptr_t, None)
+            node.loaded_name = value
+
+            exc_msg = node.variable.name
+            if hasattr(node, 'lineno'):
+               exc_msg = '%s%s' % (error.format_pos(node), exc_msg)
+
+            check_unbound = nodes.CheckErrorNode(
+                    value, badval=nodes.const(0, Py_uintptr_t),
+                    exc_type=UnboundLocalError,
+                    exc_msg=exc_msg)
+            node.check_unbound = self.visit(check_unbound)
 
         return super(LateSpecializer, self).visit_Name(node)
 

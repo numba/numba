@@ -186,6 +186,7 @@ class TypeMapper(object):
         else:
             raise minierror.UnpromotableTypeError((type1, type2))
 
+
 def map_dtype(dtype):
     """
     Map a NumPy dtype to a minitype.
@@ -599,7 +600,10 @@ class BoolType(NamedType):
     name = "bool"
 
     def __repr__(self):
-        return "int %s" % " ".join(self.qualifiers)
+        return ("int %s" % " ".join(self.qualifiers)).rstrip()
+
+    def __str__(self):
+        return ("bool %s" % " ".join(self.qualifiers)).rstrip()
 
     def to_llvm(self, context):
         return llvm.core.Type.int(1)

@@ -11,7 +11,7 @@ from timeit import default_timer as _timer
 
 import numba.closure
 from numba import error
-from numba import functions, naming, transforms, visitors
+from numba import functions, naming, transforms, visitors, control_flow
 from numba import ast_type_inference as type_inference
 from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
@@ -28,14 +28,18 @@ class Pipeline(object):
     """
 
     order = [
-        'const_folding',
+        'cfg',
+        #'dump_cfg',
+        #'const_folding',
         'type_infer',
         'type_set',
+        'dump_cfg',
         'closure_type_inference',
         'transform_for',
         'specialize',
         'late_specializer',
         'fix_ast_locations',
+        'cleanup_symtab',
         'codegen',
     ]
 
@@ -70,7 +74,7 @@ class Pipeline(object):
             self.llvm_module = self.context.function_cache.module
 
         self.nopython = nopython
-        self.locals = locals
+        self.locals = locals or {}
         self.kwargs = kwargs
 
         if order is None:
@@ -90,7 +94,8 @@ class Pipeline(object):
 
         return cls(self.context, self.func, ast,
                    func_signature=self.func_signature, nopython=self.nopython,
-                   symtab=self.symtab, func_name=self.func_name, **kwds)
+                   symtab=self.symtab, func_name=self.func_name,
+                   locals=self.locals, **kwds)
 
     def insert_specializer(self, name, after):
         "Insert a new transform or visitor into the pipeline"
@@ -134,7 +139,21 @@ class Pipeline(object):
     #
     ### Pipeline stages
     #
-    
+
+    def cfg(self, ast):
+        transform = self.make_specializer(
+                control_flow.ControlFlowAnalysis, ast, **self.kwargs)
+        ast = transform.visit(ast)
+        self.symtab = transform.symtab
+        ast.flow = transform.flow
+        self.ast.cfg_transform = transform
+        return ast
+
+    def dump_cfg(self, ast):
+        if self.ast.cfg_transform.graphviz:
+            self.cfg_transform._render_gv(ast)
+        return ast
+
     def const_folding(self, ast):
         const_marker = self.make_specializer(constant_folding.ConstantMarker,
                                              ast)
@@ -146,8 +165,7 @@ class Pipeline(object):
 
     def type_infer(self, ast):
         type_inferer = self.make_specializer(
-                    type_inference.TypeInferer, ast, locals=self.locals,
-                    **self.kwargs)
+                    type_inference.TypeInferer, ast, **self.kwargs)
         type_inferer.infer_types()
 
         self.func_signature = type_inferer.func_signature
@@ -180,6 +198,14 @@ class Pipeline(object):
     def fix_ast_locations(self, ast):
         fixer = self.make_specializer(FixMissingLocations, ast)
         fixer.visit(ast)
+        return ast
+
+    def cleanup_symtab(self, ast):
+        "Pop original variables from the symtab"
+        for var in ast.symtab.values():
+            if not var.parent_var and var.renameable:
+                ast.symtab.pop(var.name, None)
+
         return ast
 
     def codegen(self, ast):
@@ -225,13 +251,13 @@ def infer_types(context, func, restype=None, argtypes=None, **kwargs):
     Like run_pipeline, but takes restype and argtypes instead of a FunctionType
     """
     pipeline, (sig, symtab, ast) = _infer_types(context, func, restype,
-                                                argtypes, order=['type_infer'],
+                                                argtypes, order=['cfg', 'type_infer'],
                                                 **kwargs)
     return sig, symtab, ast
 
 def infer_types_from_ast_and_sig(context, dummy_func, ast, signature, **kwargs):
     return run_pipeline(context, dummy_func, ast, signature,
-                        order=['type_infer'], **kwargs)
+                        order=['cfg', 'type_infer'], **kwargs)
 
 def get_wrapper(translator, ctypes=False):
     if ctypes:
