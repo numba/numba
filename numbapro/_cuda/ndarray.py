@@ -61,7 +61,7 @@ def ndarray_device_memory_from_data(gpu_data, c_shape, c_strides, stream=0):
     struct = NumpyStructure(**fields)
 
     gpu_struct = _cuda.DeviceMemory(sizeof(struct))
-    gpu_struct.to_device_raw(addressof(struct), sizeof(struct))
+    gpu_struct.to_device_raw(addressof(struct), sizeof(struct), stream=stream)
 
     # NOTE: Do not free gpu_data, gpu_dims and gpu_strides before
     #       freeing gpu_struct.
