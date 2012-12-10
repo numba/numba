@@ -1052,21 +1052,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return node
 
     def visit_Compare(self, node):
-        if len(node.ops) != 1:
-            raise error.NumbaError(
-                node, 'Multiple comparison operators not supported')
-
         self.generic_visit(node)
-
         lhs = node.left
-        rhs, = node.comparators
-
-        if lhs.variable.type != rhs.variable.type:
-            type = self.context.promote_types(lhs.variable.type,
-                                              rhs.variable.type)
+        comparators = node.comparators
+        types = [lhs.variable.type] + [c.variable.type for c in comparators]
+        if len(set(types))!=1:
+            type = reduce(self.context.promote_types, types)
             node.left = nodes.CoercionNode(lhs, type)
-            node.comparators = [nodes.CoercionNode(rhs, type)]
-
+            node.comparators = [nodes.CoercionNode(c, type)
+                                for c in comparators]
         node.variable = Variable(minitypes.bool_)
         return node
 
