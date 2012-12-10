@@ -992,7 +992,7 @@ def check_definitions(flow, compiler_directives):
                     messages.warning(entry, "Unused argument '%s'" %
                                      entry.name)
             else:
-                if warn_unused and entry.warn_unused:
+                if warn_unused and entry.warn_unused and flow.is_tracked(entry):
                     messages.warning(entry, "Unused variable '%s'" %
                                      entry.name)
             entry.cf_used = False
@@ -1428,4 +1428,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             self.flow.block.add_child(loop.loop_block)
 
         self.flow.block = None
+        return node
+
+    def visit_Print(self, node):
+        self.generic_visit(node)
         return node
