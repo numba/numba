@@ -1027,6 +1027,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
     gv_ctx = None
     source_descr = None
 
+    function_level = 0
+
     def __init__(self, context, func, ast, *args, **kwargs):
         super(ControlFlowAnalysis, self).__init__(context, func, ast,
                                                   *args, **kwargs)
@@ -1072,6 +1074,14 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         #for arg in node.args:
         #    if arg.default:
         #        self.visitchildren(arg)
+        if self.function_level:
+            lhs = self.visit(ast.Name(node.name, ast.Store()))
+            ast.copy_location(lhs, node)
+            self.mark_assignment(lhs=lhs, rhs=node)
+            return node
+
+        self.function_level += 1
+
         self.visitlist(node.decorator_list)
         self.stack.append(self.flow)
 
@@ -1087,7 +1097,9 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         for arg in node.args.args:
             self.visit_Name(arg)
 
+
         self.visitlist(node.body)
+        self.function_level -= 1
 
         # Exit point
         self.flow.add_exit(self.flow.exit_point)

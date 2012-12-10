@@ -945,6 +945,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def visit_Name(self, node):
         from numba import functions
+        node.name = node.id
 
         var = self.current_scope.lookup(node.id)
         is_none = var and node.id in ('None', 'True', 'False')

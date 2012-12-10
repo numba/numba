@@ -194,8 +194,9 @@ class ClosureMixin(object):
         del node.decorator_list[:]
 
         if len(signature.args) != len(node.args.args):
-            self.error(decorator,
-                       "Expected %d arguments type(s), got %d" % (
+            raise error.NumbaError(
+                decorator,
+                "Expected %d arguments type(s), got %d" % (
                                 len(signature.args), len(node.args.args)))
 
         return signature
