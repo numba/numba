@@ -26,7 +26,7 @@ def simple_loops():
         continue
         print 'Never be here'
 
-    while 1:
+    while True:
         break
         print 'Never be here'
 
