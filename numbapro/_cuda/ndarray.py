@@ -3,6 +3,7 @@ from ctypes import *
 import numpy as np
 from numpy.ctypeslib import c_intp
 from numbapro._cuda import driver as _cuda
+from numbapro._utils.ndarray import *
 
 _pyobject_head_fields = [('pyhead1', c_size_t),
                          ('pyhead2', c_void_p),]
@@ -72,7 +73,7 @@ def ndarray_device_memory_from_data(gpu_data, c_shape, c_strides, stream=0):
 
 def ndarray_data_to_device_memory(ary, stream=0, copy=True):
     dataptr = ary.ctypes.data
-    datasize = ary.shape[0] * ary.strides[0]
+    datasize = ndarray_datasize(ary)
 
     gpu_data = _cuda.DeviceMemory(datasize)
 

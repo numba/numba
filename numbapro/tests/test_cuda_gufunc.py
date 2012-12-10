@@ -49,7 +49,7 @@ def _test_gufunc_stream():
     dA = cuda.to_device(A, stream)
     dB = cuda.to_device(B, stream)
     C = gufunc(dA, dB, stream=stream)
-    C.to_host()
+    C.to_host(stream=stream)
     stream.synchronize()
     tcuda = time() - ts
 

@@ -375,10 +375,8 @@ numba.decorators.numba_function_autojit_targets['gpu'] = CudaAutoJitNumbaFunctio
 
 # NDarray device helper
 def to_device(ary, *args, **kws):
-    import numpy as np
     from numbapro._cuda import devicearray
-    devarray =  devicearray.DeviceNDArray(shape=ary.shape, dtype=ary.dtype,
-                                          buffer=ary)
+    devarray =  ary.view(type=devicearray.DeviceNDArray)
     devarray.to_device(*args, **kws)
     return devarray
 

@@ -7,6 +7,7 @@ from numbapro._cuda import driver as _cuda
 from numbapro._cuda.ndarray import ndarray_to_device_memory
 from numbapro._cuda.devicearray import DeviceNDArray
 from numbapro import cuda
+from numbapro._utils.ndarray import ndarray_datasize
 import math
 import re
 
@@ -62,6 +63,14 @@ class CudaUFuncDispatcher(object):
         assert not unknown_kws, ("Unknown keyword args %s" % unknown_kws)
 
         stream = kws.get('stream', 0)
+
+        # convert arguments to ndarray if they are not
+        args = list(args) # convert to list
+        for i, v in enumerate(args):
+            if not isinstance(v, np.ndarray):
+                args[i] = np.asarray(v)
+
+        # get the dtype for each argument
         dtypes = tuple(a.dtype for a in args)
 
         # find the fitting function
@@ -170,7 +179,7 @@ class CudaUFuncDispatcher(object):
             out = self.__reduce(mem, gpu_mems, stream)
             # use a small buffer to store the result element
             buf = np.array((1,), dtype=arg.dtype)
-            out.copy_to_host(buf, buf.shape[0] * buf.strides[0], stream=stream)
+            out.copy_to_host(buf, ndarray_datasize(buf), stream=stream)
 
         return buf[0]
 
