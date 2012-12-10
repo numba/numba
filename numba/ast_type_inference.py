@@ -864,7 +864,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 deferred_type = lhs_var.type
                 lhs_var.type = rhs_var.type
                 deferred_type.update()
-            else:
+            elif isinstance(lhs_node, ast.Name):
                 # Override type with new assignment
                 lhs_var.type = rhs_var.type
 
@@ -1128,6 +1128,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             node.value = self.visit(node.value)
             node.slice = self.visit(node.slice)
 
+        value = node.value
         value_type = node.value.variable.type
         deferred_type = self.create_deferred(node, numba_types.DeferredIndexType)
         if value_type and value_type.is_unresolved:
