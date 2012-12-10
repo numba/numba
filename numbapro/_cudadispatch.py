@@ -37,9 +37,18 @@ class CudaUFuncDispatcher(object):
         # prepare broadcasted contiguous arrays
         # TODO: Allow strided memory (use mapped memory + strides?)
         # TODO: don't perform actual broadcasting, pass in strides
-        args = [np.ascontiguousarray(a) for a in args]
-        first_ary = args[0]
-        broadcast_arrays = np.broadcast_arrays(*args)
+        #        args = [np.ascontiguousarray(a) for a in args]
+
+        return np.broadcast_arrays(*args)
+
+    def _adjust_dimension(self, broadcast_arrays):
+        '''Reshape the broadcasted arrays so that they are all 1D arrays.
+        Uses ndarray.ravel() to flatten.  It only copy if necessary.
+        '''
+        reshape = broadcast_arrays[0].shape
+        for i, ary in enumerate(broadcast_arrays):
+            if ary.ndim > 1: # flatten multi-dimension arrays
+                broadcast_arrays[i] = ary.ravel() # copy if necessary
         return broadcast_arrays
 
     def _allocate_output(self, broadcast_arrays, result_dtype):
@@ -113,7 +122,13 @@ class CudaUFuncDispatcher(object):
                 out = kws['out']
                 assert not isinstance(device_out, DeviceNDArray)
                 assert out.shape[0] >= broadcast_arrays[0].shape[0]
-                    
+
+            # Reshape the arrays if necessary.
+            # Ufunc expects 1D array.
+            reshape = out.shape
+            (out,) = self._adjust_dimension([out])
+            broadcast_arrays = self._adjust_dimension(broadcast_arrays)
+
             nctaid, ntid = self._determine_dimensions(element_count, MAX_THREAD)
 
             assert all(isinstance(array, np.ndarray)
@@ -126,11 +141,12 @@ class CudaUFuncDispatcher(object):
 
             griddim = (nctaid,)
             blockdim = (ntid,)
-            
+
             cuda_func[griddim, blockdim, stream](*kernel_args)
             
             device_out.to_host(stream) # only retrive the last one
-            return out
+            # Revert the shape of the array if it has been modified earlier
+            return out.reshape(reshape)
         else:
             raise ValueError("Cannot mix DeviceNDArray and ndarray as args")
 
@@ -234,6 +250,9 @@ class CudaGUFuncDispatcher(CudaUFuncDispatcher):
     def _prepare_inputs(self, args):
         args = [np.ascontiguousarray(a) for a in args]
         return args
+
+    def _adjust_dimension(self, broadcast_arrays):
+        return broadcast_arrays # do nothing
 
     def _allocate_output(self, broadcast_arrays, result_dtype):
         shape = self._determine_output_shape(broadcast_arrays)

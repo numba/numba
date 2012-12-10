@@ -4,7 +4,7 @@ import numpy as np
 import support
 import unittest
 
-@vectorize([f4(f8, f4, f4)], target='gpu')
+@vectorize([f8(f8, f4, f4)], target='gpu')
 def ufunc_broadcast(a, x, y):
     return a * x + y
 
@@ -13,9 +13,10 @@ class TestUFuncBroadcast(support.CudaTestCase):
         N = 32
         X = np.arange(N, dtype=np.float32)
         Y = (np.arange(N, dtype=np.float32) + 1) * 2
-        Z = ufunc_broadcast(2.0, X, Y)
-        print Z
-        print 2.0 * X + Y
+        A = 2.0
+        Z = ufunc_broadcast(A, X, Y)
+        Z0 = A * X + Y
+        self.assertTrue(np.allclose(Z, Z0))
 
 if __name__ == '__main__':
     unittest.main()

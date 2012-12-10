@@ -97,7 +97,7 @@ def test_nd():
 
         result = data + data2
         our_result = cuda_ufunc(data, data2)
-        assert np.allclose(result, our_result), (dtype, order)
+        assert np.allclose(result, our_result), (dtype, order, result, our_result)
 
     for nd in range(1, 8):
         for dtype in test_dtypes:

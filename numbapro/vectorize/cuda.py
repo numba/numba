@@ -49,17 +49,24 @@ class _CudaStagingCaller(CDefinition):
                 self.ret()
 
         dataptrs = []
+        steps = []
         for inary, ty in zip(inputs, self.ArgTypes):
             acc = PyArrayAccessor(self.builder, inary.value)
-            casted_data = self.builder.bitcast(acc.data, ty)
-            dataptrs.append(CArray(self, casted_data))
+            # data
+            dataptrs.append(CArray(self, acc.data))
+            # strides
+            step = CArray(self, acc.strides)[0]
+            steps.append(step) # assume 1D
 
-        res = worker(*[x[i] for x in dataptrs], inline=True)
+        kargs = [x[i.cast(s.type) * s:].cast(ty)[0]
+                 for x, s, ty in zip(dataptrs, steps, self.ArgTypes)]
+
+        res = worker(*kargs, inline=True)
 
         acc = PyArrayAccessor(self.builder, output.value)
         casted_data = self.builder.bitcast(acc.data, self.RetType)
         outary = CArray(self, casted_data)
-        outary[i] = res
+        outary[i] = res # assume stride is non-zero
 
         self.ret()
 
