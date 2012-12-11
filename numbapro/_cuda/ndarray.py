@@ -29,9 +29,6 @@ _numpy_fields = _pyobject_head_fields + \
         #       ('masna_strides', POINTER(c_intp)),    # masna_strides
       ]
 
-class NumpyStructure(Structure):
-    _fields_ = _numpy_fields
-
 def ndarray_to_device_memory(ary, stream=0, copy=True):
     packed = ndarray_device_memory_and_data(ary, stream=stream, copy=copy)
     retr, struct, data_is_ignored = packed
@@ -47,26 +44,42 @@ def ndarray_device_memory_and_data(ary, stream=0, copy=True):
     return retriever, gpu_struct, gpu_data
 
 def ndarray_device_memory_from_data(gpu_data, c_shape, c_strides, stream=0):
-    gpu_dims = _cuda.DeviceMemory(sizeof(c_shape))
-    gpu_dims.to_device_raw(addressof(c_shape), sizeof(c_shape), stream=stream)
+    nd = len(c_shape)
+    
+    more_fields = [
+        ('shape_array',   c_intp * nd),
+        ('strides_array', c_intp * nd),
+    ]
 
-    gpu_strides = _cuda.DeviceMemory(sizeof(c_strides))
-    gpu_strides.to_device_raw(addressof(c_strides), sizeof(c_strides), stream=stream)
+    class NumpyStructure(Structure):
+        _fields_ = _numpy_fields + more_fields
 
-    fields = {
-        'nd':         len(c_shape),
-        'data':       c_void_p(gpu_data._handle.value),
-        'dimensions': cast(c_void_p(gpu_dims._handle.value), POINTER(c_intp)),
-        'strides':    cast(c_void_p(gpu_strides._handle.value), POINTER(c_intp)),
-    }
-    struct = NumpyStructure(**fields)
+    gpu_struct = _cuda.DeviceMemory(sizeof(NumpyStructure))
 
-    gpu_struct = _cuda.DeviceMemory(sizeof(struct))
+    # get base address of the GPU ndarray structure
+    base_addr = gpu_struct._handle.value
+
+    to_intp_p = lambda x: cast(c_void_p(x), POINTER(c_intp))
+
+    # Offset to shape and strides memory
+    struct = NumpyStructure()
+    base = addressof(struct)
+    offset_shape = addressof(struct.shape_array) - base
+    offset_strides = addressof(struct.strides_array) - base
+
+    # Fill the ndarray structure
+    struct.nd = len(c_shape)
+    struct.data = c_void_p(gpu_data._handle.value)
+    struct.dimensions = to_intp_p(base_addr + offset_shape)
+    struct.strides = to_intp_p(base_addr + offset_strides)
+    struct.shape_array = c_shape
+    struct.strides_array = c_strides
+
+    # transfer the memory
     gpu_struct.to_device_raw(addressof(struct), sizeof(struct), stream=stream)
 
-    # NOTE: Do not free gpu_data, gpu_dims and gpu_strides before
-    #       freeing gpu_struct.
-    gpu_struct.add_dependencies(gpu_data, gpu_dims, gpu_strides)
+    # NOTE: Do not free gpu_data before freeing gpu_struct.
+    gpu_struct.add_dependencies(gpu_data)
 
     return gpu_struct
 
