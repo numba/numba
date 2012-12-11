@@ -1,6 +1,7 @@
 import ast
+import types
 
-from numba import visitors, nodes, error
+from numba import visitors, nodes, error, functions
 
 class UFuncBuilder(object):
     """
@@ -47,6 +48,36 @@ class UFuncBuilder(object):
         UFuncBuilder.ufunc_counter += 1
         # print ast.dump(func)
         return func
+
+    def compile_to_pyfunc(self, ufunc_ast):
+        "Compile the ufunc ast to a function"
+        # Build ufunc AST module
+        module = ast.Module(body=[ufunc_ast])
+        functions.fix_ast_lineno(module)
+
+        # Create Python ufunc function
+        d = {}
+        exec compile(module, '<ast>', 'exec') in d, d
+        d.pop('__builtins__')
+        py_ufunc = d[ufunc_ast.name]
+
+        assert isinstance(py_ufunc, types.FunctionType), py_ufunc
+
+        return py_ufunc
+
+    def save(self):
+        """
+        Save the state of the builder to allow processing other parts of
+        the tree.
+        """
+        state = self.operands
+        self.operands = []
+        return state
+
+    def restore(self, state):
+        "Restore saved state"
+        self.operands = state
+
 
 class UFuncConverter(UFuncBuilder, visitors.NumbaTransformer):
     """

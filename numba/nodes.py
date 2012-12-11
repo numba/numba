@@ -8,7 +8,7 @@ from numba import *
 from .symtab import Variable
 from . import _numba_types as numba_types
 from numba import utils, translate, error
-from numba.minivect import minitypes
+from numba.minivect import minitypes, minierror
 
 import llvm.core
 
@@ -79,6 +79,14 @@ def print_(translator, node):
 def print_llvm(translator, type, llvm_value):
     return print_(translator, LLVMValueRefNode(type, llvm_value))
 
+def is_name(node):
+    """
+    Returns whether the given node is a Name
+    """
+    if isinstance(node, CloneableNode):
+        node = node.node
+    return isinstance(node, ast.Name)
+
 #
 ### AST nodes
 #
@@ -87,7 +95,9 @@ class Node(ast.AST):
     """
     Superclass for Numba AST nodes
     """
+
     _fields = []
+    _attributes = ('lineno', 'col_offset')
 
     def __init__(self, **kwargs):
         vars(self).update(kwargs)
@@ -143,8 +153,8 @@ class CoercionNode(Node):
             # in __init__ being called
             return
 
-        self.dst_type = dst_type
         self.type = dst_type
+        self.variable = Variable(dst_type)
         self.name = name
 
         self.node = self.verify_conversion(dst_type, node)
@@ -165,6 +175,14 @@ class CoercionNode(Node):
         node.type = object_
         return node
 
+    @property
+    def dst_type(self):
+        """
+        dst_type is always the same as type, and 'type' is kept consistent
+        with Variable.type
+        """
+        return self.type
+
     @classmethod
     def coerce(cls, node_or_nodes, dst_type):
         if isinstance(node_or_nodes, list):
@@ -184,6 +202,20 @@ class CoercionNode(Node):
 
         return node
 
+    def __repr__(self):
+        return "Coerce(%s, %s)" % (self.type, self.node)
+
+class PromotionNode(Node):
+    """
+    Coerces a variable of some type to another type for a phi node in a
+    successor block.
+    """
+
+    _fields = ['node']
+
+    def __init__(self, **kwargs):
+        super(PromotionNode, self).__init__(**kwargs)
+        self.variable = self.node.variable
 
 class CoerceToObject(CoercionNode):
     "Coerce native values to objects"
@@ -272,13 +304,120 @@ class ConstNode(Node):
         else:
             raise NotImplementedError(dst_type)
 
-        self.pyval = caster(self.pyval)
+        try:
+            self.pyval = caster(self.pyval)
+        except ValueError:
+            raise minierror.UnpromotableTypeError((dst_type, self.type))
         self.type = dst_type
         self.variable.type = dst_type
+
+    def __repr__(self):
+        return "const(%s, %s)" % (self.pyval, self.type)
 
 _NULL = object()
 NULL_obj = ConstNode(_NULL, object_)
 NULL = ConstNode(_NULL, void.pointer())
+
+basic_block_fields = ['cond_block', 'if_block', 'else_block', 'exit_block']
+
+class FlowNode(Node):
+
+    cond_block = None
+    if_block = None
+    else_block = None
+    exit_block = None
+
+    def __init__(self, **kwargs):
+        super(FlowNode, self).__init__(**kwargs)
+
+        from numba import control_flow
+        for field_name in basic_block_fields:
+            if not getattr(self, field_name):
+                block = control_flow.ControlBlock(-1, is_fabricated=True)
+                setattr(self, field_name, block)
+
+class If(ast.If, FlowNode):
+    pass
+
+class While(ast.While, FlowNode):
+
+    # Place to jump to when we see a 'continue'. The default is
+    # 'the condition block'. For 'for' loops we set this to
+    # 'the counter increment block'
+    continue_block = None
+
+class For(ast.For, FlowNode):
+    pass
+
+def merge_cfg_in_ast(basic_block_fields, bodies, node):
+    for bb_name, body_name in zip(basic_block_fields, bodies):
+        body = getattr(node, body_name)
+        if not body:
+            continue
+        bb = getattr(node, bb_name)
+        if not bb.body:
+            if isinstance(body, list):
+                bb.body.extend(body)
+                bb = [bb]
+            else:
+                bb.body.append(body)
+
+        setattr(node, body_name, bb)
+
+def build_if(cls=If, **kwargs):
+    node = cls(**kwargs)
+    bodies = ['test', 'body', 'orelse']
+    merge_cfg_in_ast(basic_block_fields, bodies, node)
+    return node
+
+def build_while(**kwargs):
+    return build_if(cls=While, **kwargs)
+
+def build_for(**kwargs):
+    result = For(**kwargs)
+    merge_cfg_in_ast(basic_block_fields, ['iter', 'body', 'orelse'], result)
+    merge_cfg_in_ast(['target_block'], ['target'], result)
+    return result
+
+
+class LowLevelBasicBlockNode(Node):
+    """
+    Evaluate a statement or expression in a new LLVM basic block.
+    """
+
+    _fields = ['body']
+
+    def __init__(self, body, label='unnamed', **kwargs):
+        super(LowLevelBasicBlockNode, self).__init__(**kwargs)
+        self.body = body
+        self.label = label
+        self.entry_block = None
+
+    def create_block(self, translator, label=None):
+        if self.entry_block is None:
+            self.entry_block = translator.append_basic_block(label or self.label)
+        return self.entry_block
+
+class Name(ast.Name, Node):
+
+    cf_maybe_null = False
+    raise_unbound_node = None
+
+    _fields = ['check_unbound']
+
+    def __init__(self, id, ctx, *args, **kwargs):
+        super(Name, self).__init__(*args, **kwargs)
+        self.id = self.name = id
+        self.ctx = ctx
+
+    def __repr__(self):
+        type = getattr(self, 'type', "")
+        if type:
+            type = ', %s' % type
+        name = self.name
+        if hasattr(self, 'variable') and self.variable.renamed_name:
+            name = self.variable.unmangled_name
+        return "name(%s%s)" % (name, type)
 
 class ForRangeNode(Node):
     _fields = ['index', 'target', 'start', 'stop', 'step', 'body']
@@ -319,6 +458,16 @@ class NativeCallNode(FunctionCallNode):
             arg = self.args[i]
             self.args[i] = CoercionNode(arg, dst_type,
                                         name='func_%s_arg%d' % (self.name, i))
+
+    def __repr__(self):
+        if self.llvm_func:
+            name = self.llvm_func.name
+        elif self.name:
+            name = self.name
+        else:
+            name = "<unknown(%s)>" % self.signature
+
+        return "%s(%s)" % (name, ", ".join(str(arg) for arg in self.args))
 
 class NativeFunctionCallNode(NativeCallNode):
     """
@@ -504,6 +653,9 @@ class ObjectInjectNode(Node):
         self.variable = Variable(self.type, is_constant=True,
                                  constant_value=object)
 
+    def __repr__(self):
+        return "<inject(%s)>" % self.object
+
 NoneNode = ObjectInjectNode(None, object_)
 
 class ObjectTempNode(Node):
@@ -519,6 +671,9 @@ class ObjectTempNode(Node):
         self.llvm_temp = None
         self.type = getattr(node, 'type', node.variable.type)
         self.incref = incref
+
+    def __repr__(self):
+        return "objtemp(%s)" % self.node
 
 class NoneNode(Node):
     """
@@ -558,6 +713,9 @@ class CloneableNode(Node):
     def clone(self):
         return CloneNode(self)
 
+    def __repr__(self):
+        return "cloneable(%s)" % self.node
+
 class CloneNode(Node):
     """
     Clone a CloneableNode. This allows the node's sub-expressions to be
@@ -578,6 +736,9 @@ class CloneNode(Node):
 
         self.llvm_value = None
 
+    def __repr__(self):
+        return "clone(%s)" % self.node.node
+
 class ExpressionNode(Node):
     """
     Node that allows an expression to execute a bunch of statements first.
@@ -591,6 +752,9 @@ class ExpressionNode(Node):
         self.expr = expr
         self.type = expr.variable.type
 
+    def __repr__(self):
+        return "exprstat(..., %s)" % self.expr
+
 class LLVMValueRefNode(Node):
     """
     Wrap an LLVM value.
@@ -602,6 +766,12 @@ class LLVMValueRefNode(Node):
         self.type = type
         self.llvm_value = llvm_value
 
+class BadValue(LLVMValueRefNode):
+    def __init__(self, type):
+        super(BadValue, self).__init__(type, None)
+
+    def __repr__(self):
+        return "bad(%s)" % self.type
 
 class TempNode(Node): #, ast.Name):
     """
@@ -610,8 +780,9 @@ class TempNode(Node): #, ast.Name):
 
     temp_counter = 0
 
-    def __init__(self, type):
+    def __init__(self, type, name=None):
         self.type = type
+        self.name = name
         self.variable = Variable(type, name='___numba_%d' % self.temp_counter,
                                  is_local=True)
         TempNode.temp_counter += 1
@@ -623,6 +794,13 @@ class TempNode(Node): #, ast.Name):
     def store(self):
         return TempStoreNode(temp=self)
 
+    def __repr__(self):
+        if self.name:
+            name = ", %s" % self.name
+        else:
+            name = ""
+        return "temp(%s%s)" % (self.type, name)
+
 class TempLoadNode(Node):
     _fields = ['temp']
 
@@ -631,8 +809,14 @@ class TempLoadNode(Node):
         self.type = temp.type
         self.variable = Variable(self.type)
 
+    def __repr__(self):
+        return "load(%s)" % self.temp
+
 class TempStoreNode(TempLoadNode):
     _fields = ['temp']
+
+    def __repr__(self):
+        return "store(%s)" % self.temp
 
 class IncrefNode(Node):
 
@@ -647,7 +831,7 @@ class DecrefNode(IncrefNode):
 
 class DataPointerNode(Node):
 
-    _fields = ['node', 'index']
+    _fields = ['node', 'slice']
 
     def __init__(self, node, slice, ctx):
         self.node = node
@@ -704,6 +888,8 @@ class DataPointerNode(Node):
         ptr = builder.bitcast(dptr_plus_offset, data_ptr_ty)
         return ptr
 
+    def __repr__(self):
+        return "%s.data" % self.node
 
 class ArrayAttributeNode(Node):
     is_read_only = True
@@ -726,6 +912,9 @@ class ArrayAttributeNode(Node):
             raise error._UnknownAttribute(attribute_name)
 
         self.type = type
+
+    def __repr__(self):
+        return "%s.%s" % (self.array, self.attr_name)
 
 class ShapeAttributeNode(ArrayAttributeNode):
     # NOTE: better do this at code generation time, and not depend on
@@ -781,6 +970,9 @@ class ExtTypeAttribute(Node):
         self.ctx = ctx
         self.ext_type = ext_type
 
+    def __repr__(self):
+        return "%s.%s" % (self.value, self.attr)
+
 class NewExtObjectNode(Node):
     """
     Instantiate an extension type. Currently unused.
@@ -810,6 +1002,7 @@ class StructAttribute(ExtTypeAttribute):
 
         self.type = self.attr_type
         self.variable = Variable(self.type, promotable_type=False)
+
 
 class StructVariable(Node):
     """
@@ -859,6 +1052,9 @@ class ExtensionMethod(Node):
                                            args=method_type.args,
                                            is_bound_method=True)
 
+    def __repr__(self):
+        return "%s.%s" % (self.value, self.attr)
+
 #class ExtensionMethodCall(Node):
 #    """
 #    Low level call that has resolved the virtual method.
@@ -872,7 +1068,6 @@ class ExtensionMethod(Node):
 #        self.args = args
 #        self.signature = signature
 #        self.type = signature
-
 
 class ClosureNode(Node):
     """
@@ -966,6 +1161,7 @@ class ClosureCallNode(NativeCallNode):
         self.closure_type = closure_type
 
     def _resolve_keywords(self, closure_type, args, keywords):
+        "Map keyword arguments to positional arguments"
         func_def = closure_type.closure.func_def
         argnames = [name.id for name in func_def.args.args]
 
@@ -1032,6 +1228,8 @@ class DereferenceNode(Node):
         self.pointer = pointer
         self.type = pointer.type.base_type
 
+    def __repr__(self):
+        return "*%s" % (self.pointer,)
 
 class PointerFromObject(Node):
     """
@@ -1046,6 +1244,8 @@ class PointerFromObject(Node):
         super(PointerFromObject, self).__init__(**kwargs)
         self.node = node
 
+    def __repr__(self):
+        return "((void *) %s)" % (self.node,)
 
 #
 ### Nodes for NumPy calls

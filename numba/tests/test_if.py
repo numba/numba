@@ -116,10 +116,13 @@ class TestIf(unittest.TestCase):
         if_fn_6c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_6)
 
     def test_if_fn_7(self):
-        if_fn_7c = jit(restype=i4, argtypes=[i4], backend='ast')(if_fn_7)
+        # if_fn_7c = jit(restype=i4, argtypes=[i4], backend='ast')(if_fn_7)
+        if_fn_7c = autojit(if_fn_7)
         oracle = if_fn_7
         for i in range(-3, 3):
             self.assertEqual(if_fn_7c(i), oracle(i))
+            self.assertEqual(if_fn_7c(float(i)), oracle(float(i)))
+            # self.assertEqual(if_fn_7c(i+1j), oracle(i+1j))
 
     def test_if_fn_8(self):
         if_fn_5c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_8)
@@ -140,6 +143,12 @@ class TestIf(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
+#    if_fn_1c = jit(restype=f4, argtypes=[f4], backend='ast')(if_fn_1)
+#    if_fn_4c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_4)
+#    if_fn_5c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_5)
+#    if_fn_6c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_6)
+#    if_fn_7c = jit(restype=i4, argtypes=[i4], backend='ast')(if_fn_7)
+#    print if_fn_7c(-2), if_fn_7(-2)
     unittest.main()
 
 # ______________________________________________________________________

@@ -263,7 +263,7 @@ def _autojit(target, nopython):
 
     return _autojit_decorator
 
-def autojit(backend='ast', target='cpu', nopython=False, locals=None):
+def autojit(backend='ast', target='cpu', nopython=False, locals=None, **kwargs):
     """
     Creates a function that dispatches to type-specialized LLVM
     functions based on the input argument types.  If no specialized
@@ -274,15 +274,15 @@ def autojit(backend='ast', target='cpu', nopython=False, locals=None):
         if callable(backend):
             func = backend
             return autojit(backend='ast', target=target,
-                           nopython=nopython, locals=locals)(func)
+                           nopython=nopython, locals=locals, **kwargs)(func)
         else:
             raise Exception("The autojit decorator should be called: "
                             "@autojit(backend='bytecode|ast')")
 
     if backend == 'bytecode':
-        return _autojit(target, nopython)
+        return _autojit(target, nopython, **kwargs)
     else:
-        return _autojit2(target, nopython, locals=locals)
+        return _autojit2(target, nopython, locals=locals, **kwargs)
 
 def _jit2(restype=None, argtypes=None, nopython=False,
           _llvm_module=None, **kwargs):

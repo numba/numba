@@ -63,7 +63,7 @@ def test():
     print "ran test files: failed: (%d/%d)" % (failed, run)
     return failed
 
-def nose_run():
+def nose_run(module=None):
     "Oh nose, why dost thou never read my configuration file"
     import nose.config
     config = nose.config.Config()
@@ -73,10 +73,6 @@ def nose_run():
                       #'--doctest-tests'
                       ])
     config.verbosity = 3
-    nose.run(config=config)
-
-def get_include():
-    from os.path import abspath, dirname, join
-    return abspath(join(dirname(__file__), ".."))
+    nose.run(module=module, config=config)
 
 __all__ = _numba_types.__all__ + decorators.__all__ + special.__all__

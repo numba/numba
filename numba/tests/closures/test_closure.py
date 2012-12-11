@@ -107,7 +107,7 @@ NumbaError: 10:5: Dynamic closures not yet supported, use @jit
 >>> error3()
 Traceback (most recent call last):
     ...
-NumbaError: 16:4: Local variable  'inner' is not bound yet
+NumbaError: 16:4: local variable 'inner' referenced before assignment
 >>> error4()
 Traceback (most recent call last):
     ...
@@ -120,6 +120,7 @@ NumbaError: Got multiple values for positional argument 'a'
 Test closures
 
 >>> closure1().__name__
+Warning 40:4: Unused variable 'a'
 'inner'
 >>> closure1()()
 Traceback (most recent call last):
@@ -179,8 +180,6 @@ def closure_arg(a):
 
 __doc__ += \
 """
-This test doesn't work yet...
-
 >>> closure1 = closure_arg(1)
 >>> closure1.__name__
 'closure1'
@@ -208,6 +207,7 @@ This test doesn't work yet...
 >>> closure3_2(7)
 1 3 5 7 13 18.0
 """
+
 
 @autojit
 def closure_arg_simple(a):
@@ -278,7 +278,7 @@ __doc__ += """
 >>> wrong_restype()
 Traceback (most recent call last):
     ...
-NumbaError: 1:0: Function with non-void return does not return a value
+NumbaError: 0:0: Function with non-void return does not return a value
 """
 
 #
@@ -311,5 +311,6 @@ NumbaError: 301:5: Expected 1 arguments type(s), got 0
 """
 
 if __name__ == '__main__':
+#    pass
     import doctest
     doctest.testmod()

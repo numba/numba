@@ -8,7 +8,7 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import error, transforms, closure
+from numba import error, transforms, closure, control_flow
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as numba_types
 from .symtab import Variable
@@ -22,7 +22,14 @@ import numpy
 import numpy as np
 
 import logging
-logger = logging.getLogger(__name__)
+
+debug = False
+#debug = True
+
+#logger = logging.getLogger(__name__)
+#logger.setLevel(logging.INFO)
+if debug:
+    logger.setLevel(logging.DEBUG)
 
 def _parse_args(call_node, arg_names):
     result = dict.fromkeys(arg_names)
@@ -362,16 +369,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     See transform.py for an overview of AST transformations.
     """
 
-    def __init__(self, context, func, ast, locals, closure_scope=None, **kwds):
+    def __init__(self, context, func, ast, closure_scope=None, **kwds):
         super(TypeInferer, self).__init__(context, func, ast, **kwds)
 
-        self.locals = locals or {}
-        #for local in self.locals:
-        #    if local not in self.local_names:
-        #        raise error.NumbaError("Not a local variable: %r" % (local,))
-
         self.given_return_type = self.func_signature.return_type
-        self.return_variables = []
         self.return_type = None
 
         ast.symtab = self.symtab
@@ -380,6 +381,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         ast.closures = []
 
         self.function_level = kwds.get('function_level', 0)
+
         self.init_locals()
         ast.have_return = False
 
@@ -387,7 +389,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         """
         Infer types for the function.
         """
-        self.return_variable = Variable(None)
+        self.return_variable = Variable(self.given_return_type)
         self.ast = self.visit(self.ast)
 
         self.return_type = self.return_variable.type or void
@@ -404,8 +406,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # Change signatures returning complex numbers or structs to
             # signatures taking a pointer argument to a complex number
             # or struct
-            #argtypes += (restype,)
-            #restype = void
             self.func_signature.struct_by_reference = True
 
     def init_global(self, global_name):
@@ -429,19 +429,18 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def init_locals(self):
         arg_types = self.func_signature.args
-        if len(arg_types) > len(self.local_names):
-            raise error.NumbaError("Too many types specified in @jit()")
+        if (isinstance(self.ast, ast.FunctionDef) and
+                len(arg_types) != len(self.ast.args.args)):
+            raise error.NumbaError(
+                    "Incorrect number of types specified in @jit()")
 
-        for i, arg_type in enumerate(arg_types):
-            varname = self.local_names[i]
-            self.symtab[varname] = Variable(arg_type, is_local=True,
-                                            name=varname)
+        self.symtab['None'] = Variable(numba_types.none, name='None',
+                                       is_constant=True, constant_value=None)
+        self.symtab['True'] = Variable(bool_, name='True', is_constant=True,
+                                       constant_value=True)
+        self.symtab['False'] = Variable(bool_, name='False', is_constant=True,
+                                       constant_value=False)
 
-        for varname in self.local_names[len(arg_types):]:
-            self.symtab[varname] = Variable(None, is_local=True, name=varname)
-
-        self.symtab['None'] = Variable(numba_types.none, is_constant=True,
-                                       constant_value=None)
 
         arg_types = list(arg_types)
         for local_name, local_type in self.locals.iteritems():
@@ -456,7 +455,30 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 idx = self.argnames.index(local_name)
                 arg_types[idx] = local_type
 
+        # Initialize argument types
+        for var_name, arg_type in zip(self.local_names, arg_types):
+            self.symtab[var_name].type = arg_type
+
+        # Propagate argument types to first rename of the variable in the block
+        for var in self.symtab.values():
+            if var.parent_var and not var.parent_var.parent_var:
+                var.type = var.parent_var.type
+                if not var.type:
+                    var.type = numba_types.UninitializedType(None)
+
         self.func_signature.args = tuple(arg_types)
+
+        self.have_cfg = hasattr(self.ast, 'flow')
+        if self.have_cfg:
+            self.deferred_types = []
+            self.resolve_variable_types()
+
+        if debug and self.have_cfg:
+            for block in self.ast.flow.blocks:
+                for var in block.symtab.values():
+                    if var.type and var.cf_references:
+                        assert not var.type.is_unresolved
+                        print "Variable after analysis: %s" % var
 
     def is_object(self, type):
         return type.is_object or type.is_array
@@ -484,29 +506,274 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def type_from_pyval(self, pyval):
         return self.context.typemapper.from_python(pyval)
 
+    def handle_NameAssignment(self, assignment_node):
+        if assignment_node is None:
+            # ast.Name parameter to the function
+            return
+
+        if isinstance(assignment_node, ast.For):
+            # Analyse target variable assignment
+            return self.visit_For(assignment_node, visit_body=False)
+            #print "handled", assignment_node.target.variable
+        #elif (isinstance(assignment_node, ast.Assign) and
+        #          isinstance(assignment_node.value, nodes.FuncDefExprNode)):
+            # Don't analyse inner functions at this point
+        #    pass
+        else:
+            return self.visit(assignment_node)
+            #print "handled", assignment_node.targets[0].variable
+
+    def handle_phi(self, node):
+        # Merge point for different definitions
+        incoming = [v for v in node.incoming
+                          if not v.type or not v.type.is_uninitialized]
+        assert incoming
+
+        for v in incoming:
+            if v.type is None:
+                # We have not analyzed this definition yet, delay the type
+                # resolution
+                v.type = v.deferred_type
+                self.deferred_types.append(v.type)
+
+        incoming_types = [v.type for v in incoming]
+        if len(incoming_types) > 1:
+            promoted_type = numba_types.PromotionType(
+                node.variable, self.context,incoming_types, assignment=True)
+            promoted_type.simplify()
+            node.variable.type = promoted_type.resolve()
+        else:
+            node.variable.type = incoming_types[0]
+
+        #print "handled", node.variable
+        return node
+
+    def kill_unused_phis(self, cfg):
+        """
+        Kill phis which are not referenced. We need to do this bottom-up,
+        i.e. in reverse topological dominator-tree order, since in SSA
+        a definition always lexically precedes a reference.
+
+        This is important, since it kills any unnecessary promotions (e.g.
+        ones to object, which LLVM wouldn't be able to optimize out).
+        """
+        for block in cfg.blocks[::-1]:
+            phi_nodes = []
+            for i, phi in enumerate(block.phi_nodes):
+                if phi.variable.cf_references:
+                    # Used phi
+                    phi_nodes.append(phi)
+                else:
+                    # Unused phi
+                    logging.info("Killing phi: %s", phi)
+                    block.symtab.pop(phi.variable.renamed_name)
+                    for incoming_var in phi.incoming:
+                        # A single definition can reach a block multiple times,
+                        # remove= all references
+                        refs = [ref for ref in incoming_var.cf_references
+                                        if ref.variable is not phi.variable]
+                        incoming_var.cf_references = refs
+
+            block.phi_nodes = phi_nodes
+
+    def analyse_assignments(self):
+        """
+        Analyze all variable assignments and phis.
+        """
+        cfg = self.ast.flow
+        self.kill_unused_phis(cfg)
+
+        self.function_level += 1
+        for block in cfg.blocks:
+            phis = []
+            for phi in block.phi_nodes:
+                phi = self.handle_phi(phi)
+                if phi is not None:
+                    phis.append(phi)
+            block.phi_nodes = phis
+
+            for stat in block.stats:
+                if isinstance(stat, control_flow.NameAssignment):
+                    #visitor.referenced = {}
+                    #visitor.visit(stat.rhs)
+                    #parents = [name_node.variable
+                    #    for name_node in visitor.referenced.itervalues()]
+                    assmnt = self.handle_NameAssignment(stat.assignment_node)
+                    # TODO: inject back in AST...
+                    stat.assignment_node = assmnt
+
+        self.function_level -= 1
+
+    def candidates(self, unvisited):
+        "Types with in-degree zero"
+        return [type for type in unvisited if len(type.parents) == 0]
+
+    def add_resolved_parents(self, unvisited, start_points, strongly_connected):
+        "Check for immediate resolved parents"
+        for type in unvisited:
+            for parent in type.parents:
+                parent = strongly_connected.get(parent, parent)
+                if self.is_resolved(parent) or len(parent.parents) == 0:
+                    start_points.append(parent)
+
+    def is_resolved(self, t):
+        return not t.is_unresolved or (t.is_unresolved and not t.is_scc and not
+                                       t.resolve().is_unresolved)
+
+    def is_trivial_cycle(self, type):
+        "Return whether the type directly refers to itself"
+        return len(type.parents) == 1 and list(type.parents)[0] is type
+
+    def _debug_type(self, start_point):
+        if start_point.is_scc:
+            print "scc", start_point, start_point.types
+        else:
+            print start_point
+
+    def remove_resolved_type(self, start_point):
+        "Remove a resolved type from the type graph"
+        for child in start_point.children:
+            if start_point in child.parents:
+                child.parents.remove(start_point)
+
+    def resolve_variable_types(self):
+        """
+        Resolve the types for all variable assignments. We run type inference
+        on each assignment which builds a type graph in case of dependencies.
+        The dependencies are resolved after type inference completes.
+        """
+        self.analyse_assignments()
+
+        for deferred_type in self.deferred_types:
+            deferred_type.update()
+
+        #-------------------------------------------------------------------
+        # Find all unresolved variables
+        #-------------------------------------------------------------------
+        unresolved = set()
+        for block in self.ast.flow.blocks:
+            for variable in block.symtab.itervalues():
+                if variable.parent_var: # renamed variable
+                    if variable.type.is_unresolved:
+                        variable.type.resolve()
+                        if variable.type.is_unresolved:
+                            unresolved.add(variable.type)
+
+        #-------------------------------------------------------------------
+        # Find the strongly connected components (build a condensation graph)
+        #-------------------------------------------------------------------
+        unvisited = set(unresolved)
+        strongly_connected = {}
+        while unresolved:
+            start_type = unresolved.pop()
+            sccs = {}
+            numba_types.kosaraju_strongly_connected(start_type, sccs)
+            unresolved -= set(sccs)
+            strongly_connected.update(sccs)
+
+        #-------------------------------------------------------------------
+        # Process type dependencies in topological order. Handle strongly
+        # connected components specially.
+        #-------------------------------------------------------------------
+
+        if unvisited:
+            sccs = dict((k, v) for k, v in strongly_connected.iteritems() if k is not v)
+
+            # unvisited = set([strongly_connected[type] for type in unvisited])
+            unvisited = set(strongly_connected.itervalues())
+            original_unvisited = set(unvisited)
+            visited = set()
+
+            while unvisited:
+                L = list(unvisited)
+                start_points = self.candidates(unvisited)
+                self.add_resolved_parents(unvisited, start_points, strongly_connected)
+                if not start_points:
+                    # Find and resolve any final reduced self-referential
+                    # portions in the graph
+                    for u in list(unvisited):
+                        if self.is_trivial_cycle(u):
+                            u.simplify()
+                            if not u.resolve().is_unresolved:
+                                unvisited.remove(u)
+
+                    break
+
+                while start_points:
+                    start_point = start_points.pop()
+                    assert (len(start_point.parents) == 0 or
+                            self.is_trivial_cycle(start_point) or
+                            self.is_resolved(start_point))
+                    visited.add(start_point)
+                    if start_point in unvisited:
+                        unvisited.remove(start_point)
+
+                    # self._debug_type(start_point)
+
+                    if not self.is_resolved(start_point):
+                        start_point.simplify()
+
+                    if not (start_point.is_scc or start_point.is_deferred):
+                        r = start_point
+                        while r.is_unresolved:
+                            resolved = r.resolve()
+                            if resolved is r:
+                                break
+                            r = resolved
+                        assert not r.is_unresolved
+
+                    self.remove_resolved_type(start_point)
+                    if start_point.is_scc:
+                        for type in start_point.types:
+                            self.remove_resolved_type(type)
+
+                    children = (strongly_connected.get(c, c)
+                                    for c in start_point.children
+                                        if c not in visited)
+                    start_points.extend(self.candidates(children))
+
+        if unvisited:
+            t = list(unvisited)[0] # for debugging
+            self.error_unresolved_types(unvisited)
+
+    def error_unresolved_types(self, unvisited):
+        "Raise an exception for a circular dependence we can't resolve"
+        def getvar(type):
+            if type.is_scc:
+                candidates = [type for type in type.scc if not type.is_scc]
+                return type.scc[0].variable
+            else:
+                return type.variable
+
+        def pos(type):
+            assmnt = getvar(type).name_assignment
+            if assmnt:
+                assmnt_node = assmnt.assignment_node
+                return error.format_pos(assmnt_node) or 'na'
+            else:
+                return 'na'
+
+        type = sorted(unvisited, key=pos)[0]
+        numba_types.error_circular(getvar(type))
+
+
+    #------------------------------------------------------------------------
+    # Visit methods
+    #------------------------------------------------------------------------
+
     def visit(self, node):
         if node is Ellipsis:
             node = ast.Ellipsis()
         result = super(TypeInferer, self).visit(node)
         return result
 
-    def visit_AugAssign(self, node):
-        """
-        Inplace assignment.
+    def visit_PhiNode(self, node):
+        # Already handled
+        return node
 
-        Resolve a += b to a = a + b. Set 'inplace_op' attribute of the
-        Assign node so later stages may recognize inplace assignment.
-        """
-        target = node.target
-
-        rhs_target = copy.deepcopy(target)
-        rhs_target.ctx = ast.Load()
-        ast.fix_missing_locations(rhs_target)
-
-        bin_op = ast.BinOp(rhs_target, node.op, node.value)
-        assignment = ast.Assign([target], bin_op)
-        assignment.inplace_op = node.op
-        return self.visit(assignment)
+    #------------------------------------------------------------------------
+    # Assignments
+    #------------------------------------------------------------------------
 
     def _handle_unpacking(self, node):
         """
@@ -563,8 +830,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         lhs_var = target.variable
         rhs_var = node.value.variable
         if isinstance(target, ast.Name):
-            # Variable's type may be promoted later!
-            node.value = nodes.DeferredCoercionNode(node.value, lhs_var)
+            node.value = nodes.CoercionNode(node.value, lhs_var.type)
         elif lhs_var.type != rhs_var.type:
             if lhs_var.type.is_array and rhs_var.type.is_array:
                 # Let other code handle array coercions
@@ -579,27 +845,37 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if rhs_var is None:
             rhs_var = rhs_node.variable
 
-        if lhs_var.type and lhs_var.type.is_deferred:
-            # TODO: complete this
-            if lhs_var.type.resolved_type:
-                lhs_var.type = lhs_var.type.resolved_type
-            else:
-                lhs_var.type.resolved_type = rhs_var.type
-                lhs_var.type = rhs_var.type
-
         if lhs_var.type is None:
             lhs_var.type = rhs_var.type
         elif lhs_var.type != rhs_var.type:
-            self.assert_assignable(lhs_var.type, rhs_var.type)
-            if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
-                    lhs_var.promotable_type):
-                lhs_var.type = self.promote_types(lhs_var.type, rhs_var.type)
+            if lhs_var.name in self.locals:
+                # Type must be consistent
+                self.assert_assignable(lhs_var.type, rhs_var.type)
+                if rhs_node:
+                    rhs_node = nodes.CoercionNode(rhs_node, lhs_var.type)
+            elif lhs_var.type.is_deferred:
+                # Override type with new assignment of a deferred LHS and
+                # update the type graph to link it together correctly
+                assert lhs_var is lhs_var.type.variable
+                deferred_type = lhs_var.type
+                lhs_var.type = rhs_var.type
+                deferred_type.update()
+            elif isinstance(lhs_node, ast.Name):
+                if lhs_var.renameable:
+                    # Override type with new assignment
+                    lhs_var.type = rhs_var.type
+                else:
+                    # Promote type for cellvar or freevar
+                    if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
+                            lhs_var.promotable_type):
+                        lhs_var.type = self.promote_types(lhs_var.type,
+                                                          rhs_var.type)
 
-            if rhs_node:
-                return nodes.CoercionNode(rhs_node, lhs_var.type)
-
-        lhs_var.deleted = False
         return rhs_node
+
+    #------------------------------------------------------------------------
+    # Loops and Control Flow
+    #------------------------------------------------------------------------
 
     def _get_iterator_type(self, node, iterator_type, target_type):
         "Get the type of an iterator Variable"
@@ -622,11 +898,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return base_type
 
-    def visit_For(self, node):
-        if node.orelse:
-            raise error.NumbaError(node.orelse,
-                                   'Else in for-loop is not implemented.')
-
+    def visit_For(self, node, visit_body=True):
         target = node.target
         #if not isinstance(target, ast.Name):
         #    self.error(node.target,
@@ -638,16 +910,73 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                             node.target.variable.type)
         self.assign(node.target, None, rhs_var=Variable(base_type))
 
-        self.visitlist(node.body)
+        if visit_body:
+            self.visitlist(node.body)
+        if visit_body and node.orelse:
+            self.visitlist(node.orelse)
+
         return node
 
+    def visit_booltest(self, node):
+        if isinstance(node.test, control_flow.ControlBlock):
+            node.test.body[0] = nodes.CoercionNode(
+                node.test.body[0], minitypes.bool_)
+        else:
+            node.test = nodes.CoercionNode(node.test, minitypes.bool_)
+
     def visit_While(self, node):
-        if node.orelse:
-            raise error.NumbaError(node.orelse,
-                                   'Else in for-loop is not implemented.')
-        node.test = nodes.CoercionNode(self.visit(node.test), minitypes.bool_)
-        node.body = self.visitlist(node.body)
+        self.generic_visit(node)
+        self.visit_booltest(node)
         return node
+
+    visit_If = visit_While
+
+    def visit_IfExp(self, node):
+        self.generic_visit(node)
+        type_ = self.promote(node.body.variable, node.orelse.variable)
+        node.variable = Variable(type_)
+        node.test = nodes.CoercionNode(node.test, minitypes.bool_)
+        node.orelse = nodes.CoercionNode(node.orelse, type_)
+        node.body = nodes.CoercionNode(node.body, type_)
+        return node
+
+    #------------------------------------------------------------------------
+    # Return
+    #------------------------------------------------------------------------
+
+    def visit_Return(self, node):
+        if node.value is not None:
+            # 'return value'
+            self.ast.have_return = True
+            value = self.visit(node.value)
+            type = value.variable.type
+            assert type is not None
+        else:
+            # 'return'
+            value = None
+
+        if value is None or type.is_none:
+            # When returning None, set the return type to void.
+            # That way, we don't have to deal with the PyObject reference.
+            if self.return_variable.type is None:
+                self.return_variable.type = minitypes.VoidType()
+            value = None
+        elif self.return_variable.type is None:
+            self.return_variable.type = type
+        elif self.return_variable.type != type:
+            # TODO: in case of unpromotable types, return object?
+            if self.given_return_type is None:
+                self.return_variable.type = self.promote_types_numeric(
+                                        self.return_variable.type, type)
+
+            value = nodes.DeferredCoercionNode(value, self.return_variable)
+
+        node.value = value
+        return node
+
+    #------------------------------------------------------------------------
+    # 'with' statement
+    #------------------------------------------------------------------------
 
     def visit_With(self, node):
         if (not isinstance(node.context_expr, ast.Name) or
@@ -671,22 +1000,30 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return node
 
+    #------------------------------------------------------------------------
+    # Variable Assignments and References
+    #------------------------------------------------------------------------
+
     def visit_Name(self, node):
         node.name = node.id
-        variable = self.symtab.get(node.id)
-        if variable:
-            # local variable
-            uninitialized = (variable.type is None or
-                             variable.type.is_deferred or
-                             variable.deleted)
-            if (uninitialized and variable.is_local and
-                    isinstance(node.ctx, ast.Load)):
-                raise error.NumbaError(node, "Local variable  %r is "
-                                             "not bound yet" % variable.name)
-        elif (self.closure_scope and node.id in self.closure_scope and not
-                  self.is_store(node.ctx)):
+
+        var = self.current_scope.lookup(node.id)
+        is_none = var and node.id in ('None', 'True', 'False')
+        in_closure_scope = self.closure_scope and node.id in self.closure_scope
+        if var and (var.is_local or is_none):
+            if isinstance(node.ctx, ast.Param) or is_none:
+                variable = self.symtab[node.id]
+            else:
+                # Local variable
+                local_variable = self.symtab[node.id]
+                if not local_variable.renameable:
+                    variable = local_variable
+                else:
+                    variable = node.variable
+        elif in_closure_scope and not self.is_store(node.ctx):
+            # Free variable
+            # print node.id, node.ctx, self.ast.name
             closure_var = self.closure_scope[node.id]
-            closure_var.is_cellvar = True
 
             variable = Variable.from_variable(closure_var)
             variable.is_local = False
@@ -695,6 +1032,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             variable.promotable_type = False
             self.symtab[node.id] = variable
         else:
+            # Global or builtin
             variable = self.init_global(node.id)
 
         if variable.type and not variable.type.is_deferred:
@@ -710,7 +1048,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 pass
 
         node.variable = variable
+        if variable.type and variable.type.is_unresolved:
+            variable.type = variable.type.resolve()
         return node
+
+    #------------------------------------------------------------------------
+    # Binary and Unary operations
+    #------------------------------------------------------------------------
 
     def visit_BoolOp(self, node):
         "and/or expression"
@@ -761,41 +1105,21 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return node
 
     def visit_Compare(self, node):
-        if len(node.ops) != 1:
-            raise error.NumbaError(
-                node, 'Multiple comparison operators not supported')
-
         self.generic_visit(node)
-
         lhs = node.left
-        rhs, = node.comparators
-
-        if lhs.variable.type != rhs.variable.type:
-            type = self.context.promote_types(lhs.variable.type,
-                                              rhs.variable.type)
+        comparators = node.comparators
+        types = [lhs.variable.type] + [c.variable.type for c in comparators]
+        if len(set(types))!=1:
+            type = reduce(self.context.promote_types, types)
             node.left = nodes.CoercionNode(lhs, type)
-            node.comparators = [nodes.CoercionNode(rhs, type)]
-
+            node.comparators = [nodes.CoercionNode(c, type)
+                                for c in comparators]
         node.variable = Variable(minitypes.bool_)
         return node
 
-    def _get_index_type(self, node, type, index_type):
-        if type.is_pointer:
-            assert index_type.is_int
-            return type.base_type
-        elif type.is_object:
-            return object_
-        elif type.is_carray:
-            assert index_type.is_int
-            return type.base_type
-        elif type.is_c_string:
-            if index_type.is_int:
-                return char
-            else:
-                return c_string_type
-
-        op = ('sliced', 'indexed')[index_type.is_int]
-        raise error.NumbaError(node, "object of type %s cannot be %s" % (type, op))
+    #------------------------------------------------------------------------
+    # Indexing and Slicing
+    #------------------------------------------------------------------------
 
     def _handle_struct_index(self, node, value_type):
         slice_type = node.slice.variable.type
@@ -822,14 +1146,53 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return ast.Attribute(value=node.value, attr=field_name, ctx=node.ctx)
 
-    def visit_Subscript(self, node):
-        node.value = self.visit(node.value)
-        node.slice = self.visit(node.slice)
+    def assert_index(self, type, node):
+        if type.is_unresolved:
+            type.make_assertion('is_int', node, "Expected an integer")
+        elif not type.is_int:
+            self.error(node, "Excepted an integer")
 
+    def get_resolved_type(self, type):
+        if type.is_unresolved:
+            type.simplify()
+            type = type.resolve()
+            if type.is_promotion and len(type.types) == 2:
+                type1, type2 = type.types
+                if type1.is_deferred and type2.is_deferred:
+                    return type
+                elif type1.is_deferred:
+                    return type2, type1
+                elif type2.is_deferred:
+                    return type1, type2
+                else:
+                    return None, type
+        else:
+            return type, None
+
+    def create_deferred(self, node, deferred_cls):
+        variable = Variable(None)
+        deferred_type = deferred_cls(variable, self, node)
+        variable.type = deferred_type
+        node.variable = variable
+        return deferred_type
+
+    def visit_Subscript(self, node, visitchildren=True):
+        if visitchildren:
+            node.value = self.visit(node.value)
+            node.slice = self.visit(node.slice)
+
+        value = node.value
         value_type = node.value.variable.type
+        deferred_type = self.create_deferred(node, numba_types.DeferredIndexType)
+        if value_type and value_type.is_unresolved:
+            deferred_type.dependences.append(node.value)
+            deferred_type.update()
+            return node
+
+        slice_variable = node.slice.variable
+        slice_type = slice_variable.type
         if value_type.is_array:
-            slice_variable = node.slice.variable
-            slice_type = slice_variable.type
+            # Handle array indexing
             if (slice_type.is_tuple and
                     isinstance(node.slice, ast.Index)):
                 node.slice = node.slice.value
@@ -845,31 +1208,66 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
             if slices is None:
                 if slice_type.is_tuple:
-                    # Array tuple index. Get the result type by slicing the
-                    # ArrayType
-                    result_type = value_type[slice_type.size:]
+                    # result_type = value_type[slice_type.size:]
+                    # TODO: use slice_variable.constant_value if available
+                    result_type = minitypes.object_
                 else:
                     result_type = minitypes.object_
+            elif any(slice_node.variable.type.is_unresolved for slice_node in slices):
+                for slice_node in slices:
+                    if slice_type.variable.type.is_unresolved:
+                        deferred_type.dependences.append(slice_node)
+
+                deferred_type.update()
+                result_type = deferred_type
             else:
                 result_type, node.value = self._unellipsify(
                                     node.value, slices, node)
+
         elif value_type.is_carray:
-            if not node.slice.variable.type.is_int:
+            # Handle C array indexing
+            if (not slice_variable.type.is_int and not
+                    slice_variable.type.is_unresolved):
                 self.error(node.slice, "Can only index with an int")
             if not isinstance(node.slice, ast.Index):
                 self.error(node.slice, "Expected index")
 
             # node.slice = node.slice.value
             result_type = value_type.base_type
+
         elif value_type.is_struct:
             node = self._handle_struct_index(node, value_type)
             return self.visit(node)
-        else:
-            result_type = self._get_index_type(node,
-                                               node.value.variable.type,
-                                               node.slice.variable.type)
 
-        node.variable = Variable(result_type)
+        elif value_type.is_pointer:
+            self.assert_index(slice_variable.type, node.slice)
+            result_type = value_type.base_type
+
+        elif value_type.is_object:
+            result_type = object_
+
+        elif value_type.is_c_string:
+            # Handle string indexing
+            if slice_type.is_int:
+                result_type = char
+            elif slice_type.is_slice:
+                result_type = c_string_type
+            elif slice_type.is_unresolved:
+                deferred_type.dependences.append(node.slice)
+                deferred_type.update()
+                result_type = deferred_type
+            else:
+                # TODO: check for insanity
+                node.value = nodes.CoercionNode(node.value, object_)
+                node.slice = nodes.CoercionNode(node.slice, object_)
+                result_type = object_
+
+        else:
+            op = ('sliced', 'indexed')[slice_variable.type.is_int]
+            raise error.NumbaError(node, "object of type %s cannot be %s" %
+                                                            (value_type, op))
+
+        node.variable.type = result_type
         return node
 
     def visit_Index(self, node):
@@ -915,6 +1313,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.generic_visit(node)
         node.variable = Variable(minitypes.object_)
         return node
+
+    #------------------------------------------------------------------------
+    # Constants
+    #------------------------------------------------------------------------
 
     def visit_Num(self, node):
         return nodes.ConstNode(node.n)
@@ -979,6 +1381,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.variable = variable
         return node
 
+    #------------------------------------------------------------------------
+    # Function and Method Calls
+    #------------------------------------------------------------------------
+
     def _resolve_function(self, func_type, func_name):
         func = None
 
@@ -991,28 +1397,53 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return func
 
-    def _resolve_external_call(self, call_node, py_func, arg_types=None):
+    def _create_deferred_call(self, arg_types, call_node):
+        "Set the statement as uninferable for now"
+        deferred_type = self.create_deferred(call_node,
+                                             numba_types.DeferredCallType)
+        for arg, arg_type in zip(call_node.args, arg_types):
+            if arg_type.is_unresolved:
+                deferred_type.dependences.append(arg)
+
+        deferred_type.update()
+        return call_node
+
+    def _resolve_external_call(self, call_node, func_type, py_func, arg_types):
         """
         Resolve a call to a function. If we know about the function,
         generate a native call, otherwise go through PyObject_Call().
         """
-#        signature = self.function_cache.get_signature(arg_types)
+        if any(arg_type.is_unresolved for arg_type in arg_types) and not func_type == object_:
+            result = self.function_cache.get_function(py_func, arg_types)
+            if result is not None:
+                signature, llvm_func, py_func = result
+            else:
+                return self._create_deferred_call(arg_types, call_node)
+        else:
+            signature, llvm_func, py_func = \
+                    self.function_cache.compile_function(py_func, arg_types)
 
-        if self.function_cache.is_registered(py_func):
-            fn_info = self.function_cache.compile_function(py_func, arg_types)
-            signature, llvm_func, py_func = fn_info
-            assert llvm_func is not None
-            return nodes.NativeCallNode(signature, call_node.args, llvm_func,
-                                        py_func)
+        if llvm_func is not None:
+            new_node = nodes.NativeCallNode(signature, call_node.args,
+                                            llvm_func, py_func)
         elif not call_node.keywords and self._is_math_function(
                                         call_node.args, py_func):
-            return self._resolve_math_call(call_node, py_func)
+            new_node = self._resolve_math_call(call_node, py_func)
         else:
             assert arg_types is not None
             signature = self.function_cache.get_signature(arg_types)
-            return nodes.ObjectCallNode(signature, call_node.func,
-                                        call_node.args, call_node.keywords,
-                                        py_func)
+            new_node = nodes.ObjectCallNode(signature, call_node.func,
+                                            call_node.args, call_node.keywords,
+                                            py_func)
+
+        if not func_type.is_object:
+            raise error.NumbaError(
+                call_node, "Cannot call object of type %s" % (func_type,))
+
+        if new_node.type.is_object:
+            new_node = self._resolve_return_type(func_type, new_node, call_node)
+
+        return new_node
 
     def _resolve_method_calls(self, func_type, new_node, node):
         "Resolve special method calls"
@@ -1076,19 +1507,22 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         new_node = nodes.const(signature, numba_types.CastType(signature))
         return new_node
 
-    def visit_Call(self, node):
+    def visit_Call(self, node, visitchildren=True):
         if node.starargs or node.kwargs:
             raise error.NumbaError("star or keyword arguments not implemented")
 
-        node.func = self.visit(node.func)
-        self.visitlist(node.args)
-        self.visitlist(node.keywords)
+        if self.visitchildren:
+            node.func = self.visit(node.func)
+            self.visitlist(node.args)
+            self.visitlist(node.keywords)
 
         func_variable = node.func.variable
         func_type = func_variable.type
 
         func = self._resolve_function(func_type, func_variable.name)
 
+        # TODO: Resolve variable types based on how they are used as arguments
+        # TODO: in calls with known signatures
         new_node = None
         if func_type.is_builtin:
             # Call to Python built-in function
@@ -1137,16 +1571,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # 3) call to special numpy functions (np.empty, etc)
             # 4) generic call using PyObject_Call
             arg_types = [a.variable.type for a in node.args]
-            new_node = self._resolve_external_call(node, func, arg_types)
-
-            if not func_type.is_object:
-                raise error.NumbaError(
-                    node, "Cannot call object of type %s" % (func_type,))
-
-            if new_node.type.is_object:
-                new_node = self._resolve_return_type(func_type, new_node, node)
+            new_node = self._resolve_external_call(node, func_type, func, arg_types)
 
         return new_node
+
+    #------------------------------------------------------------------------
+    # Attributes
+    #------------------------------------------------------------------------
 
     def _resolve_module_attribute(self, node, type):
         "Resolve attributes of the numpy module or a submodule"
@@ -1249,42 +1680,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_ClosureScopeLoadNode(self, node):
         return node
 
-    def visit_Return(self, node):
-        if node.value is not None:
-            self.ast.have_return = True
-            value = self.visit(node.value)
-            type = value.variable.type
-            assert type is not None
-        else:
-            # This is possible when we do "return" without any value
-            value = None
-
-        if value is None or type.is_none:
-            # When returning None, set the return type to void.
-            # That way, we don't have to deal with the PyObject reference.
-            if self.return_variable.type is None:
-                self.return_variable.type = minitypes.VoidType()
-            value = None
-        elif self.return_variable.type is None:
-            self.return_variable.type = type
-        elif self.return_variable.type != type:
-            # todo: in case of unpromotable types, return object?
-            self.return_variable.type = self.promote_types_numeric(
-                                    self.return_variable.type, type)
-            
-            # XXX: DeferredCoercionNode __init__ is not compatible
-            #      with CoercionNode __new__.
-            #      We go around the problem for test_if.test_if_fn_5
-            #      by not visiting this block if return_variable.type == type.
-            value = nodes.DeferredCoercionNode(value, self.return_variable)
-
-        node.value = value
-        return node
-
-    def visit_If(self, node):
-        self.generic_visit(node)
-        node.test = nodes.CoercionNode(node.test, minitypes.bool_)
-        return node
+    def visit_FuncDefExprNode(self, node):
+        return self.visit(node.func_def)
 
     #
     ### Unsupported nodes
@@ -1300,13 +1697,55 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
     Allows for deferred coercions (may be removed in the future).
     """
 
+    def visit_FunctionDef(self, node):
+        self.generic_visit(node)
+        if node.flow:
+            for block in node.flow.blocks:
+                for phi in block.phi_nodes:
+                    self.handle_phi(phi)
+
+        rettype = self.func_signature.return_type
+        if rettype.is_unresolved:
+            rettype = rettype.resolve()
+            assert not rettype.is_unresolved
+            self.func_signature.return_type = rettype
+
+        return node
+
+    def resolve(self, variable):
+        """
+        Resolve any resolved types, and resolve any final disconnected
+        type graphs that haven't been simplified. This can be the case if
+        the type of a variable does not depend on the type of a sub-expression
+        which may be unresolved, e.g.:
+
+            y = 0
+            for i in range(...):
+                x = int(y + 4)  # y is unresolved here, so we have
+                                # promote(deferred(y), int)
+                y += 1
+        """
+        if variable.type.is_unresolved:
+            variable.type = variable.type.resolve()
+            if variable.type.is_unresolved:
+                variable.type = numba_types.resolve_var(variable)
+            assert not variable.type.is_unresolved
+
     def visit(self, node):
         if hasattr(node, 'variable'):
+            self.resolve(node.variable)
             node.type = node.variable.type
-            if node.type.is_deferred:
-                assert node.type.resolved_type, node.type
-                node.type = node.type.resolved_type
         return super(TypeSettingVisitor, self).visit(node)
+
+    def handle_phi(self, node):
+        for incoming_var in node.incoming:
+            self.resolve(incoming_var)
+        self.resolve(node.variable)
+        node.type = node.variable.type
+        return node
+
+    def visit_Name(self, node):
+        return node
 
     def visit_ExtSlice(self, node):
         self.generic_visit(node)
@@ -1322,4 +1761,3 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
         "Resolve deferred coercions"
         self.generic_visit(node)
         return nodes.CoercionNode(node.node, node.variable.type)
-

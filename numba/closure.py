@@ -201,8 +201,9 @@ class ClosureMixin(object):
         del node.decorator_list[:]
 
         if len(signature.args) != len(node.args.args):
-            self.error(decorator,
-                       "Expected %d arguments type(s), got %d" % (
+            raise error.NumbaError(
+                decorator,
+                "Expected %d arguments type(s), got %d" % (
                                 len(signature.args), len(node.args.args)))
 
         return signature
@@ -350,7 +351,9 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
         return self._visit_children(node)
 
     def update_closures(self, func_def, scope_type, ext_type):
-        # Patch closures to get the closure scope as the first argument
+        """
+        Patch closures to get the closure scope as the first argument.
+        """
         for closure in func_def.closures:
             # closure.scope_type = scope_type
             closure.func_def.scope_type = scope_type
@@ -367,10 +370,6 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
 
             # patch closure signature
             closure.type.signature.args = (scope_type,) + closure.type.signature.args
-
-#    def visit_ClosureNode(self, node):
-#        node.func_def = self.visit(node.func_def)
-#        return node
 
 
 def get_locals(symtab):
@@ -396,19 +395,17 @@ def process_closures(context, outer_func_def, outer_symtab):
         logger.debug("process closures: %s %s", outer_func_def.name,
                      closure.func_def.name)
         closure.make_pyfunc()
-        symtab = {}
-
+        #symtab = {}
         p, result = numba.pipeline.infer_types_from_ast_and_sig(
                     context, closure.py_func, closure.func_def,
                     closure.type.signature,
-                    closure_scope=closure_scope,
-                    symtab=symtab)
+                    closure_scope=closure_scope)
 
         _, _, ast = result
-        closure.symtab = symtab
+        closure.symtab = p.symtab
         closure.type_inferred_ast = ast
 
-        process_closures(context, closure.func_def, symtab)
+        process_closures(context, closure.func_def, p.symtab)
 
 
 class ClosureCompilingMixin(ClosureBaseVisitor):
@@ -464,6 +461,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
             if arg.id in node.scope_type.unmangled_symtab:
                 dst = lookup_scope_attribute(scope, arg.id, ast.Store())
                 src = self._load_name(arg.id)
+                src.variable.assign_in_closure_scope = True
                 assmt = ast.Assign(targets=[dst], value=src)
                 stats.append(assmt)
 
@@ -503,6 +501,14 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
             self.symtab[func_name] = Variable(name=func_name, type=node.type,
                                               is_local=True)
             return ast.Pass()
+
+    def assign_closure(self, func_call, node):
+        "Assign closure to its name. NOT USED, already happened in CFG"
+        func_name = node.func_def.name
+        dst = self._load_name(func_name, self.symtab[func_name].is_cellvar)
+        dst.ctx = ast.Store()
+        result = ast.Assign(targets=[dst], value=func_call)
+        return result
 
     def create_numba_function(self, node, p):
         closure_scope = self.ast.cur_scope
@@ -554,11 +560,8 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
                             function_node=create_numbafunc,
                             args=args)
 
-        # Assign closure to its name
-        func_name = node.func_def.name
-        dst = self._load_name(func_name, self.symtab[func_name].is_cellvar)
-        dst.ctx = ast.Store()
-        result = ast.Assign(targets=[dst], value=func_call)
+        # result = self.assign_closure(func_call, node)
+        result = func_call
 
         #stats = [nodes.inject_print(nodes.const("calling...", c_string_type)),
         #         result]

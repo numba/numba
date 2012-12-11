@@ -1047,6 +1047,7 @@ class Translate(object):
             if not is_dead_code:
                 getattr(self, 'op_'+name)(i, op, arg)
 
+        print self.lfunc
         # Perform code optimization
         if self.optimize:
             fpm = lp.FunctionPassManager.new(self.mod)

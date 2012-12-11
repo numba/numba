@@ -6,7 +6,7 @@ Test type inference.
 '''
 # ______________________________________________________________________
 
-from numba.minivect import minitypes
+from numba.minivect import minitypes, minierror
 from numba import *
 from numba import _numba_types as numba_types
 from numba import ast_type_inference
@@ -33,6 +33,8 @@ def _for_loop(start, stop, inc):
     acc = 0
     for value in range(start, stop, inc):
         acc += value
+
+    print value
     return acc
 
 for_loop = decorators.autojit(backend='ast')(_for_loop)
@@ -81,12 +83,24 @@ def none_newaxis(a):
     k = a[None, 0, numpy.newaxis]
     l = a[0, n, numpy.newaxis]
 
+def func_with_signature(a):
+    if a > 1:
+        return float(a)
+    elif a < 5:
+        return int(a)
+    elif a > 10:
+        return object()
+
+    return a + 1j
+
+def arg_rebind(a):
+    a = 0
+    a = 0.0
+    a = "hello"
+
 # ______________________________________________________________________
 
-def infer(func, argtypes):
-    sig, symtab, ast = pipeline.infer_types(decorators.context, func,
-                                            argtypes=argtypes)
-    return sig, symtab
+from numba.tests.cfg.test_cfg_type_infer import infer, functype
 
 class TestTypeInference(unittest.TestCase):
     def test_simple_func(self):
@@ -97,28 +111,28 @@ class TestTypeInference(unittest.TestCase):
          self.assertEqual(for_loop(0, 10, 1), 45)
 
     def test_type_infer_simple_func(self):
-        sig, symtab = infer(_simple_func, [double])
+        sig, symtab = infer(_simple_func, functype(None, [double]))
         self.assertEqual(sig.return_type, double)
 
     def test_type_infer_for_loop(self):
-        sig, symtab = infer(_for_loop, [int_, int_, int_])
+        sig, symtab = infer(_for_loop, functype(None, [int_, int_, int_]))
         self.assertTrue(symtab['acc'].type.is_int)
         self.assertEqual(symtab['value'].type, Py_ssize_t)
         self.assertEqual(sig.return_type, Py_ssize_t)
 
     def test_type_infer_arange(self):
-        sig, symtab = infer(arange, [])
+        sig, symtab = infer(arange, functype())
         self.assertEqual(symtab['a'].type, int64[:])
         self.assertEqual(symtab['b'].type, double[:])
 
     def test_empty_like(self):
-        sig, symtab = infer(empty_like, [double[:]])
+        sig, symtab = infer(empty_like, functype(None, [double[:]]))
         self.assertEqual(symtab['b'].type, double[:])
         self.assertEqual(symtab['c'].type, int32[:])
         self.assertEqual(symtab['d'].type, double[:])
 
     def test_slicing(self):
-        sig, symtab = infer(slicing, [double[:]])
+        sig, symtab = infer(slicing, functype(None, [double[:]]))
         self.assertEqual(symtab['n'].type, numba_types.NewAxisType())
 
         self.assertEqual(symtab['b'].type, double)
@@ -134,7 +148,7 @@ class TestTypeInference(unittest.TestCase):
         self.assertEqual(symtab['l'].type, double[:, :])
 
     def test_none_newaxis(self):
-        sig, symtab = infer(none_newaxis, [double[:]])
+        sig, symtab = infer(none_newaxis, functype(None, [double[:]]))
         self.assertEqual(symtab['f'].type, double[:, :])
         #self.assertEqual(symtab['g'].type, double[:, :])
         self.assertEqual(symtab['h'].type, double[:, :])
@@ -143,9 +157,33 @@ class TestTypeInference(unittest.TestCase):
         self.assertEqual(symtab['k'].type, double[:, :])
         self.assertEqual(symtab['l'].type, double[:, :])
 
+    def test_return_type(self):
+        sig, symtab = infer(func_with_signature, functype(int_, [int_]))
+        assert sig == int_(int_)
+
+        sig, symtab = infer(func_with_signature, functype(int_, [float_]))
+        assert sig == int_(float_)
+
+        sig, symtab = infer(func_with_signature, functype(float_, [int_]))
+        assert sig == float_(int_)
+
+    def test_rebind_arg(self):
+        sig, symtab = infer(arg_rebind, functype(int_, [int_]),
+                            allow_rebind_args=True)
+        assert sig == int_(int_)
+        assert symtab['a'].type == c_string_type
+
+        try:
+            sig, symtab = infer(arg_rebind, functype(int_, [int_]),
+                                allow_rebind_args=False)
+        except minierror.UnpromotableTypeError, e:
+            msg = str(sorted(e.args, key=str))
+            self.assertEqual("[(double, const char *)]", msg)
+        else:
+            raise Exception("Expected an unpromotable type error")
 
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    TestTypeInference('test_slicing').debug()
+    TestTypeInference('test_rebind_arg').debug()
     unittest.main()

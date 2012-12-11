@@ -2,9 +2,14 @@ import traceback
 
 def format_pos(node):
     if node is not None and hasattr(node, 'lineno'):
-        return "%s:%s: " % (node.lineno, node.col_offset)
+        return format_postup((node.lineno, node.col_offset))
     else:
         return ""
+
+def format_postup(tup):
+    lineno, col_offset = tup
+    return "%s:%s: " % (lineno - 1, col_offset)
+
 
 class NumbaError(Exception):
     "Some error happened during compilation"
