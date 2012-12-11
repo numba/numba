@@ -9,6 +9,7 @@ from ctypes import *
 from .error import *
 from numbapro._utils import finalizer
 import threading
+from weakref import WeakValueDictionary
 
 #------------------
 # Configuration
@@ -209,6 +210,14 @@ class Driver(object):
         'cuLaunchKernel':       (c_int, cu_function, c_uint, c_uint, c_uint,
                                  c_uint, c_uint, c_uint, c_uint, cu_stream,
                                  POINTER(c_void_p), POINTER(c_void_p)),
+
+        # CUresult cuMemHostRegister(void * 	p,
+        #                            size_t 	bytesize,
+        #                            unsigned int 	Flags)
+        'cuMemHostRegister':    (c_int, c_void_p, c_size_t, c_uint),
+
+        # CUresult cuMemHostUnregister(void * 	p)
+        'cuMemHostUnregister':  (c_int, c_void_p),
     }
 
     OLD_API_PROTOTYPES = {
@@ -532,7 +541,10 @@ class DeviceMemory(finalizer.OwnerMixin):
             global debug_memory_alloc
             debug_memory_alloc += 1
 
-    def to_device_raw(self, src, size, stream=None):
+    def to_device_raw(self, src, size, stream=None, pinned=False):
+        if pinned:
+            pm = PinnedMemory(src, size)
+            self.add_dependencies(pm)
         if stream:
             error = self.driver.cuMemcpyHtoDAsync(self._handle, src, size, stream._handle)
         else:
@@ -571,6 +583,51 @@ class DeviceMemory(finalizer.OwnerMixin):
     @property
     def device(self):
         return self.context.device
+
+class PinnedMemory(finalizer.OwnerMixin):
+
+    # Use a weak value dictionary to cache pointer-value -> PinnedMemory object.
+    __cache = WeakValueDictionary()
+
+    def __new__(cls, ptr, size):
+        if isinstance(ptr, int) or isinstance(ptr, long):
+            ptr_value = ptr
+        else:
+            ptr_value = ptr.value
+        if ptr_value in cls.__cache:
+            # If the memory is already pinned,
+            # return the existing object
+            return cls.__cache[ptr_value]
+
+        inst = object.__new__(PinnedMemory)
+        # Cache instance in the cache
+        cls.__cache[ptr_value] = inst
+        inst._initialize(ptr, size)
+        return inst
+
+    def _initialize(self, ptr, size):
+        self._pointer = ptr
+        # possible flags are portable (between context)
+        # and deivce-map (map host memory to device thus no need
+        # for memory transfer).
+        flags = 0
+        error = self.driver.cuMemHostRegister(ptr, size, flags)
+        self.driver.check_error(error, 'Failed to pin memory')
+        self._finalizer_track(self._pointer)
+
+    @classmethod
+    def _finalize(cls, pointer):
+        driver = Driver()
+        error = driver.cuMemHostUnregister(pointer)
+        driver.check_error(error, 'Failed to unpin memory')
+
+    @property
+    def context(self):
+        return self.driver.current_context()
+
+    @property
+    def driver(self):
+        return Driver()
 
 CU_JIT_INFO_LOG_BUFFER = 3
 CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES = 4

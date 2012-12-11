@@ -9,13 +9,22 @@ assert not hasattr(np.ndarray, 'device_partition')
 assert not hasattr(np.ndarray, 'copy_to_host')
 
 class DeviceNDArray(np.ndarray):
-    def to_device(self, stream=0, copy=True):
+    def to_device(self, stream=0, copy=True, pinned=False):
         '''Transfer the ndarray to the device.
 
+        stream --- [optional] The stream to use; or use 0 to imply no stream.
+                              Default to 0.
+        copy --- [optional] Whether to transfer the data or just allocate.
+                            Default to True.
+        pinned --- [optional] Whether to use pinned-memory for faster memory
+                              transfer.  Default to False because over
+                              pinning reduces the amount of physical memory
+                              to the system.
         '''
         assert not hasattr(self, '__device_memory')
         assert not hasattr(self, '__gpu_readback')
-        packed = ndarray_device_memory_and_data(self, stream=stream, copy=copy)
+        packed = ndarray_device_memory_and_data(self, stream=stream, copy=copy,
+                                                pinned=pinned)
         retriever, device_memory, device_data = packed
         self.__device_memory = device_memory
         self.__device_data = device_data
