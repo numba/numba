@@ -23,11 +23,11 @@ def lookup(block, var_name):
 def types(symtab, *varnames):
     return tuple(symtab[varname].type for varname in varnames)
 
-def infer(func, signature=functype(), warn=True):
+def infer(func, signature=functype(), warn=True, **kwargs):
     ast = functions._get_ast(func)
     pipe, (signature, symtab, ast) = pipeline.run_pipeline(
                         decorators.context, func, ast, signature,
-                        order=order, warn=warn)
+                        order=order, warn=warn, **kwargs)
 
     last_block = ast.flow.blocks[-2]
     symbols = {}

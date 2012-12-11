@@ -848,12 +848,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             lhs_var.type = rhs_var.type
         elif lhs_var.type != rhs_var.type:
             if lhs_var.name in self.locals:
+                # Type must be consistent
                 self.assert_assignable(lhs_var.type, rhs_var.type)
                 if rhs_node:
                     rhs_node = nodes.CoercionNode(rhs_node, lhs_var.type)
-                #if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
-                #        lhs_var.promotable_type):
-                #    lhs_var.type = self.promote_types(lhs_var.type, rhs_var.type)
             elif lhs_var.type.is_deferred:
                 # Override type with new assignment of a deferred LHS and
                 # update the type graph to link it together correctly
@@ -862,10 +860,16 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 lhs_var.type = rhs_var.type
                 deferred_type.update()
             elif isinstance(lhs_node, ast.Name):
-                # Override type with new assignment
-                lhs_var.type = rhs_var.type
+                if lhs_var.renameable:
+                    # Override type with new assignment
+                    lhs_var.type = rhs_var.type
+                else:
+                    # Promote type for cellvar or freevar
+                    if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
+                            lhs_var.promotable_type):
+                        lhs_var.type = self.promote_types(lhs_var.type,
+                                                          rhs_var.type)
 
-        lhs_var.deleted = False
         return rhs_node
 
     #------------------------------------------------------------------------
@@ -1012,8 +1016,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             else:
                 # Local variable
                 local_variable = self.symtab[node.id]
-                if (node.id in self.locals or local_variable.is_cellvar or
-                        local_variable.is_freevar):
+                if not local_variable.renameable:
                     variable = local_variable
                 else:
                     variable = node.variable

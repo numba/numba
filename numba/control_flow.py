@@ -1014,7 +1014,7 @@ class FuncDefExprNode(nodes.Node):
 class ControlFlowAnalysis(visitors.NumbaTransformer):
     """
     Control flow analysis pass that builds the CFG and injects the blocks
-    into the AST.
+    into the AST (but not all blocks are injected).
 
     The CFG must be build in topological DFS order, e.g. the 'if' condition
     block must precede the clauses and the clauses must precede the exit.
@@ -1026,15 +1026,14 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
     function_level = 0
 
-    def __init__(self, context, func, ast, *args, **kwargs):
-        super(ControlFlowAnalysis, self).__init__(context, func, ast,
-                                                  *args, **kwargs)
+    def __init__(self, context, func, ast, allow_rebind_args, **kwargs):
+        super(ControlFlowAnalysis, self).__init__(context, func, ast, **kwargs)
         self.visitchildren = self.generic_visit
         self.current_directives = kwargs.get('directives', None) or {}
         self.current_directives['warn'] = kwargs.get('warn', True)
         self.set_default_directives()
         symtab = kwargs.get('symtab', None) or {}
-        self.symtab = self.initialize_symtab()
+        self.symtab = self.initialize_symtab(allow_rebind_args)
 
         self.graphviz = self.current_directives['control_flow.dot_output']
         if self.graphviz:
@@ -1046,6 +1045,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.flow = ControlFlow(self.source_descr)
 
     def set_default_directives(self):
+        "Set some defaults for warnings"
         warn = self.current_directives['warn']
         self.current_directives.setdefault('warn.maybe_uninitialized', warn)
         self.current_directives.setdefault('warn.unused_result', False)
@@ -1054,14 +1054,27 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.current_directives.setdefault('control_flow.dot_output', dot_output_graph)
         self.current_directives.setdefault('control_flow.dot_annotate_defs', False)
 
-    def initialize_symtab(self):
+    def initialize_symtab(self, allow_rebind_args):
+        """
+        Populate the symbol table with variables and set their renaming status.
+
+        Variables appearing in locals, or arguments typed through the 'jit'
+        decorator are not renameable.
+        """
         symbols = symtab.Symtab(self.symtab)
         for var_name in self.local_names:
             variable = symtab.Variable(None, name=var_name, is_local=True)
+
+            # Set cellvar status. Free variables are not assignments, and
+            # are caught in the type inferencer
             variable.is_cellvar = var_name in self.cellvars
             # variable.is_freevar = var_name in self.freevars
-            variable.renameable = (var_name not in self.locals and not
-                                   (variable.is_cellvar or variable.is_freevar))
+
+            variable.renameable = (
+                var_name not in self.locals and not
+                (variable.is_cellvar or variable.is_freevar) and
+                (var_name not in self.argnames or allow_rebind_args))
+
             symbols[var_name] = variable
 
         return symbols

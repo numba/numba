@@ -48,11 +48,16 @@ class Pipeline(object):
 
     def __init__(self, context, func, ast, func_signature,
                  nopython=False, locals=None, order=None, codegen=False,
-                 symtab=None, **kwargs):
+                 symtab=None, allow_rebind_args=True, **kwargs):
         self.context = context
         self.func = func
         self.ast = ast
         self.func_signature = func_signature
+
+        # Whether argument variables may be rebound to different types.
+        # e.g. def f(a): a = "hello" ;; f(0.0)
+        self.allow_rebind_args = allow_rebind_args
+
         ast.pipeline = self
 
         self.func_name = kwargs.get('name')
@@ -95,7 +100,8 @@ class Pipeline(object):
         return cls(self.context, self.func, ast,
                    func_signature=self.func_signature, nopython=self.nopython,
                    symtab=self.symtab, func_name=self.func_name,
-                   locals=self.locals, **kwds)
+                   locals=self.locals,
+                   allow_rebind_args=self.allow_rebind_args, **kwds)
 
     def insert_specializer(self, name, after):
         "Insert a new transform or visitor into the pipeline"
@@ -128,12 +134,15 @@ class Pipeline(object):
 
             self._current_pipeline_stage = method_name
             ast = getattr(self, method_name)(ast)
-            te = _timer() #  for profileing individual stage
+
+            te = _timer() #  for profiling individual stage
             logger.info("%X pipeline stage %30s:\t%.3fms",
                         id(self), method_name, (te - ts) * 1000)
+
         tomega = _timer() # for profiling complete pipeline
         logger.info("%X pipeline entire:\t\t\t\t\t%.3fms",
                     id(self), (tomega - talpha) * 1000)
+
         return self.func_signature, self.symtab, ast
 
     #

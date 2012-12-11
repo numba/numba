@@ -6,7 +6,7 @@ Test type inference.
 '''
 # ______________________________________________________________________
 
-from numba.minivect import minitypes
+from numba.minivect import minitypes, minierror
 from numba import *
 from numba import _numba_types as numba_types
 from numba import ast_type_inference
@@ -93,6 +93,11 @@ def func_with_signature(a):
 
     return a + 1j
 
+def arg_rebind(a):
+    a = 0
+    a = 0.0
+    a = "hello"
+
 # ______________________________________________________________________
 
 from numba.tests.cfg.test_cfg_type_infer import infer, functype
@@ -162,9 +167,23 @@ class TestTypeInference(unittest.TestCase):
         sig, symtab = infer(func_with_signature, functype(float_, [int_]))
         assert sig == float_(int_)
 
+    def test_rebind_arg(self):
+        sig, symtab = infer(arg_rebind, functype(int_, [int_]),
+                            allow_rebind_args=True)
+        assert sig == int_(int_)
+        assert symtab['a'].type == c_string_type
+
+        try:
+            sig, symtab = infer(arg_rebind, functype(int_, [int_]),
+                                allow_rebind_args=False)
+        except minierror.UnpromotableTypeError, e:
+            msg = str(sorted(e.args, key=str))
+            self.assertEqual("[(double, const char *)]", msg)
+        else:
+            raise Exception("Expected an unpromotable type error")
 
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    TestTypeInference('test_slicing').debug()
+    TestTypeInference('test_rebind_arg').debug()
     unittest.main()

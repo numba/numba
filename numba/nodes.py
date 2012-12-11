@@ -8,7 +8,7 @@ from numba import *
 from .symtab import Variable
 from . import _numba_types as numba_types
 from numba import utils, translate, error
-from numba.minivect import minitypes
+from numba.minivect import minitypes, minierror
 
 import llvm.core
 
@@ -304,7 +304,10 @@ class ConstNode(Node):
         else:
             raise NotImplementedError(dst_type)
 
-        self.pyval = caster(self.pyval)
+        try:
+            self.pyval = caster(self.pyval)
+        except ValueError:
+            raise minierror.UnpromotableTypeError((dst_type, self.type))
         self.type = dst_type
         self.variable.type = dst_type
 
