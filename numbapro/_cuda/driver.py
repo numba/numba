@@ -32,7 +32,8 @@ cu_context = c_void_p           # an opaque handle
 cu_module = c_void_p            # an opaque handle
 cu_jit_option = c_int           # enum
 cu_function = c_void_p          # an opaque handle
-cu_device_ptr = c_size_t        # defined as unsigned int on 32-bit and unsigned long long on 64-bit machine
+cu_device_ptr = c_size_t        # defined as unsigned int on 32-bit
+                                # and unsigned long long on 64-bit machine
 cu_stream = c_void_p            # an opaque handle
 
 CUDA_SUCCESS                              = 0
@@ -248,8 +249,10 @@ class Driver(object):
 
     __INSTANCE = None
 
+    # A mapping from context handle -> Context instance
     _CONTEXTS = {}
 
+    # Thread local storage for cache the context
     _THREAD_LOCAL = threading.local()
 
     def __new__(cls, override_path=None):
@@ -337,6 +340,14 @@ class Driver(object):
                 raise exc
 
     def create_context(self, device=None):
+        '''Create a new context.
+            
+        NOTE: If there is already a context for this module, 
+              this function will raise Exception.
+              We do not support multiple contexts per thread, yet.
+            
+        device --- [optional] The device object to be used for the new context.
+        '''
         if device is None:
             device = Device(0)
         if self.current_context(noraise=True) is not None:
@@ -344,7 +355,6 @@ class Driver(object):
             raise Exception(errmsg)
         ctxt = _Context(device)
         self._CONTEXTS[ctxt._handle.value] = ctxt
-
         self._cache_current_context(ctxt)
 
     def current_context(self, noraise=False):
@@ -417,12 +427,12 @@ class Device(object):
         self.driver.check_error(error, 'Failed to get device %d' % device_id)
         assert device_id == got_device.value
         self.id = got_device.value
-        self._read_attributes()
+        self.__read_attributes()
 
     def __str__(self):
         return "CUDA device %d" % self.id
 
-    def _read_attributes(self):
+    def __read_attributes(self):
         got_value = c_int()
         for name, num in self.ATTRIBUTES.items():
             error = self.driver.cuDeviceGetAttribute(byref(got_value), num,
@@ -602,10 +612,10 @@ class PinnedMemory(finalizer.OwnerMixin):
         inst = object.__new__(PinnedMemory)
         # Cache instance in the cache
         cls.__cache[ptr_value] = inst
-        inst._initialize(ptr, size)
+        inst.__initialize(ptr, size)
         return inst
 
-    def _initialize(self, ptr, size):
+    def __initialize(self, ptr, size):
         self._pointer = ptr
         # possible flags are portable (between context)
         # and deivce-map (map host memory to device thus no need
