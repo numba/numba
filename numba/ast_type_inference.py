@@ -372,7 +372,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         super(TypeInferer, self).__init__(context, func, ast, **kwds)
 
         self.given_return_type = self.func_signature.return_type
-        self.return_variables = []
         self.return_type = None
 
         ast.symtab = self.symtab
@@ -389,7 +388,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         """
         Infer types for the function.
         """
-        self.return_variable = Variable(None)
+        self.return_variable = Variable(self.given_return_type)
         self.ast = self.visit(self.ast)
 
         self.return_type = self.return_variable.type or void
@@ -406,8 +405,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # Change signatures returning complex numbers or structs to
             # signatures taking a pointer argument to a complex number
             # or struct
-            #argtypes += (restype,)
-            #restype = void
             self.func_signature.struct_by_reference = True
 
     def init_global(self, global_name):
@@ -944,12 +941,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def visit_Return(self, node):
         if node.value is not None:
+            # 'return value'
             self.ast.have_return = True
             value = self.visit(node.value)
             type = value.variable.type
             assert type is not None
         else:
-            # This is possible when we do "return" without any value
+            # 'return'
             value = None
 
         if value is None or type.is_none:
@@ -961,14 +959,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif self.return_variable.type is None:
             self.return_variable.type = type
         elif self.return_variable.type != type:
-            # todo: in case of unpromotable types, return object?
-            self.return_variable.type = self.promote_types_numeric(
-                                    self.return_variable.type, type)
+            # TODO: in case of unpromotable types, return object?
+            if self.given_return_type is None:
+                self.return_variable.type = self.promote_types_numeric(
+                                        self.return_variable.type, type)
 
-            # XXX: DeferredCoercionNode __init__ is not compatible
-            #      with CoercionNode __new__.
-            #      We go around the problem for test_if.test_if_fn_5
-            #      by not visiting this block if return_variable.type == type.
             value = nodes.DeferredCoercionNode(value, self.return_variable)
 
         node.value = value

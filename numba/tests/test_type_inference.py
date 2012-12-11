@@ -83,6 +83,16 @@ def none_newaxis(a):
     k = a[None, 0, numpy.newaxis]
     l = a[0, n, numpy.newaxis]
 
+def func_with_signature(a):
+    if a > 1:
+        return float(a)
+    elif a < 5:
+        return int(a)
+    elif a > 10:
+        return object()
+
+    return a + 1j
+
 # ______________________________________________________________________
 
 from numba.tests.cfg.test_cfg_type_infer import infer, functype
@@ -141,6 +151,16 @@ class TestTypeInference(unittest.TestCase):
         #self.assertEqual(symtab['j'].type, double[:, :, :])
         self.assertEqual(symtab['k'].type, double[:, :])
         self.assertEqual(symtab['l'].type, double[:, :])
+
+    def test_return_type(self):
+        sig, symtab = infer(func_with_signature, functype(int_, [int_]))
+        assert sig == int_(int_)
+
+        sig, symtab = infer(func_with_signature, functype(int_, [float_]))
+        assert sig == int_(float_)
+
+        sig, symtab = infer(func_with_signature, functype(float_, [int_]))
+        assert sig == float_(int_)
 
 
 # ______________________________________________________________________
