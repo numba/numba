@@ -8,6 +8,7 @@ import contextlib
 from ctypes import *
 from .error import *
 from numbapro._utils import finalizer
+import threading
 
 #------------------
 # Configuration
@@ -240,6 +241,8 @@ class Driver(object):
 
     _CONTEXTS = {}
 
+    _THREAD_LOCAL = threading.local()
+
     def __new__(cls, override_path=None):
         if cls.__INSTANCE is None:
             cls.__INSTANCE = inst = object.__new__(Driver)
@@ -327,17 +330,43 @@ class Driver(object):
     def create_context(self, device=None):
         if device is None:
             device = Device(0)
+        if self.current_context(noraise=True) is not None:
+            errmsg = "Does not support multiple context per thread, yet."
+            raise Exception(errmsg)
         ctxt = _Context(device)
         self._CONTEXTS[ctxt._handle.value] = ctxt
 
-    def current_context(self):
+        self._cache_current_context(ctxt)
+
+    def current_context(self, noraise=False):
+        '''Get current context from TLS
+        '''
+        try:
+            handle = self._THREAD_LOCAL.context
+        except AttributeError:
+            if noraise:
+                return None
+            else:
+                raise CudaDriverError("No context was created")
+        else:
+            return self._CONTEXTS[handle]
+
+    def _cache_current_context(self, ctxt):
+        '''Store current context into TLS
+        '''
+        self._THREAD_LOCAL.context = ctxt._handle.value
+
+    def get_current_context(self):
+        '''Uses CUDA driver API to get current context
+        '''
         handle = cu_context()
         error = self.cuCtxGetCurrent(byref(handle))
         self.check_error(error, "Fail to get current context.")
         if handle.value is None:
             raise CudaDriverError("No CUDA context was created.")
         else:
-            return self._CONTEXTS[handle.value]
+            context = self._CONTEXTS[handle.value]
+            return context
 
     def get_or_create_context(self, device=None):
         '''Returns the current context if exists, or get create a new one.
@@ -376,7 +405,7 @@ class Device(object):
         self.driver = Driver()
         got_device = c_int()
         error = self.driver.cuDeviceGet(byref(got_device), device_id)
-        self.driver.check_error(error, 'Failed to get device %d')
+        self.driver.check_error(error, 'Failed to get device %d' % device_id)
         assert device_id == got_device.value
         self.id = got_device.value
         self._read_attributes()
