@@ -1,6 +1,6 @@
 """
 >>> test_refcounting()
-True
+[3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
 
 >>> sys.getrefcount(object())
 1
@@ -116,70 +116,70 @@ def test_refcounting():
     # This fails in nose
     #expected = "\n".join("Unique(%d)" % i for i in range(10)) + '\n'
     #print out.getvalue() == expected
-    print all(sys.getrefcount(obj) == 3 for obj in L)
+    print [sys.getrefcount(obj) for obj in L]
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def fresh_obj():
     x = object()
     return x
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def fresh_obj2():
     return object()
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def fresh_obj3():
     x = object()
     y = x
     return y
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def fresh_obj4():
     x = np.ones(1, dtype=np.double)
     y = x
     return y
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def fresh_obj5():
     return np.ones(1, dtype=np.double)
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def fresh_obj6():
     x = np.ones(1, dtype=np.double)
     y = x
     return x
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def fresh_obj7():
     x = np.ones(1, dtype=np.double)
     return [x]
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def fresh_obj8():
     x = np.ones(1, dtype=np.double)
     return {"value": x}
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def fresh_obj9():
     x = np.ones(1, dtype=np.double)
     return (x,)
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def index_count(L):
     x = L[0]
     return x
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def attr_count(obj):
     x = obj.value
     return x
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def exc(obj):
     x = obj
     return object()('boom')
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def count_arguments(x, y):
     x = y
     y = x
@@ -187,16 +187,16 @@ def count_arguments(x, y):
     b = y
     return x, y
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def count_arguments2(obj):
     pass
 
-@autojit(backend='ast')
+@autojit(backend='ast', warn=False)
 def count_arguments3(obj):
     x = obj
 
 if __name__ == "__main__":
-#    print sys.getrefcount(fresh_obj7())
+#    print sys.getrefcount(fresh_obj())
 #    exc(object())
     import doctest
     doctest.testmod()

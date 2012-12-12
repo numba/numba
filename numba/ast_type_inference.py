@@ -621,7 +621,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def is_trivial_cycle(self, type):
         "Return whether the type directly refers to itself"
-        return len(type.parents) == 1 and list(type.parents)[0] is type
+        return type in type.parents
 
     def _debug_type(self, start_point):
         if start_point.is_scc:
@@ -1508,7 +1508,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if node.starargs or node.kwargs:
             raise error.NumbaError("star or keyword arguments not implemented")
 
-        if self.visitchildren:
+        if visitchildren:
             node.func = self.visit(node.func)
             self.visitlist(node.args)
             self.visitlist(node.keywords)

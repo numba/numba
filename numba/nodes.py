@@ -307,6 +307,8 @@ class ConstNode(Node):
         try:
             self.pyval = caster(self.pyval)
         except ValueError:
+            if dst_type.is_int and self.type.is_c_string:
+                raise
             raise minierror.UnpromotableTypeError((dst_type, self.type))
         self.type = dst_type
         self.variable.type = dst_type
