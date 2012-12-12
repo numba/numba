@@ -185,5 +185,5 @@ class TestTypeInference(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    TestTypeInference('test_rebind_arg').debug()
+    #TestTypeInference('test_rebind_arg').debug()
     unittest.main()
