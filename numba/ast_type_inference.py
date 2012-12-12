@@ -1419,6 +1419,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         flags = None # FIXME: Stub.
         signature = None
         llvm_func = None
+        new_node = None
         if (any(arg_type.is_unresolved for arg_type in arg_types) and
                 not func_type == object_):
             result = self.function_cache.get_function(py_func, arg_types,
@@ -1426,33 +1427,35 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if result is not None:
                 signature, llvm_func, py_func = result
             else:
-                return self._create_deferred_call(arg_types, call_node)
-        elif py_func is not None:
-            signature, llvm_func, py_func = \
-                    self.function_cache.compile_function(py_func, arg_types)
+                new_node = self._create_deferred_call(arg_types, call_node)
+        elif self.function_cache.is_registered(py_func):
+            fn_info = self.function_cache.compile_function(py_func, arg_types)
+            signature, llvm_func, py_func = fn_info
         else:
             assert arg_types is not None
             signature = self.function_cache.get_signature(arg_types)
 
-        assert signature is not None
-
-        if llvm_func is not None:
-            new_node = nodes.NativeCallNode(signature, call_node.args,
-                                            llvm_func, py_func)
-        elif not call_node.keywords and self._is_math_function(
-                                        call_node.args, py_func):
-            new_node = self._resolve_math_call(call_node, py_func)
-        else:
-            new_node = nodes.ObjectCallNode(signature, call_node.func,
-                                            call_node.args, call_node.keywords,
-                                            py_func)
+        if new_node is None:
+            assert signature is not None
+            if llvm_func is not None:
+                new_node = nodes.NativeCallNode(signature, call_node.args,
+                                                llvm_func, py_func)
+            elif not call_node.keywords and self._is_math_function(
+                                            call_node.args, py_func):
+                new_node = self._resolve_math_call(call_node, py_func)
+            else:
+                new_node = nodes.ObjectCallNode(signature, call_node.func,
+                                                call_node.args,
+                                                call_node.keywords,
+                                                py_func)
 
         if not func_type.is_object:
             raise error.NumbaError(
                 call_node, "Cannot call object of type %s" % (func_type,))
 
         if new_node.type.is_object:
-            new_node = self._resolve_return_type(func_type, new_node, call_node)
+            new_node = self._resolve_return_type(func_type, new_node,
+                                                 call_node)
 
         return new_node
 
