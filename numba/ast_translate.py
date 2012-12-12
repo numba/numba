@@ -352,7 +352,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                     context, func, ast, func_signature=func_signature,
                     nopython=nopython, symtab=symtab,
                     llvm_module=llvm_module,
-                    **kws)
+                    **kwds)
 
         self.func_name = kwds.get('func_name', None)
         self.func_signature = func_signature

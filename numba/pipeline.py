@@ -324,12 +324,24 @@ class PipelineStage(object):
                    symtab=env.crnt.symtab,
                    func_name=env.crnt.func_name,
                    llvm_module=env.crnt.llvm_module,
+                   locals=env.crnt.locals,
+                   allow_rebind_args=env.crnt.allow_rebind_args,
                    **kws)
 
     def __call__(self, ast, env):
         if env.stage_checks: self.check_preconditions(ast, env)
         ast = self.transform(ast, env)
         if env.stage_checks: self.check_postconditions(ast, env)
+        return ast
+
+class ControlFlowAnalysis(PipelineStage):
+    def transform(self, ast, env):
+        transform = self.make_specializer(control_flow.ControlFlowAnalysis,
+                                          ast, env)
+        ast = transform.visit(ast)
+        env.crnt.symtab = transform.symtab
+        ast.flow = transform.flow
+        env.crnt.ast.cfg_transform = transform
         return ast
 
 class ConstFolding(PipelineStage):
@@ -358,7 +370,7 @@ class TypeInfer(PipelineStage):
 
     def transform(self, ast, env):
         type_inferer = self.make_specializer(type_inference.TypeInferer,
-                                             ast, env, locals=env.crnt.locals,
+                                             ast, env,
                                              **env.crnt.kwargs)
         type_inferer.infer_types()
         env.crnt.func_signature = type_inferer.func_signature
@@ -411,7 +423,8 @@ class CodeGen(PipelineStage):
 
 class PipelineEnvironment(object):
     init_stages=[
-        ConstFolding,
+        ControlFlowAnalysis,
+        #ConstFolding,
         TypeInfer,
         TypeSet,
         ClosureTypeInference,
@@ -464,6 +477,7 @@ class PipelineEnvironment(object):
                                    self.parent.context.llvm_module)
         self.nopython = kws.pop('nopython', False)
         self.locals = kws.pop('locals', None)
+        self.allow_rebind_args = kws.pop('allow_rebind_args', True)
         self.kwargs = kws
 
 def check_stage(stage):

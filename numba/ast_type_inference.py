@@ -1413,8 +1413,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         Resolve a call to a function. If we know about the function,
         generate a native call, otherwise go through PyObject_Call().
         """
+        flags = None # FIXME: Stub.
         if any(arg_type.is_unresolved for arg_type in arg_types) and not func_type == object_:
-            result = self.function_cache.get_function(py_func, arg_types)
+            result = self.function_cache.get_function(py_func, arg_types, 
+                                                      flags)
             if result is not None:
                 signature, llvm_func, py_func = result
             else:
