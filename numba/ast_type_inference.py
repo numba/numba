@@ -26,7 +26,7 @@ import logging
 debug = False
 #debug = True
 
-#logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 #logger.setLevel(logging.INFO)
 if debug:
     logger.setLevel(logging.DEBUG)
@@ -1412,7 +1412,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         Resolve a call to a function. If we know about the function,
         generate a native call, otherwise go through PyObject_Call().
         """
-        if any(arg_type.is_unresolved for arg_type in arg_types) and not func_type == object_:
+        if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
+            logger.debug('func_type = %r, py_func = %r, call_node = %s' %
+                         (func_type, py_func, utils.pformat_ast(call_node)))
+        if (any(arg_type.is_unresolved for arg_type in arg_types) and
+                not func_type == object_):
             result = self.function_cache.get_function(py_func, arg_types)
             if result is not None:
                 signature, llvm_func, py_func = result
