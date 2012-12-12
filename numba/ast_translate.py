@@ -394,13 +394,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     # __________________________________________________________________________
 
-    def _load_arg(self, argtype, larg):
-        if (minitypes.pass_by_ref(argtype) and
-            self.func_signature.struct_by_reference):
-            larg = self.builder.load(larg)
-
-        return larg
-
 #    def _init_args(self):
 #        for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
 #                                          self.func_signature.args):
@@ -450,6 +443,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 #
 #                var.lvalue = stackspace
 
+
+    def _load_arg_by_ref(self, argtype, larg):
+        if (minitypes.pass_by_ref(argtype) and
+            self.func_signature.struct_by_reference):
+            larg = self.builder.load(larg)
+
+        return larg
+
     def _allocate_arg_local(self, name, argtype, larg):
         """
         Allocate a local variable on the stack.
@@ -459,37 +460,77 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.store(larg, stackspace)
         return stackspace
 
+    def allocate_object_local(self, local_name):
+        pass
+
+    def renameable(self, variable):
+        renameable = self.have_cfg and (not variable or variable.renameable)
+        return renameable
+
+    def incref_arg(self, argname, argtype, larg, variable):
+        # TODO: incref objects in structs
+        if not (self.nopython or argtype.is_closure_scope):
+            if is_obj(variable.type) and self.refcount_args:
+                if self.renameable(variable):
+                    lvalue = self._allocate_arg_local(argname, argtype,
+                                                      variable.lvalue)
+                else:
+                    lvalue = variable.lvalue
+
+                self.object_local_temps[argname] = lvalue
+                self.incref(larg)
+
     def _init_args(self):
+        """
+        Unpack arguments:
+
+            1) Intialize SSA variables
+            2) Handle variables declared in the 'locals' dict
+        """
         for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
                                           self.func_signature.args):
             larg.name = argname
-
             variable = self.symtab.get(argname, None)
-            if self.have_cfg and (not variable or variable.renameable):
+
+            if self.renameable(variable):
                 # Set value on first definition of the variable
                 if argtype.is_closure_scope:
                     variable = self.symtab[argname]
                 else:
                     variable = self.symtab.lookup_renamed(argname, 0)
-                larg = self._load_arg(argtype, larg)
+
+                larg = self._load_arg_by_ref(argtype, larg)
                 variable.lvalue = larg
-            else:
+            elif argname in self.locals or variable.is_cellvar:
                 # Allocate on stack
                 variable = self.symtab[argname]
                 variable.lvalue = self._allocate_arg_local(argname, argtype, larg)
 
-            # TODO: incref objects in structs
-            if not (self.nopython or argtype.is_closure_scope):
-                if is_obj(variable.type) and self.refcount_args:
-                    self.incref(larg)
+            self.incref_arg(argname, argtype, larg, variable)
+
+    def c_array_to_pointer(self, name, stackspace, var):
+        "Decay a C array to a pointer to allow pointer access"
+        ltype = var.type.base_type.pointer().to_llvm(self.context)
+        pointer = self.builder.alloca(ltype, name=name + "_p")
+        p = self.builder.gep(stackspace, [llvm_types.constant_int(0),
+                                          llvm_types.constant_int(0)])
+        self.builder.store(p, pointer)
+        stackspace = pointer
+        return stackspace
 
     def _allocate_locals(self):
+        """
+        Allocate local variables:
+
+            1) Intialize SSA variables
+            2) Handle variables declared in the 'locals' dict
+        """
         for name, var in self.symtab.items():
             # FIXME: 'None' should be handled as a special case (probably).
             if var.type.is_uninitialized and var.cf_references:
                 assert var.uninitialized_value, var
                 var.lvalue = self.visit(var.uninitialized_value)
-            elif name in self.locals and name not in self.argnames:
+            elif name in self.locals and not name in self.argnames:
                 name = 'var_%s' % var.name
                 if is_obj(var.type):
                     stackspace = self._null_obj_temp(name, type=var.ltype)
@@ -500,15 +541,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                     # TODO: memset struct to 0
                     pass
                 elif var.type.is_carray:
-                    ltype = var.type.base_type.pointer().to_llvm(self.context)
-                    pointer = self.builder.alloca(ltype, name=name + "_p")
-                    p = self.builder.gep(stackspace, [llvm_types.constant_int(0),
-                                                      llvm_types.constant_int(0)])
-                    self.builder.store(p, pointer)
-                    stackspace = pointer
+                    stackspace = self.c_array_to_pointer(name, stackspace, var)
 
                 var.lvalue = stackspace
-
 
     def setup_func(self):
         have_return = getattr(self.ast, 'have_return', None)
@@ -530,6 +565,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.object_coercer = ObjectCoercer(self)
         self.multiarray_api.set_PyArray_API(self.llvm_module)
 
+        self.object_local_temps = {}
         self._init_args()
         self._allocate_locals()
 
@@ -849,10 +885,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def lfunc_pointer(self):
         return LLVMContextManager().get_pointer_to_function(self.lfunc)
 
-    def _null_obj_temp(self, name, type=None):
+    def _null_obj_temp(self, name, type=None, change_bb=False):
+        if change_bb:
+            bb = self.builder.basic_block
         lhs = self.llvm_alloca(type or llvm_types._pyobject_head_struct_p,
                                name=name, change_bb=False)
         self.generate_assign(self.visit(nodes.NULL_obj), lhs)
+        if change_bb:
+            self.builder.position_at_end(bb)
         return lhs
 
     def puts(self, msg):
@@ -890,12 +930,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.builder.position_at_end(self.current_cleanup_bb)
 
         # Decref local variables
-        if not self.nopython and False: # TODO: Re-enable refcounting !!
-            for name, var in self.symtab.iteritems():
-                if (var.is_local and is_obj(var.type) and not
-                        var.type.is_closure_scope and var.renameable):
-                    if self.refcount_args or not name in self.argnames:
-                        self.xdecref(var.lvalue)
+        for name, stackspace in self.object_local_temps.iteritems():
+            self.xdecref_temp(stackspace)
 
         if self.is_void_return:
             self.builder.ret_void()
@@ -938,42 +974,57 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_StructVariable(self, node):
         return self.visit(node.node)
 
-    def visit_Assign(self, node):
-        value = self.visit(node.value)
-
-        target_node = node.targets[0]
-        object = is_obj(target_node.type)
-        if object:
-            self.incref(value)
-
-        if isinstance(target_node, ast.Name):
-            # self.decref(target)
-            # print "Assigning", target_node.variable, error.format_pos(node).rstrip(": ")
-            if target_node.variable.renameable:
-                # phi nodes are in place for the variable
-                target_node.variable.lvalue = value
-            else:
-                # The variable is stack allocated
-                self.builder.store(value, target_node.variable.lvalue)
-        else:
-            target = self.visit(target_node)
-            if object:
-                self.decref(target)
-            self.generate_assign(value, target)
-
     def generate_assign(self, lvalue, ltarget, decref=False, incref=False):
-        '''
+        """
         Generate assignment operation and automatically cast value to
         match the target type.
-        '''
+        """
         if lvalue.type != ltarget.type.pointee:
             lvalue = self.caster.cast(lvalue, ltarget.type.pointee)
 
+        if incref:
+            self.incref(lvalue)
         if decref:
             # Py_XDECREF any previous object
             self.xdecref_temp(ltarget)
 
         self.builder.store(lvalue, ltarget)
+
+    def stack_assign(self, lhs, rhs):
+        if is_obj(lhs_type):
+            self.decref(lhs)
+        self.generate_assign(rhs, lhs, decref)
+
+    def visit_Assign(self, node):
+        target_node = node.targets[0]
+        is_object = is_obj(target_node.type)
+        value = self.visit(node.value)
+
+        incref = is_object
+        decref = is_object
+
+        if (isinstance(target_node, ast.Name) and
+                self.renameable(target_node.variable)):
+            # phi nodes are in place for the variable
+            target_node.variable.lvalue = value
+            if not is_object:
+                # No worries about refcounting, we are done
+                return
+
+            # Refcount SSA variables
+            if target_node.id not in self.object_local_temps:
+                target = self._null_obj_temp(target_node.id, change_bb=True)
+                self.object_local_temps[target_node.id] = target
+                decref = bool(self.loop_beginnings)
+            else:
+                target = self.object_local_temps[target_node.id]
+        else:
+            target = self.visit(target_node)
+
+        # INCREF RHS. Note that new references are always in temporaries, and
+        # hence we can only borrow references, and have to make it an owned
+        # reference
+        self.generate_assign(value, target, decref=decref, incref=incref)
 
     def visit_Num(self, node):
         if node.type.is_int:
@@ -1757,7 +1808,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # goto error if NULL
         # self.puts("checking error... %s" % error.format_pos(node))
-        self.object_coercer.check_err(rhs)
+        self.object_coercer.check_err(rhs, pos_node=node.node)
         # self.puts("all good at %s" % error.format_pos(node))
 
         if node.incref:
@@ -1904,7 +1955,8 @@ class ObjectCoercer(object):
         self.function_cache = translator.function_cache
         self.NULL = self.translator.visit(nodes.NULL_obj)
 
-    def check_err(self, llvm_result, callback=None, cmp=llvm.core.ICMP_EQ):
+    def check_err(self, llvm_result, callback=None, cmp=llvm.core.ICMP_EQ,
+                  pos_node=None):
         """
         Check for errors. If the result is NULL, and error should have been set
         Jumps to translator.error_label if an exception occurred.
@@ -1919,7 +1971,10 @@ class ObjectCoercer(object):
                       callback=callback or default_callback, cmp=cmp)
         else:
             test = self.builder.icmp(cmp, int_result, NULL)
-            bb = self.translator.append_basic_block('no_error')
+            name = 'no_error'
+            if hasattr(pos_node, 'lineno'):
+                name = 'no_error_%s' % error.format_pos(pos_node).rstrip(": ")
+            bb = self.translator.append_basic_block(name)
             self.builder.cbranch(test, self.translator.error_label, bb)
             self.builder.position_at_end(bb)
 

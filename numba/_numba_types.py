@@ -491,8 +491,7 @@ class PromotionType(UnresolvedType):
         for type in self.types:
             if type not in seen:
                 seen.add(type)
-                if type.is_unresolved:
-                    type = type.resolve()
+                type = resolve_type_chain(type)
                 seen.add(type)
                 if type.is_promotion:
                     type.dfs(types, seen)
@@ -540,8 +539,6 @@ class PromotionType(UnresolvedType):
             seen = set()
 
         # Find all types in the type graph and eliminate nested promotion types
-        # TODO: find strongly connected promotions in the strongly connected
-        # TODO: component graph, and resolve them as one
         types = self.find_types(seen)
         # types = self.find_simple(seen)
 
@@ -842,11 +839,22 @@ class DeferredCallType(ReanalyzeCircularType):
         return "<deferred_call(%s, %s)" % (self.call_node,
                                            ", ".join(map(str, self.parents)))
 
+def resolve_type_chain(type):
+    if not type.is_unresolved:
+        return type
+
+    while type.is_unresolved:
+        old_type = type
+        type = old_type.resolve()
+        if type is old_type or not type.is_unresolved:
+            break
+
+    return type
 
 def error_circular(var):
     raise error.NumbaError(
         var.name_assignment and var.name_assignment.assignment_node,
-        "Unable to infer type for assignment to %s,"
+        "Unable to infer type for assignment to %r,"
         " insert a cast or initialize the variable." % var.name)
 
 class StronglyConnectedCircularType(UnresolvedType):
@@ -880,7 +888,7 @@ class StronglyConnectedCircularType(UnresolvedType):
                 reanalyzeable.substitute_and_reinfer()
 
     def err_no_input(self):
-        raise error.NumbaError(self.variable.assignment_node,
+        raise error.NumbaError(self.variable and self.variable.assignment_node,
                                "No input types for this assignment were "
                                "found, a cast is needed")
 

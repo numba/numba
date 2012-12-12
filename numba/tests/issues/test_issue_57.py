@@ -60,5 +60,5 @@ class TestIssue57(unittest.TestCase):
 
 
 if __name__ == "__main__":
-#    jit('f4[:,:](i2,f4[:,:])')(ra_numba)
-    test_support.main()
+    jit('f4[:,:](i2,f4[:,:])')(ra_numba)
+#    test_support.main()

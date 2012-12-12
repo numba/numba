@@ -311,6 +311,6 @@ NumbaError: 301:5: Expected 1 arguments type(s), got 0
 """
 
 if __name__ == '__main__':
-#    pass
+#    closure1 = closure_arg(1)
     import doctest
     doctest.testmod()
