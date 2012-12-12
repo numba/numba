@@ -15,7 +15,6 @@ from _cuda import ptx
 from numba.minivect import minitypes
 from numba import void
 import numba.decorators
-import _cuda.default # this creates the default context
 
 cached = {}
 def jit(restype=void, argtypes=None, backend='ast', **kws):
@@ -375,6 +374,7 @@ numba.decorators.numba_function_autojit_targets['gpu'] = CudaAutoJitNumbaFunctio
 
 # NDarray device helper
 def to_device(ary, *args, **kws):
+    import numbapro._cuda.default # ensure we have a GPU device
     from numbapro._cuda import devicearray
     devarray =  ary.view(type=devicearray.DeviceNDArray)
     devarray.to_device(*args, **kws)
@@ -383,8 +383,28 @@ def to_device(ary, *args, **kws):
 # Stream helper
 
 def stream():
+    import numbapro._cuda.default # ensure we have a GPU device
     from numbapro._cuda.driver import Stream
     return Stream()
 
-# Macros
+# Device selection
+
+def select_device(device_id):
+    '''Call this before any CUDA feature is used in each thread.
+
+    Raises exception on error.
+    '''
+    from numbapro._cuda import driver as cu
+    driver = cu.Driver()
+    device = cu.Device(device_id)
+    driver.create_context(device)
+
+def close():
+    '''Explicitly closes the context.
+        
+    Destroy the current context of the current thread
+    '''
+    from numbapro._cuda import driver as cu
+    driver = cu.Driver()
+    driver.release_context(driver.current_context())
 

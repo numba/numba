@@ -21,6 +21,8 @@ class DeviceNDArray(np.ndarray):
                               pinning reduces the amount of physical memory
                               to the system.
         '''
+        # Ensure we already have a CUDA device
+        from . import default # this creates the default context
         assert not hasattr(self, '__device_memory')
         assert not hasattr(self, '__gpu_readback')
         packed = ndarray_device_memory_and_data(self, stream=stream, copy=copy,

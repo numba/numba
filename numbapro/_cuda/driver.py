@@ -820,9 +820,3 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, stream_handle, ar
 
         driver.check_error(error, "Failed to launch kernel")
 
-# auto initialize CUDA driver when import
-try:
-    Driver()
-except CudaDriverError, e:
-    raise CudaSupportError(*e.args)
-

@@ -1,4 +1,4 @@
-from numbapro import cuda # this should have created a CUDA context
+from numbapro import cuda
 from numba import *
 import numpy as np
 import unittest
