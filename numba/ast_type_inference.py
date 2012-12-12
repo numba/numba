@@ -1417,6 +1417,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             logger.debug('func_type = %r, py_func = %r, call_node = %s' %
                          (func_type, py_func, utils.pformat_ast(call_node)))
         flags = None # FIXME: Stub.
+        signature = None
+        llvm_func = None
         if (any(arg_type.is_unresolved for arg_type in arg_types) and
                 not func_type == object_):
             result = self.function_cache.get_function(py_func, arg_types,
@@ -1425,9 +1427,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 signature, llvm_func, py_func = result
             else:
                 return self._create_deferred_call(arg_types, call_node)
-        else:
+        elif py_func is not None:
             signature, llvm_func, py_func = \
                     self.function_cache.compile_function(py_func, arg_types)
+        else:
+            assert arg_types is not None
+            signature = self.function_cache.get_signature(arg_types)
+
+        assert signature is not None
 
         if llvm_func is not None:
             new_node = nodes.NativeCallNode(signature, call_node.args,
@@ -1436,8 +1443,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                         call_node.args, py_func):
             new_node = self._resolve_math_call(call_node, py_func)
         else:
-            assert arg_types is not None
-            signature = self.function_cache.get_signature(arg_types)
             new_node = nodes.ObjectCallNode(signature, call_node.func,
                                             call_node.args, call_node.keywords,
                                             py_func)
