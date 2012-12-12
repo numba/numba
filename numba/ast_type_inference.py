@@ -1453,7 +1453,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             raise error.NumbaError(
                 call_node, "Cannot call object of type %s" % (func_type,))
 
-        if new_node.type.is_object:
+        if signature and new_node.type.is_object:
             new_node = self._resolve_return_type(func_type, new_node,
                                                  call_node)
 
