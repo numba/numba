@@ -419,9 +419,6 @@ class Name(ast.Name, Node):
             name = self.variable.unmangled_name
         return "name(%s%s)" % (name, type)
 
-class ForRangeNode(Node):
-    _fields = ['index', 'target', 'start', 'stop', 'step', 'body']
-
 class FunctionCallNode(Node):
     _attributes = ['signature', 'type', 'name']
 

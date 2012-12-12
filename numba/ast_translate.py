@@ -1274,50 +1274,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_While(self, node):
         self.visit_If(node, is_while=True)
 
-    def visit_ForRangeNode(self, node):
-        """
-        Implements simple for loops over range or xrange
-        """
-        start, stop, step = self.visitlist([node.start, node.stop, node.step])
-        target = self.visit(node.target)
-
-        # assert isinstance(target.ctx, ast.Store)
-        self.visit(node.cond_block)
-        bb_incr = self.visit(node.target_block)
-        bb_body = self.visit(node.body)
-        bb_exit = self.visit(node.orelse)
-
-        self.setup_loop(bb_cond, bb_exit)
-        self.visit(node.cond_block)
-
-        # generate initializer
-        self.generate_assign(start, target)
-        self.builder.branch(bb_cond)
-
-        # generate condition
-        self.builder.position_at_end(bb_cond)
-        index = self.visit(node.index)
-        op = _compare_mapping_sint['<']
-        cond = self.builder.icmp(op, index, stop)
-        self.builder.cbranch(cond, bb_body, bb_exit)
-
-        # generate increment
-        self.builder.position_at_end(bb_incr)
-        self.builder.store(self.builder.add(index, step), target)
-        self.builder.branch(bb_cond)
-
-        # generate body
-        self.builder.position_at_end(bb_body)
-        for stmt in node.body:
-            self.visit(stmt)
-
-        if not self.is_block_terminated():
-            self.builder.branch(bb_incr)
-
-        # move to exit block
-        self.builder.position_at_end(bb_exit)
-        self.teardown_loop()
-
     def visit_Continue(self, node):
         assert self.loop_beginnings # Python syntax should ensure this
         self.builder.branch(self.loop_beginnings[-1])
