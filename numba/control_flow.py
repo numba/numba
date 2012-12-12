@@ -449,9 +449,14 @@ class ControlFlow(object):
             for block in self.blocks:
                 print block.id, sorted(block.dominators, key=lambda b: b.id)
 
+        blocks = []
         for block in self.blocks:
-            block.idom = self.immediate_dominator(block)
-            block.visited = False
+            if block.parents:
+                block.idom = self.immediate_dominator(block)
+                block.visited = False
+                blocks.append(block)
+
+        self.blocks = blocks
 
         def visit(block, result):
             block.visited = True
