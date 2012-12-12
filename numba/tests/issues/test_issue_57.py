@@ -6,6 +6,7 @@ import unittest
 import time
 import logging
 
+logger = logging.getLogger(__name__)
 
 def ra_numba(doy, lat):
     '''Modified from http://nbviewer.ipython.org/4117896/'''
@@ -29,7 +30,6 @@ def ra_numba(doy, lat):
 
     return ra
 
-
 def ra_numpy(doy, lat):
     Gsc = 0.0820
     pi = math.pi
@@ -44,21 +44,25 @@ def ra_numpy(doy, lat):
 
     return ra
 
-
 class TestIssue57(unittest.TestCase):
     def test_ra_numba(self):
         test_fn = jit('f4[:,:](i2,f4[:,:])')(ra_numba)
-        lat = np.deg2rad(np.ones((1000, 1000), dtype=np.float32) * 45.)
-        t0 = time.time()
+        lat = np.deg2rad(np.ones((5, 5), dtype=np.float32) * 45.)
         control_arr = ra_numpy(120, lat)
-        t1 = time.time()
         test_arr = test_fn(120, lat)
-        t2 = time.time()
-        logging.info('Numpy time %0.6fs, Numba time %0.6fs' % (
-                t1 - t0, t2 - t1))
         self.assertTrue(np.allclose(test_arr, control_arr))
 
+def benchmark():
+    test_fn = jit('f4[:,:](i2,f4[:,:])')(ra_numba)
+    lat = np.deg2rad(np.ones((1000, 1000), dtype=np.float32) * 45.)
+    t0 = time.time()
+    control_arr = ra_numpy(120, lat)
+    t1 = time.time()
+    test_arr = test_fn(120, lat)
+    t2 = time.time()
+    logger.info('Numpy time %0.6fs, Numba time %0.6fs' % (
+            t1 - t0, t2 - t1))
+    assert np.allclose(test_arr, control_arr)
 
 if __name__ == "__main__":
-#    jit('f4[:,:](i2,f4[:,:])')(ra_numba)
     test_support.main()
