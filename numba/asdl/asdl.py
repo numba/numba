@@ -12,19 +12,24 @@ def _get_asdl_depending_on_version():
 
     global version_specific_path
     major, minor = sys.version_info[0], sys.version_info[1]
+    # Assumes that specific-path and common-path are a subdirectory
+    # Build an absolute module path.
+    prefix = __name__.rsplit('.', 1)
+    # The else-case is for running tests in the current directory
+    base = (prefix[0] + '.') if len(prefix) > 1 else ''
     dir = 'py%d_%d' % (major, minor)
     version_specific_path = os.path.join(_cd, dir)
 
-    use_rel_and_abs = -1
+    use_abs_import = 0
 
-    modname = dir + '.asdl'
+    modname = base + dir + '.asdl'
     try:
         # try to import from version specific directory
-        mod = __import__(modname, fromlist=_importlist, level=use_rel_and_abs)
+        mod = __import__(modname, fromlist=_importlist, level=use_abs_import)
     except ImportError:
         # fallback to import from common directory
         dir = 'common'
-        modname = dir + '.asdl'
+        modname = base + dir + '.asdl'
         mod = __import__(modname, fromlist=_importlist, level=use_rel_and_abs)
     for i in _importlist:
         globals()[i] = getattr(mod, i)

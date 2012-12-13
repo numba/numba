@@ -22,3 +22,10 @@ Usage
 	import schema
 	sch = schema.load("Python.asdl")
 	sch.verify(some_ast)
+
+Testing
+-------
+
+Run tests in the current directory:
+
+$ python -m unittest discover -vft tests

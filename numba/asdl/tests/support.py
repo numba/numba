@@ -1,8 +1,9 @@
+import sys, os
+# add parent path to import schema & asdl
+sys.path += [os.path.dirname(__file__), '..']
 import unittest
-import os
 import schema
 import contextlib
-import sys
 
 def build_schema():
     '''Build a schema from Python.asdl
@@ -16,6 +17,3 @@ class SchemaTestCase(unittest.TestCase):
 
     def capture_error(self):
         return self.assertRaises(schema.SchemaError)
-
-# add parent path to import schema & asdl
-sys.path += [os.path.dirname(__file__), '..']
