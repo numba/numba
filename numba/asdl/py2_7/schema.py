@@ -3,10 +3,27 @@ import asdl
 from collections import defaultdict, namedtuple
 import contextlib
 
-SUM = 'sum'
-PROD = 'prod'
+class _rule(namedtuple('rule', ['kind', 'fields'])):
+    __slots__ = ()
 
-_rule = namedtuple('rule', ['kind', 'fields'])
+    SUM = 0
+    PROD = 1
+
+    @classmethod
+    def sum(cls, fields):
+        return cls(kind=cls.SUM, fields=fields)
+
+    @classmethod
+    def product(cls, fields):
+        return cls(kind=cls.PROD, fields=fields)
+
+    @property
+    def is_sum(self):
+        return self.kind == self.SUM
+
+    @property
+    def is_product(self):
+        return self.kind == self.PROD
 
 class _debuginfo_t(namedtuple("_debuginfo_t", ['node', 'field', 'offset'])):
     __slots__ = ()
@@ -34,7 +51,7 @@ class Schema(object):
         self.name = name
         # a dictionary of {type name -> fields}
         self.types = defaultdict(list)
-        # a dictionary of {definition name -> (['sum'|'product'], fields)}
+        # a dictionary of {definition name -> _rule}
         self.dfns = {}
 
     def verify(self, ast, context=None):
@@ -48,7 +65,7 @@ class Schema(object):
         for k, fs in self.types.items():
             print '    --', k, fs
         for k, fs in self.dfns.items():
-            if fs.kind == SUM:
+            if fs.is_sum():
                 print '   ', k
                 for f in fs.fields:
                     print '       |', f
@@ -151,19 +168,19 @@ class SchemaVerifier(ast.NodeVisitor):
                                   (name, type(value)))
         else:
             # not a builtin type?
-            kind, subtypes = self._get_dfn(name)
-            if kind == SUM:
-                self._sentry_child(value, subtypes)
+            rule = self._get_dfn(name)
+            if rule.is_sum:
+                self._sentry_child(value, rule.fields)
                 self.visit(value)
             else:
-                assert kind == PROD
+                assert rule.is_product
                 name0 = type(value).__name__
                 if name0 != name:
                     raise SchemaError(self._debug_context,
                                       "Expecting %s but got %s" % \
                                       (name, name0))
 
-                self._visit(value, subtypes)
+                self._visit(value, rule.fields)
 
     def _get_dfn(self, name):
         ret = self.schema.dfns.get(str(name))
@@ -204,8 +221,8 @@ class SchemaBuilder(asdl.VisitorBase):
         self.visit(type.value, str(type.name))
 
     def visitSum(self, sum, name):
-        self.schema.dfns[str(name)] = _rule(SUM, [str(t.name)
-                                                  for t in sum.types])
+        self.schema.dfns[str(name)] = _rule.sum([str(t.name)
+                                                 for t in sum.types])
         for t in sum.types:
             self.visit(t, name, sum.attributes)
 
@@ -223,7 +240,7 @@ class SchemaBuilder(asdl.VisitorBase):
 
     def visitProduct(self, prod, name):
         assert not hasattr(prod, 'attributes')
-        self.schema.dfns[str(name)] = _rule(PROD, prod.fields)
+        self.schema.dfns[str(name)] = _rule.product(prod.fields)
         for f in prod.fields:
             self.visit(f, name)
 
