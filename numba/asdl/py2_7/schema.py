@@ -29,6 +29,8 @@ class _debuginfo_t(namedtuple("_debuginfo_t", ['node', 'field', 'offset'])):
     __slots__ = ()
 
     def __str__(self):
+        '''Create string reprentation to be used in SchemaError
+        '''
         if self.field is not None:
             if self.offset is not None:
                 return "At %s.%s[%d]" % (self.node, self.field, self.offset)
@@ -46,6 +48,15 @@ class SchemaError(Exception):
         super(SchemaError, self).__init__("%s: %s" % (ctxt, msg))
 
 class Schema(object):
+    '''A Schema object that is used to verify against an AST.
+    
+    It is built from SchemaBuilder
+        
+    Usage:
+
+        schema.verify(ast)
+        schema.verify(ast, context=SchemaContext())
+    '''
     def __init__(self, name):
         # name of the asdl module
         self.name = name
@@ -55,7 +66,10 @@ class Schema(object):
         self.dfns = {}
 
     def verify(self, ast, context=None):
-        '''Check against an AST
+        '''Check against an AST raises SchemaError upon error.
+        
+        ast --- The ast being verified
+        context --- [optional] a SchemaContext.
         '''
         context = context if context is not None else SchemaContext()
         return SchemaVerifier(self, context).visit(ast)
@@ -74,7 +88,10 @@ class Schema(object):
 
 class SchemaContext(object):
     '''Keep information about context:
-        - builtin handlers
+        - builtin type handlers
+        
+    User may expand the builtin type handlers.  See `builtin_handlers`.
+        
     '''
     def __init__(self):
         self.__builtins = {}
@@ -100,12 +117,23 @@ class SchemaContext(object):
 
 
 class SchemaVerifier(ast.NodeVisitor):
+    '''A internal class that implement a the verification logic.
+    '''
     def __init__(self, schema, context):
+        '''
+        schema --- a Schema object that defines a valid AST.
+        context --- a SchemaConctext object.
+        '''
         self.schema = schema
         self.context = context
         self._debug_context = None
     
     def visit(self, node):
+        '''Start verification at the node.
+        
+        Verification can begin at any AST node.  Can it will recursively
+        verify each and every subtree.
+        '''
         current = self._get_type(node)
         self._visit(node, current)
 
@@ -200,7 +228,9 @@ class SchemaVerifier(ast.NodeVisitor):
         return ret
 
 class SchemaBuilder(asdl.VisitorBase):
-    '''
+    '''A single instance of SchemaBuilder can be used build different 
+    Schema from different ASDL.
+
     Usage:
         schblr = SchemaBuilder()
         schblr.visit(some_asdl)
@@ -248,6 +278,10 @@ class SchemaBuilder(asdl.VisitorBase):
     def schema(self):
         return self.__schema
 
+#
+# Builtin types handler
+#
+
 def _verify_identifier(value):
     return isinstance(value, str)
 
@@ -263,6 +297,9 @@ def _verify_object(value):
 def _verify_bool(value):
     return isinstance(value, bool)
 
+#
+#  Utilities
+#
 def _is_iterable(value):
     try:
         iter(value)

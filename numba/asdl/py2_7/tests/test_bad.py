@@ -1,3 +1,5 @@
+# Use Python.asdl to test bad ast.
+
 import unittest, support, ast
 
 class TestBad(support.SchemaTestCase):

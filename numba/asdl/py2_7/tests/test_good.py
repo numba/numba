@@ -1,3 +1,7 @@
+# Uses Python.asdl to test against some python script
+# and some manually built ast
+
+
 import unittest, support
 import ast, os
 
@@ -21,14 +25,14 @@ class TestGood(support.SchemaTestCase):
                                             lineno=0,
                                             col_offset=0),
                              lineno=0, col_offset=0)
-        self.schema.verify(the_ast)
+        self.schema.verify(the_ast)  # should not raise
 
     def _test_script(self, path):
         if path.startswith('.'):
             path = os.path.join(os.path.dirname(__file__), path)
         the_script = open(path).read()
         the_ast = ast.parse(the_script)
-        self.schema.verify(the_ast) # should not raise
+        self.schema.verify(the_ast)  # should not raise
 
 if __name__ == '__main__':
     unittest.main()
