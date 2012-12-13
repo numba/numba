@@ -140,6 +140,8 @@ class CoercionNode(Node):
                 pass
             else:
                 return node
+        elif isinstance(node, CoercionNode) and node.type == dst_type:
+            return node
 
         if dst_type.is_pointer and node.type.is_int:
             assert node.type == Py_uintptr_t
@@ -405,7 +407,7 @@ class Name(ast.Name, Node):
     cf_maybe_null = False
     raise_unbound_node = None
 
-    _fields = ['check_unbound']
+    _fields = ast.Name._fields + ('check_unbound',)
 
     def __init__(self, id, ctx, *args, **kwargs):
         super(Name, self).__init__(*args, **kwargs)

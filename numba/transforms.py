@@ -584,7 +584,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     nodes.ObjectInjectNode(ctypes_pointer_type, object_)]
             new_node = nodes.call_pyfunc(ctypes.cast, args)
         elif node_type.is_bool:
-            new_node = self.function_cache.call("PyBool_FromLong", node.node)
+            new_node = self.function_cache.external_call(
+                "PyBool_FromLong", node.node, llvm_module=self.llvm_module)
 
         self.generic_visit(new_node)
         return new_node
@@ -1037,8 +1038,12 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif is_obj(node.value.type):
-            if node.type.is_module_attribute:
-                new_node = nodes.ObjectInjectNode(node.type.value)
+            if isinstance(node.value.type, numba_types.ModuleType):
+                if node.type.is_module_attribute:
+                    new_node = nodes.ObjectInjectNode(node.type.value)
+                else:
+                    new_node = nodes.ConstNode(getattr(node.value.type.module,
+                                                       node.attr))
             else:
                 new_node = self.function_cache.external_call(
                                     'PyObject_GetAttrString', node.value,
@@ -1313,5 +1318,42 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                 node = op_method(node)
             else:
                 raise error.NumbaError(
-                    node, 'Unsupported native binary operation: %s' % op_name)
+                    node, 'Unsupported binary operation for object: %s' %
+                    op_name)
+        return node
+
+    def _object_unaryop(self, node, api_name):
+        return self.visit(
+            self.function_cache.external_call(api_name, node.operand,
+                                              llvm_module = self.llvm_module))
+
+    def _object_Invert(self, node):
+        return self._object_unaryop(node, 'PyNumber_Invert')
+
+    def _object_Not(self, node):
+        return self.visit(
+            nodes.IfExp(nodes.Compare(
+                    self.function_cache.external_call('PyObject_IsTrue',
+                                                      node.operand),
+                    [nodes.Eq()], [nodes.ConstNode(0)]),
+                        nodes.ObjectInjectNode(True),
+                        nodes.ObjectInjectNode(False)))
+
+    def _object_UAdd(self, node):
+        return self._object_unaryop(node, 'PyNumber_Positive')
+
+    def _object_USub(self, node):
+        return self._object_unaryop(node, 'PyNumber_Negative')
+
+    def visit_UnaryOp(self, node):
+        self.generic_visit(node)
+        if node.type.is_object:
+            op_name = type(node.op).__name__
+            op_method = getattr(self, '_object_%s' % op_name, None)
+            if op_method:
+                node = op_method(node)
+            else:
+                raise error.NumbaError(
+                    node, 'Unsupported unary operation for objects: %s' %
+                    op_name)
         return node

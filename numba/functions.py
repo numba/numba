@@ -744,3 +744,16 @@ create_binary_pyfunc('PyNumber_Or')
 create_binary_pyfunc('PyNumber_Xor')
 create_binary_pyfunc('PyNumber_And')
 create_binary_pyfunc('PyNumber_FloorDivide')
+
+class PyNumber_Positive(ofunc):
+    pass
+
+class PyNumber_Negative(ofunc):
+    pass
+
+class PyNumber_Invert(ofunc):
+    pass
+
+class PyObject_IsTrue(ExternalFunction):
+    arg_types = [object_]
+    return_type = int_

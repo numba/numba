@@ -114,6 +114,7 @@ class ModuleType(NumbaType, minitypes.ObjectType):
         self.module = module
         self.is_numpy_module = module is np
         self.is_numba_module = module is numba
+        self.is_math_module = module is math
 
     def __repr__(self):
         if self.is_numpy_module:

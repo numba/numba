@@ -1605,7 +1605,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif type.is_numpy_module or type.is_numpy_attribute:
             result_type = numba_types.NumpyAttributeType(module=type.module,
                                                          attr=node.attr)
-        elif type.is_numba_module:
+        elif type.is_numba_module or type.is_math_module:
             result_type = self.context.typemapper.from_python(attribute)
             if result_type == object_:
                 result_type = None
