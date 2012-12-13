@@ -9,11 +9,18 @@ class TestGood(support.SchemaTestCase):
         self._test_script('../schema.py')
 
     def test_return_optional_value(self):
-        the_ast = ast.Return()
+        the_ast = ast.Return(lineno=0,
+                             col_offset=0)
         self.schema.verify(the_ast)
-        the_ast = ast.Return(value=None)
+        the_ast = ast.Return(value=None,
+                             lineno=0,
+                             col_offset=0)
         self.schema.verify(the_ast)
-        the_ast = ast.Return(value=ast.Name(id='x', ctx=ast.Load()))
+        the_ast = ast.Return(value=ast.Name(id='x',
+                                            ctx=ast.Load(),
+                                            lineno=0,
+                                            col_offset=0),
+                             lineno=0, col_offset=0)
         self.schema.verify(the_ast)
 
     def _test_script(self, path):

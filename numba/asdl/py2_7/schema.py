@@ -205,20 +205,24 @@ class SchemaBuilder(asdl.VisitorBase):
 
     def visitSum(self, sum, name):
         self.schema.dfns[str(name)] = _rule(SUM, [str(t.name)
-                                                 for t in sum.types])
+                                                  for t in sum.types])
         for t in sum.types:
-            self.visit(t, name)
+            self.visit(t, name, sum.attributes)
 
-    def visitConstructor(self, cons, name):
+    def visitConstructor(self, cons, name, attr=[]):
         typename = str(cons.name)
         fields = self.schema.types[typename]
         for f in cons.fields:
             fields.append(f)
+        for f in attr:
+            fields.append(f)
+
 
     def visitField(self, field, name):
         key = str(field.type)
 
     def visitProduct(self, prod, name):
+        assert not hasattr(prod, 'attributes')
         self.schema.dfns[str(name)] = _rule(PROD, prod.fields)
         for f in prod.fields:
             self.visit(f, name)
