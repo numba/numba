@@ -20,7 +20,7 @@ from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
 from numba import utils
 from numba.utils import dump
-
+from numba.asdl import schema
 from numba.minivect import minitypes
 
 logger = logging.getLogger(__name__)
@@ -335,6 +335,12 @@ class PipelineStage(object):
         return ast
 
 class ControlFlowAnalysis(PipelineStage):
+    _pre_condition_schema = schema.load('Python.asdl')
+
+    def check_preconditions(self, ast, env):
+        self._pre_condition_schema.verify(ast)  # raises exception on error
+        return True
+
     def transform(self, ast, env):
         transform = self.make_specializer(control_flow.ControlFlowAnalysis,
                                           ast, env)
