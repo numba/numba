@@ -4,6 +4,19 @@ import asdl
 from collections import defaultdict, namedtuple
 import contextlib
 
+def load(name):
+    '''Load a ASDL Schema by name; e.g. "Python.asdl".
+        
+    Returns a Schema object.
+
+    This tries to load from the version-specific directory, first.
+    If it failed, it loads from the common-directory.
+    '''
+    python_asdl = asdl.load(name)
+    schblr = SchemaBuilder()
+    schblr.visit(python_asdl)
+    return schblr.schema
+
 class _rule(namedtuple('rule', ['kind', 'fields'])):
     __slots__ = ()
 

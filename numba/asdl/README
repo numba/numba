@@ -14,3 +14,11 @@ File Lookup Order
 -----------------
 
 Version-specific files are searched first.  If they don't exist, the common ones are used.
+
+
+Usage
+-----
+
+	import schema
+	sch = schema.load("Python.asdl")
+	sch.verify(some_ast)
