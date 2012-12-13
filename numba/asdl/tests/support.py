@@ -8,11 +8,7 @@ import sys
 def build_schema():
     '''Build a schema from Python.asdl
     '''
-    srcfile = os.path.join(os.path.dirname(__file__), '../Python.asdl')
-
-    python_asdl = asdl.parse(srcfile)
-    assert asdl.check(python_asdl)
-
+    python_asdl = asdl.load('Python.asdl')
     schblr = SchemaBuilder()
     schblr.visit(python_asdl)
     schema = schblr.schema

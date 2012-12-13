@@ -3,11 +3,13 @@
 
 
 import unittest, support
-import ast, os
+import ast, os, inspect
 
 class TestGood(support.SchemaTestCase):
     def test_self(self):
-        self._test_script(__file__)
+        # Cannot use __file__ because it may get the .pyc file instead
+        srcfile = inspect.getsourcefile(type(self))
+        self._test_script(srcfile)
 
     def test_schema_dot_py(self):
         self._test_script('../schema.py')
