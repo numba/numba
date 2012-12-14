@@ -299,6 +299,12 @@ def compile(context, func, restype=None, argtypes=None, ctypes=False,
     if compile_only:
         return func_signature, t, None
 
+    # begin experimental
+    import functions
+    intrlib = functions.default_intrinsic_library(context)
+    intrlib.link(t.lfunc.module)
+    # end experimental
+
     t.link()
     return func_signature, t, get_wrapper(t, ctypes)
 

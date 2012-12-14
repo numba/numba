@@ -181,6 +181,7 @@ class LLVMContextManager(object):
 
     def link(self, lfunc):
         if lfunc.module is not self.module:
+            # optimize
             self.pass_manager.run(lfunc.module)
             # link module
             func_name = lfunc.name

@@ -8,7 +8,7 @@ from .minivect import minitypes
 import numba.ast_translate as translate
 from numba import nodes
 from llpython.byte_translator import LLVMTranslator
-
+import llvm.core
 import logging
 import traceback
 logger = logging.getLogger(__name__)
@@ -235,7 +235,7 @@ class FunctionCache(object):
         #            return module.add_function(extfunc.type, name)
 
         declared_func = globals()[name](**kws)
-        lfunc = self.build_external_function(declared_func, module=module)
+        lfunc = declare_external_function(self.context, declared_func, module)
         return declared_func.signature, lfunc
 
     def external_call(self, name, *args, **kw):
@@ -264,6 +264,8 @@ class FunctionCache(object):
         Build an external function given it's signature information. 
         See the `ExternalFunction` class.
         """
+        # TODO: Remove this function
+        assert False, "Unused"
         assert module is not None
         try:
             lfunc = module.get_function_named(external_function.name)
@@ -295,6 +297,133 @@ class FunctionCache(object):
     #
     #    return ret_val
 
+def sig_to_lfunc_type(context, sig):
+    '''Generate LLVM function type from a signature'''
+    func_type = minitypes.FunctionType(return_type=sig.return_type,
+                                       args=sig.arg_types,
+                                       is_vararg=sig.is_vararg)
+    return func_type.to_llvm(context)
+
+def declare_external_function(context, external_function, module):
+    '''
+    context --- numba context.
+    external_function --- see class ExternalFunction below.
+    module --- a llvm module.
+    '''
+    lfunc_type = sig_to_lfunc_type(context, external_function)
+    # Declare it in the llvm module
+    return module.get_or_insert_function(lfunc_type, external_function.name)
+
+def build_external_function(context, external_function, module):
+    """
+    Build an external function given it's signature information.
+    See the `ExternalFunction` class.
+
+    context --- numba context.
+    external_function --- see class ExternalFunction below.
+    module --- a llvm module.
+    """
+    lfunc = declare_external_function(context, external_function, module)
+
+    assert lfunc.is_declaration
+
+    if isinstance(external_function, InternalFunction):
+        lfunc.linkage = external_function.linkage
+        external_function.implementation(module, lfunc)
+
+    return lfunc
+
+class IntrinsicLibrary(object):
+    '''An intrinsic library maintains a LLVM module for holding the 
+    intrinsics.  These are functions are used internally to implement
+    specific features.
+    '''
+    def __init__(self, context):
+        self._context = context
+        self._module = llvm.core.Module.new('intrlib.%X' % id(self))
+        # A lookup dictionary that matches (name, argtys) -> lfunc
+        self._functions = {}
+        # Build function pass manager to reduce memory usage of 
+        from llvm.passes import FunctionPassManager, PassManagerBuilder
+        pmb = PassManagerBuilder.new()
+        pmb.opt_level = 2
+        self._fpm = FunctionPassManager.new(self._module)
+        pmb.populate(self._fpm)
+
+    def add(self, name, sig, impl):
+        '''Add a new intrinsic.
+        name --- function name
+        sig --- function signature
+        impl --- a callable that implements the lfunc
+        '''
+        # implement the intrinsic
+        lfunc_type = sig_to_lfunc_type(self._context, sig)
+        lfunc = self._module.add_function(lfunc_type, name=name)
+        impl(lfunc)
+
+        # optimize the function
+        self._fpm.run(lfunc)
+
+        # populate the lookup dictionary
+        key = name, tuple(sig.arg_types)
+        self._functions[key] = lfunc
+
+    def get(self, name, argtys):
+        '''Get an intrinsic by name and sig
+        name --- function name
+        sig --- function signature
+        '''
+        key = name, tuple(sig.arg_types)
+        return self._functions[key]
+
+    def link(self, module):
+        '''Link the intrinsic library into the target module.
+        '''
+        module.link_in(self._module, preserve=True)
+
+def default_intrinsic_library(context):
+    '''Build an intrinsic library with a default set of external functions.
+        
+    context --- numba context
+    '''
+    intrlib = IntrinsicLibrary(context)
+    gsym = globals()
+
+    # install intrinsics
+    excluded = [InternalFunction, ExternalFunction, PyModulo]
+    def _filter(x):
+        return (x not in excluded
+                and isinstance(x, type)
+                and issubclass(x, ExternalFunction))
+
+    extfns = filter(_filter, globals().itervalues())
+
+    def _impl(ef):
+        def _wrapped(lfunc):
+            if isinstance(ef, InternalFunction):
+                lfunc.linkage = ef.linkage
+                ef.implementation(lfunc.module, lfunc)
+        return _wrapped
+    for efcls in extfns:
+        ef = efcls()
+        intrlib.add(ef.name, ef, _impl(ef))
+
+    # Install pymodulo intrinsics
+    # Implement for all numeric types
+    from _numba_types import int8, int16, int32, int64, int_, intp, f4, f8
+    numerictypes = int8, int16, int32, int64, int_, intp, f4, f8
+    types = []
+
+    for t in numerictypes:
+        group = [t] * 3
+        types.append(group)
+
+    for t in types:
+        retty, argtys = t[0], t[1:]
+        pymodulo = PyModulo(return_type=retty, arg_types=argtys)
+        intrlib.add(pymodulo.name, pymodulo, _impl(pymodulo))
+
+    return intrlib
 
 class _LLVMModuleUtils(object):
     # TODO: rewrite print statements w/ native types to printf during type
