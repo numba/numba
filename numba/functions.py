@@ -385,6 +385,9 @@ def default_intrinsic_library(context):
     '''Build an intrinsic library with a default set of external functions.
         
     context --- numba context
+        
+    TODO: It is possible to cache the default intrinsic library as a bitcode 
+          file on disk so that we don't build it every time.
     '''
     intrlib = IntrinsicLibrary(context)
     gsym = globals()
