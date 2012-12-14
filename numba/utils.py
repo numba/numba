@@ -80,8 +80,8 @@ def ast2tree (node, include_attrs = True):
         raise TypeError('expected AST, got %r' % node.__class__.__name__)
     return _transform(node)
 
-def pformat_ast (node, include_attrs = True):
-    return pprint.pformat(ast2tree(node, include_attrs))
+def pformat_ast (node, include_attrs = True, **kws):
+    return pprint.pformat(ast2tree(node, include_attrs), **kws)
 
 def dump(node):
     print pformat_ast(node)
