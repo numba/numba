@@ -18,8 +18,7 @@ class NumbaproPipeline(pipeline.Pipeline):
     def rewrite_array_expressions(self, ast):
         # transformer = ArrayExpressionRewriteUfunc(self.context, self.func, ast)
         transformer = self.make_specializer(
-            array_expressions.ArrayExpressionRewriteNative, ast,
-            llvm_module=self.llvm_module)
+            array_expressions.ArrayExpressionRewriteNative, ast)
         return transformer.visit(ast)
 
     def rewrite_prange_privates(self, ast):

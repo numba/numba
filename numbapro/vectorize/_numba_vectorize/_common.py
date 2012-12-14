@@ -168,22 +168,18 @@ class ASTVectorizeMixin(object):
 
     def __init__(self, *args, **kwargs):
         super(ASTVectorizeMixin, self).__init__(*args, **kwargs)
-        self.llvm_context = ast_translate.LLVMContextManager()
-        self.mod = self.llvm_context.get_default_module()
-        self.ee = self.llvm_context.get_execution_engine()
         self.args_restypes = getattr(self, 'args_restypes', [])
         self.signatures = []
+        self.llvm_context = ast_translate.LLVMContextManager()
 
     def _get_ee(self):
-        return self.ee
+        return self.llvm_context.execution_engine
 
     def add(self, restype=None, argtypes=None):
-        dec = decorators.jit2(restype, argtypes,
-                              _llvm_module=self.mod,
-                              _llvm_ee=self.ee)
+        dec = decorators.jit(restype, argtypes, backend='ast')
         numba_func = dec(self.pyfunc)
         self.args_restypes.append(list(numba_func.signature.args) +
-                                   [numba_func.signature.return_type])
+                                  [numba_func.signature.return_type])
         self.signatures.append((restype, argtypes, {}))
         self.translates.append(numba_func)
 
@@ -204,19 +200,20 @@ class ASTVectorizeMixin(object):
 class GenericASTVectorize(ASTVectorizeMixin, GenericVectorize):
     "Use the AST backend to compile the ufunc"
 
-def post_vectorize_optimize(func):
-    '''Perform aggressive optimization after each vectorizer.
-
-    TODO: Currently uses Module level PassManager each is rather wasteful
-          and may have side-effect on other already optimized functions.
-          We should find out a list of optimization to add use in
-          FunctionPassManager.
-    '''
+def _build_post_vectorize_optimizer():
     pmb = PassManagerBuilder.new()
     pmb.opt_level = 3
     pmb.vectorize = True
 
     pm = PassManager.new()
     pmb.populate(pm)
+    return pm
 
-    pm.run(func.module)
+_post_vectorize_optimizer = _build_post_vectorize_optimizer()
+
+def post_vectorize_optimize(func):
+    '''Perform aggressive optimization after each vectorizer.
+        
+    TODO: review if this is necessary.
+    '''
+    _post_vectorize_optimizer.run(func.module)
