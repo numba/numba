@@ -393,11 +393,11 @@ def default_intrinsic_library(context):
     gsym = globals()
 
     # install intrinsics
-    excluded = [InternalFunction, ExternalFunction, PyModulo]
+    excluded = [InternalFunction, PyModulo]
     def _filter(x):
         return (x not in excluded
                 and isinstance(x, type)
-                and issubclass(x, ExternalFunction))
+                and issubclass(x, InternalFunction))
 
     extfns = filter(_filter, globals().itervalues())
 
