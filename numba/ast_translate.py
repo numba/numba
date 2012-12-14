@@ -134,6 +134,10 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
 
 
 class LLVMContextManager(object):
+    '''TODO: Make this class not a singleton.  
+             A possible design is to let each Numba Context owns a
+             LLVMContextManager.
+    '''
 
     __singleton = None
     
@@ -155,6 +159,7 @@ class LLVMContextManager(object):
         assert self.__singleton is None
         m = self.__module = lc.Module.new("numba_executable_module")
         self.__engine = le.EngineBuilder.new(m).opt(cg).create()
+        # Build a PassManager which will be used for every module/
         self.__pm = lp.PassManager.new()
         # populate pass manager
         pmb = lp.PassManagerBuilder.new()
