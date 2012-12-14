@@ -52,17 +52,22 @@ class TestIssue57(unittest.TestCase):
         test_arr = test_fn(120, lat)
         self.assertTrue(np.allclose(test_arr, control_arr))
 
-def benchmark():
-    test_fn = jit('f4[:,:](i2,f4[:,:])')(ra_numba)
-    lat = np.deg2rad(np.ones((1000, 1000), dtype=np.float32) * 45.)
+def benchmark(test_fn=None, control_fn=None):
+    if test_fn is None:
+        test_fn = jit('f4[:,:](i2,f4[:,:])')(ra_numba)
+    if control_fn is None:
+        control_fn = ra_numpy
+    lat = np.deg2rad(np.ones((2000, 2000), dtype=np.float32) * 45.)
     t0 = time.time()
-    control_arr = ra_numpy(120, lat)
+    control_arr = control_fn(120, lat)
     t1 = time.time()
     test_arr = test_fn(120, lat)
     t2 = time.time()
-    logger.info('Numpy time %0.6fs, Numba time %0.6fs' % (
-            t1 - t0, t2 - t1))
+    dt0 = t1 - t0
+    dt1 = t2 - t1
+    logger.info('Control time %0.6fs, test time %0.6fs' % (dt0, dt1))
     assert np.allclose(test_arr, control_arr)
+    return dt0, dt1
 
 if __name__ == "__main__":
     test_support.main()
