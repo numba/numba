@@ -1311,7 +1311,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
     def visit_BinOp(self, node):
         self.generic_visit(node)
-        if node.left.type.is_object or node.right.type.is_object:
+        if is_obj(node.left.type) or is_obj(node.right.type):
             op_name = type(node.op).__name__
             op_method = getattr(self, '_object_%s' % op_name, None)
             if op_method:
@@ -1347,7 +1347,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
     def visit_UnaryOp(self, node):
         self.generic_visit(node)
-        if node.type.is_object:
+        if is_obj(node.type):
             op_name = type(node.op).__name__
             op_method = getattr(self, '_object_%s' % op_name, None)
             if op_method:
