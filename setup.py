@@ -54,6 +54,8 @@ setup(
     scripts = ['numba/pycc/pycc'],
     package_data = {
         'numba.minivect' : ['include/*'],
+        'numba.asdl.common': ['*.asdl'],
+        'numba.asdl.py2_7': ['*.asdl'],
     },
     ext_modules = [
 #        Extension(name = "numba._ext",
