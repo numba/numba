@@ -19,6 +19,7 @@ context = utils.get_minivect_context()
 context.llvm_context = translate.LLVMContextManager()
 context.numba_pipeline = pipeline.Pipeline
 function_cache = context.function_cache = functions.FunctionCache(context)
+context.intrinsic_library = functions.default_intrinsic_library(context)
 pipeline_env = pipeline.PipelineEnvironment.init_env(
     context, "Top-level compilation environment (in %s).\n" % __name__)
 

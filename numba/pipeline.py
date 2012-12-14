@@ -299,12 +299,10 @@ def compile(context, func, restype=None, argtypes=None, ctypes=False,
     if compile_only:
         return func_signature, t, None
 
-    # begin experimental
-    import functions
-    intrlib = functions.default_intrinsic_library(context)
-    intrlib.link(t.lfunc.module)
-    # end experimental
+    # link intrinsic library
+    context.intrinsic_library.link(t.lfunc.module)
 
+    # link into the JIT module
     t.link()
     return func_signature, t, get_wrapper(t, ctypes)
 
