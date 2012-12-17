@@ -208,15 +208,17 @@ class FunctionCache(object):
         self.__compiled_funcs[func][argtypes_flags] = compiled
         return func_signature, translator.lfunc, ctypes_func
 
-
-    def get_signature(self, argtypes):
-        '''Get the signature base on the argtypes
-
-        create a signature taking N objects and returning an object
-        '''
-        return minitypes.FunctionType(args=(object_,) * len(argtypes),
-                                      return_type=object_)
-
+    ## Does not belong to function-cache functionality.
+    ## Any caller can easily implement this.
+    #    def get_signature(self, argtypes):
+    #        '''Get the signature base on the argtypes
+    #
+    #        create a signature taking N objects and returning an object
+    #        '''
+    #        assert False
+    #        return minitypes.FunctionType(args=(object_,) * len(argtypes),
+    #                                      return_type=object_)
+    #
     def external_function_by_name(self, name, module, **kws):
         """
         Return the signature and LLVM function given a external function name. 

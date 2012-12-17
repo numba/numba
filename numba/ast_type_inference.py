@@ -1433,7 +1433,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             signature, llvm_func, py_func = fn_info
         else:
             assert arg_types is not None
-            signature = self.function_cache.get_signature(arg_types)
+            # This should not be a function-cache method
+            # signature = self.function_cache.get_signature(arg_types)
+            signature = minitypes.FunctionType(args=(object_,) * len(arg_types),
+                                               return_type=object_)
 
         if new_node is None:
             assert signature is not None
