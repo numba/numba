@@ -5,7 +5,8 @@ all = {}
 
 def _import_all():
     global __all__
-    mods = ['pyapi',]
+    mods = ['pyapi',
+            'libc']
     for k in mods:
         mod = __import__(__name__ + '.' + k, fromlist=['__all__'])
         __all__.extend(mod.__all__)

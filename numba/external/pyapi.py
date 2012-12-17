@@ -5,15 +5,6 @@ class ofunc(ExternalFunction):
     arg_types = [object_]
     return_type = object_
 
-class printf(ExternalFunction):
-    arg_types = [void.pointer()]
-    return_type = int32
-    is_vararg = True
-
-class puts(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = int32
-
 class Py_IncRef(ofunc):
     # TODO: rewrite calls to Py_IncRef/Py_DecRef to direct integer
     # TODO: increments/decrements
@@ -96,35 +87,6 @@ class PyErr_Occurred(ExternalFunction):
 class PyErr_Clear(ExternalFunction):
     arg_types = []
     return_type = void
-
-class labs(ExternalFunction):
-    arg_types = [long_]
-    return_type = long_
-
-class llabs(ExternalFunction):
-    arg_types = [longlong]
-    return_type = longlong
-
-class atoi(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = int_
-
-class atol(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = long_
-
-class atoll(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = longlong
-
-class atof(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = double
-
-class strlen(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = size_t
-
 #
 ### Object conversions to native types
 #
@@ -142,6 +104,7 @@ def create_func(name, restype, argtype, d):
     d[type] = PyLong_FromLong
     globals()[name] = PyLong_FromLong
 
+# The pipeline is using this dictionary to lookup casting func
 _as_long = {}
 def as_long(name, type):
     create_func(name, type, object_, _as_long)
@@ -176,6 +139,7 @@ class PyBool_FromLong(ExternalFunction):
 #
 ### Conversion of native types to object
 #
+# The pipeline is using this dictionary to lookup casting func
 _from_long = {}
 
 def from_long(name, type):
