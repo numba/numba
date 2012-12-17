@@ -37,6 +37,12 @@ class ExternalLibrary(object):
     def add(self, extfn):
         self._functions[extfn.name] = extfn
 
+    def get(self, name):
+        return self._functions[name]
+
+    def __contains__(self, name):
+        return name in self._functions
+
     def declare(self, module, name, arg_types=(), return_type=None):
         extfn = self._functions[name] # raises KeyError if name is not found
 

@@ -221,24 +221,13 @@ class FunctionCache(object):
     #
     def external_function_by_name(self, name, module, **kws):
         """
-        Return the signature and LLVM function given a external function name. 
-        The function is compiled in every module once.  External functions of
-        the same definition is combined during linkage by the use of
-        LINKONCE_ODR linkage type.
+        Return the signature and LLVM function declaration given a external 
+        function name.  The function name can be external or intrinsic 
+        functions.  The linker is responsible to link the intrinsic library
+        into the module.  All intrinsics have linkage LINKONCE_ODR; thus,
+        they are safe to appear in multiple linking modules.
         """
         assert module is not None
-
-        # No caching of external function.
-        # Let them be compiled into every module to allow inlining.
-
-        #    if name in self.external_functions:
-        #        extfunc = self.external_functions[name]
-        #        if extfunc.module is module:
-        #            return extfunc
-        #        else:
-        #            return module.add_function(extfunc.type, name)
-
-
         try:
             sig, lfunc = self.context.external_library.declare(module,
                                                                name,
@@ -256,8 +245,8 @@ class FunctionCache(object):
         llvm_module = kw.pop('llvm_module')
         sig, lfunc = self.external_function_by_name(name, llvm_module, **kw)
 
-        if name in globals():
-            external_func = globals()[name]
+        if name in self.context.external_library:
+            external_func = self.context.external_library.get(name)
             exc_check = dict(badval=external_func.badval,
                              goodval=external_func.goodval,
                              exc_msg=external_func.exc_msg,
@@ -308,18 +297,18 @@ class FunctionCache(object):
     #
     #    return ret_val
 
+## Unused
+#def declare_external_function(context, external_function, module):
+#    '''
+#    context --- numba context.
+#    external_function --- see class ExternalFunction below.
+#    module --- a llvm module.
+#    '''
+#    lfunc_type = external_function.signature.to_llvm(context)
+#    # Declare it in the llvm module
+#    return module.get_or_insert_function(lfunc_type, external_function.name)
 
-def declare_external_function(context, external_function, module):
-    '''
-    context --- numba context.
-    external_function --- see class ExternalFunction below.
-    module --- a llvm module.
-    '''
-    lfunc_type = external_function.signature.to_llvm(context)
-    # Declare it in the llvm module
-    return module.get_or_insert_function(lfunc_type, external_function.name)
-
-# Unused
+## Unused
 #def build_external_function(context, external_function, module):
 #    """
 #    Build an external function given it's signature information.
