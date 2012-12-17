@@ -6,7 +6,7 @@ from numba import *
 from . import naming
 from .minivect import minitypes
 import numba.ast_translate as translate
-from numba import nodes
+from numba import nodes, intrinsic
 from llpython.byte_translator import LLVMTranslator
 import llvm.core
 import logging
@@ -234,9 +234,19 @@ class FunctionCache(object):
         #        else:
         #            return module.add_function(extfunc.type, name)
 
-        declared_func = globals()[name](**kws)
-        lfunc = declare_external_function(self.context, declared_func, module)
-        return declared_func.signature, lfunc
+
+        try:
+            fncls = globals()[name]
+        except KeyError:
+            sig, lfunc = self.context.intrinsic_library.declare(module,
+                                                                name,
+                                                                **kws)
+
+        else:
+            declared_func = fncls(**kws)
+            lfunc = declare_external_function(self.context, declared_func, module)
+            sig = declared_func.signature
+        return sig, lfunc
 
     def external_call(self, name, *args, **kw):
         '''Builds a call node for an external function.
@@ -297,12 +307,6 @@ class FunctionCache(object):
     #
     #    return ret_val
 
-def sig_to_lfunc_type(context, sig):
-    '''Generate LLVM function type from a signature'''
-    func_type = minitypes.FunctionType(return_type=sig.return_type,
-                                       args=sig.arg_types,
-                                       is_vararg=sig.is_vararg)
-    return func_type.to_llvm(context)
 
 def declare_external_function(context, external_function, module):
     '''
@@ -310,7 +314,7 @@ def declare_external_function(context, external_function, module):
     external_function --- see class ExternalFunction below.
     module --- a llvm module.
     '''
-    lfunc_type = sig_to_lfunc_type(context, external_function)
+    lfunc_type = external_function.signature.to_llvm(context)
     # Declare it in the llvm module
     return module.get_or_insert_function(lfunc_type, external_function.name)
 
@@ -333,100 +337,6 @@ def build_external_function(context, external_function, module):
 
     return lfunc
 
-class IntrinsicLibrary(object):
-    '''An intrinsic library maintains a LLVM module for holding the 
-    intrinsics.  These are functions are used internally to implement
-    specific features.
-    '''
-    def __init__(self, context):
-        self._context = context
-        self._module = llvm.core.Module.new('intrlib.%X' % id(self))
-        # A lookup dictionary that matches (name, argtys) -> lfunc
-        self._functions = {}
-        # Build function pass manager to reduce memory usage of 
-        from llvm.passes import FunctionPassManager, PassManagerBuilder
-        pmb = PassManagerBuilder.new()
-        pmb.opt_level = 2
-        self._fpm = FunctionPassManager.new(self._module)
-        pmb.populate(self._fpm)
-
-    def add(self, name, sig, impl):
-        '''Add a new intrinsic.
-        name --- function name
-        sig --- function signature
-        impl --- a callable that implements the lfunc
-        '''
-        # implement the intrinsic
-        lfunc_type = sig_to_lfunc_type(self._context, sig)
-        lfunc = self._module.add_function(lfunc_type, name=name)
-        impl(lfunc)
-
-        # optimize the function
-        self._fpm.run(lfunc)
-
-        # populate the lookup dictionary
-        key = name, tuple(sig.arg_types)
-        self._functions[key] = lfunc
-
-    def get(self, name, argtys):
-        '''Get an intrinsic by name and sig
-        name --- function name
-        sig --- function signature
-        '''
-        key = name, tuple(sig.arg_types)
-        return self._functions[key]
-
-    def link(self, module):
-        '''Link the intrinsic library into the target module.
-        '''
-        module.link_in(self._module, preserve=True)
-
-def default_intrinsic_library(context):
-    '''Build an intrinsic library with a default set of external functions.
-        
-    context --- numba context
-        
-    TODO: It is possible to cache the default intrinsic library as a bitcode 
-          file on disk so that we don't build it every time.
-    '''
-    intrlib = IntrinsicLibrary(context)
-    gsym = globals()
-
-    # install intrinsics
-    excluded = [InternalFunction, PyModulo]
-    def _filter(x):
-        return (x not in excluded
-                and isinstance(x, type)
-                and issubclass(x, InternalFunction))
-
-    extfns = filter(_filter, globals().itervalues())
-
-    def _impl(ef):
-        def _wrapped(lfunc):
-            if isinstance(ef, InternalFunction):
-                lfunc.linkage = ef.linkage
-                ef.implementation(lfunc.module, lfunc)
-        return _wrapped
-    for efcls in extfns:
-        ef = efcls()
-        intrlib.add(ef.name, ef, _impl(ef))
-
-    # Install pymodulo intrinsics
-    # Implement for all numeric types
-    from _numba_types import int8, int16, int32, int64, int_, intp, f4, f8
-    numerictypes = int8, int16, int32, int64, int_, intp, f4, f8
-    types = []
-
-    for t in numerictypes:
-        group = [t] * 3
-        types.append(group)
-
-    for t in types:
-        retty, argtys = t[0], t[1:]
-        pymodulo = PyModulo(return_type=retty, arg_types=argtys)
-        intrlib.add(pymodulo.name, pymodulo, _impl(pymodulo))
-
-    return intrlib
 
 class _LLVMModuleUtils(object):
     # TODO: rewrite print statements w/ native types to printf during type
@@ -684,75 +594,79 @@ class PyErr_Clear(ExternalFunction):
     arg_types = []
     return_type = void
 
-class PyModulo(InternalFunction):
+## Moved to numba.intrinsic.math_intrinsic
+#
+#class PyModulo(InternalFunction):
+#
+#    @property
+#    def name(self):
+#        return naming.specialized_mangle('__py_modulo', self.arg_types)
+#
+#    def implementation(self, module, ret_val):
+#        _rtype = ret_val.type.pointee.return_type
+#        _rem = (llvm.core.Builder.srem
+#               if _rtype.kind == llvm.core.TYPE_INTEGER
+#               else llvm.core.Builder.frem)
+#        def _py_modulo (arg1, arg2):
+#            ret_val = rem(arg1, arg2)
+#            if ret_val < rtype(0):
+#                if arg2 > rtype(0):
+#                    ret_val += arg2
+#            elif arg2 < rtype(0):
+#                ret_val += arg2
+#            return ret_val
+#        LLVMTranslator(module).translate(
+#            _py_modulo, llvm_function = ret_val,
+#            env = {'rtype' : _rtype, 'rem' : _rem})
+#        return ret_val
 
-    @property
-    def name(self):
-        return naming.specialized_mangle('__py_modulo', self.arg_types)
-
-    def implementation(self, module, ret_val):
-        _rtype = ret_val.type.pointee.return_type
-        _rem = (llvm.core.Builder.srem
-               if _rtype.kind == llvm.core.TYPE_INTEGER
-               else llvm.core.Builder.frem)
-        def _py_modulo (arg1, arg2):
-            ret_val = rem(arg1, arg2)
-            if ret_val < rtype(0):
-                if arg2 > rtype(0):
-                    ret_val += arg2
-            elif arg2 < rtype(0):
-                ret_val += arg2
-            return ret_val
-        LLVMTranslator(module).translate(
-            _py_modulo, llvm_function = ret_val,
-            env = {'rtype' : _rtype, 'rem' : _rem})
-        return ret_val
-
-class CStringSlice2 (InternalFunction):
-    arg_types = [c_string_type, c_string_type, size_t, Py_ssize_t, Py_ssize_t]
-    return_type = void
-
-    def implementation(self, module, ret_val):
-        # logger.debug((module, str(ret_val)))
-        def _py_c_string_slice(out_string, in_string, in_str_len, lower,
-                               upper):
-            zero = lc_size_t(0)
-            if lower < zero:
-                lower += in_str_len
-            if upper < zero:
-                upper += in_str_len
-            elif upper > in_str_len:
-                upper = in_str_len
-            temp_len = upper - lower
-            if temp_len < zero:
-                temp_len = zero
-            strncpy(out_string, in_string + lower, temp_len)
-            out_string[temp_len] = li8(0)
-            return
-        LLVMTranslator(module).translate(_py_c_string_slice,
-                                         llvm_function = ret_val)
-        return ret_val
-
-class CStringSlice2Len(InternalFunction):
-    arg_types = [c_string_type, size_t, Py_ssize_t, Py_ssize_t]
-    return_type = size_t
-
-    def implementation(self, module, ret_val):
-        def _py_c_string_slice_len(in_string, in_str_len, lower, upper):
-            zero = lc_size_t(0)
-            if lower < zero:
-                lower += in_str_len
-            if upper < zero:
-                upper += in_str_len
-            elif upper > in_str_len:
-                upper = in_str_len
-            temp_len = upper - lower
-            if temp_len < zero:
-                temp_len = zero
-            return temp_len + lc_size_t(1)
-        LLVMTranslator(module).translate(_py_c_string_slice_len,
-                                         llvm_function = ret_val)
-        return ret_val
+## Moved to numba.intrinsic.string_intrinsic
+#
+#class CStringSlice2 (InternalFunction):
+#    arg_types = [c_string_type, c_string_type, size_t, Py_ssize_t, Py_ssize_t]
+#    return_type = void
+#
+#    def implementation(self, module, ret_val):
+#        # logger.debug((module, str(ret_val)))
+#        def _py_c_string_slice(out_string, in_string, in_str_len, lower,
+#                               upper):
+#            zero = lc_size_t(0)
+#            if lower < zero:
+#                lower += in_str_len
+#            if upper < zero:
+#                upper += in_str_len
+#            elif upper > in_str_len:
+#                upper = in_str_len
+#            temp_len = upper - lower
+#            if temp_len < zero:
+#                temp_len = zero
+#            strncpy(out_string, in_string + lower, temp_len)
+#            out_string[temp_len] = li8(0)
+#            return
+#        LLVMTranslator(module).translate(_py_c_string_slice,
+#                                         llvm_function = ret_val)
+#        return ret_val
+#
+#class CStringSlice2Len(InternalFunction):
+#    arg_types = [c_string_type, size_t, Py_ssize_t, Py_ssize_t]
+#    return_type = size_t
+#
+#    def implementation(self, module, ret_val):
+#        def _py_c_string_slice_len(in_string, in_str_len, lower, upper):
+#            zero = lc_size_t(0)
+#            if lower < zero:
+#                lower += in_str_len
+#            if upper < zero:
+#                upper += in_str_len
+#            elif upper > in_str_len:
+#                upper = in_str_len
+#            temp_len = upper - lower
+#            if temp_len < zero:
+#                temp_len = zero
+#            return temp_len + lc_size_t(1)
+#        LLVMTranslator(module).translate(_py_c_string_slice_len,
+#                                         llvm_function = ret_val)
+#        return ret_val
 
 class labs(ExternalFunction):
     arg_types = [long_]
