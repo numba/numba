@@ -12,6 +12,7 @@ from numba import error, pipeline, extension_type_inference
 from .minivect import minitypes
 from numba.utils import debugout
 from numba.intrinsic import default_intrinsic_library
+from numba.external import default_external_library
 from numba import double, int_
 import llvm.core as _lc
 
@@ -20,6 +21,7 @@ context.llvm_context = translate.LLVMContextManager()
 context.numba_pipeline = pipeline.Pipeline
 function_cache = context.function_cache = functions.FunctionCache(context)
 context.intrinsic_library = default_intrinsic_library(context)
+context.external_library = default_external_library(context)
 pipeline_env = pipeline.PipelineEnvironment.init_env(
     context, "Top-level compilation environment (in %s).\n" % __name__)
 

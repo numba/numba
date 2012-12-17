@@ -104,6 +104,8 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+from numba.external import pyapi
+
 class MathMixin(object):
     """
     Resolve calls to math functions.
@@ -566,9 +568,9 @@ class ResolveCoercions(visitors.NumbaTransformer):
             cls = None
             if node_type.is_int:
                 cls = self._get_int_conversion_func(node_type,
-                                                    functions._from_long)
+                                                    pyapi._from_long)
             elif node_type.is_float:
-                cls = functions.PyFloat_FromDouble
+                cls = pyapi.PyFloat_FromDouble
             #elif node_type.is_complex:
             #      cls = functions.PyComplex_FromCComplex
 
@@ -606,13 +608,13 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
             if node_type.is_int: # and not
                 cls = self._get_int_conversion_func(node_type,
-                                                    functions._as_long)
+                                                    pyapi._as_long)
                 if not node_type.signed or node_type == Py_ssize_t:
                     # PyLong_AsLong calls __int__, but
                     # PyLong_AsUnsignedLong doesn't...
                     node.node = nodes.call_pyfunc(long, [node.node])
             elif node_type.is_float:
-                cls = functions.PyFloat_AsDouble
+                cls = pyapi.PyFloat_AsDouble
             #elif node_type.is_complex:
             #    cls = functions.PyComplex_AsCComplex
 

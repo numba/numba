@@ -11,6 +11,7 @@ from llpython.byte_translator import LLVMTranslator
 import llvm.core
 import logging
 import traceback
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -213,7 +214,8 @@ class FunctionCache(object):
 
         create a signature taking N objects and returning an object
         '''
-        return ofunc(argtypes=ofunc.arg_types * len(argtypes)).signature
+        return minitypes.FunctionType(args=(object_,) * len(argtypes),
+                                      return_type=object_)
 
     def external_function_by_name(self, name, module, **kws):
         """
@@ -236,16 +238,13 @@ class FunctionCache(object):
 
 
         try:
-            fncls = globals()[name]
+            sig, lfunc = self.context.external_library.declare(module,
+                                                               name,
+                                                               **kws)
         except KeyError:
             sig, lfunc = self.context.intrinsic_library.declare(module,
                                                                 name,
                                                                 **kws)
-
-        else:
-            declared_func = fncls(**kws)
-            lfunc = declare_external_function(self.context, declared_func, module)
-            sig = declared_func.signature
         return sig, lfunc
 
     def external_call(self, name, *args, **kw):
@@ -318,25 +317,26 @@ def declare_external_function(context, external_function, module):
     # Declare it in the llvm module
     return module.get_or_insert_function(lfunc_type, external_function.name)
 
-def build_external_function(context, external_function, module):
-    """
-    Build an external function given it's signature information.
-    See the `ExternalFunction` class.
-
-    context --- numba context.
-    external_function --- see class ExternalFunction below.
-    module --- a llvm module.
-    """
-    lfunc = declare_external_function(context, external_function, module)
-
-    assert lfunc.is_declaration
-
-    if isinstance(external_function, InternalFunction):
-        lfunc.linkage = external_function.linkage
-        external_function.implementation(module, lfunc)
-
-    return lfunc
-
+# Unused
+#def build_external_function(context, external_function, module):
+#    """
+#    Build an external function given it's signature information.
+#    See the `ExternalFunction` class.
+#
+#    context --- numba context.
+#    external_function --- see class ExternalFunction below.
+#    module --- a llvm module.
+#    """
+#    lfunc = declare_external_function(context, external_function, module)
+#
+#    assert lfunc.is_declaration
+#
+#    if isinstance(external_function, InternalFunction):
+#        lfunc.linkage = external_function.linkage
+#        external_function.implementation(module, lfunc)
+#
+#    return lfunc
+#
 
 class _LLVMModuleUtils(object):
     # TODO: rewrite print statements w/ native types to printf during type
@@ -462,137 +462,137 @@ class _LLVMModuleUtils(object):
 #
 ### Define external and internal functions
 #
-
-class ExternalFunction(object):
-    func_name = None
-    arg_types = None
-    return_type = None
-    linkage = None
-    is_vararg = False
-
-    badval = None
-    goodval = None
-    exc_type = None
-    exc_msg = None
-    exc_args = None
-
-    def __init__(self, **kwargs):
-        vars(self).update(kwargs)
-
-    @property
-    def signature(self):
-        return minitypes.FunctionType(return_type=self.return_type,
-                                      args=self.arg_types,
-                                      is_vararg=self.is_vararg)
-
-    @property
-    def name(self):
-        if self.func_name is None:
-            return type(self).__name__
-        else:
-            return self.func_name
-
-    def implementation(self, module, lfunc):
-        return None
-
-class InternalFunction(ExternalFunction):
-    linkage = llvm.core.LINKAGE_LINKONCE_ODR
-
-class ofunc(ExternalFunction):
-    arg_types = [object_]
-    return_type = object_
-
-class printf(ExternalFunction):
-    arg_types = [void.pointer()]
-    return_type = int32
-    is_vararg = True
-
-class puts(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = int32
-
-class Py_IncRef(ofunc):
-    # TODO: rewrite calls to Py_IncRef/Py_DecRef to direct integer
-    # TODO: increments/decrements
-    return_type = void
-
-class Py_DecRef(Py_IncRef):
-    pass
-
-class PyObject_Length(ofunc):
-    return_type = Py_ssize_t
-
-class PyObject_Call(ExternalFunction):
-    arg_types = [object_, object_, object_]
-    return_type = object_
-
-class PyObject_CallMethod(ExternalFunction):
-    arg_types = [object_, c_string_type, c_string_type]
-    return_type = object_
-    is_vararg = True
-
-class PyObject_Type(ExternalFunction):
-    '''
-    Added to aid debugging
-    '''
-    arg_types = [object_]
-    return_type = object_
-
-class PyTuple_Pack(ExternalFunction):
-    arg_types = [Py_ssize_t]
-    return_type = object_
-    is_vararg = True
-
-class Py_BuildValue(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = object_
-    is_vararg = True
-
-class PyArg_ParseTuple(ExternalFunction):
-    arg_types = [object_, c_string_type]
-    return_type = int_
-    is_vararg = True
-
-class PyObject_Print(ExternalFunction):
-    arg_types = [object_, void.pointer(), int_]
-    return_type = int_
-
-class PyObject_Str(ExternalFunction):
-    arg_types = [object_]
-    return_type = object_
-
-class PyObject_GetAttrString(ExternalFunction):
-    arg_types = [object_, c_string_type]
-    return_type = object_
-
-class PyObject_GetItem(ExternalFunction):
-    arg_types = [object_, object_]
-    return_type = object_
-
-class PyObject_SetItem(ExternalFunction):
-    arg_types = [object_, object_, object_]
-    return_type = int_
-
-class PySlice_New(ExternalFunction):
-    arg_types = [object_, object_, object_]
-    return_type = object_
-
-class PyErr_SetString(ExternalFunction):
-    arg_types = [object_, c_string_type]
-    return_type = void
-
-class PyErr_Format(ExternalFunction):
-    arg_types = [object_, c_string_type]
-    return_type = void.pointer() # object_
-    is_vararg = True
-
-class PyErr_Occurred(ExternalFunction):
-    arg_types = []
-    return_type = void.pointer() # object_
-
-class PyErr_Clear(ExternalFunction):
-    arg_types = []
-    return_type = void
+#
+#class ExternalFunction(object):
+#    func_name = None
+#    arg_types = None
+#    return_type = None
+#    linkage = None
+#    is_vararg = False
+#
+#    badval = None
+#    goodval = None
+#    exc_type = None
+#    exc_msg = None
+#    exc_args = None
+#
+#    def __init__(self, **kwargs):
+#        vars(self).update(kwargs)
+#
+#    @property
+#    def signature(self):
+#        return minitypes.FunctionType(return_type=self.return_type,
+#                                      args=self.arg_types,
+#                                      is_vararg=self.is_vararg)
+#
+#    @property
+#    def name(self):
+#        if self.func_name is None:
+#            return type(self).__name__
+#        else:
+#            return self.func_name
+#
+#    def implementation(self, module, lfunc):
+#        return None
+#
+#class InternalFunction(ExternalFunction):
+#    linkage = llvm.core.LINKAGE_LINKONCE_ODR
+#
+#class ofunc(ExternalFunction):
+#    arg_types = [object_]
+#    return_type = object_
+#
+#class printf(ExternalFunction):
+#    arg_types = [void.pointer()]
+#    return_type = int32
+#    is_vararg = True
+#
+#class puts(ExternalFunction):
+#    arg_types = [c_string_type]
+#    return_type = int32
+#
+#class Py_IncRef(ofunc):
+#    # TODO: rewrite calls to Py_IncRef/Py_DecRef to direct integer
+#    # TODO: increments/decrements
+#    return_type = void
+#
+#class Py_DecRef(Py_IncRef):
+#    pass
+#
+#class PyObject_Length(ofunc):
+#    return_type = Py_ssize_t
+#
+#class PyObject_Call(ExternalFunction):
+#    arg_types = [object_, object_, object_]
+#    return_type = object_
+#
+#class PyObject_CallMethod(ExternalFunction):
+#    arg_types = [object_, c_string_type, c_string_type]
+#    return_type = object_
+#    is_vararg = True
+#
+#class PyObject_Type(ExternalFunction):
+#    '''
+#    Added to aid debugging
+#    '''
+#    arg_types = [object_]
+#    return_type = object_
+#
+#class PyTuple_Pack(ExternalFunction):
+#    arg_types = [Py_ssize_t]
+#    return_type = object_
+#    is_vararg = True
+#
+#class Py_BuildValue(ExternalFunction):
+#    arg_types = [c_string_type]
+#    return_type = object_
+#    is_vararg = True
+#
+#class PyArg_ParseTuple(ExternalFunction):
+#    arg_types = [object_, c_string_type]
+#    return_type = int_
+#    is_vararg = True
+#
+#class PyObject_Print(ExternalFunction):
+#    arg_types = [object_, void.pointer(), int_]
+#    return_type = int_
+#
+#class PyObject_Str(ExternalFunction):
+#    arg_types = [object_]
+#    return_type = object_
+#
+#class PyObject_GetAttrString(ExternalFunction):
+#    arg_types = [object_, c_string_type]
+#    return_type = object_
+#
+#class PyObject_GetItem(ExternalFunction):
+#    arg_types = [object_, object_]
+#    return_type = object_
+#
+#class PyObject_SetItem(ExternalFunction):
+#    arg_types = [object_, object_, object_]
+#    return_type = int_
+#
+#class PySlice_New(ExternalFunction):
+#    arg_types = [object_, object_, object_]
+#    return_type = object_
+#
+#class PyErr_SetString(ExternalFunction):
+#    arg_types = [object_, c_string_type]
+#    return_type = void
+#
+#class PyErr_Format(ExternalFunction):
+#    arg_types = [object_, c_string_type]
+#    return_type = void.pointer() # object_
+#    is_vararg = True
+#
+#class PyErr_Occurred(ExternalFunction):
+#    arg_types = []
+#    return_type = void.pointer() # object_
+#
+#class PyErr_Clear(ExternalFunction):
+#    arg_types = []
+#    return_type = void
 
 ## Moved to numba.intrinsic.math_intrinsic
 #
@@ -667,139 +667,139 @@ class PyErr_Clear(ExternalFunction):
 #        LLVMTranslator(module).translate(_py_c_string_slice_len,
 #                                         llvm_function = ret_val)
 #        return ret_val
-
-class labs(ExternalFunction):
-    arg_types = [long_]
-    return_type = long_
-
-class llabs(ExternalFunction):
-    arg_types = [longlong]
-    return_type = longlong
-
-class atoi(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = int_
-
-class atol(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = long_
-
-class atoll(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = longlong
-
-class atof(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = double
-
-class strlen(ExternalFunction):
-    arg_types = [c_string_type]
-    return_type = size_t
+#
+#class labs(ExternalFunction):
+#    arg_types = [long_]
+#    return_type = long_
+#
+#class llabs(ExternalFunction):
+#    arg_types = [longlong]
+#    return_type = longlong
+#
+#class atoi(ExternalFunction):
+#    arg_types = [c_string_type]
+#    return_type = int_
+#
+#class atol(ExternalFunction):
+#    arg_types = [c_string_type]
+#    return_type = long_
+#
+#class atoll(ExternalFunction):
+#    arg_types = [c_string_type]
+#    return_type = longlong
+#
+#class atof(ExternalFunction):
+#    arg_types = [c_string_type]
+#    return_type = double
+#
+#class strlen(ExternalFunction):
+#    arg_types = [c_string_type]
+#    return_type = size_t
 
 #
 ### Object conversions to native types
 #
-def create_func(name, restype, argtype, d):
-    class PyLong_FromLong(ExternalFunction):
-        arg_types = [argtype]
-        return_type = restype
-
-    PyLong_FromLong.__name__ = name
-    if restype.is_object:
-        type = argtype
-    else:
-        type = restype
-
-    d[type] = PyLong_FromLong
-    globals()[name] = PyLong_FromLong
-
-_as_long = {}
-def as_long(name, type):
-    create_func(name, type, object_, _as_long)
-
-as_long('PyLong_AsLong', long_)
-as_long('PyLong_AsUnsignedLong', ulong)
-as_long('PyLong_AsLongLong', longlong)
-as_long('PyLong_AsUnsignedLongLong', ulonglong)
-#as_long('PyLong_AsSize_t', size_t) # new in py3k
-as_long('PyLong_AsSsize_t', Py_ssize_t)
-
-class PyFloat_FromDouble(ExternalFunction):
-    arg_types = [double]
-    return_type = object_
-
-class PyComplex_FromCComplex(ExternalFunction):
-    arg_types = [complex128]
-    return_type = object_
-
-class PyInt_FromString(ExternalFunction):
-    arg_types = [c_string_type, c_string_type.pointer(), int_]
-    return_type = object_
-
-class PyFloat_FromString(ExternalFunction):
-    arg_types = [object_, c_string_type.pointer()]
-    return_type = object_
-
-class PyBool_FromLong(ExternalFunction):
-    arg_types = [long_]
-    return_type = object_
+#def create_func(name, restype, argtype, d):
+#    class PyLong_FromLong(ExternalFunction):
+#        arg_types = [argtype]
+#        return_type = restype
+#
+#    PyLong_FromLong.__name__ = name
+#    if restype.is_object:
+#        type = argtype
+#    else:
+#        type = restype
+#
+#    d[type] = PyLong_FromLong
+#    globals()[name] = PyLong_FromLong
+#
+#_as_long = {}
+#def as_long(name, type):
+#    create_func(name, type, object_, _as_long)
+#
+#as_long('PyLong_AsLong', long_)
+#as_long('PyLong_AsUnsignedLong', ulong)
+#as_long('PyLong_AsLongLong', longlong)
+#as_long('PyLong_AsUnsignedLongLong', ulonglong)
+##as_long('PyLong_AsSize_t', size_t) # new in py3k
+#as_long('PyLong_AsSsize_t', Py_ssize_t)
+#
+#class PyFloat_FromDouble(ExternalFunction):
+#    arg_types = [double]
+#    return_type = object_
+#
+#class PyComplex_FromCComplex(ExternalFunction):
+#    arg_types = [complex128]
+#    return_type = object_
+#
+#class PyInt_FromString(ExternalFunction):
+#    arg_types = [c_string_type, c_string_type.pointer(), int_]
+#    return_type = object_
+#
+#class PyFloat_FromString(ExternalFunction):
+#    arg_types = [object_, c_string_type.pointer()]
+#    return_type = object_
+#
+#class PyBool_FromLong(ExternalFunction):
+#    arg_types = [long_]
+#    return_type = object_
 
 #
 ### Conversion of native types to object
 #
-_from_long = {}
-def from_long(name, type):
-    create_func(name, object_, type, _from_long)
-
-
-from_long('PyLong_FromLong', long_)
-from_long('PyLong_FromUnsignedLong', ulong)
-from_long('PyLong_FromLongLong', longlong)
-from_long('PyLong_FromUnsignedLongLong', ulonglong)
-from_long('PyLong_FromSize_t', size_t) # new in 2.6
-from_long('PyLong_FromSsize_t', Py_ssize_t)
-
-class PyFloat_AsDouble(ExternalFunction):
-    arg_types = [object_]
-    return_type = double
-
-class PyComplex_AsCComplex(ExternalFunction):
-    arg_types = [object_]
-    return_type = complex128
-
-def create_binary_pyfunc(name):
-    class PyNumber_BinOp(ExternalFunction):
-        arg_types = [object_, object_]
-        return_type = object_
-    PyNumber_BinOp.__name__ = name
-    globals()[name] = PyNumber_BinOp
-
-create_binary_pyfunc('PyNumber_Add')
-create_binary_pyfunc('PyNumber_Subtract')
-create_binary_pyfunc('PyNumber_Multiply')
-create_binary_pyfunc('PyNumber_Divide')
-create_binary_pyfunc('PyNumber_Remainder')
-
-class PyNumber_Power(ExternalFunction):
-    arg_types = [object_, object_, object_]
-    return_type = object_
-
-create_binary_pyfunc('PyNumber_Lshift')
-create_binary_pyfunc('PyNumber_Rshift')
-create_binary_pyfunc('PyNumber_Or')
-create_binary_pyfunc('PyNumber_Xor')
-create_binary_pyfunc('PyNumber_And')
-create_binary_pyfunc('PyNumber_FloorDivide')
-
-class PyNumber_Positive(ofunc):
-    pass
-
-class PyNumber_Negative(ofunc):
-    pass
-
-class PyNumber_Invert(ofunc):
-    pass
-
-class PyObject_IsTrue(ExternalFunction):
-    arg_types = [object_]
-    return_type = int_
+#_from_long = {}
+#def from_long(name, type):
+#    create_func(name, object_, type, _from_long)
+#
+#
+#from_long('PyLong_FromLong', long_)
+#from_long('PyLong_FromUnsignedLong', ulong)
+#from_long('PyLong_FromLongLong', longlong)
+#from_long('PyLong_FromUnsignedLongLong', ulonglong)
+#from_long('PyLong_FromSize_t', size_t) # new in 2.6
+#from_long('PyLong_FromSsize_t', Py_ssize_t)
+#
+#class PyFloat_AsDouble(ExternalFunction):
+#    arg_types = [object_]
+#    return_type = double
+#
+#class PyComplex_AsCComplex(ExternalFunction):
+#    arg_types = [object_]
+#    return_type = complex128
+#
+#def create_binary_pyfunc(name):
+#    class PyNumber_BinOp(ExternalFunction):
+#        arg_types = [object_, object_]
+#        return_type = object_
+#    PyNumber_BinOp.__name__ = name
+#    globals()[name] = PyNumber_BinOp
+#
+#create_binary_pyfunc('PyNumber_Add')
+#create_binary_pyfunc('PyNumber_Subtract')
+#create_binary_pyfunc('PyNumber_Multiply')
+#create_binary_pyfunc('PyNumber_Divide')
+#create_binary_pyfunc('PyNumber_Remainder')
+#
+#class PyNumber_Power(ExternalFunction):
+#    arg_types = [object_, object_, object_]
+#    return_type = object_
+#
+#create_binary_pyfunc('PyNumber_Lshift')
+#create_binary_pyfunc('PyNumber_Rshift')
+#create_binary_pyfunc('PyNumber_Or')
+#create_binary_pyfunc('PyNumber_Xor')
+#create_binary_pyfunc('PyNumber_And')
+#create_binary_pyfunc('PyNumber_FloorDivide')
+#
+#class PyNumber_Positive(ofunc):
+#    pass
+#
+#class PyNumber_Negative(ofunc):
+#    pass
+#
+#class PyNumber_Invert(ofunc):
+#    pass
+#
+#class PyObject_IsTrue(ExternalFunction):
+#    arg_types = [object_]
+#    return_type = int_
