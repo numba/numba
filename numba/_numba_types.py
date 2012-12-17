@@ -300,7 +300,7 @@ VALID_TYPE_ATTRIBUTES = {
     "base_type": ["is_pointer", "is_carray", "is_complex"],
     "args": ["is_function"],
     "return_type": ["is_function"],
-    "fields": ["is_struct"],
+    # "fields": ["is_struct"],
     "fielddict": ["is_struct"],
 }
 
@@ -320,6 +320,12 @@ class TemplateType(NumbaType):
         if self not in template_context:
             raise error.InvalidTemplateError("Unknown template type: %s" % self)
         return template_context[self]
+
+    def __getitem__(self, index):
+        if isinstance(index, (tuple, slice)):
+            return super(TemplateType, self).__getitem__(index)
+
+        return TemplateIndexType(self, index)
 
     def __getattr__(self, attr):
         if attr in VALID_TYPE_ATTRIBUTES:
@@ -343,8 +349,11 @@ class TemplateAttributeType(TemplateType):
         self.template_type = template_type
         self.attribute_name = attribute_name
 
+        assert attribute_name in VALID_TYPE_ATTRIBUTES
+
     def resolve_template(self, template_context):
         resolved_type = self.template_type.resolve_template(template_context)
+
         assertions = VALID_TYPE_ATTRIBUTES[self.attribute_name]
         valid_attribute = any(getattr(resolved_type, a) for a in assertions)
         if not valid_attribute:
@@ -359,6 +368,28 @@ class TemplateAttributeType(TemplateType):
 
     def __str__(self):
         return "%s.%s" % (self.template_type, self.attribute_name)
+
+class TemplateIndexType(TemplateType):
+
+    is_template_attribute = True
+    subtypes = ['template_type']
+
+    def __init__(self, template_type, index, **kwds):
+        self.template_type = template_type
+        self.index = index
+
+    def resolve_template(self, template_context):
+        attrib = self.template_type.resolve_template(template_context)
+        assert isinstance(attrib, (list, tuple, dict))
+        return attrib[self.index]
+
+    def __repr__(self):
+        return "%r[%d]" % (self.template_type, self.index)
+
+    def __str__(self):
+        return "%s[%d]" % (self.template_type, self.index)
+
+
 
 template = TemplateType
 

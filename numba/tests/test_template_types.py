@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import numpy as np
 
 import numba
@@ -52,17 +54,40 @@ F = void(T1)
 S = numba.struct(a=T1, b=T2.pointer(), c=T3[:], d=void(T4))
 P = T2.pointer()
 
-type_context = { T1: int_, T2: float_, T3: double, T4: short, }
+type_context1 = { T1: int_, T2: float_, T3: double, T4: short, }
+type_context2 = { T1: int_[:, :], T2: void(float_),
+                  T3: numba.struct(a=double, b=float_), T4: short.pointer(), }
 
 def test_type_matching(array, func, struct, pointer):
     """
     >>> infer(test_type_matching, template_signature=void(A, F, S, P),
-    ...       type_context=type_context)
+    ...       type_context=type_context1)
     [('array', int[:, :]), ('func', void (*)(int)), ('pointer', float *), ('struct', struct { float * b, double[:] c, int a, void (*)(short) d })]
     """
     func(array[0, 0])
     struct.b = pointer
 
+def test_type_attributes(array, func, struct, pointer):
+    """
+    >>> locals = dict(dtype=T1.dtype, arg=T2.args[0], field_a=T3.fielddict['a'],
+    ...               field_b=T3.fielddict['b'], scalar=T4.base_type)
+    >>> pprint(infer(test_type_attributes, template_signature=void(T1, T2, T3, T4),
+    ...              type_context=type_context2, locals=locals))
+    [('array', int[:, :]),
+     ('func', void (*)(float)),
+     ('pointer', short *),
+     ('struct', struct { double a, float b }),
+     ('arg', float),
+     ('dtype', int),
+     ('field_a', double),
+     ('field_b', float),
+     ('scalar', short)]
+    """
+    dtype = array[0, 0]
+    arg = 0
+    field_a = 0
+    field_b = 0
+    scalar = 0
 
 #------------------------------------------------------------------------
 # Test utilities
@@ -79,7 +104,7 @@ def infer(func, signature=None, template_signature=None,
 
     sig, symbols = _infer(func, signature,
                           template_signature=template_signature,
-                          locals=locals)
+                          locals=locals, warn=False)
 
     if locals is not None:
         local_vars = sorted(locals.iteritems())
@@ -94,8 +119,9 @@ def specialize(T, context):
 
 
 if __name__ == '__main__':
-    test_simple_template(np.arange(10, 12, dtype=np.float32))
-    infer(test_type_matching, template_signature=void(A, F, S, P),
-          type_context=type_context)
+    locals = dict(dtype=T1.dtype, arg=T2.args[0], field_a=T3.fielddict['a'],
+                  field_b=T3.fielddict['b'], scalar=T4.base_type)
+    infer(test_type_attributes, template_signature=void(T1, T2, T3, T4),
+          type_context=type_context2, locals=locals)
 
 testmod()
