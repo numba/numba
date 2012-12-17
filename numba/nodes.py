@@ -4,6 +4,7 @@ import collections
 
 import numba
 import numba.functions
+from numba import function_util
 from numba import *
 from .symtab import Variable
 from . import _numba_types as numba_types
@@ -58,9 +59,11 @@ def ptrfromint(intval, dst_ptr_type):
 
 printing = False
 
-def inject_print(function_cache, node):
-    node = function_cache.external_call('PyObject_Str', node)
-    node = function_cache.external_call('puts', node)
+def inject_print(context, module, node):
+    node = function_util.external_call(context, module, 'PyObject_Str',
+                                       args=[node])
+    node = function_util.external_call(context, module, 'puts',
+                                       args=[node])
     return node
 
 def print_(translator, node):
@@ -70,7 +73,7 @@ def print_(translator, node):
 
     printing = True
 
-    node = inject_print(translator.function_cache, node)
+    node = inject_print(translator.context, translate.llvm_module, node)
     node = translator.ast.pipeline.late_specializer(node)
     translator.visit(node)
 

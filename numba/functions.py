@@ -6,7 +6,6 @@ from numba import *
 from . import naming
 from .minivect import minitypes
 import numba.ast_translate as translate
-from numba import nodes
 import llvm.core
 import logging
 import traceback
@@ -216,6 +215,7 @@ class FunctionCache(object):
     #        return minitypes.FunctionType(args=(object_,) * len(argtypes),
     #                                      return_type=object_)
     #
+
     def external_function_by_name(self, name, module, **kws):
         """
         Return the signature and LLVM function declaration given a external 
@@ -235,50 +235,52 @@ class FunctionCache(object):
                                                                 **kws)
         return sig, lfunc
 
-    def external_call(self, name, *args, **kw):
-        '''Builds a call node for an external function.
-        '''
-        temp_name = kw.pop('temp_name', name)
-        llvm_module = kw.pop('llvm_module')
-        sig, lfunc = self.external_function_by_name(name, llvm_module, **kw)
+    ### Does not need to be here.  Too tightly coupled.
+    #    def external_call(self, name, *args, **kw):
+    #        '''Builds a call node for an external function.
+    #        '''
+    #        temp_name = kw.pop('temp_name', name)
+    #        llvm_module = kw.pop('llvm_module')
+    #        sig, lfunc = self.external_function_by_name(name, llvm_module, **kw)
+    #
+    #        if name in self.context.external_library:
+    #            external_func = self.context.external_library.get(name)
+    #            exc_check = dict(badval=external_func.badval,
+    #                             goodval=external_func.goodval,
+    #                             exc_msg=external_func.exc_msg,
+    #                             exc_type=external_func.exc_type,
+    #                             exc_args=external_func.exc_args)
+    #        else:
+    #            exc_check = {}
+    #
+    #        result = nodes.NativeCallNode(sig, args, lfunc, name=temp_name,
+    #                                      **exc_check)
+    #        return result
 
-        if name in self.context.external_library:
-            external_func = self.context.external_library.get(name)
-            exc_check = dict(badval=external_func.badval,
-                             goodval=external_func.goodval,
-                             exc_msg=external_func.exc_msg,
-                             exc_type=external_func.exc_type,
-                             exc_args=external_func.exc_args)
-        else:
-            exc_check = {}
-
-        result = nodes.NativeCallNode(sig, args, lfunc, name=temp_name,
-                                      **exc_check)
-        return result
-
-    def build_external_function(self, external_function, module):
-        """
-        Build an external function given it's signature information. 
-        See the `ExternalFunction` class.
-        """
-        # TODO: Remove this function
-        assert False, "Unused"
-        assert module is not None
-        try:
-            lfunc = module.get_function_named(external_function.name)
-        except llvm.LLVMException:
-            func_type = minitypes.FunctionType(
-                    return_type=external_function.return_type,
-                    args=external_function.arg_types,
-                    is_vararg=external_function.is_vararg)
-            lfunc_type = func_type.to_llvm(self.context)
-            lfunc = module.add_function(lfunc_type, external_function.name)
-
-            if isinstance(external_function, InternalFunction):
-                lfunc.linkage = external_function.linkage
-                external_function.implementation(module, lfunc)
-
-        return lfunc
+    ### Unused
+    #    def build_external_function(self, external_function, module):
+    #        """
+    #        Build an external function given it's signature information. 
+    #        See the `ExternalFunction` class.
+    #        """
+    #        # TODO: Remove this function
+    #        assert False, "Unused"
+    #        assert module is not None
+    #        try:
+    #            lfunc = module.get_function_named(external_function.name)
+    #        except llvm.LLVMException:
+    #            func_type = minitypes.FunctionType(
+    #                    return_type=external_function.return_type,
+    #                    args=external_function.arg_types,
+    #                    is_vararg=external_function.is_vararg)
+    #            lfunc_type = func_type.to_llvm(self.context)
+    #            lfunc = module.add_function(lfunc_type, external_function.name)
+    #
+    #            if isinstance(external_function, InternalFunction):
+    #                lfunc.linkage = external_function.linkage
+    #                external_function.implementation(module, lfunc)
+    #
+    #        return lfunc
 
     # DEAD CODE?
     #def get_string_constant(self, const_str):

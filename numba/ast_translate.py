@@ -13,7 +13,7 @@ from . import _numba_types as _types
 from ._numba_types import BuiltinType
 
 from numba import *
-from . import visitors, nodes, llvm_types, utils
+from . import visitors, nodes, llvm_types, utils, function_util
 from .minivect import minitypes, llvm_codegen
 from numba import ndarray_helpers, translate, error, extension_types
 from numba._numba_types import is_obj, promote_closest
@@ -858,9 +858,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # Check for error using PyErr_Occurred()
             # TODO: make this an option in CheckErrorNode
             check_err = nodes.CheckErrorNode(
-                    nodes.ptrtoint(self.function_cache.external_call(
-                                            'PyErr_Occurred',
-                                            llvm_module=self.llvm_module)),
+                    nodes.ptrtoint(function_util.external_call(
+                                              self.context,
+                                              self.llvm_module,
+                                             'PyErr_Occurred')),
                     goodval=nodes.ptrtoint(nodes.NULL))
             func_call = func_call.cloneable
             func_call = nodes.ExpressionNode(stmts=[func_call, check_err],
@@ -903,11 +904,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def puts(self, msg):
         const = nodes.ConstNode(msg, c_string_type)
-        self.visit(self.function_cache.external_call('puts', const))
+        self.visit(function_util.external_call(self.context,
+                                               self.llvm_module,
+                                               'puts',
+                                               args=[const]))
 
     def puts_llvm(self, llvm_string):
         const = nodes.LLVMValueRefNode(c_string_type, llvm_string)
-        self.visit(self.function_cache.external_call('puts', const))
+        self.visit(function_util.external_call(self.context,
+                                               self.llvm_module,
+                                               'puts',
+                                               args=[const]))
 
     def setup_return(self):
         # Assign to this value which will be returned

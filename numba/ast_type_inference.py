@@ -13,7 +13,7 @@ from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as numba_types
 from .symtab import Variable
 from . import visitors, nodes, error
-from numba import stdio_util
+from numba import stdio_util, function_util
 from numba._numba_types import is_obj, promote_closest
 from numba.utils import dump
 
@@ -102,10 +102,11 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
                 assert dst_type.is_int
                 return nodes.CoercionNode(
                     nodes.ObjectTempNode(
-                        self.function_cache.external_call(
-                            'PyInt_FromString', arg1,
-                            nodes.NULL, arg2,
-                            llvm_module=self.llvm_module)),
+                        function_util.external_call(
+                                         self.context,
+                                         self.llvm_module,
+                                         'PyInt_FromString',
+                                         args=[arg1, nodes.NULL, arg2])),
                     dst_type=dst_type)
             return None
 

@@ -95,7 +95,7 @@ from .minivect import minierror, minitypes, codegen
 from . import macros, utils, _numba_types as numba_types
 from .symtab import Variable
 from . import visitors, nodes, error, functions
-from numba import stdio_util
+from numba import stdio_util, function_util
 from numba._numba_types import is_obj, promote_closest
 from numba.utils import dump
 
@@ -292,8 +292,11 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
             if argtype.signed:
                 type = promote_closest(self.context, argtype, [long_, longlong])
                 funcs = {long_: 'labs', longlong: 'llabs'}
-                return self.function_cache.external_call(funcs[type], node.args[0],
-                                                llvm_module=self.llvm_module)
+                return function_util.external_call(
+                                            self.context,
+                                            self.llvm_module,
+                                            funcs[type],
+                                            args=[node.args[0]])
             else:
                 # abs() on unsigned integral value
                 return node.args[0]
@@ -520,21 +523,27 @@ class ResolveCoercions(visitors.NumbaTransformer):
             # TODO: be a coercion
             if self.nopython:
                 node = nodes.CoercionNode(
-                    self.function_cache.external_call('atol' if dst_type.is_int
-                                             else 'atof', node.node,
-                                             llvm_module=self.llvm_module),
+                    function_util.external_call(
+                                self.context,
+                                self.llvm_module,
+                                ('atol' if dst_type.is_int else 'atof'),
+                                args=[node.node]),
                     dst_type, name=node.name,)
             else:
                 if dst_type.is_int:
-                    cvtobj = self.function_cache.external_call(
-                        'PyInt_FromString', node.node,
-                        nodes.NULL, nodes.const(10, int_),
-                        llvm_module=self.llvm_module)
+                    cvtobj = function_util.external_call(
+                                              self.context,
+                                              self.llvm_module,
+                                              'PyInt_FromString',
+                                              args=[node.node, nodes.NULL,
+                                                    nodes.const(10, int_)])
                 else:
-                    cvtobj = self.function_cache.external_call(
-                        'PyFloat_FromString', node.node,
-                        nodes.const(0, Py_ssize_t),
-                        llvm_module=self.llvm_module)
+                    cvtobj = function_util.external_call(
+                                          self.context,
+                                          self.llvm_module,
+                                          'PyFloat_FromString',
+                                          args=[node.node,
+                                                nodes.const(0, Py_ssize_t)])
                 node = nodes.CoerceToNative(nodes.ObjectTempNode(cvtobj),
                                             dst_type, name=node.name)
             return self.visit(node)
@@ -575,10 +584,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
             #      cls = functions.PyComplex_FromCComplex
 
             if cls:
-                new_node = self.function_cache.external_call(
-                                            cls.__name__,
-                                            node.node,
-                                            llvm_module=self.llvm_module)
+                new_node = function_util.external_call(self.context,
+                                                       self.llvm_module,
+                                                       cls.__name__,
+                                                       args=[node.node])
         elif node_type.is_pointer and not node_type.is_string():
             # Create ctypes pointer object
             ctypes_pointer_type = node_type.to_ctypes()
@@ -586,8 +595,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     nodes.ObjectInjectNode(ctypes_pointer_type, object_)]
             new_node = nodes.call_pyfunc(ctypes.cast, args)
         elif node_type.is_bool:
-            new_node = self.function_cache.external_call(
-                "PyBool_FromLong", node.node, llvm_module=self.llvm_module)
+            new_node = function_util.external_call(self.context,
+                                                   self.llvm_module,
+                                                   "PyBool_FromLong",
+                                                   args=[node.node])
 
         self.generic_visit(new_node)
         return new_node
@@ -620,8 +631,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
             if cls:
                 # TODO: error checking!
-                new_node = self.function_cache.external_call(cls.__name__, node.node,
-                                                    llvm_module=self.llvm_module)
+                new_node = function_util.external_call(self.context,
+                                                       self.llvm_module,
+                                                       cls.__name__,
+                                                       args=[node.node])
         elif node_type.is_pointer:
             raise error.NumbaError(node, "Obtaining pointers from objects "
                                          "is not yet supported")
@@ -775,9 +788,12 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                 value, "Printing values of type '%s' is not supported "
                        "in nopython mode" % (value.type,))
 
-        return self.function_cache.external_call(
-                    'printf', nodes.const(format, c_string_type), value,
-                    llvm_module=self.llvm_module)
+        return function_util.external_call(
+                                       self.context,
+                                       self.llvm_module,
+                                       'printf',
+                                       args=[nodes.const(format, c_string_type),
+                                             value])
 
 
     def _print(self, value, dest=None):
@@ -788,8 +804,10 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         if dest is None:
             dest = nodes.ObjectInjectNode(sys.stdout)
 
-        value = self.function_cache.external_call("PyObject_Str", value,
-                                         llvm_module=self.llvm_module)
+        value = function_util.external_call(self.context,
+                                            self.llvm_module,
+                                           "PyObject_Str",
+                                            args=[value])
         args = [dest, nodes.ConstNode("write"), nodes.ConstNode("O"), value]
         return nodes.NativeCallNode(signature, args, lfunc)
 
@@ -957,9 +975,11 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                                    node.slice.type.is_object):
             # Array or object slicing
             if isinstance(node.ctx, ast.Load):
-                result = self.function_cache.external_call('PyObject_GetItem',
-                                                  node.value, node.slice,
-                                                  llvm_module=self.llvm_module)
+                result = function_util.external_call(self.context,
+                                                     self.llvm_module,
+                                                     'PyObject_GetItem',
+                                                     args=[node.value,
+                                                           node.slice])
                 node = nodes.CoercionNode(result, dst_type=node.type)
                 node = self.visit(node)
             else:
@@ -998,9 +1018,10 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             obj = target.value
             key = target.slice
             value = self.visit(node.value)
-            call = self.function_cache.external_call('PyObject_SetItem',
-                                            obj, key, value,
-                                            llvm_module=self.llvm_module)
+            call = function_util.external_call(self.context,
+                                               self.llvm_module,
+                                               'PyObject_SetItem',
+                                               args=[obj, key, value])
             return self.visit(call)
 
         self.generic_visit(node)
@@ -1026,9 +1047,11 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             else:
                 bounds.append(node)
 
-        new_slice = self.function_cache.external_call('PySlice_New', *bounds,
-                                             temp_name='slice',
-                                             llvm_module=self.llvm_module)
+        new_slice = function_util.external_call(self.context,
+                                                self.llvm_module,
+                                                'PySlice_New',
+                                                args=bounds,
+                                                temp_name='slice')
         return self.visit(new_slice)
         # return nodes.ObjectTempNode(new_slice)
 
@@ -1047,10 +1070,12 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                     new_node = nodes.ConstNode(getattr(node.value.type.module,
                                                        node.attr))
             else:
-                new_node = self.function_cache.external_call(
-                                    'PyObject_GetAttrString', node.value,
-                                    nodes.ConstNode(node.attr),
-                                    llvm_module=self.llvm_module)
+                new_node = function_util.external_call(
+                                        self.context,
+                                        self.llvm_module,
+                                        'PyObject_GetAttrString',
+                                        args=[node.value,
+                                              nodes.ConstNode(node.attr)])
             return self.visit(new_node)
 
         self.generic_visit(node)
@@ -1172,12 +1197,16 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
             if node.exc_args:
                 args = [node.exc_type, node.exc_msg, node.exc_args]
-                raise_node = self.function_cache.external_call('PyErr_Format', *args,
-                                                      llvm_module=self.llvm_module)
+                raise_node = function_util.external_call(self.context,
+                                                         self.llvm_module,
+                                                         'PyErr_Format',
+                                                         args=args)
             else:
                 args = [node.exc_type, node.exc_msg]
-                raise_node = self.function_cache.external_call('PyErr_SetString', *args,
-                                                      llvm_module=self.llvm_module)
+                raise_node = function_util.external_call(self.context,
+                                                         self.llvm_module,
+                                                        'PyErr_SetString',
+                                                         args=args)
 
             body.append(raise_node)
 
@@ -1191,8 +1220,11 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
             msg = '%s%s%%s' % (exc_type, pos)
             format = nodes.const(msg, c_string_type)
-            print_msg = self.function_cache.external_call('printf', format, node.exc_msg,
-                                                 llvm_module=self.llvm_module)
+            print_msg = function_util.external_call(self.context,
+                                                    self.llvm_module,
+                                                    'printf',
+                                                    args=[format,
+                                                          node.exc_msg])
             body.append(print_msg)
 
         trap = nodes.LLVMIntrinsicNode(signature=void(), args=[],
@@ -1269,8 +1301,11 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
     def _object_binop(self, node, api_name):
         return self.visit(
-            self.function_cache.external_call(api_name, node.left, node.right,
-                                     llvm_module=self.llvm_module))
+            function_util.external_call(self.context,
+                                        self.llvm_module,
+                                        api_name,
+                                        args=[node.left,
+                                              node.right]))
 
     def _object_Add(self, node):
         return self._object_binop(node, 'PyNumber_Add')
@@ -1288,10 +1323,14 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         return self._object_binop(node, 'PyNumber_Remainder')
 
     def _object_Pow(self, node):
-        return self.visit(self.function_cache.external_call(
-                'PyNumber_Power', node.left, node.right,
-                nodes.ObjectInjectNode(None)),
-                llvm_module=self.llvm_module)
+        args = [node.left,
+                node.right,
+                nodes.ObjectInjectNode(None)]
+        return self.visit(function_util.external_call(self.context,
+                                                       self.llvm_module,
+                                                       'PyNumber_Power',
+                                                       args=args),
+                            llvm_module=self.llvm_module)
 
     def _object_LShift(self, node):
         return self._object_binop(node, 'PyNumber_Lshift')
@@ -1326,20 +1365,23 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
     def _object_unaryop(self, node, api_name):
         return self.visit(
-            self.function_cache.external_call(api_name, node.operand,
-                                              llvm_module = self.llvm_module))
+            function_util.external_call(self.context,
+                                        self.llvm_module,
+                                        api_name,
+                                        args=[node.operand]))
 
     def _object_Invert(self, node):
         return self._object_unaryop(node, 'PyNumber_Invert')
 
     def _object_Not(self, node):
-        return self.visit(
-            nodes.IfExp(nodes.Compare(
-                    self.function_cache.external_call('PyObject_IsTrue',
-                                                      node.operand),
-                    [nodes.Eq()], [nodes.ConstNode(0)]),
-                        nodes.ObjectInjectNode(True),
-                        nodes.ObjectInjectNode(False)))
+        callnode = function_util.external_call(self.function_cache,
+                                               self.llvm_module,
+                                               'PyObject_IsTrue',
+                                               args=[node.operand])
+        cmpnode = nodes.Compare(callnode, [nodes.Eq()], [nodes.ConstNode(0)])
+        return self.visit(nodes.IfExp(cmpnode,
+                                      nodes.ObjectInjectNode(True),
+                                      nodes.ObjectInjectNode(False)))
 
     def _object_UAdd(self, node):
         return self._object_unaryop(node, 'PyNumber_Positive')
