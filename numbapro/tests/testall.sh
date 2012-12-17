@@ -39,7 +39,6 @@ function run_test
     fi
 }
 
-run_test_in llvm_cbuilder_tests
 run_test_in basic_vectorize
 run_test_in parallel_vectorize
 run_test_in stream_vectorize
