@@ -6,8 +6,7 @@ from numba import *
 from . import naming
 from .minivect import minitypes
 import numba.ast_translate as translate
-from numba import nodes, intrinsic
-from llpython.byte_translator import LLVMTranslator
+from numba import nodes
 import llvm.core
 import logging
 import traceback
@@ -21,8 +20,6 @@ except Exception, exn:
                 "if the source is not available:\n%s" %
                 traceback.format_exc())
     decompile_func = None
-
-import llvm.core
 
 def fix_ast_lineno(tree):
     # NOTE: A hack to fix assertion error in debug mode due to bad lineno.
