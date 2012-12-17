@@ -34,6 +34,10 @@ def promote_closest(context, int_type, candidates):
 
     return candidates[-1]
 
+#------------------------------------------------------------------------
+# Numba's extension of the minivect type system
+#------------------------------------------------------------------------
+
 # Patch repr of objects to print "object_" instead of "PyObject *"
 minitypes.ObjectType.__repr__ = lambda self: "object_"
 
@@ -90,12 +94,6 @@ class UninitializedType(NumbaType):
 
     def __repr__(self):
         return "<uninitialized>"
-
-class PHIType(NumbaType):
-    """
-    Type for phi() values.
-    """
-    is_phi = True
 
 class ModuleType(NumbaType, minitypes.ObjectType):
     """
@@ -267,10 +265,21 @@ class CTypesPointerType(NumbaType):
         self.address = address
 
 class SizedPointerType(NumbaType, minitypes.PointerType):
+    """
+    A pointer with knowledge of its range.
+
+    E.g. an array's 'shape' or 'strides' attribute.
+    This also allow tuple unpacking.
+    """
+
     size = None
     is_sized_pointer = True
 
 class CastType(NumbaType, minitypes.ObjectType):
+    """
+    A type instance in user code. e.g. double(value). The Name node will have
+    a cast-type with dst_type 'double'.
+    """
 
     is_cast = True
 
@@ -280,6 +289,10 @@ class CastType(NumbaType, minitypes.ObjectType):
 
     def __repr__(self):
         return "<cast(%s)>" % self.dst_type
+
+#------------------------------------------------------------------------
+# Extension types
+#------------------------------------------------------------------------
 
 class ExtensionType(NumbaType, minitypes.ObjectType):
 
@@ -335,6 +348,9 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "<Extension %s>" % self.name
 
+#------------------------------------------------------------------------
+# Closures
+#------------------------------------------------------------------------
 
 class ClosureType(NumbaType, minitypes.ObjectType):
     """
@@ -370,10 +386,13 @@ class ClosureScopeType(ExtensionType):
         else:
             self.scope_prefix = self.parent_scope.scope_prefix + "0"
 
-#
-### Types participating in statements that are deferred later and types
-### participating in type graph cycles
-#
+
+#------------------------------------------------------------------------
+# Deferred Types
+#------------------------------------------------------------------------
+# Types participating in statements that are deferred until later, and types
+# participating in type graph cycles
+
 class UnresolvedType(NumbaType):
     """
     The directed type graph works as follows:
@@ -1015,15 +1034,18 @@ def resolve_var(var):
 
     return var.type
 
+#------------------------------------------------------------------------
+# END OF TYPE DEFINITIONS
+#------------------------------------------------------------------------
 
 tuple_ = TupleType()
 none = NoneType()
 null_type = NULLType()
 intp = minitypes.npy_intp
 
-#
-### Type shorthands
-#
+#------------------------------------------------------------------------
+# Type shorthands
+#------------------------------------------------------------------------
 
 O = object_
 b1 = bool_
@@ -1045,7 +1067,9 @@ c16 = complex128
 c32 = complex256
 
 class NumbaTypeMapper(minitypes.TypeMapper):
-
+    """
+    Map types from Python values, handle type promotions, etc
+    """
 
     def __init__(self, context):
         super(NumbaTypeMapper, self).__init__(context)
