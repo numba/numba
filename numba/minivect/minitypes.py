@@ -368,15 +368,23 @@ class Type(miniutils.ComparableObjectMixin):
     def __eq__(self, other):
         # Don't use isinstance here, compare on exact type to be consistent
         # with __hash__. Override where sensible
+        cmps = self.comparison_type_list
+        if not cmps:
+            return id(self) == id(other)
+
         return (type(self) is type(other) and
-                self.comparison_type_list == other.comparison_type_list)
+                cmps == other.comparison_type_list)
 
     def __ne__(self, other):
         return not self == other
 
     def __hash__(self):
+        cmps = self.comparison_type_list
+        if not cmps:
+            return hash(id(self))
+
         h = hash(type(self))
-        for subtype in self.comparison_type_list:
+        for subtype in cmps:
             h = h ^ hash(subtype)
 
         return h
@@ -931,6 +939,9 @@ class struct(Type):
         self.readonly = readonly
         self.fielddict = dict(self.fields)
         self.packed = packed
+
+    def copy(self):
+        return struct(self.fields, self.name, self.readonly, self.packed)
 
     def __repr__(self):
         if self.name:

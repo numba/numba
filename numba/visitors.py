@@ -125,9 +125,9 @@ class NumbaVisitorMixin(CooperativeBase):
                 func_signature.args[0].is_closure_scope)
 
     def run_template(self, s, vars=None, **substitutions):
-        from numba import template
+        from numba import templating
 
-        templ = template.TemplateContext(self.context, s)
+        templ = templating.TemplateContext(self.context, s)
         if vars:
             for name, type in vars.iteritems():
                 templ.temp_var(name, type)

@@ -10,8 +10,10 @@ def format_postup(tup):
     lineno, col_offset = tup
     return "%s:%s: " % (lineno - 1, col_offset)
 
+class error(Exception):
+    "Base class for numba compiler exceptions"
 
-class NumbaError(Exception):
+class NumbaError(error):
     "Some error happened during compilation"
 
     def __init__(self, node, msg=None, *args):
@@ -32,8 +34,11 @@ class NumbaError(Exception):
             return "<internal error creating numba error message>"
 
 
-class InternalError(NumbaError):
+class InternalError(error):
     "Indicates a compiler bug"
 
-class _UnknownAttribute(Exception):
+class _UnknownAttribute(error):
     pass
+
+class InvalidTemplateError(error):
+    "Raised for invalid template type specifications"
