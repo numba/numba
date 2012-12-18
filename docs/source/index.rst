@@ -14,6 +14,7 @@ Contents:
    doc/releases.rst
    doc/userguide.rst
    doc/types.rst
+   doc/closures.rst
    doc/examples.rst
    doc/pycc.rst
 

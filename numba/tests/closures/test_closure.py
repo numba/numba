@@ -310,7 +310,26 @@ Traceback (most recent call last):
 NumbaError: 301:5: Expected 1 arguments type(s), got 0
 """
 
+@autojit
+def get_closure(arg):
+    @void()
+    def closure():
+        print arg
+
+    return closure
+
+@autojit
+def test_call_closure():
+    closure = get_closure(10.0)
+    closure() # TODO: This still goes through the object layer, amend
+
+__doc__ += """
+>>> test_call_closure()
+10.0
+"""
+
 if __name__ == '__main__':
 #    closure1 = closure_arg(1)
+#    test_call_closure()
     import doctest
     doctest.testmod()
