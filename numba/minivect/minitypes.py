@@ -786,11 +786,12 @@ class FunctionType(Type):
 
     struct_by_reference = False
 
-    def __init__(self, return_type, args, name=None, **kwds):
+    def __init__(self, return_type, args, name=None, is_vararg=False, **kwds):
         super(FunctionType, self).__init__(**kwds)
         self.return_type = return_type
         self.args = args
         self.name = name
+        self.is_vararg = is_vararg
 
     def to_llvm(self, context):
         assert self.return_type is not None
@@ -805,7 +806,7 @@ class FunctionType(Type):
         if self.is_vararg:
             args.append("...")
         if self.name:
-            namestr = self.name + ' '
+            namestr = self.name
         else:
             namestr = ''
         return "%s (*%s)(%s)" % (self.return_type, namestr, ", ".join(args))

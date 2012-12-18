@@ -44,6 +44,7 @@ _config_logger()
 from . import _numba_types, special
 from ._numba_types import *
 from . import decorators
+from numba.minivect.minitypes import FunctionType
 from .decorators import *
 from numba.special import NULL
 from numba.error import *
