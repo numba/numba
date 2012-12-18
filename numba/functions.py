@@ -297,124 +297,126 @@ class FunctionCache(object):
     #
     #    return ret_val
 
-class _LLVMModuleUtils(object):
-    # TODO: rewrite print statements w/ native types to printf during type
-    # TODO: analysis to PrintfNode. Use PrintfNode for debugging
-
-    @classmethod
-    def build_print_string_constant(cls, translator, out_val):
-        # FIXME: This is just a hack to get things going.  There is a
-        # corner case where formatting markup in the string can cause
-        # undefined behavior, and for 100% correctness we'd have to
-        # escape string formatting sequences.
-        llvm_printf = cls.get_printf(translator.mod)
-        return translator.builder.call(llvm_printf, [
-            translator.builder.gep(cls.get_string_constant(translator.mod,
-                                                           out_val),
-                [_int32_zero, _int32_zero])])
-
-    @classmethod
-    def build_print_number(cls, translator, out_var):
-        llvm_printf = cls.get_printf(translator.mod)
-        if out_var.typ[0] == 'i':
-            if int(out_var.typ[1:]) < 64:
-                fmt = "%d"
-                typ = "i32"
-            else:
-                fmt = "%ld"
-                typ = "i64"
-        elif out_var.typ[0] == 'f':
-            if int(out_var.typ[1:]) < 64:
-                fmt = "%f"
-                typ = "f32"
-            else:
-                fmt = "%lf"
-                typ = "f64"
-        else:
-            raise NotImplementedError("FIXME (type %r not supported in "
-                                      "build_print_number())" % (out_var.typ,))
-        return translator.builder.call(llvm_printf, [
-            translator.builder.gep(
-                cls.get_string_constant(translator.mod, fmt),
-                [_int32_zero, _int32_zero]),
-            out_var.llvm(typ, builder = translator.builder)])
-
-    @classmethod
-    def build_debugout(cls, translator, args):
-        if translator.optimize:
-            print("Warning: Optimization turned on, debug output code may "
-                  "be optimized out.")
-        res = cls.build_print_string_constant(translator, "debugout: ")
-        for arg in args:
-            arg_type = arg.typ
-            if arg.typ is None:
-                arg_type = type(arg.val)
-            if isinstance(arg.val, str):
-                res = cls.build_print_string_constant(translator, arg.val)
-            elif typ_isa_number(arg_type):
-                res = cls.build_print_number(translator, arg)
-            else:
-                raise NotImplementedError("Don't know how to output stuff of "
-                                          "type %r at present." % arg_type)
-        res = cls.build_print_string_constant(translator, "\n")
-        return res, None
-
-    @classmethod
-    def build_len(cls, translator, args):
-        if (len(args) == 1 and
-            args[0].lvalue is not None and
-            args[0].lvalue.type == _numpy_array):
-            lfunc = None
-            shape_ofs = _numpy_array_field_ofs['shape']
-            res = translator.builder.load(
-                translator.builder.load(
-                    translator.builder.gep(args[0]._llvm, [
-                        _int32_zero, llvm.core.Constant.int(_int32, shape_ofs)])))
-        else:
-            return cls.build_object_len(translator, args)
-
-        return res, None
-
-    @classmethod
-    def build_zeros_like(cls, translator, args):
-        assert (len(args) == 1 and
-                args[0]._llvm is not None and
-                args[0]._llvm.type == _numpy_array), (
-            "Expected Numpy array argument to numpy.zeros_like().")
-        translator.init_multiarray()
-        larr = args[0]._llvm
-        largs = [translator.builder.load(
-            translator.builder.gep(larr, [
-                _int32_zero,
-                llvm.core.Constant.int(_int32,
-                                _numpy_array_field_ofs[field_name])]))
-                 for field_name in ('ndim', 'shape', 'descr')]
-        largs.append(_int32_zero)
-        lfunc = translator.ma_obj.load_PyArray_Zeros(translator.mod,
-                                                     translator.builder)
-        res = translator.builder.bitcast(
-            translator.builder.call(
-                cls.get_py_incref(translator.mod),
-                [translator.builder.call(lfunc, largs)]),
-            _numpy_array)
-        if __debug__:
-            print "build_zeros_like(): lfunc =", str(lfunc)
-            print "build_zeros_like(): largs =", [str(arg) for arg in largs]
-        return res, args[0].typ
-
-    @classmethod
-    def build_conj(cls, translator, args):
-        print args
-        assert ((len(args) == 1) and (args[0]._llvm is not None) and
-                (args[0]._llvm.type in (_complex64, _complex128)))
-        larg = args[0]._llvm
-        elem_ltyp = _float if larg.type == _complex64 else _double
-        new_imag_lval = translator.builder.fmul(
-            llvm.core.Constant.real(elem_ltyp, -1.),
-            translator.builder.extract_value(larg, 1))
-        assert hasattr(translator.builder, 'insert_value'), (
-            "llvm-py support for LLVMBuildInsertValue() required to build "
-            "code for complex conjugates.")
-        res = translator.builder.insert_value(larg, new_imag_lval, 1)
-        return res, None
-
+### Duplicated and unused class? See translate.py
+#
+#class _LLVMModuleUtils(object):
+#    # TODO: rewrite print statements w/ native types to printf during type
+#    # TODO: analysis to PrintfNode. Use PrintfNode for debugging
+#
+#    @classmethod
+#    def build_print_string_constant(cls, translator, out_val):
+#        # FIXME: This is just a hack to get things going.  There is a
+#        # corner case where formatting markup in the string can cause
+#        # undefined behavior, and for 100% correctness we'd have to
+#        # escape string formatting sequences.
+#        llvm_printf = cls.get_printf(translator.mod)
+#        return translator.builder.call(llvm_printf, [
+#            translator.builder.gep(cls.get_string_constant(translator.mod,
+#                                                           out_val),
+#                [_int32_zero, _int32_zero])])
+#
+#    @classmethod
+#    def build_print_number(cls, translator, out_var):
+#        llvm_printf = cls.get_printf(translator.mod)
+#        if out_var.typ[0] == 'i':
+#            if int(out_var.typ[1:]) < 64:
+#                fmt = "%d"
+#                typ = "i32"
+#            else:
+#                fmt = "%ld"
+#                typ = "i64"
+#        elif out_var.typ[0] == 'f':
+#            if int(out_var.typ[1:]) < 64:
+#                fmt = "%f"
+#                typ = "f32"
+#            else:
+#                fmt = "%lf"
+#                typ = "f64"
+#        else:
+#            raise NotImplementedError("FIXME (type %r not supported in "
+#                                      "build_print_number())" % (out_var.typ,))
+#        return translator.builder.call(llvm_printf, [
+#            translator.builder.gep(
+#                cls.get_string_constant(translator.mod, fmt),
+#                [_int32_zero, _int32_zero]),
+#            out_var.llvm(typ, builder = translator.builder)])
+#
+#    @classmethod
+#    def build_debugout(cls, translator, args):
+#        if translator.optimize:
+#            print("Warning: Optimization turned on, debug output code may "
+#                  "be optimized out.")
+#        res = cls.build_print_string_constant(translator, "debugout: ")
+#        for arg in args:
+#            arg_type = arg.typ
+#            if arg.typ is None:
+#                arg_type = type(arg.val)
+#            if isinstance(arg.val, str):
+#                res = cls.build_print_string_constant(translator, arg.val)
+#            elif typ_isa_number(arg_type):
+#                res = cls.build_print_number(translator, arg)
+#            else:
+#                raise NotImplementedError("Don't know how to output stuff of "
+#                                          "type %r at present." % arg_type)
+#        res = cls.build_print_string_constant(translator, "\n")
+#        return res, None
+#
+#    @classmethod
+#    def build_len(cls, translator, args):
+#        if (len(args) == 1 and
+#            args[0].lvalue is not None and
+#            args[0].lvalue.type == _numpy_array):
+#            lfunc = None
+#            shape_ofs = _numpy_array_field_ofs['shape']
+#            res = translator.builder.load(
+#                translator.builder.load(
+#                    translator.builder.gep(args[0]._llvm, [
+#                        _int32_zero, llvm.core.Constant.int(_int32, shape_ofs)])))
+#        else:
+#            return cls.build_object_len(translator, args)
+#
+#        return res, None
+#
+#    @classmethod
+#    def build_zeros_like(cls, translator, args):
+#        assert (len(args) == 1 and
+#                args[0]._llvm is not None and
+#                args[0]._llvm.type == _numpy_array), (
+#            "Expected Numpy array argument to numpy.zeros_like().")
+#        translator.init_multiarray()
+#        larr = args[0]._llvm
+#        largs = [translator.builder.load(
+#            translator.builder.gep(larr, [
+#                _int32_zero,
+#                llvm.core.Constant.int(_int32,
+#                                _numpy_array_field_ofs[field_name])]))
+#                 for field_name in ('ndim', 'shape', 'descr')]
+#        largs.append(_int32_zero)
+#        lfunc = translator.ma_obj.load_PyArray_Zeros(translator.mod,
+#                                                     translator.builder)
+#        res = translator.builder.bitcast(
+#            translator.builder.call(
+#                cls.get_py_incref(translator.mod),
+#                [translator.builder.call(lfunc, largs)]),
+#            _numpy_array)
+#        if __debug__:
+#            print "build_zeros_like(): lfunc =", str(lfunc)
+#            print "build_zeros_like(): largs =", [str(arg) for arg in largs]
+#        return res, args[0].typ
+#
+#    @classmethod
+#    def build_conj(cls, translator, args):
+#        print args
+#        assert ((len(args) == 1) and (args[0]._llvm is not None) and
+#                (args[0]._llvm.type in (_complex64, _complex128)))
+#        larg = args[0]._llvm
+#        elem_ltyp = _float if larg.type == _complex64 else _double
+#        new_imag_lval = translator.builder.fmul(
+#            llvm.core.Constant.real(elem_ltyp, -1.),
+#            translator.builder.extract_value(larg, 1))
+#        assert hasattr(translator.builder, 'insert_value'), (
+#            "llvm-py support for LLVMBuildInsertValue() required to build "
+#            "code for complex conjugates.")
+#        res = translator.builder.insert_value(larg, new_imag_lval, 1)
+#        return res, None
+#
