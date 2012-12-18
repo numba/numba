@@ -797,9 +797,9 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
 
     def _print(self, value, dest=None):
-        signature, lfunc = self.function_cache.external_function_by_name(
-                                                'PyObject_CallMethod',
-                                                self.llvm_module)
+        signature, lfunc = self.context.external_library.declare(
+                                                         self.llvm_module,
+                                                         'PyObject_CallMethod')
 
         if dest is None:
             dest = nodes.ObjectInjectNode(sys.stdout)
@@ -838,7 +838,8 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
     def visit_Tuple(self, node):
         self.check_context(node)
 
-        sig, lfunc = self.function_cache.external_function_by_name('PyTuple_Pack', self.llvm_module)
+        sig, lfunc = self.context.external_library.declare(self.llvm_module,
+                                                           'PyTuple_Pack')
         objs = self.visitlist(nodes.CoercionNode.coerce(node.elts, object_))
         n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
         args = [n] + objs

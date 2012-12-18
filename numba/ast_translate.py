@@ -305,7 +305,7 @@ class RefcountingMixin(object):
         object_ltype = object_.to_llvm(self.context)
         b = self.builder
         mod = b.basic_block.function.module
-        sig, py_decref = self.function_cache.external_function_by_name(func, mod)
+        sig, py_decref = self.context.external_library.declare(mod, func)
         return b.call(py_decref, [b.bitcast(value, object_ltype)])
 
     def incref(self, value):
@@ -1503,11 +1503,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return op.__name__.lower()
 
     def _handle_mod(self, node, lhs, rhs):
-        _, func = self.function_cache.external_function_by_name(
-            'PyModulo',
-            self.llvm_module,
-            arg_types = (node.type, node.type),
-            return_type = node.type)
+        _, func = self.context.intrinsic_library.declare(self.llvm_module,
+                                                        'PyModulo',
+                                                        arg_types = (node.type,
+                                                                     node.type),
+                                                        return_type = node.type)
         return self.builder.call(func, (lhs, rhs))
 
     def visit_BinOp(self, node):
@@ -1675,8 +1675,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # call PyObject_Call
         largs = [lfunc_addr, args_tuple, kwargs_dict]
-        _, pyobject_call = self.function_cache.external_function_by_name('PyObject_Call',
-                                                                self.llvm_module)
+        _, pyobject_call = self.context.external_library.declare(
+                                        self.llvm_module, 'PyObject_Call')
 
         res = self.builder.call(pyobject_call, largs, name=node.name)
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
@@ -1723,7 +1723,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return self.visit_NativeCallNode(node)
 
     def visit_LLMacroNode (self, node):
-        return node.macro(self.function_cache, self.builder,
+        return node.macro(self.context, self.builder,
                           *self.visitlist(node.args))
 
     def visit_LLVMExternalFunctionNode(self, node):
@@ -1956,15 +1956,12 @@ class ObjectCoercer(object):
         self.translator = translator
         self.builder = translator.builder
         self.llvm_module = self.builder.basic_block.function.module
-        sig, self.py_buildvalue = translator.function_cache.external_function_by_name(
-                                                              'Py_BuildValue',
-                                                              self.llvm_module)
-        sig, self.pyarg_parsetuple = translator.function_cache.external_function_by_name(
-                                                              'PyArg_ParseTuple',
-                                                              self.llvm_module)
-        sig, self.pyerr_clear = translator.function_cache.external_function_by_name(
-                                                            'PyErr_Clear',
-                                                            self.llvm_module)
+        sig, self.py_buildvalue = self.context.external_library.declare(
+                                            self.llvm_module, 'Py_BuildValue')
+        sig, self.pyarg_parsetuple = self.context.external_library.declare(
+                                        self.llvm_module, 'PyArg_ParseTuple')
+        sig, self.pyerr_clear = self.context.external_library.declare(
+                                            self.llvm_module, 'PyErr_Clear')
         self.function_cache = translator.function_cache
         self.NULL = self.translator.visit(nodes.NULL_obj)
 

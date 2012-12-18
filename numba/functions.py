@@ -216,24 +216,25 @@ class FunctionCache(object):
     #                                      return_type=object_)
     #
 
-    def external_function_by_name(self, name, module, **kws):
-        """
-        Return the signature and LLVM function declaration given a external 
-        function name.  The function name can be external or intrinsic 
-        functions.  The linker is responsible to link the intrinsic library
-        into the module.  All intrinsics have linkage LINKONCE_ODR; thus,
-        they are safe to appear in multiple linking modules.
-        """
-        assert module is not None
-        try:
-            sig, lfunc = self.context.external_library.declare(module,
-                                                               name,
-                                                               **kws)
-        except KeyError:
-            sig, lfunc = self.context.intrinsic_library.declare(module,
-                                                                name,
-                                                                **kws)
-        return sig, lfunc
+    ### Does not need to be here. Too tightly coupled.
+    #    def external_function_by_name(self, name, module, **kws):
+    #        """
+    #        Return the signature and LLVM function declaration given a external 
+    #        function name.  The function name can be external or intrinsic 
+    #        functions.  The linker is responsible to link the intrinsic library
+    #        into the module.  All intrinsics have linkage LINKONCE_ODR; thus,
+    #        they are safe to appear in multiple linking modules.
+    #            """
+    #        assert module is not None
+    #        try:
+    #            sig, lfunc = self.context.external_library.declare(module,
+    #                                                               name,
+    #                                                               **kws)
+    #        except KeyError:
+    #            sig, lfunc = self.context.intrinsic_library.declare(module,
+    #                                                                name,
+    #                                                                **kws)
+    #        return sig, lfunc
 
     ### Does not need to be here.  Too tightly coupled.
     #    def external_call(self, name, *args, **kw):

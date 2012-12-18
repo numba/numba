@@ -9,15 +9,14 @@ logger = logging.getLogger(__name__)
 # llpython.byte_translator.LLVMTranslator that does macro
 # expansion.
 
-def c_string_slice_2 (func_cache, builder, c_string, lb, ub = None):
+def c_string_slice_2 (context, builder, c_string, lb, ub = None):
     module = builder.basic_block.function.module
-    logger.debug((func_cache, builder, c_string, lb, ub))
-    _, CStringSlice2Len = func_cache.external_function_by_name('CStringSlice2Len',
-                                                      module=module)
-    _, CStringSlice2 = func_cache.external_function_by_name('CStringSlice2',
-                                                   module=module)
-    _, strlen = func_cache.external_function_by_name('strlen',
-                                            module=module)
+    logger.debug((context, builder, c_string, lb, ub))
+    _, CStringSlice2Len = context.intrinsic_library.declare(module,
+                                                           'CStringSlice2Len')
+    _, CStringSlice2 = context.intrinsic_library.declare(module,
+                                                        'CStringSlice2')
+    _, strlen = context.external_library.declare(module, 'strlen')
     c_str_len = builder.call(strlen, [c_string])
     if ub is None:
         ub = c_str_len
@@ -30,8 +29,8 @@ c_string_slice_2.__signature__ = minitypes.FunctionType(
     return_type = c_string_type,
     args = (c_string_type, Py_ssize_t, Py_ssize_t))
 
-def c_string_slice_1 (func_cache, builder, c_string, lb):
-    return c_string_slice_2(func_cache, builder, c_string, lb)
+def c_string_slice_1 (context, builder, c_string, lb):
+    return c_string_slice_2(context, builder, c_string, lb)
 
 c_string_slice_1.__signature__ = minitypes.FunctionType(
     return_type = c_string_type,
