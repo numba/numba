@@ -51,7 +51,10 @@ etc.   Also, short-names are available with the style '<char>N' where
 char is 'b', 'i', 'u', 'f', and 'c' for boolean, integer, unsigned,
 float and complex types respectively with 'N' indicating the number of
 bytes in the type.    Thus, f8 is equivalent to float32, and c16 is
-equivalent to double complex. 
+equivalent to double complex.
+
+Native platform-dependent types are also available under names such as
+``int_``, ``short``, ``ulonglong``, etc.
 
 Types are names that can be imported from the numba namespace.
 Alternatively, they can be specified in strings in the jit decorator. 
@@ -71,8 +74,7 @@ from the numba module)::
 Notice how the argument types are passed in as arguments to the return
 type treated as a python function.    Previously, this same syntax was
 used but embedded in a string which avoids having to import f8 from
-numba directly. 
-
+numba directly.
 
 Specifying Arrays
 -----------------
