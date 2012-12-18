@@ -1,5 +1,9 @@
 import traceback
 
+from numba.minivect.minierror import Error as error
+
+__all__ = ["error", "NumbaError", "InternalError", "InvalidTemplateError"]
+
 def format_pos(node):
     if node is not None and hasattr(node, 'lineno'):
         return format_postup((node.lineno, node.col_offset))
@@ -9,9 +13,6 @@ def format_pos(node):
 def format_postup(tup):
     lineno, col_offset = tup
     return "%s:%s: " % (lineno - 1, col_offset)
-
-class error(Exception):
-    "Base class for numba compiler exceptions"
 
 class NumbaError(error):
     "Some error happened during compilation"

@@ -15,6 +15,14 @@ Contents:
    doc/userguide.rst
    doc/examples.rst
    doc/pycc.rst
+
+Developer Documentation
+=======================
+
+.. toctree::
+   :titlesonly:
+   :maxdepth: 1
+
    doc/reference.rst
 
 

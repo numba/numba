@@ -46,6 +46,7 @@ from ._numba_types import *
 from . import decorators
 from .decorators import *
 from numba.special import NULL
+from numba.error import *
 
 def test():
     import os
