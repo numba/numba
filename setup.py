@@ -61,7 +61,7 @@ setup(
 #                  include_dirs=[numpy.get_include()]),
         CythonExtension(
             name = "numba.extension_types",
-            sources = ["numba/extension_types.pyx", "numba/cyfunction.c"],
+            sources = ["numba/extension_types.pyx", "numba/numbafunction.c"],
             cython_gdb=True),
     ],
     version = '0.3.2',

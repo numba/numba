@@ -493,6 +493,8 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
     is_extension = True
     is_final = False
 
+    _need_tp_dealloc = None
+
     def __init__(self, py_class, **kwds):
         super(ExtensionType, self).__init__(**kwds)
         assert isinstance(py_class, type), "Must be a new-style class"
@@ -509,6 +511,27 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
 
         self.parent_attr_struct = None
         self.parent_vtab_type = None
+        self.parent_type = getattr(py_class, "__numba_ext_type", None)
+
+    @property
+    def need_tp_dealloc(self):
+        """
+        Returns whether this extension type needs a tp_dealloc, tp_traverse
+        and tp_clear filled out.
+
+        This needs to be computed on demand since the attributes are mutated
+        after creation.
+        """
+        if self._need_tp_dealloc is not None:
+            result = self._need_tp_dealloc
+        if self.parent_type is not None and self.parent_type.need_tp_dealloc:
+            result = False
+        else:
+            field_types = self.attribute_struct.fielddict.itervalues()
+            result = any(map(is_obj, field_types))
+
+        self._need_tp_dealloc = result
+        return result
 
     def add_method(self, method_name, method_signature):
         if method_name in self.methoddict:
