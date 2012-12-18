@@ -40,7 +40,6 @@ def fix_ast_lineno(tree):
 ##  is present as this will likely not work for all AST.
 def _fix_ast(myast):
     import _ast
-
     # Remove Pass nodes from the end of the ast
     while len(myast.body) > 0  and isinstance(myast.body[-1], _ast.Pass):
         del myast.body[-1]
@@ -57,7 +56,7 @@ def _fix_ast(myast):
         myast.decorator_list = []
 
 def _get_ast(func):
-    if os.environ.get('NUMBA_FORCE_META_AST'):
+    if int(os.environ.get('NUMBA_FORCE_META_AST')):
         func_def = decompile_func(func)
         assert isinstance(func_def, ast.FunctionDef)
         return func_def
