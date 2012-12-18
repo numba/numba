@@ -1,3 +1,9 @@
+"""
+This modules creates extension types.
+
+See also numba.extension_type_inference
+"""
+
 cimport cython
 from cpython cimport PyObject
 

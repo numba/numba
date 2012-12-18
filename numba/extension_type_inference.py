@@ -20,6 +20,13 @@ def validate_method(py_func, sig, is_static):
             "%s (don't include 'self')" % (nargs, py_func.__name__))
 
 def get_signature(ext_type, is_class, is_static, sig):
+    """
+    Create a signature given the user-specified signature. E.g.
+
+        class Foo(object):
+            @void()                 # becomes: void(ext_type(Foo))
+            def method(self): ...
+    """
     if is_static:
         leading_arg_types = ()
     elif is_class:
@@ -33,6 +40,11 @@ def get_signature(ext_type, is_class, is_static, sig):
 
 def _process_signature(ext_type, method, default_signature,
                        is_static=False, is_class=False):
+    """
+    Verify a method signature.
+
+    Returns a Method object and the resolved signature.
+    """
     if isinstance(method, minitypes.Function):
         # @double(...)
         # def func(self, ...): ...
@@ -85,6 +97,7 @@ class Method(object):
             return py_func
 
 def _process_method_signatures(class_dict, ext_type):
+    "Process all method signatures in order"
     for method_name, method in class_dict.iteritems():
         default_signature = None
         if (method_name == '__init__' and
@@ -227,6 +240,7 @@ def verify_base_class_compatibility(cls, struct_type, vtab_type):
             bases.append(base)
 
 def inherit_attributes(ext_type, class_dict):
+    "Inherit attributes and methods from superclasses"
     cls = ext_type.py_class
     if not is_numba_class(cls):
         # superclass is not a numba class
