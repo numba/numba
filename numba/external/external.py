@@ -1,6 +1,7 @@
 from numba.minivect import minitypes
 
 class ExternalFunction(object):
+    _attributes = ('func_name', 'arg_types', 'return_type', 'is_vararg')
     func_name = None
     arg_types = None
     return_type = None
@@ -13,6 +14,11 @@ class ExternalFunction(object):
     exc_args = None
 
     def __init__(self, **kwargs):
+        if __debug__:
+            # Only accept keyword arguments defined _attributes
+            for k, v in kwargs.items():
+                if k not in self._attributes:
+                    raise TypeError("Invalid keyword arg %s -> %s" % (k, v))
         vars(self).update(kwargs)
 
     @property
@@ -35,6 +41,10 @@ class ExternalLibrary(object):
         self._functions = {}
 
     def add(self, extfn):
+        if __debug__:
+            # Sentry for duplicated external function name
+            if extfn.name in self._functions:
+                raise NameError("Duplicated external function: %s" % extfn.name)
         self._functions[extfn.name] = extfn
 
     def get(self, name):

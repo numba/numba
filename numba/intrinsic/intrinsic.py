@@ -6,6 +6,7 @@ from collections import namedtuple
 Signature = namedtuple('Signature', ['return_type', 'arg_types'])
 
 class Intrinsic(object):
+    _attributes = ('func_name', 'arg_types', 'return_type')
     func_name = None
     arg_types = None
     return_type = None
@@ -20,6 +21,11 @@ class Intrinsic(object):
     #    exc_args = None
 
     def __init__(self, **kwargs):
+        if __debug__:
+            # Only accept keyword arguments defined _attributes
+            for k, v in kwargs.items():
+                if k not in self._attributes:
+                    raise TypeError("Invalid keyword arg %s -> %s" % (k, v))
         vars(self).update(kwargs)
 
     @property
@@ -60,9 +66,13 @@ class IntrinsicLibrary(object):
 
     def add(self, intr):
         '''Add a new intrinsic.
-        intr --- an Intrinsic instance
+        intr --- an Intrinsic class
         '''
-        assert issubclass(intr, Intrinsic)
+        if __debug__:
+            # Sentry for duplicated external function name
+            if intr.__name__ in self._functions:
+                raise NameError("Duplicated intrinsic function: %s" \
+                                % intr.__name__)
         self._functions[intr.__name__] = intr
         if intr.arg_types and intr.return_type:
             # only if it defines arg_types and return_type
@@ -123,6 +133,6 @@ class IntrinsicLibrary(object):
 
     def link(self, module):
         '''Link the intrinsic library into the target module.
-            '''
+        '''
         module.link_in(self._module, preserve=True)
 
