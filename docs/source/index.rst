@@ -14,9 +14,11 @@ Contents:
    doc/releases.rst
    doc/userguide.rst
    doc/types.rst
+   doc/extension_types.rst
    doc/closures.rst
-   doc/examples.rst
    doc/pycc.rst
+
+   doc/examples.rst
 
 Developer Documentation
 =======================
