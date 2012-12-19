@@ -13,6 +13,7 @@ Contents:
 
    doc/releases.rst
    doc/userguide.rst
+   doc/arrays.rst
    doc/types.rst
    doc/extension_types.rst
    doc/closures.rst
