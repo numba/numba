@@ -396,7 +396,10 @@ class Driver(object):
             return self.create_context(device)
 
     def release_context(self, context):
-        del self._CONTEXTS[context._handle.value]
+        handle = context._handle.value
+        del self._CONTEXTS[handle]
+        if handle == self._THREAD_LOCAL.context:
+            del self._THREAD_LOCAL.context
 
 CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1
 CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2

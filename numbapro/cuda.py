@@ -392,13 +392,16 @@ def stream():
 
 def select_device(device_id):
     '''Call this before any CUDA feature is used in each thread.
+        
+    Returns a device instance
 
     Raises exception on error.
     '''
     from numbapro._cuda import driver as cu
     driver = cu.Driver()
     device = cu.Device(device_id)
-    driver.create_context(device)
+    context = driver.create_context(device)
+    return device
 
 def close():
     '''Explicitly closes the context.
