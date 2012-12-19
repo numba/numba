@@ -1287,6 +1287,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             bb_false = bb_endif
 
+        # Mark current basic block and the exit block of the body
+        self.setblock(node.exit_block)
+
         # Branch to block from condition
         self.builder.position_at_end(node.cond_block.prev_block)
         self.builder.branch(bb_cond)
@@ -1295,7 +1298,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # assert not self.is_block_terminated()
         self.builder.cbranch(test, bb_true, bb_false)
         self.builder.position_at_end(node.exit_block.exit_block)
-        self.setblock(node.exit_block)
+
+        # Swallow statements following the branch
+        node.exit_block.exit_block = None
 
     def visit_IfExp(self, node):
         test = self.visit(node.test)
