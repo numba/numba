@@ -270,8 +270,9 @@ class CudaBaseFunction(numba.decorators.NumbaFunction):
 
 
 def _generate_ptx(module, kernels):
-    from numbapro._cuda import nvvm, default
-    cc_major = default.device.COMPUTE_CAPABILITY[0]
+    from numbapro._cuda import nvvm, driver, default
+    context = driver.Driver().current_context()
+    cc_major = context.device.COMPUTE_CAPABILITY[0]
 
     for kernel in kernels:
         _link_device_function(kernel)
