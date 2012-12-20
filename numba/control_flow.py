@@ -18,7 +18,8 @@ import subprocess
 from meta import asttools
 
 import numba
-from numba import error, transforms, closure, visitors, symtab, nodes
+from numba import (error, transforms, closure, visitors, symtab, nodes,
+                   _numba_types as numba_types)
 from numba.utils import dump
 
 from numba import *
@@ -1411,6 +1412,53 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         if name_assignment:
             name_assignment.assignment_node = node
         return node
+
+    def visit_ListComp(self, node):
+        """
+        Rewrite list comprehensions to the equivalent for loops.
+
+        AST syntax:
+
+            ListComp(expr elt, comprehension* generators)
+            comprehension = (expr target, expr iter, expr* ifs)
+
+            'ifs' represent a chain of ANDs
+        """
+        assert len(node.generators) > 0
+
+        # Create innermost body, i.e. list.append(expr)
+        # TODO: size hint for PyList_New
+        list_create = ast.List(elts=[], ctx=ast.Load())
+        list_create.type = object_ # numba_types.ListType()
+        list_create = nodes.CloneableNode(list_create)
+        list_value = nodes.CloneNode(list_create)
+        list_append = ast.Attribute(list_value, "append", ast.Load())
+        append_call = ast.Call(func=list_append, args=[node.elt],
+                               keywords=[], starargs=None, kwargs=None)
+
+        # Build up the loops from inwards to outwards
+        body = append_call
+        for comprehension in reversed(node.generators):
+            # Hanlde the 'if' clause
+            ifs = comprehension.ifs
+            if len(ifs) > 1:
+                make_boolop = lambda op1, op2: ast.BoolOp(op=ast.And(),
+                                                          values=[op1, op2])
+                if_test = reduce(make_boolop, ifs)
+            elif len(ifs) == 1:
+                if_test, = ifs
+            else:
+                if_test = None
+
+            if if_test is not None:
+                body = ast.If(test=if_test, body=[body], orelse=[])
+
+            # Wrap list.append() call or inner loops
+            body = ast.For(target=comprehension.target,
+                           iter=comprehension.iter, body=[body], orelse=[])
+
+        expr = nodes.ExpressionNode(stmts=[body], expr=list_create)
+        return self.visit(expr)
 
     def visit_With(self, node):
         node.context_expr = self.visit(node.context_expr)
