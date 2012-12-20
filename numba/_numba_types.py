@@ -1389,9 +1389,9 @@ def have_properties(type1, type2, property1, property2):
         return None
 
     if getattr(type1, property1):
-        return type1, type2
+        return type1
     else:
-        return type2, type1
+        return type2
 
 
 def _validate_array_types(array_types):

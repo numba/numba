@@ -142,7 +142,7 @@ class CoercionNode(Node):
                 return node
 
         if dst_type.is_pointer and type.is_int:
-            assert type == Py_uintptr_t
+            assert type == Py_uintptr_t, type
 
         return super(CoercionNode, cls).__new__(cls, node, dst_type, name=name)
 

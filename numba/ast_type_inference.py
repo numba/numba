@@ -8,11 +8,10 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import error, transforms, closure, control_flow
+from numba import error, transforms, closure, control_flow, visitors, nodes
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as numba_types
 from .symtab import Variable
-from . import visitors, nodes, error
 from numba import stdio_util
 from numba._numba_types import is_obj, promote_closest
 from numba.utils import dump
@@ -1113,8 +1112,33 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.variable = Variable(minitypes.bool_)
         return node
 
+    def _handle_floordiv(self, node):
+        dst_type = self.promote(node.left.variable, node.right.variable)
+        if dst_type.is_float or dst_type.is_int:
+            node.op = ast.Div()
+            node = nodes.CoercionNode(node, long_)
+            node = nodes.CoercionNode(node, dst_type)
+
+        return node
+
+    def _verify_pointer_type(self, node, v1, v2):
+        pointer_type = self.have_types(v1, v2, "is_pointer", "is_int")
+
+        if pointer_type is None:
+            raise error.NumbaError(
+                    node, "Expected pointer and int types, got (%s, %s)" %
+                                                        (v1.type, v2.type))
+
+        if not isinstance(node.op, (ast.Add,)): # ast.Sub)):
+            # TODO: pointer subtraction
+            raise error.NumbaError(
+                    node, "Can only perform pointer arithmetic with +")
+
+        if pointer_type.base_type.is_void:
+            raise error.NumbaError(
+                    node, "Cannot perform pointer arithmetic on void *")
+
     def visit_BinOp(self, node):
-        # TODO: handle floor devision
         node.left = self.visit(node.left)
         node.right = self.visit(node.right)
 
@@ -1124,7 +1148,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         v1, v2 = node.left.variable, node.right.variable
         promotion_type = self.promote(v1, v2)
-        if not (v1.type.is_array and v2.type.is_array):
+
+        if (v1.type.is_pointer or v2.type.is_pointer):
+            self._verify_pointer_type(node, v1, v2)
+        elif not ((v1.type.is_array and v2.type.is_array) or
+                (v1.type.is_unresolved or v2.type.is_unresolved)):
             # Don't coerce arrays to lesser or higher dimensionality
             # Broadcasting transforms should take care of this
             node.left, node.right = nodes.CoercionNode.coerce(
@@ -1132,11 +1160,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         node.variable = Variable(promotion_type)
         if isinstance(node.op, ast.FloorDiv):
-            dst_type = self.promote(node.left.variable, node.right.variable)
-            if dst_type.is_float or dst_type.is_int:
-                node.op = ast.Div()
-                node = nodes.CoercionNode(node, long_)
-                node = nodes.CoercionNode(node, dst_type)
+            node = self._handle_floordiv(node)
 
         return node
 
