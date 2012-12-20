@@ -28,6 +28,7 @@ Developer Documentation
    :titlesonly:
    :maxdepth: 1
 
+   doc/architecture.rst
    doc/reference.rst
 
 
