@@ -146,8 +146,8 @@ class CoercionNode(Node):
         elif isinstance(node, CoercionNode) and node.type == dst_type:
             return node
 
-        if dst_type.is_pointer and node.type.is_int:
-            assert node.type == Py_uintptr_t
+        if dst_type.is_pointer and type.is_int:
+            assert type == Py_uintptr_t, type
 
         return super(CoercionNode, cls).__new__(cls, node, dst_type, name=name)
 

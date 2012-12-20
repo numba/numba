@@ -8,6 +8,7 @@ except ImportError:
     numbers = None
 
 from numba import error
+from numba import _numba_types as numba_types
 
 import logging
 logger = logging.getLogger(__name__)
@@ -17,7 +18,9 @@ class CooperativeBase(object):
         pass
 
 class NumbaVisitorMixin(CooperativeBase):
+
     _overloads = None
+
     def __init__(self, context, func, ast, func_signature=None, nopython=0,
                  symtab=None, locals=None, **kwargs):
         super(NumbaVisitorMixin, self).__init__(
@@ -126,9 +129,9 @@ class NumbaVisitorMixin(CooperativeBase):
                 func_signature.args[0].is_closure_scope)
 
     def run_template(self, s, vars=None, **substitutions):
-        from numba import template
+        from numba import templating
 
-        templ = template.TemplateContext(self.context, s)
+        templ = templating.TemplateContext(self.context, s)
         if vars:
             for name, type in vars.iteritems():
                 templ.temp_var(name, type)
@@ -140,6 +143,21 @@ class NumbaVisitorMixin(CooperativeBase):
 
     def error(self, node, msg):
         raise error.NumbaError(node, msg)
+
+
+    def have(self, t1, t2, p1, p2):
+        """
+        Return whether the two variables have the indicated properties:
+
+            >>> have(int_, float_, "is_float", "is_int")
+            float_
+
+        If true, returns the type indicated by the first property.
+        """
+        return numba_types.have_properties(t1, t2, p1, p2)
+
+    def have_types(self, v1, v2, p1, p2):
+        return self.have(v1.type, v2.type, p1, p2)
 
     def visitlist(self, list):
         newlist = []

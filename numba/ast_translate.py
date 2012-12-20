@@ -1348,6 +1348,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         else:
             bb_false = bb_endif
 
+        # Mark current basic block and the exit block of the body
+        self.setblock(node.exit_block)
+
         # Branch to block from condition
         self.builder.position_at_end(node.cond_block.prev_block)
         self.builder.branch(bb_cond)
@@ -1356,7 +1359,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # assert not self.is_block_terminated()
         self.builder.cbranch(test, bb_true, bb_false)
         self.builder.position_at_end(node.exit_block.exit_block)
-        self.setblock(node.exit_block)
+
+        # Swallow statements following the branch
+        node.exit_block.exit_block = None
 
     def visit_IfExp(self, node):
         test = self.visit(node.test)
@@ -1510,31 +1515,48 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                                         return_type = node.type)
         return self.builder.call(func, (lhs, rhs))
 
+    def _handle_complex_binop(self, lhs, op, rhs):
+        opname = self.opname(op)
+        if opname in ('add', 'sub', 'mul', 'div', 'floordiv'):
+            m = getattr(self, '_complex_' + opname)
+            result = self._generate_complex_op(m, lhs, rhs)
+        else:
+            raise error.NumbaError("Unsupported binary operation "
+                                   "for complex numbers: %s" % opname)
+        return result
+
+    def _handle_numeric_binop(self, lhs, node, op, rhs):
+        llvm_method_name = self._binops[op][node.type.is_int]
+        if node.type.is_int:
+            llvm_method_name = llvm_method_name[node.type.signed]
+
+        meth = getattr(self.builder, llvm_method_name)
+        if not lhs.type == rhs.type:
+            print ast.dump(node)
+            print lhs.type, rhs.type
+            assert False
+
+        result = meth(lhs, rhs)
+        return result
+
     def visit_BinOp(self, node):
         lhs = self.visit(node.left)
         rhs = self.visit(node.right)
         op = type(node.op)
 
+        pointer_type = self.have(node.left.type, node.right.type,
+                                 "is_pointer", "is_int")
+
         if (node.type.is_int or node.type.is_float) and op in self._binops:
-            llvm_method_name = self._binops[op][node.type.is_int]
-            if node.type.is_int:
-                llvm_method_name = llvm_method_name[node.type.signed]
-            meth = getattr(self.builder, llvm_method_name)
-            if not lhs.type == rhs.type:
-                print ast.dump(node)
-                print lhs.type, rhs.type
-                assert False
-            result = meth(lhs, rhs)
+            result = self._handle_numeric_binop(lhs, node, op, rhs)
         elif (node.type.is_int or node.type.is_float) and op == ast.Mod:
             return self._handle_mod(node, lhs, rhs)
         elif node.type.is_complex:
-            opname = self.opname(op)
-            if opname in ('add', 'sub', 'mul', 'div', 'floordiv'):
-                m = getattr(self, '_complex_' + opname)
-                result = self._generate_complex_op(m, lhs, rhs)
-            else:
-                raise error.NumbaError("Unsupported binary operation "
-                                       "for complex numbers: %s" % opname)
+            result = self._handle_complex_binop(lhs, op, rhs)
+        elif pointer_type:
+            if not node.left.type.is_pointer:
+                lhs, rhs = rhs, lhs
+            result = self.builder.gep(lhs, [rhs])
         else:
             logger.debug('Unrecognized node type "%s"' % node.type)
             logger.debug(ast.dump(node))
@@ -1609,7 +1631,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_Subscript(self, node):
         value_type = node.value.type
         if not (value_type.is_carray or value_type.is_c_string or
-                    value_type.is_sized_pointer):
+                    value_type.is_pointer):
             raise error.InternalError(node, "Unsupported type:", node.value.type)
 
         value = self.visit(node.value)

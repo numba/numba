@@ -1,5 +1,9 @@
 import traceback
 
+from numba.minivect.minierror import Error
+
+__all__ = ["Error", "NumbaError", "InternalError", "InvalidTemplateError"]
+
 def format_pos(node):
     if node is not None and hasattr(node, 'lineno'):
         return format_postup((node.lineno, node.col_offset))
@@ -10,8 +14,7 @@ def format_postup(tup):
     lineno, col_offset = tup
     return "%s:%s: " % (lineno - 1, col_offset)
 
-
-class NumbaError(Exception):
+class NumbaError(Error):
     "Some error happened during compilation"
 
     def __init__(self, node, msg=None, *args):
@@ -32,8 +35,11 @@ class NumbaError(Exception):
             return "<internal error creating numba error message>"
 
 
-class InternalError(NumbaError):
+class InternalError(Error):
     "Indicates a compiler bug"
 
-class _UnknownAttribute(Exception):
+class _UnknownAttribute(Error):
     pass
+
+class InvalidTemplateError(Error):
+    "Raised for invalid template type specifications"

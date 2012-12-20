@@ -14,8 +14,7 @@ Things that do NOT (yet) work:
 
     - overriding methods in Python and calling the method from Numba
     - multiple inheritance of Numba classes
-        - this is not likely to be supported in the near future
-        - multiple inheritance with Python classes should work
+        (multiple inheritance with Python classes should work)
     - subclassing variable sized objects like 'str' or 'tuple'
 """
 

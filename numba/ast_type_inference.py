@@ -8,11 +8,10 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import error, transforms, closure, control_flow
+from numba import error, transforms, closure, control_flow, visitors, nodes
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as numba_types
 from .symtab import Variable
-from . import visitors, nodes, error
 from numba import stdio_util, function_util
 from numba._numba_types import is_obj, promote_closest
 from numba.utils import dump
@@ -370,11 +369,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     See transform.py for an overview of AST transformations.
     """
 
-    def __init__(self, context, func, ast, closure_scope=None, **kwds):
+    def __init__(self, context, func, ast, closure_scope=None,
+                 template_signature=None, **kwds):
         super(TypeInferer, self).__init__(context, func, ast, **kwds)
 
         self.given_return_type = self.func_signature.return_type
         self.return_type = None
+        self.template_signature = template_signature
 
         ast.symtab = self.symtab
         self.closure_scope = closure_scope
@@ -409,41 +410,20 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # or struct
             self.func_signature.struct_by_reference = True
 
-    def init_global(self, global_name):
-        globals = self.func_globals
-        # Determine the type of the global, i.e. a builtin, global
-        # or (numpy) module
-        if (global_name not in globals and
-                getattr(builtins, global_name, None)):
-            type = numba_types.BuiltinType(name=global_name)
-        else:
-            # FIXME: analyse the bytecode of the entire module, to determine
-            # overriding of builtins
-            if isinstance(globals.get(global_name), types.ModuleType):
-                type = numba_types.ModuleType(globals.get(global_name))
-            else:
-                type = numba_types.GlobalType(name=global_name)
+    #------------------------------------------------------------------------
+    # Symbol Table Type Population and Argument Processing
+    #------------------------------------------------------------------------
 
-        variable = Variable(type, name=global_name)
-        self.symtab[global_name] = variable
-        return variable
-
-    def init_locals(self):
-        arg_types = self.func_signature.args
-        if (isinstance(self.ast, ast.FunctionDef) and
-                len(arg_types) != len(self.ast.args.args)):
-            raise error.NumbaError(
-                    "Incorrect number of types specified in @jit()")
-
+    def initialize_constants(self):
         self.symtab['None'] = Variable(numba_types.none, name='None',
                                        is_constant=True, constant_value=None)
         self.symtab['True'] = Variable(bool_, name='True', is_constant=True,
                                        constant_value=True)
         self.symtab['False'] = Variable(bool_, name='False', is_constant=True,
-                                       constant_value=False)
+                                        constant_value=False)
 
-
-        arg_types = list(arg_types)
+    def handle_locals(self, arg_types):
+        "Process entries in the locals={...} dict"
         for local_name, local_type in self.locals.iteritems():
             if local_name not in self.symtab:
                 self.symtab[local_name] = Variable(local_type, is_local=True,
@@ -456,16 +436,34 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 idx = self.argnames.index(local_name)
                 arg_types[idx] = local_type
 
-        # Initialize argument types
+    def initialize_argtypes(self, arg_types):
+        "Initialize argument types"
         for var_name, arg_type in zip(self.local_names, arg_types):
             self.symtab[var_name].type = arg_type
 
-        # Propagate argument types to first rename of the variable in the block
+    def initialize_ssa(self):
+        "Propagate argument types to first rename of the variable in the block"
         for var in self.symtab.values():
             if var.parent_var and not var.parent_var.parent_var:
                 var.type = var.parent_var.type
                 if not var.type:
                     var.type = numba_types.UninitializedType(None)
+
+    def init_locals(self):
+        "Populate symbol table for local variables and constants."
+        arg_types = self.func_signature.args
+        if (isinstance(self.ast, ast.FunctionDef) and
+                len(arg_types) != len(self.ast.args.args)):
+            raise error.NumbaError(
+                    "Incorrect number of types specified in @jit()")
+
+        arg_types = list(arg_types)
+
+        self.resolve_templates(arg_types)
+        self.initialize_constants()
+        self.handle_locals(arg_types)
+        self.initialize_argtypes(arg_types)
+        self.initialize_ssa()
 
         self.func_signature.args = tuple(arg_types)
 
@@ -480,6 +478,31 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     if var.type and var.cf_references:
                         assert not var.type.is_unresolved
                         print "Variable after analysis: %s" % var
+
+
+    #------------------------------------------------------------------------
+    # Resolve parametric/template Types
+    #------------------------------------------------------------------------
+
+    def resolve_templates(self, arg_types):
+        if not self.template_signature:
+            return
+
+        template_context = {}
+
+        # Resolve the template context with the types we have
+        for i, arg_type in enumerate(arg_types):
+            T = self.template_signature.args[i]
+            numba_types.match_template(T, arg_type, template_context)
+
+        # Resolve type functions on templates (T.dtype, T.pointer(), etc)
+        for local_name, local_type in self.locals.iteritems():
+            self.locals[local_name] = numba_types.resolve_template_type(
+                                            local_type, template_context)
+
+    #------------------------------------------------------------------------
+    # Utilities
+    #------------------------------------------------------------------------
 
     def is_object(self, type):
         return type.is_object or type.is_array
@@ -506,6 +529,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def type_from_pyval(self, pyval):
         return self.context.typemapper.from_python(pyval)
+
+    #------------------------------------------------------------------------
+    # SSA-based type inference
+    #------------------------------------------------------------------------
 
     def handle_NameAssignment(self, assignment_node):
         if assignment_node is None:
@@ -757,7 +784,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         type = sorted(unvisited, key=pos)[0]
         numba_types.error_circular(getvar(type))
 
-
     #------------------------------------------------------------------------
     # Visit methods
     #------------------------------------------------------------------------
@@ -1005,6 +1031,25 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     # Variable Assignments and References
     #------------------------------------------------------------------------
 
+    def init_global(self, global_name):
+        globals = self.func_globals
+        # Determine the type of the global, i.e. a builtin, global
+        # or (numpy) module
+        if (global_name not in globals and
+                getattr(builtins, global_name, None)):
+            type = numba_types.BuiltinType(name=global_name)
+        else:
+            # FIXME: analyse the bytecode of the entire module, to determine
+            # overriding of builtins
+            if isinstance(globals.get(global_name), types.ModuleType):
+                type = numba_types.ModuleType(globals.get(global_name))
+            else:
+                type = numba_types.GlobalType(name=global_name)
+
+        variable = Variable(type, name=global_name)
+        self.symtab[global_name] = variable
+        return variable
+
     def visit_Name(self, node):
         node.name = node.id
 
@@ -1069,8 +1114,33 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.variable = Variable(minitypes.bool_)
         return node
 
+    def _handle_floordiv(self, node):
+        dst_type = self.promote(node.left.variable, node.right.variable)
+        if dst_type.is_float or dst_type.is_int:
+            node.op = ast.Div()
+            node = nodes.CoercionNode(node, long_)
+            node = nodes.CoercionNode(node, dst_type)
+
+        return node
+
+    def _verify_pointer_type(self, node, v1, v2):
+        pointer_type = self.have_types(v1, v2, "is_pointer", "is_int")
+
+        if pointer_type is None:
+            raise error.NumbaError(
+                    node, "Expected pointer and int types, got (%s, %s)" %
+                                                        (v1.type, v2.type))
+
+        if not isinstance(node.op, (ast.Add,)): # ast.Sub)):
+            # TODO: pointer subtraction
+            raise error.NumbaError(
+                    node, "Can only perform pointer arithmetic with +")
+
+        if pointer_type.base_type.is_void:
+            raise error.NumbaError(
+                    node, "Cannot perform pointer arithmetic on void *")
+
     def visit_BinOp(self, node):
-        # TODO: handle floor devision
         node.left = self.visit(node.left)
         node.right = self.visit(node.right)
 
@@ -1080,7 +1150,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         v1, v2 = node.left.variable, node.right.variable
         promotion_type = self.promote(v1, v2)
-        if not (v1.type.is_array and v2.type.is_array):
+
+        if (v1.type.is_pointer or v2.type.is_pointer):
+            self._verify_pointer_type(node, v1, v2)
+        elif not ((v1.type.is_array and v2.type.is_array) or
+                (v1.type.is_unresolved or v2.type.is_unresolved)):
             # Don't coerce arrays to lesser or higher dimensionality
             # Broadcasting transforms should take care of this
             node.left, node.right = nodes.CoercionNode.coerce(
@@ -1088,11 +1162,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         node.variable = Variable(promotion_type)
         if isinstance(node.op, ast.FloorDiv):
-            dst_type = self.promote(node.left.variable, node.right.variable)
-            if dst_type.is_float or dst_type.is_int:
-                node.op = ast.Div()
-                node = nodes.CoercionNode(node, long_)
-                node = nodes.CoercionNode(node, dst_type)
+            node = self._handle_floordiv(node)
 
         return node
 

@@ -332,6 +332,9 @@ class Type(miniutils.ComparableObjectMixin):
 
     subtypes = []
 
+    mutated = True
+    _ctypes_type = None
+
     def __init__(self, **kwds):
         vars(self).update(kwds)
         self.qualifiers = kwds.get('qualifiers', frozenset())
@@ -368,15 +371,23 @@ class Type(miniutils.ComparableObjectMixin):
     def __eq__(self, other):
         # Don't use isinstance here, compare on exact type to be consistent
         # with __hash__. Override where sensible
+        cmps = self.comparison_type_list
+        if not cmps:
+            return id(self) == id(other)
+
         return (type(self) is type(other) and
-                self.comparison_type_list == other.comparison_type_list)
+                cmps == other.comparison_type_list)
 
     def __ne__(self, other):
         return not self == other
 
     def __hash__(self):
+        cmps = self.comparison_type_list
+        if not cmps:
+            return hash(id(self))
+
         h = hash(type(self))
-        for subtype in self.comparison_type_list:
+        for subtype in cmps:
             h = h ^ hash(subtype)
 
         return h
@@ -422,8 +433,16 @@ class Type(miniutils.ComparableObjectMixin):
         return context.to_llvm(self)
 
     def to_ctypes(self):
-        import ctypes_conversion
-        return ctypes_conversion.convert_to_ctypes(self)
+        """
+        Convert type to ctypes. The result may be cached!
+        """
+        if self._ctypes_type is None:
+            import ctypes_conversion
+            self._ctypes_type = ctypes_conversion.convert_to_ctypes(self)
+            self.mutated = False
+
+        assert not self.mutated
+        return self._ctypes_type
 
     def get_dtype(self):
         return map_minitype_to_dtype(self)
@@ -767,11 +786,12 @@ class FunctionType(Type):
 
     struct_by_reference = False
 
-    def __init__(self, return_type, args, name=None, **kwds):
+    def __init__(self, return_type, args, name=None, is_vararg=False, **kwds):
         super(FunctionType, self).__init__(**kwds)
         self.return_type = return_type
         self.args = args
         self.name = name
+        self.is_vararg = is_vararg
 
     def to_llvm(self, context):
         assert self.return_type is not None
@@ -786,7 +806,7 @@ class FunctionType(Type):
         if self.is_vararg:
             args.append("...")
         if self.name:
-            namestr = self.name + ' '
+            namestr = self.name
         else:
             namestr = ''
         return "%s (*%s)(%s)" % (self.return_type, namestr, ", ".join(args))
@@ -910,8 +930,12 @@ class struct(Type):
     >>> struct(a=int32, b=int32, name='Foo') # unordered struct
     struct Foo { int32 a, int32 b }
 
-    >>> struct(a=complex128, b=complex64, c=struct(f1=double, f2=double, f3=int32))
+    >>> S = struct(a=complex128, b=complex64, c=struct(f1=double, f2=double, f3=int32))
+    >>> S
     struct { struct { double f1, double f2, int32 f3 } c, complex128 a, complex64 b }
+
+    >>> S.offsetof('a')
+    24
     """
 
     is_struct = True
@@ -931,6 +955,9 @@ class struct(Type):
         self.readonly = readonly
         self.fielddict = dict(self.fields)
         self.packed = packed
+
+    def copy(self):
+        return struct(self.fields, self.name, self.readonly, self.packed)
 
     def __repr__(self):
         if self.name:
@@ -962,6 +989,15 @@ class struct(Type):
         assert name not in self.fielddict
         self.fielddict[name] = type
         self.fields.append((name, type))
+        self.mutated = True
+
+    def offsetof(self, field_name):
+        """
+        Compute the offset of a field. Must be used only after mutation has
+        finished.
+        """
+        ctype = self.to_ctypes()
+        return getattr(ctype, field_name).offset
 
 def getsize(ctypes_name, default):
     try:

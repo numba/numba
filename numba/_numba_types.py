@@ -17,7 +17,7 @@ from numba.minivect.ctypes_conversion import (convert_from_ctypes,
 
 __all__ = minitypes.__all__ + [
     'O', 'b1', 'i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8',
-    'f4', 'f8', 'f16', 'c8', 'c16', 'c32' 
+    'f4', 'f8', 'f16', 'c8', 'c16', 'c32', 'template',
 ]
 
 def is_obj(type):
@@ -33,6 +33,10 @@ def promote_closest(context, int_type, candidates):
             return candidate
 
     return candidates[-1]
+
+#------------------------------------------------------------------------
+# Numba's extension of the minivect type system
+#------------------------------------------------------------------------
 
 # Patch repr of objects to print "object_" instead of "PyObject *"
 minitypes.ObjectType.__repr__ = lambda self: "object_"
@@ -90,12 +94,6 @@ class UninitializedType(NumbaType):
 
     def __repr__(self):
         return "<uninitialized>"
-
-class PHIType(NumbaType):
-    """
-    Type for phi() values.
-    """
-    is_phi = True
 
 class ModuleType(NumbaType, minitypes.ObjectType):
     """
@@ -268,12 +266,25 @@ class CTypesPointerType(NumbaType):
         self.address = address
 
 class SizedPointerType(NumbaType, minitypes.PointerType):
+    """
+    A pointer with knowledge of its range.
+
+    E.g. an array's 'shape' or 'strides' attribute.
+    This also allow tuple unpacking.
+    """
+
     size = None
     is_sized_pointer = True
 
 class CastType(NumbaType, minitypes.ObjectType):
+    """
+    A type instance in user code. e.g. double(value). The Name node will have
+    a cast-type with dst_type 'double'.
+    """
 
     is_cast = True
+
+    subtypes = ['dst_type']
 
     def __init__(self, dst_type, **kwds):
         super(CastType, self).__init__(**kwds)
@@ -282,10 +293,210 @@ class CastType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "<cast(%s)>" % self.dst_type
 
+#------------------------------------------------------------------------
+# Parametric types
+#------------------------------------------------------------------------
+
+# type_attribute => [type_assertions]
+VALID_TYPE_ATTRIBUTES = {
+    "dtype": ["is_array"],
+    "base_type": ["is_pointer", "is_carray", "is_complex"],
+    "args": ["is_function"],
+    "return_type": ["is_function"],
+    # "fields": ["is_struct"],
+    "fielddict": ["is_struct"],
+}
+
+class TemplateType(NumbaType):
+
+    is_template = True
+    template_count = 0
+
+    def __init__(self, name=None, **kwds):
+        if name is None:
+            name = "T%d" % self.template_count
+            TemplateType.template_count += 1
+
+        self.name = name
+
+    def resolve_template(self, template_context):
+        if self not in template_context:
+            raise error.InvalidTemplateError("Unknown template type: %s" % self)
+        return template_context[self]
+
+    def __getitem__(self, index):
+        if isinstance(index, (tuple, slice)):
+            return super(TemplateType, self).__getitem__(index)
+
+        return TemplateIndexType(self, index)
+
+    def __getattr__(self, attr):
+        if attr in VALID_TYPE_ATTRIBUTES:
+            return TemplateAttributeType(self, attr)
+
+        return super(TemplateType, self).__getattr__(attr)
+
+    def __repr__(self):
+        return "template(%s)" % self.name
+
+    def __str__(self):
+        return self.name
+
+
+class TemplateAttributeType(TemplateType):
+
+    is_template_attribute = True
+    subtypes = ['template_type']
+
+    def __init__(self, template_type, attribute_name, **kwds):
+        self.template_type = template_type
+        self.attribute_name = attribute_name
+
+        assert attribute_name in VALID_TYPE_ATTRIBUTES
+
+    def resolve_template(self, template_context):
+        resolved_type = self.template_type.resolve_template(template_context)
+
+        assertions = VALID_TYPE_ATTRIBUTES[self.attribute_name]
+        valid_attribute = any(getattr(resolved_type, a) for a in assertions)
+        if not valid_attribute:
+            raise error.InvalidTemplateError(
+                    "%s has no attribute %s" % (self.template_type,
+                                                self.attribute_name))
+
+        return getattr(resolved_type, self.attribute_name)
+
+    def __repr__(self):
+        return "%r.%s" % (self.template_type, self.attribute_name)
+
+    def __str__(self):
+        return "%s.%s" % (self.template_type, self.attribute_name)
+
+class TemplateIndexType(TemplateType):
+
+    is_template_attribute = True
+    subtypes = ['template_type']
+
+    def __init__(self, template_type, index, **kwds):
+        self.template_type = template_type
+        self.index = index
+
+    def resolve_template(self, template_context):
+        attrib = self.template_type.resolve_template(template_context)
+        assert isinstance(attrib, (list, tuple, dict))
+        return attrib[self.index]
+
+    def __repr__(self):
+        return "%r[%d]" % (self.template_type, self.index)
+
+    def __str__(self):
+        return "%s[%d]" % (self.template_type, self.index)
+
+
+
+template = TemplateType
+
+def match_template(template_type, concrete_type, template_context):
+    """
+    This function matches up T in the example below with a concrete type
+    like double when a double pointer is passed in as argument:
+
+        def f(T.pointer() pointer):
+            scalar = T(...)
+
+    We can go two ways with this, e.g.
+
+        def f(T.base_type scalar):
+            pointer = T(...)
+
+    Which could work for things like pointers, though not for things like
+    arrays, since we can't infer the dimensionality.
+
+    We mandate that each Template type be resolved through a concrete type,
+    i.e.:
+
+        def f(T scalar):
+            pointer = T.pointer(...)
+
+
+    template_context:
+
+        Dict mapping template types to concrete types:
+
+            T1 -> double *
+            T2 -> float[:]
+    """
+    if template_type.is_template_attribute:
+        # As noted in the description, we don't handle this
+        pass
+    elif template_type.is_template:
+        if template_type in template_context:
+            prev_type = template_context[template_type]
+            if prev_type != concrete_type:
+                raise error.InvalidTemplateError(
+                        "Inconsistent types found for template: %s and %s" % (
+                                                    prev_type, concrete_type))
+        else:
+            template_context[template_type] = concrete_type
+    else:
+        if type(template_type) != type(concrete_type):
+            raise error.InvalidTemplateError(
+                    "Type argument does not match template type: %s and %s" % (
+                                                 concrete_type, template_type))
+
+        for t1, t2 in zip(template_type.subtype_list,
+                          concrete_type.subtype_list):
+            if not isinstance(t1, (list, tuple)):
+                t1, t2 = [t1], [t2]
+
+            for t1, t2 in zip(t1, t2):
+                match_template(t1, t2, template_context)
+
+def resolve_template_type(template_type, template_context):
+    """
+    After the template context is known, resolve functions on template types
+    E.g.
+
+        T[:]                -> ArrayType(dtype=T)
+        void(T)             -> FunctionType(args=[T])
+        Struct { T arg }    -> struct(fields={'arg': T})
+        T *                 -> PointerType(base_type=T)
+
+    Any other compound types?
+    """
+    r = lambda t: resolve_template_type(t, template_context)
+
+    if template_type.is_template:
+        template_type = template_type.resolve_template(template_context)
+    elif template_type.is_array:
+        template_type = template_type.copy()
+        template_type.dtype = r(template_type.dtype)
+    elif template_type.is_function:
+        template_type = r(template_type.return_type)(*map(r, template_type.args))
+    elif template_type.is_struct:
+        S = template_type
+        fields = []
+        for field_name, field_type in S.fields:
+            fields.append((field_name, r(field_type)))
+        template_type = numba.struct(fields, name=S.name, readonly=S.readonly,
+                                     packed=S.packed)
+    elif template_type.is_pointer:
+        template_type = r(template_type.base_type).pointer()
+
+    return template_type
+
+
+
+#------------------------------------------------------------------------
+# Extension types
+#------------------------------------------------------------------------
+
 class ExtensionType(NumbaType, minitypes.ObjectType):
 
     is_extension = True
     is_final = False
+
+    _need_tp_dealloc = None
 
     def __init__(self, py_class, **kwds):
         super(ExtensionType, self).__init__(**kwds)
@@ -303,6 +514,27 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
 
         self.parent_attr_struct = None
         self.parent_vtab_type = None
+        self.parent_type = getattr(py_class, "__numba_ext_type", None)
+
+    @property
+    def need_tp_dealloc(self):
+        """
+        Returns whether this extension type needs a tp_dealloc, tp_traverse
+        and tp_clear filled out.
+
+        This needs to be computed on demand since the attributes are mutated
+        after creation.
+        """
+        if self._need_tp_dealloc is not None:
+            result = self._need_tp_dealloc
+        if self.parent_type is not None and self.parent_type.need_tp_dealloc:
+            result = False
+        else:
+            field_types = self.attribute_struct.fielddict.itervalues()
+            result = any(map(is_obj, field_types))
+
+        self._need_tp_dealloc = result
+        return result
 
     def add_method(self, method_name, method_signature):
         if method_name in self.methoddict:
@@ -336,6 +568,9 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "<Extension %s>" % self.name
 
+#------------------------------------------------------------------------
+# Closures
+#------------------------------------------------------------------------
 
 class ClosureType(NumbaType, minitypes.ObjectType):
     """
@@ -371,10 +606,13 @@ class ClosureScopeType(ExtensionType):
         else:
             self.scope_prefix = self.parent_scope.scope_prefix + "0"
 
-#
-### Types participating in statements that are deferred later and types
-### participating in type graph cycles
-#
+
+#------------------------------------------------------------------------
+# Deferred Types
+#------------------------------------------------------------------------
+# Types participating in statements that are deferred until later, and types
+# participating in type graph cycles
+
 class UnresolvedType(NumbaType):
     """
     The directed type graph works as follows:
@@ -1016,15 +1254,18 @@ def resolve_var(var):
 
     return var.type
 
+#------------------------------------------------------------------------
+# END OF TYPE DEFINITIONS
+#------------------------------------------------------------------------
 
 tuple_ = TupleType()
 none = NoneType()
 null_type = NULLType()
 intp = minitypes.npy_intp
 
-#
-### Type shorthands
-#
+#------------------------------------------------------------------------
+# Type shorthands
+#------------------------------------------------------------------------
 
 O = object_
 b1 = bool_
@@ -1046,7 +1287,9 @@ c16 = complex128
 c32 = complex256
 
 class NumbaTypeMapper(minitypes.TypeMapper):
-
+    """
+    Map types from Python values, handle type promotions, etc
+    """
 
     def __init__(self, context):
         super(NumbaTypeMapper, self).__init__(context)
@@ -1106,7 +1349,9 @@ class NumbaTypeMapper(minitypes.TypeMapper):
 
         return super(NumbaTypeMapper, self).from_python(value)
 
-    def promote_types(self, type1, type2):
+    def promote_types(self, type1, type2, assignment=False):
+        have = lambda p1, p2: have_properties(type1, type2, p1, p2)
+
         if (type1.is_array or type2.is_array) and not \
             (type1.is_array and type2.is_array):
             if type1.is_array:
@@ -1133,11 +1378,23 @@ class NumbaTypeMapper(minitypes.TypeMapper):
                 return PromotionType(var, self.context, [type1, type2])
             else:
                 return self.promote_types(type1, type2)
-        elif (type1.is_pointer or type2.is_pointer) and (type1.is_null or
-                                                         type2.is_null):
-            return [type1, type2][type1.is_null]
+        elif have("is_pointer", "is_null"):
+            return [type1, type2][type1.is_null] # return the pointer type
+        elif have("is_pointer", "is_int"):
+            return [type1, type2][type1.is_int] # return the pointer type
 
         return super(NumbaTypeMapper, self).promote_types(type1, type2)
+
+def have_properties(type1, type2, property1, property2):
+    p1 = getattr(type1, property1) or getattr(type1, property2)
+    p2 = getattr(type2, property1) or getattr(type2, property2)
+    if not (p1 and p2):
+        return None
+
+    if getattr(type1, property1):
+        return type1
+    else:
+        return type2
 
 
 def _validate_array_types(array_types):
@@ -1153,10 +1410,10 @@ def _validate_array_types(array_types):
                                            array_type.dtype))
 
 
-def promote_for_arithmetic(context, types):
+def promote_for_arithmetic(context, types, assignment=False):
     result_type = types[0]
     for type in types[1:]:
-        result_type = context.promote_types(result_type, type)
+        result_type = context.promote_types(result_type, type, assignment)
 
     return result_type
 
@@ -1207,7 +1464,9 @@ def promote_for_assignment(context, types, unresolved_types, var_name):
             # resolved_types = obj_types
             return object_, []
 
-    return promote_for_arithmetic(context, types), unresolved_types
+    partial_result_type = promote_for_arithmetic(context, types,
+                                                 assignment=True)
+    return partial_result_type, unresolved_types
 
 if __name__ == '__main__':
     import doctest

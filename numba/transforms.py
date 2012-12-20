@@ -158,7 +158,7 @@ class MathMixin(object):
         return is_intrinsic
 
     def _is_math_function(self, func_args, py_func):
-        if len(func_args) > 1 or py_func is None:
+        if len(func_args) == 0 or len(func_args) > 1 or py_func is None:
             return False
 
         type = func_args[0].variable.type

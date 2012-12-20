@@ -42,3 +42,28 @@ Python wrapper to that low-level function so that the function can be
 called from Python.   The first function can be called from other
 numba functions to eliminate all python overhead in function calling. 
 
+Classes
+-------
+.. literalinclude:: /../../examples/numbaclasses.py
+
+Closures
+--------
+.. literalinclude:: /../../examples/closure.py
+
+Structs
+-------
+.. literalinclude:: /../../examples/structures.py
+
+Objects
+-------
+.. literalinclude:: /../../examples/objects.py
+
+Mandelbrot
+----------
+.. literalinclude:: /../../examples/mandel.py
+
+
+Filterbank Correlation
+----------------------
+.. literalinclude:: /../../examples/fbcorr.py
+

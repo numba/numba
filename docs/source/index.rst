@@ -13,8 +13,21 @@ Contents:
 
    doc/releases.rst
    doc/userguide.rst
-   doc/examples.rst
+   doc/arrays.rst
+   doc/types.rst
+   doc/extension_types.rst
+   doc/closures.rst
    doc/pycc.rst
+
+   doc/examples.rst
+
+Developer Documentation
+=======================
+
+.. toctree::
+   :titlesonly:
+   :maxdepth: 1
+
    doc/reference.rst
 
 

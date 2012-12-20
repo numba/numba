@@ -207,7 +207,7 @@ def jit_extension_class(py_class, translator_kwargs):
                         context, py_class, translator_kwargs)
 
 # TODO: make these two implementations the same
-def _autojit2(target, nopython, **translator_kwargs):
+def _autojit2(template_signature, target, nopython, **translator_kwargs):
     def _autojit2_decorator(f):
         """
         Defines a numba function, that, when called, specializes on the input
@@ -220,6 +220,7 @@ def _autojit2(target, nopython, **translator_kwargs):
             types = tuple(context.typemapper.from_python(value)
                               for value in arguments)
             dec = jit2(argtypes=types, target=target, nopython=nopython,
+                       template_signature=template_signature,
                        **translator_kwargs)
             compiled_numba_func = dec(f)
             return numba_func.invoke_compiled(compiled_numba_func, *args, **kwargs)
@@ -266,16 +267,17 @@ def _autojit(target, nopython):
 
     return _autojit_decorator
 
-def autojit(backend='ast', target='cpu', nopython=False, locals=None, **kwargs):
+def autojit(template_signature=None, backend='ast', target='cpu',
+            nopython=False, locals=None, **kwargs):
     """
     Creates a function that dispatches to type-specialized LLVM
     functions based on the input argument types.  If no specialized
     function exists for a set of input argument types, the dispatcher
     creates and caches a new specialized function at call time.
     """
-    if backend not in ('bytecode', 'ast'):
-        if callable(backend):
-            func = backend
+    if template_signature and not isinstance(template_signature, minitypes.Type):
+        if callable(template_signature):
+            func = template_signature
             return autojit(backend='ast', target=target,
                            nopython=nopython, locals=locals, **kwargs)(func)
         else:
@@ -285,7 +287,8 @@ def autojit(backend='ast', target='cpu', nopython=False, locals=None, **kwargs):
     if backend == 'bytecode':
         return _autojit(target, nopython, **kwargs)
     else:
-        return _autojit2(target, nopython, locals=locals, **kwargs)
+        return _autojit2(template_signature, target, nopython,
+                         locals=locals, **kwargs)
 
 def _jit2(restype=None, argtypes=None, nopython=False,
           _llvm_module=None, **kwargs):

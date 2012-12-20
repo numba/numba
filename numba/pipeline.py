@@ -143,9 +143,10 @@ class Pipeline(object):
             self._current_pipeline_stage = method_name
             ast = getattr(self, method_name)(ast)
 
-            te = _timer() #  for profiling individual stage
-            logger.info("%X pipeline stage %30s:\t%.3fms",
-                        id(self), method_name, (te - ts) * 1000)
+            if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
+                te = _timer() #  for profiling individual stage
+                logger.info("%X pipeline stage %30s:\t%.3fms",
+                            id(self), method_name, (te - ts) * 1000)
 
         tomega = _timer() # for profiling complete pipeline
         logger.info("%X pipeline entire:\t\t\t\t\t%.3fms",
@@ -168,7 +169,7 @@ class Pipeline(object):
 
     def dump_cfg(self, ast):
         if self.ast.cfg_transform.graphviz:
-            self.cfg_transform._render_gv(ast)
+            self.ast.cfg_transform._render_gv(ast)
         return ast
 
     def const_folding(self, ast):

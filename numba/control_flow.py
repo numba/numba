@@ -1126,7 +1126,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         # Collect all entries
         for var_name, var in self.symtab.iteritems():
-            self.flow.entries.add(var)
+            if var_name not in self.locals:
+                self.flow.entries.add(var)
 
         self.flow.nextblock(label='entry')
         self.mark_position(node)
