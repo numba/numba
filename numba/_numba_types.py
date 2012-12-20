@@ -1385,7 +1385,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
 def have_properties(type1, type2, property1, property2):
     p1 = getattr(type1, property1) or getattr(type1, property2)
     p2 = getattr(type2, property1) or getattr(type2, property2)
-    if not p1 and p2:
+    if not (p1 and p2):
         return None
 
     if getattr(type1, property1):
