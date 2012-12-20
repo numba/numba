@@ -57,6 +57,9 @@ class NumbaContext(miniast.LLVMContext):
     def is_object(self, type):
         return super(NumbaContext, self).is_object(type) or type.is_array
 
+    def promote_types(self, *args, **kwargs):
+        return self.typemapper.promote_types(*args, **kwargs)
+
 def get_minivect_context():
     return NumbaContext()
 

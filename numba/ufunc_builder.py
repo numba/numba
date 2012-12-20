@@ -49,14 +49,14 @@ class UFuncBuilder(object):
         # print ast.dump(func)
         return func
 
-    def compile_to_pyfunc(self, ufunc_ast):
+    def compile_to_pyfunc(self, ufunc_ast, globals=()):
         "Compile the ufunc ast to a function"
         # Build ufunc AST module
         module = ast.Module(body=[ufunc_ast])
         functions.fix_ast_lineno(module)
 
         # Create Python ufunc function
-        d = {}
+        d = dict(globals)
         exec compile(module, '<ast>', 'exec') in d, d
         d.pop('__builtins__')
         py_ufunc = d[ufunc_ast.name]

@@ -1346,7 +1346,9 @@ class NumbaTypeMapper(minitypes.TypeMapper):
 
         return super(NumbaTypeMapper, self).from_python(value)
 
-    def promote_types(self, type1, type2):
+    def promote_types(self, type1, type2, assignment=False):
+        have = lambda p1, p2: have_properties(type1, type2, p1, p2)
+
         if (type1.is_array or type2.is_array) and not \
             (type1.is_array and type2.is_array):
             if type1.is_array:
@@ -1373,11 +1375,23 @@ class NumbaTypeMapper(minitypes.TypeMapper):
                 return PromotionType(var, self.context, [type1, type2])
             else:
                 return self.promote_types(type1, type2)
-        elif (type1.is_pointer or type2.is_pointer) and (type1.is_null or
-                                                         type2.is_null):
-            return [type1, type2][type1.is_null]
+        elif have("is_pointer", "is_null"):
+            return [type1, type2][type1.is_null] # return the pointer type
+        elif have("is_pointer", "is_int"):
+            return [type1, type2][type1.is_int] # return the pointer type
 
         return super(NumbaTypeMapper, self).promote_types(type1, type2)
+
+def have_properties(type1, type2, property1, property2):
+    p1 = getattr(type1, property1) or getattr(type1, property2)
+    p2 = getattr(type2, property1) or getattr(type2, property2)
+    if not p1 and p2:
+        return None
+
+    if getattr(type1, property1):
+        return type1, type2
+    else:
+        return type2, type1
 
 
 def _validate_array_types(array_types):
@@ -1393,10 +1407,10 @@ def _validate_array_types(array_types):
                                            array_type.dtype))
 
 
-def promote_for_arithmetic(context, types):
+def promote_for_arithmetic(context, types, assignment=False):
     result_type = types[0]
     for type in types[1:]:
-        result_type = context.promote_types(result_type, type)
+        result_type = context.promote_types(result_type, type, assignment)
 
     return result_type
 
@@ -1447,7 +1461,9 @@ def promote_for_assignment(context, types, unresolved_types, var_name):
             # resolved_types = obj_types
             return object_, []
 
-    return promote_for_arithmetic(context, types), unresolved_types
+    partial_result_type = promote_for_arithmetic(context, types,
+                                                 assignment=True)
+    return partial_result_type, unresolved_types
 
 if __name__ == '__main__':
     import doctest
