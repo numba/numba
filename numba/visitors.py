@@ -18,7 +18,9 @@ class CooperativeBase(object):
         pass
 
 class NumbaVisitorMixin(CooperativeBase):
+
     _overloads = None
+
     def __init__(self, context, func, ast, func_signature=None, nopython=0,
                  symtab=None, locals=None, **kwargs):
         super(NumbaVisitorMixin, self).__init__(

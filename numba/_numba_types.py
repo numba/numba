@@ -283,6 +283,8 @@ class CastType(NumbaType, minitypes.ObjectType):
 
     is_cast = True
 
+    subtypes = ['dst_type']
+
     def __init__(self, dst_type, **kwds):
         super(CastType, self).__init__(**kwds)
         self.dst_type = dst_type
