@@ -1138,7 +1138,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         for arg in node.args.args:
             self.visit_Name(arg)
 
-
         self.visitlist(node.body)
         self.function_level -= 1
 
@@ -1457,8 +1456,20 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             body = ast.For(target=comprehension.target,
                            iter=comprehension.iter, body=[body], orelse=[])
 
-        expr = nodes.ExpressionNode(stmts=[body], expr=list_create)
+        expr = nodes.ExpressionNode(stmts=[list_create, body], expr=list_value)
         return self.visit(expr)
+
+    def visit_GeneratorExp(self, node):
+        raise error.NumbaError(
+                node, "Generator comprehensions are not yet supported")
+
+    def visit_SetComp(self, node):
+        raise error.NumbaError(
+                node, "Set comprehensions are not yet supported")
+
+    def visit_DictComp(self, node):
+        raise error.NumbaError(
+                node, "Dict comprehensions are not yet supported")
 
     def visit_With(self, node):
         node.context_expr = self.visit(node.context_expr)
