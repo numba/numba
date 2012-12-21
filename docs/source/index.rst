@@ -20,6 +20,7 @@ Contents:
    doc/closures.rst
    doc/pycc.rst
 
+   doc/doctest.rst
    doc/examples.rst
 
 Developer Documentation
