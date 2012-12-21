@@ -66,7 +66,7 @@ class Pipeline(object):
         self.func_name = kwargs.get('name')
         if not self.func_name:
             if func:
-                module_name = inspect.getmodule(func).__name__
+                module_name = func.__module__ or '<unknown>'
                 name = '.'.join([module_name, func.__name__])
             else:
                 name = ast.name
