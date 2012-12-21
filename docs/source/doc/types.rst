@@ -1,3 +1,5 @@
+.. _types:
+
 *******************
 Types and Variables
 *******************
@@ -23,6 +25,8 @@ of ``array[i, j]`` to be the dtype of ``array``.
 Cases where the type inferencer doesn't know the type is often when you call
 a Python function or method that is not a numba function and numba doesn't
 otherwise recognize.
+
+.. _variables:
 
 Variables declared in Locals
 ============================
@@ -91,6 +95,8 @@ The numba type system goes far beyond the simple scalars (e.g. ``ushort``)
 and arrays (e.g. ``float32[:, :]``) that we had previously covered.
 We can also define structs, pointers, functions and strings.
 
+.. _structtypes:
+
 Structs/Records
 ---------------
 Structs can be either aligned or unaligned (packed). Aligned structs are
@@ -131,6 +137,8 @@ Inferface:
 
         Dict mapping field names to field types.
 
+.. _pointertypes:
+
 Pointers
 --------
 Each type has a ``pointer`` method that allows one to create a pointer type with that type
@@ -170,6 +178,8 @@ Inferface:
 
         Base type of the pointer, i.e. what type after dereferencing the pointer.
 
+.. _functiontypes:
+
 Functions
 ---------
 As we have already seen, functions can be easily specified by calling types::
@@ -202,6 +212,8 @@ Inferface:
 
         Whether it takes a variable number of arguments (compatible with C ABI).
 
+.. _stringtypes:
+
 Strings
 -------
 Strings may be specified through the ``c_string_type`` type, a name which is subject to change in the future.
@@ -212,6 +224,8 @@ This does not handle unicode, and is equivalent to ``char *``::
 
 C Arrays
 --------
+
+.. _templates:
 
 Templates
 =========

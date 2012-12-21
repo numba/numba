@@ -50,9 +50,18 @@ Closures
 --------
 .. literalinclude:: /../../examples/closure.py
 
+.. _structexample:
+
 Structs
 -------
 .. literalinclude:: /../../examples/structures.py
+
+
+.. _pointerexample:
+
+Pointers
+--------
+.. literalinclude:: /../../examples/pointers.py
 
 Objects
 -------

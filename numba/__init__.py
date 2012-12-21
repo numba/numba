@@ -49,6 +49,9 @@ from .decorators import *
 from numba.special import NULL
 from numba.error import *
 
+# doctest compatible for jit or autojit numba functions
+from numba.tests.test_support import testmod
+
 def test():
     import os
     from os.path import dirname, join

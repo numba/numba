@@ -56,7 +56,7 @@ def _fix_ast(myast):
         myast.decorator_list = []
 
 def _get_ast(func):
-    if int(os.environ.get('NUMBA_FORCE_META_AST')):
+    if int(os.environ.get('NUMBA_FORCE_META_AST', 0)):
         func_def = decompile_func(func)
         assert isinstance(func_def, ast.FunctionDef)
         return func_def

@@ -15,6 +15,7 @@ Contents:
    doc/userguide.rst
    doc/arrays.rst
    doc/types.rst
+   doc/interface_c.rst
    doc/extension_types.rst
    doc/closures.rst
    doc/pycc.rst
