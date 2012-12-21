@@ -241,7 +241,7 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
         node = PrangeNode(start, nodes.CoercionNode(stop, Py_ssize_t), step)
         return node
 
-    def visit_For(self, node):
+    def visit_For(self, node, **kwargs):
         node.iter = self.visit(node.iter)
         if node.iter.variable.type.is_prange:
             if self.prange:
@@ -277,7 +277,7 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
 
             return result
 
-        node = super(PrangeTypeInfererMixin, self).visit_For(node)
+        node = super(PrangeTypeInfererMixin, self).visit_For(node, **kwargs)
         return node
 
     def visit_PrangeNode(self, node, func_def, struct_type,

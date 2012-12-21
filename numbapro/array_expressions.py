@@ -29,14 +29,26 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
     a minivect AST or a ufunc.
     """
 
-    is_slice_assign = False
     nesting_level = 0
     elementwise = False
 
+    is_slice_assign = False
+
     def register_array_expression(self, node, lhs=None):
         """
-        Start the mapping process for the outmost node in the array expression.
+        Start the mapping process for the outermost node in the array expression.
         """
+
+    def visit_elementwise(self, elementwise, node):
+        if elementwise and self.nesting_level == 0:
+            return self.register_array_expression(node)
+
+        self.nesting_level += 1
+        self.generic_visit(node)
+        self.nesting_level -= 1
+        self.elementwise = elementwise
+        return node
+
 
     def get_py_ufunc_ast(self, lhs, node):
         if lhs is not None:
@@ -64,26 +76,8 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
 
     def get_py_ufunc(self, lhs, node):
         ufunc_ast, signature, ufunc_builder = self.get_py_ufunc_ast(lhs, node)
-
-        # Build ufunc AST module
-        module = ast.Module(body=[ufunc_ast])
-        functions.fix_ast_lineno(module)
-
-        # Create Python ufunc function
-        d = {}
-        exec compile(module, '<ast>', 'exec') in d, d
-        py_ufunc = d['ufunc']
-
+        py_ufunc = ufunc_builder.compile_to_pyfunc(ufunc_ast)
         return py_ufunc, signature, ufunc_builder
-
-    def visit_elementwise(self, elementwise, node):
-        if elementwise and self.nesting_level == 0:
-            return self.register_array_expression(node)
-        self.nesting_level += 1
-        self.generic_visit(node)
-        self.nesting_level -= 1
-        self.elementwise = elementwise
-        return node
 
     def visit_Assign(self, node):
         self.is_slice_assign = False
