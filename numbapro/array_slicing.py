@@ -184,10 +184,10 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         super(NativeSliceCodegenMixin, self).__init__(*args, **kwds)
 
         newaxis_func_def = NewAxis()
-        self.newaxis_func = newaxis_func_def(self.mod)
+        self.newaxis_func = newaxis_func_def(self.llvm_module)
 
         index_func_def = IndexAxis()
-        self.index_func = index_func_def(self.mod)
+        self.index_func = index_func_def(self.llvm_module)
 
     def visit_NativeSliceNode(self, node):
         """
