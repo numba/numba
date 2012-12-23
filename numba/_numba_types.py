@@ -1345,9 +1345,18 @@ class NumbaTypeMapper(minitypes.TypeMapper):
                 pass
                 #type = convert_from_ctypes(value)
                 #value = ctypes.cast(value, ctypes.c_void_p).value
-                #return CTypesPointerType(type, value)
+                #return CTypesPointerType(type, valuee
 
-        return super(NumbaTypeMapper, self).from_python(value)
+        result_type = super(NumbaTypeMapper, self).from_python(value)
+
+        if result_type == object_:
+            from numba import module_type_inference
+
+            result = module_type_inference.module_attribute_type(value)
+            if result is not None:
+                result_type = result
+
+        return result_type
 
     def promote_types(self, type1, type2, assignment=False):
         have = lambda p1, p2: have_properties(type1, type2, p1, p2)

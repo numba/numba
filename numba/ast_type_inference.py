@@ -270,7 +270,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         self.function_level = kwds.get('function_level', 0)
 
-        self.init_module_inferers()
+        self.member2inferer = module_type_inference.ModuleTypeInferer.member2inferer
         self.init_locals()
         ast.have_return = False
 
@@ -300,12 +300,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     #------------------------------------------------------------------------
     # Symbol Table Type Population and Argument Processing
     #------------------------------------------------------------------------
-
-    def init_module_inferers(self):
-        self.inferers = module_type_inference.get_module_inferers()
-        self.member2inferer = {}
-        for inferer in self.inferers:
-            self.member2inferer.update(dict.fromkeys(inferer.members, inferer))
 
     def initialize_constants(self):
         self.symtab['None'] = Variable(numba_types.none, name='None',
@@ -1047,7 +1041,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if (v1.type.is_pointer or v2.type.is_pointer):
             self._verify_pointer_type(node, v1, v2)
         elif not ((v1.type.is_array and v2.type.is_array) or
-                (v1.type.is_unresolved or v2.type.is_unresolved)):
+                  (v1.type.is_unresolved or v2.type.is_unresolved)):
             # Don't coerce arrays to lesser or higher dimensionality
             # Broadcasting transforms should take care of this
             node.left, node.right = nodes.CoercionNode.coerce(

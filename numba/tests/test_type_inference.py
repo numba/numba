@@ -58,10 +58,33 @@ def _empty(N):
     a2 = numpy.empty((N,))
     a3 = numpy.empty([N])
 
-    #a4 = numpy.empty(N, dtype)
-    #a5 = numpy.empty(N, dtype=dtype)
+    # Given dtype
+    a4 = numpy.empty(N, dtype)
+    a5 = numpy.empty(N, dtype=dtype)
     a6 = numpy.empty(N, np.float32)
     a7 = numpy.empty(N, dtype=np.float32)
+
+    # Test dimensionality
+    a8 = np.empty((N, N), dtype=np.int64)
+
+def _empty_arg(N, empty, zeros, ones):
+    a1 = empty([N])
+    a2 = zeros([N])
+    a3 = ones([N])
+
+@autojit
+def assert_array_dtype(A, value, empty, zeros, ones):
+    if value < 2:
+        A = empty([A.shape[0], A.shape[1]], dtype=A.dtype)
+    elif value < 4:
+        A = zeros([A.shape[0], A.shape[1]], dtype=A.dtype)
+    elif value < 6:
+        A = ones([A.shape[0], A.shape[1]], dtype=A.dtype)
+    else:
+        pass
+
+    # 'A' must have a consistent array type here
+    return A
 
 def slicing(a):
     n = numpy.newaxis
@@ -156,8 +179,21 @@ class TestTypeInference(unittest.TestCase):
         for i in range(1, 4):
             self.assertEqual(symtab['a%d' % i].type, double[:])
 
-        for i in range(6, 8):
+        for i in range(4, 8):
             self.assertEqual(symtab['a%d' % i].type, float_[:])
+
+        self.assertEqual(symtab['a8'].type, int64[:, :])
+
+    def test_empty_arg(self):
+        from numba import _numba_types as nt
+        empty_t = nt.ModuleAttributeType(module=np, attr='empty')
+        zeros_t = nt.ModuleAttributeType(module=np, attr='zeros')
+        ones_t = nt.ModuleAttributeType(module=np, attr='ones')
+
+        sig, symtab = infer(_empty_arg, functype(None, [int_, empty_t,
+                                                        zeros_t, ones_t]))
+        for i in range(1, 4):
+            self.assertEqual(symtab['a%d' % i].type, double[:])
 
     def test_slicing(self):
         sig, symtab = infer(slicing, functype(None, [double[:]]))
@@ -213,5 +249,5 @@ class TestTypeInference(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    TestTypeInference('test_empty').debug()
-#    unittest.main()
+#    TestTypeInference('test_type_infer_for_loop').debug()
+    unittest.main()
