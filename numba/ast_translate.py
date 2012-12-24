@@ -342,6 +342,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.mod = llvm_module or LLVMContextManager().get_default_module()
         self.ee = llvm_ee or LLVMContextManager().get_execution_engine()
 
+        self.llvm_module = self.mod
+
         self.refcount_args = refcount_args
 
         # self.ma_obj = None # What is this?
