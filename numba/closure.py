@@ -57,7 +57,7 @@ import inspect
 import llvm.core as lc
 import numba.decorators
 from numba import *
-from numba import error, visitors, nodes
+from numba import error, visitors, nodes, module_type_inference
 from numba.minivect import  minitypes
 from numba import  _numba_types as numba_types
 from numba.symtab import Variable
@@ -134,7 +134,7 @@ class ClosureMixin(object):
     def _handle_jit_decorator(self, func_def, decorator):
         from numba import ast_type_inference
 
-        jit_args = ast_type_inference._parse_args(
+        jit_args = module_type_inference.parse_args(
                 decorator, ['restype', 'argtypes', 'backend',
                             'target', 'nopython'])
 

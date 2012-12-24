@@ -47,7 +47,7 @@ def module_attribute_type(obj):
 
     return None
 
-def _parse_args(call_node, arg_names):
+def parse_args(call_node, arg_names):
     result = dict.fromkeys(arg_names)
 
     # parse positional arguments
@@ -165,7 +165,7 @@ class ModuleTypeInferer(object):
 
         argnames = inspect.getargspec(method.im_func).args
         assert argnames.pop(0) == "self" # remove 'self' argument
-        method_kwargs = _parse_args(call_node, argnames)
+        method_kwargs = parse_args(call_node, argnames)
         return method(**method_kwargs)
 
     def resolve_call(self, call_node, func_type):
