@@ -267,8 +267,11 @@ class NumpyMixin(object):
 
         return result_type, node
 
-    def _resolve_attribute_dtype(self, dtype):
+    def _resolve_attribute_dtype(self, dtype, default=None):
         "Resolve the type for numpy dtype attributes"
+        if dtype.is_numpy_dtype:
+            return dtype
+
         if dtype.is_numpy_attribute:
             numpy_attr = getattr(dtype.module, dtype.attr, None)
             if isinstance(numpy_attr, numpy.dtype):
@@ -276,64 +279,50 @@ class NumpyMixin(object):
             elif issubclass(numpy_attr, numpy.generic):
                 return numba_types.NumpyDtypeType(dtype=numpy.dtype(numpy_attr))
 
-    def _get_dtype(self, node, args, dtype=None):
+    def _get_dtype(self, args, default_dtype=None):
         "Get the dtype keyword argument from a call to a numpy attribute."
-        for keyword in node.keywords:
-            if keyword.arg == 'dtype':
-                dtype = keyword.value.variable.type
-                return self._resolve_attribute_dtype(dtype)
+        if args['dtype'] is None:
+            if default_dtype is None:
+                return None
+            dtype = numba_types.NumpyDtypeType(dtype=numpy.dtype(default_dtype))
         else:
-            # second argument is a dtype
-            if args and args[0].variable.type.is_numpy_dtype:
-                return args[0].variable.type
+            dtype = args['dtype'].variable.type
 
-        return dtype
+        return self._resolve_attribute_dtype(dtype)
 
     def _resolve_empty_like(self, node):
         "Parse the result type for np.empty_like calls"
-        args = node.args
-        if args:
-            arg = node.args[0]
-            args = args[1:]
-        else:
-            for keyword in node.keywords:
-                if keyword.arg == 'a':
-                    arg = keyword.value
-                    break
-            else:
-                return None
-
-        type = arg.variable.type
+        args = _parse_args(node, ['a', 'dtype', 'order'])
+        type = args["a"].variable.type
         if type.is_array:
-            dtype = self._get_dtype(node, args)
+            dtype = self._get_dtype(args)
             if dtype is None:
                 return type
-            else:
-                if not dtype.is_numpy_dtype:
-                    return None
-                return minitypes.ArrayType(dtype.resolve(), type.ndim)
+
+            if not dtype.is_numpy_dtype:
+                return None
+            return minitypes.ArrayType(dtype.resolve(), type.ndim)
 
     def _resolve_arange(self, node):
         "Resolve a call to np.arange()"
-        dtype = self._get_dtype(node, node.args, numba_types.NumpyDtypeType(
-            dtype=numpy.dtype(numpy.int64)))
+        # NOTE: dtype must be passed as a keyword argument, or as the fourth
+        # parameter
+        args = _parse_args(node, ['start', 'stop', 'step', 'dtype'])
+        dtype = self._get_dtype(args, default_dtype=numpy.int64)
         if dtype is not None:
             # return a 1D array type of the given dtype
             return dtype.resolve()[:]
 
     def _resolve_empty(self, node):
         args = _parse_args(node, ['shape', 'dtype', 'order'])
-        if not args['shape'] or not args['dtype']:
+        if not args['shape']:
             return None
 
-        dtype = self._resolve_attribute_dtype(args['dtype'].variable.type)
-        if dtype is None:
-            return None
-
+        dtype = self._get_dtype(args, default_dtype=np.float64)
         shape_type = args['shape'].variable.type
         if shape_type.is_int:
             ndim = 1
-        elif shape_type.is_tuple:
+        elif shape_type.is_tuple or shape_type.is_list:
             ndim = shape_type.size
         else:
             return None

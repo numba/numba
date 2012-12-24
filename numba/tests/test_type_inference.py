@@ -15,6 +15,7 @@ from numba import decorators, functions, pipeline
 import unittest
 
 import numpy
+import numpy as np
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -48,6 +49,19 @@ def empty_like(a):
     b = numpy.empty_like(a)
     c = numpy.zeros_like(a, dtype=numpy.int32)
     d = numpy.ones_like(a)
+
+dtype = np.float32
+
+def _empty(N):
+    # default dtype
+    a1 = numpy.empty(N)
+    a2 = numpy.empty((N,))
+    a3 = numpy.empty([N])
+
+    #a4 = numpy.empty(N, dtype)
+    #a5 = numpy.empty(N, dtype=dtype)
+    a6 = numpy.empty(N, np.float32)
+    a7 = numpy.empty(N, dtype=np.float32)
 
 def slicing(a):
     n = numpy.newaxis
@@ -131,6 +145,20 @@ class TestTypeInference(unittest.TestCase):
         self.assertEqual(symtab['c'].type, int32[:])
         self.assertEqual(symtab['d'].type, double[:])
 
+    def test_empty_like(self):
+        sig, symtab = infer(empty_like, functype(None, [double[:]]))
+        self.assertEqual(symtab['b'].type, double[:])
+        self.assertEqual(symtab['c'].type, int32[:])
+        self.assertEqual(symtab['d'].type, double[:])
+
+    def test_empty(self):
+        sig, symtab = infer(_empty, functype(None, [int_]))
+        for i in range(1, 4):
+            self.assertEqual(symtab['a%d' % i].type, double[:])
+
+        for i in range(6, 8):
+            self.assertEqual(symtab['a%d' % i].type, float_[:])
+
     def test_slicing(self):
         sig, symtab = infer(slicing, functype(None, [double[:]]))
         self.assertEqual(symtab['n'].type, numba_types.NewAxisType())
@@ -185,5 +213,5 @@ class TestTypeInference(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    #TestTypeInference('test_rebind_arg').debug()
+#    TestTypeInference('test_empty').debug()
     unittest.main()

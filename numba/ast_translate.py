@@ -1204,7 +1204,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             phi.add_incoming(lc.Constant.int(booltype, 0), b)
         return phi
 
-
     def _compare(self, op, lhs, rhs):
         lhs_lvalue = self.visit(lhs)
         rhs_lvalue = self.visit(rhs)
