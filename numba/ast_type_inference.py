@@ -1644,6 +1644,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):
             # handle shape/strides/ndim etc
             return nodes.ArrayAttributeNode(node.attr, node.value)
+        elif type.is_array and node.attr == "dtype":
+            # TODO: resolve as constant at compile time?
+            result_type = numba_types.ResolvedNumpyDtypeType(
+                                        dtype_type=type.dtype)
         elif type.is_extension:
             return self._resolve_extension_attribute(node, type)
         else:

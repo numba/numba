@@ -126,6 +126,11 @@ class ModuleAttributeType(NumbaType, minitypes.ObjectType):
     module = None
     attr = None
 
+    def __init__(self, **kwds):
+        super(ModuleAttributeType, self).__init__(**kwds)
+        base_name, dot, rest = self.module.__name__.partition(".")
+        self.is_numpy_attribute = base_name == "numpy"
+
     def __repr__(self):
         return "%s.%s" % (self.module.__name__, self.attr)
 
@@ -174,10 +179,17 @@ class ExtMethodType(NumbaType, minitypes.FunctionType):
 
 class NumpyDtypeType(NumbaType, minitypes.ObjectType):
     is_numpy_dtype = True
-    dtype = None
+    dtype = None # NumPy dtype type
 
     def resolve(self):
         return map_dtype(self.dtype)
+
+class ResolvedNumpyDtypeType(NumbaType, minitypes.ObjectType):
+    is_numpy_dtype = True
+    dtype_type = None # numba dtype type
+
+    def resolve(self):
+        return self.dtype_type
 
 class EllipsisType(NumbaType, minitypes.ObjectType):
     is_ellipsis = True

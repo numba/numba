@@ -195,6 +195,14 @@ class TestTypeInference(unittest.TestCase):
         for i in range(1, 4):
             self.assertEqual(symtab['a%d' % i].type, double[:])
 
+    def test_dtype_attribute(self):
+        A = np.empty((10, 10), dtype=np.float32)
+
+        A_result = assert_array_dtype(A, 3, np.empty, np.zeros, np.ones)
+        assert np.all(A_result == 0)
+        A_result = assert_array_dtype(A, 5, np.empty, np.zeros, np.ones)
+        assert np.all(A_result == 1)
+
     def test_slicing(self):
         sig, symtab = infer(slicing, functype(None, [double[:]]))
         self.assertEqual(symtab['n'].type, numba_types.NewAxisType())
