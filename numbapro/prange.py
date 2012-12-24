@@ -228,13 +228,14 @@ class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
 
     prange = 0
 
-    def visit_Call(self, node):
+    def visit_Call(self, node, visitchildren=True):
         node.func = self.visit(node.func)
 
         func_type = node.func.variable.type
         if not (func_type.is_module_attribute and
                 func_type.value is numba.prange):
-            return super(PrangeTypeInfererMixin, self).visit_Call(node)
+            return super(PrangeTypeInfererMixin, self).visit_Call(
+                                node, visitchildren=visitchildren)
 
         ast_type_inference.no_keywords(node)
         start, stop, step = self.visitlist(transforms.unpack_range_args(node))
