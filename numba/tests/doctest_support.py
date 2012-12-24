@@ -20,7 +20,7 @@ import inspect
 
 import numba.decorators
 
-def _from_module(module, object):
+def from_module(module, object):
     """
     Return true if the given object is defined in the given module.
     """
@@ -48,10 +48,10 @@ def fix_module_doctest(module):
     for name in dir(module):
         value = getattr(module, name)
         if (isinstance(value, numba.decorators.NumbaFunction) and
-                _from_module(module, value.py_func) and value.py_func.__doc__):
+                from_module(module, value.py_func) and value.py_func.__doc__):
             module.__test__[name] = value.py_func.__doc__
         elif (inspect.isbuiltin(value) and isinstance(value.__doc__, str) and
-                  _from_module(module, value)):
+                  from_module(module, value)):
             module.__test__[name] = value.__doc__
 
 def testmod(m=None, run_doctests=True):

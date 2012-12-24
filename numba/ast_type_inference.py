@@ -8,7 +8,8 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import error, transforms, closure, control_flow, visitors, nodes
+from numba import (error, transforms, closure, control_flow, visitors, nodes,
+                   module_type_inference)
 from .minivect import minierror, minitypes
 from . import translate, utils, _numba_types as numba_types
 from .symtab import Variable
@@ -29,23 +30,6 @@ logger = logging.getLogger(__name__)
 #logger.setLevel(logging.INFO)
 if debug:
     logger.setLevel(logging.DEBUG)
-
-def _parse_args(call_node, arg_names):
-    result = dict.fromkeys(arg_names)
-
-    # parse positional arguments
-    i = 0
-    for i, (arg_name, arg) in enumerate(zip(arg_names, call_node.args)):
-        result[arg_name] = arg
-
-    arg_names = arg_names[i:]
-    if arg_names:
-        # parse keyword arguments
-        for keyword in call_node.keywords:
-            if keyword.arg in result:
-                result[keyword.arg] = keyword.value
-
-    return result
 
 def no_keywords(node):
     if node.keywords or node.starargs or node.kwargs:
@@ -163,19 +147,11 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
 
 class NumpyMixin(object):
     """
-    Infer types for NumPy functionality. This includes:
+    Mixing that deals with NumPy array slicing.
 
-        1) Figuring out dtypes
-
-            e.g. np.double     -> double
-                 np.dtype('d') -> double
-
-        2) Function calls such as np.empty/np.empty_like/np.arange/etc
-        3) Resolve the resulting type of indexing and slicing:
-
-            - normalize ellipses
-            - recognize newaxes
-            - track how contiguity is affected (C or Fortran)
+        - normalize ellipses
+        - recognize newaxes
+        - track how contiguity is affected (C or Fortran)
     """
 
     def _is_constant_index(self, node):
@@ -267,85 +243,6 @@ class NumpyMixin(object):
 
         return result_type, node
 
-    def _resolve_attribute_dtype(self, dtype, default=None):
-        "Resolve the type for numpy dtype attributes"
-        if dtype.is_numpy_dtype:
-            return dtype
-
-        if dtype.is_numpy_attribute:
-            numpy_attr = getattr(dtype.module, dtype.attr, None)
-            if isinstance(numpy_attr, numpy.dtype):
-                return numba_types.NumpyDtypeType(dtype=numpy_attr)
-            elif issubclass(numpy_attr, numpy.generic):
-                return numba_types.NumpyDtypeType(dtype=numpy.dtype(numpy_attr))
-
-    def _get_dtype(self, args, default_dtype=None):
-        "Get the dtype keyword argument from a call to a numpy attribute."
-        if args['dtype'] is None:
-            if default_dtype is None:
-                return None
-            dtype = numba_types.NumpyDtypeType(dtype=numpy.dtype(default_dtype))
-        else:
-            dtype = args['dtype'].variable.type
-
-        return self._resolve_attribute_dtype(dtype)
-
-    def _resolve_empty_like(self, node):
-        "Parse the result type for np.empty_like calls"
-        args = _parse_args(node, ['a', 'dtype', 'order'])
-        type = args["a"].variable.type
-        if type.is_array:
-            dtype = self._get_dtype(args)
-            if dtype is None:
-                return type
-
-            if not dtype.is_numpy_dtype:
-                return None
-            return minitypes.ArrayType(dtype.resolve(), type.ndim)
-
-    def _resolve_arange(self, node):
-        "Resolve a call to np.arange()"
-        # NOTE: dtype must be passed as a keyword argument, or as the fourth
-        # parameter
-        args = _parse_args(node, ['start', 'stop', 'step', 'dtype'])
-        dtype = self._get_dtype(args, default_dtype=numpy.int64)
-        if dtype is not None:
-            # return a 1D array type of the given dtype
-            return dtype.resolve()[:]
-
-    def _resolve_empty(self, node):
-        args = _parse_args(node, ['shape', 'dtype', 'order'])
-        if not args['shape']:
-            return None
-
-        dtype = self._get_dtype(args, default_dtype=np.float64)
-        shape_type = args['shape'].variable.type
-        if shape_type.is_int:
-            ndim = 1
-        elif shape_type.is_tuple or shape_type.is_list:
-            ndim = shape_type.size
-        else:
-            return None
-
-        return minitypes.ArrayType(dtype.resolve(), ndim)
-
-    def _resolve_numpy_call(self, func_type, node):
-        """
-        Resolve a call of some numpy attribute or sub-attribute.
-        """
-        numpy_func = getattr(func_type.module, func_type.attr)
-        if numpy_func in (numpy.zeros_like, numpy.ones_like,
-                          numpy.empty_like):
-            result_type = self._resolve_empty_like(node)
-        elif numpy_func is numpy.arange:
-            result_type = self._resolve_arange(node)
-        elif numpy_func in (numpy.empty, numpy.zeros, numpy.ones):
-            result_type = self._resolve_empty(node)
-        else:
-            result_type = None
-
-        return result_type
-
 
 class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                   NumpyMixin, closure.ClosureMixin, transforms.MathMixin):
@@ -373,6 +270,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         self.function_level = kwds.get('function_level', 0)
 
+        self.init_module_inferers()
         self.init_locals()
         ast.have_return = False
 
@@ -402,6 +300,12 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     #------------------------------------------------------------------------
     # Symbol Table Type Population and Argument Processing
     #------------------------------------------------------------------------
+
+    def init_module_inferers(self):
+        self.inferers = module_type_inference.get_module_inferers()
+        self.member2inferer = {}
+        for inferer in self.inferers:
+            self.member2inferer.update(dict.fromkeys(inferer.members, inferer))
 
     def initialize_constants(self):
         self.symtab['None'] = Variable(numba_types.none, name='None',
@@ -1557,12 +1461,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         to infer a more specific return value than 'object'.
         """
         result_type = None
-        is_numpy = func_type.is_numpy_attribute
-        if is_numpy:
-            result_type = self._resolve_numpy_call(func_type, node)
+
+        if (func_type.is_module_attribute and
+                func_type.value in self.member2inferer):
+            # Try the module type inferers
+            inferer = self.member2inferer[func_type.value]
+            result_type = inferer.resolve_call(node, func_type)
 
         if ((func_type.is_module_attribute and func_type.module is cmath) or
-            (result_type is None and is_numpy)):
+              (result_type is None and func_type.is_numpy_attribute)):
             new_node, result_type = self._infer_complex_math(
                                 func_type, new_node , node, result_type)
 
