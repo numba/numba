@@ -44,6 +44,9 @@ minitypes.ObjectType.__repr__ = lambda self: "object_"
 class NumbaType(minitypes.Type):
     is_numba_type = True
 
+class NumbaKeyHashingType(minitypes.KeyHashingType):
+    is_numba_type = True
+
 #------------------------------------------------------------------------
 # Python Types
 #------------------------------------------------------------------------
@@ -108,7 +111,11 @@ class ModuleType(NumbaType, minitypes.ObjectType):
         else:
             return 'ModuleType'
 
-class ModuleAttributeType(NumbaType, minitypes.ObjectType):
+    @property
+    def comparison_type_list(self):
+        return (self.module,)
+
+class ModuleAttributeType(NumbaKeyHashingType, minitypes.ObjectType):
     is_module_attribute = True
 
     module = None
@@ -125,6 +132,10 @@ class ModuleAttributeType(NumbaType, minitypes.ObjectType):
     @property
     def value(self):
         return getattr(self.module, self.attr)
+
+    @property
+    def key(self):
+        return (self.module, self.attr)
 
 class NumpyAttributeType(ModuleAttributeType):
     """

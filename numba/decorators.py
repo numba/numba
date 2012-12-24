@@ -3,6 +3,7 @@ __all__ = ['autojit', 'jit', 'export', 'exportmany']
 import functools
 import logging
 import types
+import inspect
 
 from numba import *
 from . import _numba_types
@@ -206,6 +207,22 @@ def jit_extension_class(py_class, translator_kwargs):
     return extension_type_inference.create_extension(
                         context, py_class, translator_kwargs)
 
+def get_types_tuple(numba_func, args, kwargs, translator_kwargs):
+    """
+    Given an autojitting numba function, return the argument types.
+    """
+    assert not kwargs, "Keyword arguments are not supported yet"
+    locals_dict = translator_kwargs.get("locals", None)
+    argnames = inspect.getargspec(numba_func.py_func).args
+    argtypes = map(context.typemapper.from_python, args)
+    if locals_dict is not None:
+        for i, argname in enumerate(argnames):
+            if argname in locals_dict:
+                new_type = locals_dict[argname]
+                argtypes[i] = new_type
+
+    return tuple(argtypes)
+
 # TODO: make these two implementations the same
 def _autojit2(template_signature, target, nopython, **translator_kwargs):
     def _autojit2_decorator(f):
@@ -216,9 +233,7 @@ def _autojit2(template_signature, target, nopython, **translator_kwargs):
         """
         @functools.wraps(f)
         def wrapper(numba_func, *args, **kwargs):
-            arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
-            types = tuple(context.typemapper.from_python(value)
-                              for value in arguments)
+            types = get_types_tuple(numba_func, args, kwargs, translator_kwargs)
             dec = jit2(argtypes=types, target=target, nopython=nopython,
                        template_signature=template_signature,
                        **translator_kwargs)

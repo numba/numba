@@ -460,6 +460,14 @@ class Type(miniutils.ComparableObjectMixin):
         """
         return FunctionType(self, args)
 
+class KeyHashingType(Type):
+
+    def __hash__(self):
+        return hash(self.key)
+
+    def __eq__(self, other):
+        return hasattr(other, 'key') and self.key == other.key
+
 class ArrayType(Type):
     """
     An array type. ArrayType may be sliced to obtain a subtype:
