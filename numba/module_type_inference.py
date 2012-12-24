@@ -34,11 +34,16 @@ def get_module_inferers():
     return [cls() for cls in classes]
 
 def module_attribute_type(obj):
-    if obj in ModuleTypeInferer.member2inferer:
-        inferer = ModuleTypeInferer.member2inferer[obj]
-        module = inferer.member_modules[obj]
-        attr = inferer.members[obj]
-        return numba_types.ModuleAttributeType(module=module, attr=attr)
+    try:
+        is_module_attribute_type = obj in ModuleTypeInferer.member2inferer
+    except TypeError:
+        pass # unhashable object
+    else:
+        if is_module_attribute_type:
+            inferer = ModuleTypeInferer.member2inferer[obj]
+            module = inferer.member_modules[obj]
+            attr = inferer.members[obj]
+            return numba_types.ModuleAttributeType(module=module, attr=attr)
 
     return None
 
