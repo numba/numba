@@ -44,6 +44,10 @@ minitypes.ObjectType.__repr__ = lambda self: "object_"
 class NumbaType(minitypes.Type):
     is_numba_type = True
 
+#------------------------------------------------------------------------
+# Python Types
+#------------------------------------------------------------------------
+
 class TupleType(NumbaType, minitypes.ObjectType):
     is_tuple = True
     name = "tuple"
@@ -78,22 +82,6 @@ class IteratorType(NumbaType, minitypes.ObjectType):
 
     def __repr__(self):
         return "iterator<%s>" % (self.base_type,)
-
-class UninitializedType(NumbaType):
-
-    is_uninitialized = True
-    subtypes = ['base_type']
-
-    def __init__(self, base_type, **kwds):
-        super(UninitializedType, self).__init__(**kwds)
-        self.base_type = base_type
-
-    def to_llvm(self, context):
-        ltype = self.base_type.to_llvm(context)
-        return ltype
-
-    def __repr__(self):
-        return "<uninitialized>"
 
 class ModuleType(NumbaType, minitypes.ObjectType):
     """
@@ -248,16 +236,9 @@ class NoneType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "<type(None)>"
 
-class NULLType(NumbaType):
-    """
-    Null pointer type that can be compared or assigned to any other
-    pointer type.
-    """
-
-    is_null = True
-
-    def __repr__(self):
-        return "<type(NULL)>"
+#------------------------------------------------------------------------
+# Function Types
+#------------------------------------------------------------------------
 
 class CTypesFunctionType(NumbaType, minitypes.ObjectType):
     is_ctypes_function = True
@@ -270,6 +251,43 @@ class CTypesFunctionType(NumbaType, minitypes.ObjectType):
 
     def __repr__(self):
         return "<ctypes function %s>" % (self.signature,)
+
+class AutojitType(NumbaType, minitypes.ObjectType):
+    """
+    Type for autojitting functions.
+    """
+
+    is_autojit_function = True
+
+    def __init__(self, autojit_func, **kwds):
+        super(AutojitType, self).__init__(**kwds)
+        self.autojit_func = autojit_func
+
+class JitType(NumbaType, minitypes.ObjectType):
+    """
+    Type for autojitting functions.
+    """
+
+    is_jit_function = True
+
+    def __init__(self, jit_func, **kwds):
+        super(JitType, self).__init__(**kwds)
+        self.jit_func = jit_func
+
+#------------------------------------------------------------------------
+# Pointer Types
+#------------------------------------------------------------------------
+
+class NULLType(NumbaType):
+    """
+    Null pointer type that can be compared or assigned to any other
+    pointer type.
+    """
+
+    is_null = True
+
+    def __repr__(self):
+        return "<type(NULL)>"
 
 class CTypesPointerType(NumbaType):
     def __init__(self, pointer_type, address, **kwds):
@@ -624,6 +642,22 @@ class ClosureScopeType(ExtensionType):
 #------------------------------------------------------------------------
 # Types participating in statements that are deferred until later, and types
 # participating in type graph cycles
+
+class UninitializedType(NumbaType):
+
+    is_uninitialized = True
+    subtypes = ['base_type']
+
+    def __init__(self, base_type, **kwds):
+        super(UninitializedType, self).__init__(**kwds)
+        self.base_type = base_type
+
+    def to_llvm(self, context):
+        ltype = self.base_type.to_llvm(context)
+        return ltype
+
+    def __repr__(self):
+        return "<uninitialized>"
 
 class UnresolvedType(NumbaType):
     """
@@ -1347,6 +1381,12 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return type(value).__numba_ext_type
         elif value is numba.NULL:
             return null_type
+        elif isinstance(value, numba.decorators.NumbaFunction):
+            if value.signature is None:
+                # autojit
+                return AutojitType(value)
+            else:
+                return JitType(value)
         elif hasattr(value, 'from_address') and hasattr(value, 'in_dll'):
             # Try to detect ctypes pointers, or default to minivect
             try:

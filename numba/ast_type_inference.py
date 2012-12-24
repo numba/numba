@@ -1352,6 +1352,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             func = self.func.__globals__[func_name]
         elif func_type.is_module_attribute:
             func = getattr(func_type.module, func_type.attr)
+        elif func_type.is_autojit_function:
+            func = func_type.autojit_func
+        elif func_type.is_jit_function:
+            func = func_type.jit_func
 
         return func
 
@@ -1548,7 +1552,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # 2) call to some math or numpy math function (np.sin, etc)
             # 3) call to special numpy functions (np.empty, etc)
             # 4) generic call using PyObject_Call
-            arg_types = [a.variable.type for a in node.args]
+            if func_type.is_jit_function:
+                func = func_type.jit_func.py_func
+                arg_types = func_type.jit_func.signature.args
+            else:
+                arg_types = [a.variable.type for a in node.args]
             new_node = self._resolve_external_call(node, func_type, func, arg_types)
 
         return new_node

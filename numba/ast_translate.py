@@ -1050,7 +1050,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_Name(self, node):
         var = node.variable
-        if var.lvalue is None and self.symtab[node.id].is_cellvar:
+        if (var.lvalue is None and not var.renameable and
+                self.symtab[node.id].is_cellvar):
             var = self.symtab[node.id]
 
         assert var.lvalue, var
