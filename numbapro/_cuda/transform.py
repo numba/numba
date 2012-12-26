@@ -12,6 +12,8 @@ from numba import ast_type_inference as type_inference
 from numba.symtab import Variable
 from .nvvm import ADDRSPACE_SHARED, ADDRSPACE_GENERIC
 from llvm.core import *
+from numba.intrinsic import default_intrinsic_library
+from numba.external import default_external_library
 
 import logging
 
@@ -198,6 +200,10 @@ class CudaTypeInferer(CudaAttrRewriteMixin,
     pass
 
 class CudaCodeGenerator(ast_translate.LLVMCodeGenerator):
+    def __init__(self, *args, **kws):
+        super(CudaCodeGenerator, self).__init__(*args, **kws)
+        self.__smem = {}
+
     def visit_CudaSMemArrayCallNode(self, node):
         from numba.ndarray_helpers import PyArrayAccessor
         ndarray_ptr_ty = node.variable.ltype
@@ -259,13 +265,15 @@ class CudaCodeGenerator(ast_translate.LLVMCodeGenerator):
         accessor.strides = strides
     
         return ndarray
-        
+
+    def visit_Name(self, node):
+        try:
+            return self.__smem[node.id]
+        except KeyError:
+            return super(CudaCodeGenerator, self).visit_Name(node)
 
     def visit_CudaSMemAssignNode(self, node):
-        target = self.visit(node.target)
-        value = self.visit(node.value)
-        self.generate_assign(value, target)
-
+        self.__smem[node.target.id] = self.visit(node.value)
 
 class NumbaproCudaPipeline(pipeline.Pipeline):
 #    def __init__(self, context, func, node, func_signature, **kwargs):
@@ -275,32 +283,38 @@ class NumbaproCudaPipeline(pipeline.Pipeline):
 #    
 #    def rewrite_cuda_sreg(self, node):
 #        return CudaSRegRewrite(self.context, self.func, node).visit(node)
+
     order = [
-         'const_folding',
-         'type_infer',
-         'type_set',
-         'transform_for',
-         'specialize',
-         'late_specializer',
-         'fix_ast_locations',
-         'codegen',
-         ]
+             'const_folding',
+             'cfg',
+             #'dump_cfg',
+             'type_infer',
+             'type_set',
+             'dump_cfg',
+             # 'closure_type_inference', # not supported
+             'transform_for',
+             'specialize',
+             'late_specializer',
+             'fix_ast_locations',
+             'cleanup_symtab',
+             'codegen',
+             ]
 
     def make_specializer(self, cls, ast, **kwds):
         self.mixins = {}
         return super(NumbaproCudaPipeline, self).make_specializer(cls, ast,
                                                                   **kwds)
 
-    def type_infer(self, node):
-
-        type_inferer = self.make_specializer(CudaTypeInferer, node,
-                                             locals=self.locals)
+    def type_infer(self, ast):
+        type_inferer = self.make_specializer(CudaTypeInferer, ast,
+                                             **self.kwargs)
         type_inferer.infer_types()
+
         self.func_signature = type_inferer.func_signature
-        logger.debug("signature for %s: %s" % (self.func.func_name,
-                                               self.func_signature))
+        logger.debug("signature for %s: %s", self.func_name,
+                     self.func_signature)
         self.symtab = type_inferer.symtab
-        return node
+        return ast
 
     def codegen(self, ast):
         self.translator = self.make_specializer(CudaCodeGenerator,
@@ -312,3 +326,5 @@ context = utils.get_minivect_context()
 context.llvm_context = ast_translate.LLVMContextManager()
 context.numba_pipeline = NumbaproCudaPipeline
 function_cache = context.function_cache = functions.FunctionCache(context)
+context.intrinsic_library = default_intrinsic_library(context)
+context.external_library = default_external_library(context)

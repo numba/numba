@@ -1,4 +1,5 @@
 import sys
+import copy
 import logging
 logger = logging.getLogger(__name__)
 
@@ -10,10 +11,11 @@ from _cuda.sreg import threadIdx, blockIdx, blockDim, gridDim
 from _cuda.smem import shared
 from _cuda.barrier import syncthreads
 from _cuda.macros import grid
-from _cuda.transform import function_cache
+from _cuda.transform import context
 from _cuda import ptx
 from numba.minivect import minitypes
 from numba import void
+from numba import pipeline
 import numba.decorators
 
 cached = {}
@@ -60,22 +62,16 @@ def jit(restype=void, argtypes=None, backend='ast', **kws):
     #    else:
     return jit2(restype=restype, argtypes=argtypes, **kws)
 
-
 _device_functions = {}
 
-def _ast_jit(func, argtypes, inline, llvm_module, **kws):
+def _ast_jit(func, restype, argtypes, inline, llvm_module, **kws):
     kws['nopython'] = True          # override nopython option
-
-    if not hasattr(func, '_is_numba_func'):
-        func._is_numba_func = True
-        func._numba_compile_only = True
-    assert func._numba_compile_only
-    func._numba_inline = inline
-    result = function_cache.compile_function(func, argtypes,
-                                             ctypes=True,
-                                             llvm_module=llvm_module,
-                                             _llvm_ee=None,
-                                             **kws)
+    kws['compile_only'] = True      # override
+    kws['ctypes'] = True            # override
+    func._numba_inline = kws.pop('inline', False)
+    context.function_cache.register(func)
+    result = context.function_cache.compile_function(func, argtypes,
+                                                     restype=restype, **kws)
     signature, lfunc, unused = result
     assert unused is None               # Just to be sure
 
@@ -97,7 +93,7 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
         llvm_module = (kws.pop('llvm_module', None)
                        or _lc.Module.new('ptx_%s' % func))
         
-        signature, lfunc = _ast_jit(func, argtypes, inline, llvm_module, **kws)
+        signature, lfunc = _ast_jit(func, restype, argtypes, inline, llvm_module, **kws)
         
         if device:
             assert lfunc.name not in _device_functions, 'Device function name already used'
