@@ -12,7 +12,7 @@ class Variable(object):
     so, that when used in an operation, the correct LLVM type can be inserted.
 
     Attributes:
-        type: the Numba type (see _numba_types and minivect/minitypes)
+        type: the Numba type (see numba.typesystem and minivect/minitypes)
         is_local/is_global/is_constant
         name: name of local or global
         lvalue: LLVM Value
@@ -91,8 +91,8 @@ class Variable(object):
         if self._deferred_type:
             return self._deferred_type
 
-        from numba import typesystem as numba_types
-        self._deferred_type = numba_types.DeferredType(self)
+        from numba import typesystem
+        self._deferred_type = typesystem.DeferredType(self)
         return self._deferred_type
 
     def _type_get(self):

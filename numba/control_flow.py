@@ -19,7 +19,7 @@ from meta import asttools
 
 import numba
 from numba import (error, transforms, closure, visitors, symtab, nodes,
-                   typesystem as numba_types)
+                   typesystem)
 from numba.utils import dump
 
 from numba import *
@@ -1428,7 +1428,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         # Create innermost body, i.e. list.append(expr)
         # TODO: size hint for PyList_New
         list_create = ast.List(elts=[], ctx=ast.Load())
-        list_create.type = object_ # numba_types.ListType()
+        list_create.type = object_ # typesystem.ListType()
         list_create = nodes.CloneableNode(list_create)
         list_value = nodes.CloneNode(list_create)
         list_append = ast.Attribute(list_value, "append", ast.Load())

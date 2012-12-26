@@ -11,11 +11,11 @@ from numba import *
 from numba import (error, transforms, closure, control_flow, visitors, nodes,
                    module_type_inference)
 from .minivect import minierror, minitypes
-from . import translate, utils, typesystem as numba_types
+from . import translate, utils, typesystem
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from .symtab import Variable
 from numba import stdio_util, function_util
-from numba._numba_types import is_obj, promote_closest
+from numba.typesystem import is_obj, promote_closest
 from numba.utils import dump
 
 import llvm.core
@@ -46,7 +46,7 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
     """
 
     def _resolve_range(self, func, node, argtype):
-        node.variable = Variable(numba_types.RangeType())
+        node.variable = Variable(typesystem.RangeType())
         args = self.visitlist(node.args)
         node.args = nodes.CoercionNode.coerce(args, dst_type=Py_ssize_t)
         return node
@@ -197,7 +197,7 @@ class NumpyMixin(object):
         n_indices = len(slices) - len(newaxes)
 
         full_slice = ast.Slice(lower=None, upper=None, step=None)
-        full_slice.variable = Variable(numba_types.SliceType())
+        full_slice.variable = Variable(typesystem.SliceType())
         ast.copy_location(full_slice, slices[0])
 
         # process ellipses and count integer indices
@@ -303,7 +303,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     #------------------------------------------------------------------------
 
     def initialize_constants(self):
-        self.symtab['None'] = Variable(numba_types.none, name='None',
+        self.symtab['None'] = Variable(typesystem.none, name='None',
                                        is_constant=True, constant_value=None)
         self.symtab['True'] = Variable(bool_, name='True', is_constant=True,
                                        constant_value=True)
@@ -335,7 +335,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if var.parent_var and not var.parent_var.parent_var:
                 var.type = var.parent_var.type
                 if not var.type:
-                    var.type = numba_types.UninitializedType(None)
+                    var.type = typesystem.UninitializedType(None)
 
     def init_locals(self):
         "Populate symbol table for local variables and constants."
@@ -381,11 +381,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         # Resolve the template context with the types we have
         for i, arg_type in enumerate(arg_types):
             T = self.template_signature.args[i]
-            numba_types.match_template(T, arg_type, template_context)
+            typesystem.match_template(T, arg_type, template_context)
 
         # Resolve type functions on templates (T.dtype, T.pointer(), etc)
         for local_name, local_type in self.locals.iteritems():
-            self.locals[local_name] = numba_types.resolve_template_type(
+            self.locals[local_name] = typesystem.resolve_template_type(
                                             local_type, template_context)
 
     #------------------------------------------------------------------------
@@ -454,7 +454,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         incoming_types = [v.type for v in incoming]
         if len(incoming_types) > 1:
-            promoted_type = numba_types.PromotionType(
+            promoted_type = typesystem.PromotionType(
                 node.variable, self.context,incoming_types, assignment=True)
             promoted_type.simplify()
             node.variable.type = promoted_type.resolve()
@@ -670,7 +670,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 return 'na'
 
         type = sorted(unvisited, key=pos)[0]
-        numba_types.error_circular(getvar(type))
+        typesystem.error_circular(getvar(type))
 
     #------------------------------------------------------------------------
     # Visit methods
@@ -925,14 +925,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         # or (numpy) module
         if (global_name not in globals and
                 getattr(builtins, global_name, None)):
-            type = numba_types.BuiltinType(name=global_name)
+            type = typesystem.BuiltinType(name=global_name)
         else:
             # FIXME: analyse the bytecode of the entire module, to determine
             # overriding of builtins
             if isinstance(globals.get(global_name), types.ModuleType):
-                type = numba_types.ModuleType(globals.get(global_name))
+                type = typesystem.ModuleType(globals.get(global_name))
             else:
-                type = numba_types.GlobalType(name=global_name)
+                type = typesystem.GlobalType(name=global_name)
 
         variable = Variable(type, name=global_name)
         self.symtab[global_name] = variable
@@ -1142,7 +1142,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         value = node.value
         value_type = node.value.variable.type
-        deferred_type = self.create_deferred(node, numba_types.DeferredIndexType)
+        deferred_type = self.create_deferred(node, typesystem.DeferredIndexType)
         if value_type and value_type.is_unresolved:
             deferred_type.dependences.append(node.value)
             deferred_type.update()
@@ -1236,17 +1236,17 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         type = variable.type
         if (type.is_object and variable.is_constant and
                 variable.constant_value is None):
-            type = numba_types.NewAxisType()
+            type = typesystem.NewAxisType()
 
         node.variable = Variable(type)
         return node
 
     def visit_Ellipsis(self, node):
-        return nodes.ConstNode(Ellipsis, numba_types.EllipsisType())
+        return nodes.ConstNode(Ellipsis, typesystem.EllipsisType())
 
     def visit_Slice(self, node):
         self.generic_visit(node)
-        type = numba_types.SliceType()
+        type = typesystem.SliceType()
 
         is_constant = False
         const = None
@@ -1312,7 +1312,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         constant_value = self._get_constant_list(node)
         if constant_value is not None:
             constant_value = tuple(constant_value)
-        type = numba_types.TupleType(size=len(node.elts))
+        type = typesystem.TupleType(size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node
@@ -1320,7 +1320,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_List(self, node):
         node.elts = self.visitlist(node.elts)
         constant_value = self._get_constant_list(node)
-        type = numba_types.ListType(size=len(node.elts))
+        type = typesystem.ListType(size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node
@@ -1329,7 +1329,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.generic_visit(node)
         constant_keys = self._get_constants(node.keys)
         constant_values = self._get_constants(node.values)
-        type = numba_types.DictType(size=len(node.keys))
+        type = typesystem.DictType(size=len(node.keys))
         if constant_keys and constant_values:
             variable = Variable(type, is_constant=True,
                                 constant_value=dict(zip(constant_keys,
@@ -1363,7 +1363,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def _create_deferred_call(self, arg_types, call_node):
         "Set the statement as uninferable for now"
         deferred_type = self.create_deferred(call_node,
-                                             numba_types.DeferredCallType)
+                                             typesystem.DeferredCallType)
         for arg, arg_type in zip(call_node.args, arg_types):
             if arg_type.is_unresolved:
                 deferred_type.dependences.append(arg)
@@ -1487,7 +1487,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 types.append(arg.variable.type)
 
         signature = func_type.dst_type(*types)
-        new_node = nodes.const(signature, numba_types.CastType(signature))
+        new_node = nodes.const(signature, typesystem.CastType(signature))
         return new_node
 
     def visit_Call(self, node, visitchildren=True):
@@ -1572,11 +1572,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         result_type = None
         if attribute is numpy.newaxis:
-            result_type = numba_types.NewAxisType()
+            result_type = typesystem.NewAxisType()
         elif attribute is numba.NULL:
-            return numba_types.null_type
+            return typesystem.null_type
         elif type.is_numpy_module or type.is_numpy_attribute:
-            result_type = numba_types.NumpyAttributeType(module=type.module,
+            result_type = typesystem.NumpyAttributeType(module=type.module,
                                                          attr=node.attr)
         elif type.is_numba_module or type.is_math_module:
             result_type = self.context.typemapper.from_python(attribute)
@@ -1584,7 +1584,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 result_type = None
 
         if result_type is None:
-            result_type = numba_types.ModuleAttributeType(module=type.module,
+            result_type = typesystem.ModuleAttributeType(module=type.module,
                                                           attr=node.attr)
 
         return result_type
@@ -1643,7 +1643,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.value = self.visit(node.value)
         type = node.value.variable.type
         if node.attr == 'conjugate' and (type.is_complex or type.is_float):
-            result_type = numba_types.MethodType(type, 'conjugate')
+            result_type = typesystem.MethodType(type, 'conjugate')
         elif type.is_complex:
             result_type = self._resolve_complex_attribute(node, type)
         elif type.is_struct:
@@ -1655,7 +1655,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             return nodes.ArrayAttributeNode(node.attr, node.value)
         elif type.is_array and node.attr == "dtype":
             # TODO: resolve as constant at compile time?
-            result_type = numba_types.ResolvedNumpyDtypeType(
+            result_type = typesystem.ResolvedNumpyDtypeType(
                                         dtype_type=type.dtype)
         elif type.is_extension:
             return self._resolve_extension_attribute(node, type)
@@ -1719,7 +1719,7 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
         if variable.type.is_unresolved:
             variable.type = variable.type.resolve()
             if variable.type.is_unresolved:
-                variable.type = numba_types.resolve_var(variable)
+                variable.type = typesystem.resolve_var(variable)
             assert not variable.type.is_unresolved
 
     def visit(self, node):

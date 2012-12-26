@@ -92,7 +92,7 @@ def compute_attrs_offset(py_class):
 
 def compute_object_offsets(ext_type, struct_offset):
     """
-    Given an numba_types.ExtensionType, compute the offsets of object
+    Given an typesystem.ExtensionType, compute the offsets of object
     pointers, relative to the start of the attribute offsets.
     """
     offsets = []

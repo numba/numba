@@ -9,14 +9,14 @@ import llvm.ee as le
 from .llvm_types import _int1, _int32, _intp, _LLVMCaster
 from .multiarray_api import MultiarrayAPI # not used
 from .symtab import Variable
-from numba import typesystem as _types
-from ._numba_types import BuiltinType
+from numba import typesystem
+from numba.typesystem import BuiltinType
 
 from numba import *
 from . import visitors, nodes, llvm_types, utils, function_util
 from .minivect import minitypes, llvm_codegen
 from numba import ndarray_helpers, translate, error, extension_types
-from numba._numba_types import is_obj, promote_closest
+from numba.typesystem import is_obj, promote_closest
 from numba.utils import dump
 
 import logging
@@ -43,7 +43,7 @@ class DelayedObj(object):
             ret_val = self.args[0]
         else:
             # FIXME: Need to infer case where this might be over floats.
-            ret_val = Variable(_types.int32, lvalue=lc.Constant.int(_int32, 0))
+            ret_val = Variable(typesystem.int32, lvalue=lc.Constant.int(_int32, 0))
         return ret_val
 
     def get_inc(self):
@@ -51,7 +51,7 @@ class DelayedObj(object):
             ret_val = self.args[2]
         else:
             # FIXME: Need to infer case where this might be over floats.
-            ret_val = Variable(type=_types.int32, lvalue=lc.Constant.int(_int32, 1))
+            ret_val = Variable(type=typesystem.int32, lvalue=lc.Constant.int(_int32, 1))
         return ret_val
 
     def get_stop(self):
@@ -707,7 +707,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def get_ctypes_func(self, llvm=True):
         import ctypes
         sig = self.func_signature
-        restype = _types.convert_to_ctypes(sig.return_type)
+        restype = typesystem.convert_to_ctypes(sig.return_type)
 
         # FIXME: Switch to PYFUNCTYPE so it does not release the GIL.
         #
@@ -715,7 +715,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         #                                 *[_types.convert_to_ctypes(x)
         #                                       for x in sig.args])
         prototype = ctypes.PYFUNCTYPE(restype,
-                                     *[_types.convert_to_ctypes(x)
+                                     *[typesystem.convert_to_ctypes(x)
                                            for x in sig.args])
 
 
@@ -1485,7 +1485,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.visitlist(node.body)
         return None
 
-    def generate_constant_int(self, val, ty=_types.int_):
+    def generate_constant_int(self, val, ty=typesystem.int_):
         lconstant = lc.Constant.int(ty.to_llvm(self.context), val)
         return lconstant
 
@@ -1682,9 +1682,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         #        Sounds like a hack.
         self.func.live_objects.append(node.object)
         addr = id(node.object)
-        obj_addr_int = self.generate_constant_int(addr, _types.Py_ssize_t)
+        obj_addr_int = self.generate_constant_int(addr, typesystem.Py_ssize_t)
         obj = self.builder.inttoptr(obj_addr_int,
-                                    _types.object_.to_llvm(self.context))
+                                    typesystem.object_.to_llvm(self.context))
         return obj
 
     def visit_ObjectCallNode(self, node):

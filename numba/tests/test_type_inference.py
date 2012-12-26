@@ -8,7 +8,7 @@ Test type inference.
 
 from numba.minivect import minitypes, minierror
 from numba import *
-from numba import typesystem as numba_types
+from numba import typesystem
 from numba import ast_type_inference
 from numba import decorators, functions, pipeline
 
@@ -205,7 +205,7 @@ class TestTypeInference(unittest.TestCase):
 
     def test_slicing(self):
         sig, symtab = infer(slicing, functype(None, [double[:]]))
-        self.assertEqual(symtab['n'].type, numba_types.NewAxisType())
+        self.assertEqual(symtab['n'].type, typesystem.NewAxisType())
 
         self.assertEqual(symtab['b'].type, double)
         self.assertEqual(symtab['c'].type, double)

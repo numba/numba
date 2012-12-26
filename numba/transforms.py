@@ -92,11 +92,11 @@ import numba
 from numba import *
 from numba import error, closure
 from .minivect import minierror, minitypes, codegen
-from . import macros, utils, typesystem as numba_types
+from . import macros, utils, typesystem
 from .symtab import Variable
 from . import visitors, nodes, error, functions
 from numba import stdio_util, function_util
-from numba._numba_types import is_obj, promote_closest
+from numba.typesystem import is_obj, promote_closest
 from numba.utils import dump
 
 import llvm.core
@@ -448,19 +448,19 @@ class TransformForIterable(visitors.NumbaTransformer):
 
             # replace node.iter
             call_func = ast.Name(id='range', ctx=ast.Load())
-            call_func.type = numba_types.RangeType()
+            call_func.type = typesystem.RangeType()
             call_func.variable = Variable(call_func.type)
 
-            shape_index = ast.Index(nodes.ConstNode(0, numba_types.Py_ssize_t))
-            shape_index.type = numba_types.npy_intp
+            shape_index = ast.Index(nodes.ConstNode(0, typesystem.Py_ssize_t))
+            shape_index.type = typesystem.npy_intp
             stop = ast.Subscript(value=nodes.ShapeAttributeNode(orig_iter),
                                  slice=shape_index,
                                  ctx=ast.Load())
-            stop.type = numba_types.intp
+            stop.type = typesystem.intp
             stop.variable = Variable(stop.type)
-            call_args = [nodes.ConstNode(0, numba_types.Py_ssize_t),
-                         nodes.CoercionNode(stop, numba_types.Py_ssize_t),
-                         nodes.ConstNode(1, numba_types.Py_ssize_t),]
+            call_args = [nodes.ConstNode(0, typesystem.Py_ssize_t),
+                         nodes.CoercionNode(stop, typesystem.Py_ssize_t),
+                         nodes.ConstNode(1, typesystem.Py_ssize_t),]
 
             node.iter = ast.Call(func=call_func, args=call_args)
             node.iter.type = call_func.type
@@ -844,7 +844,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
         args = [n] + objs
         new_node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
-        new_node.type = numba_types.TupleType(size=len(node.elts))
+        new_node.type = typesystem.TupleType(size=len(node.elts))
         return nodes.ObjectTempNode(new_node)
 
     def visit_List(self, node):
@@ -1064,7 +1064,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif is_obj(node.value.type):
-            if isinstance(node.value.type, numba_types.ModuleType):
+            if isinstance(node.value.type, typesystem.ModuleType):
                 if node.type.is_module_attribute:
                     new_node = nodes.ObjectInjectNode(node.type.value)
                 else:

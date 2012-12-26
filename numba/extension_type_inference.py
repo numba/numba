@@ -4,7 +4,7 @@ import logging
 
 import numba
 from numba import pipeline, error, symtab
-from numba import typesystem as numba_types
+from numba import typesystem
 from numba.minivect import minitypes
 
 from numba import *
@@ -110,7 +110,7 @@ def _process_method_signatures(class_dict, ext_type):
         if method is None:
             continue
 
-        signature = numba_types.ExtMethodType(
+        signature = typesystem.ExtMethodType(
                     return_type=restype, args=argtypes, name=method.name,
                     is_class=method.is_class, is_static=method.is_static)
         ext_type.add_method(method_name, signature)
@@ -321,7 +321,7 @@ def create_extension(context, py_class, translator_kwargs):
     
     llvm_module = translator_kwargs.pop('llvm_module')
     assert llvm_module is not None
-    ext_type = numba_types.ExtensionType(py_class)
+    ext_type = typesystem.ExtensionType(py_class)
     class_dict = dict(vars(py_class))
     inherit_attributes(ext_type, class_dict)
 

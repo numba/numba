@@ -12,7 +12,7 @@ import numba
 from numba import *
 from .minivect import minierror, minitypes
 # from numba.tests import doctest_support
-from numba import typesystem as numba_types
+from numba import typesystem
 
 import llvm.core
 import numpy.random
@@ -43,7 +43,7 @@ def module_attribute_type(obj):
             inferer = ModuleTypeInferer.member2inferer[obj]
             module = inferer.member_modules[obj]
             attr = inferer.members[obj]
-            return numba_types.ModuleAttributeType(module=module, attr=attr)
+            return typesystem.ModuleAttributeType(module=module, attr=attr)
 
     return None
 
@@ -210,16 +210,16 @@ class NumpyModuleInferer(ModuleTypeInferer):
         if dtype.is_numpy_attribute:
             numpy_attr = getattr(dtype.module, dtype.attr, None)
             if isinstance(numpy_attr, numpy.dtype):
-                return numba_types.NumpyDtypeType(dtype=numpy_attr)
+                return typesystem.NumpyDtypeType(dtype=numpy_attr)
             elif issubclass(numpy_attr, numpy.generic):
-                return numba_types.NumpyDtypeType(dtype=numpy.dtype(numpy_attr))
+                return typesystem.NumpyDtypeType(dtype=numpy.dtype(numpy_attr))
 
     def get_dtype(self, dtype_arg, default_dtype=None):
         "Get the dtype keyword argument from a call to a numpy attribute."
         if dtype_arg is None:
             if default_dtype is None:
                 return None
-            dtype = numba_types.NumpyDtypeType(dtype=numpy.dtype(default_dtype))
+            dtype = typesystem.NumpyDtypeType(dtype=numpy.dtype(default_dtype))
             return dtype
         else:
             return self._resolve_attribute_dtype(dtype_arg.variable.type)

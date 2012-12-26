@@ -7,7 +7,7 @@ from numba import *
 
 from numba.tests.test_support import *
 from numba.tests.cfg.test_cfg_type_infer import infer as _infer, types, functype
-from numba import typesystem as numba_types
+from numba import typesystem
 
 T = numba.template()
 
@@ -115,7 +115,7 @@ def infer(func, signature=None, template_signature=None,
     return vars + local_vars
 
 def specialize(T, context):
-    return numba_types.resolve_template_type(T, context)
+    return typesystem.resolve_template_type(T, context)
 
 
 if __name__ == '__main__':

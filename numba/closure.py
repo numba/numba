@@ -59,7 +59,7 @@ import numba.decorators
 from numba import *
 from numba import error, visitors, nodes, module_type_inference
 from numba.minivect import  minitypes
-from numba import typesystem as numba_types
+from numba import typesystem
 from numba.symtab import Variable
 
 import logging
@@ -213,7 +213,7 @@ class ClosureMixin(object):
             return self._visit_func_children(node)
 
         signature = self._process_decorators(node)
-        type = numba_types.ClosureType(signature)
+        type = typesystem.ClosureType(signature)
         self.symtab[node.name] = Variable(type, is_local=True)
 
         closure = nodes.ClosureNode(node, type, self.func)
@@ -327,7 +327,7 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
 
         func_name = self.func.__name__
         py_class.__name__ = '%s_scope' % func_name
-        scope_type = numba_types.ClosureScopeType(py_class, outer_scope_type)
+        scope_type = typesystem.ClosureScopeType(py_class, outer_scope_type)
         scope_type.unmangled_symtab = dict(fields)
 
         mangled_fields = [(mangle(name, scope_type), type)

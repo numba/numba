@@ -10,7 +10,6 @@ except ImportError:
     numbers = None
 
 from numba import error
-from numba import typesystem as numba_types
 
 import logging
 logger = logging.getLogger(__name__)

@@ -7,7 +7,7 @@ import numba.functions
 from numba import function_util
 from numba import *
 from .symtab import Variable
-from numba import typesystem as numba_types
+from numba import typesystem
 from numba import utils, translate, error
 from numba.minivect import minitypes, minierror
 
@@ -28,7 +28,7 @@ def objconst(obj):
     return const(obj, object_)
 
 def const(obj, type):
-    if numba_types.is_obj(type):
+    if typesystem.is_obj(type):
         node = ObjectInjectNode(obj, type)
     else:
         node = ConstNode(obj, type)
@@ -288,7 +288,7 @@ class ConstNode(Node):
         elif type.is_c_string:
             lvalue = translate._LLVMModuleUtils.get_string_constant(
                                             translator.llvm_module, constant)
-            type_char_p = numba_types.c_string_type.to_llvm(translator.context)
+            type_char_p = typesystem.c_string_type.to_llvm(translator.context)
             lvalue = translator.builder.bitcast(lvalue, type_char_p)
         elif type.is_function:
             # lvalue = map_to_function(constant, type, self.mod)
@@ -567,7 +567,7 @@ class ObjectCallNode(FunctionCallNode):
         self.py_func = py_func
 
         self.args_tuple = ast.Tuple(elts=args, ctx=ast.Load())
-        self.args_tuple.variable = Variable(numba_types.TupleType(
+        self.args_tuple.variable = Variable(typesystem.TupleType(
                                                 size=len(args)))
 
         if keywords:
@@ -684,7 +684,7 @@ class NoneNode(Node):
     Return None.
     """
 
-    type = numba_types.NoneType()
+    type = typesystem.NoneType()
     variable = Variable(type)
 
 class ObjectTempRefNode(Node):
@@ -908,7 +908,7 @@ class ArrayAttributeNode(Node):
         if attribute_name == 'ndim':
             type = minitypes.int_
         elif attribute_name in ('shape', 'strides'):
-            type = numba_types.SizedPointerType(numba_types.intp,
+            type = typesystem.SizedPointerType(typesystem.intp,
                                                 size=self.array_type.ndim)
         elif attribute_name == 'data':
             type = self.array_type.dtype.pointer()
@@ -928,7 +928,7 @@ class ShapeAttributeNode(ArrayAttributeNode):
     def __init__(self, array):
         super(ShapeAttributeNode, self).__init__('shape', array)
         self.array = array
-        self.element_type = numba_types.intp
+        self.element_type = typesystem.intp
         self.type = minitypes.CArrayType(self.element_type,
                                          array.variable.type.ndim)
 
