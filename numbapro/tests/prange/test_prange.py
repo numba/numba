@@ -148,6 +148,8 @@ __doc__ += """
 """
 
 if __name__ == '__main__':
-    prange_shared_privates_reductions(2.0)
-#    import doctest
-#    doctest.testmod()
+#    prange_shared_privates_reductions(2.0)
+#    a = np.arange(100).reshape(10, 10)
+#    test_sum2d(a)
+    import doctest
+    doctest.testmod()

@@ -94,13 +94,12 @@ def outline_prange_body(context, outer_py_func, outer_symtab, subnode, **kwargs)
     func_def.need_closure_wrapper = False
     return func_def, privates_struct_type, reductions
 
-class VariableFindingVisitor(visitors.NumbaVisitor):
+class VariableFindingVisitor(visitors.VariableFindingVisitor):
     "Find referenced and assigned ast.Name nodes"
-    def __init__(self, context, func, ast, outer_symtab, **kwargs):
-        super(VariableFindingVisitor, self).__init__(context, func, ast, **kwargs)
+    def __init__(self):
+        super(VariableFindingVisitor, self).__init__()
         self.referenced = {}
         self.assigned = {}
-        self.outer_symtab = outer_symtab
 
     def register_assignment(self, node, target, op):
         if isinstance(target, ast.Name):
@@ -123,26 +122,7 @@ class VariableFindingVisitor(visitors.NumbaVisitor):
                                   "(%s and %s) for variable %r" % (
                                             op, previous_op, target.id))
             else:
-                # This will not be triggered, since the body is already
-                # analyzed
-                if (self.outer_symtab[target.id].type is None and
-                        redop is not None):
-                    raise error.NumbaError(
-                            node, "Reduction variable %r must be "
-                                  "initialized before the loop" % target.id)
-
                 self.assigned[target.id] = redop
-
-    def visit_Assign(self, node):
-        self.generic_visit(node)
-        self.register_assignment(node, node.targets[0], node.inplace_op)
-
-    def visit_For(self, node):
-        self.generic_visit(node)
-        self.register_assignment(node, node.target, None)
-
-    def visit_Name(self, node):
-        self.referenced[node.id] = node
 
 
 class PrangeType(typesystem.RangeType):
