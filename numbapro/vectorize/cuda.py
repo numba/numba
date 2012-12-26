@@ -2,7 +2,7 @@ from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm.core import *
 import numpy as np
-from numba import llvm_types
+from numba import llvm_types, void
 from . import _common
 from numba.minivect import minitypes
 
@@ -114,13 +114,12 @@ class CudaASTVectorize(_common.GenericASTVectorize):
 
     def __init__(self, func):
         super(CudaASTVectorize, self).__init__(func)
-        self.module = Module.new('ptx_%s' % func)
+#        self.module = Module.new('ptx_%s' % func)
         self.signatures = []
 
     def add(self, restype, argtypes, **kwargs):
         self.signatures.append((restype, argtypes, kwargs))
-        translate = cuda._ast_jit(self.pyfunc, argtypes, inline=False,
-                                  llvm_module=self.module,
+        translate = cuda._ast_jit(self.pyfunc, restype, argtypes, inline=False,
                                   **kwargs)
         self.translates.append(translate)
         self.args_restypes.append(list(argtypes) + [restype])
@@ -148,7 +147,7 @@ class CudaASTVectorize(_common.GenericASTVectorize):
             ret_dtype, arg_dtypes = get_dtypes(restype, argtypes)
             # generate a caller for all functions
             cukernel = self._build_caller(lfunc)
-            assert cukernel.module is lfunc.module
+#            assert cukernel.module is lfunc.module
 
             # unicode problem?
             fname = cukernel.name
@@ -175,5 +174,5 @@ class CudaASTVectorize(_common.GenericASTVectorize):
 
     def _build_caller(self, lfunc):
         lcaller_def = _CudaStagingCaller(CFuncRef(lfunc), lfunc.type.pointee)
-        lcaller = lcaller_def(self.module)
+        lcaller = lcaller_def(lfunc.module)
         return lcaller

@@ -64,10 +64,11 @@ def jit(restype=void, argtypes=None, backend='ast', **kws):
 
 _device_functions = {}
 
-def _ast_jit(func, restype, argtypes, inline, llvm_module, **kws):
+def _ast_jit(func, restype, argtypes, inline, **kws):
     kws['nopython'] = True          # override nopython option
     kws['compile_only'] = True      # override
     kws['ctypes'] = True            # override
+    assert 'llvm_module' not in kws
     func._numba_inline = kws.pop('inline', False)
     context.function_cache.register(func)
     result = context.function_cache.compile_function(func, argtypes,
@@ -90,10 +91,7 @@ def jit2(restype=void, argtypes=None, device=False, inline=False, **kws):
         raise Exception("_llvm_ee should not be defined.")
     assert not inline or device
     def _jit2(func):
-        llvm_module = (kws.pop('llvm_module', None)
-                       or _lc.Module.new('ptx_%s' % func))
-        
-        signature, lfunc = _ast_jit(func, restype, argtypes, inline, llvm_module, **kws)
+        signature, lfunc = _ast_jit(func, restype, argtypes, inline, **kws)
         
         if device:
             assert lfunc.name not in _device_functions, 'Device function name already used'
