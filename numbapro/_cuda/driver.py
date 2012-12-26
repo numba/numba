@@ -392,7 +392,7 @@ class Driver(object):
         '''
         try:
             return self.current_context()
-        except KeyError:
+        except CudaDriverError:
             return self.create_context(device)
 
     def release_context(self, context):
