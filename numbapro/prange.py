@@ -29,7 +29,7 @@ from numba import *
 from numba import (error, visitors, nodes, template, ast_type_inference,
                    transforms)
 from numba.minivect import  minitypes
-from numba import  _numba_types as numba_types
+from numba import typesystem
 from numba.symtab import Variable
 
 from numba.ast_type_inference import no_keywords
@@ -77,7 +77,7 @@ def outline_prange_body(context, outer_py_func, outer_symtab, subnode, **kwargs)
     # of private variables as argument
     for i, (name, type) in enumerate(fields):
         if type is None:
-            fields[i] = name, numba_types.DeferredType(name)
+            fields[i] = name, typesystem.DeferredType(name)
 
     privates_struct_type = numba.struct(fields)
     privates_struct = ast.Name('__numba_privates', ast.Param())
@@ -145,7 +145,7 @@ class VariableFindingVisitor(visitors.NumbaVisitor):
         self.referenced[node.id] = node
 
 
-class PrangeType(numba_types.RangeType):
+class PrangeType(typesystem.RangeType):
     is_prange = True
 
 class PrangeNode(nodes.Node):

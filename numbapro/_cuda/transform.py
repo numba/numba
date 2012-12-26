@@ -4,7 +4,7 @@ from . import sreg, smem, barrier, macros
 import numpy as np
 # modify numba behavior
 
-from numba import utils, functions, ast_translate, _numba_types, llvm_types
+from numba import utils, functions, ast_translate, llvm_types
 from numba import visitors, nodes, error, ast_type_inference
 from numba import pipeline, naming, f4
 import ast
