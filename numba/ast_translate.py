@@ -1730,12 +1730,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_NoneNode(self, node):
         try:
-            self.mod.add_global_variable(object_.to_llvm(self.context),
+            self.llvm_module.add_global_variable(object_.to_llvm(self.context),
                                          "Py_None")
         except llvm.LLVMException:
             pass
 
-        return self.mod.get_global_variable_named("Py_None")
+        return self.llvm_module.get_global_variable_named("Py_None")
 
     def visit_NativeCallNode(self, node, largs=None):
         if largs is None:
@@ -1775,7 +1775,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_LLVMExternalFunctionNode(self, node):
         lfunc_type = node.signature.to_llvm(self.context)
-        return self.mod.get_or_insert_function(lfunc_type, node.fname)
+        return self.llvm_module.get_or_insert_function(lfunc_type, node.fname)
 
     def visit_LLVMIntrinsicNode(self, node):
         intr = getattr(llvm.core, 'INTR_' + node.func_name)
@@ -1822,7 +1822,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_MultiArrayAPINode(self, node):
         meth = getattr(self.multiarray_api, 'load_' + node.func_name)
-        lfunc = meth(self.mod, self.builder)
+        lfunc = meth(self.llvm_module, self.builder)
         lsignature = node.signature.pointer().to_llvm(self.context)
         node.llvm_func = self.builder.bitcast(lfunc, lsignature)
         result = self.visit_NativeCallNode(node)
