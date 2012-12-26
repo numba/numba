@@ -287,14 +287,12 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
 # Create Numba Functions (numbafunction.c)
 #------------------------------------------------------------------------
 
-def create_function(methoddef, py_func, lfunc_pointer, signature):
+def create_function(methoddef, py_func, lfunc_pointer, signature, modname):
     cdef Py_uintptr_t methoddef_p = ctypes.cast(ctypes.byref(methoddef),
                                                 ctypes.c_void_p).value
     cdef PyMethodDef *ml = <PyMethodDef *> methoddef_p
     cdef Py_uintptr_t lfunc_p = lfunc_pointer
 
-    modname = py_func.__module__
-    py_func.live_objects.extend((methoddef, modname))
-    result = NumbaFunction_NewEx(ml, modname, py_func.func_code,
+    result = NumbaFunction_NewEx(ml, modname, getattr(py_func, "func_code", None),
                                  NULL, <void *> lfunc_p, signature, py_func)
     return result

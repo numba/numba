@@ -432,7 +432,8 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
     # Called with a string like 'f8(f8)'
     elif isinstance(restype, str) and argtypes is None:
         name, restype, argtypes = _process_sig(restype, kws.get('name', None))
-        kws['name']=name
+        if name is not None:
+            kws['func_name'] = name
     if restype is not None:
         kws['restype'] = restype
     if argtypes is not None:

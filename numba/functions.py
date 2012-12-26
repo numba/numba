@@ -5,7 +5,6 @@ from collections import defaultdict
 from numba import *
 from . import naming
 from .minivect import minitypes
-import numba.ast_translate as translate
 import llvm.core
 import logging
 import traceback
@@ -102,6 +101,8 @@ def _compile(context, func, restype=None, argtypes=None, ctypes=False,
         - run type inference using the given input types
         - compile the function to LLVM
     """
+    import numba.ast_translate as translate
+
     func_signature, symtab, ast = _infer_types(context, func,
                                                restype, argtypes, **kwds)
     func_name = name or naming.specialized_mangle(func.__name__, func_signature.args)
@@ -119,6 +120,18 @@ def _compile(context, func, restype=None, argtypes=None, ctypes=False,
         return func_signature, t.lfunc, ctypes_func
     else:
         return func_signature, t.lfunc, t.build_wrapper_function()
+
+live_objects = [] # These are never collected
+
+def keep_alive(py_func, obj):
+    """
+    Keep an object alive for the lifetime of the translated unit.
+
+    This is a HACK. Make live objects part of the function-cache
+
+    NOTE: py_func may be None, so we can't make it a function attribute
+    """
+    live_objects.append(obj)
 
 class FunctionCache(object):
     """

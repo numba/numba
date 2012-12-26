@@ -1079,6 +1079,13 @@ class ClosureNode(Node):
 
     When coerced to an object, a wrapper PyMethodDef gets created, and at
     call time a function is dynamically created with the closure scope.
+
+        func_def:
+            AST FunctionDef of the function
+        closure_type:
+            numba.typesystem.ClosureType
+        outer_py_func:
+            Outer Python function (or None!)
     """
 
     _fields = []
@@ -1088,6 +1095,7 @@ class ClosureNode(Node):
         self.func_def = func_def
         self.type = closure_type
         self.outer_py_func = outer_py_func
+        self.name = self.func_def.name
 
         self.need_numba_func = getattr(func_def, 'need_closure_wrapper', True)
         self.lfunc = None
@@ -1206,11 +1214,13 @@ class FunctionWrapperNode(Node):
 
     _fields = ['body', 'return_result']
 
-    def __init__(self, wrapped_function, signature, orig_py_func, fake_pyfunc):
+    def __init__(self, wrapped_function, signature, orig_py_func, fake_pyfunc,
+                 orig_py_func_name):
         self.wrapped_function = wrapped_function
         self.signature = signature
         self.orig_py_func = orig_py_func
         self.fake_pyfunc = fake_pyfunc
+        self.name = orig_py_func_name
 
 def pointer_add(pointer, offset):
     assert pointer.type == char.pointer()

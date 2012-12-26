@@ -63,16 +63,8 @@ class Pipeline(object):
 
         ast.pipeline = self
 
-        self.func_name = kwargs.get('name')
-        if not self.func_name:
-            if func:
-                module_name = func.__module__ or '<unknown>'
-                name = '.'.join([module_name, func.__name__])
-            else:
-                name = ast.name
-
-            self.func_name = naming.specialized_mangle(
-                                    name, self.func_signature.args)
+        assert "name" not in kwargs
+        self.mangled_name = kwargs.get('mangled_name')
 
         self.symtab = symtab
         if symtab is None:
@@ -102,10 +94,12 @@ class Pipeline(object):
             name = '__'.join(cls.__name__ for cls in classes)
             cls = type(name, classes, {})
 
+        kwds.setdefault("mangled_name", self.mangled_name)
+
         assert 'llvm_module' not in kwds
         return cls(self.context, self.func, ast,
                    func_signature=self.func_signature, nopython=self.nopython,
-                   symtab=self.symtab, func_name=self.func_name,
+                   symtab=self.symtab,
                    llvm_module=self.llvm_module,
                    locals=self.locals,
                    allow_rebind_args=self.allow_rebind_args,
@@ -187,7 +181,7 @@ class Pipeline(object):
         type_inferer.infer_types()
 
         self.func_signature = type_inferer.func_signature
-        logger.debug("signature for %s: %s", self.func_name,
+        logger.debug("signature for %s: %s", self.mangled_name,
                      self.func_signature)
         self.symtab = type_inferer.symtab
         return ast

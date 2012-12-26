@@ -1,6 +1,7 @@
 import ast
 import ast as ast_module
 import __builtin__ as builtins
+from numba import functions
 from numba.typesystem.typemapper import have_properties
 
 try:
@@ -38,6 +39,7 @@ class NumbaVisitorMixin(CooperativeBase):
         #self.local_scopes = [self.symtab]
         self.current_scope = symtab
         self.have_cfg = getattr(self.ast, 'flow', False)
+        self.kwargs = kwargs
 
         if self.have_cfg:
             self.flow_block = self.ast.flow.blocks[1]
@@ -49,19 +51,22 @@ class NumbaVisitorMixin(CooperativeBase):
             assert isinstance(ast, ast_module.FunctionDef)
             locals, cellvars, freevars = determine_variable_status(context, ast)
             self.names = self.global_names = freevars
-            self.argnames = [arg.id for arg in ast.args.args]
+            self.argnames = tuple(arg.id for arg in ast.args.args)
             argnames = set(self.argnames)
             local_names = [local_name for local_name in locals
                                           if local_name not in argnames]
-            self.varnames = self.local_names = self.argnames + local_names
+            self.varnames = self.local_names = list(self.argnames) + local_names
             self.func_globals = kwargs.get('func_globals', {})
 
             self.cellvars = cellvars
             self.freevars = freevars
+
+            self.module_name = self.func_globals.get("__name__", "")
         else:
             f_code = self.func.func_code
             self.names = self.global_names = f_code.co_names
             self.varnames = self.local_names = list(f_code.co_varnames)
+            self.module_name = self.func.__module__
 
             if f_code.co_cellvars:
                 self.varnames.extend(
@@ -79,7 +84,9 @@ class NumbaVisitorMixin(CooperativeBase):
                 local_name for local_name in self.locals
                                if local_name not in self.local_names)
 
-        if self.is_closure(func_signature):
+        if self.is_closure(func_signature) and func is not None:
+            # If a closure is backed up by an actual Python function, the
+            # closure scope argument is absent
             from numba import closure
             self.argnames = (closure.CLOSURE_SCOPE_ARG_NAME,) + self.argnames
             self.varnames.append(closure.CLOSURE_SCOPE_ARG_NAME)
@@ -98,6 +105,26 @@ class NumbaVisitorMixin(CooperativeBase):
             self.visit = self._visit_overload
 
         self.visitchildren = self.generic_visit
+
+    @property
+    def func_name(self):
+        if "func_name" in self.kwargs:
+            return self.kwargs["func_name"]
+        return self.ast.name
+
+    @property
+    def func_doc(self):
+        if self.func is not None:
+            return self.func.__doc__
+        else:
+            return ast.get_docstring(self.ast)
+
+    @property
+    def qualified_name(self):
+        qname = self.kwargs.get("qualified_name", None)
+        if qname is None:
+            qname = "%s.%s" % (self.module_name, self.func_name)
+        return qname
 
     def _visit_overload(self, node):
         assert self._overloads
@@ -145,6 +172,13 @@ class NumbaVisitorMixin(CooperativeBase):
     def error(self, node, msg):
         raise error.NumbaError(node, msg)
 
+    def keep_alive(self, obj):
+        """
+        Keep an object alive for the lifetime of the translated unit.
+
+        This is a HACK. Make live objects part of the function-cache
+        """
+        functions.keep_alive(self.func, obj)
 
     def have(self, t1, t2, p1, p2):
         """
@@ -282,7 +316,7 @@ class VariableFindingVisitor(NumbaVisitor):
 
     def register_assignment(self, node, target):
         if isinstance(target, ast.Name):
-            self.assigned[node.id] = node
+            self.assigned[target.id] = node
 
     def visit_Assign(self, node):
         self.generic_visit(node)
@@ -297,7 +331,9 @@ class VariableFindingVisitor(NumbaVisitor):
 
     def visit_FunctionDef(self, node):
         if self.function_level == 0:
+            self.function_level += 1
             self.generic_visit(node)
+            self.function_level -= 1
         else:
             self.func_defs.append(node)
 
@@ -314,10 +350,12 @@ def determine_variable_status(context, ast):
     if hasattr(ast, 'variable_status_tuple'):
         return ast.variable_status_tuple
 
-    v = VariableFindingVisitor(context, None, ast)
+    v = VariableFindingVisitor()
     v.visit(ast)
 
     locals = set(v.assigned)
+    locals.update(arg.id for arg in ast.args.args)
+    locals.update(func_def.name for func_def in v.func_defs)
     freevars = set(v.referenced) - locals
     cellvars = set()
 
@@ -329,4 +367,4 @@ def determine_variable_status(context, ast):
 
     # Cache state
     ast.variable_status_tuple = locals, cellvars, freevars
-    return locals, freevars
+    return locals, cellvars, freevars

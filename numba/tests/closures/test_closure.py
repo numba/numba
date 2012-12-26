@@ -278,7 +278,7 @@ __doc__ += """
 >>> wrong_restype()
 Traceback (most recent call last):
     ...
-NumbaError: 0:0: Function with non-void return does not return a value
+NumbaError: 272:4: Function with non-void return does not return a value
 """
 
 #
@@ -330,6 +330,9 @@ __doc__ += """
 
 if __name__ == '__main__':
 #    closure1 = closure_arg(1)
+#    print closure1.__name__
 #    test_call_closure()
+#    closure4()
+#    signature_dec()()
     import doctest
     doctest.testmod()

@@ -74,4 +74,5 @@ class TestIssue56(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    test_support.main()
+    TestIssue56("test_sub").debug()
+#    test_support.main()

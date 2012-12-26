@@ -18,6 +18,8 @@ from .minivect import minitypes, llvm_codegen
 from numba import ndarray_helpers, translate, error, extension_types
 from numba.typesystem import is_obj, promote_closest
 from numba.utils import dump
+from numba import naming
+from numba.functions import keep_alive
 
 import logging
 logger = logging.getLogger(__name__)
@@ -57,7 +59,7 @@ class DelayedObj(object):
     def get_stop(self):
         return self.args[0 if (len(self.args) == 1) else 1]
 
-def _create_methoddef(py_func, func_pointer):
+def _create_methoddef(py_func, func_name, func_doc, func_pointer):
     # struct PyMethodDef {
     #     const char  *ml_name;   /* The name of the built-in function/method */
     #     PyCFunction  ml_meth;   /* The C function that implements it */
@@ -79,30 +81,26 @@ def _create_methoddef(py_func, func_pointer):
 
     # It is paramount to put these into variables first, since every
     # access may return a new string object!
-    name = py_func.__name__
-    doc = py_func.__doc__
-    py_func.live_objects.extend((name, doc))
+    keep_alive(py_func, func_name)
+    keep_alive(py_func, func_doc)
 
     methoddef = c_PyMethodDef()
-    methoddef.name = name
-    methoddef.doc = doc
+    methoddef.name = func_name
+    methoddef.doc = func_doc
     methoddef.method = ctypes.c_void_p(func_pointer)
     methoddef.flags = 1 # METH_VARARGS
 
     return methoddef
 
-def numbafunction_new(py_func, func_pointer, wrapped_lfunc_pointer,
-                      wrapped_signature):
-    methoddef = _create_methoddef(py_func, func_pointer)
+def numbafunction_new(py_func, func_name, func_doc, module_name, func_pointer,
+                      wrapped_lfunc_pointer, wrapped_signature):
+    methoddef = _create_methoddef(py_func, func_name, func_doc, func_pointer)
+    keep_alive(py_func, methoddef)
+    keep_alive(py_func, module_name)
 
-    # Create PyCFunctionObject, pass in the methoddef struct as the m_self
-    # attribute
-    #methoddef_p = ctypes.byref(methoddef)
-    #NULL = ctypes.c_void_p()
-    #result = PyCFunction_NewEx(methoddef_p, methoddef, NULL)
-    #return result
-    wrapper = extension_types.create_function(
-            methoddef, py_func, wrapped_lfunc_pointer, wrapped_signature)
+    wrapper = extension_types.create_function(methoddef, py_func,
+                                              wrapped_lfunc_pointer,
+                                              wrapped_signature, module_name)
     return methoddef, wrapper
 
 class MethodReference(object):
@@ -360,7 +358,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                     llvm_module=llvm_module,
                     **kwds)
 
-        self.func_name = kwds.get('func_name', None)
+        if 'manged_name' in kwds:
+            self.mangled_name = kwds['mangled_name']
+            assert self.mangled_name.startswith("__numba_specialized_")
+        else:
+            self.mangled_name = naming.specialized_mangle(
+                        self.qualified_name, func_signature.args)
+
         self.func_signature = func_signature
         self.blocks = {} # stores id => basic-block
 
@@ -560,9 +564,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         self.lfunc_type = self.to_llvm(self.func_signature)
 
-        self.lfunc = self.llvm_module.add_function(self.lfunc_type, self.func_name)
-        assert self.func_name == self.lfunc.name, \
-               "Redefinition of function %s" % self.func_name
+        self.lfunc = self.llvm_module.add_function(self.lfunc_type,
+                                                   self.mangled_name)
+        if not isinstance(self.ast, nodes.FunctionWrapperNode):
+            assert self.mangled_name == self.lfunc.name, \
+                   "Redefinition of function %s (%s, %s)" % (self.func_name,
+                                                             self.mangled_name,
+                                                             self.lfunc.name)
 
         entry = self.append_basic_block('entry')
 
@@ -742,7 +750,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         wrapper = nodes.FunctionWrapperNode(lfunc,
                                             self.func_signature,
                                             self.func,
-                                            fake_pyfunc)
+                                            fake_pyfunc,
+                                            self.func_name)
         wrapper.pipeline = self.ast.pipeline
         wrapper.cellvars = []
         return wrapper
@@ -751,7 +760,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # PyObject *(*)(PyObject *self, PyObject *args)
         def func(self, args):
             pass
-        func.live_objects = self.func.live_objects
+        # func.live_objects = self.func.live_objects
 
         if llvm_module:
             wrapper_module = llvm_module
@@ -759,7 +768,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             wrapper_module = LLVMContextManager().module
 
         # Create wrapper code generator and wrapper AST
-        func.__name__ = '__numba_wrapper_%s' % self.func_name
+        func_name = '__numba_wrapper_%s' % self.func_name
         signature = minitypes.FunctionType(return_type=object_,
                                            args=[void.pointer(), object_])
         symtab = dict(self=Variable(object_, is_local=True),
@@ -772,9 +781,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
                               symtab, llvm_module=wrapper_module,
-                              refcount_args=False, func_name=func.__name__)
+                              refcount_args=False, func_name=func_name)
         t.translate()
-        func.live_objects.append(t.lfunc)
+        # func.live_objects.append(t.lfunc)
+        keep_alive(func, t.lfunc)
         return t
 
     def build_wrapper_function(self, get_lfunc=False):
@@ -792,8 +802,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # Return a PyCFunctionObject holding the wrapper
         func_pointer = t.lfunc_pointer
-        methoddef, wrapper = numbafunction_new(self.func, func_pointer,
-                                   self.lfunc_pointer, self.func_signature)
+        methoddef, wrapper = numbafunction_new(
+                self.func, self.func_name, self.func_doc, self.module_name,
+                func_pointer, self.lfunc_pointer, self.func_signature)
 
         if get_lfunc:
             return wrapper, t.lfunc, methoddef
@@ -806,7 +817,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         function, and return a tuple containing the separate LLVM
         module, and the LLVM wrapper function.
         '''
-        llvm_module = lc.Module.new('%s_wrapper_module' % self.func_name)
+        llvm_module = lc.Module.new('%s_wrapper_module' % self.mangled_name)
         t = self._build_wrapper_translation(llvm_module=llvm_module)
         logger.debug('Wrapper module: %s' % llvm_module)
         return llvm_module, t.lfunc
@@ -1680,7 +1691,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_ObjectInjectNode(self, node):
         # FIXME: Currently uses the runtime address of the python function.
         #        Sounds like a hack.
-        self.func.live_objects.append(node.object)
+        self.keep_alive(node.object)
         addr = id(node.object)
         obj_addr_int = self.generate_constant_int(addr, typesystem.Py_ssize_t)
         obj = self.builder.inttoptr(obj_addr_int,
