@@ -1,6 +1,9 @@
 import ast
 
 import llvm.core
+# Temporary fix for utilty function defintions to merge during linkage.
+# TODO: make intrinsic functions out of these utilities
+from llvm.core import LINKAGE_LINKONCE_ODR
 from llvm.core import Type, inline_function
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
@@ -185,9 +188,11 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
 
         newaxis_func_def = NewAxis()
         self.newaxis_func = newaxis_func_def(self.llvm_module)
+        self.newaxis_func.linkage = LINKAGE_LINKONCE_ODR
 
         index_func_def = IndexAxis()
         self.index_func = index_func_def(self.llvm_module)
+        self.index_func.linkage = LINKAGE_LINKONCE_ODR
 
     def visit_NativeSliceNode(self, node):
         """
@@ -253,6 +258,7 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
                                     step is not None)
 
         slice_func = slice_func_def(self.mod)
+        slice_func.linkage = LINAKGE_LINKONCE_ODR
 
         data = node.view_copy_accessor.data
         in_shape = node.view_accessor.shape
@@ -300,6 +306,7 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
 
         func_def = Broadcast()
         broadcast = func_def(self.mod)
+        broadcast.linkage = LINAKGE_LINKONCE_ODR
 
         for op in node.operands:
             op_result = self.visit(op)
