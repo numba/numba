@@ -9,7 +9,7 @@ import numba.decorators, numba.pipeline, numba.functions
 from numba import *
 from numba import error, visitors, nodes, symtab as symtab_module
 from numba.minivect import  minitypes
-from numba import  _numba_types as numba_types
+from numba import  typesystem as numba_types
 from numba.symtab import Variable
 
 import logging

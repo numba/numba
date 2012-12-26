@@ -8,7 +8,7 @@ Test type inference.
 
 from numba.minivect import minitypes, minierror
 from numba import *
-from numba import _numba_types as numba_types
+from numba import typesystem as numba_types
 from numba import ast_type_inference
 from numba import decorators, functions, pipeline
 
@@ -185,7 +185,7 @@ class TestTypeInference(unittest.TestCase):
         self.assertEqual(symtab['a8'].type, int64[:, :])
 
     def test_empty_arg(self):
-        from numba import _numba_types as nt
+        from numba import typesystem as nt
         empty_t = nt.ModuleAttributeType(module=np, attr='empty')
         zeros_t = nt.ModuleAttributeType(module=np, attr='zeros')
         ones_t = nt.ModuleAttributeType(module=np, attr='ones')

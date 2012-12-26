@@ -11,7 +11,8 @@ from numba import *
 from numba import (error, transforms, closure, control_flow, visitors, nodes,
                    module_type_inference)
 from .minivect import minierror, minitypes
-from . import translate, utils, _numba_types as numba_types
+from . import translate, utils, typesystem as numba_types
+from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from .symtab import Variable
 from numba import stdio_util, function_util
 from numba._numba_types import is_obj, promote_closest
@@ -582,7 +583,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         while unresolved:
             start_type = unresolved.pop()
             sccs = {}
-            numba_types.kosaraju_strongly_connected(start_type, sccs)
+            kosaraju_strongly_connected(start_type, sccs)
             unresolved -= set(sccs)
             strongly_connected.update(sccs)
 

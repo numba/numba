@@ -12,7 +12,7 @@ import numba
 from numba import *
 from .minivect import minierror, minitypes
 # from numba.tests import doctest_support
-from numba import _numba_types as numba_types
+from numba import typesystem as numba_types
 
 import llvm.core
 import numpy.random

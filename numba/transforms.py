@@ -92,7 +92,7 @@ import numba
 from numba import *
 from numba import error, closure
 from .minivect import minierror, minitypes, codegen
-from . import macros, utils, _numba_types as numba_types
+from . import macros, utils, typesystem as numba_types
 from .symtab import Variable
 from . import visitors, nodes, error, functions
 from numba import stdio_util, function_util

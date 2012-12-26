@@ -4,7 +4,7 @@ import logging
 
 import numba
 from numba import pipeline, error, symtab
-from numba import _numba_types as numba_types
+from numba import typesystem as numba_types
 from numba.minivect import minitypes
 
 from numba import *

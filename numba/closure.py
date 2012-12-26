@@ -59,7 +59,7 @@ import numba.decorators
 from numba import *
 from numba import error, visitors, nodes, module_type_inference
 from numba.minivect import  minitypes
-from numba import  _numba_types as numba_types
+from numba import typesystem as numba_types
 from numba.symtab import Variable
 
 import logging

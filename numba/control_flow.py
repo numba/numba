@@ -19,7 +19,7 @@ from meta import asttools
 
 import numba
 from numba import (error, transforms, closure, visitors, symtab, nodes,
-                   _numba_types as numba_types)
+                   typesystem as numba_types)
 from numba.utils import dump
 
 from numba import *

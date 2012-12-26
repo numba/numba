@@ -1,6 +1,8 @@
 import ast
 import ast as ast_module
 import __builtin__ as builtins
+from numba.typesystem.typemapper import have_properties
+
 try:
     import numbers
 except ImportError:
@@ -8,7 +10,7 @@ except ImportError:
     numbers = None
 
 from numba import error
-from numba import _numba_types as numba_types
+from numba import typesystem as numba_types
 
 import logging
 logger = logging.getLogger(__name__)
@@ -154,7 +156,7 @@ class NumbaVisitorMixin(CooperativeBase):
 
         If true, returns the type indicated by the first property.
         """
-        return numba_types.have_properties(t1, t2, p1, p2)
+        return have_properties(t1, t2, p1, p2)
 
     def have_types(self, v1, v2, p1, p2):
         return self.have(v1.type, v2.type, p1, p2)

@@ -4,7 +4,8 @@ import pprint
 
 from .minivect.complex_support import Complex64, Complex128, Complex256
 from .minivect import miniast, minitypes
-from . import _numba_types
+from numba import typesystem
+from numba.typesystem.typemapper import NumbaTypeMapper
 
 def itercode(code):
     """Return a generator of byte-offset, opcode, and argument
@@ -52,7 +53,7 @@ class NumbaContext(miniast.LLVMContext):
 
     def init(self):
         self.astbuilder = self.astbuilder_cls(self)
-        self.typemapper = _numba_types.NumbaTypeMapper(self)
+        self.typemapper = NumbaTypeMapper(self)
 
     def is_object(self, type):
         return super(NumbaContext, self).is_object(type) or type.is_array

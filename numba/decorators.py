@@ -6,7 +6,7 @@ import types
 import inspect
 
 from numba import *
-from . import _numba_types
+from numba import typesystem
 from . import utils, functions, ast_translate as translate, ast_type_inference
 from numba import translate as bytecode_translate
 from numba import error, pipeline, extension_type_inference

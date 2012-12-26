@@ -7,7 +7,7 @@ import opcode
 import __builtin__
 
 from .minivect import minierror, minitypes
-from . import translate, utils, _numba_types as _types
+from . import translate, utils, typesystem as _types
 from .symtab import Variable
 
 class TypeInferer(translate.CodeIterator):

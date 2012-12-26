@@ -4,10 +4,10 @@ import numpy as np
 
 import numba
 from numba import *
-from numba import _numba_types as numba_types
 
 from numba.tests.test_support import *
 from numba.tests.cfg.test_cfg_type_infer import infer as _infer, types, functype
+from numba import typesystem as numba_types
 
 T = numba.template()
 

@@ -9,7 +9,7 @@ import llvm.ee as le
 from .llvm_types import _int1, _int32, _intp, _LLVMCaster
 from .multiarray_api import MultiarrayAPI # not used
 from .symtab import Variable
-from . import _numba_types as _types
+from numba import typesystem as _types
 from ._numba_types import BuiltinType
 
 from numba import *

@@ -1,5 +1,6 @@
 import sys
 import logging
+from numba import typesystem
 
 __version__ = '0.3.2'
 
@@ -41,8 +42,8 @@ def _config_logger():
 
 _config_logger()
 
-from . import _numba_types, special
-from ._numba_types import *
+from . import  special
+from numba.typesystem import *
 from . import decorators
 from numba.minivect.minitypes import FunctionType
 from .decorators import *
@@ -80,4 +81,4 @@ def nose_run(module=None):
     config.verbosity = 3
     nose.run(module=module, config=config)
 
-__all__ = _numba_types.__all__ + decorators.__all__ + special.__all__
+__all__ = typesystem.__all__ + decorators.__all__ + special.__all__

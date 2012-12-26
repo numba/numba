@@ -91,7 +91,7 @@ class Variable(object):
         if self._deferred_type:
             return self._deferred_type
 
-        from numba import _numba_types as numba_types
+        from numba import typesystem as numba_types
         self._deferred_type = numba_types.DeferredType(self)
         return self._deferred_type
 
