@@ -276,6 +276,7 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
     ext_type.__numba_lfuncs = llvm_methods
     ext_type.__numba_method_pointers = method_pointers
     ext_type.__numba_ext_type = ext_numba_type
+    ext_type.exttype = ext_numba_type
 
     offsets = getattr(ext_type, '__numba_object_offset', [])
     offsets = offsets + compute_object_offsets(ext_numba_type, attrs_offset)

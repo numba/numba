@@ -104,6 +104,20 @@ class ObjectAttrExtension(object):
         result = self.method()
         return result
 
+exttype = ObjectAttrExtension.exttype
+
+@jit
+class ExtensionTypeAsAttribute(object):
+    """
+    >>> print ExtensionTypeAsAttribute.exttype
+    <Extension ExtensionTypeAsAttribute({'attr': <Extension ObjectAttrExtension>})>
+    """
+
+    def __init__(self, attr):
+        self.attr = exttype(attr)
+
+
 if __name__ == '__main__':
+#    print ExtensionTypeAsAttribute.exttype
     import doctest
     doctest.testmod()

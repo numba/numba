@@ -81,6 +81,9 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "<Extension %s>" % self.name
 
+    def __str__(self):
+        return "<Extension %s(%s)>" % (self.name,
+                                       self.attribute_struct.fielddict)
 
 class ExtMethodType(NumbaType, minitypes.FunctionType):
     """
