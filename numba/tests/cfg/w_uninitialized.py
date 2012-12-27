@@ -3,23 +3,23 @@ from numba import *
 jitv = jit(void())
 jitvi = jit(void(int_))
 jitvii = jit(void(int_, int_))
+jitii = jit(int_(int_))
+jitiii = jit(int_(int_, int_))
+
 
 def simple():
     """
     >>> jitv(simple)
     Traceback (most recent call last):
         ...
-    NumbaError: 14:10: local variable 'a' referenced before assignment
+    NumbaError: 17:10: local variable 'a' referenced before assignment
     """
     print a
-
-
-
     a = 0
 
 def simple2(arg):
     """
-    >>> result = jitvi(simple2)
+    >>> result = jitii(simple2)
     Warning 27:11: local variable 'a' might be referenced before assignment
     """
     if arg > 0:
@@ -28,7 +28,7 @@ def simple2(arg):
 
 def simple_pos(arg):
     """
-    >>> result = jitvi(simple_pos)
+    >>> result = jitii(simple_pos)
     """
     if arg > 0:
         a = 1
@@ -38,7 +38,7 @@ def simple_pos(arg):
 
 def ifelif(c1, c2):
     """
-    >>> result = jitvii(ifelif)
+    >>> result = jitiii(ifelif)
     Warning 51:11: local variable 'a' might be referenced before assignment
     """
     if c1 == 1:
