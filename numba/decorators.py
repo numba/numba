@@ -247,7 +247,7 @@ def _autojit2(template_signature, target, nopython, **translator_kwargs):
             types = resolve_argtypes(numba_func, template_signature,
                                      args, kwargs, translator_kwargs)
             dec = jit2(argtypes=types, target=target, nopython=nopython,
-                       **translator_kwargs)
+                       override_argtypes=True, **translator_kwargs)
             compiled_numba_func = dec(f)
             return numba_func.invoke_compiled(compiled_numba_func, *args, **kwargs)
 

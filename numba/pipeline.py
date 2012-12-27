@@ -157,10 +157,13 @@ class Pipeline(object):
     #
 
     def resolve_templates(self, ast):
+        # TODO: Unify with decorators module
         if self.template_signature is not None:
             from numba import typesystem
+
             argnames = [arg.id for arg in ast.args.args]
             argtypes = list(self.func_signature.args)
+
             typesystem.resolve_templates(self.locals, self.template_signature,
                                          argnames, argtypes)
             self.func_signature = minitypes.FunctionType(

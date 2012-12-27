@@ -192,20 +192,35 @@ def resolve_template_type(template_type, template_context):
 
     return template_type
 
+def is_template_list(types):
+    return any(is_template(type) for type in types)
+
+def is_template(T):
+    if isinstance(T, (list, tuple)):
+        return is_template_list(T)
+
+    return T.is_template or is_template_list(T.subtype_list)
 
 def resolve_templates(locals, template_signature, arg_names, arg_types):
     """
     Resolve template types given a signature with concrete types.
     """
     template_context = {}
+    locals = locals or {}
 
     # Resolve the template context with the types we have
     for i, (arg_name, arg_type) in enumerate(zip(arg_names, arg_types)):
         T = template_signature.args[i]
-        if arg_name in locals:
-            # Locals trump inferred argument types
-            arg_type = locals[arg_name]
-        match_template(T, arg_type, template_context)
+        if is_template(T):
+            # Resolve template type
+            if arg_name in locals:
+                # Locals trump inferred argument types
+                arg_type = locals[arg_name]
+            match_template(T, arg_type, template_context)
+        else:
+            # Concrete type, patch argtypes. This is valid since templates
+            # are only supported for autojit functions
+            arg_types[i] = T
 
     # Resolve types of local variables and functions on templates
     # (T.dtype, T.pointer(), etc)

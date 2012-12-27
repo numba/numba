@@ -89,6 +89,15 @@ def test_type_attributes(array, func, struct, pointer):
     field_b = 0
     scalar = 0
 
+@autojit(T(T, double))
+def test_template_with_concretes(a, b):
+    """
+    >>> test_template_with_concretes(1, 2)
+    3.0
+    """
+    return a + b
+
+
 #------------------------------------------------------------------------
 # Test utilities
 #------------------------------------------------------------------------
@@ -119,9 +128,11 @@ def specialize(T, context):
 
 
 if __name__ == '__main__':
-    locals = dict(dtype=T1.dtype, arg=T2.args[0], field_a=T3.fielddict['a'],
-                  field_b=T3.fielddict['b'], scalar=T4.base_type)
-    infer(test_type_attributes, template_signature=void(T1, T2, T3, T4),
-          type_context=type_context2, locals=locals)
+    pass
+#    locals = dict(dtype=T1.dtype, arg=T2.args[0], field_a=T3.fielddict['a'],
+#                  field_b=T3.fielddict['b'], scalar=T4.base_type)
+#    infer(test_type_attributes, template_signature=void(T1, T2, T3, T4),
+#          type_context=type_context2, locals=locals)
+#    print test_template_with_concretes(1, 2)
 
 testmod()

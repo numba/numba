@@ -991,6 +991,10 @@ class struct(Type):
     def comparison_type_list(self):
         return self.fields
 
+    @property
+    def subtype_list(self):
+        return [field[1] for field in self.fields]
+
     def is_prefix(self, other_struct):
         other_fields = other_struct.fields[:len(self.fields)]
         return self.fields == other_fields
