@@ -219,12 +219,15 @@ def resolve_argtypes(numba_func, template_signature,
 
     locals_dict = translator_kwargs.get("locals", None)
 
+    return_type = None
     argnames = inspect.getargspec(numba_func.py_func).args
     argtypes = map(context.typemapper.from_python, args)
 
     if template_signature is not None:
-        typesystem.resolve_templates(locals_dict, template_signature,
-                                     argnames, argtypes)
+        template_context, signature = typesystem.resolve_templates(
+                locals_dict, template_signature, argnames, argtypes)
+        return_type = signature.return_type
+        argtypes = list(signature.args)
 
     if locals_dict is not None:
         for i, argname in enumerate(argnames):
@@ -232,7 +235,7 @@ def resolve_argtypes(numba_func, template_signature,
                 new_type = locals_dict[argname]
                 argtypes[i] = new_type
 
-    return tuple(argtypes)
+    return minitypes.FunctionType(return_type, tuple(argtypes))
 
 # TODO: make these two implementations the same
 def _autojit2(template_signature, target, nopython, **translator_kwargs):
@@ -244,10 +247,12 @@ def _autojit2(template_signature, target, nopython, **translator_kwargs):
         """
         @functools.wraps(f)
         def wrapper(numba_func, *args, **kwargs):
-            types = resolve_argtypes(numba_func, template_signature,
-                                     args, kwargs, translator_kwargs)
-            dec = jit2(argtypes=types, target=target, nopython=nopython,
-                       override_argtypes=True, **translator_kwargs)
+            signature = resolve_argtypes(numba_func, template_signature,
+                                         args, kwargs, translator_kwargs)
+            dec = jit2(restype=signature.return_type,
+                        argtypes=signature.args,
+                        target=target, nopython=nopython,
+                        **translator_kwargs)
             compiled_numba_func = dec(f)
             return numba_func.invoke_compiled(compiled_numba_func, *args, **kwargs)
 
@@ -333,6 +338,7 @@ def _jit2(restype=None, argtypes=None, nopython=False,
         assert kwargs.get('llvm_module') is None # TODO link to user module
         assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
         result = function_cache.compile_function(func, argtys,
+                                                 restype=restype,
                                                  nopython=nopython,
                                                  ctypes=False,
                                                  **kwargs)
@@ -364,7 +370,7 @@ def _jit(restype=None, argtypes=None, backend='bytecode', **kws):
                         break
 
         if use_ast:
-            return jit2(argtypes=argtypes)(func)
+            return jit2(restype=restype, argtypes=argtypes)(func)
         else:
             if argtypes is None:
                 argtyps = [double]

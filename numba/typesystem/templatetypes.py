@@ -228,5 +228,8 @@ def resolve_templates(locals, template_signature, arg_names, arg_types):
         locals[local_name] = resolve_template_type(local_type,
                                                    template_context)
 
-    return template_context
+    return_type = resolve_template_type(template_signature.return_type,
+                                        template_context)
+    signature = return_type(*arg_types)
+    return template_context, signature
 

@@ -93,10 +93,49 @@ def test_type_attributes(array, func, struct, pointer):
 def test_template_with_concretes(a, b):
     """
     >>> test_template_with_concretes(1, 2)
-    3.0
+    3L
     """
     return a + b
 
+@autojit(complex128(T, double))
+def test_template_with_concretes2(a, b):
+    """
+    >>> test_template_with_concretes2(1, 2)
+    (3+0j)
+    >>> test_template_with_concretes2(1.0, 2.0)
+    (3+0j)
+    >>> test_template_with_concretes2(1+0j, 2)
+    (3+0j)
+
+    >>> test_template_with_concretes2(1+0j, 2+0j)
+    Traceback (most recent call last):
+        ...
+    TypeError: can't convert complex to float
+    """
+    return a + b
+
+
+@autojit(T2(T1, double))
+def test_unknown_template_error(a, b):
+    """
+    >>> test_unknown_template_error(1, 2)
+    Traceback (most recent call last):
+        ...
+    InvalidTemplateError: Unknown template type: T2
+    """
+    return a + b
+
+@autojit(T(T, T))
+def test_template_inconsistent_types_error(a, b):
+    """
+    >>> test_template_inconsistent_types_error(1, 2)
+    3L
+    >>> test_template_inconsistent_types_error(1, 2.0)
+    Traceback (most recent call last):
+        ...
+    InvalidTemplateError: Inconsistent types found for template: int and double
+    """
+    return a + b
 
 #------------------------------------------------------------------------
 # Test utilities
