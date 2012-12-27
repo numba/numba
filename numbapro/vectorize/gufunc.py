@@ -277,7 +277,7 @@ class CudaGUFuncASTVectorize(CudaASTVectorize):
 
     def _build_caller(self, lfunc):
         lcaller_def = _CudaStagingCaller(CFuncRef(lfunc), lfunc.type.pointee)
-        lcaller = lcaller_def(self.module)
+        lcaller = lcaller_def(lfunc.module)
         return lcaller
 
     def _filter_input_args(self, arg_dtypes):

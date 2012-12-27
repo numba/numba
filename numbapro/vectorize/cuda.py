@@ -147,7 +147,7 @@ class CudaASTVectorize(_common.GenericASTVectorize):
             ret_dtype, arg_dtypes = get_dtypes(restype, argtypes)
             # generate a caller for all functions
             cukernel = self._build_caller(lfunc)
-#            assert cukernel.module is lfunc.module
+            # assert cukernel.module is lfunc.module
 
             # unicode problem?
             fname = cukernel.name
