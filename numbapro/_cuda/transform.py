@@ -311,7 +311,7 @@ class NumbaproCudaPipeline(pipeline.Pipeline):
         type_inferer.infer_types()
 
         self.func_signature = type_inferer.func_signature
-        logger.debug("signature for %s: %s", self.func_name,
+        logger.debug("signature for %s: %s", self.mangled_name,
                      self.func_signature)
         self.symtab = type_inferer.symtab
         return ast
