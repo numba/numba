@@ -25,7 +25,7 @@ import logging
 logger = logging.getLogger(__name__)
 debug_conversion = False
 
-#logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 #debug_conversion = True
 
 _int32_zero = lc.Constant.int(_int32, 0)
@@ -490,6 +490,18 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 self.object_local_temps[argname] = lvalue
                 self.incref(larg)
 
+    def _init_constants(self):
+        bool_ltype = llvm.core.Type.int(1)
+        if "False" in self.symtab:
+            lfalse = llvm.core.Constant.int(bool_ltype, 0)
+            self.symtab["False"].lvalue = lfalse
+
+        if "True" in self.symtab:
+            ltrue = llvm.core.Constant.int(bool_ltype, 1)
+            self.symtab["True"].lvalue = ltrue
+
+        # self.symtab["None"]
+
     def _init_args(self):
         """
         Unpack arguments:
@@ -580,6 +592,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.multiarray_api.set_PyArray_API(self.llvm_module)
 
         self.object_local_temps = {}
+        self._init_constants()
         self._init_args()
         self._allocate_locals()
 
@@ -1059,17 +1072,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             assert node.type.is_complex
             return self.generate_constant_complex(node.n)
 
-    def visit_Name(self, node):
-        var = node.variable
-        if (var.lvalue is None and not var.renameable and
-                self.symtab[node.id].is_cellvar):
-            var = self.symtab[node.id]
-
-        assert var.lvalue, var
-
-        if not node.variable.is_local and not node.variable.is_constant:
-            raise error.NumbaError(node, "global variables:", node.id)
-
+    def check_unbound_local(self, node, var):
         if getattr(node, 'check_unbound', None):
             # Path the LLVMValueRefNode, we don't want a Name since it would
             # check for unbound variables recursively
@@ -1078,11 +1081,22 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             node.loaded_name.llvm_value = value_p
             self.visit(node.check_unbound)
 
-        if not var.renameable and isinstance(node.ctx, ast.Load):
+    def visit_Name(self, node):
+        var = node.variable
+        if (var.lvalue is None and not var.renameable and
+                self.symtab[node.id].is_cellvar):
+            var = self.symtab[node.id]
+
+        assert var.lvalue, var
+
+        self.check_unbound_local(node, var)
+
+        if (not var.renameable and not var.is_constant and
+                isinstance(node.ctx, ast.Load)):
             # Not a renamed but an alloca'd variable
             return self.builder.load(var.lvalue)
-
-        return var.lvalue
+        else:
+            return var.lvalue
 
     def _handle_ctx(self, node, lptr, name=''):
         if isinstance(node.ctx, ast.Load):

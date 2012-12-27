@@ -70,6 +70,28 @@ def if_fn_9(i, j, k):
         return 1
     return 0
 
+@autojit
+def if_bool(b):
+    if b:
+        return 1
+    else:
+        return 2
+
+@autojit
+def if_bool_constant_true():
+    if True:
+        return 1
+    else:
+        return 2
+
+@autojit
+def if_bool_constant_false():
+    if False:
+        return 1
+    else:
+        return 2
+
+
 # ______________________________________________________________________
 
 class TestIf(unittest.TestCase):
@@ -140,6 +162,12 @@ class TestIf(unittest.TestCase):
                 for k in range(-2, 2):
                     self.assertEqual(if_fn_5c(i, j, k), oracle(i, j, k))
 
+    def test_if_bool(self):
+        self.assertEqual(if_bool(True), 1)
+        self.assertEqual(if_bool(False), 2)
+        self.assertEqual(if_bool_constant_true(), 1)
+        self.assertEqual(if_bool_constant_false(), 2)
+
 # ______________________________________________________________________
 
 if __name__ == "__main__":
@@ -149,6 +177,7 @@ if __name__ == "__main__":
 #    if_fn_6c = jit(restype=void, argtypes=[i4, i4], backend='ast')(if_fn_6)
 #    if_fn_7c = jit(restype=i4, argtypes=[i4], backend='ast')(if_fn_7)
 #    print if_fn_7c(-2), if_fn_7(-2)
+#    print if_bool_constant_true()
     unittest.main()
 
 # ______________________________________________________________________

@@ -139,6 +139,8 @@ class TypeMapper(object):
 
         if isinstance(value, float):
             return double
+        elif isinstance(value, bool):
+            return bool_
         elif isinstance(value, (int, long)):
             return int_
         elif isinstance(value, complex):

@@ -2,10 +2,6 @@ from . import utils
 import collections
 import llvm.core
 
-bool_ltype = llvm.core.Type.int(1)
-lfalse = llvm.core.Constant.int(bool_ltype, 0)
-ltrue = llvm.core.Constant.int(bool_ltype, 0)
-
 class Variable(object):
     """
     Variables placed on the stack. They allow an indirection
@@ -28,7 +24,7 @@ class Variable(object):
         self.type = type
         self.name = name
 
-        self.renameable = True
+        self.renameable = not is_constant
         self.renamed_name = None
 
         self.is_constant = is_constant
@@ -65,10 +61,6 @@ class Variable(object):
         self.col_offset = -1
 
         self._deferred_type = None
-
-        if (self.is_constant and isinstance(self.constant_value, bool) and
-                self.constant_value in (True, False)):
-            self.lvalue = [lfalse, ltrue][self.constant_value]
 
     @classmethod
     def make_shared_property(cls, name):
