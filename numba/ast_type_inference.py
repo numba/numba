@@ -256,13 +256,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     See transform.py for an overview of AST transformations.
     """
 
-    def __init__(self, context, func, ast, closure_scope=None,
-                 template_signature=None, **kwds):
+    def __init__(self, context, func, ast, closure_scope=None, **kwds):
         super(TypeInferer, self).__init__(context, func, ast, **kwds)
 
         self.given_return_type = self.func_signature.return_type
         self.return_type = None
-        self.template_signature = template_signature
 
         ast.symtab = self.symtab
         self.closure_scope = closure_scope
@@ -271,7 +269,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         self.function_level = kwds.get('function_level', 0)
 
-        self.member2inferer = module_type_inference.ModuleTypeInferer.member2inferer
+        self.member2inferer = \
+            module_type_inference.ModuleTypeInferer.member2inferer
         self.init_locals()
         ast.have_return = False
 
@@ -297,6 +296,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # signatures taking a pointer argument to a complex number
             # or struct
             self.func_signature.struct_by_reference = True
+
+
 
     #------------------------------------------------------------------------
     # Symbol Table Type Population and Argument Processing
@@ -339,15 +340,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def init_locals(self):
         "Populate symbol table for local variables and constants."
-        arg_types = self.func_signature.args
-        if (isinstance(self.ast, ast.FunctionDef) and
-                len(arg_types) != len(self.ast.args.args)):
-            raise error.NumbaError(
-                    "Incorrect number of types specified in @jit()")
+        arg_types = list(self.func_signature.args)
 
-        arg_types = list(arg_types)
-
-        self.resolve_templates(arg_types)
         self.initialize_constants()
         self.handle_locals(arg_types)
         self.initialize_argtypes(arg_types)
@@ -366,27 +360,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     if var.type and var.cf_references:
                         assert not var.type.is_unresolved
                         print "Variable after analysis: %s" % var
-
-
-    #------------------------------------------------------------------------
-    # Resolve parametric/template Types
-    #------------------------------------------------------------------------
-
-    def resolve_templates(self, arg_types):
-        if not self.template_signature:
-            return
-
-        template_context = {}
-
-        # Resolve the template context with the types we have
-        for i, arg_type in enumerate(arg_types):
-            T = self.template_signature.args[i]
-            typesystem.match_template(T, arg_type, template_context)
-
-        # Resolve type functions on templates (T.dtype, T.pointer(), etc)
-        for local_name, local_type in self.locals.iteritems():
-            self.locals[local_name] = typesystem.resolve_template_type(
-                                            local_type, template_context)
 
     #------------------------------------------------------------------------
     # Utilities

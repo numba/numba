@@ -207,14 +207,25 @@ def jit_extension_class(py_class, translator_kwargs):
     return extension_type_inference.create_extension(
                         context, py_class, translator_kwargs)
 
-def get_types_tuple(numba_func, args, kwargs, translator_kwargs):
+def resolve_argtypes(numba_func, template_signature,
+                     args, kwargs, translator_kwargs):
     """
     Given an autojitting numba function, return the argument types.
+    These need to be resolved in order for the function cache to work.
+
+    TODO: have a single entry point that resolved the argument types!
     """
     assert not kwargs, "Keyword arguments are not supported yet"
+
     locals_dict = translator_kwargs.get("locals", None)
+
     argnames = inspect.getargspec(numba_func.py_func).args
     argtypes = map(context.typemapper.from_python, args)
+
+    if template_signature is not None:
+        typesystem.resolve_templates(locals_dict, template_signature,
+                                     argnames, argtypes)
+
     if locals_dict is not None:
         for i, argname in enumerate(argnames):
             if argname in locals_dict:
@@ -233,9 +244,9 @@ def _autojit2(template_signature, target, nopython, **translator_kwargs):
         """
         @functools.wraps(f)
         def wrapper(numba_func, *args, **kwargs):
-            types = get_types_tuple(numba_func, args, kwargs, translator_kwargs)
+            types = resolve_argtypes(numba_func, template_signature,
+                                     args, kwargs, translator_kwargs)
             dec = jit2(argtypes=types, target=target, nopython=nopython,
-                       template_signature=template_signature,
                        **translator_kwargs)
             compiled_numba_func = dec(f)
             return numba_func.invoke_compiled(compiled_numba_func, *args, **kwargs)

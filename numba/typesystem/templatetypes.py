@@ -193,3 +193,25 @@ def resolve_template_type(template_type, template_context):
     return template_type
 
 
+def resolve_templates(locals, template_signature, arg_names, arg_types):
+    """
+    Resolve template types given a signature with concrete types.
+    """
+    template_context = {}
+
+    # Resolve the template context with the types we have
+    for i, (arg_name, arg_type) in enumerate(zip(arg_names, arg_types)):
+        T = template_signature.args[i]
+        if arg_name in locals:
+            # Locals trump inferred argument types
+            arg_type = locals[arg_name]
+        match_template(T, arg_type, template_context)
+
+    # Resolve types of local variables and functions on templates
+    # (T.dtype, T.pointer(), etc)
+    for local_name, local_type in locals.iteritems():
+        locals[local_name] = resolve_template_type(local_type,
+                                                   template_context)
+
+    return template_context
+

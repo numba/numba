@@ -31,6 +31,8 @@ class Pipeline(object):
     """
 
     order = [
+        'resolve_templates',
+        'validate_signature',
         'cfg',
         #'dump_cfg',
         #'const_folding',
@@ -51,11 +53,13 @@ class Pipeline(object):
 
     def __init__(self, context, func, ast, func_signature,
                  nopython=False, locals=None, order=None, codegen=False,
-                 symtab=None, allow_rebind_args=True, **kwargs):
+                 symtab=None, allow_rebind_args=True, template_signature=None,
+                 **kwargs):
         self.context = context
         self.func = func
         self.ast = ast
         self.func_signature = func_signature
+        self.template_signature = template_signature
 
         # Whether argument variables may be rebound to different types.
         # e.g. def f(a): a = "hello" ;; f(0.0)
@@ -151,6 +155,28 @@ class Pipeline(object):
     #
     ### Pipeline stages
     #
+
+    def resolve_templates(self, ast):
+        if self.template_signature is not None:
+            from numba import typesystem
+            argnames = [arg.id for arg in ast.args.args]
+            argtypes = list(self.func_signature.args)
+            typesystem.resolve_templates(self.locals, self.template_signature,
+                                         argnames, argtypes)
+            self.func_signature = minitypes.FunctionType(
+                    return_type=self.func_signature.return_type,
+                    args=tuple(argtypes))
+
+        return ast
+
+    def validate_signature(self, tree):
+        arg_types = self.func_signature.args
+        if (isinstance(tree, ast_module.FunctionDef) and
+                len(arg_types) != len(tree.args.args)):
+            raise error.NumbaError(
+                "Incorrect number of types specified in @jit()")
+
+        return tree
 
     def cfg(self, ast):
         transform = self.make_specializer(
