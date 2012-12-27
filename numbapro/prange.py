@@ -56,41 +56,41 @@ def get_reduction_default(op):
     }
     return defaults[op]
 
-def outline_prange_body(context, outer_py_func, outer_symtab, subnode, **kwargs):
-    # Find referenced and assigned variables
-    v = VariableFindingVisitor()
-    v.visit(subnode)
-
-    # Determine privates and reductions. Shared variables will be handled by
-    # the closure support.
-    fields = []
-    reductions = []
-    for var_name, op in v.assigned.iteritems():
-        type = outer_symtab[var_name].type
-        fields.append((var_name, type))
-        if op is not None:
-            reductions.append((var_name, op))
-
-    # Build a wrapper function around the prange body, accepting a struct
-    # of private variables as argument
-    for i, (name, type) in enumerate(fields):
-        if type is None:
-            fields[i] = name, typesystem.DeferredType(name)
-
-    privates_struct_type = numba.struct(fields)
-    privates_struct = ast.Name('__numba_privates', ast.Param())
-    privates_struct.type = privates_struct_type.pointer()
-    privates_struct.variable = Variable(privates_struct.type)
-
-    args = [privates_struct]
-    func_def = ast.FunctionDef(name=template.temp_name("prange_body"),
-                               args=ast.arguments(args=args, vararg=None,
-                                                  kwarg=None, defaults=[]),
-                               body=[subnode],
-                               decorator_list=[])
-    func_def.func_signature = void(privates_struct.type)
-    func_def.need_closure_wrapper = False
-    return func_def, privates_struct_type, reductions
+#def outline_prange_body(context, outer_py_func, outer_symtab, subnode, **kwargs):
+#    # Find referenced and assigned variables
+#    v = VariableFindingVisitor()
+#    v.visit(subnode)
+#
+#    # Determine privates and reductions. Shared variables will be handled by
+#    # the closure support.
+#    fields = []
+#    reductions = []
+#    for var_name, op in v.assigned.iteritems():
+#        type = outer_symtab[var_name].type
+#        fields.append((var_name, type))
+#        if op is not None:
+#            reductions.append((var_name, op))
+#
+#    # Build a wrapper function around the prange body, accepting a struct
+#    # of private variables as argument
+#    for i, (name, type) in enumerate(fields):
+#        if type is None:
+#            fields[i] = name, typesystem.DeferredType(name)
+#
+#    privates_struct_type = numba.struct(fields)
+#    privates_struct = ast.Name('__numba_privates', ast.Param())
+#    privates_struct.type = privates_struct_type.pointer()
+#    privates_struct.variable = Variable(privates_struct.type)
+#
+#    args = [privates_struct]
+#    func_def = ast.FunctionDef(name=template.temp_name("prange_body"),
+#                               args=ast.arguments(args=args, vararg=None,
+#                                                  kwarg=None, defaults=[]),
+#                               body=[subnode],
+#                               decorator_list=[])
+#    func_def.func_signature = void(privates_struct.type)
+#    func_def.need_closure_wrapper = False
+#    return func_def, privates_struct_type, reductions
 
 
 class VariableFindingVisitor(visitors.VariableFindingVisitor):
@@ -174,18 +174,7 @@ $contexts[{{num_threads}} - 1].__numba_stop = {{stop}}
 # print "invoking..."
 {{invoke_and_join_threads}}
 
-#for $i in range({{num_threads}}):
-#    {{invoke_thread}}
-
-#for $i in range({{num_threads}}):
-#    {{join_thread}}
-
-# print "performing reductions"
-for $i in range({{num_threads}}):
-    $reductions
-
-# print "unpacking lastprivates"
-$unpack_struct
+$lastprivates = $contexts[{{num_threads}} - 1]
 """
 
 def rewrite_prange(context, prange_node, target):
@@ -204,30 +193,16 @@ def rewrite_prange(context, prange_node, target):
     temp_i = templ.temp_var('i', int32)
     contexts = templ.temp_var('contexts', contexts_array_type)
     temp_struct = templ.temp_var('temp_struct', struct_type)
+    prange_node.lastprivates = temp.temp_var("lastprivates")
 
     pack_struct, unpack_struct, reductions = templ.code_vars(
-                    'pack_struct', 'unpack_struct', 'reductions')
-    reductions.sep = "; "
-
-    lastprivates_struct = "%s[{{num_threads}} - 1]" % contexts
+                         'pack_struct')
 
     target_name = target.id
     struct_type.add_field(target_name, Py_ssize_t)
 
     # Create code for reductions and (last)privates
     for i, (name, type) in enumerate(struct_type.fields):
-        if name != target_name and name in prange_node.reductions:
-            reduction_op = prange_node.reductions[name]
-            default = get_reduction_default(reduction_op)
-            reductions.codes.append(
-                    "%s %s= %s[%s].%s" % (name, reduction_op,
-                                          contexts, temp_i, name))
-            # reductions.codes.append('print "%s:", %s' % (name, name))
-        else:
-            default = name
-            unpack_struct.codes.append(
-                    "%s = %s.%s" % (name, lastprivates_struct, name))
-
         pack_struct.codes.append("%s.%s = %s" % (temp_struct, name,
                                                  default))
 
@@ -242,9 +217,7 @@ def rewrite_prange(context, prange_node, target):
     func_def.type = func_def.func_signature
     func_def.is_prange_body = True
 
-    num_threads_node_ = nodes.const(num_threads, Py_ssize_t).cloneable
-    num_threads_node = num_threads_node_.clone
-
+    num_threads_node = nodes.const(num_threads, Py_ssize_t)
     invoke = InvokeAndJoinThreads(contexts=contexts.node,
                                   func_def_name=func_def.name,
                                   struct_type=struct_type,
@@ -256,14 +229,55 @@ def rewrite_prange(context, prange_node, target):
         func_def=func_def,
         closure_scope=closure_scope,
         invoke_and_join_threads=invoke,
-        num_threads_=num_threads_node_,
         num_threads=num_threads_node,
         start=prange_node.start,
         stop=prange_node.stop,
         step=prange_node.step)
 
     tree = templ.template(subs)
+    prange_node.substitutions = templ.substitutions
+
     return tree
+
+post_prange_template = """
+#for $i in range({{num_threads}}):
+#    {{invoke_thread}}
+
+#for $i in range({{num_threads}}):
+#    {{join_thread}}
+
+# print "performing reductions"
+for $i in range({{num_threads}}):
+    $reductions
+
+# print "unpacking lastprivates"
+$unpack_struct
+"""
+
+def perform_reductions(context, prange_node):
+    templ = template.TemplateContext(context, post_prange_template)
+    templ.add_variable(prange_node.lastprivates)
+
+    unpack_struct, reductions = templ.code_vars('unpack_struct', 'reductions')
+    reductions.sep = "; "
+
+    # Create code for reductions and (last)privates
+    for i, (name, type) in enumerate(struct_type.fields):
+        if name != target_name and name in prange_node.reductions:
+            reduction_op = prange_node.reductions[name]
+            default = get_reduction_default(reduction_op)
+            reductions.codes.append(
+                    "%s %s= %s[%s].%s" % (name, reduction_op,
+                                          contexts, temp_i, name))
+            # reductions.codes.append('print "%s:", %s' % (name, name))
+        else:
+            default = name
+            unpack_struct.codes.append(
+                    "%s = $lastprivates.%s" % (name, name))
+
+    substitutions = {"num_threads": prange_node.substitutions["num_threads"]}
+    result = temp.template(substitutions)
+    return result
 
 #------------------------------------------------------------------------
 # prange nodes and types
@@ -355,8 +369,11 @@ class PrangeOutliner(visitors.NumbaTransformer):
         prange_node = node.iter
         outline_prange_body(prange_node, node.body)
 
+        # Clear For loop body
+        node.body = []
         tree = rewrite_prange(self.context, prange_node, node.target)
         tree = self.visit(tree)
+
         return ast.Suite(body=[node, tree])
 
 
@@ -415,15 +432,6 @@ class PrangePrivatesReplacerMixin(object):
                 return result
 
         return super(PrangePrivatesReplacerMixin, self).visit_Name(node)
-
-class PrangeTypeInfererMixin(PrangePrivatesReplacerMixin):
-    """
-    Rewrite prange() loops.
-    """
-
-    prange = 0
-
-
 
 
 class PrangeCodegenMixin(object):
