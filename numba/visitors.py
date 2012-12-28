@@ -314,17 +314,22 @@ class VariableFindingVisitor(NumbaVisitor):
         self.assigned = {}
         self.func_defs = []
 
-    def register_assignment(self, node, target):
+    def register_assignment(self, node, target, operator):
         if isinstance(target, ast.Name):
             self.assigned[target.id] = node
 
     def visit_Assign(self, node):
         self.generic_visit(node)
-        self.register_assignment(node, node.targets[0])
+        op = getattr(node, "inplace_op", None)
+        self.register_assignment(node, node.targets[0], op)
+
+    def visit_AugAssign(self, node):
+        self.generic_visit(node)
+        self.register_assignment(node, node.target, node.op)
 
     def visit_For(self, node):
         self.generic_visit(node)
-        self.register_assignment(node, node.target)
+        self.register_assignment(node, node.target, None)
 
     def visit_Name(self, node):
         self.referenced[node.id] = node
