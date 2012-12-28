@@ -79,7 +79,7 @@ def _ast_jit(func, restype, argtypes, inline, **kws):
     # XXX: temp fix for PyIncRef and PyDecRef in lfunc.
     # IS this still necessary?
     # Yes, as of Oct 22 2012
-    _temp_fix_to_remove_python_specifics(lfunc)
+    # _temp_fix_to_remove_python_specifics(lfunc)
 
     return signature, lfunc
 
@@ -111,8 +111,10 @@ def _list_callinstr(lfunc):
 CUDA_MATH_INTRINSICS_2 = {
     'llvm.exp.f32': ptx.exp_f32,
     'llvm.exp.f64': ptx.exp_f64,
-    'fabsf'       : ptx.fabs_f32,
-    'fabs'        : ptx.fabs_f64,
+    'fabsf'       : ptx.fabs_f32, # libm
+    'fabs'        : ptx.fabs_f64, # libm
+    'llvm.fabs.f32': ptx.fabs_f32,
+    'llvm.fabs.f64': ptx.fabs_f64,
     'llvm.log.f32': ptx.log_f32,
     'llvm.log.f64': ptx.log_f64,
     'llvm.pow.f32': ptx.pow_f32,
@@ -171,34 +173,36 @@ def _link_llvm_math_intrinsics(module, cc):
     for fn in to_be_removed:
         fn.delete()
 
-def _temp_fix_to_remove_python_specifics(lfunc):
-    inlinelist = []  # list of calls to be inlined
-    fakepy = {}      # function name -> function object
-
-    # find every call to python functions
-    for instr in _list_callinstr(lfunc):
-        fn = instr.called_function
-        if fn is not None: # maybe a inline asm
-            fname = fn.name
-            if fname.startswith('Py_'):
-                inlinelist.append(instr)
-                fty = instr.called_function.type.pointee
-                fakepy[fname] = fn
-                assert fty.return_type == _lc.Type.void(), 'assume no sideeffect'
-    # generate stub implementation for python functions
-    # assumes that it returns void
-    for fname, fn in fakepy.items():
-        bldr = _lc.Builder.new(fn.append_basic_block('entry'))
-        bldr.ret_void()
-
-    # inline all the calls
-    for call in inlinelist:
-        ok = _lc.inline_function(call)
-        assert ok
-
-    # remove the stub from the module
-    for fn in fakepy.values():
-        fn.delete()
+### No needed??
+#
+#def _temp_fix_to_remove_python_specifics(lfunc):
+#    inlinelist = []  # list of calls to be inlined
+#    fakepy = {}      # function name -> function object
+#
+#    # find every call to python functions
+#    for instr in _list_callinstr(lfunc):
+#        fn = instr.called_function
+#        if fn is not None: # maybe a inline asm
+#            fname = fn.name
+#            if fname.startswith('Py_'):
+#                inlinelist.append(instr)
+#                fty = instr.called_function.type.pointee
+#                fakepy[fname] = fn
+#                assert fty.return_type == _lc.Type.void(), 'assume no sideeffect'
+#    # generate stub implementation for python functions
+#    # assumes that it returns void
+#    for fname, fn in fakepy.items():
+#        bldr = _lc.Builder.new(fn.append_basic_block('entry'))
+#        bldr.ret_void()
+#
+#    # inline all the calls
+#    for call in inlinelist:
+#        ok = _lc.inline_function(call)
+#        assert ok
+#
+#    # remove the stub from the module
+#    for fn in fakepy.values():
+#        fn.delete()
 
 
 def _link_device_function(lfunc):
