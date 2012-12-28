@@ -1275,7 +1275,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
     def visit_Suite(self, node):
         if self.flow.block:
-            for stat in node.stats:
+            for stat in node.body:
                 self.visit(stat)
                 if not self.flow.block:
                     stat.is_terminator = True
