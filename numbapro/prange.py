@@ -182,7 +182,7 @@ $contexts[{{num_threads}} - 1].__numba_stop = {{stop}}
 $lastprivates = $contexts[{{num_threads}} - 1]
 """
 
-def rewrite_prange(context, prange_node, target):
+def rewrite_prange(context, prange_node, target, locals_dict):
     templ = templating.TemplateContext(context, prange_template)
 
     func_def = prange_node.func_def
@@ -221,6 +221,7 @@ def rewrite_prange(context, prange_node, target):
     # Interpolate code and variables and run type inference
     func_def.type = func_def.func_signature
     func_def.is_prange_body = True
+    func_def.prange_node = prange_node
 
     num_threads_node = nodes.const(num_threads, Py_ssize_t)
     invoke = InvokeAndJoinThreads(contexts=contexts.node,
@@ -240,7 +241,7 @@ def rewrite_prange(context, prange_node, target):
         step=prange_node.step)
 
     tree = templ.template(subs)
-    # symtab.update(templ.get_vars_symtab())
+    templ.update_locals(locals_dict)
 
     prange_node.num_threads_node = subs["num_threads"]
     prange_node.template_vars = {
@@ -251,8 +252,11 @@ def rewrite_prange(context, prange_node, target):
 
     return tree
 
-def typeof(name):
-    return "numba.typeof(%s)" % name
+def typeof(name, expr):
+    return "__numba_typeof(%s, %s)" % (name, expr)
+
+def assign(name, expr):
+    return "%s = %s" % (name, typeof(name, expr))
 
 post_prange_template = """
 #for $i in range({{num_threads}}):
@@ -281,15 +285,15 @@ def perform_reductions(context, prange_node):
     # Create code for reductions and (last)privates
     for name, reduction_op in prange_node.reductions.iteritems():
         # Generate: x += contexts[i].x
-        reductions.codes.append(
-            "%s %s= %s[%s].%s" % (name, reduction_op,
-                                  getvar("contexts"), getvar("i"), name))
-        # reductions.codes.append('print "%s:", %s' % (name, name))
+        expr = "%s %s %s[%s].%s" % (name, reduction_op,
+                                    getvar("contexts"), getvar("i"),
+                                    name)
+        reductions.codes.append(assign(name, expr))
 
     for name in prange_node.privates:
         # Generate: x += contexts[num_threads - 1].x
-        unpack_struct.codes.append(
-                "%s = %s.%s" % (name, getvar("lastprivates"), name))
+        expr = "%s.%s" % (getvar("lastprivates"), name)
+        unpack_struct.codes.append(assign(name, expr))
 
     substitutions = { "num_threads": prange_node.num_threads_node }
     result = templ.template(substitutions)
@@ -333,7 +337,7 @@ class InvokeAndJoinThreads(nodes.UserNode):
 
     _fields = ['contexts', 'num_threads']
 
-    def infer_type(self, type_inferer):
+    def infer_types(self, type_inferer):
         type_inferer.visitchildren(self)
         return self
 
@@ -353,6 +357,36 @@ class InvokeAndJoinThreads(nodes.UserNode):
         codegen.builder.call(lfunc_run, [contexts, num_threads])
         return None
 
+class TypeofNode(nodes.UserNode):
+
+    _fields = ["name", "expr"]
+
+    def __init__(self, name, expr):
+        self.name = name
+        self.expr = expr
+
+    def infer_types(self, type_inferer):
+        if type_inferer.analyse:
+            return type_inferer.visit(self.expr)
+
+        self.name = type_inferer.visit(self.name)
+        self.type = self.name.variable.type
+        return self
+
+
+def make_privates_struct_type(privates_struct_type, names):
+    """
+    Update the struct of privates and reductions once we know the
+    field types.
+    """
+    fielddict = dict((name.id, name.variable.type) for name in names)
+    fields = numba.struct(**fielddict).fields
+
+    privates_struct_type.fields = fields
+    privates_struct_type.fielddict = fielddict
+    privates_struct_type.update_mutated()
+
+
 class VariableTypeInferingNode(nodes.UserNode):
 
     _fields = ["names", "pre_prange_code"]
@@ -365,17 +399,11 @@ class VariableTypeInferingNode(nodes.UserNode):
         for varname in variable_names:
             self.names.append(ast.Name(id=varname, ctx=ast.Load()))
 
-    def infer_types(self):
-        self.visitchildren(self)
-
-        fielddict = dict((name.id, name.variable.type) for name in self.names)
-        fields = numba.struct(**fielddict).fields
-
-        self.privates_struct_type.fields = fields
-        self.privates_struct_type.fielddict = fielddict
-        self.privates_struct_type.update_mutated()
-
+    def infer_types(self, type_inferer):
+        type_inferer.visitchildren(self)
+        make_privates_struct_type(self.privates_struct_type, self.names)
         return None
+
 
 #------------------------------------------------------------------------
 # prange visitors
@@ -434,7 +462,8 @@ class PrangeExpander(visitors.NumbaTransformer):
         create_prange_closure(prange_node, node.body, node.target)
 
         # setup glue code
-        pre_loop = rewrite_prange(self.context, prange_node, node.target)
+        pre_loop = rewrite_prange(self.context, prange_node, node.target,
+                                  self.locals)
         post_loop = perform_reductions(self.context, prange_node)
 
         # infer glue code at the right place
@@ -477,19 +506,28 @@ class PrangePrivatesReplacer(visitors.NumbaTransformer):
     type inference (and control flow analysis) of the inner function).
     """
 
-    def rewrite_privates(self):
-        if not getattr(self.ast, 'is_prange_body', False):
-            return self.ast
+    in_prange_closure = 0
 
-        prange_node = self.ast.prange_node
-        self.privates_struct_type = prange_node.privates_struct_type
+    def visit_FunctionDef(self, node):
+        if getattr(node, 'is_prange_body', False):
+            prange_node = node.prange_node
+            self.privates_struct_type = prange_node.privates_struct_type
 
-        func_def.body = [nodes.WithNoPythonNode(body=func_def.body)]
-        return super(PrangePrivatesReplacerMixin, self).visit_FunctionDef(
-                                                                  func_def)
+            node.body = [nodes.WithNoPythonNode(body=node.body)]
+
+            self.in_prange_closure += 1
+            self.visitchildren(node)
+            self.in_prange_closure -= 1
+
+            self.invalidate_locals(node)
+            self.invalidate_locals()
+        else:
+            self.visitchildren(node)
+
+        return node
 
     def visit_Name(self, node):
-        if self.in_prange_body:
+        if self.in_prange_closure:
             if node.id in self.privates_struct_type.fielddict:
                 privates_struct = ast.Name('__numba_privates', node.ctx)
                 result = ast.Attribute(value=privates_struct,
@@ -497,8 +535,14 @@ class PrangePrivatesReplacer(visitors.NumbaTransformer):
                                        ctx=node.ctx)
                 return result
 
-        return super(PrangePrivatesReplacerMixin, self).visit_Name(node)
+        return node
 
+    def visit_Call(self, node):
+        if isinstance(node.func, ast.Name) and node.func.id == "__numba_typeof":
+            return TypeofNode(node.args[0], node.args[1])
+
+        self.visitchildren(node)
+        return node
 
 #----------------------------------------------------------------------------
 # LLVM cbuilder prange utilities

@@ -34,7 +34,7 @@ class NumbaproPipeline(pipeline.Pipeline):
 
     def rewrite_prange_privates(self, ast):
         transformer = self.make_specializer(prange.PrangePrivatesReplacer, ast)
-        return transformer.rewrite_privates()
+        return transformer.visit(ast)
 
     def cleanup_prange(self, ast):
         transformer = self.make_specializer(prange.PrangeCleanup, ast)
