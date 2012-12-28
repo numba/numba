@@ -1,3 +1,8 @@
+# Import all special functions before registering the Numba module
+# type inferer
+from numba.special import *
+from numba import module_type_inference
+
 import sys
 import logging
 from numba import typesystem
@@ -47,7 +52,6 @@ from numba.typesystem import *
 from . import decorators
 from numba.minivect.minitypes import FunctionType
 from .decorators import *
-from numba.special import NULL
 from numba.error import *
 
 # doctest compatible for jit or autojit numba functions

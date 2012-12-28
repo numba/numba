@@ -1223,6 +1223,7 @@ class FunctionWrapperNode(Node):
         self.name = orig_py_func_name
 
 def pointer_add(pointer, offset):
+    # TODO: use gep...
     assert pointer.type == char.pointer()
     left = ptrtoint(pointer)
     result = ast.BinOp(left, ast.Add(), offset)

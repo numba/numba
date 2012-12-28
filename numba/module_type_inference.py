@@ -187,6 +187,15 @@ class ModuleTypeInferer(object):
     def get_module(self, member):
         self.member_modules[member]
 
+class NumbaModuleInferer(ModuleTypeInferer):
+    """
+    Infer types for the Numba module.
+    """
+
+    modules = [numba]
+
+    def typeof(self, expr):
+        return typesystem.CastType(expr.variable.type)
 
 class NumpyModuleInferer(ModuleTypeInferer):
     """
@@ -281,5 +290,5 @@ class NumpyModuleInferer(ModuleTypeInferer):
             # return a 1D array type of the given dtype
             return dtype.resolve()[:]
 
-
+NumbaModuleInferer().register()
 NumpyModuleInferer().register()

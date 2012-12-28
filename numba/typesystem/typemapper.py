@@ -56,7 +56,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
         elif isinstance(value, minitypes.Type):
             return CastType(dst_type=value)
         elif hasattr(type(value), '__numba_ext_type'):
-            return type(value).__numba_ext_type
+            return getattr(type(value), '__numba_ext_type')
         elif value is numba.NULL:
             return null_type
         elif isinstance(value, numba.decorators.NumbaFunction):
