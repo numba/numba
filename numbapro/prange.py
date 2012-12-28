@@ -124,7 +124,7 @@ class VariableFindingVisitor(visitors.VariableFindingVisitor):
                 self.assigned[target.id] = redop
 
 
-def create_prange_closure(prange_node, body):
+def create_prange_closure(prange_node, body, target):
     # Find referenced and assigned variables
     v = VariableFindingVisitor()
     v.visitlist(body)
@@ -132,8 +132,13 @@ def create_prange_closure(prange_node, body):
     # Determine privates and reductions. Shared variables will be handled by
     # the closure support.
     assigned = v.assigned.items()
-    fields = dict((name, op) for name, op in assigned if op is None)
-    reductions = dict((name, op) for name, op in assigned if op is None)
+    privates = set(name for name, op in assigned if op is None)
+    reductions = dict((name, op) for name, op in assigned if op is not None)
+
+    if isinstance(target, ast.Name) and target.id in reductions:
+        # Remove target variable from reductions if present
+        reductions.pop(target.id)
+        privates.add(target.id)
 
     privates_struct_type = numba.struct([])
     privates_struct = ast.Name('__numba_privates', ast.Param())
@@ -148,9 +153,8 @@ def create_prange_closure(prange_node, body):
     func_def.func_signature = void(privates_struct_type)
     func_def.need_closure_wrapper = False
 
-    prange_node.closure = closure
     prange_node.privates_struct_type = privates_struct_type
-    prange_node.fields = fields
+    prange_node.privates = privates
     prange_node.reductions = reductions
     prange_node.func_def = func_def
 
@@ -160,7 +164,7 @@ prange_template = """
 
 $pack_struct
 
-$nsteps = ({{stop}} - {{start}}) / ({{step}} * {{num_threads_}})
+$nsteps = ({{stop}} - {{start}}) / ({{step}} * {{num_threads}})
 for $i in range({{num_threads}}):
     $temp_struct.__numba_closure_scope = {{closure_scope}}
     $temp_struct.__numba_start = {{start}} + $i * {{step}} * $nsteps
@@ -194,16 +198,16 @@ def rewrite_prange(context, prange_node, target):
     temp_i = templ.temp_var('i', int32)
     contexts = templ.temp_var('contexts', contexts_array_type)
     temp_struct = templ.temp_var('temp_struct', struct_type)
-    prange_node.lastprivates = temp.temp_var("lastprivates")
+    lastprivates = templ.temp_var("lastprivates")
 
-    pack_struct, unpack_struct, reductions = templ.code_vars(
-                         'pack_struct')
+    pack_struct = templ.code_var('pack_struct')
 
     target_name = target.id
     struct_type.add_field(target_name, Py_ssize_t)
 
     # Create code for reductions and (last)privates
-    for i, (name, type) in enumerate(struct_type.fields):
+    for name, reduction_op in prange_node.reductions.iteritems():
+        default = get_reduction_default(reduction_op)
         pack_struct.codes.append("%s.%s = %s" % (temp_struct, name,
                                                  default))
 
@@ -236,7 +240,14 @@ def rewrite_prange(context, prange_node, target):
         step=prange_node.step)
 
     tree = templ.template(subs)
-    prange_node.substitutions = templ.substitutions
+    # symtab.update(templ.get_vars_symtab())
+
+    prange_node.num_threads_node = subs["num_threads"]
+    prange_node.template_vars = {
+                                  'contexts': contexts,
+                                  'i': temp_i,
+                                  'lastprivates': lastprivates,
+                                }
 
     return tree
 
@@ -260,28 +271,28 @@ $unpack_struct
 
 def perform_reductions(context, prange_node):
     templ = templating.TemplateContext(context, post_prange_template)
-    templ.add_variable(prange_node.lastprivates)
 
     unpack_struct, reductions = templ.code_vars('unpack_struct', 'reductions')
     reductions.sep = "; "
 
-    # Create code for reductions and (last)privates
-    for i, (name, type) in enumerate(struct_type.fields):
-        if name != target_name and name in prange_node.reductions:
-            reduction_op = prange_node.reductions[name]
-            default = get_reduction_default(reduction_op)
-            reductions.codes.append(
-                    "%s %s= %s(%s[%s].%s)" % (name, reduction_op,
-                                              typeof(name), contexts,
-                                              temp_i, name))
-            # reductions.codes.append('print "%s:", %s' % (name, name))
-        else:
-            default = name
-            unpack_struct.codes.append(
-                    "%s = %s($lastprivates.%s)" % (name, typeof(name), name))
+    getvar = prange_node.template_vars.get
+    templ.add_variable(getvar("i"))
 
-    substitutions = {"num_threads": prange_node.substitutions["num_threads"]}
-    result = temp.template(substitutions)
+    # Create code for reductions and (last)privates
+    for name, reduction_op in prange_node.reductions.iteritems():
+        # Generate: x += contexts[i].x
+        reductions.codes.append(
+            "%s %s= %s[%s].%s" % (name, reduction_op,
+                                  getvar("contexts"), getvar("i"), name))
+        # reductions.codes.append('print "%s:", %s' % (name, name))
+
+    for name in prange_node.privates:
+        # Generate: x += contexts[num_threads - 1].x
+        unpack_struct.codes.append(
+                "%s = %s.%s" % (name, getvar("lastprivates"), name))
+
+    substitutions = { "num_threads": prange_node.num_threads_node }
+    result = templ.template(substitutions)
     return result
 
 #------------------------------------------------------------------------
@@ -296,16 +307,17 @@ class PrangeNode(nodes.Node):
     Prange node. This replaces the For loop iterator in the initial stage.
     After type inference and before closure type inference it replaces the
     entire loop.
-
-    Attributes:
-
-        closure:
-        privates_struct_type:
-        fields:
-        reductions:
     """
 
     _fields = ['start', 'stop', 'step']
+
+    func_def = None                 # outlined prange closure body
+    privates_struct_type = None     # numba.struct(var_name=var_type)
+    privates = None                 # set([var_name])
+    reductions = None               # { var_name: reduction_op }
+
+    num_threads_node = None         # num_threads CloneNode
+    template_vars = None            # { "template_var_name": $template_var }
 
     def __init__(self, start, stop, step, **kwargs):
         super(PrangeNode, self).__init__(**kwargs)
@@ -346,7 +358,7 @@ class VariableTypeInferingNode(nodes.UserNode):
     _fields = ["names", "pre_prange_code"]
 
     def __init__(self, variable_names, privates_struct_type):
-        super(VariableTypeInferingNode, self).__init__(**kwargs)
+        super(VariableTypeInferingNode, self).__init__()
         self.privates_struct_type = privates_struct_type
 
         self.names = []
@@ -419,7 +431,7 @@ class PrangeExpander(visitors.NumbaTransformer):
 
         # Create prange closure
         prange_node = node.iter
-        create_prange_closure(prange_node, node.body)
+        create_prange_closure(prange_node, node.body, node.target)
 
         # setup glue code
         pre_loop = rewrite_prange(self.context, prange_node, node.target)
@@ -430,9 +442,12 @@ class PrangeExpander(visitors.NumbaTransformer):
         pre_loop_infer_now = nodes.infer_now(pre_loop, pre_loop_dont_infer)
 
         # infer the type of the struct of privates right after the loop
-        allprivates = set(prange_node.fields) | set(prange_node.reductions)
-        infer_privates_struct = structVariableTypeInferingNode(
-                    allprivates, prange_node.privates_struct_type)
+        allprivates = set(prange_node.privates) | set(prange_node.reductions)
+        type = prange_node.privates_struct_type
+        infer_privates_struct = VariableTypeInferingNode(allprivates, type)
+
+        # Signal that we now have additional local variables
+        self.invalidate_locals()
 
         return ast.Suite(body=[
             pre_loop_dont_infer,

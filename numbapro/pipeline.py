@@ -17,6 +17,8 @@ class NumbaproPipeline(pipeline.Pipeline):
                                 before='cfg')
         self.insert_specializer('rewrite_prange_privates',
                                 before='cfg')
+        self.insert_specializer('fix_ast_locations',
+                                before='cfg')
         self.insert_specializer('cleanup_prange',
                                 after='type_infer')
 
