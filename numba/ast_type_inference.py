@@ -256,6 +256,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     See transform.py for an overview of AST transformations.
     """
 
+    # Whether to analyse everything (True), or whether to only analyse
+    # the result type of the statement (False)
+    analyse = True
+
     def __init__(self, context, func, ast, closure_scope=None, **kwds):
         super(TypeInferer, self).__init__(context, func, ast, **kwds)
 
@@ -402,15 +406,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if isinstance(assignment_node, ast.For):
             # Analyse target variable assignment
-            return self.visit_For(assignment_node, visit_body=False)
-            #print "handled", assignment_node.target.variable
-        #elif (isinstance(assignment_node, ast.Assign) and
-        #          isinstance(assignment_node.value, nodes.FuncDefExprNode)):
-            # Don't analyse inner functions at this point
-        #    pass
+            return self.visit_For(assignment_node)
         else:
             return self.visit(assignment_node)
-            #print "handled", assignment_node.targets[0].variable
 
     def handle_phi(self, node):
         # Merge point for different definitions
@@ -472,7 +470,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         cfg = self.ast.flow
         self.kill_unused_phis(cfg)
 
+        self.analyse = False
         self.function_level += 1
+
         for block in cfg.blocks:
             phis = []
             for phi in block.phi_nodes:
@@ -483,14 +483,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
             for stat in block.stats:
                 if isinstance(stat, control_flow.NameAssignment):
-                    #visitor.referenced = {}
-                    #visitor.visit(stat.rhs)
-                    #parents = [name_node.variable
-                    #    for name_node in visitor.referenced.itervalues()]
                     assmnt = self.handle_NameAssignment(stat.assignment_node)
                     # TODO: inject back in AST...
                     stat.assignment_node = assmnt
 
+        self.analyse = True
         self.function_level -= 1
 
     def candidates(self, unvisited):
@@ -786,7 +783,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return base_type
 
-    def visit_For(self, node, visit_body=True):
+    def visit_For(self, node):
         target = node.target
         #if not isinstance(target, ast.Name):
         #    self.error(node.target,
@@ -798,9 +795,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                             node.target.variable.type)
         self.assign(node.target, None, rhs_var=Variable(base_type))
 
-        if visit_body:
+        if self.analyse:
             self.visitlist(node.body)
-        if visit_body and node.orelse:
+        if self.analyse and node.orelse:
             self.visitlist(node.orelse)
 
         return node
@@ -1467,15 +1464,20 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if node.starargs or node.kwargs:
             raise error.NumbaError("star or keyword arguments not implemented")
 
-        if visitchildren:
-            node.func = self.visit(node.func)
-            self.visitlist(node.args)
-            self.visitlist(node.keywords)
+        node.func = self.visit(node.func)
 
         func_variable = node.func.variable
         func_type = func_variable.type
 
-        func = self._resolve_function(func_type, func_variable.name)
+        #if not self.analyse and func_type.is_cast and len(node.args) == 1:
+        #    # Short-circuit casts
+        #    no_keywords(node)
+        #    return nodes.CastNode(node.args[0], func_type.dst_type)
+
+        if visitchildren:
+            func = self._resolve_function(func_type, func_variable.name)
+            self.visitlist(node.args)
+            self.visitlist(node.keywords)
 
         # TODO: Resolve variable types based on how they are used as arguments
         # TODO: in calls with known signatures
@@ -1517,8 +1519,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if len(node.args) != 1 or node.args[0].variable.type.is_cast:
                 new_node = self._parse_signature(node, func_type)
             else:
-                new_node = nodes.CoercionNode(node.args[0], func_type.dst_type,
-                                              name="cast")
+                new_node = nodes.CoercionNode(node.args[0], func_type.dst_type)
 
         if new_node is None:
             # All other type of calls:
@@ -1531,9 +1532,17 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 arg_types = func_type.jit_func.signature.args
             else:
                 arg_types = [a.variable.type for a in node.args]
+
             new_node = self._resolve_external_call(node, func_type, func, arg_types)
 
         return new_node
+
+    def visit_CastNode(self, node):
+        if self.analyse:
+            arg = self.visit(node.arg)
+            return nodes.CoercionNode(arg, node.type)
+        else:
+            return node
 
     #------------------------------------------------------------------------
     # Attributes

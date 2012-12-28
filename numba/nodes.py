@@ -210,6 +210,18 @@ class CoercionNode(Node):
     def __repr__(self):
         return "Coerce(%s, %s)" % (self.type, self.node)
 
+class CastNode(Node):
+    """
+    Explicit cast by user, e.g. double(value)
+    """
+
+    _fields = ["arg"]
+
+    def __init__(self, node, type):
+        self.arg = node
+        self.type = type
+
+
 class PromotionNode(Node):
     """
     Coerces a variable of some type to another type for a phi node in a
