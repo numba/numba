@@ -104,6 +104,12 @@ class TemplateContext(object):
                                              is_local=True, type=var.type))
                         for var in self.variables if not var.code)
 
+    def update_locals(self, locals_dict):
+        for var in self.variables:
+            if not var.code and var.type is not None:
+                assert var.name not in locals_dict
+                locals_dict[var.temp_name] = var.type
+
     def template(self, substitutions):
         s = textwrap.dedent(self.templ)
         s = self.string_substitute(s)
