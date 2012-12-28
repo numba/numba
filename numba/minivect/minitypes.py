@@ -960,11 +960,12 @@ class struct(Type):
             fields = sort_types(kwargs)
 
         self.fields = list(fields)
-        self.rank = sum(_sort_key(field) for field in self.fields)
         self.name = name
         self.readonly = readonly
         self.fielddict = dict(self.fields)
         self.packed = packed
+
+        self.update_mutated()
 
     def copy(self):
         return struct(self.fields, self.name, self.readonly, self.packed)
@@ -1004,6 +1005,10 @@ class struct(Type):
         self.fielddict[name] = type
         self.fields.append((name, type))
         self.mutated = True
+
+    def update_mutated(self):
+        self.rank = sum(_sort_key(field) for field in self.fields)
+        self.mutated = False
 
     def offsetof(self, field_name):
         """
