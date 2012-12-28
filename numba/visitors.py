@@ -47,7 +47,7 @@ class NumbaVisitorMixin(CooperativeBase):
             self.flow_block = None
 
         self.func = func
-        if func is None:
+        if func is None or not getattr(func, "__numba_valid_code_object", True):
             assert isinstance(ast, ast_module.FunctionDef)
             locals, cellvars, freevars = determine_variable_status(context, ast)
             self.names = self.global_names = freevars
@@ -125,6 +125,12 @@ class NumbaVisitorMixin(CooperativeBase):
         if qname is None:
             qname = "%s.%s" % (self.module_name, self.func_name)
         return qname
+
+    def invalidate_locals(self):
+        if hasattr(self.ast, "variable_status_tuple"):
+            del self.ast.variable_status_tuple
+        if self.func:
+            setattr(self.func, "__numba_valid_code_object", False)
 
     def _visit_overload(self, node):
         assert self._overloads
