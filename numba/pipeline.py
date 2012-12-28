@@ -109,9 +109,14 @@ class Pipeline(object):
                    allow_rebind_args=self.allow_rebind_args,
                    **kwds)
 
-    def insert_specializer(self, name, after):
+    def insert_specializer(self, name, after=None, before=None):
         "Insert a new transform or visitor into the pipeline"
-        self.order.insert(self.order.index(after) + 1, name)
+        if after:
+            index = self.order.index(after) + 1
+        else:
+            index = self.order.index(before)
+
+        self.order.insert(index, name)
 
     def try_insert_specializer(self, name, after):
         if after in self.order:
