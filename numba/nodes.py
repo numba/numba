@@ -1279,15 +1279,26 @@ class PointerFromObject(Node):
 # User-extensible nodes
 #----------------------------------------------------------------------------
 
+class UserNodeMeta(type):
+    def __init__(cls, what, bases=None, dict=None):
+        super(UserNodeMeta, cls).__init__(what, bases, dict)
+        cls.actual_name = cls.__name__
+        cls.__name__ = "UserNode"
+
+    def __repr__(cls):
+        return "<class %s>" % cls.actual_name
+
 class UserNode(Node):
     """
     Node that users can subclass and insert in the AST without using mixins
     to provide user-specified functionality.
     """
 
+    __metaclass__ = UserNodeMeta
+
     _fields = []
 
-    def infer_type(self, type_inferer):
+    def infer_types(self, type_inferer):
         """
         Infer the type of this node and set it self.type.
 
@@ -1310,6 +1321,9 @@ class UserNode(Node):
 
         Must return an LLVM Value.
         """
+
+    def __repr__(self):
+        return "<%s object>" % self.actual_name
 
 class dont_infer(UserNode):
     """
