@@ -10,7 +10,7 @@ class TestPinned(support.CudaTestCase):
         A0 = A.copy()
         s = timer()
         for i in range(10):
-            dA = cuda.to_device(A, pinned=False)
+            dA = cuda.to_device(A, pinned=True)
             dA.to_host()
             self.assertTrue(np.allclose(A, A0))
         e = timer()
