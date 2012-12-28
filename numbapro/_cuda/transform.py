@@ -228,7 +228,9 @@ class CudaCodeGenerator(ast_translate.LLVMCodeGenerator):
         smem_elem_ptr_ty_addrspace = Type.pointer(smem_elemtype,
                                                   ADDRSPACE_SHARED)
         smem_elem_ptr = smem.bitcast(smem_elem_ptr_ty_addrspace)
-        s2g_intrinic = 'llvm.nvvm.ptr.shared.to.gen.%s' % smem_elemtype
+        tyname = str(smem_elemtype)
+        tyname = {'float': 'f32', 'double': 'f64'}.get(tyname, tyname)
+        s2g_intrinic = 'llvm.nvvm.ptr.shared.to.gen.p0%s.p3%s' % (tyname, tyname)
         shared_to_generic = mod.get_or_insert_function(
                                     Type.function(smem_elem_ptr_ty,
                                                   [smem_elem_ptr_ty_addrspace]),
