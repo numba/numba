@@ -302,6 +302,10 @@ class NumbaproCudaPipeline(pipeline.Pipeline):
              'codegen',
              ]
 
+    def __init__(self, *args, **kwargs):
+        kwargs['order'] = kwargs.get('order', NumbaproCudaPipeline.order)
+        super(NumbaproCudaPipeline, self).__init__(*args, **kwargs)
+
     def make_specializer(self, cls, ast, **kwds):
         self.mixins = {}
         return super(NumbaproCudaPipeline, self).make_specializer(cls, ast,

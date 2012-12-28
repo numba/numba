@@ -15,9 +15,12 @@ def cu_array_double(dst):
     dst[i] = smem[i] * 2      # use smem
 
 
+
+N = 32
 @jit(argtypes=[f4[:, :]], target='gpu')
 def cu_array_double_2d(dst):
-    smem = cuda.shared.array(shape=(32, 16), dtype=f4)
+    # this also test const-folding
+    smem = cuda.shared.array(shape=(N, N//2), dtype=f4)
     i = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
     j = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
     smem[j, i] = dst[j, i]          # store in smem
