@@ -78,6 +78,9 @@ class TemplateContext(object):
         self.variables.append(var)
         return var
 
+    def add_variable(self, var):
+        self.variables.append(var)
+
     def code_var(self, name):
         return self.temp_var(name, code=True)
 
