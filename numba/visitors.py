@@ -23,11 +23,13 @@ class NumbaVisitorMixin(CooperativeBase):
 
     _overloads = None
 
-    def __init__(self, context, func, ast, func_signature=None, nopython=0,
-                 symtab=None, locals=None, **kwargs):
+    def __init__(self, context, func, ast, locals=(),
+                 func_signature=None, nopython=0,
+                 symtab=None, **kwargs):
         super(NumbaVisitorMixin, self).__init__(
-                                context, func, ast, func_signature,
-                                nopython, symtab, **kwargs)
+            context, func, ast, func_signature=func_signature,
+            nopython=nopython, symtab=symtab, **kwargs)
+
         self.context = context
         self.ast = ast
         self.function_cache = context.function_cache
@@ -35,7 +37,7 @@ class NumbaVisitorMixin(CooperativeBase):
         self.func_signature = func_signature
         self.nopython = nopython
         self.llvm_module = kwargs.pop('llvm_module', None)
-        self.locals = locals or {}
+        self.locals = locals
         #self.local_scopes = [self.symtab]
         self.current_scope = symtab
         self.have_cfg = getattr(self.ast, 'flow', False)
@@ -56,17 +58,13 @@ class NumbaVisitorMixin(CooperativeBase):
             local_names = [local_name for local_name in locals
                                           if local_name not in argnames]
             self.varnames = self.local_names = list(self.argnames) + local_names
-            self.func_globals = kwargs.get('func_globals', {})
 
             self.cellvars = cellvars
             self.freevars = freevars
-
-            self.module_name = self.func_globals.get("__name__", "")
         else:
             f_code = self.func.func_code
             self.names = self.global_names = f_code.co_names
             self.varnames = self.local_names = list(f_code.co_varnames)
-            self.module_name = self.func.__module__
 
             if f_code.co_cellvars:
                 self.varnames.extend(
@@ -74,10 +72,16 @@ class NumbaVisitorMixin(CooperativeBase):
                                     if cellvar not in self.varnames)
 
             self.argnames = f_code.co_varnames[:f_code.co_argcount]
-            self.func_globals = func.func_globals
 
             self.cellvars = set(f_code.co_cellvars)
             self.freevars = set(f_code.co_freevars)
+
+        if func is None:
+            self.func_globals = kwargs.get('func_globals', {})
+            self.module_name = self.func_globals.get("__name__", "")
+        else:
+            self.func_globals = func.func_globals
+            self.module_name = self.func.__module__
 
         # Add variables declared in locals=dict(...)
         self.local_names.extend(
@@ -126,10 +130,11 @@ class NumbaVisitorMixin(CooperativeBase):
             qname = "%s.%s" % (self.module_name, self.func_name)
         return qname
 
-    def invalidate_locals(self):
-        if hasattr(self.ast, "variable_status_tuple"):
-            del self.ast.variable_status_tuple
-        if self.func:
+    def invalidate_locals(self, ast=None):
+        ast = ast or self.ast
+        if hasattr(ast, "variable_status_tuple"):
+            del ast.variable_status_tuple
+        if self.func and ast is self.ast:
             setattr(self.func, "__numba_valid_code_object", False)
 
     def _visit_overload(self, node):
