@@ -1942,6 +1942,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.visitlist(node.stmts)
         return self.visit(node.expr)
 
+    #------------------------------------------------------------------------
+    # User nodes
+    #------------------------------------------------------------------------
+
+    def visit_UserNode(self, node):
+        return node.codegen(self)
+
 
 def llvm_alloca(lfunc, builder, ltype, name='', change_bb=True):
     "Use alloca only at the entry bock of the function"

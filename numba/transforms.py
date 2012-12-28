@@ -1402,3 +1402,10 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                     node, 'Unsupported unary operation for objects: %s' %
                     op_name)
         return node
+
+    #------------------------------------------------------------------------
+    # User nodes
+    #------------------------------------------------------------------------
+
+    def visit_UserNode(self, node):
+        return node.specialize(self)

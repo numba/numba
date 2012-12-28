@@ -1647,13 +1647,19 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_FuncDefExprNode(self, node):
         return self.visit(node.func_def)
 
-    #
-    ### Unsupported nodes
-    #
+    #------------------------------------------------------------------------
+    # Unsupported nodes
+    #------------------------------------------------------------------------
 
     def visit_Global(self, node):
         raise error.NumbaError(node, "Global keyword")
 
+    #------------------------------------------------------------------------
+    # User nodes
+    #------------------------------------------------------------------------
+
+    def visit_UserNode(self, node):
+        return node.infer_types(self)
 
 class TypeSettingVisitor(visitors.NumbaTransformer):
     """

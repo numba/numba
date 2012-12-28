@@ -1262,9 +1262,47 @@ class PointerFromObject(Node):
     def __repr__(self):
         return "((void *) %s)" % (self.node,)
 
-#
-### Nodes for NumPy calls
-#
+
+#----------------------------------------------------------------------------
+# User-extensible nodes
+#----------------------------------------------------------------------------
+
+class UserNode(Node):
+    """
+    Node that users can subclass and insert in the AST without using mixins
+    to provide user-specified functionality.
+    """
+
+    _fields = []
+
+    def infer_type(self, type_inferer):
+        """
+        Infer the type of this node and set it self.type.
+
+        The return value will replace this node in the AST.
+        """
+
+    def specialize(self, specializer):
+        """
+        Just before code generation. Useful to rewrite this node in terms
+        of other existing fundamental operations.
+
+        Implementing this method is optional.
+        """
+        self.visitchildren(self)
+        return self
+
+    def codegen(self, codegen):
+        """
+        Generate code for this node.
+
+        Must return an LLVM Value.
+        """
+
+
+#----------------------------------------------------------------------------
+# Nodes for NumPy calls
+#----------------------------------------------------------------------------
 
 shape_type = npy_intp.pointer()
 void_p = void.pointer()
