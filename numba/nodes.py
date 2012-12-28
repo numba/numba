@@ -1289,7 +1289,7 @@ class UserNode(Node):
 
         Implementing this method is optional.
         """
-        self.visitchildren(self)
+        specializer.visitchildren(self)
         return self
 
     def codegen(self, codegen):
@@ -1299,10 +1299,49 @@ class UserNode(Node):
         Must return an LLVM Value.
         """
 
+class dont_infer(UserNode):
+    """
+    Support delayed type inference of the body. E.g. if you want a portion
+    <blob> to be inferred elsewhere:
+
+        print x
+        <blob>
+        print y
+
+    If we want to infer <blob> after the last print, but evaluate it before,
+    we can replace these statements with:
+
+        [print x, dont_infer(<blob>), print y, infer_now(<blob>)]
+    """
+
+    _fields = ["arg"]
+
+    def __init__(self, arg):
+        self.arg = arg
+
+    def infer_type(self, type_inferer):
+        return self
+
+    def specialize(self, specializer):
+        return self.arg
+
+class infer_now(UserNode):
+    "See dont_infer above"
+
+    _fields = []
+
+    def __init__(self, arg, dont_infer):
+        self.arg = arg
+
+    def infer_type(self, type_inferer):
+        self.dont_infer.arg = type_inferer.visit(arg)
+        return None
+
 
 #----------------------------------------------------------------------------
 # Nodes for NumPy calls
 #----------------------------------------------------------------------------
+
 
 shape_type = npy_intp.pointer()
 void_p = void.pointer()
