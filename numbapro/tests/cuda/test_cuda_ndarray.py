@@ -2,21 +2,16 @@ import numpy as np
 import unittest 
 from numbapro._cuda.driver import *
 from numbapro._cuda.default import *
-from numbapro._cuda.ndarray import *
 from numbapro import cuda
 from ctypes import *
 
 import support
 
 class TestCudaNDArray(support.CudaTestCase):
-    def test_ndarray(self):
+    def test_devicearray_no_copy(self):
         array = np.arange(100, dtype=np.float32)
-        original = array.copy()
-        retriever, gpu_struct = ndarray_to_device_memory(array)
-        array[:] = 0
-        retriever()
-
-        self.assertTrue((array == original).all())
+        devarray = cuda.to_device(array, copy=False)
+        
 
     def test_devicearray(self):
         array = np.arange(100, dtype=np.int32)

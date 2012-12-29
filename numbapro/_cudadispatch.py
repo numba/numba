@@ -4,7 +4,6 @@ from llvm import core as _lc
 import numpy as np
 from ctypes import *
 from numbapro._cuda import driver as _cuda
-from numbapro._cuda.ndarray import ndarray_to_device_memory
 from numbapro._cuda.devicearray import DeviceNDArray
 from numbapro import cuda
 from numbapro._utils.ndarray import ndarray_datasize
@@ -346,12 +345,13 @@ class CudaNumbaFuncDispatcher(object):
 
         retrievers = []
         def ndarray_gpu(x):
-            if isinstance(x, DeviceNDArray):
-                return x.device_memory
-            else:
-                retriever, device_memory = ndarray_to_device_memory(x, stream=stream)
+            if not isinstance(x, DeviceNDArray):
+                # convert to DeviceNDArray
+                x = cuda.to_device(x, stream=stream)
+                def retriever():
+                    x.to_host(stream=stream)
                 retrievers.append(retriever)
-                return device_memory
+            return x.device_memory
 
         _typemapper = {'f': c_float,
                        'd': c_double,

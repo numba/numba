@@ -29,37 +29,34 @@ _numpy_fields = _pyobject_head_fields + \
         #       ('masna_strides', POINTER(c_intp)),    # masna_strides
       ]
 
-def ndarray_to_device_memory(ary, stream=0, copy=True, pinned=False):
-    packed = ndarray_device_memory_and_data(ary, stream=stream, copy=copy,
-                                            pinned=pinned)
-    retr, struct, data_is_ignored = packed
-    return retr, struct
-
-def ndarray_device_memory_and_data(ary, stream=0, copy=True, pinned=False):
-    retriever, gpu_data = ndarray_data_to_device_memory(ary,
-                                                        stream=stream,
-                                                        copy=copy,
-                                                        pinned=pinned)
-    gpu_struct = ndarray_device_memory_from_data(gpu_data,
-                                                 ary.ctypes.shape,
-                                                 ary.ctypes.strides,
-                                                 stream=stream,
-                                                 pinned=pinned)
-    return retriever, gpu_struct, gpu_data
-
-def ndarray_device_memory_from_data(gpu_data, c_shape, c_strides, stream=0,
-                                    pinned=False):
-    nd = len(c_shape)
-    
-    more_fields = [
-        ('shape_array',   c_intp * nd),
-        ('strides_array', c_intp * nd),
-    ]
-
+def _specialize_ndarray_struct(nd):
+    more_fields = [('shape_array',   c_intp * nd),
+                   ('strides_array', c_intp * nd)]
     class NumpyStructure(Structure):
         _fields_ = _numpy_fields + more_fields
+    return NumpyStructure
 
-    gpu_struct = _cuda.DeviceMemory(sizeof(NumpyStructure))
+def ndarray_device_allocate_struct(nd):
+    c_ndarray_struct = _specialize_ndarray_struct(nd)
+    gpu_struct = _cuda.DeviceMemory(sizeof(c_ndarray_struct))
+    return gpu_struct
+
+def ndarray_device_allocate_data(ary):
+    datasize = ndarray_datasize(ary)
+    # allocate
+    gpu_data = _cuda.DeviceMemory(datasize)
+    return gpu_data
+
+def ndarray_device_transfer_data(ary, gpu_data, stream=0):
+    datapointer = ary.ctypes.data
+    datasize = ndarray_datasize(ary)
+    # transfer data
+    gpu_data.to_device_raw(datapointer, datasize, stream=stream)
+
+def ndarray_populate_struct(gpu_struct, gpu_data, c_shape, c_strides,
+                            stream=0):
+    nd = len(c_shape)
+    ndarray_struct = _specialize_ndarray_struct(nd)
 
     # get base address of the GPU ndarray structure
     base_addr = gpu_struct._handle.value
@@ -67,13 +64,13 @@ def ndarray_device_memory_from_data(gpu_data, c_shape, c_strides, stream=0,
     to_intp_p = lambda x: cast(c_void_p(x), POINTER(c_intp))
 
     # Offset to shape and strides memory
-    struct = NumpyStructure()
+    struct = ndarray_struct()
     base = addressof(struct)
     offset_shape = addressof(struct.shape_array) - base
     offset_strides = addressof(struct.strides_array) - base
 
     # Fill the ndarray structure
-    struct.nd = len(c_shape)
+    struct.nd = nd
     struct.data = c_void_p(gpu_data._handle.value)
     struct.dimensions = to_intp_p(base_addr + offset_shape)
     struct.strides = to_intp_p(base_addr + offset_strides)
@@ -83,21 +80,3 @@ def ndarray_device_memory_from_data(gpu_data, c_shape, c_strides, stream=0,
     # transfer the memory
     gpu_struct.to_device_raw(addressof(struct), sizeof(struct), stream=stream)
 
-    # NOTE: Do not free gpu_data before freeing gpu_struct.
-    gpu_struct.add_dependencies(gpu_data)
-
-    return gpu_struct
-
-
-def ndarray_data_to_device_memory(ary, stream=0, copy=True, pinned=False):
-    dataptr = ary.ctypes.data
-    datasize = ndarray_datasize(ary)
-    gpu_data = _cuda.DeviceMemory(datasize)
-
-    if copy:
-        gpu_data.to_device_raw(dataptr, datasize, stream=stream, pinned=pinned)
-
-    def retriever(stream=0):
-        gpu_data.from_device_raw(dataptr, datasize, stream=stream)
-
-    return retriever, gpu_data

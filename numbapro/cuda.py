@@ -3,6 +3,8 @@ import copy
 import logging
 logger = logging.getLogger(__name__)
 
+import contextlib
+
 from llvm import core as _lc
 from llvm import ee as _le
 from llvm import passes as _lp
@@ -372,11 +374,13 @@ numba.decorators.numba_function_autojit_targets['gpu'] = CudaAutoJitNumbaFunctio
 
 
 # NDarray device helper
-def to_device(ary, *args, **kws):
+def to_device(ary, stream=0, copy=True):
     import numbapro._cuda.default # ensure we have a GPU device
     from numbapro._cuda import devicearray
     devarray =  ary.view(type=devicearray.DeviceNDArray)
-    devarray.to_device(*args, **kws)
+    devarray.device_allocate(stream=stream)
+    if copy:
+        devarray.to_device(stream=stream)
     return devarray
 
 # Stream helper
@@ -385,6 +389,16 @@ def stream():
     import numbapro._cuda.default # ensure we have a GPU device
     from numbapro._cuda.driver import Stream
     return Stream()
+
+# Page lock
+@contextlib.contextmanager
+def pagelock(ary):
+    import numbapro._cuda.default # ensure we have a GPU device
+    from numbapro._utils.ndarray import ndarray_datasize
+    from numbapro._cuda.driver import PinnedMemory
+    pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary))
+    yield
+    del pm
 
 # Device selection
 

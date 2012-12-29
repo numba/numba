@@ -554,10 +554,7 @@ class DeviceMemory(finalizer.OwnerMixin):
             global debug_memory_alloc
             debug_memory_alloc += 1
 
-    def to_device_raw(self, src, size, stream=None, pinned=False):
-        if pinned:
-            pm = PinnedMemory(src, size)
-            self.add_dependencies(pm)
+    def to_device_raw(self, src, size, stream=None):
         if stream:
             error = self.driver.cuMemcpyHtoDAsync(self._handle, src, size, stream._handle)
         else:
