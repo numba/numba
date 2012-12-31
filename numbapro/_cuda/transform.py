@@ -174,24 +174,37 @@ class CudaAttrRewriteMixin(object):
             return super(CudaAttrRewriteMixin, self).visit_Call(node)
 
     def visit_Assign(self, node):
+        node.inplace_op = getattr(node, 'inplace_op', None)
         node.value = self.visit(node.value)
+
         if isinstance(node.value, CudaSMemArrayCallNode):
-            assert len(node.targets) == 1
+            errmsg = "LHS of shared memory declaration can have only one value."
+            assert len(node.targets) == 1, errmsg
             target = node.targets[0] = self.visit(node.targets[0])
+            node = CudaSMemAssignNode(node.targets[0], node.value)
             self.assign(target, node.value)
-            return CudaSMemAssignNode(node.targets[0], node.value)
+            return node
 
         # FIXME: the following is copied from TypeInferer.visit_Assign
         #        there seems to be some side-effect in visit(node.value)
-        node.inplace_op = getattr(node, 'inplace_op', None)
-
-        node.value = self.visit(node.value)
         if len(node.targets) != 1 or isinstance(node.targets[0], (ast.List,
                                                                   ast.Tuple)):
             return self._handle_unpacking(node)
 
         target = node.targets[0] = self.visit(node.targets[0])
-        node.value = self.assign(target, node.value)
+        self.assign(target, node.value)
+
+        lhs_var = target.variable
+        rhs_var = node.value.variable
+        if isinstance(target, ast.Name):
+            node.value = nodes.CoercionNode(node.value, lhs_var.type)
+        elif lhs_var.type != rhs_var.type:
+            if lhs_var.type.is_array and rhs_var.type.is_array:
+                # Let other code handle array coercions
+                pass
+            else:
+                node.value = nodes.CoercionNode(node.value, lhs_var.type)
+        
         return node
 
 
@@ -320,6 +333,9 @@ class NumbaproCudaPipeline(pipeline.Pipeline):
         logger.debug("signature for %s: %s", self.mangled_name,
                      self.func_signature)
         self.symtab = type_inferer.symtab
+        if self.func.__name__ == 'mean_reduce':
+            from numba.utils import dump
+            dump(ast)
         return ast
 
     def codegen(self, ast):
