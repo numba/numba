@@ -515,7 +515,7 @@ class PipelineEnvironment(object):
         self.llvm_module = kws.pop('llvm_module',
                                    self.parent.context.llvm_module)
         self.nopython = kws.pop('nopython', False)
-        self.locals = kws.pop('locals', None)
+        self.locals = kws.pop('locals', {})
         self.allow_rebind_args = kws.pop('allow_rebind_args', True)
         self.kwargs = kws
 
