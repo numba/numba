@@ -966,6 +966,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_Assign(self, node):
         target_node = node.targets[0]
+        # print target_node
         is_object = is_obj(target_node.type)
         value = self.visit(node.value)
 

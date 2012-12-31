@@ -579,6 +579,7 @@ class ControlFlow(object):
         lastvars = dict(block.symtab)
         for stat in block.stats:
             if isinstance(stat, NameAssignment) and stat.assignment_node:
+                # print "setting", stat.lhs, hex(id(stat.lhs))
                 stat.lhs.variable = block.symtab.rename(stat.entry, block)
                 stat.lhs.variable.name_assignment = stat
             elif isinstance(stat, NameReference):

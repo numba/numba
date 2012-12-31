@@ -1310,6 +1310,7 @@ class UserNode(Node):
 
         The return value will replace this node in the AST.
         """
+        raise NotImplementedError
 
     def specialize(self, specializer):
         """
@@ -1327,6 +1328,7 @@ class UserNode(Node):
 
         Must return an LLVM Value.
         """
+        raise NotImplementedError
 
     def __repr__(self):
         return "<%s object>" % self.actual_name
@@ -1351,7 +1353,7 @@ class dont_infer(UserNode):
     def __init__(self, arg):
         self.arg = arg
 
-    def infer_type(self, type_inferer):
+    def infer_types(self, type_inferer):
         return self
 
     def specialize(self, specializer):
@@ -1362,11 +1364,12 @@ class infer_now(UserNode):
 
     _fields = []
 
-    def __init__(self, arg, dont_infer):
+    def __init__(self, arg, dont_infer_node):
         self.arg = arg
+        self.dont_infer_node = dont_infer_node
 
-    def infer_type(self, type_inferer):
-        self.dont_infer.arg = type_inferer.visit(arg)
+    def infer_types(self, type_inferer):
+        self.dont_infer_node.arg = type_inferer.visit(self.arg)
         return None
 
 
