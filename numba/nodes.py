@@ -1357,7 +1357,7 @@ class dont_infer(UserNode):
         return self
 
     def specialize(self, specializer):
-        return self.arg
+        return specializer.visit(self.arg)
 
 class infer_now(UserNode):
     "See dont_infer above"
