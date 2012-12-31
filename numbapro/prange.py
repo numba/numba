@@ -223,12 +223,12 @@ def rewrite_prange(context, prange_node, target, locals_dict):
     func_def.is_prange_body = True
     func_def.prange_node = prange_node
 
-    num_threads_node = nodes.const(num_threads, Py_ssize_t)
+    num_threads_node = nodes.const(num_threads, Py_ssize_t) #.cloneable
     invoke = InvokeAndJoinThreads(contexts=contexts.node,
                                   func_def_name=func_def.name,
                                   struct_type=struct_type,
                                   target_name=target_name,
-                                  num_threads=num_threads_node)
+                                  num_threads=num_threads_node) #.clone)
 
     closure_scope = nodes.ClosureScopeLoadNode()
     subs = dict(
@@ -243,7 +243,7 @@ def rewrite_prange(context, prange_node, target, locals_dict):
     tree = templ.template(subs)
     templ.update_locals(locals_dict)
 
-    prange_node.num_threads_node = subs["num_threads"]
+    prange_node.num_threads_node = num_threads_node #.clone
     prange_node.template_vars = {
                                   'contexts': contexts,
                                   'i': temp_i,
@@ -380,6 +380,7 @@ def make_privates_struct_type(privates_struct_type, names):
     field types.
     """
     fielddict = dict((name.id, name.variable.type) for name in names)
+    fielddict.update(privates_struct_type.fielddict)
     fields = numba.struct(**fielddict).fields
 
     privates_struct_type.fields = fields
@@ -529,7 +530,7 @@ class PrangePrivatesReplacer(visitors.NumbaTransformer):
     def visit_Name(self, node):
         if self.in_prange_closure:
             if node.id in self.privates_struct_type.fielddict:
-                privates_struct = ast.Name('__numba_privates', node.ctx)
+                privates_struct = ast.Name('__numba_privates', ast.Load()) #node.ctx)
                 result = ast.Attribute(value=privates_struct,
                                        attr=node.id,
                                        ctx=node.ctx)
