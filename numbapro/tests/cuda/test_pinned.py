@@ -4,7 +4,7 @@ from timeit import default_timer as timer
 import numpy as np
 import unittest
 
-REP = 10
+
 class TestPinned(support.CudaTestCase):
 
     def _template(self, name, A):

@@ -1,3 +1,7 @@
+#
+# Test does not work on some cards.
+#
+
 from numbapro import cuda
 
 import unittest
