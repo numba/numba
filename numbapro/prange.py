@@ -242,6 +242,7 @@ def rewrite_prange(context, prange_node, target, locals_dict):
 
     tree = templ.template(subs)
     templ.update_locals(locals_dict)
+    locals_dict[target_name] = Py_ssize_t
 
     prange_node.num_threads_node = num_threads_node #.clone
     prange_node.template_vars = {
@@ -510,20 +511,26 @@ class PrangePrivatesReplacer(visitors.NumbaTransformer):
     in_prange_closure = 0
 
     def visit_FunctionDef(self, node):
-        if getattr(node, 'is_prange_body', False):
+        """
+        Analyse immedidate prange functions (not ones in closures).
+
+        Don't re-analyze prange functions when the prange function closures
+        themselves are compiled.
+        """
+        if getattr(node, 'is_prange_body', False) and self.func_level == 0:
             prange_node = node.prange_node
             self.privates_struct_type = prange_node.privates_struct_type
 
             node.body = [nodes.WithNoPythonNode(body=node.body)]
 
             self.in_prange_closure += 1
-            self.visitchildren(node)
+            self.visit_func_children(node)
             self.in_prange_closure -= 1
 
             self.invalidate_locals(node)
             self.invalidate_locals()
         else:
-            self.visitchildren(node)
+            self.visit_func_children(node)
 
         return node
 
