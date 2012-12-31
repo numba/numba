@@ -490,7 +490,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
             func_name = node.func_def.name
             self.symtab[func_name] = Variable(name=func_name, type=node.type,
                                               is_local=True)
-            return ast.Pass()
+            return nodes.LLVMValueRefNode(node.type, node.lfunc)
 
     def assign_closure(self, func_call, node):
         "Assign closure to its name. NOT USED, already happened in CFG"
