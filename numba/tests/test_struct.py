@@ -5,32 +5,56 @@ from numba import error
 
 import numpy as np
 
-@autojit(backend='ast', locals=dict(value=struct(a=char.pointer(), b=int_)))
+#------------------------------------------------------------------------
+# Structs as locals
+#------------------------------------------------------------------------
+
+struct_type = struct(a=char.pointer(), b=int_)
+
+@autojit(backend='ast', locals=dict(value=struct_type))
 def struct_local():
     value.a = "foo"
     value.b = 10
     return value.a, value.b
 
-@autojit(backend='ast', locals=dict(value=struct(a=char.pointer(), b=int_)))
+@autojit(backend='ast', locals=dict(value=struct_type))
 def struct_local_inplace():
     value.a = "foo"
     value.b = 10
     value.b += 10.0
     return value.a, value.b
 
+# TODO: structs from objects
+#@autojit
+#def struct_as_arg(arg):
+#    arg.a = "foo"
+#    return arg.a
+#
+#@autojit(backend='ast', locals=dict(value=struct_type))
+#def call_struct_as_arg():
+#    return struct_as_arg(value)
+
 def test_struct_locals():
     result = struct_local()
     assert result == ("foo", 10), result
+
     result = struct_local_inplace()
     assert result == ("foo", 20), result
 
-@autojit(backend='ast', locals=dict(value=struct(a=char.pointer(), b=int_)))
+#    result = call_struct_as_arg()
+#    assert result == "foo", result
+
+#------------------------------------------------------------------------
+# Struct indexing
+#------------------------------------------------------------------------
+
+@autojit(backend='ast', locals=dict(value=struct_type))
 def struct_indexing_strings():
     value['a'] = "foo"
     value['b'] = 10
     return value['a'], value['b']
 
-@autojit(backend='ast', locals=dict(value=struct(a=char.pointer(), b=int_)))
+@autojit(backend='ast', locals=dict(value=struct_type))
 def struct_indexing_ints():
     value[0] = "foo"
     value[1] = 10
@@ -40,7 +64,9 @@ def test_struct_indexing():
     assert struct_indexing_strings() == ("foo", 10)
     assert struct_indexing_ints() == ("foo", 10)
 
-# ----------------
+#------------------------------------------------------------------------
+# Record arrays
+#------------------------------------------------------------------------
 
 @autojit(backend='ast')
 def record_array(array):
@@ -56,7 +82,9 @@ def test_record_array():
     assert array[0]['a'] == 4, array[0]
     assert array[0]['b'] == 5.0, array[0]
 
-# ----------------
+#------------------------------------------------------------------------
+# Object Coercion
+#------------------------------------------------------------------------
 
 struct_type = struct([('a', int_), ('b', double)])
 
@@ -70,6 +98,7 @@ def test_coerce_to_obj():
     print coerce_to_obj()
 
 if __name__ == "__main__":
+#    print call_struct_as_arg()
     test_struct_locals()
     test_record_array()
     test_coerce_to_obj()

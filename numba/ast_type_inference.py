@@ -908,6 +908,16 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.symtab[global_name] = variable
         return variable
 
+    def getvar(self, name_node):
+        local_variable = self.symtab[name_node.id]
+
+        if not local_variable.renameable:
+            variable = local_variable
+        else:
+            variable = name_node.variable
+
+        return variable
+
     def visit_Name(self, node):
         node.name = node.id
 
@@ -919,11 +929,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 variable = self.symtab[node.id]
             else:
                 # Local variable
-                local_variable = self.symtab[node.id]
-                if not local_variable.renameable:
-                    variable = local_variable
-                else:
-                    variable = node.variable
+                variable = self.getvar(node)
         elif in_closure_scope and not self.is_store(node.ctx):
             # Free variable
             # print node.id, node.ctx, self.ast.name

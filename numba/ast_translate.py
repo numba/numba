@@ -462,18 +462,23 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             variable = self.symtab.get(argname, None)
 
             if self.renameable(variable):
+                if argtype.is_struct:
+                    larg = self._allocate_arg_local(argname, argtype, larg)
+
                 # Set value on first definition of the variable
                 if argtype.is_closure_scope:
                     variable = self.symtab[argname]
                 else:
                     variable = self.symtab.lookup_renamed(argname, 0)
 
-                larg = self._load_arg_by_ref(argtype, larg)
-                variable.lvalue = larg
+                variable.lvalue = self._load_arg_by_ref(argtype, larg)
             elif argname in self.locals or variable.is_cellvar:
                 # Allocate on stack
                 variable = self.symtab[argname]
-                variable.lvalue = self._allocate_arg_local(argname, argtype, larg)
+                variable.lvalue = self._allocate_arg_local(argname, argtype,
+                                                           larg)
+            #else:
+            #    raise error.InternalError(argname, argtype)
 
             self.incref_arg(argname, argtype, larg, variable)
 
@@ -500,19 +505,29 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 assert var.uninitialized_value, var
                 var.lvalue = self.visit(var.uninitialized_value)
             elif name in self.locals and not name in self.argnames:
+                # var = self.symtab.lookup_renamed(name, 0)
                 name = 'var_%s' % var.name
                 if is_obj(var.type):
-                    stackspace = self._null_obj_temp(name, type=var.ltype)
+                    lvalue = self._null_obj_temp(name, type=var.ltype)
                 else:
-                    stackspace = self.builder.alloca(var.ltype, name=name)
+                    lvalue = self.builder.alloca(var.ltype, name=name)
 
                 if var.type.is_struct:
                     # TODO: memset struct to 0
                     pass
                 elif var.type.is_carray:
-                    stackspace = self.c_array_to_pointer(name, stackspace, var)
+                    lvalue = self.c_array_to_pointer(name, lvalue, var)
 
-                var.lvalue = stackspace
+#                if is_obj(var.type):
+#                    lvalue = llvm.core.Constant.null(var.ltype)
+#                elif var.type.is_struct:
+#                    lvalue = self.builder.alloca(var.ltype, name=name)
+#                elif var.type.is_carray:
+#                    lvalue = self.c_array_to_pointer(name, stackspace, var)
+#                else:
+#                    lvalue = llvm.core.Constant.undef(var.ltype)
+
+                var.lvalue = lvalue
 
     def setup_func(self):
         have_return = getattr(self.ast, 'have_return', None)
@@ -841,7 +856,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             bb = self.builder.basic_block
         lhs = self.llvm_alloca(type or llvm_types._pyobject_head_struct_p,
                                name=name, change_bb=False)
-        self.generate_assign(self.visit(nodes.NULL_obj), lhs)
+        self.generate_assign_stack(self.visit(nodes.NULL_obj), lhs)
         if change_bb:
             self.builder.position_at_end(bb)
         return lhs
@@ -925,13 +940,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             result = self.builder.gep(
                 result, [llvm_types.constant_int(0),
                          llvm_types.constant_int(node.field_idx)])
+            #result = self.builder.insert_value(result, self.rhs_lvalue,
+            #                                   node.field_idx)
 
         return result
 
     def visit_StructVariable(self, node):
         return self.visit(node.node)
 
-    def generate_assign(self, lvalue, ltarget, decref=False, incref=False):
+    def generate_assign_stack(self, lvalue, ltarget, decref=False, incref=False):
         """
         Generate assignment operation and automatically cast value to
         match the target type.
@@ -976,7 +993,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # INCREF RHS. Note that new references are always in temporaries, and
         # hence we can only borrow references, and have to make it an owned
         # reference
-        self.generate_assign(value, target, decref=decref, incref=incref)
+        self.generate_assign_stack(value, target,
+                                   decref=decref, incref=incref)
 
     def visit_Num(self, node):
         if node.type.is_int:
@@ -1006,8 +1024,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         self.check_unbound_local(node, var)
 
-        if (not var.renameable and not var.is_constant and
-                isinstance(node.ctx, ast.Load)):
+        should_load = (not var.renameable or
+                       var.type.is_struct) and not var.is_constant
+        if should_load and isinstance(node.ctx, ast.Load):
             # Not a renamed but an alloca'd variable
             return self.builder.load(var.lvalue)
         else:
@@ -1779,7 +1798,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # Assign value
         self.builder.position_at_end(bb)
         rhs = self.visit(node.node)
-        self.generate_assign(rhs, lhs, decref=self.in_loop)
+        self.generate_assign_stack(rhs, lhs, decref=self.in_loop)
 
         # goto error if NULL
         # self.puts("checking error... %s" % error.format_pos(node))
