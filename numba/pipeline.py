@@ -118,9 +118,11 @@ class Pipeline(object):
 
         self.order.insert(index, name)
 
-    def try_insert_specializer(self, name, after):
-        if after in self.order:
-            self.insert_specializer(name, after)
+    def try_insert_specializer(self, name, after=None, before=None):
+        if after and after in self.order:
+            self.insert_specializer(name, after=after)
+        if before and before in self.order:
+            self.insert_specializer(name, before=before)
 
     @classmethod
     def add_mixin(cls, pipeline_stage, transform, before=False):
