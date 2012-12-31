@@ -168,7 +168,8 @@ class Interpolate(ast.NodeTransformer):
         self.template_variables = template_variables or {}
 
         for name, replacement in substitutions.iteritems():
-            if (not isinstance(replacement, nodes.CloneableNode) and
+            if (not isinstance(replacement, (nodes.CloneableNode,
+                                             nodes.CloneNode)) and
                     hasattr(replacement, 'type') and not
                     isinstance(replacement, (ast.Name, nodes.TempLoadNode))):
                 substitutions[name] = nodes.CloneableNode(replacement)

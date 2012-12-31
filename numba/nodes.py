@@ -121,6 +121,8 @@ class Node(ast.AST):
 
     @property
     def cloneable(self):
+        if isinstance(self, (CloneNode, CloneableNode)):
+            return self
         return CloneableNode(self)
 
 class CoercionNode(Node):
@@ -751,6 +753,10 @@ class CloneNode(Node):
         node.clone_nodes.append(self)
 
         self.llvm_value = None
+
+    @property
+    def clone(self):
+        self
 
     def __repr__(self):
         return "clone(%s)" % self.node.node
