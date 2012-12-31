@@ -956,7 +956,8 @@ def check_definitions(flow, compiler_directives):
                 is_object = True #entry.type.is_pyobject
                 is_unspecified = False #entry.type.is_unspecified
                 error_on_uninitialized = False #entry.error_on_uninitialized
-                if is_object or is_unspecified or error_on_uninitialized:
+                if entry.renameable and (is_object or is_unspecified or
+                                         error_on_uninitialized):
                     messages.error(
                         node,
                         "local variable '%s' referenced before assignment"
@@ -990,8 +991,8 @@ def check_definitions(flow, compiler_directives):
 
     # Unused entries
     for entry in flow.entries:
-        if (not entry.cf_references and not
-                entry.is_cellvar): # and not entry.is_pyclass_attr
+        if (not entry.cf_references and not entry.is_cellvar and
+                entry.renameable): # and not entry.is_pyclass_attr
             if entry.is_arg:
                 if warn_unused_arg:
                     messages.warning(entry, "Unused argument '%s'" %
@@ -1265,6 +1266,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                 # Local variable
                 self.flow.mark_reference(node, var)
 
+        # Set position of assignment of this definition
         if isinstance(node.ctx, (ast.Param, ast.Store)):
             var = self.symtab[node.name]
             if var.lineno == -1:
