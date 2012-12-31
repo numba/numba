@@ -75,12 +75,6 @@ class ClosureMixin(object):
     do not recurse into the inner functions themselves!
     """
 
-    def _visit_func_children(self, node):
-        self.function_level += 1
-        self.generic_visit(node)
-        self.function_level -= 1
-        return node
-
     def _err_decorator(self, decorator):
         raise error.NumbaError(
                 decorator, "Only @jit and @autojit and signature decorators "
@@ -210,7 +204,7 @@ class ClosureMixin(object):
 
     def visit_FunctionDef(self, node):
         if self.function_level == 0:
-            return self._visit_func_children(node)
+            return self.visit_func_children(node)
 
         signature = self._process_decorators(node)
         type = typesystem.ClosureType(signature)
@@ -283,14 +277,6 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
     3) generate nodes to instantiate scope extension type at call time
     """
 
-    func_level = 0
-
-    def _visit_children(self, node):
-        self.func_level += 1
-        self.generic_visit(node)
-        self.func_level -= 1
-        return node
-
     def visit_FunctionDef(self, node):
         if node.closure_scope is None:
             # Process inner functions and determine cellvars and freevars
@@ -317,7 +303,7 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
             if outer_scope:
                 self.update_closures(node, outer_scope_type, None)
 
-            return self._visit_children(node)
+            return self.visit_func_children(node)
 
         # Create closure scope extension type
         cellvar_fields = [(name, var.type)
@@ -353,7 +339,7 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
         node.body.insert(0, cellvar_scope)
 
         self.update_closures(node, scope_type, ext_type)
-        return self._visit_children(node)
+        return self.visit_func_children(node)
 
     def update_closures(self, func_def, scope_type, ext_type):
         """

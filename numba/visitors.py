@@ -22,6 +22,7 @@ class CooperativeBase(object):
 class NumbaVisitorMixin(CooperativeBase):
 
     _overloads = None
+    func_level = 0
 
     def __init__(self, context, func, ast, locals=(),
                  func_signature=None, nopython=0,
@@ -129,6 +130,12 @@ class NumbaVisitorMixin(CooperativeBase):
         if qname is None:
             qname = "%s.%s" % (self.module_name, self.func_name)
         return qname
+
+    def visit_func_children(self, node):
+        self.func_level += 1
+        self.generic_visit(node)
+        self.func_level -= 1
+        return node
 
     def invalidate_locals(self, ast=None):
         ast = ast or self.ast
