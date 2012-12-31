@@ -13,14 +13,14 @@ class NumbaproPipeline(pipeline.Pipeline):
         self.try_insert_specializer('rewrite_array_expressions',
                                     before='specialize')
 
-        self.insert_specializer('expand_prange',
-                                before='cfg')
-        self.insert_specializer('rewrite_prange_privates',
-                                before='cfg')
-        self.insert_specializer('fix_ast_locations',
-                                before='cfg')
-        self.insert_specializer('cleanup_prange',
-                                after='type_infer')
+        self.try_insert_specializer('expand_prange',
+                                    before='cfg')
+        self.try_insert_specializer('rewrite_prange_privates',
+                                    before='cfg')
+        self.try_insert_specializer('fix_ast_locations',
+                                    before='cfg')
+        self.try_insert_specializer('cleanup_prange',
+                                    after='type_infer')
 
     def rewrite_array_expressions(self, ast):
         # transformer = ArrayExpressionRewriteUfunc(self.context, self.func, ast)
