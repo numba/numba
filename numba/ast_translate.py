@@ -402,61 +402,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             finally:
                 self._nodes.pop() # pop current node
 
-    # __________________________________________________________________________
-
-#    def _init_args(self):
-#        for larg, argname, argtype in zip(self.lfunc.args, self.argnames,
-#                                          self.func_signature.args):
-#            larg.name = argname
-#            variable = self.symtab[argname]
-#
-#            if not variable.need_arg_copy:
-#                assert not is_obj(argtype)
-#                variable.lvalue = larg
-#                continue
-#
-#            # Store away arguments in locals
-#            stackspace = self._allocate_arg_local(argname, argtype, larg)
-#            variable.lvalue = stackspace
-#
-#            # TODO: incref objects in structs
-#            if not (self.nopython or argtype.is_closure_scope):
-#                if is_obj(variable.type) and self.refcount_args:
-#                    self.incref(self.builder.load(stackspace))
-#
-#    def _allocate_locals(self):
-#        for name, var in self.symtab.items():
-#            if var.deleted:
-#                self.symtab.pop(name)
-#                continue
-#
-#            # FIXME: 'None' should be handled as a special case (probably).
-#            if name not in self.argnames and var.is_local:
-#                # Not argument and not builtin type.
-#                # Allocate storage for all variables.
-#                name = 'var_%s' % var.name
-#                if is_obj(var.type):
-#                    stackspace = self._null_obj_temp(name, type=var.ltype)
-#                else:
-#                    stackspace = self.builder.alloca(var.ltype, name=name)
-#
-#                if var.type.is_struct:
-#                    # TODO: memset struct to 0
-#                    pass
-#                elif var.type.is_carray:
-#                    ltype = var.type.base_type.pointer().to_llvm(self.context)
-#                    pointer = self.builder.alloca(ltype, name=name + "_p")
-#                    p = self.builder.gep(stackspace, [llvm_types.constant_int(0),
-#                                                      llvm_types.constant_int(0)])
-#                    self.builder.store(p, pointer)
-#                    stackspace = pointer
-#
-#                var.lvalue = stackspace
-
+    # _________________________________________________________________________
 
     def _load_arg_by_ref(self, argtype, larg):
         if (minitypes.pass_by_ref(argtype) and
-            self.func_signature.struct_by_reference):
+                self.func_signature.struct_by_reference):
             larg = self.builder.load(larg)
 
         return larg
@@ -469,9 +419,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         stackspace.name = name
         self.builder.store(larg, stackspace)
         return stackspace
-
-    def allocate_object_local(self, local_name):
-        pass
 
     def renameable(self, variable):
         renameable = self.have_cfg and (not variable or variable.renameable)
@@ -614,15 +561,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.loop_beginnings = []
         self.loop_exits = []
 
-        # Control FLow
-        # Not needed for now.
-        #    self.cfg = None
-        #    self.blocks_locals = {}
-        #    self.pending_phis = {}
-        #    self.pending_blocks = {}
-        #    self.stack = []
-        #    self.loop_stack = []
-
     def to_llvm(self, type):
         return type.to_llvm(self.context)
 
@@ -675,17 +613,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         '''
         self.lfunc = LLVMContextManager().link(self.lfunc)
 
-#    def _handle_promotions(self, node):
-#        "Handle promotions at the end of a basic block"
-#        if node and node.promotions:
-#            for (var, type), promotion_node in node.promotions.iteritems():
-#                bb = promotion_node.variable.block.exit_block
-#                self.builder.position_before(bb.instructions[-1])
-#                lvalue = self.visit(promotion_node)
-#                promotion_node.variable.lvalue = lvalue
-#
-#            node.promotions = {}
-
     def handle_phis(self):
         """
         Update all our phi nodes after translation is done and all Variables
@@ -717,13 +644,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                     phi.add_incoming(incoming_var.lvalue,
                                      parent_block.exit_block)
 
-#                for incoming_var in phi_node.incoming:
-#                    if incoming_var.lvalue is None and incoming_var.type.is_uninitialized:
-#                        incoming_var.lvalue = self.visit(incoming_var.uninitialized_value)
-#
-#                    assert incoming_var.lvalue, incoming_var
-#                    phi.add_incoming(incoming_var.lvalue,
-#                                     incoming_var.block.exit_block)
 
     def get_ctypes_func(self, llvm=True):
         import ctypes
@@ -1026,11 +946,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             self.xdecref_temp(ltarget)
 
         self.builder.store(lvalue, ltarget)
-
-    def stack_assign(self, lhs, rhs):
-        if is_obj(lhs_type):
-            self.decref(lhs)
-        self.generate_assign(rhs, lhs, decref)
 
     def visit_Assign(self, node):
         target_node = node.targets[0]
