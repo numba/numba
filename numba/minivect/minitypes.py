@@ -73,11 +73,11 @@ class TypeMapper(object):
     PyObject *
 
     >>> tm.promote_types(int64, float32)
-    float
+    float32
     >>> tm.promote_types(int64, complex64)
     complex64
     >>> tm.promote_types(float32, float64)
-    double
+    float64
     >>> tm.promote_types(float32, complex64)
     complex64
     >>> tm.promote_types(complex64, complex128)
@@ -86,27 +86,39 @@ class TypeMapper(object):
     PyObject *
 
     >>> tm.promote_types(float32.pointer(), Py_ssize_t)
-    float *
+    float32 *
     >>> tm.promote_types(float32.pointer(), Py_ssize_t)
-    float *
+    float32 *
     >>> tm.promote_types(float32.pointer(), uint8)
-    float *
+    float32 *
 
     >>> tm.promote_types(float32.pointer(), float64.pointer())
     Traceback (most recent call last):
         ...
-    UnpromotableTypeError: (float *, double *)
+    UnpromotableTypeError: (float32 *, float64 *)
 
     >>> tm.promote_types(float32[:, ::1], float32[:, ::1])
-    float[:, ::1]
+    float32[:, ::1]
     >>> tm.promote_types(float32[:, ::1], float64[:, ::1])
-    double[:, ::1]
+    float64[:, ::1]
     >>> tm.promote_types(float32[:, ::1], float64[::1, :])
-    double[:, :]
+    float64[:, :]
     >>> tm.promote_types(float32[:, :], complex128[:, :])
     complex128[:, :]
     >>> tm.promote_types(int_[:, :], object_[:, ::1])
     PyObject *[:, :]
+
+    >>> tm.promote_types(npy_intp, float_)
+    float
+    >>> tm.promote_types(npy_intp, float32)
+    float32
+
+    >>> float32 == float_
+    True
+    >>> float64 == double
+    True
+    >>> float128 == longdouble
+    True
     """
 
     def __init__(self, context):
@@ -201,7 +213,7 @@ def map_dtype(dtype):
     >>> map_dtype(np.dtype(np.object))
     PyObject *
     >>> map_dtype(np.dtype(np.float64))
-    double
+    float64
     >>> map_dtype(np.dtype(np.complex128))
     complex128
     """
@@ -706,6 +718,9 @@ class FloatType(NumericType):
     def comparison_type_list(self):
         return self.subtype_list + [self.itemsize]
 
+    def __eq__(self, other):
+        return isinstance(other, FloatType) and self.itemsize == other.itemsize
+
     def to_llvm(self, context):
         if self.itemsize == 4:
             return lc.Type.float()
@@ -1060,6 +1075,10 @@ ulong = IntType(name="unsigned long", rank=5.5, typecode='L', signed=False)
 ulonglong = IntType(name="unsigned PY_LONG_LONG", rank=8.5,
                     typecode='Q', signed=False)
 
+float_ = FloatType(name="float", rank=20, itemsize=4)
+double = FloatType(name="double", rank=21, itemsize=8)
+longdouble = FloatType(name="long double", rank=22, itemsize=16)
+
 bool_ = BoolType()
 object_ = ObjectType()
 
@@ -1073,17 +1092,16 @@ uint16 = IntType(name="uint16", rank=2.5, signed=False, itemsize=2)
 uint32 = IntType(name="uint32", rank=4.5, signed=False, itemsize=4)
 uint64 = IntType(name="uint64", rank=8.5, signed=False, itemsize=8)
 
-float32 = float_ = FloatType(name="float", rank=10, itemsize=4)
-float64 = double = FloatType(name="double", rank=12, itemsize=8)
-float128 = longdouble = FloatType(name="long double", rank=14,
-                                  itemsize=16)
+float32 = FloatType(name="float32", rank=20, itemsize=4)
+float64 = FloatType(name="float64", rank=21, itemsize=8)
+float128 = FloatType(name="float128", rank=22, itemsize=16)
 
 complex64 = ComplexType(name="complex64", base_type=float32,
-                        rank=16, itemsize=8)
+                        rank=30, itemsize=8)
 complex128 = ComplexType(name="complex128", base_type=float64,
-                         rank=18, itemsize=16)
+                         rank=31, itemsize=16)
 complex256 = ComplexType(name="complex256", base_type=float128,
-                         rank=20, itemsize=32)
+                         rank=32, itemsize=32)
 
 integral = []
 native_integral = []
