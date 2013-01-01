@@ -1474,6 +1474,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         func_variable = node.func.variable
         func_type = func_variable.type
+        func = self._resolve_function(func_type, func_variable.name)
 
         #if not self.analyse and func_type.is_cast and len(node.args) == 1:
         #    # Short-circuit casts
@@ -1481,7 +1482,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         #    return nodes.CastNode(node.args[0], func_type.dst_type)
 
         if visitchildren:
-            func = self._resolve_function(func_type, func_variable.name)
             self.visitlist(node.args)
             self.visitlist(node.keywords)
 
