@@ -239,9 +239,10 @@ def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
         closure_scope=closure_scope,
         invoke_and_join_threads=invoke,
         num_threads=num_threads_node,
-        start=prange_node.start,
-        stop=prange_node.stop,
-        step=prange_node.step)
+        start=nodes.UntypedCoercion(prange_node.start, Py_ssize_t),
+        stop=nodes.UntypedCoercion(prange_node.stop, Py_ssize_t),
+        step=nodes.UntypedCoercion(prange_node.step, Py_ssize_t),
+    )
 
     tree = templ.template(subs)
     templ.update_locals(locals_dict)
@@ -620,9 +621,8 @@ def get_threadpool_funcs(context, context_struct_type, target_name,
             ('context', C.void_p),
         ]
 
-        def __init__(self, dependencies, **kwargs):
+        def __init__(self, dependencies, ldependencies, **kwargs):
             super(KernelWrapper, self).__init__(**kwargs)
-
 
         def body(self, context_p):
             context_struct_p = context_p.cast(context_p_ltype)
@@ -669,12 +669,12 @@ def get_threadpool_funcs(context, context_struct_type, target_name,
             ('num_threads', C.int),
         ]
 
-        def __init__(self, dependencies, **kwargs):
+        def __init__(self, dependencies, ldependencies, **kwargs):
             self.kernel_wrapper, = dependencies
             super(RunThreadPool, self).__init__(**kwargs)
 
         def body(self, contexts, num_threads):
-            callback = ee.get_pointer_to_function(self.kernel_wrapper)
+            callback = self.kernel_wrapper.pointer
             callback = self.constant(Py_uintptr_t.to_llvm(context), callback)
             callback = callback.cast(C.void_p)
             self._dispatch_worker(callback, contexts, num_threads)
