@@ -10,22 +10,8 @@ class CoercionNode(Node):
     _attributes = ['type', 'name']
 
     def __new__(cls, node, dst_type, name=''):
-        type = getattr(node, 'type', None) or node.variable.type
-        #if type == dst_type:
-        #    return node
-
-        if isinstance(node, ConstNode) and dst_type.is_numeric:
-            try:
-                node.cast(dst_type)
-            except TypeError:
-                pass
-            else:
-                return node
-        elif isinstance(node, CoercionNode) and node.type == dst_type:
+        if isinstance(node, CoercionNode) and node.type == dst_type:
             return node
-
-        if dst_type.is_pointer and type.is_int:
-            assert type == Py_uintptr_t, type
 
         return super(CoercionNode, cls).__new__(cls, node, dst_type, name=name)
 
@@ -35,6 +21,10 @@ class CoercionNode(Node):
             # right type, so __new__ returns a CoercionNode, which then results
             # in __init__ being called
             return
+
+        type = getattr(node, 'type', None) or node.variable.type
+        if dst_type.is_pointer and type.is_int:
+            assert type == Py_uintptr_t, type
 
         self.type = dst_type
         self.variable = Variable(dst_type)
@@ -130,3 +120,15 @@ class DeferredCoercionNode(Node):
     def __init__(self, node, variable):
         self.node = node
         self.variable = variable
+
+class UntypedCoercion(Node):
+    """
+    Coerce a node to the destination type. The node need not yet have a
+    type or variable.
+    """
+
+    _fields = ['node']
+
+    def __init__(self, node, type):
+        self.node = node
+        self.type = type

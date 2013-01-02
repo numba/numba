@@ -1673,6 +1673,17 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         raise error.NumbaError(node, "Global keyword")
 
     #------------------------------------------------------------------------
+    # Coercions
+    #------------------------------------------------------------------------
+
+    def visit_UntypedCoercion(self, node):
+        if self.analyse:
+            value = self.visit(node.node)
+            return nodes.CoercionNode(value, node.type)
+
+        return node
+
+    #------------------------------------------------------------------------
     # User nodes
     #------------------------------------------------------------------------
 
