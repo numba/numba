@@ -150,7 +150,8 @@ def create_prange_closure(prange_node, body, target):
                                body=copy.deepcopy(body),
                                decorator_list=[])
 
-    func_def.func_signature = void(privates_struct_type)
+    func_def.func_signature = void(privates_struct_type) # .pointer())
+    func_def.func_signature.struct_by_reference = True
     func_def.need_closure_wrapper = False
 
     prange_node.privates_struct_type = privates_struct_type
@@ -224,6 +225,7 @@ def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
     func_def.prange_node = prange_node
 
     num_threads_node = nodes.const(num_threads, Py_ssize_t)
+
     invoke = InvokeAndJoinThreads(contexts=contexts.node,
                                   func_def_name=func_def.name,
                                   struct_type=struct_type,
@@ -356,22 +358,32 @@ class InvokeAndJoinThreads(nodes.UserNode):
         type_inferer.visitchildren(self)
         return self
 
-    def codegen(self, codegen):
-        #closure = self.func_def.node
-        #closure_type = closure.type
+    def build_wrapper(self, codegen):
         closure_type = self.closures[self.func_def_name].type
         lfunc = closure_type.closure.lfunc
         # print lfunc
 
-        lfunc_wrapper, lfunc_run = get_threadpool_funcs(
-                             codegen.context, codegen.ee,
-                             self.struct_type, self.target_name,
-                             lfunc, closure_type.signature, self.num_threads)
-        codegen.keep_alive(lfunc_wrapper)
-        codegen.keep_alive(lfunc_run)
+        KernelWrapper, RunThreadPool = get_threadpool_funcs(
+            codegen.context,
+            self.struct_type,
+            self.target_name,
+            lfunc,
+            closure_type.signature,
+            self.num_threads)
+
+        kernel_wrapper = nodes.LLVMCBuilderNode(KernelWrapper, None)
+        run_threadpool = nodes.LLVMCBuilderNode(RunThreadPool, None,
+                                                dependencies=[kernel_wrapper])
+        lfunc_run = codegen.visit(run_threadpool)
+        return lfunc_run
+
+    def codegen(self, codegen):
+        self.build_wrapper(codegen)
 
         contexts = codegen.visit(self.contexts)
         num_threads = codegen.visit(self.num_threads.coerce(int_))
+
+        lfunc_run = self.build_wrapper(codegen)
         codegen.builder.call(lfunc_run, [contexts, num_threads])
         return None
 
@@ -570,12 +582,13 @@ class PrangePrivatesReplacer(visitors.NumbaTransformer):
         self.visitchildren(node)
         return node
 
+
 #----------------------------------------------------------------------------
 # LLVM cbuilder prange utilities
 #----------------------------------------------------------------------------
 
 _count = 0
-def get_threadpool_funcs(context, ee, context_struct_type, target_name,
+def get_threadpool_funcs(context, context_struct_type, target_name,
                          lfunc, signature, num_threads):
     """
     Get functions to run the closure in separate threads.
@@ -593,8 +606,6 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
                                     context, context_struct_type)
     context_p_ltype = context_struct_type.pointer().to_llvm(context)
 
-    lobject = object_.to_llvm(context)
-
     class KernelWrapper(CDefinition):
         """
         Implements a prange kernel wrapper that is invoked in each thread.
@@ -609,13 +620,17 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
             ('context', C.void_p),
         ]
 
+        def __init__(self, dependencies, **kwargs):
+            super(KernelWrapper, self).__init__(**kwargs)
+
+
         def body(self, context_p):
-            context_p = context_p.cast(context_p_ltype)
-            context = context_p.as_struct(context_cbuilder_type)
+            context_struct_p = context_p.cast(context_p_ltype)
+            context_struct = context_struct_p.as_struct(context_cbuilder_type)
 
             def gf(name):
                 "Get a field named __numba_<name>"
-                return getattr(context, '__numba_' + name)
+                return getattr(context_struct, '__numba_' + name)
 
             start = self.var(C.npy_intp, gf('start'))
             stop = self.var(C.npy_intp, gf('stop'))
@@ -628,13 +643,16 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
                     nsteps += self.constant(C.npy_intp, 1)
 
             with self.for_range(nsteps) as (loop, i):
-                getattr(context, target_name).assign(start)
+                getattr(context_struct, target_name).assign(start)
 
                 worker = CFunc(self, lfunc)
                 if signature.args[0].is_closure_scope:
-                    worker(gf('closure_scope').cast(lobject), context_p)
+                    llvm_object_type = object_.to_llvm(context)
+                    closure_scope = gf('closure_scope').cast(llvm_object_type)
+                    # print context_struct_p, lfunc.type
+                    worker(closure_scope, context_struct_p)
                 else:
-                    worker(context_p)
+                    worker(context_struct_p)
 
                 start += step
 
@@ -651,19 +669,18 @@ def get_threadpool_funcs(context, ee, context_struct_type, target_name,
             ('num_threads', C.int),
         ]
 
+        def __init__(self, dependencies, **kwargs):
+            self.kernel_wrapper, = dependencies
+            super(RunThreadPool, self).__init__(**kwargs)
+
         def body(self, contexts, num_threads):
-            callback = ee.get_pointer_to_function(wrapper_lfunc)
+            callback = ee.get_pointer_to_function(self.kernel_wrapper)
             callback = self.constant(Py_uintptr_t.to_llvm(context), callback)
             callback = callback.cast(C.void_p)
             self._dispatch_worker(callback, contexts, num_threads)
             self.ret()
 
-    wrapper_lfunc = KernelWrapper()(lfunc.module)
-    # print wrapper_lfunc
-    run_threadpool_def = RunThreadPool()
-    run_threadpool_lfunc = run_threadpool_def(lfunc.module)
-    return wrapper_lfunc, run_threadpool_lfunc
-
+    return KernelWrapper, RunThreadPool
 
 #----------------------------------------------------------------------------
 # The actual prange function
