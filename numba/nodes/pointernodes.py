@@ -9,6 +9,23 @@ def pointer_add(pointer, offset):
     result.variable = Variable(result.type)
     return CoercionNode(result, char.pointer())
 
+def ptrtoint(node):
+    return CoercionNode(node, Py_uintptr_t)
+
+def ptrfromint(intval, dst_ptr_type):
+    return CoercionNode(ConstNode(intval, Py_uintptr_t), dst_ptr_type)
+
+def value_at_offset(obj_node, offset, dst_type):
+    """
+    Perform (dst_type) (((char *) my_object) + offset)
+    """
+    offset = ConstNode(offset, Py_ssize_t)
+    pointer = PointerFromObject(obj_node)
+    pointer = CoercionNode(pointer, char.pointer())
+    pointer = pointer_add(pointer, offset)
+    value_at_offset = CoercionNode(pointer, dst_type)
+    return value_at_offset
+
 class DereferenceNode(Node):
     """
     Dereference a pointer

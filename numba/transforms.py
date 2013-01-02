@@ -1082,28 +1082,6 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         self.generic_visit(node)
         return node
 
-    def lookup_offset_attribute(self, attr, ctx, node, offset, struct_type,
-                                is_pointer=False):
-        """
-        Look up an attribute offset in an object defined by a struct type.
-        """
-        offset = nodes.ConstNode(offset, Py_ssize_t)
-        pointer = nodes.PointerFromObject(node.value)
-        pointer = nodes.CoercionNode(pointer, char.pointer())
-        pointer = nodes.pointer_add(pointer, offset)
-        struct_pointer = nodes.CoercionNode(pointer, struct_type.ref())
-
-        if isinstance(ctx, ast.Load):
-            # struct_pointer = nodes.DereferenceNode(struct_pointer)
-            if is_pointer:
-                struct_pointer = nodes.DereferenceNode(struct_pointer)
-                struct_type = struct_type.base_type
-
-        attr = nodes.StructAttribute(struct_pointer, attr, ctx, struct_type)
-        attr.type = node.type
-        result = self.visit(attr)
-        return result
-
     def visit_ExtTypeAttribute(self, node):
         """
         Resolve an extension attribute:
@@ -1113,10 +1091,13 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         """
         ext_type = node.value.type
         offset = ext_type.attr_offset
-        struct_type = ext_type.attribute_struct
-        result = self.lookup_offset_attribute(node.attr, node.ctx, node, offset,
-                                              struct_type)
-        return result
+        type = ext_type.attribute_struct.ref()
+
+        struct_pointer = nodes.value_at_offset(node.value, offset, type)
+        result = nodes.StructAttribute(struct_pointer, node.attr,
+                                       node.ctx, type)
+
+        return self.visit(result)
 
     def visit_ExtensionMethod(self, node, call_node=None):
         """
@@ -1139,16 +1120,23 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
         ext_type = node.value.type
         offset = ext_type.vtab_offset
-        struct_type = ext_type.vtab_type.pointer()
-        vmethod = self.lookup_offset_attribute(node.attr, ast.Load(), node, offset,
-                                               struct_type, is_pointer=True)
+        struct_type = ext_type.vtab_type.ref()
+
+        struct_pointer_pointer = nodes.value_at_offset(node.value, offset,
+                                                       struct_type.pointer())
+        struct_pointer = nodes.DereferenceNode(struct_pointer_pointer)
+
+        vmethod = nodes.StructAttribute(struct_pointer, node.attr,
+                                        ast.Load(), struct_type)
 
         # Visit argument list for call
         args = self.visitlist(call_node.args)
+
         # Insert first argument 'self' in args list
         args.insert(0, nodes.CloneNode(node.value))
         result = nodes.NativeFunctionCallNode(node.type, vmethod, args)
         result.signature.is_bound_method = False
+
         return self.visit(result)
 
     def visit_ArrayNewNode(self, node):

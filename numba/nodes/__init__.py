@@ -48,11 +48,6 @@ def index(node, constant_index, load=True, type=int_):
     index.variable = Variable(type)
     return ast.Subscript(value=node, slice=index, ctx=ctx)
 
-def ptrtoint(node):
-    return CoercionNode(node, Py_uintptr_t)
-
-def ptrfromint(intval, dst_ptr_type):
-    return CoercionNode(ConstNode(intval, Py_uintptr_t), dst_ptr_type)
 
 printing = False
 
