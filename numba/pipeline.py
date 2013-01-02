@@ -8,6 +8,7 @@ import ast as ast_module
 import logging
 import functools
 import pprint
+import random
 from timeit import default_timer as _timer
 
 import llvm.core as lc
@@ -77,7 +78,7 @@ class Pipeline(object):
         # Let the pipeline create a module for the function it is compiling
         # and the user will link that in.
         assert 'llvm_module' not in kwargs
-        self.llvm_module = lc.Module.new('tmp.module.%x' % id(func))
+        self.llvm_module = lc.Module.new(self.module_name(func))
 
         self.nopython = nopython
         self.locals = locals or {}
@@ -90,6 +91,16 @@ class Pipeline(object):
                 self.order.remove('codegen')
         else:
             self.order = order
+
+    def module_name(self, func):
+        if func is None:
+            name = "NoneFunc"
+            func_id = random.randrange(1000000)
+        else:
+            name = '%s.%s' % (func.__module__, func.__name__)
+            func_id = id(func)
+
+        return 'tmp.module.%s.%x' % (name, func_id)
 
     def make_specializer(self, cls, ast, **kwds):
         "Create a visitor or transform and add any mixins"
