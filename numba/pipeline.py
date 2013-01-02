@@ -81,6 +81,7 @@ class Pipeline(object):
 
         self.nopython = nopython
         self.locals = locals or {}
+        self.closures = {}
         self.kwargs = kwargs
 
         if order is None:
@@ -107,6 +108,7 @@ class Pipeline(object):
                    llvm_module=self.llvm_module,
                    locals=self.locals,
                    allow_rebind_args=self.allow_rebind_args,
+                   closures=self.closures,
                    **kwds)
 
     def insert_specializer(self, name, after=None, before=None):

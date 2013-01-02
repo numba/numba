@@ -213,6 +213,7 @@ class ClosureMixin(object):
         closure = nodes.ClosureNode(node, type, self.func)
         type.closure = closure
         self.ast.closures.append(closure)
+        self.closures[node.name] = closure
 
         return closure
 
