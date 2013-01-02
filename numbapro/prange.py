@@ -182,7 +182,7 @@ $contexts[{{num_threads}} - 1].__numba_stop = {{stop}}
 $lastprivates = $contexts[{{num_threads}} - 1]
 """
 
-def rewrite_prange(context, prange_node, target, locals_dict):
+def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
     templ = templating.TemplateContext(context, prange_template)
 
     func_def = prange_node.func_def
@@ -223,12 +223,13 @@ def rewrite_prange(context, prange_node, target, locals_dict):
     func_def.is_prange_body = True
     func_def.prange_node = prange_node
 
-    num_threads_node = nodes.const(num_threads, Py_ssize_t) #.cloneable
+    num_threads_node = nodes.const(num_threads, Py_ssize_t)
     invoke = InvokeAndJoinThreads(contexts=contexts.node,
                                   func_def_name=func_def.name,
                                   struct_type=struct_type,
                                   target_name=target_name,
-                                  num_threads=num_threads_node) #.clone)
+                                  num_threads=num_threads_node,
+                                  closures=closures_dict)
 
     closure_scope = nodes.ClosureScopeLoadNode()
     subs = dict(
@@ -331,10 +332,23 @@ class PrangeNode(nodes.Node):
         self.step = step
         self.type = PrangeType()
 
-class PrangeBodyNode(nodes.Node):
-    _fields = ['func_def']
 
 class InvokeAndJoinThreads(nodes.UserNode):
+    """
+    contexts
+        contexts array node (array of privates structs)
+    num_threads
+        num threads node
+
+    func_def_name
+        name of outlined prange body function
+    target_name
+        name of iteration target variable (e.g. 'i')
+    struct_type
+        privates struct type
+    closures
+        { closure_name : closure_node }
+    """
 
     _fields = ['contexts', 'num_threads']
 
@@ -343,20 +357,24 @@ class InvokeAndJoinThreads(nodes.UserNode):
         return self
 
     def codegen(self, codegen):
-        closure_type = codegen.symtab[node.func_def_name].type
+        #closure = self.func_def.node
+        #closure_type = closure.type
+        closure_type = self.closures[self.func_def_name].type
         lfunc = closure_type.closure.lfunc
         # print lfunc
+
         lfunc_wrapper, lfunc_run = get_threadpool_funcs(
                              codegen.context, codegen.ee,
-                             node.struct_type, node.target_name,
-                             lfunc, closure_type.signature, node.num_threads)
+                             self.struct_type, self.target_name,
+                             lfunc, closure_type.signature, self.num_threads)
         codegen.keep_alive(lfunc_wrapper)
         codegen.keep_alive(lfunc_run)
 
-        contexts = codegen.visit(node.contexts)
-        num_threads = codegen.visit(node.num_threads.coerce(int_))
+        contexts = codegen.visit(self.contexts)
+        num_threads = codegen.visit(self.num_threads.coerce(int_))
         codegen.builder.call(lfunc_run, [contexts, num_threads])
         return None
+
 
 class TypeofNode(nodes.UserNode):
 
@@ -465,7 +483,7 @@ class PrangeExpander(visitors.NumbaTransformer):
 
         # setup glue code
         pre_loop = rewrite_prange(self.context, prange_node, node.target,
-                                  self.locals)
+                                  self.locals, self.closures)
         post_loop = perform_reductions(self.context, prange_node)
 
         # infer glue code at the right place
