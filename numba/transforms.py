@@ -321,8 +321,8 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
 
 def unpack_range_args(node):
     start, stop, step = (nodes.const(0, Py_ssize_t),
-                             None,
-                             nodes.const(1, Py_ssize_t))
+                         None,
+                         nodes.const(1, Py_ssize_t))
 
     if len(node.args) == 0:
         raise error.NumbaError(node, "Expected at least one argument")

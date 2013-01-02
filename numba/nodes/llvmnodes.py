@@ -21,7 +21,7 @@ class BadValue(LLVMValueRefNode):
 class LLVMCBuilderNode(UserNode):
     """
     Instantiate an link in an LLVM cbuilder CDefinition. The CDefinition is
-    passed the list of LLVM value dependencies.
+    passed the list of dependence nodes and the list of LLVM value dependencies
     """
 
     _fields = ["dependencies"]
@@ -37,13 +37,13 @@ class LLVMCBuilderNode(UserNode):
 
     def codegen(self, codegen):
         dependencies = codegen.visitlist(self.dependencies)
-        specialized_cls = self.cbuilder_cdefinition(dependencies)
-        lfunc = specialized_cls(codegen.llvm_module)
+        cdef = self.cbuilder_cdefinition(self.dependencies, dependencies)
+        lfunc = cdef.define(codegen.llvm_module) #, optimize=False)
 
         from numba import ast_translate
         self.llvm_context = ast_translate.LLVMContextManager()
 
-        lfunc = self.llvm_context.link(lfunc)
+        # lfunc = self.llvm_context.link(lfunc)
         self.lfunc = lfunc
         codegen.keep_alive(lfunc)
 

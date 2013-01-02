@@ -25,7 +25,7 @@ import logging
 logger = logging.getLogger(__name__)
 debug_conversion = False
 
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 #debug_conversion = True
 
 _int32_zero = lc.Constant.int(_int32, 0)
@@ -1526,9 +1526,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         meth = getattr(self.builder, llvm_method_name)
         if not lhs.type == rhs.type:
-            print ast.dump(node)
             print lhs.type, rhs.type
-            assert False
+            assert False, ast.dump(node)
 
         result = meth(lhs, rhs)
         return result
