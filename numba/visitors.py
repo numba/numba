@@ -42,7 +42,7 @@ class NumbaVisitorMixin(CooperativeBase):
         #self.local_scopes = [self.symtab]
         self.current_scope = symtab
         self.have_cfg = getattr(self.ast, 'flow', False)
-        self.closures = kwargs['closures']
+        self.closures = kwargs.get('closures')
         self.kwargs = kwargs
 
         if self.have_cfg:
