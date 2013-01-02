@@ -150,7 +150,7 @@ def create_prange_closure(prange_node, body, target):
                                body=copy.deepcopy(body),
                                decorator_list=[])
 
-    func_def.func_signature = void(privates_struct_type) # .pointer())
+    func_def.func_signature = void(privates_struct_type.ref())
     func_def.func_signature.struct_by_reference = True
     func_def.need_closure_wrapper = False
 
