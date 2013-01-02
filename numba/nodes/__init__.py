@@ -70,7 +70,7 @@ def print_(translator, node):
 
     printing = True
 
-    node = inject_print(translator.context, translate.llvm_module, node)
+    node = inject_print(translator.context, translator.llvm_module, node)
     node = translator.ast.pipeline.late_specializer(node)
     translator.visit(node)
 
