@@ -1091,10 +1091,10 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         pointer = nodes.PointerFromObject(node.value)
         pointer = nodes.CoercionNode(pointer, char.pointer())
         pointer = nodes.pointer_add(pointer, offset)
-        struct_pointer = nodes.CoercionNode(pointer, struct_type.pointer())
+        struct_pointer = nodes.CoercionNode(pointer, struct_type.ref())
 
         if isinstance(ctx, ast.Load):
-            struct_pointer = nodes.DereferenceNode(struct_pointer)
+            # struct_pointer = nodes.DereferenceNode(struct_pointer)
             if is_pointer:
                 struct_pointer = nodes.DereferenceNode(struct_pointer)
                 struct_type = struct_type.base_type

@@ -2,7 +2,6 @@ from numba.nodes import *
 import numba.nodes
 
 def pointer_add(pointer, offset):
-    # TODO: use gep...
     assert pointer.type == char.pointer()
     left = numba.nodes.ptrtoint(pointer)
     result = ast.BinOp(left, ast.Add(), offset)

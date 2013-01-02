@@ -25,7 +25,7 @@ import logging
 logger = logging.getLogger(__name__)
 debug_conversion = False
 
-#logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 #debug_conversion = True
 
 _int32_zero = lc.Constant.int(_int32, 0)
@@ -1577,7 +1577,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             val = self.builder.ptrtoint(val, ldst_type)
         elif node_type.is_int and dst_type.is_pointer:
             val = self.builder.inttoptr(val, ldst_type)
-        elif dst_type.is_pointer and node_type.is_pointer:
+        elif (dst_type.is_pointer or
+              dst_type.is_reference) and node_type.is_pointer:
             val = self.builder.bitcast(val, ldst_type)
         elif dst_type.is_complex and node_type.is_complex:
             val = self._promote_complex(node_type, dst_type, val)
