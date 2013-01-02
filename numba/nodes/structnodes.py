@@ -1,18 +1,25 @@
 from numba.nodes import *
 
+def struct_type(type):
+    if type.is_reference:
+        type = type.referenced_type
+
+    return type
+
 class StructAttribute(ExtTypeAttribute):
 
     _fields = ['value']
 
-    def __init__(self, value, attr, ctx, struct_type, **kwargs):
+    def __init__(self, value, attr, ctx, type, **kwargs):
         super(ExtTypeAttribute, self).__init__(**kwargs)
         self.value = value
         self.attr = attr
         self.ctx = ctx
-        self.struct_type = struct_type
+        self.struct_type = type
 
-        self.attr_type = struct_type.fielddict[attr]
-        self.field_idx = struct_type.fields.index((attr, self.attr_type))
+        type = struct_type(type)
+        self.attr_type = type.fielddict[attr]
+        self.field_idx = type.fields.index((attr, self.attr_type))
 
         self.type = self.attr_type
         self.variable = Variable(self.type, promotable_type=False)

@@ -932,14 +932,22 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         raise error.NumbaError("This node should have been replaced")
 
+    def struct_field(self, node, value):
+        value = self.builder.gep(
+            value, [llvm_types.constant_int(0),
+                    llvm_types.constant_int(node.field_idx)])
+        return value
+
     def visit_StructAttribute(self, node):
         result = self.visit(node.value)
         if isinstance(node.ctx, ast.Load):
-            result = self.builder.extract_value(result, node.field_idx)
+            if node.value.type.is_reference:
+                result = self.struct_field(node, result)
+                result = self.builder.load(result)
+            else:
+                result = self.builder.extract_value(result, node.field_idx)
         else:
-            result = self.builder.gep(
-                result, [llvm_types.constant_int(0),
-                         llvm_types.constant_int(node.field_idx)])
+            result = self.struct_field(node, result)
             #result = self.builder.insert_value(result, self.rhs_lvalue,
             #                                   node.field_idx)
 

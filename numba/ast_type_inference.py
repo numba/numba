@@ -1600,6 +1600,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         return nodes.ExtTypeAttribute(node.value, node.attr, node.ctx, type)
 
     def _resolve_struct_attribute(self, node, type):
+        type = nodes.struct_type(type)
+
         if not node.attr in type.fielddict:
             raise error.NumbaError(
                     node, "Struct %s has no field %r" % (type, node.attr))
@@ -1634,7 +1636,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             result_type = typesystem.MethodType(type, 'conjugate')
         elif type.is_complex:
             result_type = self._resolve_complex_attribute(node, type)
-        elif type.is_struct:
+        elif type.is_struct or (type.is_reference and
+                                type.referenced_type.is_struct):
             return self._resolve_struct_attribute(node, type)
         elif type.is_module and hasattr(type.module, node.attr):
             result_type = self._resolve_module_attribute(node, type)

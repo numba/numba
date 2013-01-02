@@ -297,7 +297,41 @@ class CastType(NumbaType, minitypes.ObjectType):
         return "<cast(%s)>" % self.dst_type
 
 
+#------------------------------------------------------------------------
+# Aggregate Types
+#------------------------------------------------------------------------
 
+class struct(minitypes.struct):
+    __doc__ = minitypes.struct.__doc__
+
+    def ref(self):
+        return ReferenceType(self)
+
+#------------------------------------------------------------------------
+# References
+#------------------------------------------------------------------------
+
+class ReferenceType(NumbaType):
+    """
+    A reference to an (primitive or Python) object. This is passed as a
+    pointer and dereferences automatically.
+
+    Currently only supported for structs.
+    """
+
+    is_reference = True
+
+    subtypes = ['referenced_type']
+
+    def __init__(self, referenced_type, **kwds):
+        super(ReferenceType, self).__init__(**kwds)
+        self.referenced_type = referenced_type
+
+    def to_llvm(self, context):
+        return self.referenced_type.pointer().to_llvm(context)
+
+    def __repr__(self):
+        return "%r.ref()" % (self.referenced_type,)
 
 
 #------------------------------------------------------------------------
