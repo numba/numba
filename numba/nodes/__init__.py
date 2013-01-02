@@ -105,10 +105,11 @@ from numba.nodes.numpynodes import *
 from numba.nodes.extnodes import *
 from numba.nodes.closurenodes import *
 
+from numba.nodes.usernode import *
+
 from numba.nodes.pointernodes import *
 from numba.nodes.structnodes import *
 from numba.nodes.objectnodes import *
 from numba.nodes.llvmnodes import *
 
-from numba.nodes.usernode import *
 from numba.nodes.utils import *
