@@ -36,14 +36,16 @@ class LLVMCBuilderNode(UserNode):
         return self
 
     def codegen(self, codegen):
-        dependencies = self.visitlist(self.dependencies)
-        lfunc = self.cbuilder_cdefinition(codegen.llvm_module, dependencies)
+        dependencies = codegen.visitlist(self.dependencies)
+        specialized_cls = self.cbuilder_cdefinition(dependencies)
+        lfunc = specialized_cls(codegen.llvm_module)
 
         from numba import ast_translate
         self.llvm_context = ast_translate.LLVMContextManager()
 
         lfunc = self.llvm_context.link(lfunc)
         self.lfunc = lfunc
+        codegen.keep_alive(lfunc)
 
         return lfunc
 
