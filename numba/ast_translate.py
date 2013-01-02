@@ -193,15 +193,41 @@ class LLVMContextManager(object):
             # XXX: Better safe than sorry.
             #      Check duplicated function definitions and remove them.
             #      This problem should not exists.
-            registered = set(f.name for f in self.module.functions)
-            for func in lfunc.module.functions:
-                if not func.is_declaration and func.name in registered:
+            def is_duplicated_function(f):
+                if f.is_declaration:
+                    return False
+                try:
+                    self.module.get_function_named(f.name)
+                except llvm.LLVMException as e:
+                    return False
+                else:
+                    return True
+            lfunc_module = lfunc.module
+            for func in lfunc_module.functions:
+                if is_duplicated_function(func):
                     import warnings
                     warnings.warn("Duplicated funciton definition: %s "\
                                   "when compiling %s" % (func.name, lfunc.name))
-                    func.delete()
-        
-            self.module.link_in(lfunc.module, preserve=False)
+                    if func is lfunc:
+                        # If the duplicated function is the currently compiling
+                        # function, rename it.
+                        ct = 0
+                        while is_duplicated_function(func):
+                            print func.name
+                            func.name = "%s_duplicated%d" % (func_name, ct)
+                            ct += 1
+                        warnings.warn("Renamed duplicated function %s to %s" %
+                                      (func_name, func.name))
+                        func_name = func.name
+                    else:
+                        # If the duplicated function is not the currently
+                        # compiling function, remove it.
+                        # We assume this is a utility function.
+                        warnings.warn("Remove duplicated function %s" %
+                                      func.name)
+                        func.delete()
+
+            self.module.link_in(lfunc_module, preserve=False)
 #
 #            print 'linked'.center(80, '=')
 #            print self.module
