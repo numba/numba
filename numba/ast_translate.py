@@ -214,14 +214,11 @@ class LLVMContextManager(object):
             for func in lfunc_module.functions:
                 if is_duplicated_function(func):
                     import warnings
-                    warnings.warn("Duplicated funciton definition: %s "\
-                                  "when compiling %s" % (func.name, lfunc.name))
                     if func is lfunc:
                         # If the duplicated function is the currently compiling
                         # function, rename it.
                         ct = 0
                         while is_duplicated_function(func):
-                            print func.name
                             func.name = "%s_duplicated%d" % (func_name, ct)
                             ct += 1
                         warnings.warn("Renamed duplicated function %s to %s" %
@@ -229,11 +226,9 @@ class LLVMContextManager(object):
                         func_name = func.name
                     else:
                         # If the duplicated function is not the currently
-                        # compiling function, remove it.
+                        # compiling function, ignore it.
                         # We assume this is a utility function.
-                        warnings.warn("Remove duplicated function %s" %
-                                      func.name)
-                        func.delete()
+                        assert func.linkage == lc.LINKAGE_LINKONCE_ODR
 
             self.module.link_in(lfunc_module, preserve=False)
 #
