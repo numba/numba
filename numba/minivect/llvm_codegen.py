@@ -99,7 +99,7 @@ class LLVMCodeGen(codegen.CodeGen):
 
         llvm_fpm = llvm.passes.FunctionPassManager.new(self.llvm_module)
         # target_data = llvm.ee.TargetData(self.context.llvm_ee)
-        llvm_fpm.add(self.context.llvm_ee.target_data)
+        llvm_fpm.add(self.context.llvm_ee.target_data.clone())
         pmb = llvm.passes.PassManagerBuilder.new()
         pmb.opt_level = 3
         pmb.vectorize = True
