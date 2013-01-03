@@ -143,7 +143,7 @@ class LLVMContextManager(object):
         '''
         opt --- Optimization level for LLVM optimization pass [0 - 3].
         cg  --- Optimization level for code generator [0 - 3].
-        Use `3` for SSE support on Intel.
+                Use `3` for SSE support on Intel.
         inline --- Inliner threshold.
         '''
         inst = cls.__singleton
@@ -156,14 +156,18 @@ class LLVMContextManager(object):
     def __initialize(self, opt, cg, inline):
         assert self.__singleton is None
         m = self.__module = lc.Module.new("numba_executable_module")
-        self.__engine = le.EngineBuilder.new(m).opt(cg).create()
+        eb = le.EngineBuilder.new(m).opt(cg)
+        # Obtain the TargetMachine
+        tm = self.__machine = eb.select_target()
+        # Create the ExceutionEngine
+        self.__engine = eb.create()
         # Build a PassManager which will be used for every module/
+        passmanagers = lp.build_pass_managers(tm, opt=opt,
+                                              inline_threshold=inline,
+                                              loop_vectorize=True,
+                                              fpm=False)
+        self.__pm = passmanagers.pm
         self.__pm = lp.PassManager.new()
-        # populate pass manager
-        pmb = lp.PassManagerBuilder.new()
-        pmb.use_inliner_with_threshold(inline)
-        pmb.opt_level = opt
-        pmb.populate(self.__pm)
 
     @property
     def module(self):
@@ -176,6 +180,10 @@ class LLVMContextManager(object):
     @property
     def pass_manager(self):
         return self.__pm
+
+    @property
+    def target_machine(self):
+        return self.__machine
 
     def link(self, lfunc):
         if lfunc.module is not self.module:
