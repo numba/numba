@@ -156,11 +156,10 @@ class LLVMContextManager(object):
     def __initialize(self, opt, cg, inline):
         assert self.__singleton is None
         m = self.__module = lc.Module.new("numba_executable_module")
-        eb = le.EngineBuilder.new(m).opt(cg)
-        # Obtain the TargetMachine
-        tm = self.__machine = eb.select_target()
+        # Create the TargetMachine
+        tm = self.__machine = le.TargetMachine.new(opt=cg, cm=le.CM_JITDEFAULT)
         # Create the ExceutionEngine
-        self.__engine = eb.create()
+        self.__engine = le.EngineBuilder.new(m).create(tm)
         # Build a PassManager which will be used for every module/
         passmanagers = lp.build_pass_managers(tm, opt=opt,
                                               inline_threshold=inline,
