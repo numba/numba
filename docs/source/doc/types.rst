@@ -26,6 +26,21 @@ Cases where the type inferencer doesn't know the type is often when you call
 a Python function or method that is not a numba function and numba doesn't
 otherwise recognize.
 
+Numba allows you to obtain the type of a expression or variable through
+the typeof function in a Numba function. This type can then be used for
+instance to cast other values::
+
+    type = numba.typeof(x + y)
+    value = type(value)
+
+When used outside of a Numba function, it returns the type the type inferencer
+would infer for that value::
+
+    >>> numba.typeof(1.0)
+    double
+    >>> numba.typeof(cmath.sqrt(-1))
+    complex128
+
 .. _variables:
 
 Variables declared in Locals
