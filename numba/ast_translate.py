@@ -667,11 +667,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         for block in self.ast.flow.blocks:
             for phi_node in block.phi_nodes:
                 phi = phi_node.variable.lvalue
-                ltype = phi_node.variable.type.to_llvm(self.context)
+                assert phi, phi_node.variable
                 for parent_block in block.parents:
                     assert parent_block.exit_block, parent_block
+
                     name = phi_node.variable.name
                     incoming_var = parent_block.symtab.lookup_most_recent(name)
+
                     if incoming_var.type.is_uninitialized:
                         if incoming_var.lvalue is None:
                             lval = self.visit(incoming_var.uninitialized_value)

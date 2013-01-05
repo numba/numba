@@ -2,6 +2,24 @@ from numba.nodes import *
 
 basic_block_fields = ['cond_block', 'if_block', 'else_block', 'exit_block']
 
+def delete_control_blocks(flow_node, flow):
+    """
+    Remove all control flow basic blocks from the CFG given a FlowNode
+    and the CFG. Also removes Name references from cf_references.
+    """
+    parent = flow_node.cond_block.idom
+    flow_node.exit_block.reparent(parent)
+    flow_node.exit_block = None
+
+    #flow_node.cond_block.delete(flow)
+    #flow_node.if_block.delete(flow)
+
+    #if flow_node.orelse:
+    #    flow_node.else_block.delete(flow)
+
+    from numba import control_flow
+    control_flow.DeleteStatement(flow).visit(flow_node)
+
 class FlowNode(Node):
 
     cond_block = None
@@ -17,6 +35,7 @@ class FlowNode(Node):
             if not getattr(self, field_name):
                 block = control_flow.ControlBlock(-1, is_fabricated=True)
                 setattr(self, field_name, block)
+
 
 class If(ast.If, FlowNode):
     pass

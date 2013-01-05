@@ -148,6 +148,17 @@ class ControlBlock(nodes.LowLevelBasicBlockNode):
             child.parents.remove(self)
             new_block.add_child(child)
 
+    def delete(self, flow):
+        """
+        Delete a block from the cfg.
+        """
+        for parent in self.parents:
+            parent.children.remove(self)
+        for child in self.children:
+            child.parents.remove(self)
+
+        flow.blocks.remove(self)
+
     def __repr__(self):
         return 'Block(%d)' % self.id
 
@@ -1040,7 +1051,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.current_directives = kwargs.get('directives', None) or {}
         self.current_directives['warn'] = kwargs.get('warn', True)
         self.set_default_directives()
-        symtab = kwargs.get('symtab', None) or {}
         self.symtab = self.initialize_symtab(allow_rebind_args)
 
         self.graphviz = self.current_directives['control_flow.dot_output']
@@ -1363,7 +1373,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         # Else clause
         if node.orelse:
-
             node.else_block = self.flow.nextblock(
                         parent=node.cond_block,
                         label="else_clause_%s" % loop_name,
@@ -1547,3 +1556,42 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
     def visit_Print(self, node):
         self.generic_visit(node)
         return node
+
+class DeleteStatement(visitors.NumbaVisitor):
+    """
+    Delete a (compound) statement that contains basic blocks.
+    The statement must be at the start of the entry block.
+
+    idom: the immediate dominator of
+    """
+
+    def __init__(self, flow):
+        self.flow = flow
+
+    def visit_If(self, node):
+        self.generic_visit(node)
+
+        # Visit ControlBlocks
+        self.visit(node.cond_block)
+        self.visit(node.if_block)
+        if node.orelse:
+            self.visit(node.else_block)
+        if node.exit_block:
+            self.visit(node.exit_block)
+
+    visit_While = visit_If
+    visit_For = visit_If
+
+    def visit_ControlBlock(self, node):
+        for phi in node.phi_nodes:
+            for incoming in phi.incoming:
+                # print incoming, phi
+                incoming.cf_references.remove(phi)
+
+        self.generic_visit(node)
+        node.delete(self.flow)
+
+    def visit_Name(self, node):
+        references = node.variable.cf_references
+        if isinstance(node.ctx, ast.Load) and node in references:
+            references.remove(node)
