@@ -162,6 +162,7 @@ def create_prange_closure(prange_node, body, target):
 
 prange_template = """
 {{func_def}}
+%s # function name; avoid warning about unused variable
 
 $pack_struct
 
@@ -184,10 +185,10 @@ $lastprivates = $contexts[{{num_threads}} - 1]
 """
 
 def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
-    templ = templating.TemplateContext(context, prange_template)
-
     func_def = prange_node.func_def
     struct_type = prange_node.privates_struct_type
+
+    templ = templating.TemplateContext(context, prange_template % func_def.name)
 
     # Allocate context for each thread
     num_threads = NUM_THREADS
@@ -236,6 +237,7 @@ def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
     closure_scope = nodes.ClosureScopeLoadNode()
     subs = dict(
         func_def=func_def,
+        func_def_name=func_def.name,
         closure_scope=closure_scope,
         invoke_and_join_threads=invoke,
         num_threads=num_threads_node,
@@ -255,6 +257,7 @@ def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
                                   'lastprivates': lastprivates,
                                 }
 
+    # print templ.substituted_template
     return tree
 
 def typeof(name, expr):
@@ -529,6 +532,7 @@ class PrangeCleanup(visitors.NumbaTransformer):
             self.visitchildren(node)
             return node
 
+        nodes.delete_control_blocks(node, self.ast.flow)
         return None
 
 
