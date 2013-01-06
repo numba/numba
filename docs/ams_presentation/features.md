@@ -1,12 +1,23 @@
 Features
-========
+--------
+
+Some table
+
+=====  ======
+Vokal  Umlaut
+=====  ======
+aA     bl
+oO     aj
+=====  ======
 
 NumPy arrays
 
-.. code-block:: python
+```python
 
     # Type inference for NumPy code
     np.zeros((M, N), dtype=np.float32)
+
+```
 
 Python code:
 

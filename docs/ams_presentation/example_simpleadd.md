@@ -2,8 +2,7 @@ Example: Sum
 ------------
 
 
-.. code-block:: python
-
+```python
     @jit('f8(f8[:])')
     def sum1d(A):
         n = A.shape[0]
@@ -12,8 +11,9 @@ Example: Sum
             s += A[i]
         return s
 
+```
 
-.. code-block:: LLVM
+```LLVM
 
     "loop_body_6:8":                                  ; preds = %compare.end
       %17 = load i64* %target_temp
@@ -33,8 +33,9 @@ Example: Sum
       %31 = fadd double %s_2, %30
       br label %"for_increment_5:4"
 
+```
 
-.. code-block:: Assembly
+```Assembly
 
     .section	__TEXT,__text,regular,pure_instructions
         .globl	___numba_specialized___main___2E_sum1d_double_5B__3A__5D_
@@ -99,6 +100,5 @@ Example: Sum
 
     .subsections_via_symbols
 
-
-
+```
 

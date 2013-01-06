@@ -3,8 +3,7 @@
 Example Mandelbrot
 ------------------
 
-::
-
+```python
     @autojit
     def mandel(x, y, max_iters):
         i = 0
@@ -32,6 +31,6 @@ Example Mandelbrot
                 image[y, x] = color
 
         return image
-
+```
 
 - ~1000x speedup
