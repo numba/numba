@@ -4,6 +4,7 @@ Why Numba?
 - Python
     - rapid iteration and development
     - powerful libraries
+    - but, slow!
 
 - Numba
     - provides **JIT** and **array-oriented programming** in CPython
@@ -25,3 +26,14 @@ Software Stack
 ---------------
 
 .. image:: software_stack.png
+
+@jit, @autojit
+--------------
+
+- Instead of JIT-ing all Python code, we target the hotspot.
+- Use decorators to mark functions or classes for *just-in-time* compilation.
+
+
+
+
+
