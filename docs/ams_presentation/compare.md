@@ -1,25 +1,23 @@
-Numba, Cython and PyPy
-----------------------
+# Numba, Cython and PyPy
 
-<!---
-.. image:: cythonlogo.png
-    :width: 50px
-    :scale: 10 %
-    :alt: alternate text
-    :align: right
--->
-
-* Ahead of time
-* Compiles to C/C\+\+
-    * build step
-* Explicit types \+ type inference
-    * Python semantics
-        * quick fallback to objects
-
-PyPy
-----
-* Python implementation
-* Runtime tracing JIT
++---------------------------+-----------------------+---------------------------+
+| Cython                    | PyPy                  | Numba                     |
++===========================+=======================+===========================+
+| - Ahead of time           | - Runtime             | - Runtime                 |
+|     - build step          |                       |     - Static or dynamic   |
+|                           |                       | - Ahead of time           |
++---------------------------+-----------------------+---------------------------+
+| - Compiles to             | - Tracing JIT         | - LLVM                    |
+|   C/C++                   |                       |                           |
++---------------------------+-----------------------+---------------------------+
+| - Explicit types &        | - Full Python         | - Type inference          |
+|                           |                       |                           |
+|                           |                       |                           |
+|   type inference          |   compatability       |     - Stronger typing     |
+|     - Python semantics    |                       |                           |
+|     - Quick fallback to   |                       |                           |
+|       objects             |                       |                           |
++---------------------------+-----------------------+---------------------------+
 
 
 * Numba
@@ -30,4 +28,5 @@ PyPy
         - stronger typing
     * NumPy and Blaze aware
         - Focus on numerical and scientific computing
+
 

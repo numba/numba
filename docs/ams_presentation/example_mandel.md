@@ -1,7 +1,4 @@
-
-
-Example Mandelbrot
-------------------
+# Example Mandelbrot
 
 ```python
     @autojit
