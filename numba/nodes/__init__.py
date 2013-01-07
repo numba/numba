@@ -1,6 +1,5 @@
 import ast
 import ctypes
-import collections
 
 import numba
 import numba.functions
@@ -12,8 +11,6 @@ from numba import utils, translate, error
 from numba.minivect import minitypes, minierror
 
 import llvm.core
-
-from numba.ndarray_helpers import PyArrayAccessor
 
 context = utils.get_minivect_context()
 

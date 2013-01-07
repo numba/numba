@@ -36,6 +36,7 @@ haven't been processed yet, or circular dependences.
                       i_0 (Py_ssize_t)
 """
 
+from numba import oset
 from numba.typesystem import *
 
 class UninitializedType(NumbaType):
@@ -68,20 +69,12 @@ class UnresolvedType(NumbaType):
     is_unresolved = True
     rank = 1
 
-    @property
-    def ps(self):
-        return list(self.parents)
-
-    @property
-    def cs(self):
-        return list(self.children)
-
     def __init__(self, variable, **kwds):
         super(UnresolvedType, self).__init__(**kwds)
         self.variable = variable
         self.assertions = []
-        self.parents = set()
-        self.children = set()
+        self.parents = oset.OrderedSet()
+        self.children = oset.OrderedSet()
 
     def add_children(self, children):
         for child in children:

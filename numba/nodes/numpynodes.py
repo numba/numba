@@ -1,5 +1,8 @@
+import collections
+
 from numba.nodes import *
 import numba.nodes
+from numba.ndarray_helpers import PyArrayAccessor
 
 
 def _const_int(X):
