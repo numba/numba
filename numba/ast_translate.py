@@ -161,9 +161,10 @@ class LLVMContextManager(object):
         # Create the ExceutionEngine
         self.__engine = le.EngineBuilder.new(m).create(tm)
         # Build a PassManager which will be used for every module/
+        has_loop_vectorizer = llvm.version >= (3, 2)
         passmanagers = lp.build_pass_managers(tm, opt=opt,
                                               inline_threshold=inline,
-                                              loop_vectorize=True,
+                                              loop_vectorize=has_loop_vectorizer,
                                               fpm=False)
         self.__pm = passmanagers.pm
         self.__pm = lp.PassManager.new()
