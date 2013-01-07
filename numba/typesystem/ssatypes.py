@@ -140,6 +140,7 @@ class PromotionType(UnresolvedType):
         self.context = context
         self.types = types
         self.assignment = assignment
+        variable.type = self
 
         self.add_parents(type for type in types if type.is_unresolved)
 
