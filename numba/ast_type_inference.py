@@ -580,8 +580,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     for u in list(unvisited):
                         if self.is_trivial_cycle(u):
                             u.simplify()
-                            if not u.resolve().is_unresolved:
-                                unvisited.remove(u)
+                        if not u.resolve().is_unresolved:
+                            unvisited.remove(u)
 
                     break
 
