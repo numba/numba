@@ -1,6 +1,4 @@
-Example: Sum
-------------
-
+# Example: Sum
 
 ```python
     @jit('f8(f8[:])')

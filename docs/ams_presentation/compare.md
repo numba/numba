@@ -1,32 +1,24 @@
 # Numba, Cython and PyPy
 
-+---------------------------+-----------------------+---------------------------+
-| Cython                    | PyPy                  | Numba                     |
-+===========================+=======================+===========================+
-| - Ahead of time           | - Runtime             | - Runtime                 |
-|     - build step          |                       |     - Static or dynamic   |
-|                           |                       | - Ahead of time           |
-+---------------------------+-----------------------+---------------------------+
-| - Compiles to             | - Tracing JIT         | - LLVM                    |
-|   C/C++                   |                       |                           |
-+---------------------------+-----------------------+---------------------------+
-| - Explicit types &        | - Full Python         | - Type inference          |
-|                           |                       |                           |
-|                           |                       |                           |
-|   type inference          |   compatability       |     - Stronger typing     |
-|     - Python semantics    |                       |                           |
-|     - Quick fallback to   |                       |                           |
-|       objects             |                       |                           |
-+---------------------------+-----------------------+---------------------------+
++---------------+---------------------------+---------------------------+-----------------------+
+|               | Numba                     | Cython                    | PyPy                  |
++===============+===========================+===========================+=======================+
+|               | - Runtime                 | - Ahead of time           | - Runtime tracing \   |
+| **Compiling \ |     - Static or dynamic   |     - build step          |   JIT                 |
+|   Strategy**  | - Ahead of time           |                           |                       |
+|               |                           |                           |                       |
++---------------+---------------------------+---------------------------+-----------------------+
+| **IR**        | - LLVM                    | - C/C++                   | - PyPy JIT            |
+|               |                           |                           |                       |
++---------------+---------------------------+---------------------------+-----------------------+
+| **Typing**    | - Type inferred           | - Explicit types & \      | - Full Python         |
+|               | - Single type at each \   |   type inference          |   compatability       |
+|               |   control flow point (\   |     - Quick fallback to \ |                       |
+|               |   like RPython)           |                           |                       |
+|               | - Variable reuse          |        objects            |                       |
+|               | - Python semantics for    | - Python semantics for    |                       |
+|               |   objects                 |   objects                 |                       |
++---------------+---------------------------+---------------------------+-----------------------+
 
-
-* Numba
-
-    * Explicit runtime compilation
-    * Type inferred
-        - variable reuse
-        - stronger typing
-    * NumPy and Blaze aware
-        - Focus on numerical and scientific computing
-
+Numba has a focus on numerical and scientific computing
 

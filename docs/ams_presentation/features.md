@@ -1,16 +1,6 @@
-Features
---------
+# Features
 
-Some table
-
-=====  ======
-Vokal  Umlaut
-=====  ======
-aA     bl
-oO     aj
-=====  ======
-
-NumPy arrays
+NumPy Arrays
 
 ```python
 

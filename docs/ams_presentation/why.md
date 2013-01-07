@@ -3,19 +3,19 @@
 Python
 ------
 
-* rapid iteration and development
-* powerful libraries
-* but, slow!
+- rapid iteration and development
+- powerful libraries
+- but, slow!
 
 Numba
 -----
 
-* provides **JIT** and **array-oriented programming** in CPython
-* works with existing CPython extensions
-* Goal: Seamless integration with CPython at the core
-    * integrate with scientific software stack
-        * NumPy/SciPy/Blaze
-    * C, C++, Fortran, Cython, CFFI, Julia?
+- provides **JIT** and **array-oriented programming** in CPython
+- works with existing CPython extensions
+- Goal: Seamless integration with CPython at the core
+    - integrate with scientific software stack
+        - NumPy/SciPy/Blaze
+    - C, C++, Fortran, Cython, CFFI, Julia?
 
 # Array-Oriented Programming
 
