@@ -55,9 +55,10 @@ class Name(ast.Name, Node):
         return "name(%s%s)" % (name, type)
 
     def __deepcopy__(self, memo):
-        if self in memo:
-            return memo[self]
-        
+        result = Name(self.id, self.ctx)
+        result.cf_maybe_null = self.cf_maybe_null
+        result.raise_unbound_node = self.raise_unbound_node
+        return result
 
 class WithPythonNode(Node):
     "with python: ..."
