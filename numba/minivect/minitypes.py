@@ -1110,6 +1110,9 @@ complextypes = []
 
 for typename in __all__:
     minitype = globals()[typename]
+    if minitype is None:
+        continue
+
     if minitype.is_int:
         integral.append(minitype)
     elif minitype.is_float:
