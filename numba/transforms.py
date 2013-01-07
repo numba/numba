@@ -171,7 +171,7 @@ class MathMixin(object):
         return (type.is_float or type.is_int) and (is_intrinsic or is_math)
 
     def _resolve_intrinsic(self, args, py_func, signature):
-        func_name = py_func.__name__.upper()
+        func_name = self.get_funcname(py_func).upper()
         return nodes.LLVMIntrinsicNode(signature, args, func_name=func_name)
 
     def math_suffix(self, name, type):
