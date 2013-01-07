@@ -1,27 +1,31 @@
+# Why Python?
+
+- Rapid development cycle
+- Powerful libraries
+- Allows interfacing with native code
+    - Excellent for glue
+- ... but, slow!
+    - especially for computation-heavy code
+        - numerical algorithms
+
 # Why Numba?
 
-Python
-------
+- Provides **JIT** for **array-oriented programming** in CPython
+    - Numerical loops
+    - High level tools for domains experts to exploit modern hardware
+        - multicore CPU
+        - manycore GPU
+    - Low-level C-like code in pure Python
+        - pointers, structs, callbacks
+- Works with existing CPython extensions
+- Goal: Integration with scientific software stack
+    - NumPy/SciPy/Blaze
+        - Currently integrates with part of NumPy
+            - indexing and slicing
+            - array expressions
+            - math
 
-- rapid iteration and development
-- powerful libraries
-- but, slow!
-
-Numba
------
-
-- provides **JIT** and **array-oriented programming** in CPython
-- works with existing CPython extensions
-- Goal: Seamless integration with CPython at the core
-    - integrate with scientific software stack
-        - NumPy/SciPy/Blaze
     - C, C++, Fortran, Cython, CFFI, Julia?
-
-# Array-Oriented Programming
-
-- High level tools for domains experts to exploit modern hardware:
-    - multicore CPU
-    - manycore GPU
 
 - Easily take advantage of parallelism and accelerators
 
