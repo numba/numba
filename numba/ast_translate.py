@@ -391,7 +391,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # distiguish between is the name of the LLVM function being
         # generated and the name of the Python function being
         # translated.
-        if 'mangled_name' in kwds:
+        if 'mangled_name' in kwds and kwds['mangled_name'] is not None:
             self.mangled_name = kwds['mangled_name']
         else:
             self.mangled_name = naming.specialized_mangle(
