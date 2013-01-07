@@ -54,6 +54,11 @@ class Name(ast.Name, Node):
             name = self.variable.unmangled_name
         return "name(%s%s)" % (name, type)
 
+    def __deepcopy__(self, memo):
+        if self in memo:
+            return memo[self]
+        
+
 class WithPythonNode(Node):
     "with python: ..."
 
