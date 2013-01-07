@@ -78,8 +78,12 @@ def _internal_export(name=None, restype=double, argtypes=[double],
             func._is_numba_func = True
             func_ast = functions._get_ast(func)
             func_ast.pipeline = pipeline_env.pipeline
+            # FIXME: Hacked "mangled_name" into the translation
+            # environment.  Should do something else.  See comment in
+            # ast_translate.LLVMCodeGenerator.__init__().
             pipeline_env.crnt.init_func(func, func_ast, function_signature,
-                                        name=name, llvm_module=llvm_module)
+                                        name=name, llvm_module=llvm_module,
+                                        mangled_name=name)
             pipeline_env.pipeline(func_ast, pipeline_env)
             func_env = pipeline_env.crnt
             exports_env = pipeline_env.exports

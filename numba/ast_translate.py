@@ -386,9 +386,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                     llvm_module=llvm_module,
                     **kwds)
 
-        if 'manged_name' in kwds:
+        # FIXME: Change mangled_name to some other attribute,
+        # optionally read in the environment.  What we really want to
+        # distiguish between is the name of the LLVM function being
+        # generated and the name of the Python function being
+        # translated.
+        if 'mangled_name' in kwds:
             self.mangled_name = kwds['mangled_name']
-            assert self.mangled_name.startswith("__numba_specialized_")
         else:
             self.mangled_name = naming.specialized_mangle(
                         self.qualified_name, func_signature.args)
