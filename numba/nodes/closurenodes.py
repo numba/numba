@@ -33,6 +33,7 @@ class ClosureNode(Node):
         # ast and symtab after type inference
         self.type_inferred_ast = None
         self.symtab = None
+        self.locals = {}
 
         # The Python extension type that must be instantiated to hold cellvars
         # self.scope_type = None

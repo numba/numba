@@ -356,6 +356,17 @@ def test_closure_loop():
 
     inner()
 
+@autojit(locals=dict(var=int_), warn=False)
+def test_closure_outer_locals():
+    """
+    >>> test_closure_outer_locals()
+    """
+    var = 10
+    @jit(void())
+    def inner():
+        var = "hello"
+
+    inner()
 
 if __name__ == '__main__':
 #    closure1 = closure_arg(1)
@@ -363,6 +374,7 @@ if __name__ == '__main__':
 #    test_call_closure()
 #    closure4()
 #    signature_dec()()
-    test_closure_loop()
-#    import numba
-#    numba.testmod()
+#    test_closure_outer_locals()
+#    test_closure_loop()
+    import numba
+    numba.testmod()

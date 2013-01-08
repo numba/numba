@@ -1,7 +1,9 @@
 import ast
+from pprint import pprint, pformat
 import ast as ast_module
 import __builtin__ as builtins
 from numba import functions
+from numba import nodes
 from numba.typesystem.typemapper import have_properties
 
 try:
@@ -53,7 +55,8 @@ class NumbaVisitorMixin(CooperativeBase):
         self.func = func
         if func is None or not getattr(func, "__numba_valid_code_object", True):
             assert isinstance(ast, ast_module.FunctionDef)
-            locals, cellvars, freevars = determine_variable_status(context, ast)
+            locals, cellvars, freevars = determine_variable_status(context, ast,
+                                                                   self.locals)
             self.names = self.global_names = freevars
             self.argnames = tuple(arg.id for arg in ast.args.args)
             argnames = set(self.argnames)
@@ -364,7 +367,11 @@ class VariableFindingVisitor(NumbaVisitor):
 
         return node
 
-def determine_variable_status(context, ast):
+    def visit_ClosureNode(self, node):
+        self.func_defs.append(node)
+        return node
+
+def determine_variable_status(context, ast, locals_dict):
     """
     Determine what category referenced and assignment variables fall in:
 
@@ -379,16 +386,30 @@ def determine_variable_status(context, ast):
     v.visit(ast)
 
     locals = set(v.assigned)
+    locals.update(locals_dict)
     locals.update(arg.id for arg in ast.args.args)
     locals.update(func_def.name for func_def in v.func_defs)
+
     freevars = set(v.referenced) - locals
     cellvars = set()
 
-    # Compure cell variables
+    # Compute cell variables
     for func_def in v.func_defs:
+        if isinstance(func_def, nodes.ClosureNode):
+            locals_dict = func_def.locals
+        else:
+            locals_dict = {}
+
         inner_locals, inner_cellvars, inner_freevars = \
-                            determine_variable_status(context, func_def)
+                            determine_variable_status(context, func_def,
+                                                      locals_dict)
         cellvars.update(locals.intersection(inner_freevars))
+
+#    print ast.name, "locals", pformat(locals),      \
+#                    "cellvars", pformat(cellvars),  \
+#                    "freevars", pformat(freevars),  \
+#                    "locals_dict", pformat(locals_dict)
+#    print ast.name, "locals", pformat(locals)
 
     # Cache state
     ast.variable_status_tuple = locals, cellvars, freevars
