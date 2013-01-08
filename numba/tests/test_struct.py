@@ -52,7 +52,7 @@ def test_struct_locals():
 #    assert result == "foo", result
 
     result = struct_local_copy()
-    assert result == ("foo", 20), result
+    assert result == ("foo", 10), result
 
 #------------------------------------------------------------------------
 # Struct indexing
@@ -109,8 +109,8 @@ def test_coerce_to_obj():
 
 if __name__ == "__main__":
     print struct_local_copy()
-#    print call_struct_as_arg()
-#    test_struct_locals()
-#    test_record_array()
-#    test_coerce_to_obj()
-#    test_struct_indexing()
+    # print call_struct_as_arg()
+    test_struct_locals()
+    test_record_array()
+    test_coerce_to_obj()
+    test_struct_indexing()

@@ -1009,6 +1009,18 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
     def visit_Index(self, node):
         return self.visit(node.value)
 
+    def allocate_struct_on_stack(self, assmnt_node, target):
+        # Allocate struct on stack
+        temp = nodes.TempNode(target.type)
+        assmnt_node.targets[0] = temp.store()
+        assmnt_node.value = self.visit(assmnt_node.value)
+
+        # Expose LLVM value through SSA (patch the Variable or the
+        # LHS). We need to store the pointer to the struct (the alloca)
+        ssa_assmnt = ast.Assign(targets=[target], value=temp.store())
+
+        return ast.Suite(body=[assmnt_node, ssa_assmnt])
+
     def visit_Assign(self, node):
         target = node.targets[0]
         target_is_subscript = (len(node.targets) == 1 and
@@ -1027,9 +1039,8 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             return self.visit(call)
 
         elif target.type.is_struct and nodes.is_name(target):
-            temp = nodes.TempNode(target.type,
-                                  dst_variable=target.variable)
-            node.targets[0] = temp.store()
+            node = self.allocate_struct_on_stack(node, target)
+            return node
 
         self.generic_visit(node)
         return node
