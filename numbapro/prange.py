@@ -365,15 +365,17 @@ class InvokeAndJoinThreads(nodes.UserNode):
     def build_wrapper(self, codegen):
         closure_type = self.closures[self.func_def_name].type
         lfunc = closure_type.closure.lfunc
-        # print lfunc
+        lfunc_pointer = closure_type.closure.lfunc_pointer
 
         KernelWrapper, RunThreadPool = get_threadpool_funcs(
             codegen.context,
             self.struct_type,
             self.target_name,
             lfunc,
+            lfunc_pointer,
             closure_type.signature,
-            self.num_threads)
+            self.num_threads,
+            codegen.llvm_module)
 
         kernel_wrapper = nodes.LLVMCBuilderNode(KernelWrapper, None)
         run_threadpool = nodes.LLVMCBuilderNode(RunThreadPool, None,
@@ -382,8 +384,6 @@ class InvokeAndJoinThreads(nodes.UserNode):
         return lfunc_run
 
     def codegen(self, codegen):
-        self.build_wrapper(codegen)
-
         contexts = codegen.visit(self.contexts)
         num_threads = codegen.visit(self.num_threads.coerce(int_))
 
@@ -594,7 +594,8 @@ class PrangePrivatesReplacer(visitors.NumbaTransformer):
 
 _count = 0
 def get_threadpool_funcs(context, context_struct_type, target_name,
-                         lfunc, signature, num_threads):
+                         lfunc, lfunc_pointer, signature,
+                         num_threads, llvm_module):
     """
     Get functions to run the closure in separate threads.
 
@@ -610,6 +611,13 @@ def get_threadpool_funcs(context, context_struct_type, target_name,
     context_cbuilder_type = builder.CStruct.from_numba_struct(
                                     context, context_struct_type)
     context_p_ltype = context_struct_type.pointer().to_llvm(context)
+
+    #print "BLAH", lfunc.name, lfunc.module.id
+    #print [f.name for f in lfunc.module.functions]
+    #print '-----'
+
+    # llvm_module.link_in(lfunc.module, preserve=True)
+    # lfunc = llvm_module.get_or_insert_function(lfunc.type.pointee, lfunc.name)
 
     class KernelWrapper(CDefinition):
         """
@@ -628,39 +636,66 @@ def get_threadpool_funcs(context, context_struct_type, target_name,
         def __init__(self, dependencies, ldependencies, **kwargs):
             super(KernelWrapper, self).__init__(**kwargs)
 
+        def dispatch(self, context_struct_p, context_getfield,
+                     lfunc, lfunc_pointer):
+            """
+            Call the closure with the closure scope and context arguments.
+            We don't directly call the lfunc since there are linkage issues.
+            """
+            # worker = CFunc(self, lfunc)
+
+            if signature.args[0].is_closure_scope:
+                llvm_object_type = object_.to_llvm(context)
+                closure_scope = context_getfield('closure_scope')
+                closure_scope = closure_scope.cast(llvm_object_type)
+                # print context_struct_p, lfunc.type
+                # worker(closure_scope, context_struct_p)
+                args = [closure_scope, context_struct_p]
+            else:
+                # worker(context_struct_p)
+                args = [context_struct_p]
+
+            # Get the LLVM arguments
+            llargs = [arg.handle for arg in args]
+
+            # Get the LLVM pointer to the function
+            lfunc_pointer = llvm.core.Constant.int(Py_uintptr_t.to_llvm(context),
+                                                   lfunc_pointer)
+            lfunc_pointer = self.builder.inttoptr(lfunc_pointer, lfunc.type)
+
+            self.builder.call(lfunc_pointer, llargs)
+
         def body(self, context_p):
             context_struct_p = context_p.cast(context_p_ltype)
             context_struct = context_struct_p.as_struct(context_cbuilder_type)
 
-            def gf(name):
+            def context_getfield(name):
                 "Get a field named __numba_<name>"
                 return getattr(context_struct, '__numba_' + name)
 
-            start = self.var(C.npy_intp, gf('start'))
-            stop = self.var(C.npy_intp, gf('stop'))
-            step = self.var(C.npy_intp, gf('step'))
+            start = self.var(C.npy_intp, context_getfield('start'))
+            stop = self.var(C.npy_intp, context_getfield('stop'))
+            step = self.var(C.npy_intp, context_getfield('step'))
+
             length = stop - start
             nsteps = self.var(C.npy_intp, length / step)
+
             zero = self.constant(C.npy_intp, 0)
+
             with self.ifelse(length % step != zero) as ifelse:
                 with ifelse.then():
                     nsteps += self.constant(C.npy_intp, 1)
 
             with self.for_range(nsteps) as (loop, i):
                 getattr(context_struct, target_name).assign(start)
-
-                worker = CFunc(self, lfunc)
-                if signature.args[0].is_closure_scope:
-                    llvm_object_type = object_.to_llvm(context)
-                    closure_scope = gf('closure_scope').cast(llvm_object_type)
-                    # print context_struct_p, lfunc.type
-                    worker(closure_scope, context_struct_p)
-                else:
-                    worker(context_struct_p)
-
+                self.dispatch(context_struct_p, context_getfield,
+                              lfunc, lfunc_pointer)
                 start += step
 
             self.ret()
+
+        def specialize(self, *args, **kwargs):
+            self._name_ = "__numba_kernel_wrapper_%s" % lfunc.name
 
     class RunThreadPool(CDefinition, parallel.ParallelMixin):
         """
@@ -683,6 +718,9 @@ def get_threadpool_funcs(context, context_struct_type, target_name,
             callback = callback.cast(C.void_p)
             self._dispatch_worker(callback, contexts, num_threads)
             self.ret()
+
+        def specialize(self, *args, **kwargs):
+            self._name_ = "__numba_run_threadpool_%s" % lfunc.name
 
     return KernelWrapper, RunThreadPool
 
