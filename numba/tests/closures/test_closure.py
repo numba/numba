@@ -328,11 +328,41 @@ __doc__ += """
 10.0
 """
 
+@autojit
+def test_closure_loop():
+    """
+    >>> test_closure_loop()
+    0 3
+    1 3
+    2 3
+    <BLANKLINE>
+    0 3
+    1 3
+    2 3
+    """
+    cellvar = 3
+
+    @jit(void())
+    def inner():
+        for i in range(cellvar):
+            print i, cellvar
+
+        print
+
+        for i in range(cellvar):
+            for j in range(cellvar):
+                if i == j:
+                    print i, cellvar
+
+    inner()
+
+
 if __name__ == '__main__':
 #    closure1 = closure_arg(1)
 #    print closure1.__name__
 #    test_call_closure()
 #    closure4()
 #    signature_dec()()
-    import doctest
-    doctest.testmod()
+    test_closure_loop()
+#    import numba
+#    numba.testmod()

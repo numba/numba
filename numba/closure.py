@@ -126,8 +126,6 @@ class ClosureMixin(object):
         return restype
 
     def _handle_jit_decorator(self, func_def, decorator):
-        from numba import ast_type_inference
-
         jit_args = module_type_inference.parse_args(
                 decorator, ['restype', 'argtypes', 'backend',
                             'target', 'nopython'])
