@@ -7,7 +7,9 @@ def _fix_naming(string):
         return '_%X_' % (ord(m.group(0)))
     return _ptx_invalid_char.sub(repl, string)
 
+def type_mangle(*types):
+    return "_".join(str(t).replace(" ", "_") for t in types)
+
 def specialized_mangle(func_name, types):
-    type_strings = "_".join(str(t).replace(" ", "_") for t in types)
-    pre = "__numba_specialized_%s_%s" % (func_name, type_strings)
+    pre = "__numba_specialized_%s_%s" % (func_name, type_mangle(*types))
     return _fix_naming(pre)
