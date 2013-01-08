@@ -210,7 +210,12 @@ class LLVMContextManager(object):
                     return False
                 else:
                     return True
+
             lfunc_module = lfunc.module
+            #print "LINKING", lfunc.name, lfunc.module.id
+            #print [f.name for f in lfunc.module.functions]
+            #print '-----'
+
             for func in lfunc_module.functions:
                 if is_duplicated_function(func):
                     import warnings
@@ -228,7 +233,7 @@ class LLVMContextManager(object):
                         # If the duplicated function is not the currently
                         # compiling function, ignore it.
                         # We assume this is a utility function.
-                        assert func.linkage == lc.LINKAGE_LINKONCE_ODR
+                        assert func.linkage == lc.LINKAGE_LINKONCE_ODR, func.name
 
             self.module.link_in(lfunc_module, preserve=False)
 #

@@ -947,7 +947,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if variable.type and not variable.type.is_deferred:
             if variable.type.is_global: # or variable.type.is_module:
-                # TODO: look up globals in dict at call time
+                # TODO: look up globals in dict at call time if not
+                #       available now
                 obj = self.func_globals[node.name]
                 if not self.function_cache.is_registered(obj):
                     type = self.context.typemapper.from_python(obj)
