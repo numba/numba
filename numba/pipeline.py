@@ -498,9 +498,10 @@ class PipelineEnvironment(object):
         ret_val.context = context
         for stage in cls.init_stages:
             setattr(ret_val, stage.__name__, stage)
-        pipe = cls.init_stages[:]
-        pipe.reverse()
-        ret_val.pipeline = reduce(compose_stages, pipe)
+        #pipe = cls.init_stages[:]
+        #pipe.reverse()
+        #ret_val.pipeline = reduce(compose_stages, pipe)
+        ret_val.pipeline = ComposedPipelineStage(cls.init_stages)
         ret_val.stage_checks = kws.pop('stage_checks', True)
         ret_val.__dict__.update(kws)
         ret_val.crnt = cls(ret_val)
@@ -558,3 +559,26 @@ def compose_stages(f0, f1):
     name = '_o_'.join((f0_name, f1_name))
     _numba_pipeline_composition.__name__ = name
     return _numba_pipeline_composition
+
+class ComposedPipelineStage(PipelineStage):
+    def __init__(self, stages=None):
+        if stages is None:
+            stages = []
+        self.stages = [check_stage(stage)[1] for stage in stages]
+
+    def transform(self, ast, env):
+        for stage in self.stages:
+            ast = stage(ast, env)
+        return ast
+
+    @classmethod
+    def compose(cls, stage0, stage1):
+        if isinstance(stage0, ComposedPipelineStage):
+            stage0s = stage0.stages
+        else:
+            stage0s = [check_stage(stage0)[1]]
+        if isinstance(stage1, ComposedPipelineStage):
+            stage1s = stage1.stages
+        else:
+            stage1s = [check_stage(stage1)[1]]
+        return cls(stage0s + stage1s)
