@@ -28,6 +28,7 @@ class ClosureNode(Node):
         self.lfunc = None
         self.wrapper_func = None
         self.wrapper_lfunc = None
+        self.lfunc_pointer = None
 
         # ast and symtab after type inference
         self.type_inferred_ast = None
