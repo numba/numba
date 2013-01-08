@@ -1011,8 +1011,9 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
     def visit_Assign(self, node):
         target = node.targets[0]
-        if (len(node.targets) == 1 and
-                isinstance(target, ast.Subscript) and is_obj(target.type)):
+        target_is_subscript = (len(node.targets) == 1 and
+                               isinstance(target, ast.Subscript))
+        if target_is_subscript and is_obj(target.type):
             # Slice assignment / index assignment w/ objects
             # TODO: discount array indexing with dtype object
             target = self.visit(target)
@@ -1024,6 +1025,11 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                                                'PyObject_SetItem',
                                                args=[obj, key, value])
             return self.visit(call)
+
+        elif target.type.is_struct and nodes.is_name(target):
+            temp = nodes.TempNode(target.type,
+                                  dst_variable=target.variable)
+            node.targets[0] = temp.store()
 
         self.generic_visit(node)
         return node

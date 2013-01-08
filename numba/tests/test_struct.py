@@ -34,6 +34,13 @@ def struct_local_inplace():
 #def call_struct_as_arg():
 #    return struct_as_arg(value)
 
+@autojit(backend='ast', locals=dict(value=struct_type))
+def struct_local_copy():
+    value.a = "foo"
+    value.b = 10
+    value2 = value
+    return value2.a, value2.b
+
 def test_struct_locals():
     result = struct_local()
     assert result == ("foo", 10), result
@@ -43,6 +50,9 @@ def test_struct_locals():
 
 #    result = call_struct_as_arg()
 #    assert result == "foo", result
+
+    result = struct_local_copy()
+    assert result == ("foo", 20), result
 
 #------------------------------------------------------------------------
 # Struct indexing
@@ -98,8 +108,9 @@ def test_coerce_to_obj():
     print coerce_to_obj()
 
 if __name__ == "__main__":
+    print struct_local_copy()
 #    print call_struct_as_arg()
-    test_struct_locals()
-    test_record_array()
-    test_coerce_to_obj()
-    test_struct_indexing()
+#    test_struct_locals()
+#    test_record_array()
+#    test_coerce_to_obj()
+#    test_struct_indexing()

@@ -1,3 +1,12 @@
+"""
+Struct and complex nodes.
+
+Structs are allocated on the stack, and not mutated as values. This is
+because mutations are attribute or index assignments, which are not
+recognized as variable assignments. Hence mutation cannot propagate new
+values. So we mutate what we have on the stack.
+"""
+
 from numba.nodes import *
 
 def struct_type(type):

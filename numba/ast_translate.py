@@ -25,7 +25,7 @@ import logging
 logger = logging.getLogger(__name__)
 debug_conversion = False
 
-#logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 #debug_conversion = True
 
 _int32_zero = lc.Constant.int(_int32, 0)
@@ -1024,6 +1024,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 return
 
             # Refcount SSA variables
+            # TODO: use ObjectTempNode?
             if target_node.id not in self.object_local_temps:
                 target = self._null_obj_temp(target_node.id, change_bb=True)
                 self.object_local_temps[target_node.id] = target

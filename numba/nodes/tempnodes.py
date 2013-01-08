@@ -7,13 +7,15 @@ class TempNode(Node): #, ast.Name):
 
     temp_counter = 0
 
-    def __init__(self, type, name=None):
+    def __init__(self, type, name=None, dst_variable=None):
         self.type = type
         self.name = name
         self.variable = Variable(type, name='___numba_%d' % self.temp_counter,
                                  is_local=True)
         TempNode.temp_counter += 1
         self.llvm_temp = None
+
+        self.dst_variable = dst_variable
 
     def load(self):
         return TempLoadNode(temp=self)

@@ -153,3 +153,4 @@ class FunctionWrapperNode(Node):
         self.orig_py_func = orig_py_func
         self.fake_pyfunc = fake_pyfunc
         self.name = orig_py_func_name
+
