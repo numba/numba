@@ -391,7 +391,8 @@ def process_closures(context, outer_func_def, outer_symtab, func_globals):
                     context, closure_py_func, closure.func_def,
                     closure.type.signature,
                     closure_scope=closure_scope,
-                    func_globals=func_globals)
+                    func_globals=func_globals,
+                    locals=closure.locals)
 
         _, _, ast = result
         closure.symtab = p.symtab
@@ -478,6 +479,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
                     node.type.signature, symtab=node.symtab,
                     order=order, # skip type inference
                     qualified_name=fullname,
+                    locals=node.locals,
                     )
         p.translator.link()
         node.lfunc = p.translator.lfunc
