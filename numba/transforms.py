@@ -634,8 +634,21 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     node.node = nodes.call_pyfunc(long, [node.node])
             elif node_type.is_float:
                 cls = pyapi.PyFloat_AsDouble
-            #elif node_type.is_complex:
-            #    cls = functions.PyComplex_AsCComplex
+            elif node_type.is_complex:
+                # FIXME: This conversion has to be pretty slow.  We
+                # need to move towards being ABI-savvy enough to just
+                # call PyComplex_AsCComplex().
+                new_node = nodes.ComplexNode(
+                    real=function_util.external_call(
+                        self.context, self.llvm_module,
+                        "PyComplex_RealAsDouble", args=[node.node]),
+                    imag=function_util.external_call(
+                        self.context, self.llvm_module,
+                        "PyComplex_ImagAsDouble", args=[node.node]))
+            else:
+                raise NotImplementedError(
+                    "Don't know how to coerce a Python object to a %r" %
+                    node_type)
 
             if cls:
                 # TODO: error checking!
