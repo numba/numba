@@ -383,10 +383,16 @@ class PipelineStage(object):
         return ast
 
 class ControlFlowAnalysis(PipelineStage):
-    _pre_condition_schema = schema.load('Python.asdl')
+    _pre_condition_schema = None
+
+    @property
+    def precondition_schema(self):
+        if self._pre_condition_schema is None:
+            self._pre_condition_schema = schema.load('Python.asdl')
+        return self._pre_condition_schema
 
     def check_preconditions(self, ast, env):
-        self._pre_condition_schema.verify(ast)  # raises exception on error
+        self.pre_condition_schema.verify(ast)  # raises exception on error
         return True
 
     def transform(self, ast, env):
