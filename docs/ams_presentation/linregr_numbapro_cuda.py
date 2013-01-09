@@ -51,7 +51,6 @@ def gradient_descent(X, Y, theta, alpha, num_iters):
     NBLK = N // NTID
     assert NBLK * NTID == N
 
-
     Ex = np.empty(NBLK, dtype=X.dtype)
     Ey = np.empty(NBLK, dtype=X.dtype)
 
@@ -105,6 +104,7 @@ def main():
     NBLK = 10
     NTID = 1024
     N = NBLK * NTID
+    print 'N = %d' % N
 
     X, Y = populate_data(N)
 
