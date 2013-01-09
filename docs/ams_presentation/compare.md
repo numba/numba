@@ -1,24 +1,36 @@
-# Numba, Cython and PyPy
+# Compiling Strategy: Numba vs Cython vs PyPy
 
-+---------------+---------------------------+---------------------------+-----------------------+
-|               | Numba                     | Cython                    | PyPy                  |
-+===============+===========================+===========================+=======================+
-|               | - Runtime                 | - Ahead of time           | - Runtime tracing \   |
-| **Compiling \ |     - Static or dynamic   |     - build step          |   JIT                 |
-|   Strategy**  | - Ahead of time           |                           |                       |
-|               |                           |                           |                       |
-+---------------+---------------------------+---------------------------+-----------------------+
-| **IR**        | - LLVM                    | - C/C++                   | - PyPy JIT            |
-|               |                           |                           |                       |
-+---------------+---------------------------+---------------------------+-----------------------+
-| **Typing**    | - Type inferred           | - Explicit types & \      | - Full Python         |
-|               | - Single type at each \   |   type inference          |   compatability       |
-|               |   control flow point (\   |     - Quick fallback to \ |                       |
-|               |   like RPython)           |                           |                       |
-|               | - Variable reuse          |        objects            |                       |
-|               | - Python semantics for    | - Python semantics for    |                       |
-|               |   objects                 |   objects                 |                       |
-+---------------+---------------------------+---------------------------+-----------------------+
++---------------------------+---------------------------+-----------------------+
+| Numba                     | Cython                    | PyPy                  |
++===========================+===========================+=======================+
+| - Runtime                 | - Ahead of time           | - Runtime tracing     |
+|     - Static or dynamic   |     - build step          |   JIT                 |
+| - Ahead of time           |                           |                       |
+|                           |                           |                       |
++---------------------------+---------------------------+-----------------------+
 
-Numba has a focus on numerical and scientific computing
+# Compiler IR: Numba vs Cython vs PyPy
+
++---------------------------+---------------------------+-----------------------+
+| Numba                     | Cython                    | PyPy                  |
++===========================+===========================+=======================+
+| - LLVM                    | - C/C++                   | - PyPy JIT            |
+|                           |                           |                       |
++---------------------------+---------------------------+-----------------------+
+
+
+# Typing: Numba vs Cython vs PyPy
+
++---------------------------+---------------------------+-----------------------+
+| Numba                     | Cython                    | PyPy                  |
++===========================+===========================+=======================+
+| - Type inferred           | - Explicit types &        | - Full Python         |
+| - Single type at each     |   type inference          |   compatability       |
+|   control flow point (    | - Quick fallback to       |                       |
+|   like RPython)           |   objects                 |                       |
+| - Variable reuse          |                           |                       |
+| - Python semantics for    | - Python semantics for    |                       |
+|   objects                 |   objects                 |                       |
++---------------------------+---------------------------+-----------------------+
+
 

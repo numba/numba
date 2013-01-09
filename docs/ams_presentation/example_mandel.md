@@ -1,4 +1,4 @@
-# Example Mandelbrot
+# Example: Mandelbrot
 
 ```python
     @autojit
@@ -12,7 +12,11 @@
                 return i
 
         return 255
+```
 
+# Example Mandelbrot
+
+```python
     @autojit
     def create_fractal(min_x, max_x, min_y, max_y, image, iters):
         height = image.shape[0]
@@ -30,4 +34,8 @@
         return image
 ```
 
-- ~1000x speedup
+# Example Mandelbrot
+
+## 1000x speedup !!!
+
+![Mandelbrot](mandel.jpg)
