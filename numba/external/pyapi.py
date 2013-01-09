@@ -120,6 +120,10 @@ class PyFloat_FromDouble(ExternalFunction):
     arg_types = [double]
     return_type = object_
 
+class PyComplex_FromDoubles(ExternalFunction):
+    arg_types = [double, double]
+    return_type = object_
+
 class PyComplex_FromCComplex(ExternalFunction):
     arg_types = [complex128]
     return_type = object_

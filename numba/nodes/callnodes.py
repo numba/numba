@@ -11,6 +11,7 @@ class FunctionCallNode(Node):
 
 class NativeCallNode(FunctionCallNode):
 
+    _attributes = FunctionCallNode._attributes + ['llvm_func_name']
     _fields = ['args']
 
     def __init__(self, signature, args, llvm_func, py_func=None,
@@ -19,6 +20,7 @@ class NativeCallNode(FunctionCallNode):
                  skip_self=False, **kw):
         super(NativeCallNode, self).__init__(signature, args, **kw)
         self.llvm_func = llvm_func
+        self.llvm_func_name = getattr(llvm_func, 'name', None)
         self.py_func = py_func
         self.skip_self = skip_self
         self.type = signature.return_type
