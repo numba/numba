@@ -575,19 +575,27 @@ class ResolveCoercions(visitors.NumbaTransformer):
         node_type = node.node.type
         if node_type.is_numeric:
             cls = None
+            args = node.node,
             if node_type.is_int:
                 cls = self._get_int_conversion_func(node_type,
                                                     pyapi._from_long)
             elif node_type.is_float:
                 cls = pyapi.PyFloat_FromDouble
-            #elif node_type.is_complex:
-            #      cls = functions.PyComplex_FromCComplex
+            elif node_type.is_complex:
+                cls = pyapi.PyComplex_FromDoubles
+                args_ast = self.run_template(
+                    '({{cmplx}}.real, {{cmplx}}.imag)', vars={},
+                    cmplx=node.node)
+                args = args_ast.body[0].value.elts
+            else:
+                raise NotImplementedError(
+                    "Don't know how to coerce type %r to PyObject" % node_type)
 
             if cls:
                 new_node = function_util.external_call(self.context,
                                                        self.llvm_module,
                                                        cls.__name__,
-                                                       args=[node.node])
+                                                       args=args)
         elif node_type.is_pointer and not node_type.is_string():
             # Create ctypes pointer object
             ctypes_pointer_type = node_type.to_ctypes()
