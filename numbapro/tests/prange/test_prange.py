@@ -1,3 +1,4 @@
+
 """
 >>> prange_reduction()
 45.0
@@ -149,11 +150,16 @@ __doc__ += """
 """
 
 if __name__ == '__main__':
-#    jit(double(double))(prange_shared_privates_reductions.py_func)
-#    print "success"
+    jit(double(double))(prange_shared_privates_reductions.py_func)
+    jit(double(double[:, :]))(test_sum2d.py_func)
+
 #    print prange_shared_privates_reductions(2.0)
 #    a = np.arange(100).reshape(10, 10)
 #    print test_sum2d(a)
+
 #    print test_prange_in_closure(2.0)()
-    import doctest
-    doctest.testmod()
+#    print test_prange_in_closure2(2.0)()
+#    print test_prange_in_closure2(2)()
+
+#    import doctest
+#    doctest.testmod()
