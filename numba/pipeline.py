@@ -388,6 +388,7 @@ class PipelineStage(object):
                    llvm_module=env.crnt.llvm_module,
                    locals=env.crnt.locals,
                    allow_rebind_args=env.crnt.allow_rebind_args,
+                   warn=env.crnt.warn,
                    **kws)
 
     def __call__(self, ast, env):
@@ -553,6 +554,7 @@ class PipelineEnvironment(object):
         self.nopython = kws.pop('nopython', False)
         self.locals = kws.pop('locals', {})
         self.allow_rebind_args = kws.pop('allow_rebind_args', True)
+        self.warn = kws.pop('warn', True)
         self.kwargs = kws
 
 def check_stage(stage):
