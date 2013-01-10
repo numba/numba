@@ -76,7 +76,5 @@ class TestConversion(unittest.TestCase):
         assert ctypes.cast(result, ctypes.c_void_p).value == array.ctypes.data
 
 if __name__ == "__main__":
-    print convert_float(10.2)
-#    print convert(object(), 10.0)
-#    print convert_numeric(2.5, int_)
-#    unittest.main()
+    from numba.tests import test_support
+    test_support.main()

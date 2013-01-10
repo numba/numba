@@ -638,13 +638,14 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 # FIXME: This conversion has to be pretty slow.  We
                 # need to move towards being ABI-savvy enough to just
                 # call PyComplex_AsCComplex().
+                cloneable = nodes.CloneableNode(node.node)
                 new_node = nodes.ComplexNode(
                     real=function_util.external_call(
                         self.context, self.llvm_module,
-                        "PyComplex_RealAsDouble", args=[node.node]),
+                        "PyComplex_RealAsDouble", args=[cloneable]),
                     imag=function_util.external_call(
                         self.context, self.llvm_module,
-                        "PyComplex_ImagAsDouble", args=[node.node]))
+                        "PyComplex_ImagAsDouble", args=[cloneable.clone]))
             else:
                 raise NotImplementedError(
                     "Don't know how to coerce a Python object to a %r" %
