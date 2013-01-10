@@ -91,6 +91,7 @@ def test_sum2d(A):
     sum = 0.0
     for i in numba.prange(A.shape[0]):
         for j in range(A.shape[1]):
+            # print i, j
             sum += A[i, j]
 
     return sum
@@ -150,8 +151,9 @@ __doc__ += """
 if __name__ == '__main__':
 #    jit(double(double))(prange_shared_privates_reductions.py_func)
 #    print "success"
-    print prange_shared_privates_reductions(2.0)
+#    print prange_shared_privates_reductions(2.0)
 #    a = np.arange(100).reshape(10, 10)
-#    test_sum2d(a)
-#    import doctest
-#    doctest.testmod()
+#    print test_sum2d(a)
+#    print test_prange_in_closure(2.0)()
+    import doctest
+    doctest.testmod()

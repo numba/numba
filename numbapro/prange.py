@@ -29,7 +29,7 @@ from numba import *
 from numba import (error, visitors, nodes, templating, ast_type_inference,
                    transforms)
 from numba.minivect import  minitypes
-from numba import typesystem
+from numba import typesystem, pipeline
 from numba.symtab import Variable
 
 from numba.ast_type_inference import no_keywords
@@ -448,9 +448,22 @@ class VariableTypeInferingNode(nodes.UserNode):
 class PrangeExpander(visitors.NumbaTransformer):
     """
     Rewrite 'for i in prange(...): ...' before the control flow pass.
+
+    Runs once for the outermost function and also rewrites in closures.
     """
 
     prange = 0
+
+    def visit_FunctionDef(self, node):
+        if self.is_closure:
+            return node
+
+        # Track locals dicts
+        locals = self.locals
+        self.locals = pipeline.get_locals(node, None)
+        self.visitchildren(node)
+        self.locals = locals
+        return node
 
     def match_global(self, node, expected_value):
         if isinstance(node, ast.Name) and node.id not in self.local_names:
