@@ -237,7 +237,7 @@ class LLVMContextManager(object):
 
             self.module.link_in(lfunc_module, preserve=False)
 #
-#            print 'linked'.center(80, '=')
+#            print 'linked'.center(80, '='), lfunc.module, lfunc.name
 #            print self.module
 
             lfunc = self.module.get_function_named(func_name)
