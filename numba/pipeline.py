@@ -15,7 +15,7 @@ import llvm.core as lc
 
 import numba.closure
 from numba import error
-from numba import functions, naming, transforms, visitors, control_flow
+from numba import functions, naming, transforms, control_flow
 from numba import ast_type_inference as type_inference
 from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
@@ -23,8 +23,18 @@ from numba import utils
 from numba.utils import dump
 from numba.asdl import schema
 from numba.minivect import minitypes
+import numba.visitors
 
 logger = logging.getLogger(__name__)
+
+def get_locals(ast, locals_dict):
+    if locals_dict is None:
+        locals_dict = getattr(ast, "locals_dict", {})
+    else:
+        assert ast.locals_dict is locals_dict
+
+    ast.locals_dict = locals_dict
+    return locals_dict
 
 class Pipeline(object):
     """
@@ -55,7 +65,7 @@ class Pipeline(object):
     def __init__(self, context, func, ast, func_signature,
                  nopython=False, locals=None, order=None, codegen=False,
                  symtab=None, allow_rebind_args=True, template_signature=None,
-                 **kwargs):
+                 is_closure=False, **kwargs):
         self.context = context
         self.func = func
         self.ast = ast
@@ -81,8 +91,10 @@ class Pipeline(object):
         self.llvm_module = lc.Module.new(self.module_name(func))
 
         self.nopython = nopython
-        self.locals = locals or {}
-        self.closures = {}
+        self.locals = get_locals(ast, locals)
+        self.is_closure = is_closure
+
+        self.closures = kwargs.pop("closures", {})
         self.kwargs = kwargs
 
         if order is None:
@@ -120,6 +132,7 @@ class Pipeline(object):
                    locals=self.locals,
                    allow_rebind_args=self.allow_rebind_args,
                    closures=self.closures,
+                   is_closure=self.is_closure,
                    **kwds)
 
     def insert_specializer(self, name, after=None, before=None):
@@ -203,7 +216,7 @@ class Pipeline(object):
 
     def cfg(self, ast):
         transform = self.make_specializer(
-                control_flow.ControlFlowAnalysis, ast, **self.kwargs)
+                control_flow.ControlFlowAnalysis, ast)
         ast = transform.visit(ast)
         self.symtab = transform.symtab
         ast.flow = transform.flow
@@ -226,7 +239,7 @@ class Pipeline(object):
 
     def type_infer(self, ast):
         type_inferer = self.make_specializer(
-                    type_inference.TypeInferer, ast, **self.kwargs)
+                type_inference.TypeInferer, ast, **self.kwargs)
         type_inferer.infer_types()
 
         self.func_signature = type_inferer.func_signature
@@ -276,7 +289,7 @@ class Pipeline(object):
         return ast
 
 
-class FixMissingLocations(visitors.NumbaVisitor):
+class FixMissingLocations(numba.visitors.NumbaVisitor):
 
     def __init__(self, context, func, ast, *args, **kwargs):
         super(FixMissingLocations, self).__init__(context, func, ast,

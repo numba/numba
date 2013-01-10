@@ -33,7 +33,9 @@ class ClosureNode(Node):
         # ast and symtab after type inference
         self.type_inferred_ast = None
         self.symtab = None
-        self.locals = {}
+
+        from numba import pipeline
+        self.locals = pipeline.get_locals(func_def, None)
 
         # The Python extension type that must be instantiated to hold cellvars
         # self.scope_type = None
