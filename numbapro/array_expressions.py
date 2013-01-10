@@ -213,10 +213,16 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
         signature.struct_by_reference = True
 
         # Compile ufunc scalar kernel with numba
+        ast.fix_missing_locations(ufunc_ast)
         p, (_, _, _) = pipeline.run_pipeline(
                         self.context, None, ufunc_ast, signature, codegen=True)
 
-        lfunc = p.translator.lfunc
+        # Manual linking
+        lfunc_name = p.translator.lfunc.name
+        lfunc_type = p.translator.lfunc.type
+        self.llvm_module.link_in(p.translator.lfunc.module)
+        lfunc = self.llvm_module.get_function_named(lfunc_name)
+
         # print lfunc
         operands = ufunc_builder.operands
         self.func.live_objects.append(lfunc)

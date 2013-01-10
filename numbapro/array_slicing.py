@@ -257,8 +257,8 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
                                     stop is not None,
                                     step is not None)
 
-        slice_func = slice_func_def(self.mod)
-        slice_func.linkage = LINAKGE_LINKONCE_ODR
+        slice_func = slice_func_def(self.llvm_module)
+        slice_func.linkage = LINKAGE_LINKONCE_ODR
 
         data = node.view_copy_accessor.data
         in_shape = node.view_accessor.shape
@@ -305,8 +305,8 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
             self.builder.store(default_extent, dst)
 
         func_def = Broadcast()
-        broadcast = func_def(self.mod)
-        broadcast.linkage = LINAKGE_LINKONCE_ODR
+        broadcast = func_def(self.llvm_module)
+        broadcast.linkage = LINKAGE_LINKONCE_ODR
 
         for op in node.operands:
             op_result = self.visit(op)
