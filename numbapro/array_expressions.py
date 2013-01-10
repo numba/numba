@@ -54,7 +54,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         if lhs is not None:
             lhs.ctx = ast.Load()
 
-        builder = ufunc_builder.UFuncConverter(self.context, self.func, node)
+        builder = ufunc_builder.UFuncConverter()
         tree = builder.visit(node)
         ufunc_ast = builder.build_ufunc_ast(tree)
 
@@ -282,7 +282,7 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
         result = nodes.NativeCallNode(minikernel.type, args, lminikernel)
 
         # Use native slicing in array expressions
-        array_slicing.mark_nopython(self.context, ast.Suite(body=result.args))
+        array_slicing.mark_nopython(ast.Suite(body=result.args))
 
         if not is_expr:
             # a[:] = b[:] * c[:]

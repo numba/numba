@@ -162,7 +162,7 @@ class SliceRewriterMixin(ast_type_inference.NumpyMixin,
             node = self._rewrite_slice(node)
         return node
 
-class MarkNoPython(visitors.NumbaVisitor):
+class MarkNoPython(ast.NodeVisitor):
     """
     Mark array slicing nodes as nopython, which allows them to use
     stack-allocated fake arrays.
@@ -173,10 +173,8 @@ class MarkNoPython(visitors.NumbaVisitor):
         self.generic_visit(node)
         return node
 
-def mark_nopython(context, ast):
-    def dummy():
-        pass
-    MarkNoPython(context, dummy, ast).visit(ast)
+def mark_nopython(ast):
+    MarkNoPython().visit(ast)
 
 class FakePyArrayAccessor(object):
     pass
