@@ -276,13 +276,19 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
     3) generate nodes to instantiate scope extension type at call time
     """
 
+    def __init__(self, *args, **kwargs):
+        super(ClosureTypeInferer, self).__init__(*args, **kwargs)
+        self.warn = kwargs["warn"]
+
     def visit_FunctionDef(self, node):
         if node.closure_scope is None:
             # Process inner functions and determine cellvars and freevars
             # codes = [c for c in self.constants
             #                if isinstance(c, types.CodeType)]
             process_closures(self.context, node, self.symtab,
-                             self.func_globals, self.closures)
+                             func_globals=self.func_globals,
+                             closures=self.closures,
+                             warn=self.warn)
 
         # cellvars are the variables we own
         cellvars = dict((name, var) for name, var in self.symtab.iteritems()
@@ -366,8 +372,7 @@ def get_locals(symtab):
     return dict((name, var) for name, var in symtab.iteritems()
                     if var.is_local)
 
-def process_closures(context, outer_func_def, outer_symtab, func_globals,
-                     closures_dict):
+def process_closures(context, outer_func_def, outer_symtab, **kwds):
     """
     Process closures recursively and for each variable in each function
     determine whether it is a freevar, a cellvar, a local or otherwise.
@@ -392,17 +397,15 @@ def process_closures(context, outer_func_def, outer_symtab, func_globals,
                     context, closure_py_func, closure.func_def,
                     closure.type.signature,
                     closure_scope=closure_scope,
-                    func_globals=func_globals,
                     locals=closure.locals,
-                    closures=closures_dict,
-                    is_closure=True)
+                    is_closure=True,
+                    **kwds)
 
         _, _, ast = result
         closure.symtab = p.symtab
         closure.type_inferred_ast = ast
 
-        process_closures(context, closure.func_def, p.symtab, func_globals,
-                         closures_dict)
+        process_closures(context, closure.func_def, p.symtab, **kwds)
 
 
 class ClosureCompilingMixin(ClosureBaseVisitor):

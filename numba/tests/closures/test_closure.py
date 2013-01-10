@@ -376,5 +376,6 @@ if __name__ == '__main__':
 #    signature_dec()()
 #    test_closure_outer_locals()
 #    test_closure_loop()
-    import numba
-    numba.testmod()
+    test_closure_outer_locals()
+#    import numba
+#    numba.testmod()
