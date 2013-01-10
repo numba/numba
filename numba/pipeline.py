@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 def get_locals(ast, locals_dict):
     if locals_dict is None:
         locals_dict = getattr(ast, "locals_dict", {})
-    else:
+    elif hasattr(ast, "locals_dict"):
         assert ast.locals_dict is locals_dict
 
     ast.locals_dict = locals_dict
@@ -216,7 +216,7 @@ class Pipeline(object):
 
     def cfg(self, ast):
         transform = self.make_specializer(
-                control_flow.ControlFlowAnalysis, ast)
+                control_flow.ControlFlowAnalysis, ast, **self.kwargs)
         ast = transform.visit(ast)
         self.symtab = transform.symtab
         ast.flow = transform.flow
@@ -255,7 +255,8 @@ class Pipeline(object):
 
     def closure_type_inference(self, ast):
         type_inferer = self.make_specializer(
-                            numba.closure.ClosureTypeInferer, ast)
+                            numba.closure.ClosureTypeInferer, ast,
+                            warn=self.kwargs.get("warn", True))
         return type_inferer.visit(ast)
 
     def transform_for(self, ast):
