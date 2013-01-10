@@ -43,8 +43,6 @@ def pow2_const():
     return pow(2,3)
 
 if __name__ == '__main__':
-    c1, c2 = 1.2 + 4.1j, 0.6 + 0.5j
-    print pow2(c1, c2)
-    print pow(c1, c2)
-#    import doctest
-#    doctest.testmod()
+    import doctest
+    #import logging; logging.getLogger().setLevel(0)
+    doctest.testmod()
