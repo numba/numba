@@ -513,14 +513,9 @@ class LLVMCodeGen(codegen.CodeGen):
             return llvm_call
 
     def visit_FuncNameNode(self, node):
-        try:
-            func = self.context.llvm_module.get_function_named(node.name)
-        except llvm.LLVMException:
-            # Define as external function
-            assert node.is_external
-            func_type = node.type.to_llvm(self.context)
-            func = self.context.llvm_module.add_function(func_type, node.name)
-
+        func_type = node.type.to_llvm(self.context)
+        func = self.context.llvm_module.get_or_insert_function(func_type,
+                                                               node.name)
         return func
 
     def visit_FuncRefNode(self, node):
