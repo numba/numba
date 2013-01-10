@@ -307,6 +307,9 @@ class struct(minitypes.struct):
     def ref(self):
         return ReferenceType(self)
 
+    def __repr__(self):
+        return "struct(...)"
+
 #------------------------------------------------------------------------
 # References
 #------------------------------------------------------------------------

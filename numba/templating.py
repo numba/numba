@@ -25,7 +25,7 @@ class TempName(object):
         return self._count
 
     def temp_name(self, name):
-        return '__numba_%s_temp%d' % (name, self.count())
+        return '__numba_temp%d_%s' % (self.count(), name)
 
 _temp_name = TempName()
 

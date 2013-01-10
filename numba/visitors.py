@@ -3,7 +3,6 @@ from pprint import pprint, pformat
 import ast as ast_module
 import __builtin__ as builtins
 from numba import functions
-from numba import nodes
 from numba.typesystem.typemapper import have_properties
 
 try:
@@ -26,9 +25,12 @@ class NumbaVisitorMixin(CooperativeBase):
     _overloads = None
     func_level = 0
 
-    def __init__(self, context, func, ast, locals=(),
+    def __init__(self, context, func, ast, locals=None,
                  func_signature=None, nopython=0,
                  symtab=None, **kwargs):
+
+        assert locals is not None
+
         super(NumbaVisitorMixin, self).__init__(
             context, func, ast, func_signature=func_signature,
             nopython=nopython, symtab=symtab, **kwargs)
@@ -45,6 +47,7 @@ class NumbaVisitorMixin(CooperativeBase):
         self.current_scope = symtab
         self.have_cfg = getattr(self.ast, 'flow', False)
         self.closures = kwargs.get('closures')
+        self.is_closure = kwargs.get('is_closure', False)
         self.kwargs = kwargs
 
         if self.have_cfg:
@@ -93,7 +96,7 @@ class NumbaVisitorMixin(CooperativeBase):
                 local_name for local_name in self.locals
                                if local_name not in self.local_names)
 
-        if self.is_closure(func_signature) and func is not None:
+        if self.is_closure_signature(func_signature) and func is not None:
             # If a closure is backed up by an actual Python function, the
             # closure scope argument is absent
             from numba import closure
@@ -173,7 +176,7 @@ class NumbaVisitorMixin(CooperativeBase):
 
         self._overloads.setdefault(visit_name, []).append(func)
 
-    def is_closure(self, func_signature):
+    def is_closure_signature(self, func_signature):
         return (func_signature is not None and
                 func_signature.args and
                 func_signature.args[0].is_closure_scope)
@@ -369,6 +372,7 @@ class VariableFindingVisitor(NumbaVisitor):
 
     def visit_ClosureNode(self, node):
         self.func_defs.append(node)
+        self.generic_visit(node)
         return node
 
 def determine_variable_status(context, ast, locals_dict):
@@ -379,6 +383,8 @@ def determine_variable_status(context, ast, locals_dict):
         - free variables
         - cell variables
     """
+    from numba import pipeline
+
     if hasattr(ast, 'variable_status_tuple'):
         return ast.variable_status_tuple
 
@@ -395,14 +401,11 @@ def determine_variable_status(context, ast, locals_dict):
 
     # Compute cell variables
     for func_def in v.func_defs:
-        if isinstance(func_def, nodes.ClosureNode):
-            locals_dict = func_def.locals
-        else:
-            locals_dict = {}
+        inner_locals_dict = pipeline.get_locals(func_def, None)
 
         inner_locals, inner_cellvars, inner_freevars = \
                             determine_variable_status(context, func_def,
-                                                      locals_dict)
+                                                      inner_locals_dict)
         cellvars.update(locals.intersection(inner_freevars))
 
 #    print ast.name, "locals", pformat(locals),      \
