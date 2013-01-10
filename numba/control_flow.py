@@ -1065,7 +1065,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
     def set_default_directives(self):
         "Set some defaults for warnings"
         warn = self.current_directives['warn']
-        print self.ast.name, warn
         self.current_directives.setdefault('warn.maybe_uninitialized', warn)
         self.current_directives.setdefault('warn.unused_result', False)
         self.current_directives.setdefault('warn.unused', warn)
