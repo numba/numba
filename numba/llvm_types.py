@@ -70,7 +70,7 @@ _numpy_array_field_ofs = {
     'ndim' : _BASE_ARRAY_FIELD_OFS + 1,
     'shape' : _BASE_ARRAY_FIELD_OFS + 2,
     'strides' : _BASE_ARRAY_FIELD_OFS + 3,
-    # Skipping base for now...
+    'base' : _BASE_ARRAY_FIELD_OFS + 4,
     'descr' : _BASE_ARRAY_FIELD_OFS + 5,
 }
 
