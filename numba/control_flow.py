@@ -859,7 +859,10 @@ class SourceDescr(object):
         if self.func:
             source = inspect.getsource(self.func)
         else:
-            source = asttools.dump_python_source(self.ast)
+            try:
+                source = asttools.dump_python_source(self.ast)
+            except Exception:
+                source = ""
 
         source = "\n" * (self.ast.lineno - 2) + source
         return source.splitlines()
