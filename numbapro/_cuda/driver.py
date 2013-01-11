@@ -644,7 +644,7 @@ class PinnedMemory(finalizer.OwnerMixin):
     # Use a weak value dictionary to cache pointer-value -> PinnedMemory object.
     __cache = WeakValueDictionary()
 
-    def __new__(cls, ptr, size):
+    def __new__(cls, ptr, size, mapped=False):
         if isinstance(ptr, int) or isinstance(ptr, long):
             ptr_value = ptr
         else:
@@ -657,15 +657,17 @@ class PinnedMemory(finalizer.OwnerMixin):
         inst = object.__new__(PinnedMemory)
         # Cache instance in the cache
         cls.__cache[ptr_value] = inst
-        inst.__initialize(ptr, size)
+        inst.__initialize(ptr, size, mapped=mapped)
         return inst
 
-    def __initialize(self, ptr, size):
+    def __initialize(self, ptr, size, mapped):
         self._pointer = ptr
         # possible flags are portable (between context)
         # and deivce-map (map host memory to device thus no need
         # for memory transfer).
-        flags = CU_MEMHOSTREGISTER_DEVICEMAP
+        flags = 0
+        if mapped:
+            flags |= CU_MEMHOSTREGISTER_DEVICEMAP
         error = self.driver.cuMemHostRegister(ptr, size, flags)
         self.driver.check_error(error, 'Failed to pin memory')
         self._finalizer_track(self._pointer)

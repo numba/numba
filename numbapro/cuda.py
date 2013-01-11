@@ -396,7 +396,7 @@ def pagelock(ary):
     import numbapro._cuda.default # ensure we have a GPU device
     from numbapro._utils.ndarray import ndarray_datasize
     from numbapro._cuda.driver import PinnedMemory
-    pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary))
+    pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary), mapped=False)
     yield
     del pm
 
