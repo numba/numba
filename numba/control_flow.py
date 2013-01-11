@@ -951,6 +951,7 @@ def check_definitions(flow, compiler_directives):
         if Uninitialized in node.cf_state:
             node.cf_maybe_null = True
             if len(node.cf_state) == 1:
+                # node.cf_state == set([Uninitialized])
                 node.cf_is_null = True
             else:
                 node.cf_is_null = False
@@ -1563,9 +1564,10 @@ class DeleteStatement(visitors.NumbaVisitor):
     visit_For = visit_If
 
     def visit_ControlBlock(self, node):
+        #print "deleting block", node
         for phi in node.phi_nodes:
             for incoming in phi.incoming:
-                # print incoming, phi
+                #print "deleting", incoming, phi
                 incoming.cf_references.remove(phi)
 
         self.generic_visit(node)
