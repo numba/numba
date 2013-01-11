@@ -14,7 +14,7 @@ from numpy.core.multiarray import _ARRAY_API
 
 from .llvm_types import _int1, _int8, _int32, _int64, _intp, \
     _void_star, _void_star_star, \
-    _numpy_struct, _numpy_array
+    _numpy_struct, _numpy_array, _pyobject_head_struct_p, _numpy_array_field_ofs
 
 from .scrape_multiarray_api import get_include, process_source
 
@@ -96,6 +96,32 @@ class MultiarrayAPI (object):
             self._add_loader(symbol_name, symbol_index, symbol_type)
             setattr(self, symbol_name + '_ty', symbol_type)
         self.api_addr = None
+        # Fallback for missing API
+        self._add_missing_PyArray_SetBaseObject()
+
+    def _add_missing_PyArray_SetBaseObject(self):
+        '''Implement PyArray_SetBaseObject for old numpy API
+        '''
+        if hasattr(self, 'load_PyArray_SetBaseObject'):
+            return
+        def impl(module, builder_unused):
+            fty = lc.Type.function(_int32, [_numpy_array,
+                                            _pyobject_head_struct_p])
+            fn = module.get_or_insert_function(fty, "PyArray_SetBaseObject")
+            if fn.is_declaration: # Is a declaration?
+                # Implement the function body
+                fn.linkage = lc.LINKAGE_LINKONCE_ODR
+                builder = lc.Builder.new(fn.append_basic_block(''))
+                pyarray, pyobj = fn.args
+                const = lambda x: lc.Constant.int(_int32, x)
+                offset = _numpy_array_field_ofs['base']
+                loc = builder.gep(pyarray, map(const, [0, offset]))
+                val = builder.bitcast(pyobj, _void_star)
+                builder.store(val, loc)
+                builder.ret(const(0))
+            return fn
+
+        self.load_PyArray_SetBaseObject = impl
 
     def calculate_api_addr (self):
         PyCObject_AsVoidPtr = ctypes.pythonapi.PyCObject_AsVoidPtr
