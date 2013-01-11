@@ -158,7 +158,8 @@ class PythonUfunc2Minivect(numba_visitors.NumbaVisitor):
     """
 
     def __init__(self, context, func, func_ast, restype, argtypes):
-        super(PythonUfunc2Minivect, self).__init__(context, func, ast)
+        super(PythonUfunc2Minivect, self).__init__(context, func, ast,
+                                                   locals={})
         assert isinstance(func_ast, ast.FunctionDef)
 
         self.restype = restype
@@ -261,6 +262,12 @@ class MiniVectorize(object):
 
         # This will allow us to get parallelism at the outermost looping level,
         # as well as efficient element-wise traversal order.
+
+        def no_minivect():
+            signature = restype(*argtypes)
+            minivect_ast = build_kernel_call(lfunc, signature, mapper.miniargs)
+            return minivect_ast
+
         minivect_asts = []
         for lfunc, (restype, argtypes, kwargs) in zip(lfuncs, self.signatures):
             for dimensionality in (1, 2):
@@ -276,9 +283,7 @@ class MiniVectorize(object):
                     # Operations on complex numbers or objects are not
                     # supported by minivect, generate a kernel call
                     logging.info("Kernel not inlined, has objects/complex numbers")
-                    signature = restype(*argtypes)
-                    minivect_ast = build_kernel_call(
-                                lfunc, signature, mapper.miniargs)
+                    minivect_ast = no_minivect()
                 else:
                     # Try to directly map and inline, or fall back to generating
                     # a call
@@ -286,8 +291,7 @@ class MiniVectorize(object):
                         minivect_ast = mapper.visit(self.ast)
                     except (UntranslatableError, minierror.Error), e:
                         logging.info("Kernel not inlined: %s" % (e,))
-                        minivect_ast = self.build_kernel_call(
-                                    lfunc, mapper, restype, argtypes, kwargs)
+                        minivect_ast = no_minivect()
                     else:
                         logging.info("Kernel directly inlined")
 

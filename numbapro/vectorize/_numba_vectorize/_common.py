@@ -47,8 +47,8 @@ _numbatypes_str_to_numpy = {
         }
 
 def _numbatypes_to_numpy(ty):
-    ret = _numbatypes_str_to_numpy[str(ty)]
-    return ret
+    # ret = _numbatypes_str_to_numpy[str(ty)]
+    return ty.get_dtype()
 
 class CommonVectorizeFromFunc(object):
     def build(self, lfunc, dtypes):
