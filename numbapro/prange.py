@@ -7,8 +7,6 @@ Support for
 
 import ast
 import copy
-import types
-import ctypes
 import warnings
 import multiprocessing
 
@@ -19,7 +17,6 @@ except NotImplementedError:
     NUM_THREADS = 2
 
 import llvm.core
-from llvm.core import Type, inline_function
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm_cbuilder import builder
@@ -30,9 +27,6 @@ from numba import (error, visitors, nodes, templating, ast_type_inference,
                    transforms)
 from numba.minivect import  minitypes
 from numba import typesystem, pipeline
-from numba.symtab import Variable
-
-from numba.ast_type_inference import no_keywords
 
 from numbapro.vectorize import parallel, minivectorize
 
@@ -55,43 +49,6 @@ def get_reduction_default(op):
         '+': 0, '-': 0, '*': 1, '/': 1,
     }
     return defaults[op]
-
-#def outline_prange_body(context, outer_py_func, outer_symtab, subnode, **kwargs):
-#    # Find referenced and assigned variables
-#    v = VariableFindingVisitor()
-#    v.visit(subnode)
-#
-#    # Determine privates and reductions. Shared variables will be handled by
-#    # the closure support.
-#    fields = []
-#    reductions = []
-#    for var_name, op in v.assigned.iteritems():
-#        type = outer_symtab[var_name].type
-#        fields.append((var_name, type))
-#        if op is not None:
-#            reductions.append((var_name, op))
-#
-#    # Build a wrapper function around the prange body, accepting a struct
-#    # of private variables as argument
-#    for i, (name, type) in enumerate(fields):
-#        if type is None:
-#            fields[i] = name, typesystem.DeferredType(name)
-#
-#    privates_struct_type = numba.struct(fields)
-#    privates_struct = ast.Name('__numba_privates', ast.Param())
-#    privates_struct.type = privates_struct_type.pointer()
-#    privates_struct.variable = Variable(privates_struct.type)
-#
-#    args = [privates_struct]
-#    func_def = ast.FunctionDef(name=template.temp_name("prange_body"),
-#                               args=ast.arguments(args=args, vararg=None,
-#                                                  kwarg=None, defaults=[]),
-#                               body=[subnode],
-#                               decorator_list=[])
-#    func_def.func_signature = void(privates_struct.type)
-#    func_def.need_closure_wrapper = False
-#    return func_def, privates_struct_type, reductions
-
 
 class VariableFindingVisitor(visitors.VariableFindingVisitor):
     "Find referenced and assigned ast.Name nodes"
