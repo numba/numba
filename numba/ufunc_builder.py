@@ -79,7 +79,7 @@ class UFuncBuilder(object):
         self.operands = state
 
 
-class UFuncConverter(UFuncBuilder, visitors.NumbaTransformer):
+class UFuncConverter(UFuncBuilder, ast.NodeVisitor):
     """
     Convert a Python array expression AST to a scalar ufunc kernel by demoting
     array types to scalar types.
