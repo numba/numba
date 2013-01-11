@@ -68,7 +68,7 @@ The above adds slicing, array-expression, prange and gpu target to Numba.
 
 
 Indices and tables
-==================
+-------------------
 
 * :ref:`genindex`
 * :ref:`modindex`
