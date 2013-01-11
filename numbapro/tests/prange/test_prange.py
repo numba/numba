@@ -1,11 +1,3 @@
-
-"""
->>> prange_reduction()
-45.0
->>> prange_reduction2()
-49999995000000.0
-"""
-
 import numbapro
 import numba
 from numba import utils
@@ -15,6 +7,10 @@ import numpy as np
 
 @autojit(warn=False)
 def prange_reduction():
+    """
+    >>> prange_reduction()
+    45.0
+    """
     sum = 0.0
     for i in numba.prange(10):
         sum += i
@@ -22,6 +18,10 @@ def prange_reduction():
 
 @autojit(warn=False)
 def prange_reduction2():
+    """
+    >>> prange_reduction2()
+    49999995000000.0
+    """
     sum = 0.0
     for i in numba.prange(10000000):
         sum += i
@@ -29,20 +29,23 @@ def prange_reduction2():
 
 @autojit(warn=False)
 def prange_reduction_error():
+    """
+    >>> prange_reduction_error()
+    Traceback (most recent call last):
+        ...
+    NumbaError: 32:8: Local variable  'sum' is not bound yet
+    """
     for i in numba.prange(10):
         sum += i
     sum = 0.0
     return sum
 
-__doc__ += """
->>> prange_reduction_error()
-Traceback (most recent call last):
-    ...
-NumbaError: 32:8: Local variable  'sum' is not bound yet
-"""
-
 @autojit(warn=False)
 def prange_reduction_and_privates():
+    """
+    >>> prange_reduction_and_privates()
+    100.0
+    """
     sum = 10.0
     for i in numba.prange(10):
         j = i * 2
@@ -50,13 +53,13 @@ def prange_reduction_and_privates():
 
     return sum
 
-__doc__ += """
->>> prange_reduction_and_privates()
-100.0
-"""
-
 @autojit(warn=False)
 def prange_lastprivate():
+    """
+    >>> prange_lastprivate()
+    18
+    100.0
+    """
     sum = 10.0
     for i in numba.prange(10):
         j = i * 2
@@ -65,14 +68,12 @@ def prange_lastprivate():
     print j
     return sum
 
-__doc__ += """
->>> prange_lastprivate()
-18
-100.0
-"""
-
 @autojit(warn=False)
 def prange_shared_privates_reductions(shared):
+    """
+    >>> prange_shared_privates_reductions(2.0)
+    100.0
+    """
     sum = 10.0
 
     for i in numba.prange(10):
@@ -82,13 +83,18 @@ def prange_shared_privates_reductions(shared):
     shared = 3.0
     return sum
 
-__doc__ += """
->>> prange_shared_privates_reductions(2.0)
-100.0
-"""
 
 @autojit(warn=False)
 def test_sum2d(A):
+    """
+    >>> a = np.arange(100).reshape(10, 10)
+    >>> test_sum2d(a)
+    4950.0
+    >>> test_sum2d(a.astype(np.complex128))
+    (4950+0j)
+    >>> np.sum(a)
+    4950
+    """
     sum = 0.0
     for i in numba.prange(A.shape[0]):
         for j in range(A.shape[1]):
@@ -97,18 +103,12 @@ def test_sum2d(A):
 
     return sum
 
-__doc__ += """
->>> a = np.arange(100).reshape(10, 10)
->>> test_sum2d(a)
-4950.0
->>> test_sum2d(a.astype(np.complex128))
-(4950+0j)
->>> np.sum(a)
-4950
-"""
-
 @autojit(warn=False)
 def test_prange_in_closure(x):
+    """
+    >>> test_prange_in_closure(2.0)()
+    1000.0
+    """
     sum = 10.0
     N = 10
 
@@ -123,13 +123,13 @@ def test_prange_in_closure(x):
 
     return inner
 
-__doc__ += """
->>> test_prange_in_closure(2.0)()
-1000.0
-"""
 
 @autojit(warn=False)
 def test_prange_in_closure2(x):
+    """
+    >>> test_prange_in_closure2(2.0)()
+    10000.0
+    """
     sum = 10.0
     N = 10
 
@@ -144,24 +144,8 @@ def test_prange_in_closure2(x):
 
     return inner
 
-__doc__ += """
->>> test_prange_in_closure2(2.0)()
-10000.0
-"""
-
 if __name__ == '__main__':
-#    jit(double(double))(prange_shared_privates_reductions.py_func)
-#    jit(double(double[:, :]))(test_sum2d.py_func)
+#    prange_reduction_error()
 
-#    print prange_shared_privates_reductions(2.0)
-#    a = np.arange(100).reshape(10, 10)
-#    print test_sum2d(a)
-
-#    print test_prange_in_closure(2.0)()
-#    print test_prange_in_closure2(2.0)()
-#    print test_prange_in_closure2(2)()
-
-    prange_reduction_error()
-
-#    import doctest
-#    doctest.testmod()
+    import numba
+    numba.testmod()
