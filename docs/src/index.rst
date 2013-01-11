@@ -53,6 +53,7 @@ The above adds slicing, array-expression, prange and gpu target to Numba.
    generalizedufuncs
    CUDAJit
    CUDAufunc
+   CUDADevice
    CUDASupport
    prange
    arrayexprs

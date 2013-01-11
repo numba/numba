@@ -1,6 +1,5 @@
--------------
-CUDA Device
--------------
+CUDA Device Management
+=======================
 
 For multi-GPU machines, users may want to select which GPU to use.
 By default the CUDA driver selects the fastest GPU as the device 0,
@@ -38,4 +37,10 @@ Multi-Device
 -------------
 
 It is possible to use multiple devices by using multiple threads and 
-associating different devices to different threads.  More...
+associating different devices to different threads.
+
+**NOTE**  The compute mode of a device can be configured to be
+exclusive to a thread or process.  This prevents the user from creating
+multiple context on the same device in different threads.  The solution is to
+use the `nvidia-smi` commandline tool to query and modify the compute mode.  
+Refer to the documentation in `nvidia-smi`.
