@@ -115,7 +115,7 @@ class CloneNode(Node):
         self
 
     def __repr__(self):
-        return "clone(%s)" % self.node.node
+        return "clone(%s)" % self.node
 
 class ExpressionNode(Node):
     """
