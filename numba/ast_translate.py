@@ -1882,6 +1882,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return node.obj_temp_node.llvm_temp
 
     def visit_LLVMValueRefNode(self, node):
+        assert node.llvm_value
         return node.llvm_value
 
     def visit_BadValue(self, node):
