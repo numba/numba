@@ -11,7 +11,7 @@ class NumbaproPipeline(pipeline.Pipeline):
         super(NumbaproPipeline, self).__init__(context, func, ast,
                                                func_signature, **kwargs)
         self.try_insert_specializer('rewrite_array_expressions',
-                                    after='specialize')
+                                    before='specialize')
 #        self.try_insert_specializer('rewrite_prange_privates',
 #                                    after='closure_type_inference')
 

@@ -119,7 +119,7 @@ def test_diffusion():
     assert np.allclose(diffuse_numbapro(100), diffuse_numbapro.py_func(100))
 
 if __name__ == '__main__':
-    a = np.arange(120).reshape(10, 12).astype(np.float32)
-    assert np.all(array_expr(a, a, a) == array_expr.py_func(a, a, a))
+#    a = np.arange(120).reshape(10, 12).astype(np.float32)
+#    assert np.all(array_expr(a, a, a) == array_expr.py_func(a, a, a))
 #    test_array_expressions()
-#    numba.nose_run()
+    numba.nose_run()

@@ -57,19 +57,28 @@ class BroadcastNode(nodes.Node):
         - find big shape
     """
 
-    _fields = ['operands', 'check_error']
+    _fields = ['operands', 'check_errors']
 
     def __init__(self, array_type, operands, **kwargs):
         super(BroadcastNode, self).__init__(**kwargs)
         self.operands = operands
+
         self.shape_type = minitypes.CArrayType(npy_intp, array_type.ndim)
         self.array_type = array_type
         self.type = npy_intp.pointer()
 
-        self.return_value = nodes.LLVMValueRefNode(int_, None)
-        self.check_error = nodes.CheckErrorNode(
-                self.return_value, 0, exc_type=ValueError,
-                exc_msg="Shape mismatch while broadcasting")
+        self.broadcast_retvals = {}
+        self.check_errors = []
+
+        for op in operands:
+            # TODO: Put the raise code in a separate basic block and jump
+            return_value = nodes.LLVMValueRefNode(int_, None)
+            check_error = nodes.CheckErrorNode(
+                    return_value, 0, exc_type=ValueError,
+                    exc_msg="Shape mismatch while broadcasting")
+
+            self.broadcast_retvals[op] = return_value
+            self.check_errors.append(check_error)
 
 def create_slice_dim_node(subslice, *args):
     if subslice.type.is_slice:
@@ -293,6 +302,7 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         return None
 
     def visit_BroadcastNode(self, node):
+        print "broadcast_node:", hex(id(node))
         shape = self.alloca(node.shape_type)
         shape = self.builder.bitcast(shape, node.type.to_llvm(self.context))
 
@@ -307,6 +317,7 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
         broadcast.linkage = LINKAGE_LINKONCE_ODR
 
         for op in node.operands:
+            print op, hex(id(op))
             op_result = self.visit(op)
             acc = ndarray_helpers.PyArrayAccessor(self.builder, op_result)
             if op.type.is_array:
@@ -314,8 +325,9 @@ class NativeSliceCodegenMixin(object): # ast_translate.LLVMCodeGenerator):
                         llvm_types.constant_int(node.array_type.ndim),
                         llvm_types.constant_int(op.type.ndim)]
                 lresult = self.builder.call(broadcast, args)
-                node.return_value.llvm_value = lresult
-                self.visit(node.check_error)
+                node.broadcast_retvals[op].llvm_value = lresult
+
+        self.visitlist(node.check_errors)
 
         return shape
 

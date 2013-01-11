@@ -60,6 +60,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
 
         if print_ufunc:
             from meta import asttools
+            module = ast.Module(body=[ufunc_ast])
             print asttools.python_source(module)
 
         # Vectorize Python function
@@ -244,9 +245,9 @@ class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
                     node, "Cannot allocate new memory in nopython context")
         elif lhs is None:
             # TODO: determine best output order at runtime
-            lhs = nodes.ArrayNewEmptyNode(lhs_type, shape,
+            shape = shape.cloneable
+            lhs = nodes.ArrayNewEmptyNode(lhs_type, shape.clone,
                                           lhs_type.is_f_contig).cloneable
-
 
         # Build minivect wrapper kernel
         context = self.array_expr_context
