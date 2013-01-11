@@ -8,8 +8,21 @@ assert not hasattr(np.ndarray, 'free_device')
 assert not hasattr(np.ndarray, 'device_memory')
 assert not hasattr(np.ndarray, 'device_partition')
 assert not hasattr(np.ndarray, 'copy_to_host')
+assert not hasattr(np.ndarray, 'device_mapped')
+
 
 class DeviceNDArray(np.ndarray):
+    def device_mapped(self, mappedptr, stream=0):
+        # Ensure we already have a CUDA device
+        from . import default # this creates the default context if none exist
+        # transfer structure
+        self.__device_memory = ndarray_device_allocate_struct(self.ndim)
+        self.__device_data = mappedptr
+        ndarray_populate_struct(self.__device_memory, self.__device_data,
+                                self.ctypes.shape, self.ctypes.strides,
+                                stream=stream)
+        self.__gpu_readback = None
+
     def device_allocate(self, stream=0):
         # Ensure we already have a CUDA device
         from . import default # this creates the default context if none exist

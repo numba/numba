@@ -682,9 +682,9 @@ class PinnedMemory(finalizer.OwnerMixin):
         return inst
 
     def __initialize(self, ptr, size, mapped):
-        if not self.context.device.CAN_MAP_HOST_MEMORY:
-            msg = "Device %s cannot map host memory."
-            warnings.warns(msg % self.device)
+        if mapped and not self.context.device.CAN_MAP_HOST_MEMORY:
+            raise CudaDriverError("Device %s cannot map host memory" %
+                                  self.device)
 
         self._pointer = ptr
         # possible flags are portable (between context)
@@ -698,13 +698,12 @@ class PinnedMemory(finalizer.OwnerMixin):
         self.driver.check_error(error, 'Failed to pin memory')
         self._finalizer_track(self._pointer)
 
-    def get_device_pointer():
+    def get_device_pointer(self):
         assert self._mapped
         dptr = cu_device_ptr(0)
+        hptr=  self._pointer
         flags = 0 # must be zero for now
-        error = self.driver.cuMemHostGetDevicePointer(byref(cu_device_ptr),
-                                                      ptr,
-                                                      flags)
+        error = self.driver.cuMemHostGetDevicePointer(byref(dptr), hptr, flags)
         return DevicePointer(dptr)
 
     @classmethod
