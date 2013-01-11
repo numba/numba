@@ -229,14 +229,14 @@ class ParallelUFuncPosixMixin(object):
                                         contexts[i].reference().cast(C.void_p))
             with self.ifelse(status != self.constant_null(status.type)) as ifelse:
                 with ifelse.then():
-                    self.debug("Error at pthread_create: ", status)
+                    # self.debug("Error at pthread_create: ", status)
                     self.unreachable()
 
         with self.for_range(num_thread) as (loop, i):
             status = api.pthread_join(threads[i], NULL)
             with self.ifelse(status != self.constant_null(status.type)) as ifelse:
                 with ifelse.then():
-                    self.debug("Error at pthread_join: ", status)
+                    # self.debug("Error at pthread_join: ", status)
                     self.unreachable()
 
 class ParallelUFuncWindowsMixin(object):

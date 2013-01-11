@@ -13,21 +13,21 @@ from numba import *
 
 import numpy as np
 
-@autojit
+@autojit(warn=False)
 def prange_reduction():
     sum = 0.0
     for i in numba.prange(10):
         sum += i
     return sum
 
-@autojit
+@autojit(warn=False)
 def prange_reduction2():
     sum = 0.0
     for i in numba.prange(10000000):
         sum += i
     return sum
 
-@autojit
+@autojit(warn=False)
 def prange_reduction_error():
     for i in numba.prange(10):
         sum += i
@@ -41,7 +41,7 @@ Traceback (most recent call last):
 NumbaError: 32:8: Local variable  'sum' is not bound yet
 """
 
-@autojit
+@autojit(warn=False)
 def prange_reduction_and_privates():
     sum = 10.0
     for i in numba.prange(10):
@@ -55,7 +55,7 @@ __doc__ += """
 100.0
 """
 
-@autojit
+@autojit(warn=False)
 def prange_lastprivate():
     sum = 10.0
     for i in numba.prange(10):
@@ -71,7 +71,7 @@ __doc__ += """
 100.0
 """
 
-@autojit
+@autojit(warn=False)
 def prange_shared_privates_reductions(shared):
     sum = 10.0
 
@@ -87,7 +87,7 @@ __doc__ += """
 100.0
 """
 
-@autojit
+@autojit(warn=False)
 def test_sum2d(A):
     sum = 0.0
     for i in numba.prange(A.shape[0]):
@@ -107,7 +107,7 @@ __doc__ += """
 4950
 """
 
-@autojit
+@autojit(warn=False)
 def test_prange_in_closure(x):
     sum = 10.0
     N = 10
@@ -128,7 +128,7 @@ __doc__ += """
 1000.0
 """
 
-@autojit
+@autojit(warn=False)
 def test_prange_in_closure2(x):
     sum = 10.0
     N = 10
@@ -150,8 +150,8 @@ __doc__ += """
 """
 
 if __name__ == '__main__':
-    jit(double(double))(prange_shared_privates_reductions.py_func)
-    jit(double(double[:, :]))(test_sum2d.py_func)
+#    jit(double(double))(prange_shared_privates_reductions.py_func)
+#    jit(double(double[:, :]))(test_sum2d.py_func)
 
 #    print prange_shared_privates_reductions(2.0)
 #    a = np.arange(100).reshape(10, 10)
@@ -160,6 +160,8 @@ if __name__ == '__main__':
 #    print test_prange_in_closure(2.0)()
 #    print test_prange_in_closure2(2.0)()
 #    print test_prange_in_closure2(2)()
+
+    prange_reduction_error()
 
 #    import doctest
 #    doctest.testmod()
