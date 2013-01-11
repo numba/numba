@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 
-NumbaPro 
+NumbaPro*
 ========= 
 
 NumbaPro is an enhanced version of Numba which adds premium features and
