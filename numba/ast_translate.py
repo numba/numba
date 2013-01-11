@@ -1189,9 +1189,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_Compare(self, node):
         blocks_false = []
 
-        end_block = self.append_basic_block('compare.end')
-        cur_block = self.append_basic_block('compare.cmp')
+        pos = error.format_pos(node)
+        if pos:
+            pos = "." + pos
+
+        end_block = self.append_basic_block('compare.end' + pos)
+        cur_block = self.append_basic_block('compare.cmp' + pos)
         self.builder.branch(cur_block)
+
         next_block = None
         left = node.left
         for op, right in zip(node.ops, node.comparators):
@@ -1199,15 +1204,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             test = self._compare(op, left, right)
             cur_block = self.builder.basic_block
             blocks_false.append(cur_block)
-            next_block = self.append_basic_block('compare.cmp')
+            next_block = self.append_basic_block('compare.cmp' + pos)
             self.builder.cbranch(test, next_block, end_block)
             left = right
             cur_block = next_block
 
         self.builder.position_at_end(next_block)
         self.builder.branch(end_block)
-
         self.builder.position_at_end(end_block)
+
         booltype = _int1
         phi = self.builder.phi(booltype)
         phi.add_incoming(lc.Constant.int(booltype, 1), next_block)
