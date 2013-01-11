@@ -129,6 +129,28 @@ def class_decorators():
     def decorator(cls):
         return cls
 
+def uninitialized_augmented_assignment():
+    """
+    >>> uninitialized_augmented_assignment()
+    Traceback (most recent call last):
+        ...
+    UnboundLocalError: local variable 'x' referenced before assignment
+    """
+    x += 1
+
+
+def uninitialized_augmented_assignment_loop():
+    """
+    >>> uninitialized_augmented_assignment_loop()
+    Traceback (most recent call last):
+        ...
+    UnboundLocalError: local variable 'x' referenced before assignment
+    """
+    for i in range(10):
+        x += 1
+
+    x = 0
+
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
