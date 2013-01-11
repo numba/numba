@@ -1165,7 +1165,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         # self.flow.normalize()
         check_definitions(self.flow, self.current_directives)
 
-        # self._render_gv(node)
+        # self.render_gv(node)
 
         self.flow.compute_dominators()
         self.flow.compute_dominance_frontier()
@@ -1173,31 +1173,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         return node
 
-    def _render_gv(self, node):
-        self.gv_ctx.add(GV(node.name, self.flow))
-        dot_output = self.current_directives['control_flow.dot_output']
-        if dot_output:
-            annotate_defs = self.current_directives['control_flow.dot_annotate_defs']
-            fp = open(dot_output, 'wt')
-            try:
-                self.gv_ctx.render(fp, 'module', annotate_defs=annotate_defs)
-            finally:
-                fp.close()
-
-            png_output, ext = os.path.splitext(dot_output)
-            png_output += '.png'
-            fp = open(png_output, 'wb')
-            try:
-                p = subprocess.Popen(['dot', '-Tpng', dot_output],
-                                     stdout=fp.fileno(),
-                                     stderr=subprocess.PIPE)
-                p.wait()
-            except EnvironmentError, e:
-                logger.warn("Unable to write png: %s. Wrote %s" % (e, dot_output))
-            else:
-                logger.warn("Wrote %s" % png_output)
-            finally:
-                fp.close()
+    def render_gv(self, node):
+        render_gv(node, self.gv_ctx, self.flow, self.current_directives)
 
     def mark_assignment(self, lhs, rhs=None, assignment=None, warn_unused=True):
         assert self.flow.block
@@ -1598,3 +1575,53 @@ class DeleteStatement(visitors.NumbaVisitor):
         references = node.variable.cf_references
         if isinstance(node.ctx, ast.Load) and node in references:
             references.remove(node)
+
+
+#----------------------------------------------------------------------------
+# Graphviz Rendering
+#----------------------------------------------------------------------------
+
+def get_png_output_name(dot_output):
+    prefix, ext = os.path.splitext(dot_output)
+    i = 0
+    while True:
+        png_output = "%s%d.png" % (prefix, i)
+        if not os.path.exists(png_output):
+            break
+
+        i += 1
+
+    return png_output
+
+
+def write_dotfile(current_directives, dot_output, gv_ctx):
+    annotate_defs = current_directives['control_flow.dot_annotate_defs']
+    fp = open(dot_output, 'wt')
+    try:
+        gv_ctx.render(fp, 'module', annotate_defs=annotate_defs)
+    finally:
+        fp.close()
+
+
+def write_image(dot_output):
+    png_output = get_png_output_name(dot_output)
+    fp = open(png_output, 'wb')
+    try:
+        p = subprocess.Popen(['dot', '-Tpng', dot_output],
+                             stdout=fp.fileno(),
+                             stderr=subprocess.PIPE)
+        p.wait()
+    except EnvironmentError, e:
+        logger.warn("Unable to write png: %s. Wrote %s" % (e, dot_output))
+    else:
+        logger.warn("Wrote %s" % png_output)
+    finally:
+        fp.close()
+
+
+def render_gv(node, gv_ctx, flow, current_directives):
+    gv_ctx.add(GV(node.name, flow))
+    dot_output = current_directives['control_flow.dot_output']
+    if dot_output:
+        write_dotfile(current_directives, dot_output, gv_ctx)
+        write_image(dot_output)
