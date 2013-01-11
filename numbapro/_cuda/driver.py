@@ -94,6 +94,50 @@ CU_FUNC_CACHE_PREFER_L1      = 0x02
 # prefer equal sized L1 cache and shared memory
 CU_FUNC_CACHE_PREFER_EQUAL   = 0x03
 
+# Automatic scheduling
+CU_CTX_SCHED_AUTO          = 0x00
+# Set spin as default scheduling
+CU_CTX_SCHED_SPIN          = 0x01
+# Set yield as default scheduling
+CU_CTX_SCHED_YIELD         = 0x02
+# Set blocking synchronization as default scheduling
+CU_CTX_SCHED_BLOCKING_SYNC = 0x04
+
+CU_CTX_SCHED_MASK          = 0x07
+
+# Support mapped pinned allocations
+CU_CTX_MAP_HOST            = 0x08
+# Keep local memory allocation after launch
+CU_CTX_LMEM_RESIZE_TO_MAX  = 0x10
+
+CU_CTX_FLAGS_MASK          = 0x1f
+
+
+
+# If set, host memory is portable between CUDA contexts.
+# Flag for cuMemHostAlloc()
+CU_MEMHOSTALLOC_PORTABLE = 0x01
+
+# If set, host memory is mapped into CUDA address space and
+# cuMemHostGetDevicePointer() may be called on the host pointer.
+# Flag for cuMemHostAlloc()
+CU_MEMHOSTALLOC_DEVICEMAP = 0x02
+
+# If set, host memory is allocated as write-combined - fast to write,
+# faster to DMA, slow to read except via SSE4 streaming load instruction
+# (MOVNTDQA).
+# Flag for cuMemHostAlloc()
+CU_MEMHOSTALLOC_WRITECOMBINED = 0x04
+
+# If set, host memory is portable between CUDA contexts.
+# Flag for cuMemHostRegister()
+CU_MEMHOSTREGISTER_PORTABLE = 0x01
+
+# If set, host memory is mapped into CUDA address space and
+# cuMemHostGetDevicePointer() may be called on the host pointer.
+# Flag for cuMemHostRegister()
+CU_MEMHOSTREGISTER_DEVICEMAP = 0x02
+
 def _build_reverse_error_map():
     import sys
     prefix = 'CUDA_ERROR'
@@ -464,7 +508,8 @@ class _Context(finalizer.OwnerMixin):
     def __init__(self, device):
         self.device = device
         self._handle = cu_context()
-        error = self.driver.cuCtxCreate(byref(self._handle), 0, self.device.id)
+        flags = CU_CTX_MAP_HOST
+        error = self.driver.cuCtxCreate(byref(self._handle), flags, self.device.id)
         self.driver.check_error(error,
                                 'Failed to create context on %s' % self.device)
         self._finalizer_track(self._handle)
@@ -620,7 +665,7 @@ class PinnedMemory(finalizer.OwnerMixin):
         # possible flags are portable (between context)
         # and deivce-map (map host memory to device thus no need
         # for memory transfer).
-        flags = 0
+        flags = CU_MEMHOSTREGISTER_DEVICEMAP
         error = self.driver.cuMemHostRegister(ptr, size, flags)
         self.driver.check_error(error, 'Failed to pin memory')
         self._finalizer_track(self._pointer)
