@@ -2,8 +2,11 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Documentation for numba 
-========================
+Numba
+=====
+
+Documentation for numba
+------------------------
 
 Contents:
 
@@ -24,7 +27,8 @@ Contents:
    doc/examples.rst
 
 Developer Documentation
-=======================
+------------------------
+
 
 .. toctree::
    :titlesonly:
@@ -35,7 +39,7 @@ Developer Documentation
 
 
 Indices and tables
-==================
+------------------------
 
 * :ref:`genindex`
 * :ref:`modindex`
