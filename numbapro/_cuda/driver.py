@@ -3,7 +3,7 @@ This is more-or-less a object-oriented interface to the CUDA driver API.
 It properly has a lot of resemblence with PyCUDA.
 '''
 
-import sys, os
+import sys, os, warnings
 import contextlib
 from ctypes import *
 from .error import *
@@ -263,6 +263,12 @@ class Driver(object):
 
         # CUresult cuMemHostUnregister(void * 	p)
         'cuMemHostUnregister':  (c_int, c_void_p),
+
+        # CUresult cuMemHostGetDevicePointer(CUdeviceptr * pdptr,
+        #                                    void *        p,
+        #                                    unsigned int  Flags)
+        'cuMemHostGetDevicePointer': (c_int, POINTER(cu_device_ptr),
+                                      c_void_p, c_uint),
     }
 
     OLD_API_PROTOTYPES = {
@@ -453,10 +459,12 @@ CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X = 5
 CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y = 6
 CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z = 7
 CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK = 8
+CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT = 40
+CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY = 19
 
 class Device(object):
 
-    ATTRIBUTES = {
+    ATTRIBUTES = { # attributes with integer values
       'MAX_THREADS_PER_BLOCK': CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK,
       'MAX_GRID_DIM_X':        CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X,
       'MAX_GRID_DIM_Y':        CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y,
@@ -465,6 +473,8 @@ class Device(object):
       'MAX_BLOCK_DIM_Y':       CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y,
       'MAX_BLOCK_DIM_Z':       CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z,
       'MAX_SHARED_MEMORY':     CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK,
+      'ASYNC_ENGINE_COUNT':    CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT,
+      'CAN_MAP_HOST_MEMORY':   CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY,
     }
 
     def __init__(self, device_id):
@@ -508,8 +518,10 @@ class _Context(finalizer.OwnerMixin):
     def __init__(self, device):
         self.device = device
         self._handle = cu_context()
-        flags = CU_CTX_MAP_HOST
-        error = self.driver.cuCtxCreate(byref(self._handle), flags, self.device.id)
+        if self.device.CAN_MAP_HOST_MEMORY:
+            flags = CU_CTX_MAP_HOST
+        error = self.driver.cuCtxCreate(byref(self._handle), flags,
+                                        self.device.id)
         self.driver.check_error(error,
                                 'Failed to create context on %s' % self.device)
         self._finalizer_track(self._handle)
@@ -567,12 +579,52 @@ class Stream(finalizer.OwnerMixin):
     def device(self):
         return self.context.device
 
-class DeviceMemory(finalizer.OwnerMixin):
+class DevicePointer(object):
     '''Memory on the GPU deivce.
 
     The lifetime of the object is tied to the GPU memory handle; that is the
     memory is released when this object is released.
     '''
+    def __init__(self, handle):
+        self._handle = handle
+        self._depends = []
+
+    def to_device_raw(self, src, size, stream=None):
+        if stream:
+            error = self.driver.cuMemcpyHtoDAsync(self._handle, src, size,
+                                                  stream._handle)
+        else:
+            error = self.driver.cuMemcpyHtoD(self._handle, src, size)
+        self.driver.check_error(error, "Failed to copy memory H->D")
+
+    def from_device_raw(self, dst, size, stream=None):
+        if stream:
+            error = self.driver.cuMemcpyDtoHAsync(dst, self._handle, size,
+                                                  stream._handle)
+        else:
+            error = self.driver.cuMemcpyDtoH(dst, self._handle, size)
+        self.driver.check_error(error, "Failed to copy memory D->H")
+
+    def memset(self, val, size, stream=None):
+        if stream:
+            error = self.driver.cuMemsetD8Async(self._handle, val, size,
+                                                stream._handle)
+        else:
+            error = self.driver.cuMemsetD8(self._handle, val, size)
+        self.driver.check_error(error, "Failed to set memory")
+
+    def add_dependencies(self, *args):
+        self._depends.extend(args)
+
+    @property
+    def driver(self):
+        return self.device.driver
+
+    @property
+    def device(self):
+        return self.context.device
+
+class AllocatedDeviceMemory(DevicePointer, finalizer.OwnerMixin):
     def __init__(self, bytesize=None):
         self._depends = []
         self.context = Driver().current_context()
@@ -594,24 +646,10 @@ class DeviceMemory(finalizer.OwnerMixin):
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
         self.driver.check_error(error, 'Failed to allocate memory')
         self._finalizer_track(self._handle)
-
+        
         if debug_memory:
             global debug_memory_alloc
             debug_memory_alloc += 1
-
-    def to_device_raw(self, src, size, stream=None):
-        if stream:
-            error = self.driver.cuMemcpyHtoDAsync(self._handle, src, size, stream._handle)
-        else:
-            error = self.driver.cuMemcpyHtoD(self._handle, src, size)
-        self.driver.check_error(error, "Failed to copy memory H->D")
-
-    def from_device_raw(self, dst, size, stream=None):
-        if stream:
-            error = self.driver.cuMemcpyDtoHAsync(dst, self._handle, size, stream._handle)
-        else:
-            error = self.driver.cuMemcpyDtoH(dst, self._handle, size)
-        self.driver.check_error(error, "Failed to copy memory D->H")
 
     def offset(self, offset):
         handle = cu_device_ptr(self._handle.value + offset)
@@ -621,23 +659,6 @@ class DeviceMemory(finalizer.OwnerMixin):
         devmem.add_dependencies(self) # avoid free the parent pointer
         return devmem
 
-    def memset(self, val, size, stream=None):
-        if stream:
-            error = self.driver.cuMemsetD8Async(self._handle, val, size, stream._handle)
-        else:
-            error = self.driver.cuMemsetD8(self._handle, val, size)
-        self.driver.check_error(error, "Failed to set memory")
-
-    def add_dependencies(self, *args):
-        self._depends.extend(args)
-
-    @property
-    def driver(self):
-        return self.device.driver
-
-    @property
-    def device(self):
-        return self.context.device
 
 class PinnedMemory(finalizer.OwnerMixin):
 
@@ -661,16 +682,30 @@ class PinnedMemory(finalizer.OwnerMixin):
         return inst
 
     def __initialize(self, ptr, size, mapped):
+        if not self.context.device.CAN_MAP_HOST_MEMORY:
+            msg = "Device %s cannot map host memory."
+            warnings.warns(msg % self.device)
+
         self._pointer = ptr
         # possible flags are portable (between context)
         # and deivce-map (map host memory to device thus no need
         # for memory transfer).
         flags = 0
+        self._mapped = mapped
         if mapped:
             flags |= CU_MEMHOSTREGISTER_DEVICEMAP
         error = self.driver.cuMemHostRegister(ptr, size, flags)
         self.driver.check_error(error, 'Failed to pin memory')
         self._finalizer_track(self._pointer)
+
+    def get_device_pointer():
+        assert self._mapped
+        dptr = cu_device_ptr(0)
+        flags = 0 # must be zero for now
+        error = self.driver.cuMemHostGetDevicePointer(byref(cu_device_ptr),
+                                                      ptr,
+                                                      flags)
+        return DevicePointer(dptr)
 
     @classmethod
     def _finalize(cls, pointer):
@@ -815,7 +850,7 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, stream_handle, ar
         # count parameter byte size
         bytesize = 0
         for arg in args:
-            if isinstance(arg, DeviceMemory):
+            if isinstance(arg, AllocatedDeviceMemory):
                 size = sizeof(arg._handle)
             else:
                 size = sizeof(arg)
@@ -826,7 +861,7 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, stream_handle, ar
 
         offset = 0
         for i, arg in enumerate(args):
-            if isinstance(arg, DeviceMemory):
+            if isinstance(arg, AllocatedDeviceMemory):
                 size = sizeof(arg._handle)
                 error = driver.cuParamSetv(cufunc_handle, offset,
                                            addressof(arg._handle),
@@ -849,7 +884,7 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, stream_handle, ar
 
         param_vals = []
         for arg in args:
-            if isinstance(arg, DeviceMemory):
+            if isinstance(arg, AllocatedDeviceMemory):
                 param_vals.append(addressof(arg._handle))
             else:
                 param_vals.append(addressof(arg))

@@ -38,13 +38,13 @@ def _specialize_ndarray_struct(nd):
 
 def ndarray_device_allocate_struct(nd):
     c_ndarray_struct = _specialize_ndarray_struct(nd)
-    gpu_struct = _cuda.DeviceMemory(sizeof(c_ndarray_struct))
+    gpu_struct = _cuda.AllocatedDeviceMemory(sizeof(c_ndarray_struct))
     return gpu_struct
 
 def ndarray_device_allocate_data(ary):
     datasize = ndarray_datasize(ary)
     # allocate
-    gpu_data = _cuda.DeviceMemory(datasize)
+    gpu_data = _cuda.AllocatedDeviceMemory(datasize)
     return gpu_data
 
 def ndarray_device_transfer_data(ary, gpu_data, stream=0):

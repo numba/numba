@@ -400,6 +400,15 @@ def pagelock(ary):
     yield
     del pm
 
+@contextlib.contextmanager
+def mapped(ary):
+    import numbapro._cuda.default # ensure we have a GPU device
+    from numbapro._utils.ndarray import ndarray_datasize
+    from numbapro._cuda.driver import PinnedMemory
+    pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary), mapped=True)
+    yield pm.get_device_pointer()
+    del pm
+
 # Device selection
 
 def select_device(device_id):

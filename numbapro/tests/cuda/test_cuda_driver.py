@@ -76,7 +76,7 @@ class TestCudaDriver(support.CudaTestCase):
         function = Function(module, '_Z10helloworldPi')
 
         array = (c_int * 100)()
-        memory = DeviceMemory(sizeof(array))
+        memory = AllocatedDeviceMemory(sizeof(array))
         memory.to_device_raw(array, sizeof(array))
 
         function = function.configure((1,), (100,))
@@ -96,7 +96,7 @@ class TestCudaDriver(support.CudaTestCase):
         stream = Stream()
         with stream.auto_synchronize():
 
-            memory = DeviceMemory(sizeof(array))
+            memory = AllocatedDeviceMemory(sizeof(array))
             memory.to_device_raw(array, sizeof(array), stream)
 
             function = function.configure((1,), (100,), stream=stream)
