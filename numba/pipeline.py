@@ -225,7 +225,7 @@ class Pipeline(object):
 
     def dump_cfg(self, ast):
         if self.ast.cfg_transform.graphviz:
-            self.ast.cfg_transform._render_gv(ast)
+            self.ast.cfg_transform.render_gv(ast)
         return ast
 
     def const_folding(self, ast):
