@@ -9,6 +9,7 @@ def delete_control_blocks(flow_node, flow):
     """
     parent = flow_node.cond_block.idom
     flow_node.exit_block.reparent(parent)
+    flow.blocks.remove(flow_node.exit_block)
     flow_node.exit_block = None
 
     #flow_node.cond_block.delete(flow)

@@ -1561,7 +1561,19 @@ class DeleteStatement(visitors.NumbaVisitor):
             self.visit(node.exit_block)
 
     visit_While = visit_If
-    visit_For = visit_If
+
+    def visit_For(self, node):
+        self.generic_visit(node)
+
+        # Visit ControlBlocks
+        self.visit(node.cond_block)
+        self.visit(node.if_block)
+        self.visit(node.incr_block)
+        if node.orelse:
+            self.visit(node.else_block)
+        if node.exit_block:
+            self.visit(node.exit_block)
+
 
     def visit_ControlBlock(self, node):
         #print "deleting block", node
