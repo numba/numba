@@ -155,7 +155,8 @@ class FunctionCache(object):
         assert argtypes is not None
         flags = None # TODO: stub
         argtypes_flags = tuple(argtypes), flags
-        result = self.__compiled_funcs[py_func].get(argtypes_flags)
+        if py_func in self.__compiled_funcs:
+            result = self.__compiled_funcs[py_func].get(argtypes_flags)
 
         # DEAD CODE?
         #if result is None and py_func in self.external_functions:
