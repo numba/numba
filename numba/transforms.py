@@ -83,6 +83,7 @@ import opcode
 import types
 import ctypes
 import textwrap
+import traceback
 import __builtin__ as builtins
 
 if __debug__:
@@ -493,8 +494,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
         node_type = node.node.type
         dst_type = node.dst_type
         if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
-            logger.debug('coercion: %s --> %s\n%s' % (
-                    node_type, dst_type, pprint.pformat(utils.ast2tree(node))))
+            logger.debug('coercion: %s --> %s\n%s',
+                         node_type, dst_type, utils.pformat_ast(node))
 
         if self.nopython and is_obj(node_type):
             raise error.NumbaError(node, "Cannot coerce to or from object in "
@@ -503,21 +504,20 @@ class ResolveCoercions(visitors.NumbaTransformer):
         if is_obj(node.dst_type) and not is_obj(node_type):
             node = nodes.ObjectTempNode(nodes.CoerceToObject(
                     node.node, node.dst_type, name=node.name))
-            return self.visit(node)
+            result = self.visit(node)
         elif is_obj(node_type) and not is_obj(node.dst_type):
             node = nodes.CoerceToNative(node.node, node.dst_type,
                                         name=node.name)
             result = self.visit(node)
-            return result
         elif node_type.is_null:
             if not dst_type.is_pointer:
                 raise error.NumbaError(node.node,
                                        "NULL must be cast or implicitly "
                                        "coerced to a pointer type")
-            return self.visit(nodes.NULL.coerce(dst_type))
+            result = self.visit(nodes.NULL.coerce(dst_type))
         elif node_type.is_numeric and dst_type.is_bool:
-            return self.visit(ast.Compare(node.node, [ast.NotEq()],
-                                          [nodes.const(0, node_type)]))
+            result = self.visit(ast.Compare(node.node, [ast.NotEq()],
+                                            [nodes.const(0, node_type)]))
         elif node_type.is_c_string and dst_type.is_numeric:
             # TODO: int <-> string conversions are explicit, this should not
             # TODO: be a coercion
@@ -546,16 +546,20 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                 nodes.const(0, Py_ssize_t)])
                 node = nodes.CoerceToNative(nodes.ObjectTempNode(cvtobj),
                                             dst_type, name=node.name)
-            return self.visit(node)
+            result = self.visit(node)
+        else:
+            self.generic_visit(node)
+            if not node.node.type == node_type:
+                result = self.visit(node)
+            elif dst_type == node.node.type:
+                result = node.node
+            else:
+                result = node
 
-        self.generic_visit(node)
-        if not node.node.type == node_type:
-            return self.visit(node)
+        if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
+            logger.debug('result = %s', utils.pformat_ast(result))
 
-        if dst_type == node.node.type:
-            return node.node
-
-        return node
+        return result
 
     def _get_int_conversion_func(self, type, funcs_dict):
         type = self.context.promote_types(type, long_)
@@ -588,8 +592,9 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     cmplx=node.node)
                 args = args_ast.body[0].value.elts
             else:
-                raise NotImplementedError(
-                    "Don't know how to coerce type %r to PyObject" % node_type)
+                raise error.NumbaError(
+                    node, "Don't know how to coerce type %r to PyObject" %
+                    node_type)
 
             if cls:
                 new_node = function_util.external_call(self.context,
@@ -620,6 +625,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
         from_type = node.node.type
         node_type = node.type
+
         if node_type.is_numeric:
             cls = None
             if node_type == size_t:
@@ -638,7 +644,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 # FIXME: This conversion has to be pretty slow.  We
                 # need to move towards being ABI-savvy enough to just
                 # call PyComplex_AsCComplex().
-                cloneable = nodes.CloneableNode(node.node)
+                cloneable = self.visit(node.node).cloneable
                 new_node = nodes.ComplexNode(
                     real=function_util.external_call(
                         self.context, self.llvm_module,
@@ -647,8 +653,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
                         self.context, self.llvm_module,
                         "PyComplex_ImagAsDouble", args=[cloneable.clone]))
             else:
-                raise NotImplementedError(
-                    "Don't know how to coerce a Python object to a %r" %
+                raise error.NumbaError(
+                    node, "Don't know how to coerce a Python object to a %r" %
                     node_type)
 
             if cls:
@@ -661,13 +667,14 @@ class ResolveCoercions(visitors.NumbaTransformer):
             raise error.NumbaError(node, "Obtaining pointers from objects "
                                          "is not yet supported")
         elif node_type.is_void:
-            raise error.NumbaError(node, "Cannot coerce %s to void" % (from_type,))
+            raise error.NumbaError(node, "Cannot coerce %s to void" %
+                                   (from_type,))
 
         if new_node is None:
             # Create a tuple for PyArg_ParseTuple
             new_node = node
             new_node.node = ast.Tuple(elts=[node.node], ctx=ast.Load())
-        else:
+        elif new_node.type != node.type:
             # Fast coercion
             new_node = nodes.CoercionNode(new_node, node.type)
 
