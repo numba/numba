@@ -392,7 +392,7 @@ def stream():
 
 # Page lock
 @contextlib.contextmanager
-def pagelock(*arylist):
+def pinned(*arylist):
     import numbapro._cuda.default # ensure we have a GPU device
     from numbapro._utils.ndarray import ndarray_datasize
     from numbapro._cuda.driver import PinnedMemory

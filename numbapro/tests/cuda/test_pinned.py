@@ -30,7 +30,7 @@ class TestPinned(support.CudaTestCase):
     def test_pinned(self):
         A = np.arange(2*1024*1024) # 16 MB
         total = 0
-        with cuda.pagelock(A):
+        with cuda.pinned(A):
             for i in range(REPEAT):
                 total += self._template('pinned', A)
         print 'pinned', total / REPEAT
