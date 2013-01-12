@@ -412,6 +412,7 @@ def mapped(*arylist, **kws):
     from numbapro._cuda.driver import PinnedMemory
     from numbapro._cuda import devicearray
     pmlist = []
+    stream = kws.get('stream', 0)
     for ary in arylist:
         pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary), mapped=True)
         pmlist.append(pm)
