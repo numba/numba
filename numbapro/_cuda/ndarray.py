@@ -1,4 +1,4 @@
-import sys
+import sys, bisect
 from ctypes import *
 import threading
 import numpy as np
@@ -84,14 +84,57 @@ class SMMBucket(object):
         self.stop = stop
         self.refct = refct
 
+    def overlaps(self, other):
+        if self.start < other.stop and self.stop > other.start:
+            return True
+        elif other.start < self.stop and other.stop > self.start:
+            return True
+        else:
+            return False
+
+    def __lt__(self, other):
+        return self.start < other.start
+
+    def __gt__(self, other):
+        return self.start > other.start
+
+    __eq__ = NotImplemented
+    __ne__ = NotImplemented
+
+class SMMBucketCollection(object):
+    def __init__(self):
+        self.keys = []
+        self.vals = []
+
+    def index(self, bucket):
+        "Index of the last item with a smaller bucket.start"
+        return bisect.bisect_left(self.keys, bucket)
+
+    def insert(self, bucket, value):
+        i = self.index(bucket)
+        self.keys.insert(i, bucket)
+        self.vals.insert(i, value)
+
+    def remove_overlap(self, bucket):
+        idx = self.index(bucket)
+        for i in range(idx, min(len(self), idx + 2)):
+            b = self.keys[i]
+            if b.overlaps(bucket):
+                del self.keys[i]
+                del self.vals[i]
+
+    def __len__(self):
+        return len(self.keys)
+
+
 class SmallMemoryManager(object):
     '''Allocate a mapped+pinned host memory for storing small tuples of intp:
     e.g. shape and strides
         
-    Default to reserve 4-MB with 16-B block.
+    Default to reserve 2-MB with 32-B block.
     '''
-    NBYTES = 2**22
-    BLOCKSZ = 16
+    NBYTES = 2**21
+    BLOCKSZ = 32
 
     Driver = _cuda.Driver()
 
@@ -122,10 +165,14 @@ class SmallMemoryManager(object):
         self.devicememory = _cuda.AllocatedDeviceMemory(self.nbytes)
         self.devaddrbase = self.devicememory._handle.value
         # initialize valuemap
-        self.valuemap = {} # stores tuples -> (start, stop, refct)
+        self.valuemap = {} # stores tuples -> bucket
+        # initialize bucketmap
+        self.bucketmap = SMMBucketCollection()  # stores bucket -> tuples
         # initialize usemap
         self.usemap = bitarray(self.blockct)
         self.usemap[:] = False
+        self.usemap_last = 0
+
 
     def calc_block_use(self, n):
         from math import ceil
@@ -142,21 +189,29 @@ class SmallMemoryManager(object):
             # perform allocation
             ## find location
             nval = len(value)
-            iterator = self.usemap.itersearch(bitarray('0' * nval))
+            pattern = bitarray('0' * nval)
+            iterator = self.usemap[self.usemap_last:].itersearch(pattern)
             try: # get the first empty slot
                 index = iterator.next()
             except StopIteration:
                 raise Exception("Insufficient resources")
             else:
                 # calc indices
+                index += self.usemap_last
                 start = index * self.valueperblock
                 stop = start + nval
                 blkstart = index
                 blkstop = index + self.calc_block_use(nval)
+                self.usemap_last = blkstop % self.blockct
                 # put in host memory
                 self.hostmemory[start:stop] = np.array(value, dtype=self.dtype)
+                # new bucket
+                bucket = SMMBucket(blkstart, blkstop, 1)
+                # garbage collect bucket
+                self.bucketmap.remove_overlap(bucket)
                 # store bucket
-                self.valuemap[value] = bucket = SMMBucket(blkstart, blkstop, 1)
+                self.valuemap[value] = bucket
+                self.bucketmap.insert(bucket, value)
                 # mark use
                 self.usemap[blkstart:blkstop] = True
                 # H->D
@@ -168,8 +223,9 @@ class SmallMemoryManager(object):
                 ptr = self.devaddrbase + bucket.start * self.blocksz
                 return ManagedPointer(self, value, _cuda.cu_device_ptr(ptr))
         else:
-            # already allocated
+            # already allocated, reuse
             bucket.refct += 1
+            self.usemap[bucket.start:bucket.stop] = True
             ptr = self.devaddrbase + bucket.start * self.blocksz
             return ManagedPointer(self, value, _cuda.cu_device_ptr(ptr))
 
@@ -178,8 +234,6 @@ class SmallMemoryManager(object):
         bucket.refct -= 1
         assert bucket.refct >= 0
         if bucket.refct == 0:
-            # assert all(self.usemap[bucket.start:bucket.stop])
-            del self.valuemap[value]
             self.usemap[bucket.start : bucket.stop] = False
 
 
