@@ -721,6 +721,8 @@ class FloatType(NumericType):
     def __eq__(self, other):
         return isinstance(other, FloatType) and self.itemsize == other.itemsize
 
+    __hash__ = NumericType.__hash__
+
     def to_llvm(self, context):
         if self.itemsize == 4:
             return lc.Type.float()
