@@ -42,10 +42,11 @@ def run_2to3():
     print("Installing 2to3 fixers")
     # need to convert sources to Py3 on installation
     fixes = lib2to3.refactor.get_fixers_from_package("lib2to3.fixes")
-    #fixes = [fix for fix in fixes
-    #          if fix.split('fix_')[-1] not in ('next',)
-    #]
+    bad_fixers = ('next', 'funcattrs')
+    fixes = [fix for fix in fixes
+              if fix.split('fix_')[-1] not in bad_fixers]
 
+    build_py.fixer_names = fixes
     cmdclasses["build_py"] = build_py
     # cmdclasses["build"] = build_py
 
