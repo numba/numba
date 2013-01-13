@@ -1077,7 +1077,8 @@ ulonglong = IntType(name="unsigned PY_LONG_LONG", rank=8.5,
 
 float_ = FloatType(name="float", rank=20, itemsize=4)
 double = FloatType(name="double", rank=21, itemsize=8)
-longdouble = FloatType(name="long double", rank=22, itemsize=16)
+longdouble = FloatType(name="long double", rank=22,
+                       itemsize=ctypes.sizeof(ctypes.c_longdouble))
 
 bool_ = BoolType()
 object_ = ObjectType()
