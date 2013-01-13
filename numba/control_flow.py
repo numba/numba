@@ -1212,10 +1212,19 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         if len(node.targets) == 1 and isinstance(node.targets[0],
                                                  (ast.Tuple, ast.List)):
             node.targets = node.targets[0].elts
+
         for i, target in enumerate(node.targets):
+            # target = self.visit(target)
+
+            maybe_unused_node = isinstance(target, nodes.MaybeUnusedNode)
+            if maybe_unused_node:
+                target = target.name_node
+
             lhs, name_assignment = self.mark_assignment(target, node.value,
-                                                        assignment=node)
+                                                        assignment=node,
+                                                        warn_unused=not maybe_unused_node)
             node.targets[i] = lhs
+
         return node
 
     def visit_AugAssign(self, node):
@@ -1266,6 +1275,10 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                 var.col_offset = getattr(node, "col_offset", 0)
 
         return node
+
+    def visit_MaybeUnusedNode(self, node):
+        self.symtab[node.name_node.id].warn_unused = False
+        return self.visit(node.name_node)
 
     def visit_Suite(self, node):
         if self.flow.block:

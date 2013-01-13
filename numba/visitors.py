@@ -3,6 +3,7 @@ from pprint import pprint, pformat
 import ast as ast_module
 import __builtin__ as builtins
 from numba import functions
+from numba import nodes
 from numba.typesystem.typemapper import have_properties
 
 try:
@@ -341,6 +342,8 @@ class VariableFindingVisitor(NumbaVisitor):
         self.func_defs = []
 
     def register_assignment(self, node, target, operator):
+        if isinstance(target, nodes.MaybeUnusedNode):
+            target = target.name_node
         if isinstance(target, ast.Name):
             self.assigned[target.id] = node
 

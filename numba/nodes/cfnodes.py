@@ -99,3 +99,13 @@ class LowLevelBasicBlockNode(Node):
         if self.entry_block is None:
             self.entry_block = translator.append_basic_block(label or self.label)
         return self.entry_block
+
+class MaybeUnusedNode(Node):
+    """
+    Wraps an ast.Name() to indicate that the result may be unused.
+    """
+
+    _fields = ["name_node"]
+
+    def __init__(self, name_node):
+        self.name_node = name_node
