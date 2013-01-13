@@ -1691,6 +1691,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_UserNode(self, node):
         return node.infer_types(self)
 
+    #------------------------------------------------------------------------
+    # Nodes that should be deleted after type inference
+    #------------------------------------------------------------------------
+
+    def visit_MaybeUnusedNode(self, node):
+        return self.visit(node.name_node)
+
+
 class TypeSettingVisitor(visitors.NumbaTransformer):
     """
     Set node.type for all AST nodes after type inference from node.variable.
