@@ -38,20 +38,13 @@ def find_packages(where='.', exclude=()):
 
 def run_2to3():
     import lib2to3.refactor
-    from distutils.command.build_py import build_py_2to3
+    from distutils.command.build_py import build_py_2to3 as build_py
     print("Installing 2to3 fixers")
     # need to convert sources to Py3 on installation
     fixes = lib2to3.refactor.get_fixers_from_package("lib2to3.fixes")
     #fixes = [fix for fix in fixes
     #          if fix.split('fix_')[-1] not in ('next',)
     #]
-
-    class build_py(build_py_2to3):
-        fixer_names = fixes
-
-        def run_2to3(self, files):
-            print("RUNNING!", files, self.fixer_names)
-            return super(build_py, self).run_2to3(files)
 
     cmdclasses["build_py"] = build_py
     # cmdclasses["build"] = build_py
