@@ -107,10 +107,13 @@ def create_prange_closure(prange_node, body, target):
                                body=copy.deepcopy(body),
                                decorator_list=[])
 
+    # Update outlined prange body closure
     func_def.func_signature = void(privates_struct_type.ref())
     func_def.func_signature.struct_by_reference = True
     func_def.need_closure_wrapper = False
+    func_def.locals_dict = { '__numba_privates': privates_struct_type.ref() }
 
+    # Update prange node
     prange_node.privates_struct_type = privates_struct_type
     prange_node.privates = privates
     prange_node.reductions = reductions
@@ -262,6 +265,8 @@ def perform_reductions(context, prange_node):
 
     substitutions = { "num_threads": prange_node.num_threads_node }
     result = templ.template(substitutions)
+
+    # print templ.substituted_template
     return result
 
 #------------------------------------------------------------------------
@@ -581,13 +586,6 @@ def get_threadpool_funcs(context, context_struct_type, target_name,
     context_cbuilder_type = builder.CStruct.from_numba_struct(
                                     context, context_struct_type)
     context_p_ltype = context_struct_type.pointer().to_llvm(context)
-
-    #print "BLAH", lfunc.name, lfunc.module.id
-    #print [f.name for f in lfunc.module.functions]
-    #print '-----'
-
-    # llvm_module.link_in(lfunc.module, preserve=True)
-    # lfunc = llvm_module.get_or_insert_function(lfunc.type.pointee, lfunc.name)
 
     class KernelWrapper(CDefinition):
         """
