@@ -1,5 +1,12 @@
 /* Adapted from Cython/Utility/CythonFunction.c */
 
+#include <Python.h>
+
+#if PY_MAJOR_VERSION >= 3
+  #define PyMethod_New(func, self, klass) ( \
+              (self) ? PyMethod_New(func, self) : PyInstanceMethod_New(func))
+#endif
+
 /* inline attribute */
 #ifndef CYTHON_INLINE
   #if defined(__GNUC__)
