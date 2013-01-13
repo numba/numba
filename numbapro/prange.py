@@ -95,7 +95,7 @@ def create_prange_closure(prange_node, body, target):
     if isinstance(target, ast.Name) and target.id in reductions:
         # Remove target variable from reductions if present
         reductions.pop(target.id)
-        privates.add(target.id)
+    privates.add(target.id)
 
     privates_struct_type = numba.struct([])
     privates_struct = ast.Name('__numba_privates', ast.Param())
