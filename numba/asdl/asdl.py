@@ -30,7 +30,7 @@ def _get_asdl_depending_on_version():
         # fallback to import from common directory
         dir = 'common'
         modname = base + dir + '.asdl'
-        mod = __import__(modname, fromlist=_importlist, level=use_rel_and_abs)
+        mod = __import__(modname, fromlist=_importlist) #, level=use_rel_and_abs)
     for i in _importlist:
         globals()[i] = getattr(mod, i)
 
