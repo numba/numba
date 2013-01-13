@@ -727,9 +727,15 @@ class FloatType(NumericType):
         elif self.itemsize == 8:
             return lc.Type.double()
         else:
-            # Note: what about fp80/fp96?
-            assert self.itemsize == 16
-            return lc.Type.fp128()
+            is_ppc, is_x86 = get_target_triple()
+            if self.itemsize == 16:
+                if is_ppc:
+                    return lc.Type.ppc_fp128()
+                else:
+                    return lc.Type.fp128()
+            else:
+                assert self.itemsize == 10 and is_x86
+                return lc.Type.x86_fp80()
 
 class ComplexType(NumericType):
     is_complex = True
@@ -1038,6 +1044,12 @@ def getsize(ctypes_name, default):
         return ctypes.sizeof(getattr(ctypes, ctypes_name))
     except ImportError:
         return default
+
+def get_target_triple():
+    target_machine = llvm.ee.TargetMachine.new()
+    is_ppc = target_machine.triple.startswith("ppc")
+    is_x86 = target_machine.triple.startswith("x86")
+    return is_ppc, is_x86
 
 #
 ### Internal types
