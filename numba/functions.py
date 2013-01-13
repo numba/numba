@@ -8,6 +8,7 @@ from .minivect import minitypes
 import llvm.core
 import logging
 import traceback
+import numba.decorators
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +169,9 @@ class FunctionCache(object):
     def is_registered(self, func):
         '''Check if a function is registed to the FunctionCache instance.
         '''
-        return getattr(func, 'py_func', func) in self.__compiled_funcs
+        if isinstance(func, numba.decorators.NumbaFunction):
+            return func.py_func in self.__compiled_funcs
+        return False
 
     def register(self, func):
         '''Register a function to the FunctionCache.  
