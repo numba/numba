@@ -76,6 +76,7 @@ def test():
 def nose_run(module=None):
     "Oh nose, why dost thou never read my configuration file"
     import nose.config
+    import __main__
     config = nose.config.Config()
     config.configure(['--logging-level=DEBUG',
                       '--verbosity=3',      # why is this ignored?
@@ -83,6 +84,6 @@ def nose_run(module=None):
                       #'--doctest-tests'
                       ])
     config.verbosity = 3
-    nose.run(module=module, config=config)
+    nose.run(module=module or __main__, config=config)
 
 __all__ = typesystem.__all__ + decorators.__all__ + special.__all__
