@@ -164,8 +164,9 @@ def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
 
     pack_struct = templ.code_var('pack_struct')
 
-    target_name = target.id
-    struct_type.add_field(target_name, Py_ssize_t)
+    if isinstance(target, ast.Name):
+        target_name = target.id
+        struct_type.add_field(target_name, Py_ssize_t)
 
     # Create code for reductions and (last)privates
     for name, reduction_op in prange_node.reductions.iteritems():
@@ -181,6 +182,7 @@ def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
     struct_type.add_field('__numba_step', npy_intp)
 
     # Interpolate code and variables and run type inference
+    # TODO: UNDO monkeypatching
     func_def.type = func_def.func_signature
     func_def.is_prange_body = True
     func_def.prange_node = prange_node
@@ -208,13 +210,16 @@ def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
 
     tree = templ.template(subs)
     templ.update_locals(locals_dict)
+    # TODO: Make this an SSA variable
     locals_dict[target_name] = Py_ssize_t
 
+    prange_node.target = target
     prange_node.num_threads_node = num_threads_node #.clone
     prange_node.template_vars = {
                                   'contexts': contexts,
                                   'i': temp_i,
                                   'lastprivates': lastprivates,
+                                  'nsteps': nsteps,
                                 }
 
     # print templ.substituted_template
@@ -258,10 +263,19 @@ def perform_reductions(context, prange_node):
                                     name)
         reductions.codes.append(assign(name, expr))
 
+    target_name = ""
+    if isinstance(prange_node.target, ast.Name):
+        target_name = prange_node.target.id
+
     for name in prange_node.privates:
         # Generate: x += contexts[num_threads - 1].x
         expr = "%s.%s" % (getvar("lastprivates"), name)
-        unpack_struct.codes.append(assign(name, expr))
+        assmnt = assign(name, expr)
+
+        if name == target_name:
+            assmnt = "if %s > 0: %s" % (getvar("nsteps"), assmnt)
+
+        unpack_struct.codes.append(assmnt)
 
     substitutions = { "num_threads": prange_node.num_threads_node }
     result = templ.template(substitutions)
@@ -289,6 +303,7 @@ class PrangeNode(nodes.Node):
     privates_struct_type = None     # numba.struct(var_name=var_type)
     privates = None                 # set([var_name])
     reductions = None               # { var_name: reduction_op }
+    target = None                   # Target iteration variable
 
     num_threads_node = None         # num_threads CloneNode
     template_vars = None            # { "template_var_name": $template_var }

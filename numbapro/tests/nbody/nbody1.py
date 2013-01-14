@@ -289,4 +289,5 @@ class TestNbody1(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    TestNbody1("test").debug()
+#    unittest.main()

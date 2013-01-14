@@ -37,6 +37,7 @@ def prange_reduction_error():
     """
     for i in numba.prange(10):
         sum += i
+
     sum = 0.0
     return sum
 
@@ -146,6 +147,10 @@ def test_prange_in_closure2(x):
 
 if __name__ == '__main__':
 #    prange_reduction_error()
+
+#    a = np.arange(100).reshape(10, 10)
+#    print test_sum2d(a)
+#    print test_sum2d(a.astype(np.complex128))
 
     import numba
     numba.testmod()

@@ -72,5 +72,6 @@ def last_value():
     print i
 
 if __name__ == '__main__':
+#    empty_assign()
     import doctest
     doctest.testmod()
