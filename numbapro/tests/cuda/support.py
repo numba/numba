@@ -10,13 +10,13 @@ class CudaTestCase(unittest.TestCase):
         self._start_alloc = driver.debug_memory_alloc
         self._start_free = driver.debug_memory_free
 
-
     def tearDown(self):
         from numbapro._cuda import driver
         driver.debug_memory = True
         alloced = driver.debug_memory_alloc - self._start_alloc
         freed = driver.debug_memory_free - self._start_free
-
-        self.assertEqual(alloced, freed,
+        self.assertTrue(alloced - freed <= 1,  # 1 alloc difference for SMM
                          "Memory leak detected\n"
                          "alloced: %d freed: %d" % (alloced, freed))
+
+
