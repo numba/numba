@@ -678,11 +678,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             for phi_node in block.phi_nodes:
                 phi = phi_node.variable.lvalue
                 assert phi, phi_node.variable
-                for parent_block in block.parents:
+                for parent_block, incoming_var in phi_node.find_incoming():
                     assert parent_block.exit_block, parent_block
-
-                    name = phi_node.variable.name
-                    incoming_var = parent_block.symtab.lookup_most_recent(name)
 
                     if incoming_var.type.is_uninitialized:
                         #print incoming_var.cf_references
@@ -694,6 +691,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                             lval = self.visit(incoming_var.uninitialized_value)
                             incoming_var.lvalue = lval
                     elif not incoming_var.type == phi_node.type:
+                        print phi_node
                         promotion = parent_block.symtab.lookup_promotion(
                                         phi_node.variable.name, phi_node.type)
                         incoming_var = promotion.variable

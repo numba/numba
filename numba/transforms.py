@@ -756,7 +756,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                check whether incoming_type == phi_type, and otherwise we
                look up the promotion in the parent block or an ancestor.
         """
-        for i, incoming_var in enumerate(node.incoming):
+        for parent_block, incoming_var in node.find_incoming():
             if incoming_var.type.is_uninitialized:
                 incoming_type = incoming_var.type.base_type or node.type
                 bad = badval(incoming_type)
@@ -767,7 +767,6 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             elif not incoming_var.type == node.type:
                 # Create promotions for variables with phi nodes in successor
                 # blocks.
-
                 incoming_symtab = incoming_var.block.symtab
                 if (incoming_var, node.type) not in node.block.promotions:
                     # Make sure we only coerce once for each destination type and

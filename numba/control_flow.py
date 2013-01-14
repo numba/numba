@@ -698,6 +698,13 @@ class PhiNode(nodes.Node):
             type = ""
         return "%s %s = phi(%s)" % (type, lhs, incoming)
 
+    def find_incoming(self):
+        for parent_block in self.block.parents:
+            name = self.variable.name
+            incoming_var = parent_block.symtab.lookup_most_recent(name)
+            yield parent_block, incoming_var
+
+
 class NameDeletion(NameAssignment):
     def __init__(self, lhs, entry):
         NameAssignment.__init__(self, lhs, lhs, entry)
