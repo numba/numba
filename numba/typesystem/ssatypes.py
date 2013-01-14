@@ -674,10 +674,10 @@ def kosaraju_strongly_connected(start_type, strongly_connected):
     start_type.
     """
     stack = []
-    seen = set()
+    seen = oset.OrderedSet()
     dfs(start_type, stack, seen)
 
-    graph = set(stack)
+    graph = oset.OrderedSet(stack)
     while stack:
         start = stack[-1]
         scc = []
