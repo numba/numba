@@ -983,13 +983,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_StructAttribute(self, node):
         result = self.visit(node.value)
+        value_is_reference = node.value.type.is_reference
+
         if isinstance(node.ctx, ast.Load):
-            if node.value.type.is_reference:
+            if value_is_reference:
+                # Struct reference, load result
                 result = self.struct_field(node, result)
                 result = self.builder.load(result)
             else:
                 result = self.builder.extract_value(result, node.field_idx)
         else:
+            if value_is_reference:
+                # Load alloca-ed struct pointer
+                result = self.builder.load(result)
             result = self.struct_field(node, result)
             #result = self.builder.insert_value(result, self.rhs_lvalue,
             #                                   node.field_idx)

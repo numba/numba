@@ -1136,11 +1136,17 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         """
         ext_type = node.value.type
         offset = ext_type.attr_offset
-        type = ext_type.attribute_struct.ref()
+        type = ext_type.attribute_struct
 
-        struct_pointer = nodes.value_at_offset(node.value, offset, type)
+        if isinstance(node.ctx, ast.Load):
+            value_type = type.ref()         # Load result
+        else:
+            value_type = type.pointer()     # Use pointer for storage
+
+        struct_pointer = nodes.value_at_offset(node.value, offset,
+                                               value_type)
         result = nodes.StructAttribute(struct_pointer, node.attr,
-                                       node.ctx, type)
+                                       node.ctx, type.ref())
 
         return self.visit(result)
 
