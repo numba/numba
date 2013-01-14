@@ -392,26 +392,42 @@ def stream():
 
 # Page lock
 @contextlib.contextmanager
-def pagelock(ary):
+def pinned(*arylist):
     import numbapro._cuda.default # ensure we have a GPU device
     from numbapro._utils.ndarray import ndarray_datasize
     from numbapro._cuda.driver import PinnedMemory
-    pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary), mapped=False)
+    pmlist = []
+    for ary in arylist:
+        pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary), mapped=False)
+        pmlist.append(pm)
     yield
-    del pm
+    del pmlist
+
 
 @contextlib.contextmanager
-def mapped(ary, stream=0):
+def mapped(*arylist, **kws):
+    assert not kws or 'stream' in kws, "Only accept 'stream' as keyword."
     import numbapro._cuda.default # ensure we have a GPU device
     from numbapro._utils.ndarray import ndarray_datasize
     from numbapro._cuda.driver import PinnedMemory
     from numbapro._cuda import devicearray
-    pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary), mapped=True)
-    dptr = pm.get_device_pointer()
-    devary = ary.view(type=devicearray.DeviceNDArray)
-    devary.device_mapped(dptr, stream=stream)
-    yield devary
-    del pm
+    pmlist = []
+    stream = kws.get('stream', 0)
+    for ary in arylist:
+        pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary), mapped=True)
+        pmlist.append(pm)
+
+    devarylist = []
+    for pm in pmlist:
+        dptr = pm.get_device_pointer()
+        devary = ary.view(type=devicearray.DeviceNDArray)
+        devary.device_mapped(dptr, stream=stream)
+        devarylist.append(devary)
+    if len(devarylist) == 1:
+        yield devarylist[0]
+    else:
+        yield devarylist
+    del pmlist
 
 # Device selection
 

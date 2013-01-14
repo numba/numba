@@ -4,6 +4,7 @@ from timeit import default_timer as timer
 import numpy as np
 import unittest
 
+REPEAT = 25
 
 class TestPinned(support.CudaTestCase):
 
@@ -22,17 +23,24 @@ class TestPinned(support.CudaTestCase):
         e = timer()
 
         self.assertTrue(np.allclose(A, A0))
-        
-        print name, e - s
+
+        elapsed = e - s
+        return elapsed
 
     def test_pinned(self):
         A = np.arange(2*1024*1024) # 16 MB
-        with cuda.pagelock(A):
-            self._template('pinned', A)
+        total = 0
+        with cuda.pinned(A):
+            for i in range(REPEAT):
+                total += self._template('pinned', A)
+        print 'pinned', total / REPEAT
 
     def test_unpinned(self):
         A = np.arange(2*1024*1024) # 16 MB
-        self._template('unpinned', A)
+        total = 0
+        for i in range(REPEAT):
+            total += self._template('unpinned', A)
+        print 'unpinned', total / REPEAT
 
 
 if __name__ == '__main__':

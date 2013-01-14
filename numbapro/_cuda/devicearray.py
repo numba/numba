@@ -19,8 +19,7 @@ class DeviceNDArray(np.ndarray):
         self.__device_memory = ndarray_device_allocate_struct(self.ndim)
         self.__device_data = mappedptr
         ndarray_populate_struct(self.__device_memory, self.__device_data,
-                                self.ctypes.shape, self.ctypes.strides,
-                                stream=stream)
+                                self.shape, self.strides, stream=stream)
         self.__gpu_readback = None
 
     def device_allocate(self, stream=0):
@@ -30,8 +29,7 @@ class DeviceNDArray(np.ndarray):
         self.__device_memory = ndarray_device_allocate_struct(self.ndim)
         self.__device_data = ndarray_device_allocate_data(self)
         ndarray_populate_struct(self.__device_memory, self.__device_data,
-                                self.ctypes.shape, self.ctypes.strides,
-                                stream=stream)
+                                self.shape, self.strides, stream=stream)
         self.__gpu_readback = self.ctypes.data, ndarray_datasize(self)
 
     def to_device(self, stream=0):
@@ -93,10 +91,9 @@ class DeviceNDArray(np.ndarray):
         '''
         Populate the instance with a custom device data memory.
         '''
-        c_shape = (np.ctypeslib.c_intp * len(shape))(*shape)
-        c_strides = (np.ctypeslib.c_intp * len(strides))(*strides)
-        struct = ndarray_device_allocate_struct(len(c_shape))
-        ndarray_populate_struct(struct, data, c_shape, c_strides)
+        nd = len(shape)
+        struct = ndarray_device_allocate_struct(nd)
+        ndarray_populate_struct(struct, data, shape, strides)
         self.__device_memory = struct
         self.__device_data = data
 

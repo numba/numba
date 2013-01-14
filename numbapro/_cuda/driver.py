@@ -449,7 +449,9 @@ class Driver(object):
         handle = context._handle.value
         del self._CONTEXTS[handle]
         if handle == self._THREAD_LOCAL.context:
-            del self._THREAD_LOCAL.context
+            # Remove all thread local
+            for k in vars(self._THREAD_LOCAL).keys():
+                delattr(self._THREAD_LOCAL, k)
 
 CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1
 CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2
@@ -588,21 +590,24 @@ class DevicePointer(object):
     def __init__(self, handle):
         self._handle = handle
         self._depends = []
+        self.context = Driver().current_context()
 
-    def to_device_raw(self, src, size, stream=None):
+    def to_device_raw(self, src, size, stream=None, offset=0):
+        ptr = cu_device_ptr(self._handle.value + offset)
         if stream:
-            error = self.driver.cuMemcpyHtoDAsync(self._handle, src, size,
+            error = self.driver.cuMemcpyHtoDAsync(ptr, src, size,
                                                   stream._handle)
         else:
-            error = self.driver.cuMemcpyHtoD(self._handle, src, size)
+            error = self.driver.cuMemcpyHtoD(ptr, src, size)
         self.driver.check_error(error, "Failed to copy memory H->D")
 
-    def from_device_raw(self, dst, size, stream=None):
+    def from_device_raw(self, dst, size, stream=None, offset=0):
+        ptr = cu_device_ptr(self._handle.value + offset)
         if stream:
-            error = self.driver.cuMemcpyDtoHAsync(dst, self._handle, size,
+            error = self.driver.cuMemcpyDtoHAsync(dst, ptr, size,
                                                   stream._handle)
         else:
-            error = self.driver.cuMemcpyDtoH(dst, self._handle, size)
+            error = self.driver.cuMemcpyDtoH(dst, ptr, size)
         self.driver.check_error(error, "Failed to copy memory D->H")
 
     def memset(self, val, size, stream=None):
