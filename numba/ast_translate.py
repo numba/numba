@@ -691,7 +691,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                             lval = self.visit(incoming_var.uninitialized_value)
                             incoming_var.lvalue = lval
                     elif not incoming_var.type == phi_node.type:
-                        print phi_node
                         promotion = parent_block.symtab.lookup_promotion(
                                         phi_node.variable.name, phi_node.type)
                         incoming_var = promotion.variable
