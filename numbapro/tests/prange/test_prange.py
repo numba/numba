@@ -30,7 +30,9 @@ def prange_reduction2():
 @autojit(warn=False)
 def prange_reduction_error():
     """
-    >>> prange_reduction_error()
+    DISABLED.
+
+    >> prange_reduction_error()
     Traceback (most recent call last):
         ...
     NumbaError: 32:8: Local variable  'sum' is not bound yet
