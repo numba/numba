@@ -83,6 +83,8 @@ def is_name(node):
 # Imports
 #----------------------------------------------------------------------------
 
+# NOTE: the order of the imports is important!
+
 from numba.nodes.basenodes import *
 
 from numba.nodes.constnodes import *
