@@ -1,13 +1,17 @@
 
 from numba import autojit
 
+tests = []
+
 def _make_test(f):
     def test():
         f_ = autojit(f)
         for v in range(-10,10):
             assert f_(v)==f(v)
             assert f_(float(v))==f(float(v))
+
     test.func_name = f.func_name
+    tests.append(test)
     return test
 
 @_make_test
@@ -48,5 +52,7 @@ def test_compare_while(a):
 if __name__ == "__main__":
     # autojit(test_compare_span_basic_blocks)(5)
 #    autojit(test_compare_while)(10)
-    import numba
-    numba.nose_run()
+    for test in tests:
+        test()
+#    import numba
+#    numba.nose_run()
