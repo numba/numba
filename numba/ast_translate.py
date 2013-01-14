@@ -1246,11 +1246,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return self.builder.fcmp(lop, lhs_lvalue, rhs_lvalue)
         elif lhs.type.is_int_like and rhs.type.is_int_like:
             lfunc = self.builder.icmp
-            # FIXME
-            if not lhs.type.signed:
-                error.NumbaError(
-                        node, 'Unsigned comparison has not been implemented')
-            lop = _compare_mapping_sint[op]
+            if lhs.type.signed:
+                mapping = _compare_mapping_sint
+            else:
+                mapping = _compare_mapping_uint
+            lop = mapping[op]
         else:
             raise TypeError(lhs.type)
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
