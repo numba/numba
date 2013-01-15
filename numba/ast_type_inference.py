@@ -1423,10 +1423,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def _infer_complex_math(self, func_type, new_node, node, result_type, argtype):
         "Infer types for cmath.somefunc()"
         # Check for cmath.{sqrt,sin,etc}
-        if not argtype.is_array:
+        if argtype.is_complex:
             args = [nodes.const(1.0, float_)]
             is_math = self._is_math_function(args, func_type.value)
-
             if len(node.args) == 1 and is_math:
                 new_node = nodes.CoercionNode(new_node, complex128)
                 result_type = complex128
