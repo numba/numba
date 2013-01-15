@@ -222,13 +222,15 @@ class NumpyMixin(object):
                 return minitypes.object_, nodes.CoercionNode(node,
                                                              minitypes.object_)
 
+        # Reverse our reversed processed list of slices
+        result.reverse()
+
         # append any missing slices (e.g. a2d[:]
         result_length = len(result) - len(newaxes)
         if result_length < type.ndim:
             nslices = type.ndim - result_length
             result.extend([full_slice] * nslices)
 
-        result.reverse()
         subscript_node.slice = ast.ExtSlice(result)
         ast.copy_location(subscript_node.slice, slices[0])
 
