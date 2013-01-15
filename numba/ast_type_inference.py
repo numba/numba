@@ -1398,7 +1398,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if signature and new_node.type.is_object:
             new_node = self._resolve_return_type(func_type, new_node,
-                                                 call_node)
+                                                 call_node, arg_types)
 
         return new_node
 
@@ -1420,18 +1420,20 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return new_node
 
-    def _infer_complex_math(self, func_type, new_node, node, result_type):
+    def _infer_complex_math(self, func_type, new_node, node, result_type, argtype):
         "Infer types for cmath.somefunc()"
         # Check for cmath.{sqrt,sin,etc}
-        args = [nodes.const(1.0, float_)]
-        is_math = self._is_math_function(args, func_type.value)
-        if len(node.args) == 1 and is_math:
-            new_node = nodes.CoercionNode(new_node, complex128)
-            result_type = complex128
+        if not argtype.is_array:
+            args = [nodes.const(1.0, float_)]
+            is_math = self._is_math_function(args, func_type.value)
+
+            if len(node.args) == 1 and is_math:
+                new_node = nodes.CoercionNode(new_node, complex128)
+                result_type = complex128
 
         return new_node, result_type
 
-    def _resolve_return_type(self, func_type, new_node, node):
+    def _resolve_return_type(self, func_type, new_node, node, argtypes):
         """
         We are performing a call through PyObject_Call, but we may be able
         to infer a more specific return value than 'object'.
@@ -1442,12 +1444,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 func_type.value in self.member2inferer):
             # Try the module type inferers
             inferer = self.member2inferer[func_type.value]
-            result_type = inferer.resolve_call(node, func_type)
+            result_node = inferer.resolve_call(node, func_type)
+            if result_node is not None:
+                return result_node
 
         if ((func_type.is_module_attribute and func_type.module is cmath) or
-              (result_type is None and func_type.is_numpy_attribute)):
+             func_type.is_numpy_attribute and len(argtypes) == 1):
             new_node, result_type = self._infer_complex_math(
-                                func_type, new_node , node, result_type)
+                    func_type, new_node, node, result_type, argtypes[0])
 
         if result_type is None:
             result_type = object_
