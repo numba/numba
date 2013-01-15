@@ -4,6 +4,26 @@ from numba.nodes import *
 import numba.nodes
 from numba.ndarray_helpers import PyArrayAccessor
 
+#----------------------------------------------------------------------------
+# External Utilities
+#----------------------------------------------------------------------------
+
+def is_constant_index(node):
+    return (isinstance(node, ast.Index) and
+            isinstance(node.value, ConstNode))
+
+def is_newaxis(node):
+    v = node.variable
+    return (is_constant_index(node) and
+            node.value.pyval is None) or v.type.is_newaxis or v.type.is_none
+
+def is_ellipsis(node):
+    return is_constant_index(node) and node.value.pyval is Ellipsis
+
+
+#----------------------------------------------------------------------------
+# Internal Utilities
+#----------------------------------------------------------------------------
 
 def _const_int(X):
     return llvm.core.Constant.int(llvm.core.Type.int(), X)

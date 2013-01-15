@@ -155,18 +155,16 @@ class NumpyMixin(object):
         - track how contiguity is affected (C or Fortran)
     """
 
+    # TODO: Replace uses of these methods with the respective functions
+
     def _is_constant_index(self, node):
-        return (isinstance(node, ast.Index) and
-                isinstance(node.value, nodes.ConstNode))
+        return nodes.is_constant_index(node)
 
     def _is_newaxis(self, node):
-        v = node.variable
-        return (self._is_constant_index(node) and
-                node.value.pyval is None) or v.type.is_newaxis or v.type.is_none
+        return nodes.is_newaxis(node)
 
     def _is_ellipsis(self, node):
-        return (self._is_constant_index(node) and
-                node.value.pyval is Ellipsis)
+        return nodes.is_ellipsis(node)
 
     def _unellipsify(self, node, slices, subscript_node):
         """
