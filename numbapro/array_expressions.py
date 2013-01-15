@@ -21,6 +21,18 @@ import numpy
 
 print_ufunc = False
 
+def is_elementwise_assignment(context, assmnt_node):
+    target_type = assmnt_node.targets[0].type
+    value_type = assmnt_node.value.type
+
+    if target_type.is_array:
+        # Allow arrays and scalars
+        context.promote_types(target_type, value_type)
+        return not value_type.is_object
+
+    return False
+
+
 class ArrayExpressionRewrite(visitors.NumbaTransformer,
                              ast_type_inference.NumpyMixin,
                              transforms.MathMixin):
@@ -48,7 +60,6 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         self.nesting_level -= 1
         self.elementwise = elementwise
         return node
-
 
     def get_py_ufunc_ast(self, lhs, node):
         if lhs is not None:
@@ -83,6 +94,8 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
     def visit_Assign(self, node):
         self.is_slice_assign = False
         self.visitlist(node.targets)
+
+        target_node = node.targets[0]
         is_slice_assign = self.is_slice_assign
 
         self.nesting_level = self.is_slice_assign
@@ -90,19 +103,26 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         self.nesting_level = 0
 
         elementwise = self.elementwise
-        if (len(node.targets) == 1 and node.targets[0].type.is_array and
-                is_slice_assign): # and elementwise):
-            return self.register_array_expression(node.value,
-                                                  lhs=node.targets[0])
+
+        if (len(node.targets) == 1 and is_slice_assign and
+                is_elementwise_assignment(self.context, node)):
+            target_node = array_slicing.rewrite_slice(target_node, self.nopython)
+            return self.register_array_expression(node.value, lhs=target_node)
 
         return node
 
     def visit_Subscript(self, node):
+        # print ast.dump(node)
         self.generic_visit(node)
-        self.is_slice_assign = (isinstance(node.ctx, ast.Store) and
-                                node.type.is_array)
-        if self._is_ellipsis(node.slice):
-            return node.value
+        is_store = isinstance(node.ctx, ast.Store)
+        self.is_slice_assign = is_store and node.type.is_array
+
+        if is_store:
+            if self._is_ellipsis(node.slice):
+                return node.value
+        elif node.value.type.is_array and node.type.is_array:
+            node = array_slicing.rewrite_slice(node, self.nopython)
+
         return node
 
     def visit_MathNode(self, node):
@@ -155,8 +175,7 @@ class NumbaproStaticArgsContext(utils.NumbaContext):
     "Use a static argument list: shape, data1, strides1, data2, strides2, ..."
     astbuilder_cls = miniast.ASTBuilder
 
-class ArrayExpressionRewriteNative(array_slicing.SliceRewriterMixin,
-                                   ArrayExpressionRewrite):
+class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
     """
     Compile array expressions to a minivect kernel that calls a Numba
     scalar kernel with scalar inputs:

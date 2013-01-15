@@ -130,47 +130,48 @@ class NativeSliceNode(nodes.Node):
                 base=self.value.clone)
         return nodes.CoercionNode(array_node, self.type)
 
-class SliceRewriterMixin(ast_type_inference.NumpyMixin,
-                         visitors.NoPythonContextMixin):
+
+def rewrite_slice(node, nopython):
     """
-    Visitor mixin that rewrites slices to its native equivalent without
+    Rewrites array slices to its native equivalent without
     using the Python API.
+
+        node:       ast.Subscript with an array type as result
+        nopython:   whether the node is encountered in a nopython context
     """
+    # assert self.nopython
 
-    def _rewrite_slice(self, node):
-        # assert self.nopython
+    if isinstance(node.slice, ast.ExtSlice):
+        dims = node.slice.dims
+    else:
+        assert not isinstance(node.slice, ast.Ellipsis)
+        dims = [node.slice]
 
-        assert isinstance(node.slice, ast.ExtSlice)
-        slices = []
-        src_dim = 0
-        dst_dim = 0
+    slices = []
+    src_dim = 0
+    dst_dim = 0
 
-        all_slices = True
-        for subslice in node.slice.dims:
-            slices.append(create_slice_dim_node(subslice, src_dim, dst_dim))
+    all_slices = True
+    for subslice in dims:
+        slices.append(create_slice_dim_node(subslice, src_dim, dst_dim))
 
-            if subslice.type.is_slice:
-                src_dim += 1
-                dst_dim += 1
-            elif self._is_newaxis(subslice):
-                all_slices = False
-                dst_dim += 1
-            else:
-                assert subslice.type.is_int
-                all_slices = False
-                src_dim += 1
+        if subslice.type.is_slice:
+            src_dim += 1
+            dst_dim += 1
+        elif nodes.is_newaxis(subslice):
+            all_slices = False
+            dst_dim += 1
+        else:
+            assert subslice.type.is_int
+            all_slices = False
+            src_dim += 1
 
-        #if all_slices and all(empty(subslice) for subslice in slices):
-        #    return node.value
+    #if all_slices and all(empty(subslice) for subslice in slices):
+    #    return node.value
 
-        return NativeSliceNode(node.type, node.value, slices, self.nopython)
+    # print node, node.type
+    return NativeSliceNode(node.type, node.value, slices, nopython)
 
-    def visit_Subscript(self, node):
-        node = super(SliceRewriterMixin, self).visit_Subscript(node)
-        if (isinstance(node, ast.Subscript) and node.value.type.is_array and
-                node.type.is_array):
-            node = self._rewrite_slice(node)
-        return node
 
 class MarkNoPython(ast.NodeVisitor):
     """
