@@ -156,7 +156,7 @@ class ModuleTypeInferer(object):
         method_kwargs = parse_args(call_node, argnames)
         return method(**method_kwargs)
 
-    def resolve_call(self, call_node, func_type):
+    def resolve_call(self, call_node, obj_call_node, func_type):
         """
         Call to an attribute of this module.
 
@@ -168,10 +168,11 @@ class ModuleTypeInferer(object):
         The default is to dispatch on the name of the member.
         """
         result = self.dispatch_on_name(call_node, func_type)
+
         if result is not None and not isinstance(result, ast.AST):
             assert isinstance(result, minitypes.Type)
             type = result
-            result = call_node
+            result = obj_call_node
             result.variable = symtab.Variable(type)
 
         return result

@@ -46,9 +46,14 @@ class TestFilter2d(unittest.TestCase):
 
 # ______________________________________________________________________
 
+@autojit
+def func():
+    return numpy.empty(10)
+
 if __name__ == "__main__":
-    TestFilter2d('test_vectorized_filter2d').debug()
-#    unittest.main(*sys.argv[1:])
+#    func()
+#    TestFilter2d('test_vectorized_filter2d').debug()
+    unittest.main(*sys.argv[1:])
 
 # ______________________________________________________________________
 # End of test_filter2d.py

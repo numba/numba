@@ -1444,7 +1444,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 func_type.value in self.member2inferer):
             # Try the module type inferers
             inferer = self.member2inferer[func_type.value]
-            result_node = inferer.resolve_call(node, func_type)
+            result_node = inferer.resolve_call(node, new_node, func_type)
             if result_node is not None:
                 return result_node
 
