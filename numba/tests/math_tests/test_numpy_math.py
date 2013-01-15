@@ -83,8 +83,20 @@ def sin(A):
     return np.sin(A)
 
 def test_array_math():
-    A = np.arange(10)
-    assert np.all(sin(A) == sin.py_func(A))
+#    A = np.arange(10)
+#    assert np.all(sin(A) == sin.py_func(A))
+    dst_types = set(dest_types)
+    dst_types.discard(Py_ssize_t)
+
+    functions = get_functions()
+    for func_name, func in functions.iteritems():
+        for dst_type in dst_types:
+            dtype = dst_type.get_dtype()
+            a = np.arange(100, dtype=dtype)
+            b = np.arange(50, 150, dtype=dtype)
+            r1 = autojit(func)(a, b)
+            r2 = func(a, b)
+            assert np.allclose(r1, r2)
 
 
 if __name__ == "__main__":
