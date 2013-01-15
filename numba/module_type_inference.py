@@ -1,20 +1,12 @@
 import ast
-import math
-import cmath
-import copy
-import opcode
 import inspect
 import types
-import itertools
-import __builtin__ as builtins
 
 import numba
 from numba import *
-from .minivect import minierror, minitypes
-# from numba.tests import doctest_support
-from numba import typesystem
+from numba.minivect import minitypes
+from numba import typesystem, symtab
 
-import llvm.core
 import numpy.random
 import numpy as np
 
@@ -28,10 +20,6 @@ logger = logging.getLogger(__name__)
 if debug:
     logger.setLevel(logging.DEBUG)
 
-def get_module_inferers():
-    # Use a metaclass? Or register explicitly?
-    classes = ModuleTypeInferer.__subclasses__()
-    return [cls() for cls in classes]
 
 def module_attribute_type(obj):
     try:
