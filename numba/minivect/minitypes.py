@@ -532,8 +532,10 @@ class ArrayType(Type):
 
         return "%s[%s]" % (self.dtype, ", ".join(axes))
 
-    def copy(self):
-        return copy.copy(self)
+    def copy(self, **kwargs):
+        array_type = copy.copy(self)
+        vars(array_type).update(kwargs)
+        return array_type
 
     @property
     def strided(self):
