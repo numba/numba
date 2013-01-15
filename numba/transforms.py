@@ -1109,7 +1109,8 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif is_obj(node.value.type):
-            if isinstance(node.value.type, typesystem.ModuleType):
+            if node.value.type.is_module:
+                # Resolve module attributes as constants
                 if node.type.is_module_attribute:
                     new_node = nodes.ObjectInjectNode(node.type.value)
                 else:
