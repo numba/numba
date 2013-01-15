@@ -163,13 +163,17 @@ class MathMixin(object):
             return False
 
         type = func_args[0].variable.type
+
         if type.is_array:
             type = type.dtype
+            valid_type = type.is_float or type.is_int or type.is_complex
+        else:
+            valid_type = type.is_float or type.is_int
 
         is_intrinsic = self._is_intrinsic(py_func)
         is_math = self.get_funcname(py_func) in self.libc_math_funcs
 
-        return (type.is_float or type.is_int) and (is_intrinsic or is_math)
+        return valid_type and (is_intrinsic or is_math)
 
     def _resolve_intrinsic(self, args, py_func, signature):
         func_name = self.get_funcname(py_func).upper()
@@ -199,8 +203,7 @@ class MathMixin(object):
         if type.is_int:
             type = double
         elif type.is_array and type.dtype.is_int:
-            type = type.copy()
-            type.dtype = double
+            type = type.copy(dtype=double)
 
         signature = minitypes.FunctionType(return_type=type, args=[type])
         result = nodes.MathNode(py_func, signature, call_node.args[0])
