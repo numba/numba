@@ -179,7 +179,14 @@ class ModuleTypeInferer(object):
 
         The default is to dispatch on the name of the member.
         """
-        return self.dispatch_on_name(call_node, func_type)
+        result = self.dispatch_on_name(call_node, func_type)
+        if result is not None and not isinstance(result, ast.AST):
+            assert isinstance(result, minitypes.Type)
+            type = result
+            result = call_node
+            result.variable = symtab.Variable(type)
+
+        return result
 
     def register(self):
         self.member2inferer.update(dict.fromkeys(self.members, self))
@@ -195,7 +202,11 @@ class NumbaModuleInferer(ModuleTypeInferer):
     modules = [numba]
 
     def typeof(self, expr):
-        return typesystem.CastType(expr.variable.type)
+        from numba import nodes
+
+        obj = expr.variable.type
+        type = typesystem.CastType(obj)
+        return nodes.const(obj, type)
 
 class NumpyModuleInferer(ModuleTypeInferer):
     """
