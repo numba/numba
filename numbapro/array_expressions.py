@@ -91,7 +91,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
 
         elementwise = self.elementwise
         if (len(node.targets) == 1 and node.targets[0].type.is_array and
-                is_slice_assign and elementwise):
+                is_slice_assign): # and elementwise):
             return self.register_array_expression(node.value,
                                                   lhs=node.targets[0])
 
