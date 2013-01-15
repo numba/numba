@@ -125,6 +125,7 @@ class ModuleTypeInferer(object):
             types.BuiltinFunctionType,
             types.ClassType,
             type,
+            np.ufunc,
         )
         return isinstance(obj, valid_types)
 

@@ -168,12 +168,6 @@ class TestTypeInference(unittest.TestCase):
         self.assertEqual(symtab['c'].type, int32[:])
         self.assertEqual(symtab['d'].type, double[:])
 
-    def test_empty_like(self):
-        sig, symtab = infer(empty_like, functype(None, [double[:]]))
-        self.assertEqual(symtab['b'].type, double[:])
-        self.assertEqual(symtab['c'].type, int32[:])
-        self.assertEqual(symtab['d'].type, double[:])
-
     def test_empty(self):
         sig, symtab = infer(_empty, functype(None, [int_]))
         for i in range(1, 4):
