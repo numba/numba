@@ -965,14 +965,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return node.value(self)
 
     def visit_Attribute(self, node):
+        raise error.NumbaError("This node should have been replaced")
+
+    def visit_ComplexAttributeNode(self, node):
         result = self.visit(node.value)
         if node.value.type.is_complex:
             if node.attr == 'real':
                 return self.builder.extract_value(result, 0)
             elif node.attr == 'imag':
                 return self.builder.extract_value(result, 1)
-
-        raise error.NumbaError("This node should have been replaced")
 
     def struct_field(self, node, value):
         value = self.builder.gep(

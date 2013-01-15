@@ -587,10 +587,11 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 cls = pyapi.PyFloat_FromDouble
             elif node_type.is_complex:
                 cls = pyapi.PyComplex_FromDoubles
-                args_ast = self.run_template(
-                    '({{cmplx}}.real, {{cmplx}}.imag)', vars={},
-                    cmplx=node.node)
-                args = args_ast.body[0].value.elts
+                complex_value = nodes.CloneableNode(node.node)
+                args = [
+                    nodes.ComplexAttributeNode(complex_value, "real"),
+                    nodes.ComplexAttributeNode(complex_value.clone, "imag")
+                ]
             else:
                 raise error.NumbaError(
                     node, "Don't know how to coerce type %r to PyObject" %
@@ -1106,6 +1107,9 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             raise error.NumbaError(
                     node, "Cannot access Python attribute in nopython context")
 
+        if node.value.type.is_complex:
+            value = self.visit(node.value)
+            return nodes.ComplexAttributeNode(value, node.attr)
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif is_obj(node.value.type):

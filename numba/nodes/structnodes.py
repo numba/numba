@@ -54,7 +54,16 @@ class StructVariable(Node):
 
 class ComplexNode(Node):
     _fields = ['real', 'imag']
+
     type = complex128
     variable = Variable(type)
 
+class ComplexAttributeNode(Node):
 
+    _fields = ["value"]
+
+    def __init__(self, value, attr):
+        self.value = value
+        self.attr = attr
+        self.type = value.type.base_type
+        self.variable = Variable(self.type)
