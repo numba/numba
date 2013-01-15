@@ -122,8 +122,8 @@ def test_diffusion():
 if __name__ == '__main__':
 #    a = np.arange(120).reshape(10, 12).astype(np.float32)
 #    assert np.all(array_expr(a, a, a) == array_expr.py_func(a, a, a))
-    test_array_expressions()
-#    tests = [name for name in globals().keys() if name.startswith('test_')]
-#    for t in tests:
-#        globals()[t]()
+#    test_array_expressions()
+    tests = [name for name in globals().keys() if name.startswith('test_')]
+    for t in tests:
+        globals()[t]()
 
