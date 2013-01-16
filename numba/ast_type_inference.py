@@ -717,7 +717,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if isinstance(target, ast.Name):
             node.value = nodes.CoercionNode(node.value, lhs_var.type)
         elif lhs_var.type != rhs_var.type:
-            if lhs_var.type.is_array and rhs_var.type.is_array:
+            if lhs_var.type.is_array: # and rhs_var.type.is_array:
                 # Let other code handle array coercions
                 pass
             else:
