@@ -21,7 +21,24 @@ if debug:
     logger.setLevel(logging.DEBUG)
 
 
+class ModuleTypeInfererRegistry(object):
+    "Builds the module type inferers for the modules we can handle"
+
+    is_registered = False
+
+    def register(self, context):
+        if not self.is_registered:
+            NumbaModuleInferer(context).register()
+            NumpyModuleInferer(context).register()
+            self.is_registered = True
+
+module_registry = ModuleTypeInfererRegistry()
+
 def module_attribute_type(obj):
+    """
+    See if the object is registered to any module which might handle
+    type inference on the object.
+    """
     try:
         is_module_attribute_type = obj in ModuleTypeInferer.member2inferer
     except TypeError:
@@ -36,6 +53,7 @@ def module_attribute_type(obj):
     return None
 
 def parse_args(call_node, arg_names):
+    "Parse positional and keyword arguments"
     result = dict.fromkeys(arg_names)
 
     # parse positional arguments
@@ -68,7 +86,8 @@ class ModuleTypeInferer(object):
     registered_inferers = []
     member2inferer = {}
 
-    def __init__(self, modules=None):
+    def __init__(self, context, modules=None):
+        self.context = context
         self.modules = modules or self.modules
 
         # NOTE: __name__ may be unreliable, we use the name exposed by the
