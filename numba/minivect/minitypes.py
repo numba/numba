@@ -525,9 +525,9 @@ class ArrayType(Type):
 
     def __repr__(self):
         axes = [":"] * self.ndim
-        if self.is_c_contig:
+        if self.is_c_contig and self.ndim > 0:
             axes[-1] = "::1"
-        elif self.is_f_contig:
+        elif self.is_f_contig and self.ndim > 0:
             axes[0] = "::1"
 
         return "%s[%s]" % (self.dtype, ", ".join(axes))
