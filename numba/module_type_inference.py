@@ -310,5 +310,21 @@ class NumpyModuleInferer(ModuleTypeInferer):
             # return a 1D array type of the given dtype
             return dtype.resolve()[:]
 
-NumbaModuleInferer().register()
-NumpyModuleInferer().register()
+    def dot(self, a, b, out):
+        if out is not None:
+            return out.variable.type
+
+        lhs_type = promote_to_array(a.variable.type)
+        rhs_type = promote_to_array(b.variable.type)
+
+        dtype = self.context.promote_types(lhs_type.dtype, rhs_type.dtype)
+        dst_ndim = lhs_type.ndim + rhs_type.ndim - 2
+
+        result_type = minitypes.ArrayType(dtype, dst_ndim, is_c_contig=True)
+        return result_type
+
+
+def promote_to_array(dtype):
+    if not dtype.is_array:
+        dtype = minitypes.ArrayType(dtype, 0)
+    return dtype
