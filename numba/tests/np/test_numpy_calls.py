@@ -27,7 +27,8 @@ def test_numpy_attrs():
     result = np_sum(a)
     np_result = np.sum(a, axis=0)
     assert np.all(result == np_result)
-    assert np_copy(a).strides == a.copy(order='F').strides
+    if np.__version__ >= '1.6':
+        assert np_copy(a).strides == a.copy(order='F').strides
     assert all(np.all(result1 == result2)
                    for result1, result2 in zip(attributes(a),
                                                attributes.py_func(a)))

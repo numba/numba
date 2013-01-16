@@ -17,6 +17,7 @@ build/
 *.dep
 *.swp
 *~
+.noseids
 
 tags
 TAGS
