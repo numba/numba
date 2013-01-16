@@ -16,7 +16,8 @@ def struct_type(type):
     return type
 
 class StructAttribute(ExtTypeAttribute):
-
+    # expr : = StructAttribute(expr, string, expr_context, Type, metadata)
+    # metadata := StructAttribute | ComplexAttribute
     _fields = ['value']
 
     def __init__(self, value, attr, ctx, type, **kwargs):

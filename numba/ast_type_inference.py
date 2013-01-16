@@ -299,8 +299,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # or struct
             self.func_signature.struct_by_reference = True
 
-
-
     #------------------------------------------------------------------------
     # Symbol Table Type Population and Argument Processing
     #------------------------------------------------------------------------
