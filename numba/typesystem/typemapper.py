@@ -81,6 +81,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
 
         if result_type == object_:
             from numba import module_type_inference
+            module_type_inference.module_registry.register(self.context)
 
             result = module_type_inference.module_attribute_type(value)
             if result is not None:
