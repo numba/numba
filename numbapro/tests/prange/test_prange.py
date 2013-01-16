@@ -1,3 +1,7 @@
+"""
+>>> import test_prange
+"""
+
 import numbapro
 import numba
 from numba import utils
@@ -147,12 +151,12 @@ def test_prange_in_closure2(x):
 
     return inner
 
+import numba
+numba.testmod()
+
 if __name__ == '__main__':
-#    prange_reduction_error()
+    prange_reduction_error()
 
 #    a = np.arange(100).reshape(10, 10)
 #    print test_sum2d(a)
 #    print test_sum2d(a.astype(np.complex128))
-
-    import numba
-    numba.testmod()
