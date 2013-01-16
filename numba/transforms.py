@@ -1113,8 +1113,11 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         if node.value.type.is_complex:
             value = self.visit(node.value)
             return nodes.ComplexAttributeNode(value, node.attr)
-        if node.type.is_numpy_attribute:
+        elif node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
+        elif node.type.is_numpy_dtype:
+            dtype_type = node.type.resolve()
+            return nodes.ObjectInjectNode(dtype_type.get_dtype())
         elif is_obj(node.value.type):
             if node.value.type.is_module:
                 # Resolve module attributes as constants

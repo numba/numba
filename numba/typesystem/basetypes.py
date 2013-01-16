@@ -145,12 +145,18 @@ class NumpyDtypeType(NumbaType, minitypes.ObjectType):
     def resolve(self):
         return map_dtype(self.dtype)
 
+    def __repr__(self):
+        return "NumpyDtype(%s)" % self.resolve()
+
 class ResolvedNumpyDtypeType(NumbaType, minitypes.ObjectType):
     is_numpy_dtype = True
     dtype_type = None # numba dtype type
 
     def resolve(self):
         return self.dtype_type
+
+    def __repr__(self):
+        return "NumpyDtype(%s)" % self.resolve()
 
 class EllipsisType(NumbaType, minitypes.ObjectType):
     is_ellipsis = True
