@@ -645,7 +645,7 @@ def dfs(start_type, stack, seen, graph=None, parents=False):
 
     for child_type in children:
         if child_type not in seen and child_type.is_unresolved:
-            if not graph or child_type in graph:
+            if graph is None or child_type in graph:
                 dfs(child_type, stack, seen, graph, parents=parents)
 
     stack.append(start_type)
@@ -668,20 +668,20 @@ def resolve_var(var):
     return var.type
 
 
-def kosaraju_strongly_connected(start_type, strongly_connected):
+def kosaraju_strongly_connected(start_type, strongly_connected, seen):
     """
     Find the strongly connected components in the connected graph starting at
     start_type.
     """
     stack = []
-    seen = oset.OrderedSet()
-    dfs(start_type, stack, seen)
+    dfs(start_type, stack, set(seen))
 
+    seen = set(seen)
     graph = oset.OrderedSet(stack)
     while stack:
         start = stack[-1]
         scc = []
-        dfs(start, scc, set(strongly_connected), graph, parents=True)
+        dfs(start, scc, seen, graph, parents=True)
         if len(scc) > 1:
             scc_type = StronglyConnectedCircularType(scc)
             for type in scc_type.types:

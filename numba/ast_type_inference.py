@@ -554,7 +554,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         while unresolved:
             start_type = unresolved.pop()
             sccs = {}
-            kosaraju_strongly_connected(start_type, sccs)
+            kosaraju_strongly_connected(start_type, sccs, strongly_connected)
             unresolved -= set(sccs)
             strongly_connected.update(sccs)
 
