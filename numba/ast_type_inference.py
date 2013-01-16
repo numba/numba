@@ -1423,6 +1423,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def _infer_complex_math(self, func_type, new_node, node, result_type, argtype):
         "Infer types for cmath.somefunc()"
         # Check for cmath.{sqrt,sin,etc}
+        # FIXME: This is not visited when the input is a non-complex scalar.
+        #        In that case, Numba will bypass the cmath and generate
+        #        a LLVM math intrinsic call.
         if not argtype.is_array:
             args = [nodes.const(1.0, float_)]
             is_math = self._is_math_function(args, func_type.value)
