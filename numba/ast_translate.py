@@ -16,7 +16,7 @@ from numba import *
 from . import visitors, nodes, llvm_types, utils, function_util
 from .minivect import minitypes, llvm_codegen
 from numba import ndarray_helpers, translate, error, extension_types
-from numba.typesystem import is_obj, promote_closest
+from numba.typesystem import is_obj, promote_closest, promote_to_native
 from numba.utils import dump
 from numba import naming
 from numba.functions import keep_alive
@@ -2066,8 +2066,7 @@ class ObjectCoercer(object):
             if is_obj(type):
                 type = object_
             elif type.is_int:
-                type = promote_closest(self.context, type,
-                                       minitypes.native_integral)
+                type = promote_to_native(type)
 
             result_types.append(type)
             typestrs.append(self.type_to_buildvalue_str[type])
@@ -2106,18 +2105,18 @@ class ObjectCoercer(object):
         return result
 
     def npy_intp_to_py_ssize_t(self, llvm_result, type):
-        if type == minitypes.npy_intp:
-            lpy_ssize_t = minitypes.Py_ssize_t.to_llvm(self.context)
-            llvm_result = self.translator.caster.cast(llvm_result, lpy_ssize_t)
-            type = minitypes.Py_ssize_t
+#        if type == minitypes.npy_intp:
+#            lpy_ssize_t = minitypes.Py_ssize_t.to_llvm(self.context)
+#            llvm_result = self.translator.caster.cast(llvm_result, lpy_ssize_t)
+#            type = minitypes.Py_ssize_t
 
         return llvm_result, type
 
     def py_ssize_t_to_npy_intp(self, llvm_result, type):
-        if type == minitypes.npy_intp:
-            lnpy_intp = minitypes.npy_intp.to_llvm(self.context)
-            llvm_result = self.translator.caster.cast(llvm_result, lnpy_intp)
-            type = minitypes.Py_ssize_t
+#        if type == minitypes.npy_intp:
+#            lnpy_intp = minitypes.npy_intp.to_llvm(self.context)
+#            llvm_result = self.translator.caster.cast(llvm_result, lnpy_intp)
+#            type = minitypes.Py_ssize_t
 
         return llvm_result, type
 
