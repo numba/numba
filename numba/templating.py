@@ -1,14 +1,32 @@
+"""
+String templating support. The following syntax is supported:
+
+    1) Arbitrary Python code
+    2) Placeholders for AST sub-tree substitutions:
+
+        {{some_node}}
+
+    3) Typed, untyped and code template variables:
+
+        $some_var
+
+        Typed and untyped variables are just artificial program
+        (Python) variables.
+
+            - Typed variables end up in the jit/autojit locals dict
+            - Untyped variables are renameable/ssa variables
+            - Code variables simply expand to arbitrary code
+"""
+
+
 import re
 import ast
 import string
-import types
-import ctypes
 import textwrap
 
 import numba.decorators, numba.pipeline, numba.functions
 from numba import *
-from numba import error, visitors, nodes, symtab as symtab_module
-from numba.minivect import  minitypes
+from numba import nodes, symtab as symtab_module
 from numba.symtab import Variable
 
 import logging
@@ -62,6 +80,11 @@ class TemplateVariable(Variable):
         return node
 
 class TemplateContext(object):
+    """
+    The context in which a template is evaluated. Allows defining
+    template variables and a mechanism to merge those variables back
+    into the function being compiled.
+    """
 
     def __init__(self, context, template):
         self.context = context
@@ -72,6 +95,7 @@ class TemplateContext(object):
         self.substituted_template = None
 
     def temp_var(self, name, type=None, code=False):
+        "Create and add a new template $variable"
         var = TemplateVariable(name=name, type=type, is_local=True,
                                temp_name=not code and temp_name(name),
                                code=code)
@@ -79,16 +103,20 @@ class TemplateContext(object):
         return var
 
     def add_variable(self, var):
+        "Add an external template $variable to this context"
         self.variables.append(var)
 
     def code_var(self, name):
+        "Create a template $variable that expands to generated code statements"
         return self.temp_var(name, code=True)
 
     def temp_vars(self, *names):
+        "Create a number of template $variables"
         for name in names:
             yield self.temp_var(name)
 
     def code_vars(self, *names):
+        "Create a number of code $variables"
         for name in names:
             yield self.code_var(name)
 
@@ -105,12 +133,19 @@ class TemplateContext(object):
                         for var in self.variables if not var.code)
 
     def update_locals(self, locals_dict):
+        """
+        Update an external jit/autojit locals dict with our
+        template $variables
+        """
         for var in self.variables:
             if not var.code and var.type is not None:
                 assert var.name not in locals_dict
                 locals_dict[var.temp_name] = var.type
 
     def template(self, substitutions):
+        """
+        Run a template and perform the given {{substitutions}}
+        """
         s = textwrap.dedent(self.templ)
         s = self.string_substitute(s)
 
@@ -162,27 +197,44 @@ def template_simple(s, **substitutions):
     return template(s, substitutions)
 
 class Interpolate(ast.NodeTransformer):
+    """
+    Interpolate template substitutions.
+
+    substitutions: { var_name : substitution_node }
+
+        This is for {{var_name}} template syntax. This allows
+        substituting arbitrary asts is specific places.
+
+    template_variables: [TemplateVariable(...)]
+
+        This is for $var syntax. This allows the introductions of typed
+        or untyped variables, as well as code variables.
+    """
 
     def __init__(self, substitutions, template_variables):
         self.substitutions = substitutions
         self.template_variables = template_variables or {}
+        self.make_substitutions_clonenodes()
 
-        for name, replacement in substitutions.iteritems():
-            if (not isinstance(replacement, (nodes.CloneableNode,
-                                             nodes.CloneNode)) and
-                    hasattr(replacement, 'type') and not
-                    isinstance(replacement, (ast.Name, nodes.TempLoadNode))):
-                substitutions[name] = nodes.CloneableNode(replacement)
+    def make_substitutions_clonenodes(self):
+        for name, replacement in self.substitutions.iteritems():
+            is_clone = isinstance(replacement, (nodes.CloneableNode,
+                                                nodes.CloneNode,
+                                                ast.Name,   # atomic
+                                                nodes.TempLoadNode))
+            have_type = hasattr(replacement, 'type')
+            if not is_clone and have_type:
+                self.substitutions[name] = nodes.CloneableNode(replacement)
 
     def visit_Name(self, node):
         if node.id.startswith(prefix):
             name = node.id[len(prefix):]
-            replacement = self.substitutions[name]
-            if (not isinstance(replacement, nodes.CloneNode) and
-                    isinstance(replacement, nodes.CloneableNode)):
-                self.substitutions[name] = replacement.clone
-            return replacement
+            node = self.substitutions[name]
+            if isinstance(node, nodes.CloneableNode):
+                self.substitutions[name] = node.clone
+
         elif node.id in self.template_variables:
             node.variable = self.template_variables[node.id]
+            node = nodes.MaybeUnusedNode(node)
 
         return node

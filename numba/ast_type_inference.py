@@ -155,18 +155,16 @@ class NumpyMixin(object):
         - track how contiguity is affected (C or Fortran)
     """
 
+    # TODO: Replace uses of these methods with the respective functions
+
     def _is_constant_index(self, node):
-        return (isinstance(node, ast.Index) and
-                isinstance(node.value, nodes.ConstNode))
+        return nodes.is_constant_index(node)
 
     def _is_newaxis(self, node):
-        v = node.variable
-        return (self._is_constant_index(node) and
-                node.value.pyval is None) or v.type.is_newaxis or v.type.is_none
+        return nodes.is_newaxis(node)
 
     def _is_ellipsis(self, node):
-        return (self._is_constant_index(node) and
-                node.value.pyval is Ellipsis)
+        return nodes.is_ellipsis(node)
 
     def _unellipsify(self, node, slices, subscript_node):
         """
@@ -222,13 +220,15 @@ class NumpyMixin(object):
                 return minitypes.object_, nodes.CoercionNode(node,
                                                              minitypes.object_)
 
+        # Reverse our reversed processed list of slices
+        result.reverse()
+
         # append any missing slices (e.g. a2d[:]
         result_length = len(result) - len(newaxes)
         if result_length < type.ndim:
             nslices = type.ndim - result_length
             result.extend([full_slice] * nslices)
 
-        result.reverse()
         subscript_node.slice = ast.ExtSlice(result)
         ast.copy_location(subscript_node.slice, slices[0])
 
@@ -272,9 +272,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         ast.closures = []
 
         self.function_level = kwds.get('function_level', 0)
-
-        self.member2inferer = \
-            module_type_inference.ModuleTypeInferer.member2inferer
+        self.register_module_type_inferers()
         self.init_locals()
         ast.have_return = False
 
@@ -300,8 +298,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             # signatures taking a pointer argument to a complex number
             # or struct
             self.func_signature.struct_by_reference = True
-
-
 
     #------------------------------------------------------------------------
     # Symbol Table Type Population and Argument Processing
@@ -364,6 +360,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     if var.type and var.cf_references:
                         assert not var.type.is_unresolved
                         print "Variable after analysis: %s" % var
+
+    def register_module_type_inferers(self):
+        module_type_inference.module_registry.register(self.context)
+        self.member2inferer = \
+            module_type_inference.ModuleTypeInferer.member2inferer
 
     #------------------------------------------------------------------------
     # Utilities
@@ -553,7 +554,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         while unresolved:
             start_type = unresolved.pop()
             sccs = {}
-            kosaraju_strongly_connected(start_type, sccs)
+            kosaraju_strongly_connected(start_type, sccs, strongly_connected)
             unresolved -= set(sccs)
             strongly_connected.update(sccs)
 
@@ -717,7 +718,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if isinstance(target, ast.Name):
             node.value = nodes.CoercionNode(node.value, lhs_var.type)
         elif lhs_var.type != rhs_var.type:
-            if lhs_var.type.is_array and rhs_var.type.is_array:
+            if lhs_var.type.is_array: # and rhs_var.type.is_array:
                 # Let other code handle array coercions
                 pass
             else:
@@ -1398,7 +1399,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if signature and new_node.type.is_object:
             new_node = self._resolve_return_type(func_type, new_node,
-                                                 call_node)
+                                                 call_node, arg_types)
 
         return new_node
 
@@ -1420,18 +1421,22 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         return new_node
 
-    def _infer_complex_math(self, func_type, new_node, node, result_type):
+    def _infer_complex_math(self, func_type, new_node, node, result_type, argtype):
         "Infer types for cmath.somefunc()"
         # Check for cmath.{sqrt,sin,etc}
-        args = [nodes.const(1.0, float_)]
-        is_math = self._is_math_function(args, func_type.value)
-        if len(node.args) == 1 and is_math:
-            new_node = nodes.CoercionNode(new_node, complex128)
-            result_type = complex128
+        # FIXME: This is not visited when the input is a non-complex scalar.
+        #        In that case, Numba will bypass the cmath and generate
+        #        a LLVM math intrinsic call.
+        if not argtype.is_array:
+            args = [nodes.const(1.0, float_)]
+            is_math = self._is_math_function(args, func_type.value)
+            if len(node.args) == 1 and is_math:
+                new_node = nodes.CoercionNode(new_node, complex128)
+                result_type = complex128
 
         return new_node, result_type
 
-    def _resolve_return_type(self, func_type, new_node, node):
+    def _resolve_return_type(self, func_type, new_node, node, argtypes):
         """
         We are performing a call through PyObject_Call, but we may be able
         to infer a more specific return value than 'object'.
@@ -1442,12 +1447,15 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                 func_type.value in self.member2inferer):
             # Try the module type inferers
             inferer = self.member2inferer[func_type.value]
-            result_type = inferer.resolve_call(node, func_type)
+            result_node = inferer.resolve_call(node, new_node, func_type)
+            if result_node is not None:
+                return result_node
 
         if ((func_type.is_module_attribute and func_type.module is cmath) or
-              (result_type is None and func_type.is_numpy_attribute)):
+                 (func_type.is_numpy_attribute and len(argtypes) == 1 and
+                  argtypes[0].is_complex)):
             new_node, result_type = self._infer_complex_math(
-                                func_type, new_node , node, result_type)
+                    func_type, new_node, node, result_type, argtypes[0])
 
         if result_type is None:
             result_type = object_
@@ -1690,6 +1698,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def visit_UserNode(self, node):
         return node.infer_types(self)
+
+    #------------------------------------------------------------------------
+    # Nodes that should be deleted after type inference
+    #------------------------------------------------------------------------
+
+    def visit_MaybeUnusedNode(self, node):
+        return self.visit(node.name_node)
+
 
 class TypeSettingVisitor(visitors.NumbaTransformer):
     """

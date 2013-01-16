@@ -182,6 +182,21 @@ class TestASTComplex(test_support.ASTTestCase):
         self.assertAlmostEqual(self.autojit(asinh)(m, n), asinh(m, n))
         self.assertAlmostEqual(self.autojit(absolute)(m, n), absolute(m, n))
 
+
+    def test_complex_math_float_input(self):
+        m, n = .12, .32
+        self.assertAlmostEqual(self.autojit(sqrt)(m, n), sqrt(m, n))
+        self.assertAlmostEqual(self.autojit(log)(m, n), log(m, n))
+        self.assertAlmostEqual(self.autojit(log10)(m, n), log10(m, n))
+        self.assertAlmostEqual(self.autojit(exp)(m, n), exp(m, n))
+        self.assertAlmostEqual(self.autojit(sin)(m, n), sin(m, n))
+        self.assertAlmostEqual(self.autojit(cos)(m, n), cos(m, n))
+        self.assertAlmostEqual(self.autojit(cosh)(m, n), cosh(m, n))
+        self.assertAlmostEqual(self.autojit(atan)(m, n), atan(m, n))
+        self.assertAlmostEqual(self.autojit(asinh)(m, n), asinh(m, n))
+        self.assertAlmostEqual(self.autojit(absolute)(m, n), absolute(m, n))
+
+
     def test_mandel(self):
         self.assertEqual(self.autojit(mandel)(-1, -1, 20), 2)
         self.assertEqual(mandel(-1, -1, 20), 2)

@@ -43,8 +43,8 @@ u2 = uint16
 u4 = uint32
 u8 = uint64
 
-f4 = float_
-f8 = double
+f4 = float32
+f8 = float64
 f16 = float128
 
 c8 = complex64

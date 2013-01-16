@@ -1,20 +1,12 @@
 import ast
-import math
-import cmath
-import copy
-import opcode
 import inspect
 import types
-import itertools
-import __builtin__ as builtins
 
 import numba
 from numba import *
-from .minivect import minierror, minitypes
-# from numba.tests import doctest_support
-from numba import typesystem
+from numba.minivect import minitypes
+from numba import typesystem, symtab
 
-import llvm.core
 import numpy.random
 import numpy as np
 
@@ -28,12 +20,25 @@ logger = logging.getLogger(__name__)
 if debug:
     logger.setLevel(logging.DEBUG)
 
-def get_module_inferers():
-    # Use a metaclass? Or register explicitly?
-    classes = ModuleTypeInferer.__subclasses__()
-    return [cls() for cls in classes]
+
+class ModuleTypeInfererRegistry(object):
+    "Builds the module type inferers for the modules we can handle"
+
+    is_registered = False
+
+    def register(self, context):
+        if not self.is_registered:
+            NumbaModuleInferer(context).register()
+            NumpyModuleInferer(context).register()
+            self.is_registered = True
+
+module_registry = ModuleTypeInfererRegistry()
 
 def module_attribute_type(obj):
+    """
+    See if the object is registered to any module which might handle
+    type inference on the object.
+    """
     try:
         is_module_attribute_type = obj in ModuleTypeInferer.member2inferer
     except TypeError:
@@ -48,6 +53,7 @@ def module_attribute_type(obj):
     return None
 
 def parse_args(call_node, arg_names):
+    "Parse positional and keyword arguments"
     result = dict.fromkeys(arg_names)
 
     # parse positional arguments
@@ -80,7 +86,8 @@ class ModuleTypeInferer(object):
     registered_inferers = []
     member2inferer = {}
 
-    def __init__(self, modules=None):
+    def __init__(self, context, modules=None):
+        self.context = context
         self.modules = modules or self.modules
 
         # NOTE: __name__ may be unreliable, we use the name exposed by the
@@ -137,6 +144,7 @@ class ModuleTypeInferer(object):
             types.BuiltinFunctionType,
             types.ClassType,
             type,
+            np.ufunc,
         )
         return isinstance(obj, valid_types)
 
@@ -168,7 +176,7 @@ class ModuleTypeInferer(object):
         method_kwargs = parse_args(call_node, argnames)
         return method(**method_kwargs)
 
-    def resolve_call(self, call_node, func_type):
+    def resolve_call(self, call_node, obj_call_node, func_type):
         """
         Call to an attribute of this module.
 
@@ -179,7 +187,15 @@ class ModuleTypeInferer(object):
 
         The default is to dispatch on the name of the member.
         """
-        return self.dispatch_on_name(call_node, func_type)
+        result = self.dispatch_on_name(call_node, func_type)
+
+        if result is not None and not isinstance(result, ast.AST):
+            assert isinstance(result, minitypes.Type)
+            type = result
+            result = obj_call_node
+            result.variable = symtab.Variable(type)
+
+        return result
 
     def register(self):
         self.member2inferer.update(dict.fromkeys(self.members, self))
@@ -195,7 +211,11 @@ class NumbaModuleInferer(ModuleTypeInferer):
     modules = [numba]
 
     def typeof(self, expr):
-        return typesystem.CastType(expr.variable.type)
+        from numba import nodes
+
+        obj = expr.variable.type
+        type = typesystem.CastType(obj)
+        return nodes.const(obj, type)
 
 class NumpyModuleInferer(ModuleTypeInferer):
     """
@@ -290,5 +310,21 @@ class NumpyModuleInferer(ModuleTypeInferer):
             # return a 1D array type of the given dtype
             return dtype.resolve()[:]
 
-NumbaModuleInferer().register()
-NumpyModuleInferer().register()
+    def dot(self, a, b, out):
+        if out is not None:
+            return out.variable.type
+
+        lhs_type = promote_to_array(a.variable.type)
+        rhs_type = promote_to_array(b.variable.type)
+
+        dtype = self.context.promote_types(lhs_type.dtype, rhs_type.dtype)
+        dst_ndim = lhs_type.ndim + rhs_type.ndim - 2
+
+        result_type = minitypes.ArrayType(dtype, dst_ndim, is_c_contig=True)
+        return result_type
+
+
+def promote_to_array(dtype):
+    if not dtype.is_array:
+        dtype = minitypes.ArrayType(dtype, 0)
+    return dtype

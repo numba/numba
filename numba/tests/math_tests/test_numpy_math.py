@@ -83,23 +83,35 @@ def sin(A):
     return np.sin(A)
 
 def test_array_math():
-    A = np.arange(10)
-    assert np.all(sin(A) == sin.py_func(A))
+#    A = np.arange(10)
+#    assert np.all(sin(A) == sin.py_func(A))
+    dst_types = set(dest_types)
+    dst_types.discard(Py_ssize_t)
+
+    functions = get_functions()
+    for func_name, func in functions.iteritems():
+        for dst_type in dst_types:
+#            print func_name, dst_type
+            dtype = dst_type.get_dtype()
+            a = np.arange(1, 5, dtype=dtype)
+            b = np.arange(5, 9, dtype=dtype)
+            r1 = autojit(func)(a, b)
+            r2 = func(a, b)
+            assert np.allclose(r1, r2)
+
+def expm1(a, b):
+    print numba.typeof(a)
+    print numba.typeof(np.expm1(a))
+#    result = a**2 + b**2
+#    print "... :)"
+#    print np.expm1(result), "..."
+    return np.expm1(a)
 
 
 if __name__ == "__main__":
-#    @jit(complex64(complex64, complex64))
-#    def log1(a, b):
-#        result = a**2 + b**2
-#        return np.log(result) + 1.6
-#
-#    @jit(complex128(complex128, complex128))
-#    def log2(a, b):
-#        result = a**2 + b**2
-#        return np.log(result) + 1.6
-#
-#    print log1(5.2, 6.9)
-#    print log2(5.2, 6.9)
-#    print log1.py_func(5.2, 6.9)
+#    dtype = np.complex128
+#    a = np.arange(1, 11, dtype=dtype)
+#    b = np.arange(5, 15, dtype=dtype)
+#    print autojit(expm1)(a, b)
     test_array_math()
     test_math_funcs()

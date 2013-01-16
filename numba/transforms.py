@@ -83,6 +83,7 @@ import opcode
 import types
 import ctypes
 import textwrap
+import traceback
 import __builtin__ as builtins
 
 if __debug__:
@@ -162,13 +163,17 @@ class MathMixin(object):
             return False
 
         type = func_args[0].variable.type
+
         if type.is_array:
             type = type.dtype
+            valid_type = type.is_float or type.is_int or type.is_complex
+        else:
+            valid_type = type.is_float or type.is_int
 
         is_intrinsic = self._is_intrinsic(py_func)
         is_math = self.get_funcname(py_func) in self.libc_math_funcs
 
-        return (type.is_float or type.is_int) and (is_intrinsic or is_math)
+        return valid_type and (is_intrinsic or is_math)
 
     def _resolve_intrinsic(self, args, py_func, signature):
         func_name = self.get_funcname(py_func).upper()
@@ -198,8 +203,7 @@ class MathMixin(object):
         if type.is_int:
             type = double
         elif type.is_array and type.dtype.is_int:
-            type = type.copy()
-            type.dtype = double
+            type = type.copy(dtype=double)
 
         signature = minitypes.FunctionType(return_type=type, args=[type])
         result = nodes.MathNode(py_func, signature, call_node.args[0])
@@ -493,8 +497,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
         node_type = node.node.type
         dst_type = node.dst_type
         if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
-            logger.debug('coercion: %s --> %s\n%s' % (
-                    node_type, dst_type, pprint.pformat(utils.ast2tree(node))))
+            logger.debug('coercion: %s --> %s\n%s',
+                         node_type, dst_type, utils.pformat_ast(node))
 
         if self.nopython and is_obj(node_type):
             raise error.NumbaError(node, "Cannot coerce to or from object in "
@@ -503,21 +507,20 @@ class ResolveCoercions(visitors.NumbaTransformer):
         if is_obj(node.dst_type) and not is_obj(node_type):
             node = nodes.ObjectTempNode(nodes.CoerceToObject(
                     node.node, node.dst_type, name=node.name))
-            return self.visit(node)
+            result = self.visit(node)
         elif is_obj(node_type) and not is_obj(node.dst_type):
             node = nodes.CoerceToNative(node.node, node.dst_type,
                                         name=node.name)
             result = self.visit(node)
-            return result
         elif node_type.is_null:
             if not dst_type.is_pointer:
                 raise error.NumbaError(node.node,
                                        "NULL must be cast or implicitly "
                                        "coerced to a pointer type")
-            return self.visit(nodes.NULL.coerce(dst_type))
+            result = self.visit(nodes.NULL.coerce(dst_type))
         elif node_type.is_numeric and dst_type.is_bool:
-            return self.visit(ast.Compare(node.node, [ast.NotEq()],
-                                          [nodes.const(0, node_type)]))
+            result = self.visit(ast.Compare(node.node, [ast.NotEq()],
+                                            [nodes.const(0, node_type)]))
         elif node_type.is_c_string and dst_type.is_numeric:
             # TODO: int <-> string conversions are explicit, this should not
             # TODO: be a coercion
@@ -546,16 +549,20 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                 nodes.const(0, Py_ssize_t)])
                 node = nodes.CoerceToNative(nodes.ObjectTempNode(cvtobj),
                                             dst_type, name=node.name)
-            return self.visit(node)
+            result = self.visit(node)
+        else:
+            self.generic_visit(node)
+            if not node.node.type == node_type:
+                result = self.visit(node)
+            elif dst_type == node.node.type:
+                result = node.node
+            else:
+                result = node
 
-        self.generic_visit(node)
-        if not node.node.type == node_type:
-            return self.visit(node)
+        if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
+            logger.debug('result = %s', utils.pformat_ast(result))
 
-        if dst_type == node.node.type:
-            return node.node
-
-        return node
+        return result
 
     def _get_int_conversion_func(self, type, funcs_dict):
         type = self.context.promote_types(type, long_)
@@ -583,13 +590,15 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 cls = pyapi.PyFloat_FromDouble
             elif node_type.is_complex:
                 cls = pyapi.PyComplex_FromDoubles
-                args_ast = self.run_template(
-                    '({{cmplx}}.real, {{cmplx}}.imag)', vars={},
-                    cmplx=node.node)
-                args = args_ast.body[0].value.elts
+                complex_value = nodes.CloneableNode(node.node)
+                args = [
+                    nodes.ComplexAttributeNode(complex_value, "real"),
+                    nodes.ComplexAttributeNode(complex_value.clone, "imag")
+                ]
             else:
-                raise NotImplementedError(
-                    "Don't know how to coerce type %r to PyObject" % node_type)
+                raise error.NumbaError(
+                    node, "Don't know how to coerce type %r to PyObject" %
+                    node_type)
 
             if cls:
                 new_node = function_util.external_call(self.context,
@@ -620,6 +629,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
         from_type = node.node.type
         node_type = node.type
+
         if node_type.is_numeric:
             cls = None
             if node_type == size_t:
@@ -638,7 +648,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 # FIXME: This conversion has to be pretty slow.  We
                 # need to move towards being ABI-savvy enough to just
                 # call PyComplex_AsCComplex().
-                cloneable = nodes.CloneableNode(node.node)
+                cloneable = nodes.CloneableNode(self.visit(node.node))
                 new_node = nodes.ComplexNode(
                     real=function_util.external_call(
                         self.context, self.llvm_module,
@@ -647,8 +657,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
                         self.context, self.llvm_module,
                         "PyComplex_ImagAsDouble", args=[cloneable.clone]))
             else:
-                raise NotImplementedError(
-                    "Don't know how to coerce a Python object to a %r" %
+                raise error.NumbaError(
+                    node, "Don't know how to coerce a Python object to a %r" %
                     node_type)
 
             if cls:
@@ -661,13 +671,14 @@ class ResolveCoercions(visitors.NumbaTransformer):
             raise error.NumbaError(node, "Obtaining pointers from objects "
                                          "is not yet supported")
         elif node_type.is_void:
-            raise error.NumbaError(node, "Cannot coerce %s to void" % (from_type,))
+            raise error.NumbaError(node, "Cannot coerce %s to void" %
+                                   (from_type,))
 
         if new_node is None:
             # Create a tuple for PyArg_ParseTuple
             new_node = node
             new_node.node = ast.Tuple(elts=[node.node], ctx=ast.Load())
-        else:
+        elif new_node.type != node.type:
             # Fast coercion
             new_node = nodes.CoercionNode(new_node, node.type)
 
@@ -749,7 +760,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                check whether incoming_type == phi_type, and otherwise we
                look up the promotion in the parent block or an ancestor.
         """
-        for i, incoming_var in enumerate(node.incoming):
+        for parent_block, incoming_var in node.find_incoming():
             if incoming_var.type.is_uninitialized:
                 incoming_type = incoming_var.type.base_type or node.type
                 bad = badval(incoming_type)
@@ -760,7 +771,6 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             elif not incoming_var.type == node.type:
                 # Create promotions for variables with phi nodes in successor
                 # blocks.
-
                 incoming_symtab = incoming_var.block.symtab
                 if (incoming_var, node.type) not in node.block.promotions:
                     # Make sure we only coerce once for each destination type and
@@ -1100,10 +1110,14 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             raise error.NumbaError(
                     node, "Cannot access Python attribute in nopython context")
 
+        if node.value.type.is_complex:
+            value = self.visit(node.value)
+            return nodes.ComplexAttributeNode(value, node.attr)
         if node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif is_obj(node.value.type):
-            if isinstance(node.value.type, typesystem.ModuleType):
+            if node.value.type.is_module:
+                # Resolve module attributes as constants
                 if node.type.is_module_attribute:
                     new_node = nodes.ObjectInjectNode(node.type.value)
                 else:
@@ -1130,11 +1144,17 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         """
         ext_type = node.value.type
         offset = ext_type.attr_offset
-        type = ext_type.attribute_struct.ref()
+        type = ext_type.attribute_struct
 
-        struct_pointer = nodes.value_at_offset(node.value, offset, type)
+        if isinstance(node.ctx, ast.Load):
+            value_type = type.ref()         # Load result
+        else:
+            value_type = type.pointer()     # Use pointer for storage
+
+        struct_pointer = nodes.value_at_offset(node.value, offset,
+                                               value_type)
         result = nodes.StructAttribute(struct_pointer, node.attr,
-                                       node.ctx, type)
+                                       node.ctx, type.ref())
 
         return self.visit(result)
 

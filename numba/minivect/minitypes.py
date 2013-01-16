@@ -525,15 +525,17 @@ class ArrayType(Type):
 
     def __repr__(self):
         axes = [":"] * self.ndim
-        if self.is_c_contig:
+        if self.is_c_contig and self.ndim > 0:
             axes[-1] = "::1"
-        elif self.is_f_contig:
+        elif self.is_f_contig and self.ndim > 0:
             axes[0] = "::1"
 
         return "%s[%s]" % (self.dtype, ", ".join(axes))
 
-    def copy(self):
-        return copy.copy(self)
+    def copy(self, **kwargs):
+        array_type = copy.copy(self)
+        vars(array_type).update(kwargs)
+        return array_type
 
     @property
     def strided(self):
@@ -721,15 +723,23 @@ class FloatType(NumericType):
     def __eq__(self, other):
         return isinstance(other, FloatType) and self.itemsize == other.itemsize
 
+    __hash__ = NumericType.__hash__
+
     def to_llvm(self, context):
         if self.itemsize == 4:
             return lc.Type.float()
         elif self.itemsize == 8:
             return lc.Type.double()
         else:
-            # Note: what about fp80/fp96?
-            assert self.itemsize == 16
-            return lc.Type.fp128()
+            is_ppc, is_x86 = get_target_triple()
+            if self.itemsize == 16:
+                if is_ppc:
+                    return lc.Type.ppc_fp128()
+                else:
+                    return lc.Type.fp128()
+            else:
+                assert self.itemsize == 10 and is_x86
+                return lc.Type.x86_fp80()
 
 class ComplexType(NumericType):
     is_complex = True
@@ -1039,6 +1049,12 @@ def getsize(ctypes_name, default):
     except ImportError:
         return default
 
+def get_target_triple():
+    target_machine = llvm.ee.TargetMachine.new()
+    is_ppc = target_machine.triple.startswith("ppc")
+    is_x86 = target_machine.triple.startswith("x86")
+    return is_ppc, is_x86
+
 #
 ### Internal types
 #
@@ -1077,7 +1093,8 @@ ulonglong = IntType(name="unsigned PY_LONG_LONG", rank=8.5,
 
 float_ = FloatType(name="float", rank=20, itemsize=4)
 double = FloatType(name="double", rank=21, itemsize=8)
-longdouble = FloatType(name="long double", rank=22, itemsize=16)
+longdouble = FloatType(name="long double", rank=22,
+                       itemsize=ctypes.sizeof(ctypes.c_longdouble))
 
 bool_ = BoolType()
 object_ = ObjectType()

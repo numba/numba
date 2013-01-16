@@ -16,7 +16,8 @@ def struct_type(type):
     return type
 
 class StructAttribute(ExtTypeAttribute):
-
+    # expr : = StructAttribute(expr, string, expr_context, Type, metadata)
+    # metadata := StructAttribute | ComplexAttribute
     _fields = ['value']
 
     def __init__(self, value, attr, ctx, type, **kwargs):
@@ -54,7 +55,16 @@ class StructVariable(Node):
 
 class ComplexNode(Node):
     _fields = ['real', 'imag']
+
     type = complex128
     variable = Variable(type)
 
+class ComplexAttributeNode(Node):
 
+    _fields = ["value"]
+
+    def __init__(self, value, attr):
+        self.value = value
+        self.attr = attr
+        self.type = value.type.base_type
+        self.variable = Variable(self.type)

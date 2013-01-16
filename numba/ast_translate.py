@@ -678,11 +678,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             for phi_node in block.phi_nodes:
                 phi = phi_node.variable.lvalue
                 assert phi, phi_node.variable
-                for parent_block in block.parents:
+                for parent_block, incoming_var in phi_node.find_incoming():
                     assert parent_block.exit_block, parent_block
-
-                    name = phi_node.variable.name
-                    incoming_var = parent_block.symtab.lookup_most_recent(name)
 
                     if incoming_var.type.is_uninitialized:
                         #print incoming_var.cf_references
@@ -968,14 +965,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return node.value(self)
 
     def visit_Attribute(self, node):
+        raise error.NumbaError("This node should have been replaced")
+
+    def visit_ComplexAttributeNode(self, node):
         result = self.visit(node.value)
         if node.value.type.is_complex:
             if node.attr == 'real':
                 return self.builder.extract_value(result, 0)
             elif node.attr == 'imag':
                 return self.builder.extract_value(result, 1)
-
-        raise error.NumbaError("This node should have been replaced")
 
     def struct_field(self, node, value):
         value = self.builder.gep(
@@ -985,13 +983,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_StructAttribute(self, node):
         result = self.visit(node.value)
+        value_is_reference = node.value.type.is_reference
+
         if isinstance(node.ctx, ast.Load):
-            if node.value.type.is_reference:
+            if value_is_reference:
+                # Struct reference, load result
                 result = self.struct_field(node, result)
                 result = self.builder.load(result)
             else:
                 result = self.builder.extract_value(result, node.field_idx)
         else:
+            if value_is_reference:
+                # Load alloca-ed struct pointer
+                result = self.builder.load(result)
             result = self.struct_field(node, result)
             #result = self.builder.insert_value(result, self.rhs_lvalue,
             #                                   node.field_idx)
@@ -1243,11 +1247,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             return self.builder.fcmp(lop, lhs_lvalue, rhs_lvalue)
         elif lhs.type.is_int_like and rhs.type.is_int_like:
             lfunc = self.builder.icmp
-            # FIXME
-            if not lhs.type.signed:
-                error.NumbaError(
-                        node, 'Unsigned comparison has not been implemented')
-            lop = _compare_mapping_sint[op]
+            if lhs.type.signed:
+                mapping = _compare_mapping_sint
+            else:
+                mapping = _compare_mapping_uint
+            lop = mapping[op]
         else:
             raise TypeError(lhs.type)
         return lfunc(lop, lhs_lvalue, rhs_lvalue)

@@ -12,10 +12,13 @@ from Cython.Distutils.extension import Extension as CythonExtension
 if sys.version_info[:2] < (2, 5):
     raise Exception('numba requires Python 2.5 or greater.')
 
-kwds = {}
+cmdclasses = {
+    'build_ext': build_ext,
+}
 
-kwds['long_description'] = open('README').read()
-
+setup_args = {
+    'long_description': open('README').read(),
+}
 
 def find_packages(where='.', exclude=()):
     out = []
@@ -33,6 +36,26 @@ def find_packages(where='.', exclude=()):
         out = [item for item in out if not fnmatchcase(item, pat)]
     return out
 
+def run_2to3():
+    import lib2to3.refactor
+    from distutils.command.build_py import build_py_2to3 as build_py
+    print("Installing 2to3 fixers")
+    # need to convert sources to Py3 on installation
+    fixes = lib2to3.refactor.get_fixers_from_package("lib2to3.fixes")
+    bad_fixers = ('next', 'funcattrs')
+    fixes = [fix for fix in fixes
+              if fix.split('fix_')[-1] not in bad_fixers]
+
+    build_py.fixer_names = fixes
+    cmdclasses["build_py"] = build_py
+    # cmdclasses["build"] = build_py
+
+    # Distribute options
+    # setup_args["use_2to3"] = True
+
+if sys.version_info[0] >= 3:
+    run_2to3()
+
 setup(
     name = "numba",
     author = "Continuum Analytics, Inc.",
@@ -46,7 +69,7 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 2.6",
         "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.2",
+        # "Programming Language :: Python :: 3.2",
         "Topic :: Utilities",
     ],
     description = "compiling Python code using LLVM",
@@ -67,5 +90,6 @@ setup(
             cython_gdb=True),
     ],
     version = '0.3.2',
-    cmdclass={'build_ext': build_ext},
+    cmdclass=cmdclasses,
+    **setup_args
 )

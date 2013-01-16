@@ -52,7 +52,6 @@ class Variable(object):
         # The control_flow.NameAssignment that defines this
         # variable (or PhiNode if a phi)
         self.name_assignment = None
-
         self.cf_assignments = []
         self.cf_references = [] # def-use chain
 

@@ -126,12 +126,21 @@ class NumbaTypeMapper(minitypes.TypeMapper):
 
 
 def have_properties(type1, type2, property1, property2):
-    p1 = getattr(type1, property1) or getattr(type1, property2)
-    p2 = getattr(type2, property1) or getattr(type2, property2)
-    if not (p1 and p2):
-        return None
+    """
+    Return whether the two types satisfy the two properties:
 
-    if getattr(type1, property1):
-        return type1
+    >>> have_properties(int32, int32.pointer(), "is_pointer", "is_int")
+    True
+    """
+    type1_p1 = getattr(type1, property1)
+    type1_p2 = getattr(type1, property2)
+    type2_p1 = getattr(type2, property1)
+    type2_p2 = getattr(type2, property2)
+
+    if (type1_p1 and type2_p2) or (type1_p2 and type2_p1):
+        if type1_p1:
+            return type1
+        else:
+            return type2
     else:
-        return type2
+        return None
