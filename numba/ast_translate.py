@@ -826,7 +826,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         args.insert(0, closure)
 
     def visit_FunctionWrapperNode(self, node):
+        global debug_conversion
         from numba import ast_type_inference, pipeline
+
+        was_debug_conversion = debug_conversion
+        if debug_conversion:
+            debug_conversion = False
 
         args_tuple = self.lfunc.args[1]
         arg_types = [object_] * len(node.signature.args)
@@ -888,6 +893,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                                       order=['late_specializer'])
         sig, symtab, return_stmt_ast = pipeline_.run_pipeline()
         self.generic_visit(return_stmt_ast)
+
+        debug_conversion = was_debug_conversion
 
     @property
     def lfunc_pointer(self):
@@ -2093,6 +2100,8 @@ class ObjectCoercer(object):
 
         if debug_conversion:
             self.translator.puts("done building... %s" % name)
+            nodes.print_llvm(self.translator, object_, result)
+            self.translator.puts("--------------------------")
 
         return result
 
