@@ -1,9 +1,11 @@
+"""
+>>> import test_closure_type_inference
+"""
+
 import numpy as np
 
 from numba import *
 from numba.tests.test_support import *
-
-from numba.minivect import minitypes, minierror
 
 @autojit
 def test_cellvar_promotion(a):

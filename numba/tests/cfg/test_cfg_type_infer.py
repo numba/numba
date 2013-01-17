@@ -190,11 +190,10 @@ def test_while_reassign(obj1, obj2, obj3, obj4):
 
     return obj1, obj2, obj3, obj4
 
-@autojit
+@autojit(warn=False)
 def test_conditional_assignment(value):
     """
     >>> test_conditional_assignment(0)
-    Warning 208:11: local variable 'obj1' might be referenced before assignment
     array([ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.], dtype=float32)
 
     >>> test_conditional_assignment(1)
@@ -207,6 +206,7 @@ def test_conditional_assignment(value):
 
     return obj1
 
+
 #
 ### Test for errors
 #
@@ -216,11 +216,15 @@ def test_error_array_variable1(value, obj1):
     >>> test_error_array_variable1(0, object())
     Traceback (most recent call last):
         ...
-    TypeError: Arrays must have consistent types in assignment for variable 'obj1': 'float[:]' and 'object_'
+    TypeError: Arrays must have consistent types in assignment for variable 'obj1': 'float32[:]' and 'object_'
     """
     if value < 1:
         obj1 = np.empty(10, dtype=np.float32)
 
     return obj1
 
-testmod()
+def test():
+    import test_cfg_type_infer
+    testmod(test_cfg_type_infer)
+
+test()

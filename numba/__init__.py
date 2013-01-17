@@ -60,6 +60,9 @@ from numba.tests.test_support import testmod
 
 EXCLUDE_TEST_PACKAGES = ["bytecode"]
 
+def split_path(path):
+    return path.split(os.sep)
+
 def exclude_package_dirs(dirs):
     for exclude_pkg in EXCLUDE_TEST_PACKAGES:
         if exclude_pkg in dirs:
@@ -67,13 +70,19 @@ def exclude_package_dirs(dirs):
 
 
 def qualified_test_name(root):
-    qname = root.replace("/", ".").replace("\\", ".").replace(os.sep, ".")
-    return qname + "."
+    qname = root.replace("/", ".").replace("\\", ".").replace(os.sep, ".") + "."
+    offset = qname.rindex('numba.tests.')
+    return qname[offset:]
 
-def test():
+def whitelist_match(whitelist, modname):
+    if whitelist is not None:
+        return any(item in modname for item in whitelist)
+    return True
+
+def test(whitelist=None):
     import os
     from os.path import dirname, join
-    from subprocess import call
+    import subprocess
 
     run = failed = 0
     for root, dirs, files in os.walk(join(dirname(__file__), 'tests')):
@@ -83,9 +92,24 @@ def test():
         for fn in files:
             if fn.startswith('test_') and fn.endswith('.py'):
                 modname, ext = os.path.splitext(fn)
+                modname = qname + modname
+
+                if not whitelist_match(whitelist, modname):
+                    continue
+
                 run += 1
-                res = call([sys.executable, '-m', qname + modname])
-                if res != 0:
+                print "running %-60s" % (modname,),
+                process = subprocess.Popen([sys.executable, '-m', modname],
+                                           stdout=subprocess.PIPE,
+                                           stderr=subprocess.STDOUT)
+                out, err = process.communicate()
+
+                if process.returncode == 0:
+                    print "SUCCESS"
+                else:
+                    print "FAILED"
+                    print out
+                    print "-" * 80
                     failed += 1
 
     print "ran test files: failed: (%d/%d)" % (failed, run)
