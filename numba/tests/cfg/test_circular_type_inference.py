@@ -1,5 +1,5 @@
+">>> import test_circular_type_inference" # UGH nosetests :(
 from numba.tests.cfg.test_cfg_type_infer import *
-
 @autojit
 def test_circular_error():
     """
@@ -9,7 +9,7 @@ def test_circular_error():
     ...     print str(e).replace('var1', '<var>').replace('var2', '<var>')
     Warning 16:19: local variable 'var2' might be referenced before assignment
     Warning 18:19: local variable 'var1' might be referenced before assignment
-    Unable to infer type for assignment to <var>, insert a cast or initialize the variable.
+    Unable to infer type for assignment to '<var>', insert a cast or initialize the variable.
     """
     for i in range(10):
         if i > 5:
@@ -210,7 +210,7 @@ def test_delayed_array_indexing():
     >>> sig, syms = infer(test_delayed_array_indexing.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 'array', 'var', 'x')
-    (double[:], double, int)
+    (float64[:], float64, int)
     """
     array = np.ones(10, dtype=np.double)
     x = 0
@@ -237,7 +237,7 @@ def test_delayed_array_slicing():
     >>> sig, syms = infer(test_delayed_array_slicing.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 'array', 'row')
-    (double[:, :], double[:])
+    (float64[:, :], float64[:])
     """
     array = np.ones((8, 10), dtype=np.double)
     for i in range(8):
@@ -265,7 +265,7 @@ def test_delayed_array_slicing2():
     >>> sig, syms = infer(test_delayed_array_slicing.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 'array', 'row')
-    (double[:, :], double[:])
+    (float64[:, :], float64[:])
     """
     for i in range(8):
         if i == 0:
@@ -472,5 +472,9 @@ def infer_simple(numba_func, *varnames):
     sig, syms = infer(numba_func.py_func, functype(None, []), warn=False)
     return types(syms, *varnames)
 
-
-testmod()
+#from numba.minivect import minitypes
+#sig = minitypes.FunctionType(None, [])
+#func = jit(sig)(test_delayed_string_indexing_simple.py_func)
+#print vars(func)
+test_delayed_string_indexing_simple()
+#testmod()
