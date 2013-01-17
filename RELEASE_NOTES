@@ -1,3 +1,16 @@
+Version 0.5
+===========
+* SSA-based type inference
+    * Allows variable reuse
+    * Allow referring to variables before lexical definition
+* Support multiple comparisons
+* Support for template types
+* Support for pointers
+* Many bug fixes
+* Added user documentation
+
+Version 0.4
+===========
 
 Version 0.3
 ===========
