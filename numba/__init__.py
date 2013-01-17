@@ -3,6 +3,7 @@
 from numba.special import *
 from numba import module_type_inference
 
+import os
 import sys
 import logging
 from numba import typesystem
@@ -57,24 +58,40 @@ from numba.error import *
 # doctest compatible for jit or autojit numba functions
 from numba.tests.test_support import testmod
 
+EXCLUDE_TEST_PACKAGES = ["bytecode"]
+
+def exclude_package_dirs(dirs):
+    for exclude_pkg in EXCLUDE_TEST_PACKAGES:
+        if exclude_pkg in dirs:
+            dirs.remove(exclude_pkg)
+
+
+def qualified_test_name(root):
+    qname = root.replace("/", ".").replace("\\", ".").replace(os.sep, ".")
+    return qname + "."
+
 def test():
     import os
     from os.path import dirname, join
     from subprocess import call
 
     run = failed = 0
-    for fn in os.listdir(join(dirname(__file__), 'tests')):
-        if fn.startswith('test_') and fn.endswith('.py'):
-            modname = fn[:-3]
-            run += 1
-            res = call([sys.executable, '-m', 'numba.tests.' + modname])
-            if res != 0:
-                failed += 1
+    for root, dirs, files in os.walk(join(dirname(__file__), 'tests')):
+        qname = qualified_test_name(root)
+        exclude_package_dirs(dirs)
+
+        for fn in files:
+            if fn.startswith('test_') and fn.endswith('.py'):
+                modname, ext = os.path.splitext(fn)
+                run += 1
+                res = call([sys.executable, '-m', qname + modname])
+                if res != 0:
+                    failed += 1
+
     print "ran test files: failed: (%d/%d)" % (failed, run)
     return failed
 
 def nose_run(module=None):
-    "Oh nose, why dost thou never read my configuration file"
     import nose.config
     import __main__
     config = nose.config.Config()

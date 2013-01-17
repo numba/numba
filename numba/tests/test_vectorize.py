@@ -35,8 +35,8 @@ class TestVectorize(unittest.TestCase):
     def __init__(self, *args, **kws):
         super(TestVectorize, self).__init__(*args, **kws)
 
-    #@unittest.skipUnless(__debug__, 'Requires implementation of make_ufunc().')
-    @nottest
+    @unittest.skip('Requires implementation of make_ufunc().')
+#    @nottest
     def test_manual_vectorization(self):
         x = linspace(-5,5,1001)
         t = Translate(sinc)
