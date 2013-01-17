@@ -75,7 +75,7 @@ def qualified_test_name(root):
     return qname[offset:]
 
 def whitelist_match(whitelist, modname):
-    if whitelist is not None:
+    if whitelist:
         return any(item in modname for item in whitelist)
     return True
 
