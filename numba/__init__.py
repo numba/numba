@@ -79,6 +79,23 @@ def whitelist_match(whitelist, modname):
         return any(item in modname for item in whitelist)
     return True
 
+def map_returncode_to_message(retcode):
+    if retcode < 0:
+        retcode = -retcode
+        return signal_to_name.get(retcode, "Signal %d" % retcode)
+
+    return ""
+
+try:
+    import signal
+except ImportError:
+    signal_to_name = {}
+else:
+    signal_to_name = { signal_code:signal_name
+                           for signal_name, signal_code in vars(signal).items()
+                               if signal_name.startswith("SIG") }
+
+
 def test(whitelist=None):
     import os
     from os.path import dirname, join
@@ -107,8 +124,9 @@ def test(whitelist=None):
                 if process.returncode == 0:
                     print "SUCCESS"
                 else:
-                    print "FAILED"
-                    print out
+                    print "FAILED: %s" % map_returncode_to_message(
+                                                process.returncode)
+                    print out, err
                     print "-" * 80
                     failed += 1
 
