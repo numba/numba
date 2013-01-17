@@ -9,8 +9,8 @@ import numpy
 from Cython.Distutils import build_ext
 from Cython.Distutils.extension import Extension as CythonExtension
 
-if sys.version_info[:2] < (2, 5):
-    raise Exception('numba requires Python 2.5 or greater.')
+if sys.version_info[:2] < (2, 7):
+    raise Exception('numba requires Python 2.7 or greater.')
 
 cmdclasses = {
     'build_ext': build_ext,
@@ -67,7 +67,7 @@ setup(
         "Intended Audience :: Developers",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2.6",
+        # "Programming Language :: Python :: 2.6",
         "Programming Language :: Python :: 2.7",
         # "Programming Language :: Python :: 3.2",
         "Topic :: Utilities",
@@ -89,7 +89,7 @@ setup(
             sources = ["numba/extension_types.pyx", "numba/numbafunction.c"],
             cython_gdb=True),
     ],
-    version = '0.3.2',
+    version = '0.5.0',
     cmdclass=cmdclasses,
     **setup_args
 )

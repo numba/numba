@@ -7,7 +7,7 @@ import sys
 import logging
 from numba import typesystem
 
-__version__ = '0.3.2'
+__version__ = '0.5.0'
 
 # NOTE: Be sure to keep the logging level commented out before commiting.  See:
 #   https://github.com/numba/numba/issues/31
