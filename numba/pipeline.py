@@ -395,6 +395,7 @@ class PipelineStage(object):
                    locals=env.crnt.locals,
                    allow_rebind_args=env.crnt.allow_rebind_args,
                    warn=env.crnt.warn,
+                   env=env,
                    **kws)
 
     def __call__(self, ast, env):
@@ -402,6 +403,32 @@ class PipelineStage(object):
         ast = self.transform(ast, env)
         if env.stage_checks: self.check_postconditions(ast, env)
         return ast
+
+def resolve_templates(ast, env):
+    # TODO: Unify with decorators module
+    if env.crnt.template_signature is not None:
+        from numba import typesystem
+
+        argnames = [arg.id for arg in ast.args.args]
+        argtypes = list(env.crnt.func_signature.args)
+
+        typesystem.resolve_templates(env.crnt.locals, env.crnt.template_signature,
+                                     argnames, argtypes)
+        env.crnt.func_signature = minitypes.FunctionType(
+            return_type=env.crnt.func_signature.return_type,
+            args=tuple(argtypes))
+
+    return ast
+
+def validate_signature(tree, env):
+    arg_types = env.crnt.func_signature.args
+    if (isinstance(tree, ast_module.FunctionDef) and
+        len(arg_types) != len(tree.args.args)):
+        raise error.NumbaError(
+            "Incorrect number of types specified in @jit()")
+
+    return tree
+
 
 class ControlFlowAnalysis(PipelineStage):
     _pre_condition_schema = None
@@ -424,6 +451,13 @@ class ControlFlowAnalysis(PipelineStage):
         ast.flow = transform.flow
         env.crnt.ast.cfg_transform = transform
         return ast
+
+def dump_cfg(ast, env):
+    if env.crnt.cfg_transform.graphviz:
+        env.crnt.cfg_transform.render_gv(ast)
+
+    return ast
+
 
 class ConstFolding(PipelineStage):
     def check_preconditions(self, ast, env):
@@ -489,6 +523,14 @@ class LateSpecializer(PipelineStage):
                                             env)
         return specializer.visit(ast)
 
+def cleanup_symtab(ast, env):
+    "Pop original variables from the symtab"
+    for var in env.symtab.values():
+        if not var.parent_var and var.renameable:
+            env.symtab.pop(var.name, None)
+
+    return ast
+
 class FixASTLocations(PipelineStage):
     def transform(self, ast, env):
         fixer = self.make_specializer(FixMissingLocations, ast, env)
@@ -504,15 +546,19 @@ class CodeGen(PipelineStage):
 
 class PipelineEnvironment(object):
     init_stages=[
+        resolve_templates,
+        validate_signature,
         ControlFlowAnalysis,
         #ConstFolding,
         TypeInfer,
         TypeSet,
+        # dump_cfg,
         ClosureTypeInference,
         TransformFor,
         Specialize,
         LateSpecializer,
         FixASTLocations,
+        cleanup_symtab,
         CodeGen,
         ]
 
@@ -546,6 +592,7 @@ class PipelineEnvironment(object):
         self.ast = ast
         self.func_signature = func_signature
         self.func_name = kws.get('name')
+
         if not self.func_name:
             if func:
                 module_name = inspect.getmodule(func).__name__
@@ -554,13 +601,33 @@ class PipelineEnvironment(object):
                 name = ast.name
             self.func_name = naming.specialized_mangle(
                 name, self.func_signature.args)
-        self.symtab = kws.pop('symtab', {})
+
+        # LLVM module for this function. This module is first optimized
+        # and then linked into a global module.
+        # The Python wrapper function goes directly into the main fat module
         self.llvm_module = kws.pop('llvm_module',
                                    self.parent.context.llvm_module)
         self.nopython = kws.pop('nopython', False)
+
+        # { 'local_var_name' : numba.symtab.Variable(local_var_type) } for
+        # all local variables
+        self.symtab = kws.pop('symtab', {})
+
+        # { 'local_var_name' : local_var_type } for @autojit(locals=...)
         self.locals = kws.pop('locals', {})
+
+        # Whether the type of arguments may be overridden for @jit functions
+        # This is always true (except for in tests perhaps!)
         self.allow_rebind_args = kws.pop('allow_rebind_args', True)
+
+        # Control flow warnings
         self.warn = kws.pop('warn', True)
+
+        # The Control Flow Analysis transform object
+        # (control_flow.ControlFlowAnalysis). Set during the cfg pass
+        self.cfg_transform = None
+
+        # Additional keyword arguments
         self.kwargs = kws
 
 def check_stage(stage):
