@@ -6,13 +6,8 @@ import unittest
 
 try:
     import theano
+    raise ImportError
 except ImportError:
-#    builtin_abs
-#    globals_builtins
-    print("Skipping")
-    if 'nose' not in sys.modules:
-        sys.exit(0)
-
     raise unittest.SkipTest
 
 from numba.ad import Watcher
