@@ -59,6 +59,7 @@ def test_math_funcs():
         func = functions[func_name]
         for dest_type in dest_types:
             signature = minitypes.FunctionType(None, [dest_type, dest_type])
+            print "executing...", func_name, signature
 
             try:
                 numba_func = jit(signature)(func)
