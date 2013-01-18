@@ -113,7 +113,7 @@ def test(whitelist=None, blacklist=None):
 
                 if not whitelist_match(whitelist, modname):
                     continue
-                if whitelist_match(blacklist, modname):
+                if blacklist and whitelist_match(blacklist, modname):
                     continue
 
                 run += 1
