@@ -92,7 +92,7 @@ def test_array_math():
     functions = get_functions()
     for func_name, func in functions.iteritems():
         for dst_type in dst_types:
-#            print func_name, dst_type
+            print "array math", func_name, dst_type
             dtype = dst_type.get_dtype()
             a = np.arange(1, 5, dtype=dtype)
             b = np.arange(5, 9, dtype=dtype)
@@ -114,5 +114,5 @@ if __name__ == "__main__":
 #    a = np.arange(1, 11, dtype=dtype)
 #    b = np.arange(5, 15, dtype=dtype)
 #    print autojit(expm1)(a, b)
-    test_array_math()
     test_math_funcs()
+    test_array_math()
