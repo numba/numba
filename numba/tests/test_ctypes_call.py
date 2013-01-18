@@ -9,11 +9,13 @@ def call_ctypes_func(func, value):
 
 
 def test_ctypes_calls():
+    # Test puts for no segfault
     libc = ctypes.CDLL(ctypes.util.find_library('c'))
     puts = libc.puts
     puts.argtypes = [ctypes.c_char_p]
-    assert call_ctypes_func(puts, "Hello World!")
+    call_ctypes_func(puts, "Hello World!")
 
+    # Test ceil result
     libm = ctypes.CDLL(ctypes.util.find_library('m'))
     ceil = libm.ceil
     ceil.argtypes = [ctypes.c_double]
