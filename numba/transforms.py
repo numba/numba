@@ -113,7 +113,7 @@ def filter_math_funcs(math_func_names):
     if is_win32:
         dll = ctypes.cdll.msvcrt
     else:
-        dll = ctypes.CDLL("")
+        dll = ctypes.CDLL(None)
 
     result_func_names = []
     for name in math_func_names:
@@ -155,7 +155,7 @@ class MathMixin(object):
         'expm1',
         'rint',
         'log1p',
-        'round'
+        'round',
     ]
     libc_math_funcs = filter_math_funcs(libc_math_funcs)
 
