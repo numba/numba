@@ -96,7 +96,7 @@ else:
                                if signal_name.startswith("SIG") }
 
 
-def test(whitelist=None):
+def test(whitelist=None, blacklist=None):
     import os
     from os.path import dirname, join
     import subprocess
@@ -112,6 +112,8 @@ def test(whitelist=None):
                 modname = qname + modname
 
                 if not whitelist_match(whitelist, modname):
+                    continue
+                if whitelist_match(blacklist, modname):
                     continue
 
                 run += 1
