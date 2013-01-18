@@ -109,6 +109,19 @@ from numba.external import pyapi
 
 is_win32 = sys.platform == 'win32'
 
+def filter_math_funcs(math_func_names):
+    if is_win32:
+        dll = ctypes.cdll.msvcrt
+    else:
+        dll = ctypes.CDLL("")
+
+    result_func_names = []
+    for name in math_func_names:
+        if getattr(dll, name, None) is not None:
+            result_func_names.append(name)
+
+    return result_func_names
+
 class MathMixin(object):
     """
     Resolve calls to math functions.
@@ -139,14 +152,12 @@ class MathMixin(object):
         'pow',
         'erfc',
         'ceil',
+        'expm1',
+        'rint',
+        'log1p',
+        'round'
     ]
-    if not is_win32:
-        libc_math_funcs.extend([
-            'expm1',
-            'rint',
-            'log1p',
-            'round'
-        ])
+    libc_math_funcs = filter_math_funcs(libc_math_funcs)
 
     def get_funcname(self, py_func):
         if py_func is np.abs:
