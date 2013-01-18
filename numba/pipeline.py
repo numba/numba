@@ -374,6 +374,43 @@ def compile_from_sig(context, func, signature, **kwds):
     return compile(context, func, signature.return_type, signature.args,
                    **kwds)
 
+#------------------------------------------------------------------------
+# Pipeline refactored code
+#------------------------------------------------------------------------
+
+def setup_env(context, func, func_ast, func_signature, name, **kwds):
+    # to reassign need to setup this variable
+    # with no 'nonlocal'
+    pipeline_env = PipelineEnvironment.init_env(
+            context, "Top-level compilation environment (in %s).\n" % __name__)
+
+    llvm_module = lc.Module.new('export_%s' % name)
+    if func_ast is None:
+        func_ast = functions._get_ast(func)
+
+    # Monkeypatch AST root to hold the pipeline environment
+    func_ast.pipeline = pipeline_env.pipeline
+
+    # FIXME: Hacked "mangled_name" into the translation
+    # environment.  Should do something else.  See comment in
+    # ast_translate.LLVMCodeGenerator.__init__().
+    pipeline_env.crnt.init_func(func, func_ast, func_signature,
+                                name=name, **kwds)
+
+    # Run pipeline
+    pipeline_env.pipeline(func_ast, pipeline_env)
+
+    env = pipeline_env.crnt
+    env.function_signature_map[name] = func_signature
+    env.function_module_map[name] = llvm_module
+
+    if not env.wrap:
+        env.function_wrapper_map[name] = None
+    else:
+        wrapper_tup = pipeline_env.crnt.translator.build_wrapper_module()
+        exports_env.function_wrapper_map[name] = wrapper_tup
+
+
 class PipelineStage(object):
     def check_preconditions(self, ast, env):
         return True
@@ -525,9 +562,9 @@ class LateSpecializer(PipelineStage):
 
 def cleanup_symtab(ast, env):
     "Pop original variables from the symtab"
-    for var in env.symtab.values():
+    for var in env.crnt.symtab.values():
         if not var.parent_var and var.renameable:
-            env.symtab.pop(var.name, None)
+            env.crnt.symtab.pop(var.name, None)
 
     return ast
 
@@ -566,7 +603,7 @@ class PipelineEnvironment(object):
         self.reset(parent, doc, *args, **kws)
 
     @classmethod
-    def init_env(cls, context, doc='', **kws):
+    def init_env(cls, context, init_stages, doc='', **kws):
         ret_val = cls(doc=doc)
         ret_val.context = context
         for stage in cls.init_stages:
@@ -607,7 +644,17 @@ class PipelineEnvironment(object):
         # The Python wrapper function goes directly into the main fat module
         self.llvm_module = kws.pop('llvm_module',
                                    self.parent.context.llvm_module)
+
+        # Whether the function needs a wrapper function to be callable from
+        # Python
+        self.wrap = kws.pop('wrap', True)
+
+        # LLVM wrapper function that accept python object arguments and
+        # returns an object
+        self.llvm_wrapper_func = None
+
         self.nopython = kws.pop('nopython', False)
+
 
         # { 'local_var_name' : numba.symtab.Variable(local_var_type) } for
         # all local variables
@@ -615,6 +662,10 @@ class PipelineEnvironment(object):
 
         # { 'local_var_name' : local_var_type } for @autojit(locals=...)
         self.locals = kws.pop('locals', {})
+
+        # Template signature for @autojit. E.g. T(T[:, :])
+        # See numba.typesystem.templatetypes
+        self.template_signature = kws.pop('template_signature', None)
 
         # Whether the type of arguments may be overridden for @jit functions
         # This is always true (except for in tests perhaps!)

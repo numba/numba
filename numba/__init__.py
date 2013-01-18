@@ -100,7 +100,6 @@ else:
                            for signal_name, signal_code in vars(signal).items()
                                if signal_name.startswith("SIG"))
 
-
 def test(whitelist=None, blacklist=None):
     import os
     from os.path import dirname, join

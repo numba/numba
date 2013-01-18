@@ -375,8 +375,7 @@ def get_locals(symtab):
 
 def process_closures(context, outer_func_def, outer_symtab, **kwds):
     """
-    Process closures recursively and for each variable in each function
-    determine whether it is a freevar, a cellvar, a local or otherwise.
+    Process closures recursively
     """
     import numba.pipeline
 
