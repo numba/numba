@@ -646,7 +646,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 # FIXME: This conversion has to be pretty slow.  We
                 # need to move towards being ABI-savvy enough to just
                 # call PyComplex_AsCComplex().
-                cloneable = nodes.CloneableNode(self.visit(node.node))
+                cloneable = nodes.CloneableNode(node.node)
                 new_node = nodes.ComplexNode(
                     real=function_util.external_call(
                         self.context, self.llvm_module,
@@ -676,15 +676,17 @@ class ResolveCoercions(visitors.NumbaTransformer):
             # Create a tuple for PyArg_ParseTuple
             new_node = node
             new_node.node = ast.Tuple(elts=[node.node], ctx=ast.Load())
-        elif new_node.type != node.type:
-            # Fast coercion
+            self.generic_visit(node)
+            return node
+
+        if new_node.type != node.type:
+            # Fast native coercion. E.g. coercing an object to an int_
+            # will use PyLong_AsLong, but that will return a long_. We
+            # need to coerce the long_ to an int_
             new_node = nodes.CoercionNode(new_node, node.type)
 
-        if new_node is node:
-            self.generic_visit(new_node)
-        else:
-            new_node = self.visit(new_node)
-
+        # Specialize replacement node
+        new_node = self.visit(new_node)
         return new_node
 
 def badval(type):

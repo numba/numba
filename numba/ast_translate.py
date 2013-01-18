@@ -1223,7 +1223,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         left = node.left
         for op, right in zip(node.ops, node.comparators):
             self.builder.position_at_end(cur_block)
-            test = self._compare(op, left, right)
+            test = self._compare(node, op, left, right)
             cur_block = self.builder.basic_block
             blocks_false.append(cur_block)
             next_block = self.append_basic_block('compare.cmp' + pos)
@@ -1242,7 +1242,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             phi.add_incoming(lc.Constant.int(booltype, 0), b)
         return phi
 
-    def _compare(self, op, lhs, rhs):
+    def _compare(self, node, op, lhs, rhs):
         lhs_lvalue = self.visit(lhs)
         rhs_lvalue = self.visit(rhs)
         op_map = {
@@ -1267,7 +1267,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 mapping = _compare_mapping_uint
             lop = mapping[op]
         else:
-            raise TypeError(lhs.type)
+            raise error.NumbaError(node, lhs.type)
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 
     def _init_phis(self, node):

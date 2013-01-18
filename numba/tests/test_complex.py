@@ -205,8 +205,7 @@ class TestASTComplex(test_support.ASTTestCase):
 
 if __name__ == "__main__":
 #    autojit(add)(m, n)
-#    TestASTComplex('test_arithmetic_mixed').debug()
-#    autojit(mandel)() #-1, -1, 20)
+    TestASTComplex('test_mandel').debug()
     unittest.main()
 #    autojit(sin)(m, n)
 

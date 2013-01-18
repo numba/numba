@@ -122,10 +122,7 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
 
     def _resolve_pow(self, func, node, argtype):
         self._expect_n_args(func, node, (2, 3))
-        if argtype.is_float or argtype.is_int:
-            node.variable = Variable(argtype)
-
-        return nodes.CoercionNode(node, argtype)
+        return self.pow(*node.args)
 
     def _resolve_round(self, func, node, argtype):
         self._expect_n_args(func, node, (1, 2))
@@ -1014,7 +1011,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if isinstance(node.op, ast.Pow):
             node = self.pow(node.left, node.right)
-            return self.visit(node)
+            node = self.visit(node)
+            return node
 
         v1, v2 = node.left.variable, node.right.variable
         promotion_type = self.promote(v1, v2)
