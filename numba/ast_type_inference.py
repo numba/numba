@@ -107,15 +107,25 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
 
     def _resolve_abs(self, func, node, argtype):
         self._expect_n_args(func, node, 1)
+
+        # Result type of the substitution during late
+        # specialization
+        result_type = object_
+
+        # What we actually get back regardless of implementation,
+        # e.g. abs(complex) goes throught the object layer, but we know the result
+        # will be a double
+        dst_type = argtype
+
         if argtype.is_complex:
             dst_type = double
-            result_type = object_
         elif argtype.is_int and not transforms.is_win32:
-            dst_type = argtype
-            result_type = promote_closest(self.context, argtype, [long_, longlong])
-        else:
-            dst_type = argtype
-            result_type = argtype
+            if argtype.signed:
+                # Use of labs or llabs returns long_ and longlong respectively
+                result_type = promote_closest(self.context, argtype,
+                                              [long_, longlong])
+            else:
+                result_type = argtype
 
         node.variable = Variable(result_type)
         return nodes.CoercionNode(node, dst_type)
