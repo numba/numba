@@ -227,4 +227,7 @@ def test():
     import test_cfg_type_infer
     testmod(test_cfg_type_infer)
 
-test()
+if __name__ == '__main__':
+    testmod()
+#else:
+#    test()
