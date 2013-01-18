@@ -15,6 +15,11 @@ T = numba.template()
 def test_simple_template(array):
     """
     >>> test_simple_template(np.arange(10, 12, dtype=np.float32))
+    Traceback (most recent call last):
+        ...
+    InvalidTemplateError: Template expects 2 dimensions, got 1
+
+    >>> test_simple_template(np.arange(10, 12, dtype=np.float32).reshape(2, 1))
     10.0
 
     #------------------------------------------------------------------------
@@ -167,11 +172,11 @@ def specialize(T, context):
 
 
 if __name__ == '__main__':
-    pass
+    testmod()
+
 #    locals = dict(dtype=T1.dtype, arg=T2.args[0], field_a=T3.fielddict['a'],
 #                  field_b=T3.fielddict['b'], scalar=T4.base_type)
 #    infer(test_type_attributes, template_signature=void(T1, T2, T3, T4),
 #          type_context=type_context2, locals=locals)
 #    print test_template_with_concretes(1, 2)
-
-testmod()
+#print test_simple_template(np.arange(10, 12, dtype=np.float32))

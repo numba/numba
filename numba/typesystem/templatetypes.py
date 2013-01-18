@@ -81,7 +81,7 @@ class TemplateAttributeType(TemplateType):
 
 class TemplateIndexType(TemplateType):
 
-    is_template_attribute = True
+    is_template_index = True
     subtypes = ['template_type']
 
     def __init__(self, template_type, index, **kwds):
@@ -102,6 +102,18 @@ class TemplateIndexType(TemplateType):
 
 
 template = TemplateType
+
+def validate_template(concrete_type, template_type):
+    if type(template_type) != type(concrete_type):
+        raise error.InvalidTemplateError(
+                "Type argument does not match template type: %s and %s" % (
+                concrete_type, template_type))
+
+    if concrete_type.is_array:
+        if template_type.ndim != concrete_type.ndim:
+            raise error.InvalidTemplateError(
+                "Template expects %d dimensions, got %d" % (template_type.ndim,
+                                                            concrete_type.ndim))
 
 def match_template(template_type, concrete_type, template_context):
     """
@@ -146,10 +158,7 @@ def match_template(template_type, concrete_type, template_context):
         else:
             template_context[template_type] = concrete_type
     else:
-        if type(template_type) != type(concrete_type):
-            raise error.InvalidTemplateError(
-                    "Type argument does not match template type: %s and %s" % (
-                                                 concrete_type, template_type))
+        validate_template(concrete_type, template_type)
 
         for t1, t2 in zip(template_type.subtype_list,
                           concrete_type.subtype_list):

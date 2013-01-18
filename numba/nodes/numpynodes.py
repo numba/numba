@@ -40,12 +40,8 @@ class DataPointerNode(Node):
         self.node = node
         self.slice = slice
         self.type = node.type.dtype
-        self.variable = Variable(node.type)
+        self.variable = Variable(self.type)
         self.ctx = ctx
-
-    @property
-    def ndim(self):
-        return self.variable.type.ndim
 
     def data_descriptors(self, llvm_value, builder):
         '''
@@ -90,6 +86,10 @@ class DataPointerNode(Node):
 
         ptr = builder.bitcast(dptr_plus_offset, data_ptr_ty)
         return ptr
+
+    @property
+    def ndim(self):
+        return self.node.type.ndim
 
     def __repr__(self):
         return "%s.data" % self.node
