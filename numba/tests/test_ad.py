@@ -74,7 +74,9 @@ def test_loop():
     assert np.all(y2 == 16)
 
 if __name__ == "__main__":
-    test_loop()
 #    import __main__
 #    import numba
 #    numba.nose_run(module=__main__)
+    test_foo()
+    test_grad()
+#    test_loop()
