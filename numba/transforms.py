@@ -128,12 +128,10 @@ class MathMixin(object):
         'sinh',
         'cosh',
         'tanh',
-        'asinh',
         'acosh',
         'atanh',
         'log2',
         'log10',
-        'log1p',
         'fabs',
         'pow',
         'erfc',
@@ -141,8 +139,7 @@ class MathMixin(object):
         'round',
     ]
     if sys.platform != 'win32':
-        libc_math_funcs.append('expm1')
-        libc_math_funcs.append('rint')
+        libc_math_funcs.extend(['expm1', 'rint', 'log1p', 'asinh'])
 
     def get_funcname(self, py_func):
         if py_func is np.abs:
