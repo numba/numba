@@ -87,18 +87,19 @@ class NVVM(object):
     def __new__(cls, override_path=None):
         if not cls.__INSTANCE:
             inst = cls.__INSTANCE = object.__new__(cls)
-
-            # Determine DLL type
-            if sys.platform == 'win32':
-                dlloader = CDLL
-                path = './nvvm.dll'
-            elif sys.platform == 'darwin':
-                dlloader = CDLL
-                path = './libnvvm.dylib'
+            # Determine DLL name
+            dlldir = 'lib' # common for linux and darwin
+            if sys.platform.startswith('linux'):
+                dllname = 'libnvvm.so'
+            elif sys.platform.startswith('win32'):
+                dllname = 'nvvm.dll'
+                dlldir = 'DLLs' # override only for win32
+            elif sys.platform.startswith('darwin'):
+                dllname = 'libnvvm.dylib'
             else:
-                dlloader = CDLL
-                path = './libnvvm.so'
-        
+                raise Exception("Unsupported platform.")
+
+            path = os.path.join(sys.prefix, dlldir, dllname)
 
             if not override_path: # Try to discover libNVVM automatically
                 # Environment variable always override if present
@@ -109,7 +110,7 @@ class NVVM(object):
 
             # Load the driver
             try:
-                inst.driver = dlloader(path)
+                inst.driver = CDLL(path)
                 inst.path = path
             except OSError:
                 raise NvvmSupportError(
