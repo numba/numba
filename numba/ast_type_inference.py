@@ -110,7 +110,7 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
         if argtype.is_complex:
             dst_type = double
             result_type = object_
-        elif argtype.is_int:
+        elif argtype.is_int and not transforms.is_win32:
             dst_type = argtype
             result_type = promote_closest(self.context, argtype, [long_, longlong])
         else:

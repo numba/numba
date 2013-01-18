@@ -107,6 +107,8 @@ logger = logging.getLogger(__name__)
 
 from numba.external import pyapi
 
+is_win32 = sys.platform == 'win32'
+
 class MathMixin(object):
     """
     Resolve calls to math functions.
@@ -136,10 +138,9 @@ class MathMixin(object):
         'pow',
         'erfc',
         'ceil',
-        'round',
     ]
-    if sys.platform != 'win32':
-        libc_math_funcs.extend(['expm1', 'rint', 'log1p', 'asinh'])
+    if not is_win32:
+        libc_math_funcs.extend(['expm1', 'rint', 'log1p', 'asinh', 'round'])
 
     def get_funcname(self, py_func):
         if py_func is np.abs:
@@ -289,7 +290,7 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
         # TODO: generate efficient inline code
         if argtype.is_float:
             return self._resolve_math_call(node, abs)
-        elif argtype.is_int:
+        elif argtype.is_int and not is_win32:
             if argtype.signed:
                 type = promote_closest(self.context, argtype, [long_, longlong])
                 funcs = {long_: 'labs', longlong: 'llabs'}
