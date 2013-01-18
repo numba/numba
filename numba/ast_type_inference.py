@@ -1386,6 +1386,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         elif self.function_cache.is_registered(py_func):
             fn_info = self.function_cache.compile_function(py_func, arg_types)
             signature, llvm_func, py_func = fn_info
+        elif func_type.is_jit_function:
+            llvm_func = func_type.jit_func.lfunc
+            signature = func_type.jit_func.signature
         else:
             assert arg_types is not None
             # This should not be a function-cache method

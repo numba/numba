@@ -242,6 +242,9 @@ class AutojitType(NumbaType, minitypes.ObjectType):
         super(AutojitType, self).__init__(**kwds)
         self.autojit_func = autojit_func
 
+    def __repr__(self):
+        return "<autojit(%s)>" % self.autojit_func
+
 class JitType(NumbaType, minitypes.ObjectType):
     """
     Type for autojitting functions.
@@ -252,6 +255,9 @@ class JitType(NumbaType, minitypes.ObjectType):
     def __init__(self, jit_func, **kwds):
         super(JitType, self).__init__(**kwds)
         self.jit_func = jit_func
+
+    def __repr__(self):
+        return "<jit(%s)>" % self.jit_func
 
 #------------------------------------------------------------------------
 # Pointer Types
