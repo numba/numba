@@ -127,6 +127,10 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
     def _resolve_round(self, func, node, argtype):
         self._expect_n_args(func, node, (1, 2))
         is_math = self._is_math_function(node.args, round)
+        if len(node.args) == 1 and argtype.is_int:
+            # round(myint) -> myint
+            return nodes.CoercionNode(node.args[0], double)
+
         if (argtype.is_float or argtype.is_int) and is_math:
             dst_type = argtype
         else:

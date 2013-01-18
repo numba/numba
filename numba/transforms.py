@@ -307,10 +307,7 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
 
     def _resolve_round(self, func, node, argtype):
         self._expect_n_args(func, node, (1, 2))
-        if len(node.args) == 1 and argtype.is_int:
-            # round(myint) -> myint
-            return nodes.CoercionNode(node.args[0], double)
-        elif self._is_math_function(node.args, round):
+        if self._is_math_function(node.args, round):
             # round() always returns a float
             return self._resolve_math_call(node, round)
 
