@@ -31,6 +31,7 @@ def test_cellvar_promotion(a):
 @autojit
 def test_cellvar_promotion_error(a):
     """
+    >>> from numba.minivect import minierror
     >>> try:
     ...     test_cellvar_promotion_error(10)
     ... except minierror.UnpromotableTypeError, e:
