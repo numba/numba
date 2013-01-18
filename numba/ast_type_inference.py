@@ -766,6 +766,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     lhs_var.type = rhs_var.type
                 else:
                     # Promote type for cellvar or freevar
+                    self.assert_assignable(lhs_var.type, rhs_var.type)
                     if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
                             lhs_var.promotable_type):
                         lhs_var.type = self.promote_types(lhs_var.type,
