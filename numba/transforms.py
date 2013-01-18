@@ -311,7 +311,7 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
         self._expect_n_args(func, node, (1, 2))
         if len(node.args) == 1 and argtype.is_int:
             # round(myint) -> myint
-            return node.args[0]
+            return nodes.CoercionNode(node.args[0], double)
         elif self._is_math_function(node.args, round):
             # round() always returns a float
             return self._resolve_math_call(node, round)
@@ -552,9 +552,9 @@ class ResolveCoercions(visitors.NumbaTransformer):
             result = self.visit(node)
         else:
             self.generic_visit(node)
-            if not node.node.type == node_type:
-                result = self.visit(node)
-            elif dst_type == node.node.type:
+#            if not node.node.type == node_type:
+#                result = self.visit(node)
+            if dst_type == node.node.type:
                 result = node.node
             else:
                 result = node

@@ -43,6 +43,7 @@ def pow2_const():
     return pow(2,3)
 
 if __name__ == '__main__':
+#    pow2(1.0, 2.0)
+#    import logging; logging.getLogger().setLevel(0)
     import doctest
-    #import logging; logging.getLogger().setLevel(0)
     doctest.testmod()

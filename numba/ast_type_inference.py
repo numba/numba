@@ -122,17 +122,19 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
 
     def _resolve_pow(self, func, node, argtype):
         self._expect_n_args(func, node, (2, 3))
+        if argtype.is_float or argtype.is_int:
+            node.variable = Variable(argtype)
+
         return nodes.CoercionNode(node, argtype)
 
     def _resolve_round(self, func, node, argtype):
         self._expect_n_args(func, node, (1, 2))
-        if argtype.is_float:
-            dst_type = argtype
-        elif argtype.is_int and (len(node.args) == 1 or
-                                    self._is_math_function(node.args, round)):
+        is_math = self._is_math_function(node.args, round)
+        if (argtype.is_float or argtype.is_int) and is_math:
             dst_type = argtype
         else:
             dst_type = object_
+            node.args[0] = nodes.CoercionNode(node.args[0], object_)
 
         node.variable = Variable(dst_type)
         return nodes.CoercionNode(node, double)

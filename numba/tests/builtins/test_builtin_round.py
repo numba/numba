@@ -5,6 +5,10 @@
 4.0
 >>> round_val(5)
 5.0
+>>> round_val(object())
+Traceback (most recent call last):
+    ...
+TypeError: a float is required
 
 >>> round2(10.497, 2)
 10.5
@@ -24,6 +28,7 @@ def round2(a, b):
     return round(a, b)
 
 if __name__ == '__main__':
-    round2(10.497, 2)
-#    import doctest
-#    doctest.testmod()
+#    round2(10.497, 2)
+#    round_val(5)
+    import doctest
+    doctest.testmod()
