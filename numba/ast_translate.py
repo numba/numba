@@ -167,7 +167,6 @@ class LLVMContextManager(object):
                                               loop_vectorize=has_loop_vectorizer,
                                               fpm=False)
         self.__pm = passmanagers.pm
-        self.__pm = lp.PassManager.new()
 
     @property
     def module(self):
