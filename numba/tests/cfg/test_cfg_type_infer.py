@@ -199,7 +199,7 @@ def test_conditional_assignment(value):
     >>> test_conditional_assignment(1)
     Traceback (most recent call last):
         ...
-    UnboundLocalError: 208:11: obj1
+    UnboundLocalError: 207:11: obj1
     """
     if value < 1:
         obj1 = np.ones(10, dtype=np.float32)
@@ -220,12 +220,12 @@ def test_error_array_variable1(value, obj1):
     """
     if value < 1:
         obj1 = np.empty(10, dtype=np.float32)
-
+    
     return obj1
 
 def test():
     import test_cfg_type_infer
-    testmod(test_cfg_type_infer)
+    testmod(test_cfg_type_infer, runit=True)
 
 if __name__ == '__main__':
     testmod()

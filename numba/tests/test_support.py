@@ -47,7 +47,7 @@ class StdoutReplacer(object):
 
 from bytecode.test_support import ByteCodeTestCase
 
-def testmod(module=None):
+def testmod(module=None, runit=False):
     """
     Tests a doctest modules with numba functions. When run in nosetests, only
     populates module.__test__, when run as main, runs the doctests.
@@ -58,6 +58,6 @@ def testmod(module=None):
     else:
         modname = module.__name__
 
-    doctest_support.testmod(module, run_doctests=modname == '__main__')
+    doctest_support.testmod(module, run_doctests=runit or modname == '__main__')
     #if modname == '__main__':
     #    numba.nose_run(mod)

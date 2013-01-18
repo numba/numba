@@ -14,7 +14,8 @@ when called with "python mymod.py", but it's pretty close.
 Further options can be passed to testmod() as desired, e.g.
 verbose=True.)
 """
-
+import sys
+import unittest
 import doctest
 import inspect
 
@@ -54,6 +55,11 @@ def fix_module_doctest(module):
                   from_module(module, value)):
             module.__test__[name] = value.__doc__
 
+class MyDocTestFinder(doctest.DocTestFinder):
+    def find(self, obj, **kws):
+        res = doctest.DocTestFinder.find(self, obj, **kws)
+        return res
+
 def testmod(m=None, run_doctests=True):
     """
     Fix a Cython module's doctests, then call doctest.testmod()
@@ -62,4 +68,9 @@ def testmod(m=None, run_doctests=True):
     """
     fix_module_doctest(m)
     if run_doctests:
-        doctest.testmod(m)
+        finder = MyDocTestFinder(exclude_empty=False)
+        suite = doctest.DocTestSuite(m, test_finder=finder)
+        result =  unittest.TextTestRunner(verbosity=2).run(suite)
+        if not result.wasSuccessful():
+            raise Exception("Doctests failed: %s" % result)
+
