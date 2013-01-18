@@ -304,10 +304,12 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
     def _resolve_abs(self, func, node, argtype):
         self._expect_n_args(func, node, 1)
 
+        is_math = self._is_math_function(node.args, abs)
+
         # TODO: generate efficient inline code
-        if argtype.is_float:
+        if is_math and argtype.is_float:
             return self._resolve_math_call(node, abs)
-        elif argtype.is_int and not is_win32:
+        elif is_math and argtype.is_int:
             if argtype.signed:
                 type = promote_closest(self.context, argtype, [long_, longlong])
                 funcs = {long_: 'labs', longlong: 'llabs'}

@@ -117,15 +117,16 @@ class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
         # will be a double
         dst_type = argtype
 
+        is_math = self._is_math_function(node.args, abs)
+
         if argtype.is_complex:
             dst_type = double
-        elif argtype.is_int and not transforms.is_win32:
-            if argtype.signed:
-                # Use of labs or llabs returns long_ and longlong respectively
-                result_type = promote_closest(self.context, argtype,
-                                              [long_, longlong])
-            else:
-                result_type = argtype
+        elif is_math and argtype.is_int and argtype.signed:
+            # Use of labs or llabs returns long_ and longlong respectively
+            result_type = promote_closest(self.context, argtype,
+                                          [long_, longlong])
+        elif is_math and (argtype.is_float or argtype.is_int):
+            result_type = argtype
 
         node.variable = Variable(result_type)
         return nodes.CoercionNode(node, dst_type)
