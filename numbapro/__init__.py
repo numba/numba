@@ -7,7 +7,6 @@ def test(verbosity=2, failfast=False):
     import sys
 
     test_package_names = ['numbapro.tests.basic_vectorize',
-                          'numbapro.tests.llvm_cbuilder_tests',
                           'numbapro.tests.parallel_vectorize',
                           'numbapro.tests.stream_vectorize']
 
