@@ -89,7 +89,7 @@ setup(
             sources = ["numba/extension_types.pyx", "numba/numbafunction.c"],
             cython_gdb=True),
     ],
-    version = '0.5.0',
+    version = '0.5.1',
     cmdclass=cmdclasses,
     **setup_args
 )
