@@ -19,6 +19,7 @@ from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
 from numba import utils
 from numba.type_inference import infer as type_inference
+from numba.utils import dump, TypedProperty
 from numba.asdl import schema
 from numba.minivect import minitypes
 import numba.visitors
@@ -680,6 +681,36 @@ class PipelineEnvironment(object):
 
         # Additional keyword arguments
         self.kwargs = kws
+
+class NumbaEnvironment(object):
+    '''Defines global state for a Numba translator. '''
+    pipelines = TypedProperty(dict, 'Map from entry point names to '
+                              'PipelineStages.')
+
+    default_pipeline = TypedProperty(str, '', 'numba')
+
+    specializations = TypedProperty(object, '') # FIXME: FunctionCache, '')
+
+    debug = TypedProperty(bool, '', False)
+
+class FunctionEnvironment(object):
+    '''State for a function under translation.'''
+
+class TranslationEnvironment(object):
+    '''State for a given translation.'''
+    numba = TypedProperty(NumbaEnvironment, 'Parent environment')
+
+    crnt = TypedProperty(
+        FunctionEnvironment,
+        'The current function being processed by the pipeline.')
+
+    stack = TypedProperty(list, 'A stack consisting of FunctionEnvironment '
+                          'instances.  Used to manage lexical closures.')
+
+    functions = TypedProperty(dict, 'map from functions under compilation to '
+                              'FunctionEnvironments')
+
+    stages = TypedProperty(list, '') # FIXME: Not well defined.
 
 def check_stage(stage):
     if isinstance(stage, str):

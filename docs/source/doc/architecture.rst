@@ -27,6 +27,8 @@ Numba has several modes of use:
 #. As a compile-time translator of Python modules into shared object
    libraries.
 
+#. Template instantiation.
+
 The following subsections describe the primary entry points for these
 modes of use.  Each usage mode corresponds to a specific set of definitions provided in the top-level numba module.
 

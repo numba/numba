@@ -89,3 +89,30 @@ def pformat_ast (node, include_attrs = True, **kws):
 
 def dump(node):
     print pformat_ast(node)
+
+class TypedProperty(object):
+    '''Defines a class property that does a type check in the setter.'''
+
+    def __new__(cls, ty, doc, default=None):
+        rv = super(TypedProperty, cls).__new__(cls)
+        TypedProperty.__init__(rv, ty, doc, default)
+        return property(rv.getter, rv.setter, rv.deleter, doc)
+
+    def __init__(self, ty, doc, default=None):
+        self.val = default
+        self.ty = ty
+        self.default = default
+        self.doc = doc
+
+    def getter(self, _):
+        return self.val
+
+    def setter(self, _, new_val):
+        if not isinstance(new_val, self.ty):
+            raise ValueError(
+                'Invalid property setting, expected instance of type(s) %r.' %
+                self.ty)
+        self.val = new_val
+
+    def deleter(self, obj):
+        del self.val
