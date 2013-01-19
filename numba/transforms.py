@@ -186,7 +186,12 @@ class MathMixin(object):
             valid_type = type.is_float or type.is_int
 
         is_intrinsic = self._is_intrinsic(py_func)
-        is_math = self.get_funcname(py_func) in self.libc_math_funcs
+
+        math_name = self.get_funcname(py_func)
+        is_math = math_name in self.libc_math_funcs
+        if is_math and valid_type:
+            math_name = self.math_suffix(math_name, type)
+            is_math = filter_math_funcs([math_name])
 
         return valid_type and (is_intrinsic or is_math)
 
