@@ -171,7 +171,7 @@ class MathMixin(object):
         "Whether the math function is available as an llvm intrinsic"
         intrinsic_name = 'INTR_' + self.get_funcname(py_func).upper()
         is_intrinsic = hasattr(llvm.core, intrinsic_name)
-        return is_intrinsic
+        return is_intrinsic and not is_win32
 
     def _is_math_function(self, func_args, py_func):
         if len(func_args) == 0 or len(func_args) > 1 or py_func is None:

@@ -108,11 +108,16 @@ def expm1(a, b):
 #    print np.expm1(result), "..."
     return np.expm1(a)
 
+@autojit
+def log2(a, b):
+    result = a**2 + b**2
+    return np.log2(result) + 1.6
 
 if __name__ == "__main__":
 #    dtype = np.complex128
 #    a = np.arange(1, 11, dtype=dtype)
 #    b = np.arange(5, 15, dtype=dtype)
 #    print autojit(expm1)(a, b)
-    test_math_funcs()
-    test_array_math()
+    log2(10, 10)
+#    test_math_funcs()
+#    test_array_math()
