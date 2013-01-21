@@ -1,4 +1,4 @@
-__version__ = '0.8.0'
+__version__ = '0.8.1'
 
 #def test(verbosity=2, failfast=False):
 #    import unittest
