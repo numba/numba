@@ -50,7 +50,7 @@ class DataPointerNode(Node):
         - strides: a pointer to an array of stride information;
                    has `ndim` elements.
         '''
-        acc = PyArrayAccessor(builder, llvm_value, tbaa)
+        acc = PyArrayAccessor(builder, llvm_value, tbaa, self.type)
         return acc.data, acc.strides
 
     def subscript(self, translator, tbaa, llvm_value, indices):

@@ -199,8 +199,8 @@ class LLVMContextManager(object):
             # link module
             func_name = lfunc.name
 #
-#            print 'lfunc.module'.center(80, '-')
-#            print lfunc.module
+            print 'lfunc.module'.center(80, '-')
+            print lfunc.module
 #
 #            print 'self.module'.center(80, '-')
 #            print self.module
@@ -360,7 +360,7 @@ class RefcountingMixin(object):
         "Py_XDECREF a temporary"
         assert not self.nopython
         decref = decref or self.decref
-        decref(self.builder.load(temp))
+        decref(self.load_tbaa(temp, object_))
 
     def xincref_temp(self, temp):
         "Py_XINCREF a temporary"
@@ -916,10 +916,29 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             bb = self.builder.basic_block
         lhs = self.llvm_alloca(type or llvm_types._pyobject_head_struct_p,
                                name=name, change_bb=False)
-        self.generate_assign_stack(self.visit(nodes.NULL_obj), lhs)
+        self.generate_assign_stack(self.visit(nodes.NULL_obj), lhs,
+                                   tbaa_type=object_)
         if change_bb:
             self.builder.position_at_end(bb)
         return lhs
+
+    def load_tbaa(self, ptr, tbaa_type, name=''):
+        """
+        Load a pointer and annotate with Type Based Alias Analysis
+        metadata.
+        """
+        instr = self.builder.load(ptr, name='')
+        self.tbaa.set_tbaa(instr, tbaa_type)
+        return instr
+
+    def store_tbaa(self, value, ptr, tbaa_type):
+        """
+        Load a pointer and annotate with Type Based Alias Analysis
+        metadata.
+        """
+        instr = self.builder.store(value, ptr)
+        if metadata.is_tbaa_type(tbaa_type):
+            self.tbaa.set_tbaa(instr, tbaa_type)
 
     def puts(self, msg):
         const = nodes.ConstNode(msg, c_string_type)
@@ -1003,6 +1022,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         result = self.visit(node.value)
         value_is_reference = node.value.type.is_reference
 
+        # TODO: TBAA for loads
         if isinstance(node.ctx, ast.Load):
             if value_is_reference:
                 # Struct reference, load result
@@ -1023,7 +1043,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_StructVariable(self, node):
         return self.visit(node.node)
 
-    def generate_assign_stack(self, lvalue, ltarget, decref=False, incref=False):
+    def generate_assign_stack(self, lvalue, ltarget,
+                              tbaa_node=None, tbaa_type=None,
+                              decref=False, incref=False):
         """
         Generate assignment operation and automatically cast value to
         match the target type.
@@ -1037,7 +1059,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # Py_XDECREF any previous object
             self.xdecref_temp(ltarget)
 
-        self.builder.store(lvalue, ltarget)
+        instr = self.builder.store(lvalue, ltarget)
+
+        # Set TBAA on store instruction
+        if tbaa_node is None:
+            assert tbaa_type is not None
+            tbaa_node = self.tbaa.get_metadata(tbaa_type)
+
+        self.tbaa.set_metadata(instr, tbaa_node)
 
     def visit_Assign(self, node):
         target_node = node.targets[0]
@@ -1064,13 +1093,25 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 decref = bool(self.loop_beginnings)
             else:
                 target = self.object_local_temps[target_node.id]
+
+            tbaa_node = self.tbaa.get_metadata(target_node.type)
         else:
             target = self.visit(target_node)
+
+            if isinstance(target_node, nodes.TempStoreNode):
+                # Use TBAA specific to only this temporary
+                tbaa_node = target_node.temp.get_tbaa_node(self.tbaa)
+            else:
+                # ast.Attribute | ast.Subscript  store.
+                # These types don't have pointer types but rather
+                # scalar values
+                tbaa_type = target_node.type.pointer()
+                tbaa_node = self.tbaa.get_metadata(tbaa_type)
 
         # INCREF RHS. Note that new references are always in temporaries, and
         # hence we can only borrow references, and have to make it an owned
         # reference
-        self.generate_assign_stack(value, target,
+        self.generate_assign_stack(value, target, tbaa_node,
                                    decref=decref, incref=incref)
 
     def visit_Num(self, node):
@@ -1105,13 +1146,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                        var.type.is_struct) and not var.is_constant
         if should_load and isinstance(node.ctx, ast.Load):
             # Not a renamed but an alloca'd variable
-            return self.builder.load(var.lvalue)
+            return self.load_tbaa(var.lvalue, var.type)
         else:
             return var.lvalue
 
-    def _handle_ctx(self, node, lptr, name=''):
+    def _handle_ctx(self, node, lptr, tbaa_type, name=''):
         if isinstance(node.ctx, ast.Load):
-            return self.builder.load(lptr, name=name and 'load_' + name)
+            return self.load_tbaa(lptr, tbaa_type,
+                                  name=name and 'load_' + name)
         else:
             return lptr
 
@@ -1659,7 +1701,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_DereferenceNode(self, node):
         result = self.visit(node.pointer)
-        return self.builder.load(result)
+        return self.load_tbaa(result, node.type.pointer())
 
     def visit_PointerFromObject(self, node):
         return self.visit(node.node)
@@ -1681,7 +1723,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         lptr = self.builder.gep(value, indices)
         if node.slice.type.is_int:
-            lptr = self._handle_ctx(node, lptr)
+            lptr = self._handle_ctx(node, lptr, node.value.type)
 
         return lptr
 
@@ -1690,7 +1732,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         lvalue = self.visit(node.node)
         lindices = self.visit(node.slice)
         lptr = node.subscript(self, self.tbaa, lvalue, lindices)
-        return self._handle_ctx(node, lptr)
+        return self._handle_ctx(node, lptr, node.type.pointer())
 
     #def visit_Index(self, node):
     #    return self.visit(node.value)
@@ -1776,6 +1818,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         if node.signature.struct_by_reference:
             if minitypes.pass_by_ref(node.signature.return_type):
+                # TODO: TBAA
                 result = self.builder.load(return_value)
 
         return result
@@ -1861,7 +1904,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return node.llvm_temp
 
     def visit_TempLoadNode(self, node):
-        return self.builder.load(self.visit(node.temp))
+        # TODO: use unique type for each temporary load and store pair
+        temp = self.visit(node.temp)
+        instr = self.builder.load(temp, invariant=node.invariant)
+        self.tbaa.set_metadata(instr, node.temp.get_tbaa_node(self.tbaa))
+        return instr
 
     def visit_TempStoreNode(self, node):
         return self.visit(node.temp)
@@ -1880,7 +1927,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # Assign value
         self.builder.position_at_end(bb)
         rhs = self.visit(node.node)
-        self.generate_assign_stack(rhs, lhs, decref=self.in_loop)
+        self.generate_assign_stack(rhs, lhs, tbaa_type=object_,
+                                   decref=self.in_loop)
 
         # goto error if NULL
         # self.puts("checking error... %s" % error.format_pos(node))
@@ -1888,11 +1936,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # self.puts("all good at %s" % error.format_pos(node))
 
         if node.incref:
-            self.incref(self.builder.load(lhs))
+            self.incref(self.load_tbaa(lhs, object_))
 
         # Generate Py_XDECREF(temp) at end-of-function cleanup path
         self.xdecref_temp_cleanup(lhs)
-        result = self.builder.load(lhs, name=name + '_load')
+        result = self.load_tbaa(lhs, object_, name=name + '_load')
 
         if not node.type == object_:
             dst_type = node.type.to_llvm(self.context)
@@ -1929,7 +1977,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)
         acc = ndarray_helpers.PyArrayAccessor(self.builder, array,
-                                              self.tbaa)
+                                              self.tbaa, node.array_type.dtype)
 
         attr_name = node.attr_name
         if attr_name == 'shape':

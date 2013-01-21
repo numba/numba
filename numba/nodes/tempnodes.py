@@ -16,6 +16,18 @@ class TempNode(Node): #, ast.Name):
         self.llvm_temp = None
 
         self.dst_variable = dst_variable
+        self._tbaa_node = None
+
+    def get_tbaa_node(self, tbaa):
+        """
+        TBAA metadata node unique to this temporary. This is valid
+        since one cannot take the address of a temporary.
+        """
+        if self._tbaa_node is None:
+            root = tbaa.get_metadata(char.pointer())
+            self._tbaa_node = tbaa.make_unique_metadata(root)
+
+        return self._tbaa_node
 
     def load(self):
         return TempLoadNode(temp=self)
@@ -33,10 +45,11 @@ class TempNode(Node): #, ast.Name):
 class TempLoadNode(Node):
     _fields = ['temp']
 
-    def __init__(self, temp):
+    def __init__(self, temp, invariant=False):
         self.temp = temp
         self.type = temp.type
         self.variable = Variable(self.type)
+        self.invariant = invariant
 
     def __repr__(self):
         return "load(%s)" % self.temp

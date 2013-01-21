@@ -11,8 +11,8 @@ def bubblesort(X, doprint):
                 tmp = X[i]
                 X[i] = X[i + 1]
                 X[i + 1] = tmp
-        if doprint:
-            print "Iteration:", X
+#        if doprint:
+#            print "Iteration:", X
 
 bubblesort_fast = autojit(bubblesort)
 
@@ -27,6 +27,7 @@ def main():
     print '== Test Numba == '
     X1 = Xtest.copy()
     bubblesort_fast(X1, True)
+#    return
 
     print X0
     print X1

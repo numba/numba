@@ -488,7 +488,7 @@ class TransformForIterable(visitors.NumbaTransformer):
             node.iter = ast.Call(func=call_func, args=call_args)
             node.iter.type = call_func.type
 
-            node.index = target_temp.load()
+            node.index = target_temp.load(invariant=True)
             # add assignment to new target variable at the start of the body
             index = ast.Index(value=node.index)
             index.type = target_temp.type

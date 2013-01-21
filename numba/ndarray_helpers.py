@@ -16,46 +16,60 @@ import llvm.core as lc
 
 const_int = lambda X: lc.Constant.int(_int32, X)
 
+def set_metadata(tbaa, instr, type):
+    if type is not None:
+        metadata = tbaa.get_metadata(type)
+        instr.set_metadata("tbaa", metadata)
+
 def make_property(type=None):
     """
-
-    :param type: The type to be used for TBAA annotation
+    type: The type to be used for TBAA annotation
     """
-
-    def set_metadata(tbaa, instr):
-        if type is not None:
-            metadata = tbaa.get_metadata(type)
-            instr.set_metadata("tbaa", metadata)
-
     def decorator(access_func):
         def load(self):
             instr = self.builder.load(access_func(self))
-            set_metadata(self.tbaa, instr)
+            set_metadata(self.tbaa, instr, type)
             return instr
 
         def store(self, value):
             ptr = access_func(self)
             instr = self.builder.store(value, ptr)
-            set_metadata(self.tbaa, instr)
+            set_metadata(self.tbaa, instr, type)
 
         return property(load, store)
 
     return decorator
 
 class PyArrayAccessor(object):
-    def __init__(self, builder, pyarray_ptr, tbaa):
+    """
+    Convenient access to a the native fields of a NumPy array.
+
+    builder: llvmpy IRBuilder
+    pyarray_ptr: pointer to the numpy array
+    tbaa: metadata.TBAAMetadata instance
+    """
+
+    def __init__(self, builder, pyarray_ptr, tbaa, dtype):
         self.builder = builder
         self.pyarray_ptr = pyarray_ptr
         self.tbaa = tbaa
+        self.dtype = dtype
 
     def _get_element(self, idx):
         indices = map(const_int, [0, _head_len + idx])
         ptr = self.builder.gep(self.pyarray_ptr, indices)
         return ptr
 
-    @make_property()
-    def data(self):
-        return self._get_element(0)
+    def get_data(self):
+        instr = self.builder.load(self._get_element(0))
+        set_metadata(self.tbaa, instr, self.dtype.pointer())
+        return instr
+
+    def set_data(self, value):
+        instr = self.builder.store(value, self._get_element(0))
+        set_metadata(self.tbaa, instr, self.dtype.pointer())
+
+    data = property(get_data, set_data, "The array.data attribute")
 
     @make_property(typesystem.numpy_ndim)
     def ndim(self):

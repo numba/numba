@@ -385,6 +385,8 @@ numpy_dtype = TBAAType("numpy dtype", root=object_)
 numpy_base = TBAAType("numpy base", root=object_)
 numpy_flags = TBAAType("numpy flags", root=int_.pointer())
 
+iteration_target_type = TBAAType("iteration target", root=char.pointer())
+unique_tbaa_type = TBAAType("unique", root=char.pointer())
 
 if __name__ == '__main__':
     import doctest
