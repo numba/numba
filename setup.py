@@ -98,6 +98,6 @@ setup(
     description = "compile Python code",
     ext_modules = ext_modules,
     packages = find_packages(),
-    version = "0.7.3",
+    version = "0.8.0",
     cmdclass={'build_ext': build_ext},
 )
