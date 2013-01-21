@@ -18,14 +18,14 @@ from .minivect import minitypes, llvm_codegen
 from numba import ndarray_helpers, translate, error, extension_types
 from numba.typesystem import is_obj, promote_closest, promote_to_native
 from numba.utils import dump
-from numba import naming
+from numba import naming, metadata
 from numba.functions import keep_alive
 
 import logging
 logger = logging.getLogger(__name__)
 debug_conversion = False
 
-#logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 #debug_conversion = True
 
 _int32_zero = lc.Constant.int(_int32, 0)
@@ -597,6 +597,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.caster = _LLVMCaster(self.builder)
         self.object_coercer = ObjectCoercer(self)
         self.multiarray_api.set_PyArray_API(self.llvm_module)
+        self.tbaa = metadata.TBAAMetadata(self.llvm_module)
 
         self.object_local_temps = {}
         self._init_constants()
@@ -654,7 +655,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             # Done code generation
             del self.builder  # release the builder to make GC happy
 
-            logger.debug("ast translated function: %s" % self.lfunc)
+            if logger.level >= logging.DEBUG:
+                # logger.debug("ast translated function: %s" % self.lfunc)
+                logger.debug(self.llvm_module)
+
             # Verify code generation
             self.llvm_module.verify()  # only Module level verification checks everything.
 
@@ -1685,7 +1689,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         assert node.node.type.is_array
         lvalue = self.visit(node.node)
         lindices = self.visit(node.slice)
-        lptr = node.subscript(self, lvalue, lindices)
+        lptr = node.subscript(self, self.tbaa, lvalue, lindices)
         return self._handle_ctx(node, lptr)
 
     #def visit_Index(self, node):
@@ -1924,7 +1928,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)
-        acc = ndarray_helpers.PyArrayAccessor(self.builder, array)
+        acc = ndarray_helpers.PyArrayAccessor(self.builder, array,
+                                              self.tbaa)
 
         attr_name = node.attr_name
         if attr_name == 'shape':

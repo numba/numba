@@ -43,27 +43,22 @@ class DataPointerNode(Node):
         self.variable = Variable(self.type)
         self.ctx = ctx
 
-    def data_descriptors(self, llvm_value, builder):
+    def data_descriptors(self, llvm_value, builder, tbaa):
         '''
         Returns a tuple of (dptr, strides)
         - dptr:    a pointer of the data buffer
         - strides: a pointer to an array of stride information;
                    has `ndim` elements.
         '''
-        acc = PyArrayAccessor(builder, llvm_value)
+        acc = PyArrayAccessor(builder, llvm_value, tbaa)
         return acc.data, acc.strides
 
-    def subscript(self, translator, llvm_value, indices):
+    def subscript(self, translator, tbaa, llvm_value, indices):
         builder = translator.builder
         caster = translator.caster
         context = translator.context
 
-        dptr, strides = self.data_descriptors(llvm_value, builder)
-#        data_ty = self.type.to_llvm(context)
-#        data_ptr_ty = llvm.core.Type.pointer(data_ty)
-#        ptr = builder.bitcast(dptr, data_ptr_ty)
-#        return ptr
-
+        dptr, strides = self.data_descriptors(llvm_value, builder, tbaa)
         ndim = self.ndim
 
         offset = _const_int(0)
@@ -72,9 +67,9 @@ class DataPointerNode(Node):
             indices = (indices,)
 
         for i, index in zip(range(ndim), indices):
-            # why is the indices reversed?
             stride_ptr = builder.gep(strides, [_const_int(i)])
             stride = builder.load(stride_ptr, invariant=True)
+            stride.set_metadata("tbaa", tbaa.get_metadata(typesystem.numpy_strides))
             index = caster.cast(index, stride.type)
             offset = caster.cast(offset, stride.type)
             offset = builder.add(offset, builder.mul(index, stride))

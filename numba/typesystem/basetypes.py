@@ -158,6 +158,25 @@ class ResolvedNumpyDtypeType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "NumpyDtype(%s)" % self.resolve()
 
+class TBAAType(NumbaType):
+    """
+    Type based alias analysis type. See numba/metadata.py.
+    """
+
+    is_tbaa = True
+
+    def __init__(self, name, root):
+        super(TBAAType, self).__init__()
+        self.name = name
+        self.root = root
+
+    @property
+    def comparison_type_list(self):
+        return [self.name, self.root]
+
+    def __repr__(self):
+        return "tbaa(%s)" % self.name
+
 class EllipsisType(NumbaType, minitypes.ObjectType):
     is_ellipsis = True
 
@@ -357,6 +376,14 @@ tuple_ = TupleType()
 none = NoneType()
 null_type = NULLType()
 intp = minitypes.npy_intp
+
+numpy_array = TBAAType("numpy array", root=object_)
+numpy_shape = TBAAType("numpy shape", root=intp.pointer())
+numpy_strides = TBAAType("numpy strides", root=intp.pointer())
+numpy_ndim = TBAAType("numpy flags", root=int_.pointer())
+numpy_dtype = TBAAType("numpy dtype", root=object_)
+numpy_base = TBAAType("numpy base", root=object_)
+numpy_flags = TBAAType("numpy flags", root=int_.pointer())
 
 
 if __name__ == '__main__':
