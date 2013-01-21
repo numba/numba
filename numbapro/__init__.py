@@ -1,6 +1,5 @@
 __version__ = '0.8.0'
 
-
 def test(verbosity=2, failfast=False):
     import unittest
     import pkgutil
@@ -8,7 +7,8 @@ def test(verbosity=2, failfast=False):
 
     test_package_names = ['numbapro.tests.basic_vectorize',
                           'numbapro.tests.parallel_vectorize',
-                          'numbapro.tests.stream_vectorize']
+                          'numbapro.tests.stream_vectorize',
+                          'numbapro.tests.vectorize_pointer',]
 
     loader = unittest.TestLoader()
 
@@ -24,6 +24,79 @@ def test(verbosity=2, failfast=False):
     # The default stream doesn't work in Windows IPython qtconsole
     runner = unittest.TextTestRunner(verbosity=verbosity, failfast=True, stream=sys.stdout)
     return runner.run(suite)
+
+EXCLUDE_TEST_PACKAGES = []
+
+def split_path(path):
+    return path.split(os.sep)
+
+def exclude_package_dirs(dirs, cuda=False):
+    excludes = EXCLUDE_TEST_PACKAGES
+    if not cuda:
+        excludes.append('cuda')
+    for exclude_pkg in excludes:
+        if exclude_pkg in dirs:
+            dirs.remove(exclude_pkg)
+
+def qualified_test_name(root):
+    import os
+    qname = root.replace("/", ".").replace("\\", ".").replace(os.sep, ".") + "."
+    offset = qname.rindex('numbapro.tests.')
+    return qname[offset:]
+
+def whitelist_match(whitelist, modname):
+    if whitelist:
+        return any(item in modname for item in whitelist)
+    return True
+
+def map_returncode_to_message(retcode):
+    if retcode < 0:
+        retcode = -retcode
+        return signal_to_name.get(retcode, "Signal %d" % retcode)
+
+    return ""
+
+def test(whitelist=None, blacklist=None, cuda=False):
+    import sys, os
+    from os.path import dirname, join
+    import subprocess
+
+    run = failed = 0
+    for root, dirs, files in os.walk(join(dirname(__file__), 'tests')):
+        qname = qualified_test_name(root)
+        exclude_package_dirs(dirs, cuda=cuda)
+
+        for fn in files:
+            if fn.startswith('test_') and fn.endswith('.py'):
+                if not cuda and fn.startswith('test_cuda_'):
+                    continue
+
+                modname, ext = os.path.splitext(fn)
+                modname = qname + modname
+
+                if not whitelist_match(whitelist, modname):
+                    continue
+                if blacklist and whitelist_match(blacklist, modname):
+                    continue
+
+                run += 1
+                print "running %-60s" % (modname,),
+                process = subprocess.Popen([sys.executable, '-m', modname],
+                                           stdout=subprocess.PIPE,
+                                           stderr=subprocess.STDOUT)
+                out, err = process.communicate()
+
+                if process.returncode == 0:
+                    print "SUCCESS"
+                else:
+                    print "FAILED: %s" % map_returncode_to_message(
+                                                                   process.returncode)
+                    print out, err
+                    print "-" * 80
+                    failed += 1
+    
+    print "ran test files: failed: (%d/%d)" % (failed, run)
+    return failed
 
 def exercise():
     '''Exercise test that are not unittest.TestCase
