@@ -1,0 +1,22 @@
+Version 0.8
+============
+* Update for SSA types inference in Numba
+* Allow user to select CUDA device
+* Add support for pinned and mapped CUDA memory
+* Improvement on small memory allocation in CUDA
+* Default to use libNVVM from Anaconda
+* Bug fixes
+
+Version 0.7
+============
+* Prange: parallel for-range
+* Array slicing
+* Refactor CUDA dispatch mechanisms
+* Migrate to NVVM instead of PTX for CUDA codegen
+
+Version 0.6 and earlier
+========================
+* Array expressions
+* Fast ufuncs and generalized-ufunc (gufunc) with single-core, multi-core and CUDA
+* CUDA JIT.
+
