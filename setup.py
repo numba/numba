@@ -1,8 +1,7 @@
 import os
-import sys
-import platform
-from os.path import join
+from fnmatch import fnmatchcase
 from distutils.core import setup, Extension
+from distutils.util import convert_path
 
 from numba import minivect
 
@@ -72,6 +71,24 @@ ext_modules = [
 #    )
 ]
 
+
+def find_packages(where='.', exclude=()):
+    out = []
+    stack=[(convert_path(where), '')]
+    while stack:
+        where, prefix = stack.pop(0)
+        for name in os.listdir(where):
+            fn = os.path.join(where,name)
+            if ('.' not in name and os.path.isdir(fn) and
+                os.path.isfile(os.path.join(fn, '__init__.py'))
+            ):
+                out.append(prefix+name)
+                stack.append((fn, prefix+name+'.'))
+    for pat in list(exclude) + ['ez_setup', 'distribute_setup']:
+        out = [item for item in out if not fnmatchcase(item, pat)]
+    return out
+
+
 setup(
     name = "numbapro",
     author = "Continuum Analytics, Inc.",
@@ -80,16 +97,7 @@ setup(
     license = "Proprietary",
     description = "compile Python code",
     ext_modules = ext_modules,
-    packages = ['numbapro', 'numbapro.vectorize',
-                'numbapro._cuda',
-                'numbapro._utils',
-                'numbapro.tests',
-                'numbapro.tests.basic_vectorize',
-                'numbapro.tests.parallel_vectorize',
-                'numbapro.tests.stream_vectorize',
-                'numbapro.tests.cuda', 'numbapro.tests.cuda.fail'] + [
-                'numbapro.vectorize._numba_vectorize' # staging for opensourcing
-                ],
+    packages = find_packages(),
     version = "0.7.3",
     cmdclass={'build_ext': build_ext},
 )
