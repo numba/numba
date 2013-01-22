@@ -50,7 +50,7 @@ Unsigned integer counterparts are available under the name ``uint8``
 etc.   Also, short-names are available with the style '<char>N' where
 char is 'b', 'i', 'u', 'f', and 'c' for boolean, integer, unsigned,
 float and complex types respectively with 'N' indicating the number of
-bytes in the type.    Thus, f8 is equivalent to float32, and c16 is
+bytes in the type.    Thus, f8 is equivalent to float64, and c16 is
 equivalent to double complex.
 
 Native platform-dependent types are also available under names such as
