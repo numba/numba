@@ -122,4 +122,6 @@ class TBAAMetadata(object):
         load_instr.set_metadata("tbaa", metadata)
 
     def set_tbaa(self, load_instr, type):
-        self.set_metadata(load_instr, self.get_metadata(type))
+        md = self.get_metadata(type)
+        if md is not None:
+            self.set_metadata(load_instr, md)
