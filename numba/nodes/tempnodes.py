@@ -29,8 +29,8 @@ class TempNode(ExprNode): #, ast.Name):
 
         return self._tbaa_node
 
-    def load(self):
-        return TempLoadNode(temp=self)
+    def load(self, invariant=False):
+        return TempLoadNode(temp=self, invariant=invariant)
 
     def store(self):
         return TempStoreNode(temp=self)
