@@ -25,7 +25,7 @@ import logging
 logger = logging.getLogger(__name__)
 debug_conversion = False
 
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 #debug_conversion = True
 
 _int32_zero = lc.Constant.int(_int32, 0)
@@ -199,8 +199,8 @@ class LLVMContextManager(object):
             # link module
             func_name = lfunc.name
 #
-            print 'lfunc.module'.center(80, '-')
-            print lfunc.module
+#            print 'lfunc.module'.center(80, '-')
+#            print lfunc.module
 #
 #            print 'self.module'.center(80, '-')
 #            print self.module
