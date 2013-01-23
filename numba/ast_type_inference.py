@@ -533,9 +533,44 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def remove_resolved_type(self, start_point):
         "Remove a resolved type from the type graph"
+        self.assert_resolved(start_point)
+
         for child in start_point.children:
             if start_point in child.parents:
                 child.parents.remove(start_point)
+
+        if start_point.is_scc:
+            for type in start_point.types:
+                assert not type.is_scc
+                self.remove_resolved_type(type)
+
+    def assert_resolveable(self, start_point):
+        "Assert a type in the type graph can be resolved"
+        assert (len(start_point.parents) == 0 or
+                self.is_trivial_cycle(start_point) or
+                self.is_resolved(start_point))
+
+    def assert_resolved(self, start_point):
+        "Assert a type in the type graph is resolved somewhere down the line"
+        if not (start_point.is_scc or start_point.is_deferred):
+            r = start_point
+            while r.is_unresolved:
+                resolved = r.resolve()
+                if resolved is r:
+                    break
+                r = resolved
+            assert not r.is_unresolved
+
+    def process_unvisited(self, unvisited):
+        """
+        Find and resolve any final reduced self-referential
+        portions in the graph
+        """
+        for u in list(unvisited):
+            if self.is_trivial_cycle(u):
+                u.simplify()
+            if not u.resolve().is_unresolved:
+                unvisited.remove(u)
 
     def resolve_variable_types(self):
         """
@@ -578,33 +613,28 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         #-------------------------------------------------------------------
 
         if unvisited:
-            sccs = dict((k, v) for k, v in strongly_connected.iteritems() if k is not v)
-
-            # unvisited = set([strongly_connected[type] for type in unvisited])
             unvisited = set(strongly_connected.itervalues())
-            original_unvisited = set(unvisited)
             visited = set()
+
+            # sccs = dict((k, v) for k, v in strongly_connected.iteritems()
+            #                        if k is not v)
+            # unvisited = set([strongly_connected[type] for type in unvisited])
+            # original_unvisited = set(unvisited)
+
 
             while unvisited:
                 L = list(unvisited)
                 start_points = self.candidates(unvisited)
-                self.add_resolved_parents(unvisited, start_points, strongly_connected)
+                self.add_resolved_parents(unvisited, start_points,
+                                          strongly_connected)
                 if not start_points:
-                    # Find and resolve any final reduced self-referential
-                    # portions in the graph
-                    for u in list(unvisited):
-                        if self.is_trivial_cycle(u):
-                            u.simplify()
-                        if not u.resolve().is_unresolved:
-                            unvisited.remove(u)
-
+                    self.process_unvisited(unvisited)
                     break
 
                 while start_points:
                     start_point = start_points.pop()
-                    assert (len(start_point.parents) == 0 or
-                            self.is_trivial_cycle(start_point) or
-                            self.is_resolved(start_point))
+                    self.assert_resolveable(start_point)
+
                     visited.add(start_point)
                     if start_point in unvisited:
                         unvisited.remove(start_point)
@@ -614,19 +644,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     if not self.is_resolved(start_point):
                         start_point.simplify()
 
-                    if not (start_point.is_scc or start_point.is_deferred):
-                        r = start_point
-                        while r.is_unresolved:
-                            resolved = r.resolve()
-                            if resolved is r:
-                                break
-                            r = resolved
-                        assert not r.is_unresolved
-
                     self.remove_resolved_type(start_point)
-                    if start_point.is_scc:
-                        for type in start_point.types:
-                            self.remove_resolved_type(type)
 
                     children = (strongly_connected.get(c, c)
                                     for c in start_point.children
