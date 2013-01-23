@@ -1,6 +1,6 @@
 from numba.nodes import *
 
-class ExtTypeAttribute(Node):
+class ExtTypeAttribute(ExprNode):
 
     _fields = ['value']
 
@@ -16,7 +16,7 @@ class ExtTypeAttribute(Node):
     def __repr__(self):
         return "%s.%s" % (self.value, self.attr)
 
-class NewExtObjectNode(Node):
+class NewExtObjectNode(ExprNode):
     """
     Instantiate an extension type. Currently unused.
     """
@@ -28,7 +28,7 @@ class NewExtObjectNode(Node):
         self.ext_type = ext_type
         self.args = args
 
-class ExtensionMethod(Node):
+class ExtensionMethod(ExprNode):
 
     _fields = ['value']
     call_node = None

@@ -1,7 +1,7 @@
 from numba.nodes import *
 import numba.nodes
 
-class CheckErrorNode(Node):
+class CheckErrorNode(ExprNode):
     """
     Check for an exception.
 
@@ -30,7 +30,7 @@ class CheckErrorNode(Node):
 
         self.raise_node = RaiseNode(exc_type, exc_msg, exc_args)
 
-class RaiseNode(Node):
+class RaiseNode(ExprNode):
 
     _fields = ['exc_type', 'exc_msg', 'exc_args']
 
@@ -50,7 +50,7 @@ class RaiseNode(Node):
 
         self.print_on_trap = print_on_trap
 
-class PropagateNode(Node):
+class PropagateNode(ExprNode):
     """
     Propagate an exception (jump to the error label).
     """

@@ -1,6 +1,7 @@
 from numba.nodes import *
 
-class ClosureNode(Node):
+# not really an expression, but used in an assignment
+class ClosureNode(ExprNode):
     """
     Inner functions or closures.
 
@@ -73,7 +74,7 @@ class ClosureNode(Node):
         if hasattr(self.func_def, 'pure_ast_body'):
             self.func_def.body = func_body
 
-class InstantiateClosureScope(Node):
+class InstantiateClosureScope(ExprNode):
 
     _fields = ['outer_scope']
 
@@ -85,7 +86,7 @@ class InstantiateClosureScope(Node):
         self.outer_scope = outer_scope
         self.type = scope_type
 
-class ClosureScopeLoadNode(Node):
+class ClosureScopeLoadNode(ExprNode):
     "Load the closure scope for the function or NULL"
 
     type = void.pointer()

@@ -1,6 +1,6 @@
 from numba.nodes import *
 
-class ObjectInjectNode(Node):
+class ObjectInjectNode(ExprNode):
     """
     Refer to a Python object in the llvm code.
     """
@@ -19,7 +19,7 @@ class ObjectInjectNode(Node):
 
 NoneNode = ObjectInjectNode(None, object_)
 
-class ObjectTempNode(Node):
+class ObjectTempNode(ExprNode):
     """
     Coerce a node to a temporary which is reference counted.
     """
@@ -36,7 +36,7 @@ class ObjectTempNode(Node):
     def __repr__(self):
         return "objtemp(%s)" % self.node
 
-class NoneNode(Node):
+class NoneNode(ExprNode):
     """
     Return None.
     """
@@ -44,7 +44,7 @@ class NoneNode(Node):
     type = typesystem.NoneType()
     variable = Variable(type)
 
-class ObjectTempRefNode(Node):
+class ObjectTempRefNode(ExprNode):
     """
     Reference an ObjectTempNode, without evaluating its subexpressions.
     The ObjectTempNode must already have been evaluated.
@@ -57,7 +57,7 @@ class ObjectTempRefNode(Node):
         self.obj_temp_node = obj_temp_node
 
 
-class IncrefNode(Node):
+class IncrefNode(ExprNode):
 
     _fields = ['value']
 

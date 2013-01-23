@@ -1,6 +1,6 @@
 from numba.nodes import *
 
-class TempNode(Node): #, ast.Name):
+class TempNode(ExprNode): #, ast.Name):
     """
     Create a temporary to store values in. Does not perform reference counting.
     """
@@ -42,7 +42,7 @@ class TempNode(Node): #, ast.Name):
             name = ""
         return "temp(%s%s)" % (self.type, name)
 
-class TempLoadNode(Node):
+class TempLoadNode(ExprNode):
     _fields = ['temp']
 
     def __init__(self, temp, invariant=False):

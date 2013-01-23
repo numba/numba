@@ -35,7 +35,7 @@ class StructAttribute(ExtTypeAttribute):
         self.variable = Variable(self.type, promotable_type=False)
 
 
-class StructVariable(Node):
+class StructVariable(ExprNode):
     """
     Tells the type inferencer that the node is actually a valid struct that
     we can mutate. For instance
@@ -53,13 +53,13 @@ class StructVariable(Node):
         self.node = node
         self.type = node.type
 
-class ComplexNode(Node):
+class ComplexNode(ExprNode):
     _fields = ['real', 'imag']
 
     type = complex128
     variable = Variable(type)
 
-class ComplexAttributeNode(Node):
+class ComplexAttributeNode(ExprNode):
 
     _fields = ["value"]
 

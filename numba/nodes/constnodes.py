@@ -1,7 +1,7 @@
 from numba.nodes import *
 import numba.nodes
 
-class ConstNode(Node):
+class ConstNode(ExprNode):
     """
     Wrap a constant.
     """

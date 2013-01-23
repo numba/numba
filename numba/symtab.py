@@ -91,11 +91,14 @@ class Variable(object):
 
     def _type_set(self, type):
         assert not (self.type and type is None)
+        from numba.minivect import minitypes
         if type is None:
-            print 'Setting None type!', self.name
+            print 'Setting None type!'
+        elif not isinstance(type, minitypes.Type):
+            print type
         self._type = type
 
-    #type = property(_type_get, _type_set)
+    # type = property(_type_get, _type_set)
 
     @classmethod
     def from_variable(cls, variable, **kwds):

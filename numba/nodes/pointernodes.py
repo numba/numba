@@ -26,7 +26,7 @@ def value_at_offset(obj_node, offset, dst_type):
     value_at_offset = CoercionNode(pointer, dst_type)
     return value_at_offset
 
-class DereferenceNode(Node):
+class DereferenceNode(ExprNode):
     """
     Dereference a pointer
     """
@@ -41,7 +41,7 @@ class DereferenceNode(Node):
     def __repr__(self):
         return "*%s" % (self.pointer,)
 
-class PointerFromObject(Node):
+class PointerFromObject(ExprNode):
     """
     Bitcast objects to void *
     """

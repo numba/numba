@@ -1,6 +1,6 @@
 from numba.nodes import *
 
-class LLVMValueRefNode(Node):
+class LLVMValueRefNode(ExprNode):
     """
     Wrap an LLVM value.
     """

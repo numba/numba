@@ -32,7 +32,7 @@ def _const_int(X):
 # NumPy Array Attributes
 #----------------------------------------------------------------------------
 
-class DataPointerNode(Node):
+class DataPointerNode(ExprNode):
 
     _fields = ['node', 'slice']
 
@@ -89,7 +89,7 @@ class DataPointerNode(Node):
     def __repr__(self):
         return "%s.data" % self.node
 
-class ArrayAttributeNode(Node):
+class ArrayAttributeNode(ExprNode):
     is_read_only = True
 
     _fields = ['array']
@@ -130,7 +130,7 @@ class ShapeAttributeNode(ArrayAttributeNode):
 # NumPy Array Creation
 #----------------------------------------------------------------------------
 
-class ArrayNewNode(Node):
+class ArrayNewNode(ExprNode):
     """
     Allocate a new array given the attributes.
     """
@@ -145,7 +145,7 @@ class ArrayNewNode(Node):
         self.strides = strides
         self.base = base
 
-class ArrayNewEmptyNode(Node):
+class ArrayNewEmptyNode(ExprNode):
     """
     Allocate a new array with data.
     """

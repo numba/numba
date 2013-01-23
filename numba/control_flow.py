@@ -163,11 +163,6 @@ class ControlBlock(nodes.LowLevelBasicBlockNode):
         return 'Block(%d)' % self.id
 
     def __getattr__(self, attr):
-        if attr in ('variable', 'type'):
-            return getattr(self.body[0], attr)
-        raise AttributeError
-
-    def __getattr__(self, attr):
         if attr in ('variable', 'type', 'ctx'):
             return getattr(self.body[0], attr)
         raise AttributeError
