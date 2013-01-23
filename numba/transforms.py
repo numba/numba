@@ -1363,6 +1363,9 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         return node
 
     def visit_Compare(self, node):
+        if node.left.type.is_object:
+            raise error.NumbaError(node,
+                                   "Comparing objects is not yet supported")
         if node.left.type.is_pointer and node.comparators[0].type.is_pointer:
             node.left = nodes.CoercionNode(node.left, Py_uintptr_t)
             node.comparators = [nodes.CoercionNode(node.comparators[0],
