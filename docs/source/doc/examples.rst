@@ -9,6 +9,8 @@ Suppose we want to write an image-processing function in Python.  Here's how it 
 
 .. code-block:: python 
 
+   import numpy
+   
    def filter2d(image, filt):
        M, N = image.shape
        Mf, Nf = filt.shape
@@ -23,17 +25,19 @@ Suppose we want to write an image-processing function in Python.  Here's how it 
                        num += (filt[Mf-1-ii, Nf-1-jj] * image[i-Mf2+ii, j-Nf2+jj])
                result[i, j] = num
        return result
-
-This kind of quadruply-nested for-loop is going to be quite slow.  Using Numba we can compile this code to LLVM which then gets compiled to machine code: 
-
-.. code-block:: python
-
-   from numba import double
-
+   
+   # This kind of quadruply-nested for-loop is going to be quite slow.
+   # Using Numba we can compile this code to LLVM which then gets 
+   # compiled to machine code: 
+   
+   from numba import double, jit
+   
    fastfilter_2d = jit(double[:,:](double[:,:], double[:,:]))(filter2d)
-
+   
    # Now fastfilter_2d runs at speeds as if you had first translated
    # it to C, compiled the code and wrapped it with Python
+   image = numpy.random.random((100, 100))
+   filt = numpy.random.random((10, 10))
    res = fastfilter_2d(image, filt)
 
 Numba actually produces two functions.   The first function is the
