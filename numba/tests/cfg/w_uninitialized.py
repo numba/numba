@@ -76,8 +76,8 @@ def list_comp(a):
 def set_comp(a):
     return set(i for i in a)
 
-def dict_comp(a):
-    return {i: j for i, j in a}
+#def dict_comp(a):
+#    return {i: j for i, j in a}
 
 # args and kwargs
 def generic_args_call(*args, **kwargs):
