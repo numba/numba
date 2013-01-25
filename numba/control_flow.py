@@ -15,8 +15,6 @@ import logging
 import itertools
 import subprocess
 
-from meta import asttools
-
 import numba
 from numba import (error, transforms, closure, visitors, symtab, nodes,
                    typesystem)
@@ -862,6 +860,7 @@ class SourceDescr(object):
             source = inspect.getsource(self.func)
         else:
             try:
+                from meta import asttools
                 source = asttools.dump_python_source(self.ast)
             except Exception:
                 source = ""
