@@ -22,9 +22,17 @@ class ASTTestCase(unittest.TestCase):
 # Support for unittest in < py2.7
 #------------------------------------------------------------------------
 
+have_unit_skip = sys.version_info[:2] > (2, 6)
+
+if have_unit_skip:
+    from unittest import SkipTest
+else:
+    class SkipTest(Exception):
+        "Skip a test in < py27"
+
 def skip_test(reason):
-    if sys.version_info[:2] > (2, 6):
-        raise unittest.skip(reason)
+    if have_unit_skip:
+        raise SkipTest(reason)
     else:
         print >>sys.stderr, "Skipping: " + reason
 
