@@ -44,8 +44,19 @@ PyMODINIT_FUNC PyInit_utilities(void)
     module = PyModule_Create(&moduledef);
 #endif
 
+    if (!module)
+        goto error;
+
     /* Call all export functions */
-    export_type_conversion(module); 
+    if (export_type_conversion(module) < 0)
+        goto error;
+
+    goto success; /* done */
+
+error:
+    Py_XDECREF(module);
+    module = NULL;
+success:
 
 #if PY_MAJOR_VERSION < 3
     return;
