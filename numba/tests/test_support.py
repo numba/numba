@@ -26,6 +26,19 @@ class ASTTestCase(unittest.TestCase):
     backend = 'ast'
     autojit = staticmethod(autojit(backend=backend))
 
+def skip_if(should_skip, message):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            if should_skip:
+                print >>sys.stderr, "Skipping: " + message
+            else:
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def skip_unless(should_skip, message):
+    return skip_if(not should_skip, message)
+
 def main():
     import sys, logging
     if '-d' in sys.argv:
