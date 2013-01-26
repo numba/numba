@@ -105,5 +105,3 @@ from numba.nodes.pointernodes import *
 from numba.nodes.structnodes import *
 from numba.nodes.objectnodes import *
 from numba.nodes.llvmnodes import *
-
-from numba.nodes.utils import *

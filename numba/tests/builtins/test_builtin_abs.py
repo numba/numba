@@ -34,10 +34,10 @@ True
 >>> float_abs(-5.5)
 11.0
 
->>> round(complex64_abs(-10-2j), 2)
-20.4
->>> round(complex128_abs(-10-2j), 2)
-20.4
+>>> '%.2f' % round(complex64_abs(-10-2j), 2)
+'20.40'
+>>> '%.2f' % round(complex128_abs(-10-2j), 2)
+'20.40'
 """
 
 from numba import *

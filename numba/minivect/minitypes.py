@@ -45,6 +45,7 @@ import miniutils
 import minierror
 
 from miniutils import *
+from miniutils import have_ctypes, ctypes
 
 _plat_bits = struct_.calcsize('@P') * 8
 
@@ -755,7 +756,14 @@ class Py_ssize_t_Type(IntType):
 
     def __init__(self, **kwds):
         super(Py_ssize_t_Type, self).__init__(**kwds)
-        self.itemsize = getsize('c_ssize_t', _plat_bits // 8)
+        if have_ctypes:
+            if hasattr(ctypes, 'c_ssize_t'):
+                self.itemsize = ctypes.sizeof(ctypes.c_ssize_t)
+            else:
+                self.itemsize = size_t.itemsize
+        else:
+            self.itemsize = _plat_bits // 8
+
 
 class NPyIntp(IntType):
     is_numpy_intp = True
@@ -1069,14 +1077,13 @@ try:
 except ImportError:
     npy_intp = None
 
+size_t = IntType(name="size_t", rank=8.5,
+                 itemsize=getsize('c_size_t', _plat_bits // 8), signed=False)
 Py_ssize_t = Py_ssize_t_Type()
 Py_uintptr_t = IntType(name='Py_uintptr_t',
                        itemsize=getsize('c_void_p', Py_ssize_t.itemsize),
                        rank=8.5)
 
-
-size_t = IntType(name="size_t", rank=8.5,
-                 itemsize=getsize('c_size_t', _plat_bits / 8), signed=False)
 char = CharType(name="char", typecode='b')
 short = IntType(name="short", rank=2, typecode='h')
 int_ = IntType(name="int", rank=4, typecode='i')

@@ -16,8 +16,7 @@ try:
     from meta.decompiler import decompile_func
 except Exception, exn:
     logger.warn("Could not import Meta - AST translation will not work "
-                "if the source is not available:\n%s" %
-                traceback.format_exc())
+                "if the source is not available.")
     decompile_func = None
 
 def fix_ast_lineno(tree):

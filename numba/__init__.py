@@ -91,9 +91,9 @@ try:
 except ImportError:
     signal_to_name = {}
 else:
-    signal_to_name = { signal_code:signal_name
+    signal_to_name = dict((signal_code, signal_name)
                            for signal_name, signal_code in vars(signal).items()
-                               if signal_name.startswith("SIG") }
+                               if signal_name.startswith("SIG"))
 
 
 def test(whitelist=None, blacklist=None):
