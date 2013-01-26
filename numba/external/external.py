@@ -13,7 +13,14 @@ class ExternalFunction(object):
     exc_msg = None
     exc_args = None
 
-    def __init__(self, **kwargs):
+    def __init__(self, return_type=None, arg_types=None, **kwargs):
+        # Add positional arguments to keyword arguments
+        if return_type is not None:
+            kwargs['return_type'] = return_type
+        if arg_types is not None:
+            kwargs['arg_types'] = arg_types
+
+        # Process keyword arguments
         if __debug__:
             # Only accept keyword arguments defined _attributes
             for k, v in kwargs.items():
