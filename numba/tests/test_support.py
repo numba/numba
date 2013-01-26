@@ -49,6 +49,9 @@ def skip_if(should_skip, message):
 def skip_unless(should_skip, message):
     return skip_if(not should_skip, message)
 
+def skip(message):
+    return skip_if(True, message)
+
 def checkSkipFlag(reason):
     def _checkSkipFlag(fn):
         @nottest
@@ -95,4 +98,4 @@ def testmod(module=None, runit=False):
 
     doctest_support.testmod(module, run_doctests=runit or modname == '__main__')
     #if modname == '__main__':
-    #    numba.nose_run(mod)
+    #numba.nose_run(mod)
