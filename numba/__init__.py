@@ -1,7 +1,7 @@
 # Import all special functions before registering the Numba module
 # type inferer
 from numba.special import *
-from numba import module_type_inference
+#from numba import module_type_inference
 
 import os
 import sys
@@ -9,6 +9,10 @@ import logging
 from numba import typesystem
 
 __version__ = '0.5.0'
+
+def get_include():
+    numba_root = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(numba_root, "include")
 
 # NOTE: Be sure to keep the logging level commented out before commiting.  See:
 #   https://github.com/numba/numba/issues/31
