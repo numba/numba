@@ -822,6 +822,18 @@ class Function(object):
         self.signature = signature
         self.py_func = py_func
 
+    def __call__(self, *args, **kwargs):
+        """
+        Implement this to pass the callable test for classmethod/staticmethod.
+        E.g.
+
+            @classmethod
+            @void()
+            def m(self):
+                ...
+        """
+        raise minierror.Error("Not a callable function")
+
 class FunctionType(Type):
     subtypes = ['return_type', 'args']
     is_function = True
