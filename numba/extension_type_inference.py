@@ -38,6 +38,19 @@ def get_signature(ext_type, is_class, is_static, sig):
     restype = sig.return_type
     return minitypes.FunctionType(return_type=restype, args=argtypes)
 
+def get_classmethod_func(func):
+    """
+    Get the Python function the classmethod or staticmethod is wrapping.
+
+    In Python2.6 classmethod and staticmethod don't have the '__func__'
+    attribute.
+    """
+    if isinstance(func, classmethod):
+        return func.__get__(object()).im_func
+    else:
+        assert isinstance(func, staticmethod)
+        return func.__get__(object())
+
 def _process_signature(ext_type, method, default_signature,
                        is_static=False, is_class=False):
     """
@@ -71,8 +84,8 @@ def _process_signature(ext_type, method, default_signature,
             return None, None, None
 
         method, restype, argtypes = _process_signature(
-                        ext_type, method.__func__, default_signature,
-                        is_static=is_static, is_class=is_class)
+                    ext_type, get_classmethod_func(method),
+                    default_signature, is_static=is_static, is_class=is_class)
 
     return method, restype, argtypes
 
