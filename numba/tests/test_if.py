@@ -7,6 +7,7 @@ if-then-else statements.
 '''
 # ______________________________________________________________________
 
+import sys
 from numba import *
 
 import unittest
@@ -118,14 +119,18 @@ class TestIf(unittest.TestCase):
                 self.assertEqual(if_fn_3c(i, j), oracle(i, j))
 
     def test_if_fn_4(self):
-        from meta.decompiler import decompile_func
-        import ast, inspect
-        if_fn_4c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_4)
+        try:
+            from meta.decompiler import decompile_func
+        except ImportError:
+            print >>sys.stderr, "Skipping if test, meta not available"
+        else:
+            import ast, inspect
+            if_fn_4c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_4)
 
-        oracle = if_fn_4
-        for i in range(-3, 3):
-            for j in range(-3, 3):
-                self.assertEqual(if_fn_4c(i, j), oracle(i, j))
+            oracle = if_fn_4
+            for i in range(-3, 3):
+                for j in range(-3, 3):
+                    self.assertEqual(if_fn_4c(i, j), oracle(i, j))
 
     def test_if_fn_5(self):
         if_fn_5c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_5)
