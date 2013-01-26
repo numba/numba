@@ -20,14 +20,19 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
         self.methods = [] # (method_name, func_signature)
         self.methoddict = {} # method_name -> (func_signature, vtab_index)
 
-        self.vtab_offset = extension_types.compute_vtab_offset(py_class)
-        self.attr_offset = extension_types.compute_attrs_offset(py_class)
+        self.compute_offsets(py_class)
         self.attribute_struct = None
         self.vtab_type = None
 
         self.parent_attr_struct = None
         self.parent_vtab_type = None
         self.parent_type = getattr(py_class, "__numba_ext_type", None)
+
+    def compute_offsets(self, py_class):
+        from numba import extension_types
+
+        self.vtab_offset = extension_types.compute_vtab_offset(py_class)
+        self.attr_offset = extension_types.compute_attrs_offset(py_class)
 
     @property
     def need_tp_dealloc(self):

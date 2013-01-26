@@ -5,7 +5,7 @@ import numpy as np
 # from numpy.ctypeslib import _typecodes
 
 import numba
-from numba import  extension_types, error
+from numba import  error
 from numba.minivect.minitypes import *
 from numba.minivect.minitypes import map_dtype
 from numba.minivect import minitypes, minierror
