@@ -1,38 +1,42 @@
+#include "generated_conversions.h"
+
+/* Utilities copied from Cython/Utility/TypeConversion.c */
+
 /////////////// TypeConversions.proto ///////////////
 
 /* Type Conversion Predeclarations */
 
-#define __Pyx_PyBytes_FromUString(s) PyBytes_FromString((char*)s)
-#define __Pyx_PyBytes_AsUString(s)   ((unsigned char*) PyBytes_AsString(s))
+#define __Numba_PyBytes_FromUString(s) PyBytes_FromString((char*)s)
+#define __Numba_PyBytes_AsUString(s)   ((unsigned char*) PyBytes_AsString(s))
 
-#define __Pyx_Owned_Py_None(b) (Py_INCREF(Py_None), Py_None)
-#define __Pyx_PyBool_FromLong(b) ((b) ? (Py_INCREF(Py_True), Py_True) : (Py_INCREF(Py_False), Py_False))
-static CYTHON_INLINE int __Pyx_PyObject_IsTrue(PyObject*);
-static CYTHON_INLINE PyObject* __Pyx_PyNumber_Int(PyObject* x);
+#define __Numba_Owned_Py_None(b) (Py_INCREF(Py_None), Py_None)
+#define __Numba_PyBool_FromLong(b) ((b) ? (Py_INCREF(Py_True), Py_True) : (Py_INCREF(Py_False), Py_False))
+static NUMBA_INLINE int __Numba_PyObject_IsTrue(PyObject*);
+static NUMBA_INLINE PyObject* __Numba_PyNumber_Int(PyObject* x);
 
-static CYTHON_INLINE Py_ssize_t __Pyx_PyIndex_AsSsize_t(PyObject*);
-static CYTHON_INLINE PyObject * __Pyx_PyInt_FromSize_t(size_t);
-static CYTHON_INLINE size_t __Pyx_PyInt_AsSize_t(PyObject*);
+static NUMBA_INLINE Py_ssize_t __Numba_PyIndex_AsSsize_t(PyObject*);
+static NUMBA_INLINE PyObject * __Numba_PyInt_FromSize_t(size_t);
+static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
 
 #if CYTHON_COMPILING_IN_CPYTHON
-#define __pyx_PyFloat_AsDouble(x) (PyFloat_CheckExact(x) ? PyFloat_AS_DOUBLE(x) : PyFloat_AsDouble(x))
+#define __Numba_PyFloat_AsDouble(x) (PyFloat_CheckExact(x) ? PyFloat_AS_DOUBLE(x) : PyFloat_AsDouble(x))
 #else
-#define __pyx_PyFloat_AsDouble(x) PyFloat_AsDouble(x)
+#define __Numba_PyFloat_AsDouble(x) PyFloat_AsDouble(x)
 #endif
-#define __pyx_PyFloat_AsFloat(x) ((float) __pyx_PyFloat_AsDouble(x))
+#define __Numba_PyFloat_AsFloat(x) ((float) __Numba_PyFloat_AsDouble(x))
 
 /////////////// TypeConversions ///////////////
 
 /* Type Conversion Functions */
 
-/* Note: __Pyx_PyObject_IsTrue is written to minimize branching. */
-static CYTHON_INLINE int __Pyx_PyObject_IsTrue(PyObject* x) {
+/* Note: __Numba_PyObject_IsTrue is written to minimize branching. */
+static NUMBA_INLINE int __Numba_PyObject_IsTrue(PyObject* x) {
    int is_true = x == Py_True;
    if (is_true | (x == Py_False) | (x == Py_None)) return is_true;
    else return PyObject_IsTrue(x);
 }
 
-static CYTHON_INLINE PyObject* __Pyx_PyNumber_Int(PyObject* x) {
+static NUMBA_INLINE PyObject* __Numba_PyNumber_Int(PyObject* x) {
   PyNumberMethods *m;
   const char *name = NULL;
   PyObject *res = NULL;
@@ -78,7 +82,7 @@ static CYTHON_INLINE PyObject* __Pyx_PyNumber_Int(PyObject* x) {
   return res;
 }
 
-static CYTHON_INLINE Py_ssize_t __Pyx_PyIndex_AsSsize_t(PyObject* b) {
+static NUMBA_INLINE Py_ssize_t __Numba_PyIndex_AsSsize_t(PyObject* b) {
   Py_ssize_t ival;
   PyObject* x = PyNumber_Index(b);
   if (!x) return -1;
@@ -87,7 +91,7 @@ static CYTHON_INLINE Py_ssize_t __Pyx_PyIndex_AsSsize_t(PyObject* b) {
   return ival;
 }
 
-static CYTHON_INLINE PyObject * __Pyx_PyInt_FromSize_t(size_t ival) {
+static NUMBA_INLINE PyObject * __Numba_PyInt_FromSize_t(size_t ival) {
 #if PY_VERSION_HEX < 0x02050000
    if (ival <= LONG_MAX)
        return PyInt_FromLong((long)ival);
@@ -101,8 +105,8 @@ static CYTHON_INLINE PyObject * __Pyx_PyInt_FromSize_t(size_t ival) {
 #endif
 }
 
-static CYTHON_INLINE size_t __Pyx_PyInt_AsSize_t(PyObject* x) {
-   unsigned PY_LONG_LONG val = __Pyx_PyInt_AsUnsignedLongLong(x);
+static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject* x) {
+   unsigned PY_LONG_LONG val = __Numba_PyInt_AsUnsignedLongLong(x);
    if (unlikely(val == (unsigned PY_LONG_LONG)-1 && PyErr_Occurred())) {
        return (size_t)-1;
    } else if (unlikely(val != (unsigned PY_LONG_LONG)(size_t)val)) {
@@ -113,49 +117,13 @@ static CYTHON_INLINE size_t __Pyx_PyInt_AsSize_t(PyObject* x) {
    return (size_t)val;
 }
 
-/////////////// FromPyStructUtility.proto ///////////////
-{{struct_type_decl}};
-static {{struct_type_decl}} {{funcname}}(PyObject *);
-
-/////////////// FromPyStructUtility ///////////////
-static {{struct_type_decl}} {{funcname}}(PyObject * o) {
-    {{struct_type_decl}} result;
-    PyObject *value = NULL;
-
-    if (!PyMapping_Check(o)) {
-        PyErr_Format(PyExc_TypeError, "Expected a mapping, not %s", o->ob_type->tp_name);
-        goto bad;
-    }
-
-    {{for member in var_entries:}}
-        {{py:attr = "result." + member.cname}}
-
-        value = PyMapping_GetItemString(o, (char *) "{{member.name}}");
-        if (!value) {
-            PyErr_SetString(PyExc_ValueError, "No value specified for struct "
-                                              "attribute '{{member.name}}'");
-            goto bad;
-        }
-        {{attr}} = {{member.type.from_py_function}}(value);
-        if ({{member.type.error_condition(attr)}})
-            goto bad;
-
-        Py_DECREF(value);
-    {{endfor}}
-
-    return result;
-bad:
-    Py_XDECREF(value);
-    return result;
-}
-
 /////////////// ObjectAsUCS4.proto ///////////////
 
-static CYTHON_INLINE Py_UCS4 __Pyx_PyObject_AsPy_UCS4(PyObject*);
+static NUMBA_INLINE Py_UCS4 __Numba_PyObject_AsPy_UCS4(PyObject*);
 
 /////////////// ObjectAsUCS4 ///////////////
 
-static CYTHON_INLINE Py_UCS4 __Pyx_PyObject_AsPy_UCS4(PyObject* x) {
+static NUMBA_INLINE Py_UCS4 __Numba_PyObject_AsPy_UCS4(PyObject* x) {
    long ival;
    if (PyUnicode_Check(x)) {
        Py_ssize_t length;
@@ -186,7 +154,7 @@ static CYTHON_INLINE Py_UCS4 __Pyx_PyObject_AsPy_UCS4(PyObject* x) {
                     "got length %" CYTHON_FORMAT_SSIZE_T "d", length);
        return (Py_UCS4)-1;
    }
-   ival = __Pyx_PyInt_AsLong(x);
+   ival = __Numba_PyInt_AsLong(x);
    if (unlikely(ival < 0)) {
        if (!PyErr_Occurred())
            PyErr_SetString(PyExc_OverflowError,
@@ -202,11 +170,11 @@ static CYTHON_INLINE Py_UCS4 __Pyx_PyObject_AsPy_UCS4(PyObject* x) {
 
 /////////////// ObjectAsPyUnicode.proto ///////////////
 
-static CYTHON_INLINE Py_UNICODE __Pyx_PyObject_AsPy_UNICODE(PyObject*);
+static NUMBA_INLINE Py_UNICODE __Numba_PyObject_AsPy_UNICODE(PyObject*);
 
 /////////////// ObjectAsPyUnicode ///////////////
 
-static CYTHON_INLINE Py_UNICODE __Pyx_PyObject_AsPy_UNICODE(PyObject* x) {
+static NUMBA_INLINE Py_UNICODE __Numba_PyObject_AsPy_UNICODE(PyObject* x) {
     long ival;
     #if CYTHON_PEP393_ENABLED
     #if Py_UNICODE_SIZE > 2
@@ -218,10 +186,10 @@ static CYTHON_INLINE Py_UNICODE __Pyx_PyObject_AsPy_UNICODE(PyObject* x) {
     static long maxval = 0;
     #endif
     if (PyUnicode_Check(x)) {
-        if (unlikely(__Pyx_PyUnicode_GET_LENGTH(x) != 1)) {
+        if (unlikely(__Numba_PyUnicode_GET_LENGTH(x) != 1)) {
             PyErr_Format(PyExc_ValueError,
                          "only single character unicode strings can be converted to Py_UNICODE, "
-                         "got length %" CYTHON_FORMAT_SSIZE_T "d", __Pyx_PyUnicode_GET_LENGTH(x));
+                         "got length %" CYTHON_FORMAT_SSIZE_T "d", __Numba_PyUnicode_GET_LENGTH(x));
             return (Py_UNICODE)-1;
         }
         #if CYTHON_PEP393_ENABLED
@@ -234,7 +202,7 @@ static CYTHON_INLINE Py_UNICODE __Pyx_PyObject_AsPy_UNICODE(PyObject* x) {
         if (unlikely(!maxval))
             maxval = (long)PyUnicode_GetMax();
         #endif
-        ival = __Pyx_PyInt_AsLong(x);
+        ival = __Numba_PyInt_AsLong(x);
     }
     if (unlikely(ival < 0)) {
         if (!PyErr_Occurred())
@@ -248,3 +216,39 @@ static CYTHON_INLINE Py_UNICODE __Pyx_PyObject_AsPy_UNICODE(PyObject* x) {
     }
     return (Py_UNICODE)ival;
 }
+
+/* End copy from Cython/Utility/TypeConversion.c */
+/* --------------------------------------------- */
+
+#include "generated_conversions.c"
+
+/* Export all utilities */
+static NUMBA_INLINE int __Numba_PyObject_IsTrue(PyObject*);
+static NUMBA_INLINE PyObject* __Numba_PyNumber_Int(PyObject* x);
+
+static NUMBA_INLINE Py_ssize_t __Numba_PyIndex_AsSsize_t(PyObject*);
+static NUMBA_INLINE PyObject * __Numba_PyInt_FromSize_t(size_t);
+static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
+
+static int
+export_type_conversion(PyObject *module)
+{
+    EXPORT_FUNCTION(__Numba_PyInt_AsChar, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedChar, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsShort, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedShort, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsInt, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedInt, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsLong, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedLong, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsLongLong, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedLongLong, module, error)
+
+    EXPORT_FUNCTION(__Numba_PyIndex_AsSsize_t, module, error);
+    EXPORT_FUNCTION(__Numba_PyInt_FromSize_t, module, error);
+
+    return 0;
+error:
+    return -1;
+}
+
