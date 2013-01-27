@@ -1283,7 +1283,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             assert node.exc_msg
 
             if node.exc_args:
-                args = [node.exc_type, node.exc_msg, node.exc_args]
+                args = [node.exc_type, node.exc_msg] + node.exc_args
                 raise_node = function_util.external_call(self.context,
                                                          self.llvm_module,
                                                          'PyErr_Format',
