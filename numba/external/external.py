@@ -1,3 +1,9 @@
+"""
+This module adds a way to declare external functions.
+
+See numba.function_util on how to call them.
+"""
+
 from numba.minivect import minitypes
 
 class ExternalFunction(object):
@@ -40,6 +46,11 @@ class ExternalFunction(object):
             return type(self).__name__
         else:
             return self.func_name
+
+    def declare_lfunc(self, context, llvm_module, temp_name):
+        lfunc_type = self.signature.to_llvm(context)
+        lfunc = llvm_module.get_or_insert_function(lfunc_type, name=temp_name)
+        return lfunc
 
 class ExternalLibrary(object):
     def __init__(self, context):
