@@ -10,6 +10,8 @@ class CheckErrorNode(ExprNode):
 
     If exc_type, exc_msg and optionally exc_args are given, an error is
     raised instead of propagating it.
+
+    See RaiseNode for the exc_* arguments.
     """
 
     _fields = ['return_value', 'badval', 'raise_node']
@@ -31,6 +33,21 @@ class CheckErrorNode(ExprNode):
         self.raise_node = RaiseNode(exc_type, exc_msg, exc_args)
 
 class RaiseNode(ExprNode):
+    """
+    Raise an exception.
+
+        exception_type: The Python exception type
+
+        exc_type: The Python exception as an AST node
+            May be passed in as a Python exception type
+
+        exc_msg: The message to print as an AST node
+            May be passed in as a string
+
+        exc_args: If given, must be an list of AST nodes representing the
+                  arguments to PyErr_Format (matching the format specifiers
+                  at runtime in exc_msg)
+    """
 
     _fields = ['exc_type', 'exc_msg', 'exc_args']
 
@@ -52,5 +69,6 @@ class RaiseNode(ExprNode):
 
 class PropagateNode(ExprNode):
     """
-    Propagate an exception (jump to the error label).
+    Propagate an exception (jump to the error label). This is resolved
+    at code generation time and can be generated at any moment.
     """
