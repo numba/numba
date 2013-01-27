@@ -30,6 +30,7 @@ else:
     class SkipTest(Exception):
         "Skip a test in < py27"
 
+@nottest
 def skip_test(reason):
     if have_unit_skip:
         raise SkipTest(reason)
