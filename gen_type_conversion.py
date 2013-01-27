@@ -119,7 +119,23 @@ def generate_conversions(out_c, out_h):
             out_c.write(conversion)
             out_h.write(header % fmtargs + ';\n')
 
-            # print "EXPORT_FUNCTION(%(FuncName)s, module, error)" % fmtargs
+            # print_export(fmtargs)
+            # print_utility_load(fmtargs, signedness)
+
+
+def print_export(fmtargs):
+    "Code to put in type_conversion.c"
+    print "EXPORT_FUNCTION(%(FuncName)s, module, error)" % fmtargs
+
+def print_utility_load(fmtargs, signedness):
+    "Code to put in numba.external.utility"
+    typename = fmtargs['TypeName'].lower()
+    if signedness == "unsigned":
+        typename = "u" + typename
+
+    print '%-10s : load("%s", %s(object_)),' % (typename, fmtargs['FuncName'],
+                                                typename)
+
 
 def open_files():
     numba_root = os.path.dirname(os.path.abspath(__file__))

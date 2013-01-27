@@ -76,5 +76,6 @@ class TestConversion(unittest.TestCase):
         assert ctypes.cast(result, ctypes.c_void_p).value == array.ctypes.data
 
 if __name__ == "__main__":
-    from numba.tests import test_support
-    test_support.main()
+    TestConversion("test_pointer_conversion").test_pointer_conversion()
+#    from numba.tests import test_support
+#    test_support.main()

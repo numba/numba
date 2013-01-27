@@ -97,7 +97,8 @@ from . import macros, utils, typesystem
 from .symtab import Variable
 from . import visitors, nodes, error, functions
 from numba import stdio_util, function_util
-from numba.typesystem import is_obj, promote_closest
+from numba.typesystem import is_obj, promote_closest, promote_to_native
+from numba.external import utility
 from numba.utils import dump
 
 import llvm.core
@@ -639,6 +640,25 @@ class ResolveCoercions(visitors.NumbaTransformer):
         self.generic_visit(new_node)
         return new_node
 
+    def object_to_int(self, node, dst_type):
+        """
+        Return node that converts the given node to the dst_type.
+        This also performs overflow/underflow checking, and conversion to
+        a Python int or long if necessary.
+
+        PyLong_AsLong and friends do not do this (overflow/underflow checking
+        is only for longs, and conversion to int|long depends on the Python
+        version).
+        """
+        dst_type = promote_to_native(dst_type)
+        assert dst_type in utility.object_to_numeric
+        utility_func = utility.object_to_numeric[dst_type]
+        result = function_util.external_call_func(self.context,
+                                                  self.llvm_module,
+                                                  utility_func,
+                                                  args=[node])
+        return result
+
     def visit_CoerceToNative(self, node):
         """
         Try to perform fast coercion using e.g. PyLong_AsLong(), with a
@@ -655,12 +675,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 node_type = ulonglong
 
             if node_type.is_int: # and not
-                cls = self._get_int_conversion_func(node_type,
-                                                    pyapi._as_long)
-                if not node_type.signed or node_type == Py_ssize_t:
-                    # PyLong_AsLong calls __int__, but
-                    # PyLong_AsUnsignedLong doesn't...
-                    node.node = nodes.call_pyfunc(long, [node.node])
+                new_node = self.object_to_int(node.node, node_type)
             elif node_type.is_float:
                 cls = pyapi.PyFloat_AsDouble
             elif node_type.is_complex:
