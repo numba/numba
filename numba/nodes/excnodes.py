@@ -72,3 +72,21 @@ class PropagateNode(ExprNode):
     Propagate an exception (jump to the error label). This is resolved
     at code generation time and can be generated at any moment.
     """
+
+class PyErr_OccurredNode(ExprNode):
+    """
+    Check for a set Python exception using PyErr_Occurred().
+
+    Can be set any time after type inference. This node is resolved during
+    late specialization.
+    """
+
+    # TODO: support checking for (value == badval && PyErr_Occurred()) for
+    #       efficiency
+
+    _fields = ['node']
+
+    def __init__(self, node):
+        self.node = node
+        self.variable = node.variable
+        self.type = node.type

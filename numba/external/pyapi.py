@@ -90,12 +90,14 @@ class PyErr_Clear(ExternalFunction):
 #
 ### Object conversions to native types
 #
-def create_func(name, restype, argtype, d):
+def create_func(name, restype, argtype, d, check_pyerr_occurred=False):
     class PyLong_FromLong(ExternalFunction):
         arg_types = [argtype]
         return_type = restype
 
     PyLong_FromLong.__name__ = name
+    PyLong_FromLong.check_pyerr_occurred = check_pyerr_occurred
+
     if restype.is_object:
         type = argtype
     else:
@@ -107,7 +109,7 @@ def create_func(name, restype, argtype, d):
 # The pipeline is using this dictionary to lookup casting func
 _as_long = {}
 def as_long(name, type):
-    create_func(name, type, object_, _as_long)
+    create_func(name, type, object_, _as_long, check_pyerr_occurred=True)
 
 as_long('PyLong_AsLong', long_)
 as_long('PyLong_AsUnsignedLong', ulong)

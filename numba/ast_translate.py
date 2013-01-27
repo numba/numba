@@ -873,16 +873,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         if not is_obj(node.signature.return_type):
             # Check for error using PyErr_Occurred()
-            # TODO: make this an option in CheckErrorNode
-            check_err = nodes.CheckErrorNode(
-                    nodes.ptrtoint(function_util.external_call(
-                                              self.context,
-                                              self.llvm_module,
-                                             'PyErr_Occurred')),
-                    goodval=nodes.ptrtoint(nodes.NULL))
-            func_call = func_call.cloneable
-            func_call = nodes.ExpressionNode(stmts=[func_call, check_err],
-                                             expr=func_call.clone)
+            func_call = nodes.PyErr_OccurredNode(func_call)
 
         # Coerce and return result
         if node.signature.return_type.is_void:

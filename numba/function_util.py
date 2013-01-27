@@ -31,4 +31,8 @@ def external_call_func(context, module, extfn, args=(), temp_name=None):
                      exc_args = extfn.exc_args)
 
     result = nodes.NativeCallNode(sig, args, lfunc, name=temp_name, **exc_check)
+
+    if extfn.check_pyerr_occurred:
+        result = nodes.PyErr_OccurredNode(result)
+
     return result

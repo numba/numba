@@ -7,7 +7,8 @@ See numba.function_util on how to call them.
 from numba.minivect import minitypes
 
 class ExternalFunction(object):
-    _attributes = ('func_name', 'arg_types', 'return_type', 'is_vararg')
+    _attributes = ('func_name', 'arg_types', 'return_type', 'is_vararg',
+                   'check_pyerr_occurred')
     func_name = None
     arg_types = None
     return_type = None
@@ -18,6 +19,8 @@ class ExternalFunction(object):
     exc_type = None
     exc_msg = None
     exc_args = None
+
+    check_pyerr_occurred = False
 
     def __init__(self, return_type=None, arg_types=None, **kwargs):
         # Add positional arguments to keyword arguments

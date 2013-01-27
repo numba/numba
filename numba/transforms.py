@@ -1344,6 +1344,18 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         check = nodes.build_if(test=test, body=[node.raise_node], orelse=[])
         return self.visit(check)
 
+    def visit_PyErr_OccurredNode(self, node):
+        check_err = nodes.CheckErrorNode(
+            nodes.ptrtoint(function_util.external_call(
+                self.context,
+                self.llvm_module,
+                'PyErr_Occurred')),
+            goodval=nodes.ptrtoint(nodes.NULL))
+        result = nodes.CloneableNode(node.node)
+        result = nodes.ExpressionNode(stmts=[result, check_err],
+                                      expr=result.clone)
+        return self.visit(result)
+
     def visit_Name(self, node):
         if node.type.is_builtin and not node.variable.is_local:
             obj = getattr(builtins, node.name)
