@@ -22,7 +22,7 @@ def external_call_func(context, module, extfn, args=(), temp_name=None):
     assert temp_name is not None
 
     sig = extfn.signature
-    lfunc = extfn.declare_lfunc(context, module, temp_name)
+    lfunc = extfn.declare_lfunc(context, module)
 
     exc_check = dict(badval   = extfn.badval,
                      goodval  = extfn.goodval,

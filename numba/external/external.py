@@ -47,9 +47,9 @@ class ExternalFunction(object):
         else:
             return self.func_name
 
-    def declare_lfunc(self, context, llvm_module, temp_name):
+    def declare_lfunc(self, context, llvm_module):
         lfunc_type = self.signature.to_llvm(context)
-        lfunc = llvm_module.get_or_insert_function(lfunc_type, name=temp_name)
+        lfunc = llvm_module.get_or_insert_function(lfunc_type, name=self.name)
         return lfunc
 
 class ExternalLibrary(object):

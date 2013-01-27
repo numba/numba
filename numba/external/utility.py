@@ -16,7 +16,7 @@ class UtilityFunction(external.ExternalFunction):
         super(UtilityFunction, self).__init__(return_type, arg_types, **kwargs)
         self.funcaddr = funcaddr
 
-    def declare_lfunc(self, context, llvm_module, temp_name):
+    def declare_lfunc(self, context, llvm_module):
         lsig = self.signature.pointer().to_llvm(context)
         inttype = Py_uintptr_t.to_llvm(context)
         intval = llvm.core.Constant.int(inttype, self.funcaddr)
