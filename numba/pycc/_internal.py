@@ -2,7 +2,6 @@ import logging
 import os
 import sys
 import functools
-from importlib import import_module
 from numba import decorators
 from numba import llvm_types
 import llvm.core as lc
