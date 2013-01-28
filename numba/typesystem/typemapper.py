@@ -79,7 +79,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
         result_type = super(NumbaTypeMapper, self).from_python(value)
 
         if result_type == object_:
-            from numba import module_type_inference
+            from numba.type_inference import module_type_inference
             module_type_inference.module_registry.register(self.context)
 
             result = module_type_inference.module_attribute_type(value)

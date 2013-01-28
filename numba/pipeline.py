@@ -6,7 +6,6 @@ define the transformations and the order in which they run on the AST.
 import inspect
 import ast as ast_module
 import logging
-import functools
 import pprint
 import random
 from timeit import default_timer as _timer
@@ -16,11 +15,10 @@ import llvm.core as lc
 import numba.closure
 from numba import error
 from numba import functions, naming, transforms, control_flow
-from numba import ast_type_inference as type_inference
 from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
 from numba import utils
-from numba.utils import dump
+from numba.type_inference import infer as type_inference
 from numba.asdl import schema
 from numba.minivect import minitypes
 import numba.visitors

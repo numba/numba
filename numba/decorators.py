@@ -2,14 +2,13 @@ __all__ = ['autojit', 'jit', 'export', 'exportmany']
 
 import functools
 import logging
-import types
 import inspect
 
 from numba import *
 from numba import typesystem, numbawrapper
-from . import utils, functions, ast_translate as translate, ast_type_inference
+from . import utils, functions, ast_translate as translate
 from numba import translate as bytecode_translate
-from numba import error, pipeline, extension_type_inference
+from numba import  pipeline, extension_type_inference
 from .minivect import minitypes
 from numba.utils import debugout
 from numba.intrinsic import default_intrinsic_library
@@ -143,8 +142,6 @@ logger = logging.getLogger(__name__)
 #        traceback.print_exc()
 #        import numpy
 #        return numpy.vectorize(func)
-
-from numpy import vectorize
 
 # The __tr_map__ global maps from Python functions to a Translate
 # object.  This added reference prevents the translator and its

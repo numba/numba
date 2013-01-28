@@ -6,17 +6,16 @@ import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 
-from .llvm_types import _int1, _int32, _intp, _LLVMCaster
+from .llvm_types import _int1, _int32, _LLVMCaster
 from .multiarray_api import MultiarrayAPI # not used
 from .symtab import Variable
 from numba import typesystem
-from numba.typesystem import BuiltinType
 
 from numba import *
 from . import visitors, nodes, llvm_types, utils, function_util
 from .minivect import minitypes, llvm_codegen
-from numba import ndarray_helpers, translate, error, extension_types
-from numba.typesystem import is_obj, promote_closest, promote_to_native
+from numba import ndarray_helpers, error, extension_types
+from numba.typesystem import is_obj, promote_to_native
 from numba.utils import dump
 from numba import naming, metadata
 from numba.functions import keep_alive
@@ -838,7 +837,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_FunctionWrapperNode(self, node):
         global debug_conversion
-        from numba import ast_type_inference, pipeline
+        from numba import  pipeline
 
         was_debug_conversion = debug_conversion
         if debug_conversion:

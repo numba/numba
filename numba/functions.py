@@ -5,10 +5,7 @@ from collections import defaultdict
 from numba import *
 from . import naming
 from .minivect import minitypes
-import llvm.core
 import logging
-import traceback
-import numba.decorators
 from numba import numbawrapper
 
 logger = logging.getLogger(__name__)
@@ -84,7 +81,7 @@ def _get_ast(func):
         return func_def
 
 def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
-    import numba.ast_type_inference as type_inference
+    import numba.type_inference.infer as type_inference
 
     ast = _get_ast(func)
     func_signature = minitypes.FunctionType(return_type=restype,

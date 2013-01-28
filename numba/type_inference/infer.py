@@ -8,12 +8,12 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import (error, transforms, closure, control_flow, visitors, nodes,
-                   module_type_inference)
-from .minivect import minierror, minitypes
-from . import translate, utils, typesystem
+from numba import error, transforms, closure, control_flow, visitors, nodes
+from numba.type_inference import module_type_inference
+from numba.minivect import minierror, minitypes
+from numba import translate, utils, typesystem
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
-from .symtab import Variable
+from numba.symtab import Variable
 from numba import stdio_util, function_util
 from numba.typesystem import is_obj, promote_closest
 from numba.utils import dump

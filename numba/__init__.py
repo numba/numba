@@ -1,7 +1,6 @@
 # Import all special functions before registering the Numba module
 # type inferer
 from numba.special import *
-#from numba import module_type_inference
 
 import os
 import sys

@@ -57,7 +57,8 @@ import inspect
 import llvm.core as lc
 import numba.decorators
 from numba import *
-from numba import error, visitors, nodes, module_type_inference
+from numba import error, visitors, nodes
+from numba.type_inference import module_type_inference
 from numba.minivect import  minitypes
 from numba import typesystem
 from numba.symtab import Variable

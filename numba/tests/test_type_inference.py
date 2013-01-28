@@ -6,11 +6,9 @@ Test type inference.
 '''
 # ______________________________________________________________________
 
-from numba.minivect import minitypes, minierror
 from numba import *
 from numba import typesystem
-from numba import ast_type_inference
-from numba import decorators, functions, pipeline
+from numba import decorators
 
 import unittest
 
@@ -18,6 +16,7 @@ import numpy
 import numpy as np
 
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 # ______________________________________________________________________
 
