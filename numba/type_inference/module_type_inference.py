@@ -119,9 +119,14 @@ def dispatch_on_value(context, call_node, func_type):
     module, attr, inferer = get_inferer(func_type.value)
 
     argnames = inspect.getargspec(inferer).args
-    assert argnames.pop(0) == "context"
+    if argnames[0] == "context":
+        argnames.pop(0)
+        args = (context,)
+    else:
+        args = ()
+
     method_kwargs = parse_args(call_node, argnames)
-    return inferer(context, **method_kwargs)
+    return inferer(*args, **method_kwargs)
 
 def resolve_call(context, call_node, obj_call_node, func_type):
     """
