@@ -912,7 +912,8 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
         args = [n] + objs
         new_node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
-        new_node.type = typesystem.TupleType(size=len(node.elts))
+        # TODO: determine element type of node.elts
+        new_node.type = typesystem.TupleType(object_, size=len(node.elts))
         return nodes.ObjectTempNode(new_node)
 
     def visit_List(self, node):

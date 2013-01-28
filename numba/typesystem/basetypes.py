@@ -27,18 +27,24 @@ class NumbaKeyHashingType(minitypes.KeyHashingType):
 # Python Types
 #------------------------------------------------------------------------
 
-class TupleType(NumbaType, minitypes.ObjectType):
+class ContainerListType(NumbaType, minitypes.ObjectType):
+
+    def __init__(self, dtype, size=-1):
+        super(ContainerListType, self).__init__()
+        self.dtype = dtype
+        self.size = size
+
+class TupleType(ContainerListType):
+
     is_tuple = True
     name = "tuple"
-    size = 0
 
     def __str__(self):
         return "tuple(%s)" % ", ".join(["..."] * self.size)
 
-class ListType(NumbaType, minitypes.ObjectType):
+class ListType(ContainerListType):
     is_list = True
     name = "list"
-    size = 0
 
     def __str__(self):
         return "list(%s)" % ", ".join(["..."] * self.size)
@@ -46,7 +52,6 @@ class ListType(NumbaType, minitypes.ObjectType):
 class DictType(NumbaType, minitypes.ObjectType):
     is_dict = True
     name = "dict"
-    size = 0
 
     def __str__(self):
         return "dict(%s)" % ", ".join(["..."] * self.size)
@@ -372,7 +377,7 @@ class ReferenceType(NumbaType):
 # END OF TYPE DEFINITIONS
 #------------------------------------------------------------------------
 
-tuple_ = TupleType()
+tuple_ = TupleType(object_, size=0)
 none = NoneType()
 null_type = NULLType()
 intp = minitypes.npy_intp

@@ -143,8 +143,8 @@ class ObjectCallNode(FunctionCallNode):
         self.py_func = py_func
 
         self.args_tuple = ast.Tuple(elts=args, ctx=ast.Load())
-        self.args_tuple.variable = Variable(typesystem.TupleType(
-                                                size=len(args)))
+        self.args_tuple.variable = Variable(
+                typesystem.TupleType(object_, size=len(args)))
 
         if keywords:
             keywords = [(ConstNode(k.arg), k.value) for k in keywords]
