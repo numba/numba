@@ -1,4 +1,6 @@
-# cython: profile=True
+
+
+# # cython: profile=True
 
 import numpy as np
 cimport numpy as cnp
@@ -95,7 +97,11 @@ cdef class NumbaSpecializingWrapper(NumbaWrapper):
 cdef inline _id(obj):
     return <Py_uintptr_t> <PyObject *> obj
 
-cpdef inline getkey(tuple args):
+cdef inline void setkey(t, int i, k):
+    Py_INCREF(<PyObject *> k)
+    PyTuple_SET_ITEM(t, i, k)
+
+cpdef inline getkey(tuple args): # 3.0x
     """
     Get the tuple key we need to look up the right specialization from the
     runtime autojit arguments.
@@ -104,8 +110,10 @@ cpdef inline getkey(tuple args):
     (the dispatch may in fact be significantly more expensive than the actual
      function call).
     """
+    cdef Py_ssize_t i
+
     cdef Py_ssize_t nargs = PyTuple_GET_SIZE(args)
-    cdef tuple key = PyTuple_New(nargs)
+    cdef tuple key = PyTuple_New(nargs * 3)
     cdef cnp.ndarray array
 
     for i in range(nargs):
@@ -119,14 +127,21 @@ cpdef inline getkey(tuple args):
             # Hashing on dtype here makes the test example more than
             # twice as slow, hash on its id() instead.
             # k = (type(arg), array.descr, array.ndim)
-            k = (type(arg), _id(array.descr), array.ndim)
+            # k = (type(arg), _id(array.descr), array.ndim)
+            setkey(key, i*3, type(arg))
+            setkey(key, i*3+1, _id(array.descr))
+            setkey(key, i*3+2, array.ndim)
         else:
-            k = type(arg)
+            # k = type(arg)
+            setkey(key, i*3, type(arg))
+            setkey(key, i*3+1, 0)
+            setkey(key, i*3+2, 0)
 
-        Py_INCREF(<PyObject *> k)
-        PyTuple_SET_ITEM(key, i, k)
+        # Py_INCREF(<PyObject *> k)
+        # PyTuple_SET_ITEM(key, i, k)
 
     return key
+
 
 cdef class AutojitFunctionCache(object):
     """
@@ -149,7 +164,7 @@ cdef class AutojitFunctionCache(object):
 
     cpdef add(self, args, wrapper):
         # self.specializations[0] = wrapper
-        # key = (0x19228, 0x384726)
+#        key = (0x19228, 0x384726)
         key = getkey(args)
         self.specializations[key] = wrapper
 
@@ -160,6 +175,7 @@ cdef class AutojitFunctionCache(object):
     cdef lookup(self, tuple args):
         # return self.specializations[0]
         key = getkey(args)
-        # key = (0x19228, 0x384726)
+
+#        key = (0x19228, 0x384726)
         wrapper = self.specializations.get(key)
         return wrapper
