@@ -27,27 +27,28 @@ class NumbaKeyHashingType(minitypes.KeyHashingType):
 # Python Types
 #------------------------------------------------------------------------
 
-class ContainerListType(NumbaType, minitypes.ObjectType):
+class ContainerListType(NumbaKeyHashingType, minitypes.ObjectType):
 
     def __init__(self, dtype, size=-1):
         super(ContainerListType, self).__init__()
         self.dtype = dtype
         self.size = size
 
+    @property
+    def key(self):
+        return self.dtype, self.size
+
+    def __repr__(self):
+        return "%s(%s, %s)" % (self.name, self.dtype, self.size)
+
 class TupleType(ContainerListType):
 
     is_tuple = True
     name = "tuple"
 
-    def __str__(self):
-        return "tuple(%s)" % ", ".join(["..."] * self.size)
-
 class ListType(ContainerListType):
     is_list = True
     name = "list"
-
-    def __str__(self):
-        return "list(%s)" % ", ".join(["..."] * self.size)
 
 class DictType(NumbaType, minitypes.ObjectType):
     is_dict = True
