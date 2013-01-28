@@ -11,6 +11,9 @@ from numba.minivect.minitypes import map_dtype, object_
 from numba import numbawrapper
 from numba.typesystem import *
 
+def is_dtype_constructor(value):
+    return isinstance(value, type) and issubclass(value, np.generic)
+
 class NumbaTypeMapper(minitypes.TypeMapper):
     """
     Map types from Python values, handle type promotions, etc
@@ -41,6 +44,10 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return minitypes.ArrayType(dtype, value.ndim,
                                        is_c_contig=value.flags['C_CONTIGUOUS'],
                                        is_f_contig=value.flags['F_CONTIGUOUS'])
+        elif isinstance(value, np.dtype):
+            return NumpyDtypeType(dtype=value)
+        elif is_dtype_constructor(value):
+            return NumpyDtypeType(dtype=np.dtype(value))
         elif isinstance(value, tuple):
             return tuple_
         elif isinstance(value, types.ModuleType):

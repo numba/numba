@@ -250,5 +250,5 @@ class TestTypeInference(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    TestTypeInference('test_dtype_attribute').debug()
+#    TestTypeInference('test_empty').debug()
     unittest.main()
