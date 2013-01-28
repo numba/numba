@@ -508,6 +508,9 @@ class ArrayType(Type):
         self.ndim = ndim
         self.is_c_contig = is_c_contig
         self.is_f_contig = is_f_contig
+        if ndim == 1 and (is_c_contig or is_f_contig):
+            self.is_c_contig = True
+            self.is_f_contig = True
         self.inner_contig = inner_contig or is_c_contig or is_f_contig
         self.broadcasting = broadcasting
 
