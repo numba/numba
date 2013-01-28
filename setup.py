@@ -102,6 +102,11 @@ setup(
             name = "numba.extension_types",
             sources = ["numba/extension_types.pyx", "numba/numbafunction.c"],
             cython_gdb=True),
+        CythonExtension(
+            name = "numba.numbawrapper",
+            sources = ["numba/numbawrapper.pyx"],
+            include_dirs=[numpy.get_include()],
+            cython_gdb=True),
     ],
     version = '0.5.0',
     cmdclass=cmdclasses,
