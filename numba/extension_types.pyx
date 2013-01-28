@@ -5,7 +5,7 @@ See also numba.extension_type_inference
 """
 
 cimport cython
-from cpython cimport PyObject
+from numba._numba cimport *
 
 import sys
 import ctypes
@@ -16,15 +16,7 @@ ctypedef object (*tp_new_func)(PyObject *, PyObject *, PyObject *)
 ctypedef void (*destructor)(PyObject *)
 ctypedef int (*visitproc)(PyObject *, void *)
 
-cdef extern size_t closure_field_offset
-cdef extern int NumbaFunction_init() except -1
-cdef extern object NumbaFunction_NewEx(
-                PyMethodDef *ml, module, code, PyObject *closure,
-                void *native_func, native_signature, keep_alive)
-
 cdef extern from *:
-    ctypedef unsigned long Py_uintptr_t
-
     ctypedef struct PyTypeObject:
         tp_new_func tp_new
         destructor tp_dealloc
@@ -39,9 +31,11 @@ cdef extern from *:
     ctypedef struct PyMethodDef:
         pass
 
-    void Py_XDECREF(PyObject *)
-    void Py_INCREF(PyObject *)
-    void Py_CLEAR(PyObject *)
+cdef extern size_t closure_field_offset
+cdef extern int NumbaFunction_init() except -1
+cdef extern object NumbaFunction_NewEx(
+                PyMethodDef *ml, module, code, PyObject *closure,
+                void *native_func, native_signature, keep_alive)
 
 NumbaFunction_init()
 NumbaFunction_NewEx_pointer = <Py_uintptr_t> &NumbaFunction_NewEx
