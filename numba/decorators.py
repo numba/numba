@@ -6,7 +6,7 @@ import types
 import inspect
 
 from numba import *
-from numba import typesystem
+from numba import typesystem, numbawrapper
 from . import utils, functions, ast_translate as translate, ast_type_inference
 from numba import translate as bytecode_translate
 from numba import error, pipeline, extension_type_inference
@@ -155,56 +155,6 @@ from numpy import vectorize
 
 __tr_map__ = {}
 
-class NumbaFunction(object):
-    """
-    Numba function.
-
-        py_func: original Python function
-        ctypes_func: LLVM function wrapper, callable from Python
-        signature: minitype FunctionType signature
-        lfunc: LLVM function
-        methoddef: PyMethodDef ctypes structure for the wrapper function
-    """
-
-    def __init__(self, py_func, wrapper=None, ctypes_func=None, signature=None,
-                 lfunc=None):
-        self.py_func = py_func
-        self.wrapper = wrapper
-        self.ctypes_func = ctypes_func
-        self.signature = signature
-        self.lfunc = lfunc
-
-        name = py_func.__name__
-        if signature is not None:
-            name = signature.name or name
-        self.func_name = self.__name__ = name
-        self.func_doc = self.__doc__ = py_func.__doc__
-        self.__module__ = py_func.__module__
-
-    def __repr__(self):
-        if self.ctypes_func:
-            compiled = 'compiled numba function (%s)' % self.signature
-        else:
-            compiled = 'specializing numba function'
-
-        return '<%s %s>' % (compiled, self.py_func)
-
-    def __call__(self, *args, **kwargs):
-        if self.ctypes_func:
-            return self.invoke_compiled(self.ctypes_func, *args, **kwargs)
-        else:
-            if kwargs:
-                raise error.NumbaError("Cannot handle keyword arguments yet")
-
-            nargs = self.py_func.func_code.co_argcount
-            if len(args) != nargs:
-                raise error.NumbaError("Expected %d arguments, got %d" % (
-                                                        nargs, len(args)))
-            return self.wrapper(self, *args, **kwargs)
-
-    def invoke_compiled(self, compiled_numba_func, *args, **kwargs):
-        return compiled_numba_func(*args, **kwargs)
-
 def jit_extension_class(py_class, translator_kwargs):
     llvm_module = translator_kwargs.get('llvm_module')
     if llvm_module is None:
@@ -251,20 +201,22 @@ def _autojit2(template_signature, target, nopython, **translator_kwargs):
         types. Uses the AST translator backend. For the bytecode translator,
         use @autojit.
         """
-        @functools.wraps(f)
-        def wrapper(numba_func, *args, **kwargs):
+        def compile_function(args, kwargs):
+            "Compile the function given its positional and keyword arguments"
             signature = resolve_argtypes(numba_func, template_signature,
                                          args, kwargs, translator_kwargs)
             dec = jit2(restype=signature.return_type,
-                        argtypes=signature.args,
-                        target=target, nopython=nopython,
-                        **translator_kwargs)
-            compiled_numba_func = dec(f)
-            return numba_func.invoke_compiled(compiled_numba_func, *args, **kwargs)
+                       argtypes=signature.args,
+                       target=target, nopython=nopython,
+                       **translator_kwargs)
 
-        f.live_objects = []
-        numba_func = numba_function_autojit_targets[target](f, wrapper=wrapper)
+            compiled_function = dec(f)
+            return compiled_function
+
         function_cache.register(f)
+        cache = function_cache.get_autojit_cache(f)
+        numba_func = numbawrapper.NumbaSpecializingWrapper(f, compile_function,
+                                                           cache)
         return numba_func
 
     return _autojit2_decorator
@@ -279,7 +231,7 @@ def _autojit(target, nopython):
         @autojit2
         """
         @functools.wraps(f)
-        def wrapper(numba_func, *args, **kwargs):
+        def wrapper(args, kwargs):
             # Infer argument types
             arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
             types = tuple(context.typemapper.from_python(value)
@@ -296,10 +248,11 @@ def _autojit(target, nopython):
                 compiled_numba_func = decorator(f)
                 _func_cache[types] = compiled_numba_func
 
-            return numba_func.invoke_compiled(compiled_numba_func, *args, **kwargs)
+            return compiled_numba_func
 
-        f.live_objects = []
-        numba_func = numba_function_autojit_targets[target](f, wrapper=wrapper)
+        pyfunc_cache = function_cache.register(f)
+        numba_func = numbawrapper.NumbaSpecializingWrapper(f, wrapper,
+                                                           pyfunc_cache)
         return numba_func
 
     return _autojit_decorator
@@ -335,10 +288,6 @@ def _jit2(restype=None, argtypes=None, nopython=False,
             argtys = []
 
         assert argtys is not None
-
-        if not hasattr(func, 'live_objects'):
-            func.live_objects = []
-
         function_cache.register(func)
 
         assert kwargs.get('llvm_module') is None # TODO link to user module
@@ -349,8 +298,8 @@ def _jit2(restype=None, argtypes=None, nopython=False,
                                                  ctypes=False,
                                                  **kwargs)
         signature, lfunc, wrapper_func = result
-        return NumbaFunction(func, ctypes_func=wrapper_func,
-                             signature=signature, lfunc=lfunc)
+        return numbawrapper.NumbaCompiledWrapper(func, wrapper_func,
+                                                 signature, lfunc)
 
     return _jit2_decorator
 
@@ -395,10 +344,6 @@ def _jit(restype=None, argtypes=None, backend='bytecode', **kws):
 jit_targets = {
     ('cpu', 'bytecode') : _jit,
     ('cpu', 'ast') : _jit2
-}
-
-numba_function_autojit_targets = {
-    'cpu': NumbaFunction,
 }
 
 def _process_sig(sigstr, name=None):
