@@ -171,7 +171,21 @@ class TypeMapper(object):
 
     def promote_numeric(self, type1, type2):
         "Promote two numeric types"
-        return miniutils.max([type1, type2], key=lambda type: type.rank)
+        type = miniutils.max([type1, type2], key=lambda type: type.rank)
+        if type1.kind != type2.kind:
+            def itemsize(type):
+                return type.itemsize // 2 if type.is_complex else type.itemsize
+
+            size = max(itemsize(type1), itemsize(type2))
+            if type.is_complex:
+                type = find_type_of_size(size * 2, complextypes)
+            elif type.is_float:
+                type = find_type_of_size(size, floating)
+            else:
+                assert type.is_int
+                type = find_type_of_size(size, integral)
+
+        return type
 
     def promote_arrays(self, type1, type2):
         "Promote two array types in an expression to a new array type"
@@ -311,6 +325,13 @@ def map_minitype_to_dtype(type):
     dtype = _dtypes[type]
     assert dtype is not None, "dtype not supported in this numpy build"
     return dtype
+
+def find_type_of_size(size, typelist):
+    for type in typelist:
+        if type.itemsize == size:
+            return type
+
+    assert False, "Type of size %d not found: %s" % (size, typelist)
 
 NONE_KIND = 0
 INT_KIND = 1
