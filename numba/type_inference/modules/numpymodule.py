@@ -11,9 +11,17 @@ Infer types for NumPy functionality. This includes:
 
 import numpy as np
 
+from numba import *
 from numba.minivect import minitypes
 from numba import typesystem
 from numba.type_inference.module_type_inference import register, register_inferer
+
+
+#------------------------------------------------------------------------
+# Type Definitions
+#------------------------------------------------------------------------
+
+index_array_t = npy_intp[::1]
 
 #------------------------------------------------------------------------
 # Some utilities
@@ -47,19 +55,41 @@ def promote_to_array(dtype):
         dtype = minitypes.ArrayType(dtype, 0)
     return dtype
 
+def array_from_object(a):
+    """
+    object -> array type:
+
+        array_from_object(ASTNode([[1, 2], [3, 4]])) => int64[:, :]
+    """
+    return array_from_type(a.variable.type)
+
+def array_from_type(type):
+    if type.is_array:
+        return type
+    elif type.is_tuple or type.is_list:
+        dtype = array_from_object(type.dtype)
+        if dtype.is_array:
+            type = dtype.copy()
+            type.ndim += 1
+            return type
+    elif not type.is_object:
+        return minitypes.ArrayType(dtype=type, ndim=0)
+
+    return object_
+
 #------------------------------------------------------------------------
 # Resolution of NumPy calls
 #------------------------------------------------------------------------
 
 @register(np)
-def dtype(context, obj, align):
+def dtype(obj, align):
     "Parse np.dtype(...) calls"
     if obj is None:
         return
 
     return get_dtype(obj)
 
-def empty_like(context, a, dtype, order):
+def empty_like(a, dtype, order):
     "Parse the result type for np.empty_like calls"
     if a is None:
         return
@@ -80,7 +110,7 @@ register_inferer(np, 'empty_like', empty_like)
 register_inferer(np, 'zeros_like', empty_like)
 register_inferer(np, 'ones_like', empty_like)
 
-def empty(context, shape, dtype, order):
+def empty(shape, dtype, order):
     if shape is None:
         return None
 
@@ -101,7 +131,7 @@ register_inferer(np, 'zeros', empty)
 register_inferer(np, 'ones', empty)
 
 @register(np)
-def arange(context, start, stop, step, dtype):
+def arange(start, stop, step, dtype):
     "Resolve a call to np.arange()"
     # NOTE: dtype must be passed as a keyword argument, or as the fourth
     # parameter
@@ -124,3 +154,31 @@ def dot(context, a, b, out):
 
     result_type = minitypes.ArrayType(dtype, dst_ndim, is_c_contig=True)
     return result_type
+
+@register(np)
+def array(object, dtype, order, subok):
+    type = array_from_object(object)
+    if dtype is not None:
+        type = type.copy(dtype=dtype.variable.type)
+
+    return type
+
+@register(np)
+def nonzero(a):
+    return _nonzero(array_from_object(a))
+
+def _nonzero(type):
+    if type.is_array:
+        return typesystem.TupleType(index_array_t, type.ndim)
+    else:
+        return typesystem.TupleType(index_array_t)
+
+@register(np)
+def where(context, condition, x, y):
+    if x is None and y is None:
+        return nonzero(condition)
+
+    xtype = array_from_object(x)
+    ytype = array_from_object(y)
+    type = context.promote_types(xtype, ytype)
+    return type
