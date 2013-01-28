@@ -8,6 +8,7 @@ from numba.minivect.ctypes_conversion import convert_from_ctypes
 import numba.minivect.minitypes
 from numba.minivect.minitypes import map_dtype, object_
 
+from numba import numbawrapper
 from numba.typesystem import *
 
 class NumbaTypeMapper(minitypes.TypeMapper):
@@ -59,12 +60,10 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return getattr(type(value), '__numba_ext_type')
         elif value is numba.NULL:
             return null_type
-        elif isinstance(value, numba.decorators.NumbaFunction):
-            if value.signature is None:
-                # autojit
-                return AutojitType(value)
-            else:
-                return JitType(value)
+        elif isinstance(value, numbawrapper.NumbaCompiledWrapper):
+            return JitType(value)
+        elif isinstance(value, numbawrapper.NumbaSpecializingWrapper):
+            return AutojitType(value)
         elif hasattr(value, 'from_address') and hasattr(value, 'in_dll'):
             # Try to detect ctypes pointers, or default to minivect
             try:
