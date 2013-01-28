@@ -286,7 +286,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         ast.closures = []
 
         self.function_level = kwds.get('function_level', 0)
-        self.register_module_type_inferers()
         self.init_locals()
         ast.have_return = False
 
@@ -374,11 +373,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     if var.type and var.cf_references:
                         assert not var.type.is_unresolved
                         print "Variable after analysis: %s" % var
-
-    def register_module_type_inferers(self):
-        module_type_inference.module_registry.register(self.context)
-        self.member2inferer = \
-            module_type_inference.ModuleTypeInferer.member2inferer
 
     #------------------------------------------------------------------------
     # Utilities
@@ -1481,10 +1475,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         result_type = None
 
         if (func_type.is_module_attribute and
-                func_type.value in self.member2inferer):
+                module_type_inference.is_registered(func_type.value)):
             # Try the module type inferers
-            inferer = self.member2inferer[func_type.value]
-            result_node = inferer.resolve_call(node, new_node, func_type)
+            result_node = module_type_inference.resolve_call(
+                        self.context, node, new_node, func_type)
             if result_node is not None:
                 return result_node
 
