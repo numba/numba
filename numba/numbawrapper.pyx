@@ -130,7 +130,8 @@ cpdef inline getkey(tuple args): # 3.0x
             # k = (type(arg), _id(array.descr), array.ndim)
             setkey(key, i*3, type(arg))
             setkey(key, i*3+1, _id(array.descr))
-            setkey(key, i*3+2, array.ndim)
+            # NumPy maximum ndim is 32 (2 ** 5).
+            setkey(key, i*3+2, array.ndim | (cnp.PyArray_FLAGS(arg) << 5))
         else:
             # k = type(arg)
             setkey(key, i*3, type(arg))
