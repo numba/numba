@@ -663,6 +663,8 @@ class PhiNode(nodes.Node):
         self.variable = variable
         self.type = None
         # self.incoming_blocks = []
+
+        # Set of incoming variables
         self.incoming = set()
         self.phis = set()
 

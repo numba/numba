@@ -21,13 +21,13 @@ def set_metadata(tbaa, instr, type):
         metadata = tbaa.get_metadata(type)
         instr.set_metadata("tbaa", metadata)
 
-def make_property(type=None):
+def make_property(type=None, invariant=True):
     """
     type: The type to be used for TBAA annotation
     """
     def decorator(access_func):
         def load(self):
-            instr = self.builder.load(access_func(self))
+            instr = self.builder.load(access_func(self), invariant=invariant)
             set_metadata(self.tbaa, instr, type)
             return instr
 
