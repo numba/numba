@@ -14,7 +14,7 @@ import llvm.core as lc
 
 import numba.closure
 from numba import error
-from numba import functions, naming, transforms, control_flow
+from numba import functions, naming, transforms, control_flow, optimize
 from numba import ast_constant_folding as constant_folding
 from numba import ast_translate
 from numba import utils
@@ -51,6 +51,7 @@ class Pipeline(object):
         'closure_type_inference',
         'transform_for',
         'specialize',
+        'optimize',
         'late_specializer',
         'fix_ast_locations',
         'cleanup_symtab',
@@ -263,6 +264,9 @@ class Pipeline(object):
 
     def specialize(self, ast):
         return ast
+
+    def optimize(self, ast):
+        return self.make_specializer(optimize.Preloader, ast).visit(ast)
 
     def late_specializer(self, ast):
         specializer = self.make_specializer(transforms.LateSpecializer, ast)
