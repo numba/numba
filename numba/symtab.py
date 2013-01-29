@@ -81,9 +81,9 @@ class Variable(object):
         #   ... versus
         # func()[0]
 
-        self.preloaded_data = False
-        self.preloaded_shape = False    # tuple of size ndim
-        self.preloaded_strides = False  # tuple of size ndim
+        self.preloaded_data = None
+        self.preloaded_shape = None    # tuple of size ndim
+        self.preloaded_strides = None  # tuple of size ndim
 
     @classmethod
     def make_shared_property(cls, name):
