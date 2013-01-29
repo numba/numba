@@ -27,7 +27,7 @@ def make_property(type=None, invariant=True):
     """
     def decorator(access_func):
         def load(self):
-            instr = self.builder.load(access_func(self), invariant=invariant)
+            instr = self.builder.load(access_func(self))
             set_metadata(self.tbaa, instr, type)
             return instr
 
@@ -62,7 +62,7 @@ class PyArrayAccessor(object):
 
     def get_data(self):
         instr = self.builder.load(self._get_element(0))
-        set_metadata(self.tbaa, instr, self.dtype.pointer())
+        set_metadata(self.tbaa, instr, self.dtype.pointer().qualify("const"))
         return instr
 
     def set_data(self, value):
@@ -75,13 +75,13 @@ class PyArrayAccessor(object):
     def ndim(self):
         return self._get_element(1)
 
-    @make_property(typesystem.numpy_shape.pointer())
+    @make_property(typesystem.numpy_shape.pointer().qualify("const"))
     def dimensions(self):
         return self._get_element(2)
 
     shape = dimensions
 
-    @make_property(typesystem.numpy_strides.pointer())
+    @make_property(typesystem.numpy_strides.pointer().qualify("const"))
     def strides(self):
         return self._get_element(3)
 

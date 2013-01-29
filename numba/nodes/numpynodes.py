@@ -68,7 +68,7 @@ class DataPointerNode(ExprNode):
 
         for i, index in zip(range(ndim), indices):
             stride_ptr = builder.gep(strides, [_const_int(i)])
-            stride = builder.load(stride_ptr, invariant=True)
+            stride = builder.load(stride_ptr)
             stride.set_metadata("tbaa", tbaa.get_metadata(typesystem.numpy_strides))
             index = caster.cast(index, stride.type)
             offset = caster.cast(offset, stride.type)
