@@ -41,9 +41,9 @@ class NumbaTypeMapper(minitypes.TypeMapper):
     def from_python(self, value):
         if isinstance(value, np.ndarray):
             dtype = map_dtype(value.dtype)
-            return minitypes.ArrayType(dtype, value.ndim,
-                                       is_c_contig=value.flags['C_CONTIGUOUS'],
-                                       is_f_contig=value.flags['F_CONTIGUOUS'])
+            return minitypes.ArrayType(dtype, value.ndim) #,
+                                       #is_c_contig=value.flags['C_CONTIGUOUS'],
+                                       #is_f_contig=value.flags['F_CONTIGUOUS'])
         elif isinstance(value, np.dtype):
             return NumpyDtypeType(dtype=value)
         elif is_dtype_constructor(value):
