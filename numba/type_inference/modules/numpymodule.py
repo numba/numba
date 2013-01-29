@@ -21,7 +21,7 @@ from numba.type_inference.module_type_inference import register, register_infere
 # Type Definitions
 #------------------------------------------------------------------------
 
-index_array_t = npy_intp[::1]
+index_array_t = npy_intp[:]
 
 #------------------------------------------------------------------------
 # Some utilities

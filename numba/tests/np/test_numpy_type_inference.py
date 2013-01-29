@@ -43,32 +43,32 @@ def equals(a, b):
     assert a == b, (a, b, a.comparison_type_list, b.comparison_type_list)
 
 def test_array():
-    equals(array(np.array([1, 2, 3], dtype=np.double)), float64[::1])
-    equals(array(np.array([[1, 2, 3]], dtype=np.int32)), int32[:, ::1])
+    equals(array(np.array([1, 2, 3], dtype=np.double)), float64[:])
+    equals(array(np.array([[1, 2, 3]], dtype=np.int32)), int32[:, :])
     equals(array(np.array([[1, 2, 3],
-                           [4, 5, 6]], dtype=np.int32).T), int32[::1, :])
+                           [4, 5, 6]], dtype=np.int32).T), int32[:, :])
 
 def test_nonzero():
     equals(nonzero(np.array([1, 2, 3], dtype=np.double)),
-           tup_t(npy_intp[::1], 1))
+           tup_t(npy_intp[:], 1))
     equals(nonzero(np.array([[1, 2, 3]], dtype=np.double)),
-           tup_t(npy_intp[::1], 2))
+           tup_t(npy_intp[:], 2))
     equals(nonzero(np.array((((1, 2, 3),),), dtype=np.double)),
-           tup_t(npy_intp[::1], 3))
+           tup_t(npy_intp[:], 3))
 
 def test_where():
     equals(where(np.array([1, 2, 3], dtype=np.double)),
-           tup_t(npy_intp[::1], 1))
+           tup_t(npy_intp[:], 1))
 
     equals(where3(np.array([True, False, True]),
                   np.array([1, 2, 3], dtype=np.double),
                   np.array([1, 2, 3], dtype=np.complex128)),
-           complex128[::1])
+           complex128[:])
 
     equals(where3(np.array([True, False, True]),
                   np.array([1, 2, 3], dtype=np.float32),
                   np.array([1, 2, 3], dtype=np.int64)),
-           float64[::1])
+           float64[:])
 
 def test_numba_dot():
     A = np.array(1)
