@@ -316,6 +316,18 @@ class SizedPointerType(NumbaType, minitypes.PointerType):
     size = None
     is_sized_pointer = True
 
+    def __repr__(self):
+        return "%r<%s>" % (self.base_type.pointer(), self.size)
+
+    def __eq__(self, other):
+        if other.is_sized_pointer:
+            return (self.base_type == other.base_type and
+                    self.size == other.size)
+        return other.is_pointer and self.base_type == other.base_type
+
+    def __hash__(self):
+        return hash(self.base_type.pointer())
+
 class CastType(NumbaType, minitypes.ObjectType):
     """
     A type instance in user code. e.g. double(value). The Name node will have

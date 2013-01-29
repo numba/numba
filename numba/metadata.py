@@ -55,7 +55,7 @@ class TBAAMetadata(object):
         node = llvm.core.MetaData.get(self.module, operands)
         llvm.core.MetaData.add_named_operand(self.module, "tbaa", node)
 
-        # print "made metadata", node, root
+        # print "made metadata", self.module.id, typename # , node, root
         return node
 
     def make_unique_metadata(self, root, is_constant=False):
