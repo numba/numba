@@ -59,7 +59,31 @@ class Variable(object):
         self.lineno = -1
         self.col_offset = -1
 
+        # Cached value for the deferred_type attribute
         self._deferred_type = None
+
+        self.init_array_flags()
+
+    def init_array_flags(self):
+        # For arrays. These variables indicate whether to preload data, shape
+        # and strides. These are set during late specialization in
+        # visit_Subscript.
+        self.preload_data = False
+        self.preload_shape = False
+        self.preload_strides = False
+
+        # These are the preloaded llvm values set during code generation time.
+        # These are set iff the respective flags above are true, *and* the
+        # Variable definition belongs to an Assignment or Phi definition
+        # (as opposed to e.g. a function call):
+
+        # A = np.array(...); A[0]
+        #   ... versus
+        # func()[0]
+
+        self.preloaded_data = False
+        self.preloaded_shape = False    # tuple of size ndim
+        self.preloaded_strides = False  # tuple of size ndim
 
     @classmethod
     def make_shared_property(cls, name):
