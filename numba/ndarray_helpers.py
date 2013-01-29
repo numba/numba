@@ -62,7 +62,7 @@ class PyArrayAccessor(object):
 
     def get_data(self):
         instr = self.builder.load(self._get_element(0))
-        set_metadata(self.tbaa, instr, self.dtype.pointer().qualify("const"))
+        set_metadata(self.tbaa, instr, self.dtype.pointer())
         return instr
 
     def set_data(self, value):
@@ -70,6 +70,11 @@ class PyArrayAccessor(object):
         set_metadata(self.tbaa, instr, self.dtype.pointer())
 
     data = property(get_data, set_data, "The array.data attribute")
+
+    def typed_data(self, context):
+        data = self.data
+        ltype = self.dtype.pointer().to_llvm(context)
+        return self.builder.bitcast(data, ltype)
 
     @make_property(typesystem.numpy_ndim)
     def ndim(self):
