@@ -15,10 +15,13 @@ def bubblesort(X, doprint):
 #            print "Iteration:", X
 
 bubblesort_fast = autojit(bubblesort)
+#bubblesort_fast = jit(void(int64[::1], bool_))(bubblesort)
+
+dtype = np.int64
 
 def main():
 
-    Xtest = np.array(list(reversed(range(8))))
+    Xtest = np.array(list(reversed(range(8))), dtype=dtype)
 
     print '== Test Pure-Python =='
     X0 = Xtest.copy()
@@ -36,7 +39,7 @@ def main():
     REP = 10
     N = 1000
 
-    Xorig = np.array(list(reversed(range(N))))
+    Xorig = np.array(list(reversed(range(N))), dtype=dtype)
 
     t0 = timer()
     for t in range(REP):
