@@ -151,7 +151,7 @@ class TestCFG(unittest.TestCase):
                                 3 : set((0,3))})
         idoms = tuple(test_cfg.idom(block) for block in xrange(4))
         self.assertEqual(idoms[:-1], (None, 0, 0))
-        self.assertIn(idoms[-1], (1, 2))
+        self.assertEqual(idoms[-1] in (1, 2), True, idoms[-1])
         self.assertEqual(test_cfg.nreaches(3), {0 : 1, 1 : 2})
         self.assertEqual(test_cfg.phi_needed(3), set((1,)))
         self.assertEqual(test_cfg.get_reaching_definitions(3),
