@@ -521,10 +521,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 variable = self.symtab[argname]
                 variable.lvalue = self._allocate_arg_local(argname, argtype,
                                                            larg)
+
             #else:
             #    raise error.InternalError(argname, argtype)
 
             self.incref_arg(argname, argtype, larg, variable)
+
+            if variable.type.is_array:
+                self.preload_attributes(variable, variable.lvalue)
 
     def c_array_to_pointer(self, name, stackspace, var):
         "Decay a C array to a pointer to allow pointer access"
@@ -709,6 +713,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                     # assert incoming_var.type == phi_node.type, msg
                     phi.add_incoming(incoming_var.lvalue,
                                      parent_block.exit_block)
+
+                    if phi_node.type.is_array:
+                        nodes.update_preloaded_phi(phi_node.variable,
+                                                   incoming_var,
+                                                   parent_block.exit_block)
 
 
     def get_ctypes_func(self, llvm=True):
@@ -1104,6 +1113,34 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         self.generate_assign_stack(value, target, tbaa_node,
                                    decref=decref, incref=incref)
 
+        self.preload_attributes(target_node.variable, value)
+
+    def preload_attributes(self, var, value):
+        """
+        Pre-load ndarray attributes data/shape/strides.
+        """
+        if not (var.preload_data or var.preload_shape or var.preload_strides):
+            return
+
+        if not var.renameable:
+            # Stack allocated variable
+            var = self.builder.load(value)
+
+        acc = self.pyarray_accessor(value, var.type.dtype)
+
+        if var.preload_data:
+            var.preloaded_data = acc.data
+
+        if var.preload_shape:
+            shape = nodes.get_strides(self.builder, self.tbaa,
+                                      acc.shape, var.type.ndim)
+            var.preloaded_shape = tuple(shape)
+
+        if var.preload_strides:
+            strides = nodes.get_strides(self.builder, self.tbaa,
+                                        acc.strides, var.type.ndim)
+            var.preloaded_strides = tuple(strides)
+
     def visit_Num(self, node):
         if node.type.is_int:
             return self.generate_constant_int(node.n)
@@ -1312,6 +1349,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             ltype = phi_node.variable.type.to_llvm(self.context)
             phi = self.builder.phi(ltype, phi_node.variable.unmangled_name)
             phi_node.variable.lvalue = phi
+
+            if phi_node.variable.type.is_array:
+                nodes.make_preload_phi(self.context, self.builder, phi_node)
 
     def setblock(self, cfg_basic_block):
         if cfg_basic_block.is_fabricated:
@@ -1964,10 +2004,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         return llvm_value
 
+    def pyarray_accessor(self, llvm_array_ptr, dtype):
+        acc = ndarray_helpers.PyArrayAccessor(self.builder, llvm_array_ptr,
+                                              self.tbaa, dtype)
+        return acc
+
     def visit_ArrayAttributeNode(self, node):
         array = self.visit(node.array)
-        acc = ndarray_helpers.PyArrayAccessor(self.builder, array,
-                                              self.tbaa, node.array_type.dtype)
+        acc = self.pyarray_accessor(array, node.array_type.dtype)
 
         attr_name = node.attr_name
         if attr_name == 'shape':

@@ -55,6 +55,7 @@ class Pipeline(object):
         'late_specializer',
         'fix_ast_locations',
         'cleanup_symtab',
+        'preloader',
         'codegen',
     ]
 
@@ -266,6 +267,9 @@ class Pipeline(object):
         return ast
 
     def optimize(self, ast):
+        return ast
+
+    def preloader(self, ast):
         return self.make_specializer(optimize.Preloader, ast).visit(ast)
 
     def late_specializer(self, ast):

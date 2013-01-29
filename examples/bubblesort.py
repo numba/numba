@@ -37,7 +37,7 @@ def main():
     assert all(X0 == X1)
 
     REP = 10
-    N = 1000
+    N = 1400
 
     Xorig = np.array(list(reversed(range(N))), dtype=dtype)
 

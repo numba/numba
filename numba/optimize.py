@@ -12,7 +12,7 @@ def update(phi_var):
 
     # Get incoming variables
     phi_node = phi_var.name_assignment
-    incoming = phi_node.incoming
+    incoming = [var for block, var in phi_node.find_incoming()]
 
     # Update incoming variables
     for property in properties:
@@ -66,6 +66,17 @@ class Preloader(visitors.NumbaTransformer):
             # Set the preload conditions
             array_variable.preload_data = True
             array_variable.preload_strides = True
+
+        self.visitchildren(node)
+        return node
+
+    def visit_DataPointerNode(self, node):
+        "This never runs, since we run before late specialization!"
+        array_variable = node.node.variable
+
+        # Set the preload conditions
+        array_variable.preload_data = True
+        array_variable.preload_strides = True
 
         self.visitchildren(node)
         return node

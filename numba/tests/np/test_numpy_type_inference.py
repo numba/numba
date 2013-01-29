@@ -31,6 +31,9 @@ def numba_dot(A, B):
     result = np.dot(A, B)
     return numba.typeof(result), result
 
+@autojit
+def sum(a):
+    return numba.typeof(np.sum(a))
 
 #------------------------------------------------------------------------
 # Tests
@@ -66,7 +69,6 @@ def test_where():
                   np.array([1, 2, 3], dtype=np.float32),
                   np.array([1, 2, 3], dtype=np.int64)),
            float64[::1])
-
 
 def test_numba_dot():
     A = np.array(1)
