@@ -171,8 +171,8 @@ class TBAAType(NumbaType):
 
     is_tbaa = True
 
-    def __init__(self, name, root):
-        super(TBAAType, self).__init__()
+    def __init__(self, name, root, **kwds):
+        super(TBAAType, self).__init__(**kwds)
         self.name = name
         self.root = root
 
@@ -395,9 +395,13 @@ none = NoneType()
 null_type = NULLType()
 intp = minitypes.npy_intp
 
+const_qualifiers = frozenset(["const"])
+
 numpy_array = TBAAType("numpy array", root=object_)
-numpy_shape = TBAAType("numpy shape", root=intp.pointer())
-numpy_strides = TBAAType("numpy strides", root=intp.pointer())
+numpy_shape = TBAAType("numpy shape", root=intp.pointer(),
+                       qualifiers=const_qualifiers)
+numpy_strides = TBAAType("numpy strides", root=intp.pointer(),
+                         qualifiers=const_qualifiers)
 numpy_ndim = TBAAType("numpy flags", root=int_.pointer())
 numpy_dtype = TBAAType("numpy dtype", root=object_)
 numpy_base = TBAAType("numpy base", root=object_)
