@@ -31,16 +31,32 @@ def numba_dot(A, B):
     result = np.dot(A, B)
     return numba.typeof(result), result
 
+# ------------- Test sum ------------
+
 @autojit
-def sum(a):
+def sum_(a):
     return numba.typeof(np.sum(a))
+
+@autojit
+def sum_axis(a, axis):
+    return numba.typeof(np.sum(a, axis=axis))
+
+@autojit
+def sum_dtype(a, dtype):
+    return numba.typeof(np.sum(a, dtype=dtype))
+
+@autojit
+def sum_out(a, out):
+    return numba.typeof(np.sum(a, out=out))
+
 
 #------------------------------------------------------------------------
 # Tests
 #------------------------------------------------------------------------
 
 def equals(a, b):
-    assert a == b, (a, b, a.comparison_type_list, b.comparison_type_list)
+    assert a == b, (a, b, type(a), type(b),
+                    a.comparison_type_list, b.comparison_type_list)
 
 def test_array():
     equals(array(np.array([1, 2, 3], dtype=np.double)), float64[:])
@@ -74,8 +90,12 @@ def test_numba_dot():
     A = np.array(1)
     B = np.array(2)
 
+    dtype = typesystem.from_numpy_dtype(A.dtype).dtype
+
     for i in range(1, 10):
         for j in range(1, 10):
+            # print i, j
+
             shape_A = (1,) * i
             shape_B = (1,) * j
 
@@ -85,11 +105,23 @@ def test_numba_dot():
             result_type, result = numba_dot(x, y)
 
             assert result == np.dot(x, y)
-            assert result.ndim == result_type.ndim
-            # assert result.dtype == result_type.get_dtype()
+            if i + j - 2 > 0:
+                assert result.ndim == result_type.ndim
+            else:
+                assert result_type == dtype
+
+def test_sum():
+    a = np.array([1, 2, 3], dtype=np.int32)
+    b = np.array([[1, 2], [3, 4]], dtype=np.int64)
+
+    equals(sum_(a), int32)
+    equals(sum_axis(a, 0), int32)
+    equals(sum_dtype(a, np.double), double)
+    equals(sum_out(b, a), int32[:]) # Not a valid call to sum :)
 
 if __name__ == "__main__":
     test_array()
     test_nonzero()
     test_where()
     test_numba_dot()
+    test_sum()

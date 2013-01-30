@@ -1688,8 +1688,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             return nodes.ArrayAttributeNode(node.attr, node.value)
         elif type.is_array and node.attr == "dtype":
             # TODO: resolve as constant at compile time?
-            result_type = typesystem.ResolvedNumpyDtypeType(
-                                        dtype_type=type.dtype)
+            result_type = typesystem.dtype(type.dtype)
         elif type.is_extension:
             return self._resolve_extension_attribute(node, type)
         else:
