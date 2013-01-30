@@ -7,7 +7,8 @@ from numba.typesystem import *
 # type_attribute => [type_assertions]
 VALID_TYPE_ATTRIBUTES = {
     "dtype": ["is_array"],
-    "base_type": ["is_pointer", "is_carray", "is_complex"],
+    "base_type": ["is_pointer", "is_carray", "is_complex",
+                  "is_list", "is_tuple"],
     "args": ["is_function"],
     "return_type": ["is_function"],
     # "fields": ["is_struct"],
