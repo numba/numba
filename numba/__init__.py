@@ -7,6 +7,11 @@ import sys
 import logging
 from numba import typesystem
 
+from numba.type_inference.module_type_inference import (is_registered,
+                                                        register,
+                                                        register_inferer,
+                                                        get_inferer)
+
 __version__ = '0.5.0'
 
 def get_include():
