@@ -22,6 +22,7 @@ Contents:
    doc/extension_types.rst
    doc/closures.rst
    doc/pycc.rst
+   doc/type_inference.rst
 
    doc/doctest.rst
    doc/examples.rst

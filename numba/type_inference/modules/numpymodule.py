@@ -41,7 +41,10 @@ def resolve_attribute_dtype(dtype, default=None):
             return typesystem.from_numpy_dtype(np.dtype(numpy_attr))
 
 def get_dtype(dtype_arg, default_dtype=None):
-    "Get the dtype keyword argument from a call to a numpy attribute."
+    """
+    Simple helper function to map an AST node dtype keyword
+    argument => NumPy dtype.
+    '"""
     if dtype_arg is None:
         if default_dtype is None:
             return None
