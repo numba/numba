@@ -15,6 +15,7 @@ from numba import *
 from numba.minivect import minitypes
 from numba import typesystem
 from numba.type_inference.module_type_inference import register, register_inferer
+from numba.typesystem import get_type
 
 
 #------------------------------------------------------------------------
@@ -35,19 +36,19 @@ def resolve_attribute_dtype(dtype, default=None):
     if dtype.is_numpy_attribute:
         numpy_attr = getattr(dtype.module, dtype.attr, None)
         if isinstance(numpy_attr, np.dtype):
-            return typesystem.NumpyDtypeType(dtype=numpy_attr)
+            return typesystem.from_numpy_dtype(numpy_attr)
         elif issubclass(numpy_attr, np.generic):
-            return typesystem.NumpyDtypeType(dtype=np.dtype(numpy_attr))
+            return typesystem.from_numpy_dtype(np.dtype(numpy_attr))
 
 def get_dtype(dtype_arg, default_dtype=None):
     "Get the dtype keyword argument from a call to a numpy attribute."
     if dtype_arg is None:
         if default_dtype is None:
             return None
-        dtype = typesystem.NumpyDtypeType(dtype=np.dtype(default_dtype))
-        return dtype
+
+        return typesystem.dtype(default_dtype)
     else:
-        return resolve_attribute_dtype(dtype_arg.variable.type)
+        return resolve_attribute_dtype(get_type(dtype_arg))
 
 def promote_to_array(dtype):
     "Promote scalar to 0d array type"
@@ -61,7 +62,7 @@ def array_from_object(a):
 
         array_from_object(ASTNode([[1, 2], [3, 4]])) => int64[:, :]
     """
-    return array_from_type(a.variable.type)
+    return array_from_type(get_type(a))
 
 def array_from_type(type):
     if type.is_array:
