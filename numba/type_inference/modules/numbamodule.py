@@ -7,9 +7,8 @@ from numba.type_inference.module_type_inference import register, register_infere
 
 
 @register(numba)
-def typeof(context, expr):
+def typeof(expr_type):
     from numba import nodes
 
-    obj = expr.variable.type
-    type = typesystem.CastType(obj)
-    return nodes.const(obj, type)
+    type = typesystem.CastType(expr_type)
+    return nodes.const(expr_type, type)

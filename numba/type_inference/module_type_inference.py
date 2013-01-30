@@ -6,6 +6,7 @@ import numba
 from numba import *
 from numba.minivect import minitypes
 from numba import typesystem, symtab, error, nodes
+from numba.typesystem import get_type
 
 import numpy.random
 import numpy as np
@@ -55,7 +56,7 @@ class ModuleTypeInfererRegistry(object):
         if self.is_registered(value):
             raise ValueAlreadyRegistered((value, module, inferer))
 
-        self.value_to_inferer[value] = (module, attr, inferer)
+        self.value_to_inferer[value] = (module, attr, inferer, True)
 
     def register_unbound_method(self, value, method_name, inferer):
         self.register_unbound_dotted(value, method_name, inferer)
@@ -95,7 +96,7 @@ def module_attribute_type(obj):
     type inference on the object.
     """
     if is_registered(obj):
-        module, attr, inferer = get_inferer(obj)
+        module, attr, inferer, pass_in_types = get_inferer(obj)
         return typesystem.ModuleAttributeType(module=module, attr=attr)
 
     return None
@@ -132,7 +133,7 @@ def dispatch_on_value(context, call_node, func_type):
 
     Returns the result type, or None
     """
-    module, attr, inferer = get_inferer(func_type.value)
+    module, attr, inferer, pass_in_types = get_inferer(func_type.value)
 
     argnames = inspect.getargspec(inferer).args
     if argnames[0] == "context":
@@ -142,6 +143,12 @@ def dispatch_on_value(context, call_node, func_type):
         args = ()
 
     method_kwargs = parse_args(call_node, argnames)
+
+    if pass_in_types:
+        for argname, node in method_kwargs.iteritems():
+            if node is not None:
+                method_kwargs[argname] = get_type(node)
+
     return inferer(*args, **method_kwargs)
 
 def resolve_call(context, call_node, obj_call_node, func_type):

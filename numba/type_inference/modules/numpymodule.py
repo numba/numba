@@ -51,7 +51,7 @@ def get_dtype(dtype_arg, default_dtype=None):
 
         return typesystem.dtype(default_dtype)
     else:
-        return resolve_attribute_dtype(get_type(dtype_arg))
+        return resolve_attribute_dtype(dtype_arg)
 
 def promote_to_array(dtype):
     "Promote scalar to 0d array type"
@@ -65,7 +65,7 @@ def array_from_object(a):
 
         array_from_object(ASTNode([[1, 2], [3, 4]])) => int64[:, :]
     """
-    return array_from_type(get_type(a))
+    return array_from_type(a)
 
 def array_from_type(type):
     if type.is_array:
@@ -98,17 +98,16 @@ def empty_like(a, dtype, order):
     if a is None:
         return None
 
-    type = get_type(a)
-    if type.is_array:
+    if a.is_array:
         if dtype:
             dtype_type = get_dtype(dtype)
             if dtype_type is None:
-                return type
+                return a
             dtype = dtype_type.dtype
         else:
-            dtype = type.dtype
+            dtype = a.dtype
 
-        return typesystem.array(dtype, type.ndim)
+        return typesystem.array(dtype, a.ndim)
 
 register_inferer(np, 'empty_like', empty_like)
 register_inferer(np, 'zeros_like', empty_like)
@@ -119,12 +118,11 @@ def empty(shape, dtype, order):
         return None
 
     dtype = get_dtype(dtype, float64)
-    shape_type = get_type(shape)
 
-    if shape_type.is_int:
+    if shape.is_int:
         ndim = 1
-    elif shape_type.is_tuple or shape_type.is_list:
-        ndim = shape_type.size
+    elif shape.is_tuple or shape.is_list:
+        ndim = shape.size
     else:
         return None
 
@@ -148,10 +146,10 @@ def arange(start, stop, step, dtype):
 def dot(context, a, b, out):
     "Resolve a call to np.dot()"
     if out is not None:
-        return get_type(out)
+        return out
 
-    lhs_type = promote_to_array(get_type(a))
-    rhs_type = promote_to_array(get_type(b))
+    lhs_type = promote_to_array(a)
+    rhs_type = promote_to_array(b)
 
     dtype = context.promote_types(lhs_type.dtype, rhs_type.dtype)
     dst_ndim = lhs_type.ndim + rhs_type.ndim - 2
@@ -163,7 +161,7 @@ def dot(context, a, b, out):
 def array(object, dtype, order, subok):
     type = array_from_object(object)
     if dtype is not None:
-        type = type.copy(dtype=get_type(dtype))
+        type = type.copy(dtype=dtype)
 
     return type
 
@@ -189,23 +187,21 @@ def where(context, condition, x, y):
 
 def reduce_(a, axis, dtype, out):
     if out is not None:
-        return get_type(out)
+        return out
 
-    array_type = get_type(a)
-    dtype_type = get_dtype(dtype, default_dtype=array_type.dtype).dtype
+    dtype_type = get_dtype(dtype, default_dtype=a.dtype).dtype
 
     if axis is None:
         # Return the scalar type
         return dtype_type
 
     # Handle the axis parameter
-    axis_type = get_type(axis)
-    if axis_type.is_tuple and axis_type.is_sized:
+    if axis.is_tuple and axis.is_sized:
         # axis=(tuple with a constant size)
-        return typesystem.array(dtype_type, array_type.ndim - axis_type.size)
-    elif axis_type.is_int:
+        return typesystem.array(dtype_type, a.ndim - axis.size)
+    elif axis.is_int:
         # axis=1
-        return typesystem.array(dtype_type, array_type.ndim - 1)
+        return typesystem.array(dtype_type, a.ndim - 1)
     else:
         # axis=(something unknown)
         return object_
