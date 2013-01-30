@@ -29,17 +29,22 @@ class NumbaKeyHashingType(minitypes.KeyHashingType):
 
 class ContainerListType(NumbaKeyHashingType, minitypes.ObjectType):
 
-    def __init__(self, dtype, size=-1):
+    subtypes = ['base_type']
+
+    def __init__(self, base_type, size=-1):
         super(ContainerListType, self).__init__()
-        self.dtype = dtype
+        self.base_type = base_type
         self.size = size
 
     @property
     def key(self):
-        return self.dtype, self.size
+        return self.base_type, self.size
+
+    def is_sized(self):
+        return self.size >= 0
 
     def __repr__(self):
-        return "%s(%s, %s)" % (self.name, self.dtype, self.size)
+        return "%s(%s, %s)" % (self.name, self.base_type, self.size)
 
 class TupleType(ContainerListType):
 
