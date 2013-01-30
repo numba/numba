@@ -85,26 +85,26 @@ def array_from_type(type):
 def dtype(obj, align):
     "Parse np.dtype(...) calls"
     if obj is None:
-        return
+        return None
 
     return get_dtype(obj)
 
 def empty_like(a, dtype, order):
     "Parse the result type for np.empty_like calls"
     if a is None:
-        return
+        return None
 
-    type = a.variable.type
+    type = get_type(a)
     if type.is_array:
         if dtype:
-            dtype = get_dtype(dtype)
-            if dtype is None:
+            dtype_type = get_dtype(dtype)
+            if dtype_type is None:
                 return type
-            dtype = dtype.resolve()
+            dtype = dtype_type.dtype
         else:
             dtype = type.dtype
 
-        return minitypes.ArrayType(dtype, type.ndim)
+        return typesystem.array(dtype, type.ndim)
 
 register_inferer(np, 'empty_like', empty_like)
 register_inferer(np, 'zeros_like', empty_like)
@@ -114,8 +114,8 @@ def empty(shape, dtype, order):
     if shape is None:
         return None
 
-    dtype = get_dtype(dtype, np.float64)
-    shape_type = shape.variable.type
+    dtype = get_dtype(dtype, float64)
+    shape_type = get_type(shape)
 
     if shape_type.is_int:
         ndim = 1
@@ -124,7 +124,7 @@ def empty(shape, dtype, order):
     else:
         return None
 
-    return minitypes.ArrayType(dtype.resolve(), ndim)
+    return typesystem.array(dtype.dtype, ndim)
 
 register_inferer(np, 'empty', empty)
 register_inferer(np, 'zeros', empty)
@@ -135,31 +135,31 @@ def arange(start, stop, step, dtype):
     "Resolve a call to np.arange()"
     # NOTE: dtype must be passed as a keyword argument, or as the fourth
     # parameter
-    dtype = get_dtype(dtype, np.int64)
-    if dtype is not None:
+    dtype_type = get_dtype(dtype, int64)
+    if dtype_type is not None:
         # return a 1D array type of the given dtype
-        return dtype.resolve()[:]
+        return dtype_type.dtype[:]
 
 @register(np)
 def dot(context, a, b, out):
     "Resolve a call to np.dot()"
     if out is not None:
-        return out.variable.type
+        return get_type(out)
 
-    lhs_type = promote_to_array(a.variable.type)
-    rhs_type = promote_to_array(b.variable.type)
+    lhs_type = promote_to_array(get_type(a))
+    rhs_type = promote_to_array(get_type(b))
 
     dtype = context.promote_types(lhs_type.dtype, rhs_type.dtype)
     dst_ndim = lhs_type.ndim + rhs_type.ndim - 2
 
-    result_type = minitypes.ArrayType(dtype, dst_ndim, is_c_contig=True)
+    result_type = typesystem.array(dtype, dst_ndim)
     return result_type
 
 @register(np)
 def array(object, dtype, order, subok):
     type = array_from_object(object)
     if dtype is not None:
-        type = type.copy(dtype=dtype.variable.type)
+        type = type.copy(dtype=get_type(dtype))
 
     return type
 
@@ -169,9 +169,9 @@ def nonzero(a):
 
 def _nonzero(type):
     if type.is_array:
-        return typesystem.TupleType(index_array_t, type.ndim)
+        return typesystem.tuple_(index_array_t, type.ndim)
     else:
-        return typesystem.TupleType(index_array_t)
+        return typesystem.tuple_(index_array_t)
 
 @register(np)
 def where(context, condition, x, y):
@@ -182,3 +182,29 @@ def where(context, condition, x, y):
     ytype = array_from_object(y)
     type = context.promote_types(xtype, ytype)
     return type
+
+def reduce_(a, axis, dtype, out):
+    if out is not None:
+        return get_type(out)
+
+    array_type = get_type(a)
+    dtype_type = get_dtype(dtype, default_dtype=array_type.dtype).dtype
+
+    if axis is None:
+        # Return the scalar type
+        return dtype_type
+
+    # Handle the axis parameter
+    axis_type = get_type(axis)
+    if axis_type.is_tuple and axis_type.is_sized:
+        # axis=(tuple with a constant size)
+        return typesystem.array(dtype_type, array_type.ndim - axis_type.size)
+    elif axis_type.is_int:
+        # axis=1
+        return typesystem.array(dtype_type, array_type.ndim - 1)
+    else:
+        # axis=(something unknown)
+        return object_
+
+register_inferer(np, 'sum', reduce_)
+register_inferer(np, 'prod', reduce_)
