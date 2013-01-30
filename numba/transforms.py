@@ -1153,7 +1153,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         elif node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif node.type.is_numpy_dtype:
-            dtype_type = node.type.resolve()
+            dtype_type = node.type.dtype
             return nodes.ObjectInjectNode(dtype_type.get_dtype())
         elif is_obj(node.value.type):
             if node.value.type.is_module:
