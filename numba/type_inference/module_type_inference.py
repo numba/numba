@@ -5,7 +5,7 @@ import types
 import numba
 from numba import *
 from numba.minivect import minitypes
-from numba import typesystem, symtab, error
+from numba import typesystem, symtab, error, nodes
 
 import numpy.random
 import numpy as np
@@ -154,7 +154,8 @@ def resolve_call(context, call_node, obj_call_node, func_type):
         assert isinstance(result, minitypes.Type)
         type = result
         result = obj_call_node
-        result.variable = symtab.Variable(type)
+        # result.variable = symtab.Variable(type)
+        result = nodes.CoercionNode(result, type)
 
     return result
 
