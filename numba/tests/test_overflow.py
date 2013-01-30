@@ -18,13 +18,13 @@ TODO::::::::::
 >>> object_convert(char, 128)
 Traceback (most recent call last):
     ...
-OverflowError: value too large to convert to char
+OverflowError: value too large to convert to signed char
 >>> object_convert(char, -128)
 -128L
 >>> object_convert(char, -129)
 Traceback (most recent call last):
     ...
-OverflowError: value too large to convert to char
+OverflowError: value too large to convert to signed char
 >>> object_convert(char, 2.9)
 2L
 

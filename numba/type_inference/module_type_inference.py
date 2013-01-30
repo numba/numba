@@ -32,7 +32,7 @@ class ModuleTypeInfererRegistry(object):
     def __init__(self):
         super(ModuleTypeInfererRegistry, self).__init__()
 
-        # { value : (module, attr, inferer }
+        # { value : (module, attr, inferer, pass_in_types_instead_of_nodes }
         self.value_to_inferer = {}
 
         # { (value, unbound_dotted_path) : inferer }
@@ -55,7 +55,7 @@ class ModuleTypeInfererRegistry(object):
         if self.is_registered(value):
             raise ValueAlreadyRegistered((value, module, inferer))
 
-        self.value_to_inferer[value] = (module, attr, inferer)
+        self.value_to_inferer[value] = (module, attr, inferer, True)
 
     def register_unbound_method(self, value, method_name, inferer):
         self.register_unbound_dotted(value, method_name, inferer)
