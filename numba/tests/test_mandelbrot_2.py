@@ -56,7 +56,7 @@ def mandel_driver_1(min_x, max_x, min_y, nb_iterations, colors, image):
             image[x, y, 1] = colors[col_index, 1]
             image[x, y, 2] = colors[col_index, 2]
 
-mandel_driver_1c = jit('void(f8,f8,f8,i4,i1[:,:],i1[:,:,:])')(
+mandel_driver_1c = jit('void(f8,f8,f8,i4,u1[:,:],u1[:,:,:])')(
     mandel_driver_1)
 
 
