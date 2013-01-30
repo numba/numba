@@ -151,23 +151,16 @@ class MethodType(NumbaType, minitypes.ObjectType):
 
 class NumpyDtypeType(NumbaType, minitypes.ObjectType):
     is_numpy_dtype = True
-    dtype = None # NumPy dtype type
+    dtype = None # Numby dtype type
 
-    def resolve(self):
-        return map_dtype(self.dtype)
+    subtypes = ["dtype"]
 
-    def __repr__(self):
-        return "NumpyDtype(%s)" % self.resolve()
-
-class ResolvedNumpyDtypeType(NumbaType, minitypes.ObjectType):
-    is_numpy_dtype = True
-    dtype_type = None # numba dtype type
-
-    def resolve(self):
-        return self.dtype_type
+    def __init__(self, dtype, **kwds):
+        super(NumpyDtypeType, self).__init__(**kwds)
+        self.dtype = dtype
 
     def __repr__(self):
-        return "NumpyDtype(%s)" % self.resolve()
+        return "NumpyDtype(%s)" % self.dtype
 
 class TBAAType(NumbaType):
     """
