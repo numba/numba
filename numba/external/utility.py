@@ -39,7 +39,7 @@ load = UtilityFunction.load
 load2 = lambda name, sig: load(name, sig, check_pyerr_occurred=True)
 
 object_to_numeric = {
-    char       : load2("__Numba_PyInt_AsChar", char(object_)),
+    char       : load2("__Numba_PyInt_AsSignedChar", char(object_)),
     uchar      : load2("__Numba_PyInt_AsUnsignedChar", uchar(object_)),
     short      : load2("__Numba_PyInt_AsShort", short(object_)),
     ushort     : load2("__Numba_PyInt_AsUnsignedShort", ushort(object_)),

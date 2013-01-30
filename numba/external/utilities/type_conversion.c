@@ -234,6 +234,7 @@ static int
 export_type_conversion(PyObject *module)
 {
     EXPORT_FUNCTION(__Numba_PyInt_AsChar, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsSignedChar, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedChar, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsShort, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedShort, module, error)

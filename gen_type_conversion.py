@@ -126,6 +126,10 @@ def generate_conversions(out_c, out_h):
         for signedness in signednesses:
             write_utility(exact_type, exact_type_name, out_c, out_h, signedness)
 
+    write_utility("char", "Char", out_c, out_h, "signed")
+
+    print "Wrote %s and %s" % (out_c.name, out_h.name)
+
 
 def print_export(fmtargs):
     "Code to put in type_conversion.c"

@@ -98,7 +98,10 @@ setup(
         Extension(
             name = "numba.external.utilities.utilities",
             sources = ["numba/external/utilities/utilities.c"],
-            include_dirs=[numba_include_dir]),
+            include_dirs=[numba_include_dir],
+            depends=["numba/external/utilities/type_conversion.c",
+                     "numba/external/utilities/generated_conversions.c",
+                     "numba/external/utilities/generated_conversions.h"]),
         CythonExtension(
             name = "numba.extension_types",
             sources = ["numba/extension_types.pyx", "numba/numbafunction.c"],
