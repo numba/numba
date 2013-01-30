@@ -24,7 +24,7 @@ class MyExtension(object):
     >>> obj.getvalue.__doc__
     'Return value'
     >>> type(obj.getvalue.im_func)
-    <type 'cython_function_or_method'>
+    <type 'numba_function_or_method'>
     >>> obj._numba_attrs._fields_
     [('value', <class 'ctypes.c_double'>)]
     """
