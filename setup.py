@@ -95,12 +95,14 @@ setup(
         'numba.asdl.py2_7': ['*.asdl'],
     },
     ext_modules = [
-        Extension(name = "numba.external.utilities.utilities",
-                  sources = ["numba/external/utilities/utilities.c"],
-                  include_dirs=[numba_include_dir]),
+        Extension(
+            name = "numba.external.utilities.utilities",
+            sources = ["numba/external/utilities/utilities.c"],
+            include_dirs=[numba_include_dir]),
         CythonExtension(
             name = "numba.extension_types",
             sources = ["numba/extension_types.pyx", "numba/numbafunction.c"],
+            include_dirs=[numba_include_dir],
             cython_gdb=True),
         CythonExtension(
             name = "numba.numbawrapper",
