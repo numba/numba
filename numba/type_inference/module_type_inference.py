@@ -55,7 +55,7 @@ class ModuleTypeInfererRegistry(object):
         if self.is_registered(value):
             raise ValueAlreadyRegistered((value, module, inferer))
 
-        self.value_to_inferer[value] = (module, attr, inferer, True)
+        self.value_to_inferer[value] = (module, attr, inferer)
 
     def register_unbound_method(self, value, method_name, inferer):
         self.register_unbound_dotted(value, method_name, inferer)
