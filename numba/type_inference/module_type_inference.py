@@ -35,6 +35,13 @@ class ModuleTypeInfererRegistry(object):
         # { value : (module, attr, inferer }
         self.value_to_inferer = {}
 
+        # { (value, unbound_dotted_path) : inferer }
+        self.unbound_dotted = {}
+
+        # { (type, bound_dotted_path) : inferer }
+        self.bound_dotted = {}
+
+
     def is_registered(self, value):
         try:
             hash(value)
@@ -49,6 +56,15 @@ class ModuleTypeInfererRegistry(object):
             raise ValueAlreadyRegistered((value, module, inferer))
 
         self.value_to_inferer[value] = (module, attr, inferer)
+
+    def register_unbound_method(self, value, method_name, inferer):
+        self.register_unbound_dotted(value, method_name, inferer)
+
+    def register_unbound_dotted(self, value, dotted_path, inferer):
+        if self.is_registered(value):
+            raise ValueAlreadyRegistered((value, inferer))
+
+        self.unbound_dotted[value, dotted_path] = inferer
 
     def get_inferer(self, value):
         return self.value_to_inferer[value]
