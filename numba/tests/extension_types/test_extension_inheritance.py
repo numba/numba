@@ -13,7 +13,7 @@ Derived(20.0)
 >>> Base.py_method(object())
 Traceback (most recent call last):
     ...
-TypeError: unbound method cython_function_or_method object must be called with Base instance as first argument (got object instance instead)
+TypeError: unbound method numba_function_or_method object must be called with Base instance as first argument (got object instance instead)
 
 Test numba virtual methods
 
