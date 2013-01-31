@@ -131,20 +131,18 @@ def class_decorators():
 
 def uninitialized_augmented_assignment():
     """
-    >>> uninitialized_augmented_assignment()
+    >>> func = jitv(uninitialized_augmented_assignment)
     Traceback (most recent call last):
         ...
-    UnboundLocalError: local variable 'x' referenced before assignment
+    NumbaError: 139:4: local variable 'x' referenced before assignment
     """
     x += 1
 
 
 def uninitialized_augmented_assignment_loop():
     """
-    >>> uninitialized_augmented_assignment_loop()
-    Traceback (most recent call last):
-        ...
-    UnboundLocalError: local variable 'x' referenced before assignment
+    >>> func = jitv(uninitialized_augmented_assignment_loop)
+    Warning 148:8: local variable 'x' might be referenced before assignment
     """
     for i in range(10):
         x += 1
