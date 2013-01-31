@@ -113,7 +113,7 @@ setup(
             include_dirs=[numpy.get_include()],
             cython_gdb=True),
     ],
-    version = '0.5.1',
+    version = '0.6.0',
     cmdclass=cmdclasses,
     **setup_args
 )

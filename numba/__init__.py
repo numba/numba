@@ -7,7 +7,8 @@ import sys
 import logging
 from numba import typesystem
 
-__version__ = '0.5.1'
+
+__version__ = '0.6.0'
 
 def get_include():
     numba_root = os.path.dirname(os.path.abspath(__file__))
