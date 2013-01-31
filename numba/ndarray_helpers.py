@@ -28,13 +28,15 @@ def make_property(type=None, invariant=True):
     def decorator(access_func):
         def load(self):
             instr = self.builder.load(access_func(self))
-            set_metadata(self.tbaa, instr, type)
+            if self.tbaa:
+                set_metadata(self.tbaa, instr, type)
             return instr
 
         def store(self, value):
             ptr = access_func(self)
             instr = self.builder.store(value, ptr)
-            set_metadata(self.tbaa, instr, type)
+            if self.tbaa:
+                set_metadata(self.tbaa, instr, type)
 
         return property(load, store)
 
@@ -49,10 +51,10 @@ class PyArrayAccessor(object):
     tbaa: metadata.TBAAMetadata instance
     """
 
-    def __init__(self, builder, pyarray_ptr, tbaa, dtype):
+    def __init__(self, builder, pyarray_ptr, tbaa=None, dtype=None):
         self.builder = builder
         self.pyarray_ptr = pyarray_ptr
-        self.tbaa = tbaa
+        self.tbaa = tbaa # this maybe None
         self.dtype = dtype
 
     def _get_element(self, idx):
@@ -62,12 +64,14 @@ class PyArrayAccessor(object):
 
     def get_data(self):
         instr = self.builder.load(self._get_element(0))
-        set_metadata(self.tbaa, instr, self.dtype.pointer())
+        if self.tbaa:
+            set_metadata(self.tbaa, instr, self.dtype.pointer())
         return instr
 
     def set_data(self, value):
         instr = self.builder.store(value, self._get_element(0))
-        set_metadata(self.tbaa, instr, self.dtype.pointer())
+        if self.tbaa:
+            set_metadata(self.tbaa, instr, self.dtype.pointer())
 
     data = property(get_data, set_data, "The array.data attribute")
 
