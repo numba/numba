@@ -52,10 +52,10 @@ class Pipeline(object):
         'transform_for',
         'specialize',
         'optimize',
+        'preloader',
         'late_specializer',
         'fix_ast_locations',
         'cleanup_symtab',
-        'preloader',
         'codegen',
     ]
 
