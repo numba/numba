@@ -7,6 +7,9 @@ cimport numpy as cnp
 
 from numba._numba cimport *
 from numba import error
+from numba.minivect import minitypes
+
+cdef object numba_type = minitypes.Type
 
 cdef class NumbaWrapper(object):
     """
@@ -132,11 +135,18 @@ cpdef inline getkey(tuple args): # 3.0x
             setkey(key, i*3+1, _id(array.descr))
             # NumPy maximum ndim is 32 (2 ** 5).
             setkey(key, i*3+2, array.ndim | (cnp.PyArray_FLAGS(arg) << 5))
+            continue
+
+        elif isinstance(arg, numba_type):
+            # A type is passed in as a value, hash the thing (this will be slow)
+            setkey(key, i*3, arg)
+
         else:
             # k = type(arg)
             setkey(key, i*3, type(arg))
-            setkey(key, i*3+1, 0)
-            setkey(key, i*3+2, 0)
+
+        setkey(key, i*3+1, 0)
+        setkey(key, i*3+2, 0)
 
         # Py_INCREF(<PyObject *> k)
         # PyTuple_SET_ITEM(key, i, k)
