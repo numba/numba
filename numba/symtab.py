@@ -33,7 +33,7 @@ class Variable(object):
         self.promotable_type = promotable_type
         self.deleted = False
 
-        self.set_uninitialized = False
+        self.uninitialized = False
         self.uninitialized_value = None
 
         self.killing_def = None # The definition that kills us, or None

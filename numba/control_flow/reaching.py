@@ -1,6 +1,23 @@
 from numba.control_flow.cfstats import *
 from numba.control_flow.reporting import *
 
+def compute_uninitialized_phis(flow):
+    """
+    Compute potentially uninitialized phi variables.
+    """
+    maybe_uninitialized = set()
+
+    for phi_var, phi_node in flow.blocks[0].phis.iteritems():
+        if phi_var.uninitialized:
+            maybe_uninitialized.add(phi_var)
+
+    for block in flow.blocks[1:]:
+        for phi_var, phi_node in block.phis:
+            if any(x in maybe_uninitialized for x in phi_node.incoming):
+                maybe_uninitialized.add(phi_var)
+
+    return maybe_uninitialized
+
 def allow_null(node):
     return False
 

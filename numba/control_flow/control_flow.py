@@ -533,7 +533,7 @@ class ControlFlow(object):
         for var_name, var in symbol_table.items():
             if var.renameable:
                 new_var = symbol_table.rename(var, self.blocks[0])
-                new_var.set_uninitialized = True
+                new_var.uninitialized = True
 
         self.rename_assignments(self.blocks[0])
 
@@ -556,6 +556,8 @@ class ControlFlow(object):
                 for parent in block.parents:
                     incoming_var = parent.symtab.lookup_most_recent(variable.name)
                     phi.incoming.add(incoming_var)
+
+                    phi_node.variable.uninitialized |= incoming_var.uninitialized
 
                     # Update def-use chain
                     incoming_var.cf_references.append(phi)

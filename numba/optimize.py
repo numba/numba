@@ -91,7 +91,9 @@ class Preloader(visitors.NumbaTransformer):
         is_full_index = node.value.type.is_array and not node.type.is_array
         # is_index = node.slice.type.is_int
         is_name = isinstance(node.value, ast.Name)
-        if is_full_index and is_name and not node.value.cf_maybe_null:
+        maybe_null = ((is_name and node.value.cf_maybe_null) or
+                      node.value.variable.uninitialized)
+        if is_full_index and is_name and not maybe_null:
             array_variable = node.value.variable
 
             # Set the preload conditions
