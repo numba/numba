@@ -158,7 +158,7 @@ class TestTypeInference(unittest.TestCase):
 
     def test_type_infer_arange(self):
         sig, symtab = infer(arange, functype())
-        self.assertEqual(symtab['a'].type, int64[:])
+        self.assertEqual(symtab['a'].type, npy_intp[:])
         self.assertEqual(symtab['b'].type, double[:])
 
     def test_empty_like(self):
