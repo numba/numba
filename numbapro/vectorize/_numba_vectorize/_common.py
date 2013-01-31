@@ -200,20 +200,14 @@ class ASTVectorizeMixin(object):
 class GenericASTVectorize(ASTVectorizeMixin, GenericVectorize):
     "Use the AST backend to compile the ufunc"
 
-def _build_post_vectorize_optimizer():
-    pmb = PassManagerBuilder.new()
-    pmb.opt_level = 3
-    pmb.vectorize = True
-
-    pm = PassManager.new()
-    pmb.populate(pm)
-    return pm
-
-_post_vectorize_optimizer = _build_post_vectorize_optimizer()
 
 def post_vectorize_optimize(func):
     '''Perform aggressive optimization after each vectorizer.
         
     TODO: review if this is necessary.
     '''
-    _post_vectorize_optimizer.run(func.module)
+    from numba.ast_translate import LLVMContextManager
+    cm = LLVMContextManager()
+    return cm.pass_manager
+
+
