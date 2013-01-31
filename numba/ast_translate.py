@@ -1104,7 +1104,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 # ast.Attribute | ast.Subscript  store.
                 # These types don't have pointer types but rather
                 # scalar values
-                tbaa_type = target_node.type.pointer()
+                if is_obj(target_node.type):
+                    target_type = object_
+                else:
+                    target_type = target_node.type
+                tbaa_type = target_type.pointer()
                 tbaa_node = self.tbaa.get_metadata(tbaa_type)
 
         # INCREF RHS. Note that new references are always in temporaries, and
