@@ -333,7 +333,7 @@ class NULLType(NumbaType):
 
 class CTypesPointerType(NumbaType):
     def __init__(self, pointer_type, address, **kwds):
-        super(CTypesPointer, self).__init__(**kwds)
+        super(CTypesPointerType, self).__init__(**kwds)
         self.pointer_type = pointer_type
         self.address = address
 

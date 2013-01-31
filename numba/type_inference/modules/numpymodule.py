@@ -187,33 +187,6 @@ def where(context, condition, x, y):
     type = context.promote_types(xtype, ytype)
     return type
 
-def reduce_(a, axis, dtype, out):
-    if out is not None:
-        return out
-
-    dtype_type = get_dtype(dtype, default_dtype=a.dtype).dtype
-
-    if axis is None:
-        # Return the scalar type
-        return dtype_type
-
-    # Handle the axis parameter
-    if axis.is_tuple and axis.is_sized:
-        # axis=(tuple with a constant size)
-        return typesystem.array(dtype_type, a.ndim - axis.size)
-    elif axis.is_int:
-        # axis=1
-        return typesystem.array(dtype_type, a.ndim - 1)
-    else:
-        # axis=(something unknown)
-        return object_
-
-register_inferer(np, 'sum', reduce_)
-register_inferer(np, 'prod', reduce_)
-
-register_unbound(np, "add", "reduce", reduce_)
-register_unbound(np, "multiply", "reduce", reduce_)
-
 @register(np)
 def vdot(context, a, b):
     raise NotImplementedError("XXX")

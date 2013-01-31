@@ -215,4 +215,5 @@ def resolve_call(context, call_node, obj_call_node, func_type):
 
 # Register type inferrer functions
 from numba.type_inference.modules import (numbamodule,
-                                          numpymodule)
+                                          numpymodule,
+                                          numpyufuncs)
