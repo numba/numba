@@ -212,8 +212,9 @@ def _autojit2(template_signature, target, nopython, **translator_kwargs):
 
         function_cache.register(f)
         cache = function_cache.get_autojit_cache(f)
-        numba_func = numbawrapper.NumbaSpecializingWrapper(f, compile_function,
-                                                           cache)
+
+        wrapper = autojit_wrappers[(target, 'ast')]
+        numba_func = wrapper(f, compile_function, cache)
         return numba_func
 
     return _autojit2_decorator
@@ -248,8 +249,9 @@ def _autojit(target, nopython):
             return compiled_numba_func
 
         pyfunc_cache = function_cache.register(f)
-        numba_func = numbawrapper.NumbaSpecializingWrapper(f, wrapper,
-                                                           pyfunc_cache)
+
+        wrapper = autojit_wrappers[(target, 'bytecode')]
+        numba_func = wrapper(f, wrapper, pyfunc_cache)
         return numba_func
 
     return _autojit_decorator
@@ -341,6 +343,11 @@ def _jit(restype=None, argtypes=None, backend='bytecode', **kws):
 jit_targets = {
     ('cpu', 'bytecode') : _jit,
     ('cpu', 'ast') : _jit2
+}
+
+autojit_wrappers = {
+    ('cpu', 'bytecode') : numbawrapper.NumbaSpecializingWrapper,
+    ('cpu', 'ast')      : numbawrapper.NumbaSpecializingWrapper,
 }
 
 def _process_sig(sigstr, name=None):
