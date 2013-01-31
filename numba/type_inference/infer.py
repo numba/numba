@@ -1476,7 +1476,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         """
         result_type = None
 
-        if (func_type.is_module_attribute and
+        if (func_type.is_known_value and
                 module_type_inference.is_registered(func_type.value)):
             # Try the module type inferers
             result_node = module_type_inference.resolve_call(
@@ -1615,7 +1615,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if result_type is None:
             result_type = typesystem.ModuleAttributeType(module=type.module,
-                                                          attr=node.attr)
+                                                         attr=node.attr)
 
         return result_type
 
@@ -1683,6 +1683,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             return self._resolve_struct_attribute(node, type)
         elif type.is_module and hasattr(type.module, node.attr):
             result_type = self._resolve_module_attribute(node, type)
+        elif (type.is_known_value and
+                  module_type_inference.is_registered((type.value, node.attr))):
+            # Unbound method call, e.g. np.add.reduce
+            result_type = typesystem.KnownValueType((type.value, node.attr),
+                                                    is_object=True)
         elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):
             # handle shape/strides/ndim etc
             return nodes.ArrayAttributeNode(node.attr, node.value)

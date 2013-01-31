@@ -14,7 +14,9 @@ import numpy as np
 from numba import *
 from numba.minivect import minitypes
 from numba import typesystem
-from numba.type_inference.module_type_inference import register, register_inferer
+from numba.type_inference.module_type_inference import (register,
+                                                        register_inferer,
+                                                        register_unbound)
 from numba.typesystem import get_type
 
 
@@ -208,6 +210,9 @@ def reduce_(a, axis, dtype, out):
 
 register_inferer(np, 'sum', reduce_)
 register_inferer(np, 'prod', reduce_)
+
+register_unbound(np, "add", "reduce", reduce_)
+register_unbound(np, "multiply", "reduce", reduce_)
 
 @register(np)
 def vdot(context, a, b):

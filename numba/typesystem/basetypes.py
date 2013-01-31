@@ -73,7 +73,34 @@ class IteratorType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "iterator<%s>" % (self.base_type,)
 
-class ModuleType(NumbaType, minitypes.ObjectType):
+class KnownValueType(NumbaType):
+    """
+    Type which is associated with a known value or well-defined symbolic
+    expression:
+
+        np.add          => np.add
+        np.add.reduce   => (np.add, "reduce")
+
+    (Remember that unbound methods like np.add.reduce are transient, i.e.
+     np.add.reduce is not np.add.reduce).
+    """
+
+    is_known_value = True
+
+    def __init__(self, value, **kwds):
+        super(KnownValueType, self).__init__(**kwds)
+        self.value = value
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __eq__(self, other):
+        return isinstance(other, KnownValueType) and self.value == other.value
+
+    def __repr__(self):
+        return "kwown_value(%s)" % (self.value,)
+
+class ModuleType(KnownValueType):
     """
     Represents a type for modules.
 
@@ -84,13 +111,18 @@ class ModuleType(NumbaType, minitypes.ObjectType):
 
     is_module = True
     is_numpy_module = False
+    is_object = True
 
     def __init__(self, module, **kwds):
-        super(ModuleType, self).__init__(**kwds)
-        self.module = module
+        super(ModuleType, self).__init__(module, **kwds)
+
         self.is_numpy_module = module is np
         self.is_numba_module = module is numba
         self.is_math_module = module is math
+
+    @property
+    def module(self):
+        return self.value
 
     def __repr__(self):
         if self.is_numpy_module:
@@ -102,27 +134,29 @@ class ModuleType(NumbaType, minitypes.ObjectType):
     def comparison_type_list(self):
         return (self.module,)
 
-class ModuleAttributeType(NumbaKeyHashingType, minitypes.ObjectType):
+class ModuleAttributeType(KnownValueType):
+    """
+    Attribute of a module. E.g. np.sin
+    """
+
     is_module_attribute = True
+    is_object = True
 
     module = None
     attr = None
 
-    def __init__(self, **kwds):
-        super(ModuleAttributeType, self).__init__(**kwds)
+    def __init__(self, module, attr, **kwds):
+        self.module = module
+        self.attr = attr
+        value = getattr(self.module, self.attr)
+
+        super(ModuleAttributeType, self).__init__(value, **kwds)
+
         base_name, dot, rest = self.module.__name__.partition(".")
         self.is_numpy_attribute = base_name == "numpy"
 
     def __repr__(self):
         return "%s.%s" % (self.module.__name__, self.attr)
-
-    @property
-    def value(self):
-        return getattr(self.module, self.attr)
-
-    @property
-    def key(self):
-        return (self.module, self.attr)
 
 class NumpyAttributeType(ModuleAttributeType):
     """

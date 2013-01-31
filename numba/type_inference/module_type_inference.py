@@ -33,17 +33,18 @@ class ModuleTypeInfererRegistry(object):
     def __init__(self):
         super(ModuleTypeInfererRegistry, self).__init__()
 
-        # { value : (module, attr, inferer, pass_in_types_instead_of_nodes }
+        # function calls: (np.add)
+        #     { value                               : (typefunc, pass_in_types) }
+        # unbound methods: (np.add.reduce)
+        #     { (value, unbound_dotted_path, False) : (typefunc, pass_in_types) }
+        # bound methods: (obj.method where type(obj) is registered)
+        #     { (type, bound_dotted_path, True)     : (typefunc, pass_in_types) }
         self.value_to_inferer = {}
 
-        # { (value, unbound_dotted_path) : inferer }
-        self.unbound_dotted = {}
+        # { value : (module, 'attribute') }  (e.g. {np.add : (np, 'add')})
+        self.value_to_module = {}
 
-        # { (type, bound_dotted_path) : inferer }
-        self.bound_dotted = {}
-
-
-    def is_registered(self, value):
+    def is_registered(self, value, func_type=None):
         try:
             hash(value)
         except TypeError:
@@ -51,37 +52,64 @@ class ModuleTypeInfererRegistry(object):
         else:
             return value in self.value_to_inferer
 
-    def register_inferer(self, module, attr, inferer):
+    def register_inferer(self, module, attr, inferer, pass_in_types=True):
+        """
+        Register an type function (a type inferer) for a known function value.
+
+            E.g. np.add() can be mapped as follows:
+
+                module=np, attr='add', inferrer=my_inferer
+        """
         value = getattr(module, attr)
         if self.is_registered(value):
             raise ValueAlreadyRegistered((value, module, inferer))
 
-        self.value_to_inferer[value] = (module, attr, inferer, True)
+        self.value_to_inferer[value] = (inferer, pass_in_types)
 
-    def register_unbound_method(self, value, method_name, inferer):
-        self.register_unbound_dotted(value, method_name, inferer)
+    def register_unbound_method(self, module, attr, method_name, inferer,
+                                pass_in_types=True):
+        """
+        Register an unbound method or dotted attribute path
+        (allow for transience).
 
-    def register_unbound_dotted(self, value, dotted_path, inferer):
+             E.g. np.add.reduce() can be mapped as follows:
+
+                module=np, attr='add', method_name='reduce',
+                inferrer=my_inferer
+        """
+        self.register_unbound_dotted(module, attr, method_name, inferer,
+                                     pass_in_types)
+
+    def register_unbound_dotted(self, module, attr, dotted_path, inferer,
+                                pass_in_types=True):
+        """
+        Register an type function for a dotted attribute path of a value,
+
+            E.g. my_module.my_obj.foo.bar() can be mapped as follows:
+
+                module=my_module, attr='my_obj', dotted_path='foo.bar',
+                inferrer=my_inferer
+        """
+        value = getattr(module, attr)
         if self.is_registered(value):
             raise ValueAlreadyRegistered((value, inferer))
 
-        self.unbound_dotted[value, dotted_path] = inferer
+        self.value_to_inferer[value, dotted_path] = (inferer, pass_in_types)
 
-    def get_inferer(self, value):
+    def get_inferer(self, value, func_type=None):
         return self.value_to_inferer[value]
 
-    def module_attribute_type(self, value):
-        if self.is_registered(value):
-            module, attr, inferer = self.get_inferer(value)
-            return typesystem.ModuleAttributeType(module=module, attr=attr)
+    def lookup_module_attribute(self, value):
+        if value in self.value_to_module:
+            return self.value_to_module[value]
 
-        return None
 
 module_registry = ModuleTypeInfererRegistry()
 
 is_registered = module_registry.is_registered
 register_inferer = module_registry.register_inferer
 get_inferer = module_registry.get_inferer
+register_unbound = module_registry.register_unbound_method
 
 def register(module):
     def decorator(inferer):
@@ -95,8 +123,9 @@ def module_attribute_type(obj):
     See if the object is registered to any module which might handle
     type inference on the object.
     """
-    if is_registered(obj):
-        module, attr, inferer, pass_in_types = get_inferer(obj)
+    result = module_registry.lookup_module_attribute(obj)
+    if result is not None:
+        module, attr = result
         return typesystem.ModuleAttributeType(module=module, attr=attr)
 
     return None
@@ -133,7 +162,7 @@ def dispatch_on_value(context, call_node, func_type):
 
     Returns the result type, or None
     """
-    module, attr, inferer, pass_in_types = get_inferer(func_type.value)
+    inferer, pass_in_types = get_inferer(func_type.value)
 
     argnames = inspect.getargspec(inferer).args
     if argnames[0] == "context":
