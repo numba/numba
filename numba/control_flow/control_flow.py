@@ -6,6 +6,7 @@ Control flow for the AST backend.
 Adapted from Cython/Compiler/FlowControl.py
 """
 
+import re
 import ast
 import copy
 
@@ -230,7 +231,7 @@ class ControlFlow(object):
         self.blocks.append(exit_block)
 
     def is_tracked(self, entry):
-        return entry.renameable
+        return entry.renameable and not re.match(r"_\[\d+\]", entry.name)
 
     def mark_position(self, node):
         """Mark position, will be used to draw graph nodes."""
