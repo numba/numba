@@ -1,9 +1,18 @@
 # -*- coding: UTF-8 -*-
 
+"""
+Optimizations module.
+"""
+
 from itertools import imap
 
 from numba import typesystem
 from numba import visitors
+
+#----------------------------------------------------------------------------
+# NumPy Array Attribute Preloading
+#----------------------------------------------------------------------------
+
 
 properties = ("preload_data", "preload_shape", "preload_strides")
 
@@ -45,6 +54,25 @@ class Preloader(visitors.NumbaTransformer):
     """
     Pre-load things in order to avoid a potential runtime load instruction.
     (We also use invariant loads and TBAA).
+
+    For each definition of an array variable, which is either a name assignment
+    or a phi, we determine whether to pre-load the data pointer, the strides,
+    and the shape information:
+
+        array = np.array(...)
+        for i in range(...):
+            array[i]            # use array->data and array->strides[0]
+
+    becomes
+
+        array = np.array(...)
+
+        temp_data = array->data
+        temp_shape0 = array->shape[0]
+        temp_stride0 = array->strides[0]
+
+        for i in range(...):
+            array[i]            # use pre-loaded temporaries
     """
 
     def visit_FunctionDef(self, node):

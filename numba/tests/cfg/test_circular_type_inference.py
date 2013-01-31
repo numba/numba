@@ -477,4 +477,5 @@ def infer_simple(numba_func, *varnames):
 #func = jit(sig)(test_delayed_string_indexing_simple.py_func)
 #print vars(func)
 #test_delayed_string_indexing_simple()
-testmod()
+test_delayed_array_slicing2()
+#testmod()
