@@ -622,16 +622,9 @@ def check_definitions(flow, compiler_directives):
 
     # assignment hints
     for node in assmt_nodes:
-        if Uninitialized in node.cf_state:
-            node.cf_maybe_null = True
-            if len(node.cf_state) == 1:
-                # node.cf_state == set([Uninitialized])
-                node.cf_is_null = True
-            else:
-                node.cf_is_null = False
-        else:
-            node.cf_is_null = False
-            node.cf_maybe_null = False
+        maybe_null = Uninitialized in node.cf_state
+        node.cf_maybe_null = maybe_null
+        node.cf_is_null = maybe_null and len(node.cf_state) == 1
 
     # Find uninitialized references and cf-hints
     for node, entry in references.iteritems():
