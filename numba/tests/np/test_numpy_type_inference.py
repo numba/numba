@@ -31,6 +31,16 @@ def numba_dot(A, B):
     result = np.dot(A, B)
     return numba.typeof(result), result
 
+@autojit
+def numba_vdot(A, B):
+    result = np.vdot(A, B)
+    return numba.typeof(result), result
+
+@autojit
+def numba_inner(a, b):
+    result = np.inner(a, b)
+    return numba.typeof(result), result
+
 # ------------- Test sum ------------
 
 @autojit
@@ -118,6 +128,36 @@ def test_numba_dot():
             else:
                 assert result_type == dtype
 
+def test_numba_vdot():
+    for a, b in ((np.array([1+2j,3+4j]),
+                  np.array([5+6j,7+8j])),
+                 (np.array([[1, 4], [5, 6]]),
+                  np.array([[4, 1], [2, 2]]))):
+        result_type, result = numba_vdot(a, b)
+        assert result == np.vdot(a, b)
+        assert result_type == typesystem.from_numpy_dtype(a.dtype).dtype
+        result_type, result = numba_vdot(b, a)
+        assert result == np.vdot(b, a)
+        assert result_type == typesystem.from_numpy_dtype(b.dtype).dtype
+
+def test_numba_inner():
+    # Note these tests assume that the lhs' type is the same as the
+    # promotion type for both arguments.  They will fail if additional
+    # test data doesn't adhere to this policy.
+    for a, b in ((np.array([1,2,3]), np.array([0,1,0])),
+                 (np.arange(24).reshape((2,3,4)), np.arange(4)),
+                 (np.eye(2), 7)):
+        result_type, result = numba_inner(a, b)
+        if result_type.is_array:
+            assert (result == np.inner(a, b)).all()
+            assert (result_type.dtype ==
+                    typesystem.from_numpy_dtype(result.dtype).dtype)
+            assert (result_type.dtype ==
+                    typesystem.from_numpy_dtype(a.dtype).dtype)
+        else:
+            assert result == np.inner(a, b)
+            assert result_type == typesystem.from_numpy_dtype(a.dtype).dtype
+
 def test_sum():
     a = np.array([1, 2, 3], dtype=np.int32)
     b = np.array([[1, 2], [3, 4]], dtype=np.int64)
@@ -139,5 +179,7 @@ if __name__ == "__main__":
     test_nonzero()
     test_where()
     test_numba_dot()
+    test_numba_vdot()
+    test_numba_inner()
     test_sum()
     test_ufunc_reduce()

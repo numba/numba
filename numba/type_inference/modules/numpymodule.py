@@ -142,7 +142,7 @@ def arange(start, stop, step, dtype):
     "Resolve a call to np.arange()"
     # NOTE: dtype must be passed as a keyword argument, or as the fourth
     # parameter
-    dtype_type = get_dtype(dtype, int64)
+    dtype_type = get_dtype(dtype, npy_intp)
     if dtype_type is not None:
         # return a 1D array type of the given dtype
         return dtype_type.dtype[:]
@@ -189,11 +189,28 @@ def where(context, condition, x, y):
 
 @register(np)
 def vdot(context, a, b):
-    raise NotImplementedError("XXX")
+    lhs_type = promote_to_array(a)
+    rhs_type = promote_to_array(b)
+    dtype = context.promote_types(lhs_type.dtype, rhs_type.dtype)
+    return dtype
 
 @register(np)
 def inner(context, a, b):
-    raise NotImplementedError("XXX")
+    lhs_type = promote_to_array(a)
+    rhs_type = promote_to_array(b)
+    dtype = context.promote_types(lhs_type.dtype, rhs_type.dtype)
+    print lhs_type.ndim, rhs_type.ndim, dtype
+    if lhs_type.ndim == 0:
+        result_ndim = rhs_type.ndim
+    elif rhs_type.ndim == 0:
+        result_ndim = lhs_type.ndim
+    else:
+        result_ndim = lhs_type.ndim + rhs_type.ndim - 2
+    if result_ndim == 0:
+        result_type = dtype
+    else:
+        result_type = typesystem.array(dtype, result_ndim)
+    return result_type
 
 @register(np)
 def outer(context, a, b):
@@ -204,8 +221,10 @@ def tensordot(context, a, b):
     raise NotImplementedError("XXX")
 
 @register(np)
-def einsum(context, subs, *operands, **kws):
-    raise NotImplementedError("XXX")
+def einsum(context, subs, operands, kws):
+    # XXX Issue warning to user?
+    # XXX Attempt type inference in case where subs is a string?
+    return object_
 
 @register(np)
 def kron(context, a, b):
