@@ -93,6 +93,9 @@ class Preloader(visitors.NumbaTransformer):
         is_name = isinstance(node.value, ast.Name)
         maybe_null = ((is_name and node.value.cf_maybe_null) or
                       node.value.variable.uninitialized)
+
+        # if maybe_null: print "maybe null"
+
         if is_full_index and is_name and not maybe_null:
             array_variable = node.value.variable
 

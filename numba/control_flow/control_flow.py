@@ -501,6 +501,8 @@ class ControlFlow(object):
             for block in self.blocks:
                 print 'DF(%d) = %s' % (block.id, block.dominance_frontier)
 
+        argnames = [name.id for name in ast.args.args]
+
         #
         ### 1) Insert phi nodes in the right places
         #
@@ -533,7 +535,7 @@ class ControlFlow(object):
         for var_name, var in symbol_table.items():
             if var.renameable:
                 new_var = symbol_table.rename(var, self.blocks[0])
-                new_var.uninitialized = True
+                new_var.uninitialized = var.name not in argnames
 
         self.rename_assignments(self.blocks[0])
 
