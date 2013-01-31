@@ -225,16 +225,18 @@ def _link_device_function(lfunc):
 
 
 
-class CudaDeviceFunction(numbawrapper.NumbaCompiledWrapper):
-    def __init__(self, py_func, wrapper=None, ctypes_func=None,
-                 signature=None, lfunc=None, extra=None):
-        super(CudaDeviceFunction, self).__init__(py_func, wrapper, ctypes_func,
-                                                signature, lfunc)
+class CudaDeviceFunction(numbawrapper.NumbaWrapper):
+    def __init__(self, py_func, signature, lfunc):
+        super(CudaDeviceFunction, self).__init__(py_func)
+        self.signature = signature
+        self.lfunc = lfunc
+        # print 'translating...'
+        self.module = lfunc.module
 
     def __call__(self, *args, **kws):
         raise TypeError("")
 
-class CudaBaseFunction(numbawrapper.NumbaCompiledWrapper):
+class CudaBaseFunction(numbawrapper.NumbaWrapper):
 
     _griddim = 1, 1, 1      # default grid dimension
     _blockdim = 1, 1, 1     # default block dimension
@@ -283,23 +285,26 @@ def _generate_ptx(module, kernels):
 
     nvvm.fix_data_layout(module)
 
-    pmb = _lp.PassManagerBuilder.new()
-    pmb.opt_level = 2 # O3 causes bar.sync to be duplicated in unrolled loop
-    pm = _lp.PassManager.new()
-    pmb.populate(pm)
-    pm.run(module)
+    # NOTE: It seems to be invalid to run passes on the LLVM for PTX.
+    #       LLVM assumes it is CPU code and does the wrong kind of optimization.
+    #    pmb = _lp.PassManagerBuilder.new()
+    #    pmb.opt_level = 2 # O3 causes bar.sync to be duplicated in unrolled loop
+    #    pm = _lp.PassManager.new()
+    #    pmb.populate(pm)
+    #    pm.run(module)
 
-    return nvvm.llvm_to_ptx(str(module), arch=arch)
+    ptx = nvvm.llvm_to_ptx(str(module), arch=arch)
+    return ptx
 
 
 class CudaNumbaFunction(CudaBaseFunction):
-    def __init__(self, py_func, wrapper=None, ctypes_func=None,
-                 signature=None, lfunc=None, extra=None):
-        super(CudaNumbaFunction, self).__init__(py_func, wrapper, ctypes_func,
-                                                signature, lfunc)
+    def __init__(self, py_func, signature, lfunc):
+        super(CudaNumbaFunction, self).__init__(py_func)
+        self.signature = signature
+        self.lfunc = lfunc
         # print 'translating...'
         self.module = lfunc.module
-        self.extra = extra
+        # self.extra = extra # unused
 
         func_name = lfunc.name
 
@@ -348,8 +353,21 @@ class CudaNumbaFunction(CudaBaseFunction):
 
 class CudaAutoJitNumbaFunction(CudaBaseFunction):
 
-    def invoke_compiled(self, compiled_cuda_func, *args, **kwargs):
-        return compiled_cuda_func[self._griddim, self._blockdim](*args, **kwargs)
+    def __init__(self, py_func, compiling_decorator, funccache):
+        super(CudaAutoJitNumbaFunction, self).__init__(py_func)
+        self.compiling_decorator = compiling_decorator
+        #self.funccache = funccache
+        #help(funccache)
+        #raise Exception(funccache)
+
+    def __call__(self, *args, **kwargs):
+        if len(kwargs):
+            raise error.NumbaError("Cannot handle keyword arguments yet")
+        numba_wrapper = self.compiling_decorator(args, kwargs)
+        return numba_wrapper[self._griddim, self._blockdim](*args)
+
+#    def invoke_compiled(self, compiled_cuda_func, *args, **kwargs):
+#        return compiled_cuda_func[self._griddim, self._blockdim](*args, **kwargs)
 
 #class CudaTranslate(_Translate):
 #     def op_LOAD_ATTR(self, i, op, arg):
@@ -370,8 +388,7 @@ class CudaAutoJitNumbaFunction(CudaBaseFunction):
 
 # Patch numba
 numba.decorators.jit_targets[('gpu', 'ast')] = jit2 # give up on bytecode path
-#numba.decorators.numba_function_autojit_targets['gpu'] = CudaAutoJitNumbaFunction
-
+numba.decorators.autojit_wrappers[('gpu', 'ast')] = CudaAutoJitNumbaFunction
 
 # NDarray device helper
 def to_device(ary, stream=0, copy=True):
