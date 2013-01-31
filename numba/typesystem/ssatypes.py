@@ -443,7 +443,7 @@ class ReanalyzeCircularType(UnresolvedType):
 
     def substitution_candidate(self, variable):
         if variable.type.is_unresolved:
-            variable.type.resolve()
+            variable.type = variable.type.resolve()
 
         if variable.type.is_promotion:
             p = resolve_var(variable)

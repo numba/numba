@@ -5,7 +5,7 @@ See also numba.extension_type_inference
 """
 
 cimport cython
-from cpython cimport PyObject
+from numba._numba cimport *
 
 import sys
 import ctypes
@@ -16,15 +16,7 @@ ctypedef object (*tp_new_func)(PyObject *, PyObject *, PyObject *)
 ctypedef void (*destructor)(PyObject *)
 ctypedef int (*visitproc)(PyObject *, void *)
 
-cdef extern size_t closure_field_offset
-cdef extern int NumbaFunction_init() except -1
-cdef extern object NumbaFunction_NewEx(
-                PyMethodDef *ml, module, code, PyObject *closure,
-                void *native_func, native_signature, keep_alive)
-
 cdef extern from *:
-    ctypedef unsigned long Py_uintptr_t
-
     ctypedef struct PyTypeObject:
         tp_new_func tp_new
         destructor tp_dealloc
@@ -39,9 +31,11 @@ cdef extern from *:
     ctypedef struct PyMethodDef:
         pass
 
-    void Py_XDECREF(PyObject *)
-    void Py_INCREF(PyObject *)
-    void Py_CLEAR(PyObject *)
+cdef extern size_t closure_field_offset
+cdef extern int NumbaFunction_init() except -1
+cdef extern object NumbaFunction_NewEx(
+                PyMethodDef *ml, module, code, PyObject *closure,
+                void *native_func, native_signature, keep_alive)
 
 NumbaFunction_init()
 NumbaFunction_NewEx_pointer = <Py_uintptr_t> &NumbaFunction_NewEx
@@ -203,10 +197,17 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
         cdef void **vtab_location
 
         if orig_new is not None:
-            obj = orig_new(cls, *args, **kwds)
+            new_func = orig_new
         else:
             assert issubclass(cls, ext_type), (cls, ext_type)
-            obj = super(ext_type, cls).__new__(cls, *args, **kwds)
+            new_func = super(ext_type, cls).__new__
+
+        if base_is_object:
+            # Avoid warnings in py2.6:
+            #     DeprecationWarning: object.__new__() takes no parameters
+            obj = new_func(cls)
+        else:
+            obj = new_func(cls, *args, **kwds)
 
         if (cls.__numba_vtab is not ext_type.__numba_vtab or
                 not isinstance(obj, cls)):
@@ -232,6 +233,8 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
     dict['__new__'] = staticmethod(new)
     ext_type = type(name, bases, dict)
     assert isinstance(ext_type, type)
+
+    cdef bint base_is_object = bases == (object,)
 
     ext_type_p = <PyTypeObject *> ext_type
 

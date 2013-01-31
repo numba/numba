@@ -7,6 +7,7 @@ Test the Numba compiler on a simple for loop over an iterable object.
 # ______________________________________________________________________
 
 from numba import *
+from numba.tests import test_support
 
 import numpy
 
@@ -92,9 +93,9 @@ def for_loop_fn_4(i, u, p, U):
 # ______________________________________________________________________
 
 class TestForLoop(unittest.TestCase):
-    @unittest.skipUnless(hasattr(__builtin__, '__noskip__'),
-                         "Requires implementation of iteration "
-                         "over arrays.")
+    @test_support.skip_unless(hasattr(__builtin__, '__noskip__'),
+                              "Requires implementation of iteration "
+                              "over arrays.")
     def test_compiled_for_loop_fn_0(self):
         test_data = numpy.array([1, 2, 3], dtype = 'l')
         compiled_for_loop_fn = jit(restype=f4,

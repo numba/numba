@@ -6,6 +6,9 @@ from distutils.core import setup, Extension
 
 import numpy
 
+# import numba
+import gen_type_conversion
+
 from Cython.Distutils import build_ext
 from Cython.Distutils.extension import Extension as CythonExtension
 
@@ -56,6 +59,17 @@ def run_2to3():
 if sys.version_info[0] >= 3:
     run_2to3()
 
+def get_include():
+    """Use numba.get_include() instead (make numba importable without
+    building it first)
+    """
+    numba_root = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(numba_root, "numba", "include")
+
+numba_include_dir = get_include()
+
+gen_type_conversion.run()
+
 setup(
     name = "numba",
     author = "Continuum Analytics, Inc.",
@@ -81,12 +95,22 @@ setup(
         'numba.asdl.py2_7': ['*.asdl'],
     },
     ext_modules = [
-#        Extension(name = "numba._ext",
-#                  sources = ["numba/_ext.c"],
-#                  include_dirs=[numpy.get_include()]),
+        Extension(
+            name = "numba.external.utilities.utilities",
+            sources = ["numba/external/utilities/utilities.c"],
+            include_dirs=[numba_include_dir],
+            depends=["numba/external/utilities/type_conversion.c",
+                     "numba/external/utilities/generated_conversions.c",
+                     "numba/external/utilities/generated_conversions.h"]),
         CythonExtension(
             name = "numba.extension_types",
             sources = ["numba/extension_types.pyx", "numba/numbafunction.c"],
+            include_dirs=[numba_include_dir],
+            cython_gdb=True),
+        CythonExtension(
+            name = "numba.numbawrapper",
+            sources = ["numba/numbawrapper.pyx"],
+            include_dirs=[numpy.get_include()],
             cython_gdb=True),
     ],
     version = '0.5.1',

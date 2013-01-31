@@ -1,7 +1,6 @@
 # Import all special functions before registering the Numba module
 # type inferer
 from numba.special import *
-from numba import module_type_inference
 
 import os
 import sys
@@ -9,6 +8,10 @@ import logging
 from numba import typesystem
 
 __version__ = '0.5.1'
+
+def get_include():
+    numba_root = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(numba_root, "include")
 
 # NOTE: Be sure to keep the logging level commented out before commiting.  See:
 #   https://github.com/numba/numba/issues/31
@@ -91,9 +94,9 @@ try:
 except ImportError:
     signal_to_name = {}
 else:
-    signal_to_name = { signal_code:signal_name
+    signal_to_name = dict((signal_code, signal_name)
                            for signal_name, signal_code in vars(signal).items()
-                               if signal_name.startswith("SIG") }
+                               if signal_name.startswith("SIG"))
 
 
 def test(whitelist=None, blacklist=None):
@@ -148,3 +151,9 @@ def nose_run(module=None):
     nose.run(module=module or __main__, config=config)
 
 __all__ = typesystem.__all__ + decorators.__all__ + special.__all__
+
+from numba.type_inference.module_type_inference import (is_registered,
+                                                        register,
+                                                        register_inferer,
+                                                        get_inferer,
+                                                        register_unbound)

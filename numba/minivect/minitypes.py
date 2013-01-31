@@ -45,6 +45,7 @@ import miniutils
 import minierror
 
 from miniutils import *
+from miniutils import have_ctypes, ctypes
 
 _plat_bits = struct_.calcsize('@P') * 8
 
@@ -170,7 +171,21 @@ class TypeMapper(object):
 
     def promote_numeric(self, type1, type2):
         "Promote two numeric types"
-        return miniutils.max([type1, type2], key=lambda type: type.rank)
+        type = miniutils.max([type1, type2], key=lambda type: type.rank)
+        if type1.kind != type2.kind:
+            def itemsize(type):
+                return type.itemsize // 2 if type.is_complex else type.itemsize
+
+            size = max(itemsize(type1), itemsize(type2))
+            if type.is_complex:
+                type = find_type_of_size(size * 2, complextypes)
+            elif type.is_float:
+                type = find_type_of_size(size, floating)
+            else:
+                assert type.is_int
+                type = find_type_of_size(size, integral)
+
+        return type
 
     def promote_arrays(self, type1, type2):
         "Promote two array types in an expression to a new array type"
@@ -310,6 +325,13 @@ def map_minitype_to_dtype(type):
     dtype = _dtypes[type]
     assert dtype is not None, "dtype not supported in this numpy build"
     return dtype
+
+def find_type_of_size(size, typelist):
+    for type in typelist:
+        if type.itemsize == size:
+            return type
+
+    assert False, "Type of size %d not found: %s" % (size, typelist)
 
 NONE_KIND = 0
 INT_KIND = 1
@@ -507,6 +529,9 @@ class ArrayType(Type):
         self.ndim = ndim
         self.is_c_contig = is_c_contig
         self.is_f_contig = is_f_contig
+        if ndim == 1 and (is_c_contig or is_f_contig):
+            self.is_c_contig = True
+            self.is_f_contig = True
         self.inner_contig = inner_contig or is_c_contig or is_f_contig
         self.broadcasting = broadcasting
 
@@ -755,7 +780,14 @@ class Py_ssize_t_Type(IntType):
 
     def __init__(self, **kwds):
         super(Py_ssize_t_Type, self).__init__(**kwds)
-        self.itemsize = getsize('c_ssize_t', _plat_bits // 8)
+        if have_ctypes:
+            if hasattr(ctypes, 'c_ssize_t'):
+                self.itemsize = ctypes.sizeof(ctypes.c_ssize_t)
+            else:
+                self.itemsize = size_t.itemsize
+        else:
+            self.itemsize = _plat_bits // 8
+
 
 class NPyIntp(IntType):
     is_numpy_intp = True
@@ -813,6 +845,18 @@ class Function(object):
     def __init__(self, signature, py_func):
         self.signature = signature
         self.py_func = py_func
+
+    def __call__(self, *args, **kwargs):
+        """
+        Implement this to pass the callable test for classmethod/staticmethod.
+        E.g.
+
+            @classmethod
+            @void()
+            def m(self):
+                ...
+        """
+        raise minierror.Error("Not a callable function")
 
 class FunctionType(Type):
     subtypes = ['return_type', 'args']
@@ -1069,14 +1113,13 @@ try:
 except ImportError:
     npy_intp = None
 
+size_t = IntType(name="size_t", rank=8.5,
+                 itemsize=getsize('c_size_t', _plat_bits // 8), signed=False)
 Py_ssize_t = Py_ssize_t_Type()
 Py_uintptr_t = IntType(name='Py_uintptr_t',
                        itemsize=getsize('c_void_p', Py_ssize_t.itemsize),
                        rank=8.5)
 
-
-size_t = IntType(name="size_t", rank=8.5,
-                 itemsize=getsize('c_size_t', _plat_bits / 8), signed=False)
 char = CharType(name="char", typecode='b')
 short = IntType(name="short", rank=2, typecode='h')
 int_ = IntType(name="int", rank=4, typecode='i')

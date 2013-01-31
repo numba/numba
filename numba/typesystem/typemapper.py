@@ -8,7 +8,12 @@ from numba.minivect.ctypes_conversion import convert_from_ctypes
 import numba.minivect.minitypes
 from numba.minivect.minitypes import map_dtype, object_
 
+from numba import numbawrapper
 from numba.typesystem import *
+import numba.typesystem
+
+def is_dtype_constructor(value):
+    return isinstance(value, type) and issubclass(value, np.generic)
 
 class NumbaTypeMapper(minitypes.TypeMapper):
     """
@@ -37,9 +42,13 @@ class NumbaTypeMapper(minitypes.TypeMapper):
     def from_python(self, value):
         if isinstance(value, np.ndarray):
             dtype = map_dtype(value.dtype)
-            return minitypes.ArrayType(dtype, value.ndim,
-                                       is_c_contig=value.flags['C_CONTIGUOUS'],
-                                       is_f_contig=value.flags['F_CONTIGUOUS'])
+            return minitypes.ArrayType(dtype, value.ndim) #,
+                                       #is_c_contig=value.flags['C_CONTIGUOUS'],
+                                       #is_f_contig=value.flags['F_CONTIGUOUS'])
+        elif isinstance(value, np.dtype):
+            return numba.typesystem.from_numpy_dtype(value)
+        elif is_dtype_constructor(value):
+            return numba.typesystem.from_numpy_dtype(np.dtype(value))
         elif isinstance(value, tuple):
             return tuple_
         elif isinstance(value, types.ModuleType):
@@ -59,12 +68,10 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return getattr(type(value), '__numba_ext_type')
         elif value is numba.NULL:
             return null_type
-        elif isinstance(value, numba.decorators.NumbaFunction):
-            if value.signature is None:
-                # autojit
-                return AutojitType(value)
-            else:
-                return JitType(value)
+        elif isinstance(value, numbawrapper.NumbaCompiledWrapper):
+            return JitType(value)
+        elif isinstance(value, numbawrapper.NumbaSpecializingWrapper):
+            return AutojitType(value)
         elif hasattr(value, 'from_address') and hasattr(value, 'in_dll'):
             # Try to detect ctypes pointers, or default to minivect
             try:
@@ -80,8 +87,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
         result_type = super(NumbaTypeMapper, self).from_python(value)
 
         if result_type == object_:
-            from numba import module_type_inference
-            module_type_inference.module_registry.register(self.context)
+            from numba.type_inference import module_type_inference
 
             result = module_type_inference.module_attribute_type(value)
             if result is not None:

@@ -1,7 +1,7 @@
 from numba.nodes import *
 import numba.nodes
 
-class CoercionNode(Node):
+class CoercionNode(ExprNode):
     """
     Coerce a node to a different type
     """
@@ -78,7 +78,7 @@ class CoercionNode(Node):
     def __repr__(self):
         return "Coerce(%s, %s)" % (self.type, self.node)
 
-class CastNode(Node):
+class CastNode(ExprNode):
     """
     Explicit cast by user, e.g. double(value)
     """
@@ -90,7 +90,7 @@ class CastNode(Node):
         self.type = type
 
 
-class PromotionNode(Node):
+class PromotionNode(ExprNode):
     """
     Coerces a variable of some type to another type for a phi node in a
     successor block.
@@ -109,7 +109,7 @@ class CoerceToNative(CoercionNode):
     "Coerce objects to native values"
 
 
-class DeferredCoercionNode(Node):
+class DeferredCoercionNode(ExprNode):
     """
     Coerce to the type of the given variable. The type of the variable may
     change in the meantime (e.g. may be promoted or demoted).
@@ -121,7 +121,7 @@ class DeferredCoercionNode(Node):
         self.node = node
         self.variable = variable
 
-class UntypedCoercion(Node):
+class UntypedCoercion(ExprNode):
     """
     Coerce a node to the destination type. The node need not yet have a
     type or variable.

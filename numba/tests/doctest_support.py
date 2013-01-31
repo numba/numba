@@ -20,6 +20,7 @@ import doctest
 import inspect
 
 import numba.decorators
+from numba import numbawrapper
 
 def from_module(module, object):
     """
@@ -48,7 +49,7 @@ def fix_module_doctest(module):
     module.__test__ = {}
     for name in dir(module):
         value = getattr(module, name)
-        if (isinstance(value, numba.decorators.NumbaFunction) and
+        if (isinstance(value, numbawrapper.NumbaWrapper) and
                 from_module(module, value.py_func) and value.py_func.__doc__):
             module.__test__[name] = value.py_func.__doc__
         elif (inspect.isbuiltin(value) and isinstance(value.__doc__, str) and

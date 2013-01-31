@@ -1,39 +1,13 @@
 /* Adapted from Cython/Utility/CythonFunction.c */
 
 #include <Python.h>
+#include "_numba.h"
 
 #if PY_MAJOR_VERSION >= 3
   #define PyMethod_New(func, self, klass) ( \
               (self) ? PyMethod_New(func, self) : PyInstanceMethod_New(func))
 #endif
 
-/* inline attribute */
-#ifndef CYTHON_INLINE
-  #if defined(__GNUC__)
-    #define CYTHON_INLINE __inline__
-  #elif defined(_MSC_VER)
-    #define CYTHON_INLINE __inline
-  #elif defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
-    #define CYTHON_INLINE inline
-  #else
-    #define CYTHON_INLINE
-  #endif
-#endif
-
-/* unused attribute */
-#ifndef CYTHON_UNUSED
-# if defined(__GNUC__)
-#   if !(defined(__cplusplus)) || (__GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 4))
-#     define CYTHON_UNUSED __attribute__ ((__unused__))
-#   else
-#     define CYTHON_UNUSED
-#   endif
-# elif defined(__ICC) || (defined(__INTEL_COMPILER) && !defined(_MSC_VER))
-#   define CYTHON_UNUSED __attribute__ ((__unused__))
-# else
-#   define CYTHON_UNUSED
-# endif
-#endif
 
 #if PY_VERSION_HEX < 0x02050000
   #define NAMESTR(n) ((char *)(n))
@@ -95,16 +69,16 @@ static PyObject *NumbaFunction_New(PyTypeObject *type,
                                    PyObject *self, PyObject *module,
                                    PyObject* code);
 
-static CYTHON_INLINE void *NumbaFunction_InitDefaults(PyObject *m,
+static NUMBA_INLINE void *NumbaFunction_InitDefaults(PyObject *m,
                                                    size_t size,
                                                    int pyobjects);
-static CYTHON_INLINE void NumbaFunction_SetDefaultsTuple(PyObject *m,
+static NUMBA_INLINE void NumbaFunction_SetDefaultsTuple(PyObject *m,
                                                       PyObject *tuple);
 
 /* Implementation */
 
 static PyObject *
-NumbaFunction_get_doc(NumbaFunctionObject *op, CYTHON_UNUSED void *closure)
+NumbaFunction_get_doc(NumbaFunctionObject *op, NUMBA_UNUSED void *closure)
 {
     if (op->func_doc == NULL && op->func.m_ml->ml_doc) {
 #if PY_MAJOR_VERSION >= 3
@@ -170,7 +144,7 @@ NumbaFunction_set_name(NumbaFunctionObject *op, PyObject *value)
 }
 
 static PyObject *
-NumbaFunction_get_self(NumbaFunctionObject *m, CYTHON_UNUSED void *closure)
+NumbaFunction_get_self(NumbaFunctionObject *m, NUMBA_UNUSED void *closure)
 {
     PyObject *self;
 
@@ -217,7 +191,7 @@ NumbaFunction_set_dict(NumbaFunctionObject *op, PyObject *value)
 
 /*
 static PyObject *
-NumbaFunction_get_globals(CYTHON_UNUSED NumbaFunctionObject *op)
+NumbaFunction_get_globals(NUMBA_UNUSED NumbaFunctionObject *op)
 {
     PyObject* dict = PyModule_GetDict(${module_cname});
     Py_XINCREF(dict);
@@ -226,7 +200,7 @@ NumbaFunction_get_globals(CYTHON_UNUSED NumbaFunctionObject *op)
 */
 
 static PyObject *
-NumbaFunction_get_closure(CYTHON_UNUSED NumbaFunctionObject *op)
+NumbaFunction_get_closure(NUMBA_UNUSED NumbaFunctionObject *op)
 {
     if (op->func_closure) {
         Py_INCREF(op->func_closure);
@@ -296,7 +270,7 @@ static PyMemberDef NumbaFunction_members[] = {
 };
 
 static PyObject *
-NumbaFunction_reduce(NumbaFunctionObject *m, CYTHON_UNUSED PyObject *args)
+NumbaFunction_reduce(NumbaFunctionObject *m, NUMBA_UNUSED PyObject *args)
 {
 #if PY_MAJOR_VERSION >= 3
     return PyUnicode_FromString(m->func.m_ml->ml_name);
@@ -465,7 +439,7 @@ NumbaFunction_repr(NumbaFunctionObject *op)
 
 static PyTypeObject NumbaFunctionType_type = {
     PyVarObject_HEAD_INIT(0, 0)
-    NAMESTR("cython_function_or_method"), /*tp_name*/
+    NAMESTR("numba_function_or_method"), /*tp_name*/
     sizeof(NumbaFunctionObject),   /*tp_basicsize*/
     0,                                  /*tp_itemsize*/
     (destructor) NumbaFunction_dealloc, /*tp_dealloc*/
@@ -529,7 +503,7 @@ int NumbaFunction_init(void) {
     return 0;
 }
 
-static CYTHON_INLINE void *NumbaFunction_InitDefaults(PyObject *func, size_t size, int pyobjects) {
+static NUMBA_INLINE void *NumbaFunction_InitDefaults(PyObject *func, size_t size, int pyobjects) {
     NumbaFunctionObject *m = (NumbaFunctionObject *) func;
 
     m->defaults = PyMem_Malloc(size);
@@ -540,7 +514,7 @@ static CYTHON_INLINE void *NumbaFunction_InitDefaults(PyObject *func, size_t siz
     return m->defaults;
 }
 
-static CYTHON_INLINE void NumbaFunction_SetDefaultsTuple(PyObject *func, PyObject *tuple) {
+static NUMBA_INLINE void NumbaFunction_SetDefaultsTuple(PyObject *func, PyObject *tuple) {
     NumbaFunctionObject *m = (NumbaFunctionObject *) func;
     m->defaults_tuple = tuple;
     Py_INCREF(tuple);

@@ -15,8 +15,10 @@ class UnavailableImport(object):
 
 try:
     import ctypes
+    have_ctypes = True
 except ImportError:
     ctypes = UnavailableImport("ctypes")
+    have_ctypes = False
 
 try:
     import numpy as np

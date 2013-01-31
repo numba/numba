@@ -1,6 +1,6 @@
 from numba.nodes import *
 
-class FunctionCallNode(Node):
+class FunctionCallNode(ExprNode):
     _attributes = ['signature', 'type', 'name']
 
     def __init__(self, signature, args, name=''):
@@ -80,7 +80,7 @@ class LLMacroNode (NativeCallNode):
         super(LLMacroNode, self).__init__(signature, args, None, None, **kw)
         self.macro = macro
 
-class MathNode(Node):
+class MathNode(ExprNode):
     """
     Represents a high-level call to a math function.
     """
@@ -94,7 +94,7 @@ class MathNode(Node):
         self.arg = arg
         self.type = signature.return_type
 
-class LLVMExternalFunctionNode(Node):
+class LLVMExternalFunctionNode(ExprNode):
     '''For calling an external llvm function where you only have the
     signature and the function name.
     '''
@@ -143,8 +143,8 @@ class ObjectCallNode(FunctionCallNode):
         self.py_func = py_func
 
         self.args_tuple = ast.Tuple(elts=args, ctx=ast.Load())
-        self.args_tuple.variable = Variable(typesystem.TupleType(
-                                                size=len(args)))
+        self.args_tuple.variable = Variable(
+                typesystem.TupleType(object_, size=len(args)))
 
         if keywords:
             keywords = [(ConstNode(k.arg), k.value) for k in keywords]
@@ -156,7 +156,7 @@ class ObjectCallNode(FunctionCallNode):
 
         self.type = signature.return_type
 
-class ComplexConjugateNode(Node):
+class ComplexConjugateNode(ExprNode):
     "mycomplex.conjugate()"
 
     _fields = ['complex_node']

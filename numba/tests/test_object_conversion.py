@@ -1,3 +1,7 @@
+"""
+See also numba.tests.test_overflow.
+"""
+
 import ctypes
 import unittest
 
@@ -76,5 +80,6 @@ class TestConversion(unittest.TestCase):
         assert ctypes.cast(result, ctypes.c_void_p).value == array.ctypes.data
 
 if __name__ == "__main__":
+#    TestConversion("test_pointer_conversion").test_pointer_conversion()
     from numba.tests import test_support
     test_support.main()

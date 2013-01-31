@@ -449,8 +449,8 @@ def func_with_promotion2(x):
 def test_simple_call_promotion2():
     """
     >>> result =test_simple_call_promotion2()
-    >>> round(result.real, 4)
-    3.9818
+    >>> "%.4f" % round(result.real, 4)
+    '3.9818'
     >>> round(result.imag, 4)
     3.9312
     >>> infer_simple(test_simple_call_promotion2, 'x')
@@ -477,4 +477,5 @@ def infer_simple(numba_func, *varnames):
 #func = jit(sig)(test_delayed_string_indexing_simple.py_func)
 #print vars(func)
 #test_delayed_string_indexing_simple()
+#test_delayed_array_slicing2()
 testmod()

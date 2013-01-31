@@ -13,7 +13,7 @@ class UserNodeMeta(type):
     def __repr__(cls):
         return "<class %s>" % cls.actual_name
 
-class UserNode(Node):
+class UserNode(ExprNode):
     """
     Node that users can subclass and insert in the AST without using mixins
     to provide user-specified functionality.

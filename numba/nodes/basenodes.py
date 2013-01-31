@@ -1,6 +1,11 @@
 from numba.nodes import *
 import numba.nodes
 
+def is_expr(node):
+    if not isinstance(node, Node):
+        return True
+    return isinstance(node, ExprNode)
+
 class Node(ast.AST):
     """
     Superclass for Numba AST nodes
@@ -11,6 +16,12 @@ class Node(ast.AST):
 
     def __init__(self, **kwargs):
         vars(self).update(kwargs)
+
+
+class ExprNode(Node):
+    """
+    Node that is an expression.
+    """
 
     def _variable_get(self):
         if not hasattr(self, '_variable'):
@@ -33,7 +44,7 @@ class Node(ast.AST):
         return CloneableNode(self)
 
 
-class Name(ast.Name, Node):
+class Name(ast.Name, ExprNode):
 
     cf_maybe_null = False
     raise_unbound_node = None
@@ -69,7 +80,7 @@ class WithNoPythonNode(WithPythonNode):
     "with nopython: ..."
 
 
-class CloneableNode(Node):
+class CloneableNode(ExprNode):
     """
     Create a node that can be cloned. This allows sub-expressions to be
     re-used without re-evaluating them.
@@ -90,7 +101,7 @@ class CloneableNode(Node):
     def __repr__(self):
         return "cloneable(%s)" % self.node
 
-class CloneNode(Node):
+class CloneNode(ExprNode):
     """
     Clone a CloneableNode. This allows the node's sub-expressions to be
     re-used without re-evaluating them.
@@ -117,7 +128,7 @@ class CloneNode(Node):
     def __repr__(self):
         return "clone(%s)" % self.node
 
-class ExpressionNode(Node):
+class ExpressionNode(ExprNode):
     """
     Node that allows an expression to execute a bunch of statements first.
     """

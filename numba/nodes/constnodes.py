@@ -1,7 +1,7 @@
 from numba.nodes import *
 import numba.nodes
 
-class ConstNode(Node):
+class ConstNode(ExprNode):
     """
     Wrap a constant.
     """
@@ -28,7 +28,7 @@ class ConstNode(Node):
         constant = self.pyval
 
         if constant is _NULL:
-            lvalue = llvm.core.Constant.null(type.to_llvm(context))
+            lvalue = llvm.core.Constant.null(ltype)
         elif type.is_float:
             lvalue = llvm.core.Constant.real(ltype, constant)
         elif type.is_int:

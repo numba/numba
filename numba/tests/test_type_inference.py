@@ -6,11 +6,9 @@ Test type inference.
 '''
 # ______________________________________________________________________
 
-from numba.minivect import minitypes, minierror
 from numba import *
 from numba import typesystem
-from numba import ast_type_inference
-from numba import decorators, functions, pipeline
+from numba import decorators
 
 import unittest
 
@@ -18,6 +16,7 @@ import numpy
 import numpy as np
 
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 # ______________________________________________________________________
 
@@ -159,7 +158,7 @@ class TestTypeInference(unittest.TestCase):
 
     def test_type_infer_arange(self):
         sig, symtab = infer(arange, functype())
-        self.assertEqual(symtab['a'].type, int64[:])
+        self.assertEqual(symtab['a'].type, npy_intp[:])
         self.assertEqual(symtab['b'].type, double[:])
 
     def test_empty_like(self):

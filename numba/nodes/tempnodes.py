@@ -1,6 +1,6 @@
 from numba.nodes import *
 
-class TempNode(Node): #, ast.Name):
+class TempNode(ExprNode): #, ast.Name):
     """
     Create a temporary to store values in. Does not perform reference counting.
     """
@@ -16,9 +16,21 @@ class TempNode(Node): #, ast.Name):
         self.llvm_temp = None
 
         self.dst_variable = dst_variable
+        self._tbaa_node = None
 
-    def load(self):
-        return TempLoadNode(temp=self)
+    def get_tbaa_node(self, tbaa):
+        """
+        TBAA metadata node unique to this temporary. This is valid
+        since one cannot take the address of a temporary.
+        """
+        if self._tbaa_node is None:
+            root = tbaa.get_metadata(char.pointer())
+            self._tbaa_node = tbaa.make_unique_metadata(root)
+
+        return self._tbaa_node
+
+    def load(self, invariant=False):
+        return TempLoadNode(temp=self, invariant=invariant)
 
     def store(self):
         return TempStoreNode(temp=self)
@@ -30,13 +42,14 @@ class TempNode(Node): #, ast.Name):
             name = ""
         return "temp(%s%s)" % (self.type, name)
 
-class TempLoadNode(Node):
+class TempLoadNode(ExprNode):
     _fields = ['temp']
 
-    def __init__(self, temp):
+    def __init__(self, temp, invariant=False):
         self.temp = temp
         self.type = temp.type
         self.variable = Variable(self.type)
+        self.invariant = invariant
 
     def __repr__(self):
         return "load(%s)" % self.temp

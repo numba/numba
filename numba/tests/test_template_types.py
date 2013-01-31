@@ -179,4 +179,4 @@ if __name__ == '__main__':
 #    infer(test_type_attributes, template_signature=void(T1, T2, T3, T4),
 #          type_context=type_context2, locals=locals)
 #    print test_template_with_concretes(1, 2)
-#print test_simple_template(np.arange(10, 12, dtype=np.float32))
+#    print test_simple_template(np.arange(10, 12, dtype=np.float32))

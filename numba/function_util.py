@@ -1,5 +1,14 @@
+from numba.external import utility
 
 def external_call(context, module, name, args=(), temp_name=None):
+    extfn = context.external_library.get(name)
+    return external_call_func(context, module, extfn, args, temp_name)
+
+def utility_call(context, module, name, args=(), temp_name=None):
+    extfn = context.utility_library.get(name)
+    return external_call_func(context, module, extfn, args, temp_name)
+
+def external_call_func(context, module, extfn, args=(), temp_name=None):
     '''Build a call node to the specified external function.
 
     context --- A numba context
@@ -9,14 +18,12 @@ def external_call(context, module, name, args=(), temp_name=None):
     temp_name --- [optional] Name of the temporary value in LLVM IR.
     '''
     from numba import nodes
-    temp_name = temp_name or name
-    extfn = context.external_library.get(name)
+    temp_name = temp_name or extfn.name
+    assert temp_name is not None
 
     sig = extfn.signature
-    lfunc_type = sig.to_llvm(context)
+    lfunc = extfn.declare_lfunc(context, module)
 
-    lfunc = module.get_or_insert_function(lfunc_type, name=name)
-    
     exc_check = dict(badval   = extfn.badval,
                      goodval  = extfn.goodval,
                      exc_msg  = extfn.exc_msg,
@@ -24,4 +31,8 @@ def external_call(context, module, name, args=(), temp_name=None):
                      exc_args = extfn.exc_args)
 
     result = nodes.NativeCallNode(sig, args, lfunc, name=temp_name, **exc_check)
+
+    if extfn.check_pyerr_occurred:
+        result = nodes.PyErr_OccurredNode(result)
+
     return result

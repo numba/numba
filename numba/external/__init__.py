@@ -16,7 +16,7 @@ def _import_all():
 _import_all()
 
 def default_external_library(context):
-    '''Build an external functino library
+    '''Build an external function library
         
     context --- numba context
     '''

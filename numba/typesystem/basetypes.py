@@ -5,7 +5,7 @@ import numpy as np
 # from numpy.ctypeslib import _typecodes
 
 import numba
-from numba import  extension_types, error
+from numba import  error
 from numba.minivect.minitypes import *
 from numba.minivect.minitypes import map_dtype
 from numba.minivect import minitypes, minierror
@@ -27,26 +27,37 @@ class NumbaKeyHashingType(minitypes.KeyHashingType):
 # Python Types
 #------------------------------------------------------------------------
 
-class TupleType(NumbaType, minitypes.ObjectType):
+class ContainerListType(NumbaKeyHashingType, minitypes.ObjectType):
+
+    subtypes = ['base_type']
+
+    def __init__(self, base_type, size=-1):
+        super(ContainerListType, self).__init__()
+        self.base_type = base_type
+        self.size = size
+
+    @property
+    def key(self):
+        return self.base_type, self.size
+
+    def is_sized(self):
+        return self.size >= 0
+
+    def __repr__(self):
+        return "%s(%s, %s)" % (self.name, self.base_type, self.size)
+
+class TupleType(ContainerListType):
+
     is_tuple = True
     name = "tuple"
-    size = 0
 
-    def __str__(self):
-        return "tuple(%s)" % ", ".join(["..."] * self.size)
-
-class ListType(NumbaType, minitypes.ObjectType):
+class ListType(ContainerListType):
     is_list = True
     name = "list"
-    size = 0
-
-    def __str__(self):
-        return "list(%s)" % ", ".join(["..."] * self.size)
 
 class DictType(NumbaType, minitypes.ObjectType):
     is_dict = True
     name = "dict"
-    size = 0
 
     def __str__(self):
         return "dict(%s)" % ", ".join(["..."] * self.size)
@@ -62,7 +73,34 @@ class IteratorType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "iterator<%s>" % (self.base_type,)
 
-class ModuleType(NumbaType, minitypes.ObjectType):
+class KnownValueType(NumbaType):
+    """
+    Type which is associated with a known value or well-defined symbolic
+    expression:
+
+        np.add          => np.add
+        np.add.reduce   => (np.add, "reduce")
+
+    (Remember that unbound methods like np.add.reduce are transient, i.e.
+     np.add.reduce is not np.add.reduce).
+    """
+
+    is_known_value = True
+
+    def __init__(self, value, **kwds):
+        super(KnownValueType, self).__init__(**kwds)
+        self.value = value
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __eq__(self, other):
+        return isinstance(other, KnownValueType) and self.value == other.value
+
+    def __repr__(self):
+        return "kwown_value(%s)" % (self.value,)
+
+class ModuleType(KnownValueType):
     """
     Represents a type for modules.
 
@@ -73,13 +111,18 @@ class ModuleType(NumbaType, minitypes.ObjectType):
 
     is_module = True
     is_numpy_module = False
+    is_object = True
 
     def __init__(self, module, **kwds):
-        super(ModuleType, self).__init__(**kwds)
-        self.module = module
+        super(ModuleType, self).__init__(module, **kwds)
+
         self.is_numpy_module = module is np
         self.is_numba_module = module is numba
         self.is_math_module = module is math
+
+    @property
+    def module(self):
+        return self.value
 
     def __repr__(self):
         if self.is_numpy_module:
@@ -91,27 +134,29 @@ class ModuleType(NumbaType, minitypes.ObjectType):
     def comparison_type_list(self):
         return (self.module,)
 
-class ModuleAttributeType(NumbaKeyHashingType, minitypes.ObjectType):
+class ModuleAttributeType(KnownValueType):
+    """
+    Attribute of a module. E.g. np.sin
+    """
+
     is_module_attribute = True
+    is_object = True
 
     module = None
     attr = None
 
-    def __init__(self, **kwds):
-        super(ModuleAttributeType, self).__init__(**kwds)
+    def __init__(self, module, attr, **kwds):
+        self.module = module
+        self.attr = attr
+        value = getattr(self.module, self.attr)
+
+        super(ModuleAttributeType, self).__init__(value, **kwds)
+
         base_name, dot, rest = self.module.__name__.partition(".")
         self.is_numpy_attribute = base_name == "numpy"
 
     def __repr__(self):
         return "%s.%s" % (self.module.__name__, self.attr)
-
-    @property
-    def value(self):
-        return getattr(self.module, self.attr)
-
-    @property
-    def key(self):
-        return (self.module, self.attr)
 
 class NumpyAttributeType(ModuleAttributeType):
     """
@@ -140,23 +185,35 @@ class MethodType(NumbaType, minitypes.ObjectType):
 
 class NumpyDtypeType(NumbaType, minitypes.ObjectType):
     is_numpy_dtype = True
-    dtype = None # NumPy dtype type
+    dtype = None # Numby dtype type
 
-    def resolve(self):
-        return map_dtype(self.dtype)
+    subtypes = ["dtype"]
 
-    def __repr__(self):
-        return "NumpyDtype(%s)" % self.resolve()
-
-class ResolvedNumpyDtypeType(NumbaType, minitypes.ObjectType):
-    is_numpy_dtype = True
-    dtype_type = None # numba dtype type
-
-    def resolve(self):
-        return self.dtype_type
+    def __init__(self, dtype, **kwds):
+        super(NumpyDtypeType, self).__init__(**kwds)
+        self.dtype = dtype
 
     def __repr__(self):
-        return "NumpyDtype(%s)" % self.resolve()
+        return "NumpyDtype(%s)" % self.dtype
+
+class TBAAType(NumbaType):
+    """
+    Type based alias analysis type. See numba/metadata.py.
+    """
+
+    is_tbaa = True
+
+    def __init__(self, name, root, **kwds):
+        super(TBAAType, self).__init__(**kwds)
+        self.name = name
+        self.root = root
+
+    @property
+    def comparison_type_list(self):
+        return [self.name, self.root]
+
+    def __repr__(self):
+        return "tbaa(%s)" % self.name
 
 class EllipsisType(NumbaType, minitypes.ObjectType):
     is_ellipsis = True
@@ -276,7 +333,7 @@ class NULLType(NumbaType):
 
 class CTypesPointerType(NumbaType):
     def __init__(self, pointer_type, address, **kwds):
-        super(CTypesPointer, self).__init__(**kwds)
+        super(CTypesPointerType, self).__init__(**kwds)
         self.pointer_type = pointer_type
         self.address = address
 
@@ -290,6 +347,18 @@ class SizedPointerType(NumbaType, minitypes.PointerType):
 
     size = None
     is_sized_pointer = True
+
+    def __repr__(self):
+        return "%r<%s>" % (self.base_type.pointer(), self.size)
+
+    def __eq__(self, other):
+        if other.is_sized_pointer:
+            return (self.base_type == other.base_type and
+                    self.size == other.size)
+        return other.is_pointer and self.base_type == other.base_type
+
+    def __hash__(self):
+        return hash(self.base_type.pointer())
 
 class CastType(NumbaType, minitypes.ObjectType):
     """
@@ -353,11 +422,25 @@ class ReferenceType(NumbaType):
 # END OF TYPE DEFINITIONS
 #------------------------------------------------------------------------
 
-tuple_ = TupleType()
+tuple_ = TupleType(object_, size=0)
 none = NoneType()
 null_type = NULLType()
 intp = minitypes.npy_intp
 
+const_qualifiers = frozenset(["const"])
+
+numpy_array = TBAAType("numpy array", root=object_)
+numpy_shape = TBAAType("numpy shape", root=intp.pointer(),
+                       qualifiers=const_qualifiers)
+numpy_strides = TBAAType("numpy strides", root=intp.pointer(),
+                         qualifiers=const_qualifiers)
+numpy_ndim = TBAAType("numpy flags", root=int_.pointer())
+numpy_dtype = TBAAType("numpy dtype", root=object_)
+numpy_base = TBAAType("numpy base", root=object_)
+numpy_flags = TBAAType("numpy flags", root=int_.pointer())
+
+iteration_target_type = TBAAType("iteration target", root=char.pointer())
+unique_tbaa_type = TBAAType("unique", root=char.pointer())
 
 if __name__ == '__main__':
     import doctest

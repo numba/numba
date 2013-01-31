@@ -8,12 +8,12 @@ import __builtin__ as builtins
 
 import numba
 from numba import *
-from numba import (error, transforms, closure, control_flow, visitors, nodes,
-                   module_type_inference)
-from .minivect import minierror, minitypes
-from . import translate, utils, typesystem
+from numba import error, transforms, closure, control_flow, visitors, nodes
+from numba.type_inference import module_type_inference
+from numba.minivect import minierror, minitypes
+from numba import translate, utils, typesystem
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
-from .symtab import Variable
+from numba.symtab import Variable
 from numba import stdio_util, function_util
 from numba.typesystem import is_obj, promote_closest
 from numba.utils import dump
@@ -286,7 +286,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         ast.closures = []
 
         self.function_level = kwds.get('function_level', 0)
-        self.register_module_type_inferers()
         self.init_locals()
         ast.have_return = False
 
@@ -374,11 +373,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     if var.type and var.cf_references:
                         assert not var.type.is_unresolved
                         print "Variable after analysis: %s" % var
-
-    def register_module_type_inferers(self):
-        module_type_inference.module_registry.register(self.context)
-        self.member2inferer = \
-            module_type_inference.ModuleTypeInferer.member2inferer
 
     #------------------------------------------------------------------------
     # Utilities
@@ -533,9 +527,44 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
     def remove_resolved_type(self, start_point):
         "Remove a resolved type from the type graph"
+        self.assert_resolved(start_point)
+
         for child in start_point.children:
             if start_point in child.parents:
                 child.parents.remove(start_point)
+
+        if start_point.is_scc:
+            for type in start_point.types:
+                assert not type.is_scc
+                self.remove_resolved_type(type)
+
+    def assert_resolveable(self, start_point):
+        "Assert a type in the type graph can be resolved"
+        assert (len(start_point.parents) == 0 or
+                self.is_trivial_cycle(start_point) or
+                self.is_resolved(start_point))
+
+    def assert_resolved(self, start_point):
+        "Assert a type in the type graph is resolved somewhere down the line"
+        if not (start_point.is_scc or start_point.is_deferred):
+            r = start_point
+            while r.is_unresolved:
+                resolved = r.resolve()
+                if resolved is r:
+                    break
+                r = resolved
+            assert not r.is_unresolved
+
+    def process_unvisited(self, unvisited):
+        """
+        Find and resolve any final reduced self-referential
+        portions in the graph
+        """
+        for u in list(unvisited):
+            if self.is_trivial_cycle(u):
+                u.simplify()
+            if not u.resolve().is_unresolved:
+                unvisited.remove(u)
 
     def resolve_variable_types(self):
         """
@@ -578,33 +607,28 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         #-------------------------------------------------------------------
 
         if unvisited:
-            sccs = dict((k, v) for k, v in strongly_connected.iteritems() if k is not v)
-
-            # unvisited = set([strongly_connected[type] for type in unvisited])
             unvisited = set(strongly_connected.itervalues())
-            original_unvisited = set(unvisited)
             visited = set()
+
+            # sccs = dict((k, v) for k, v in strongly_connected.iteritems()
+            #                        if k is not v)
+            # unvisited = set([strongly_connected[type] for type in unvisited])
+            # original_unvisited = set(unvisited)
+
 
             while unvisited:
                 L = list(unvisited)
                 start_points = self.candidates(unvisited)
-                self.add_resolved_parents(unvisited, start_points, strongly_connected)
+                self.add_resolved_parents(unvisited, start_points,
+                                          strongly_connected)
                 if not start_points:
-                    # Find and resolve any final reduced self-referential
-                    # portions in the graph
-                    for u in list(unvisited):
-                        if self.is_trivial_cycle(u):
-                            u.simplify()
-                        if not u.resolve().is_unresolved:
-                            unvisited.remove(u)
-
+                    self.process_unvisited(unvisited)
                     break
 
                 while start_points:
                     start_point = start_points.pop()
-                    assert (len(start_point.parents) == 0 or
-                            self.is_trivial_cycle(start_point) or
-                            self.is_resolved(start_point))
+                    self.assert_resolveable(start_point)
+
                     visited.add(start_point)
                     if start_point in unvisited:
                         unvisited.remove(start_point)
@@ -614,19 +638,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                     if not self.is_resolved(start_point):
                         start_point.simplify()
 
-                    if not (start_point.is_scc or start_point.is_deferred):
-                        r = start_point
-                        while r.is_unresolved:
-                            resolved = r.resolve()
-                            if resolved is r:
-                                break
-                            r = resolved
-                        assert not r.is_unresolved
-
                     self.remove_resolved_type(start_point)
-                    if start_point.is_scc:
-                        for type in start_point.types:
-                            self.remove_resolved_type(type)
 
                     children = (strongly_connected.get(c, c)
                                     for c in start_point.children
@@ -1306,7 +1318,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         constant_value = self._get_constant_list(node)
         if constant_value is not None:
             constant_value = tuple(constant_value)
-        type = typesystem.TupleType(size=len(node.elts))
+        # TODO: determine element type of node.elts
+        type = typesystem.TupleType(object_, size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node
@@ -1314,7 +1327,8 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     def visit_List(self, node):
         node.elts = self.visitlist(node.elts)
         constant_value = self._get_constant_list(node)
-        type = typesystem.ListType(size=len(node.elts))
+        # TODO: determine element type of node.elts
+        type = typesystem.ListType(object_, size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node
@@ -1462,11 +1476,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         """
         result_type = None
 
-        if (func_type.is_module_attribute and
-                func_type.value in self.member2inferer):
+        if (func_type.is_known_value and
+                module_type_inference.is_registered(func_type.value)):
             # Try the module type inferers
-            inferer = self.member2inferer[func_type.value]
-            result_node = inferer.resolve_call(node, new_node, func_type)
+            result_node = module_type_inference.resolve_call(
+                        self.context, node, new_node, func_type)
             if result_node is not None:
                 return result_node
 
@@ -1601,7 +1615,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         if result_type is None:
             result_type = typesystem.ModuleAttributeType(module=type.module,
-                                                          attr=node.attr)
+                                                         attr=node.attr)
 
         return result_type
 
@@ -1669,13 +1683,17 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             return self._resolve_struct_attribute(node, type)
         elif type.is_module and hasattr(type.module, node.attr):
             result_type = self._resolve_module_attribute(node, type)
+        elif (type.is_known_value and
+                  module_type_inference.is_registered((type.value, node.attr))):
+            # Unbound method call, e.g. np.add.reduce
+            result_type = typesystem.KnownValueType((type.value, node.attr),
+                                                    is_object=True)
         elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):
             # handle shape/strides/ndim etc
             return nodes.ArrayAttributeNode(node.attr, node.value)
         elif type.is_array and node.attr == "dtype":
             # TODO: resolve as constant at compile time?
-            result_type = typesystem.ResolvedNumpyDtypeType(
-                                        dtype_type=type.dtype)
+            result_type = typesystem.dtype(type.dtype)
         elif type.is_extension:
             return self._resolve_extension_attribute(node, type)
         else:

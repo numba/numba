@@ -6,37 +6,17 @@ Control flow for the AST backend.
 Adapted from Cython/Compiler/FlowControl.py
 """
 
-import os
+import re
 import ast
-import sys
 import copy
-import inspect
-import logging
-import itertools
-import subprocess
 
-from meta import asttools
-
-import numba
-from numba import (error, transforms, closure, visitors, symtab, nodes,
-                   typesystem)
-from numba.utils import dump
+from numba import error, visitors, symtab, nodes
 
 from numba import *
+from numba.control_flow import reporting, graphviz, reaching
+from numba.control_flow.cfstats import *
+from numba.control_flow.debug import *
 
-debug = False
-#debug = True
-debug_cfg = False
-#debug_cfg = True
-
-logger = logging.getLogger(__name__)
-if debug:
-    logger.setLevel(logging.DEBUG)
-
-if debug_cfg:
-    dot_output_graph = os.path.expanduser("~/cfg.dot")
-else:
-    dot_output_graph = False
 
 class ControlBlock(nodes.LowLevelBasicBlockNode):
     """
@@ -163,11 +143,6 @@ class ControlBlock(nodes.LowLevelBasicBlockNode):
         return 'Block(%d)' % self.id
 
     def __getattr__(self, attr):
-        if attr in ('variable', 'type'):
-            return getattr(self.body[0], attr)
-        raise AttributeError
-
-    def __getattr__(self, attr):
         if attr in ('variable', 'type', 'ctx'):
             return getattr(self.body[0], attr)
         raise AttributeError
@@ -256,7 +231,7 @@ class ControlFlow(object):
         self.blocks.append(exit_block)
 
     def is_tracked(self, entry):
-        return entry.renameable
+        return entry.renameable and not re.match(r"_\[\d+\]", entry.name)
 
     def mark_position(self, node):
         """Mark position, will be used to draw graph nodes."""
@@ -294,7 +269,7 @@ class ControlFlow(object):
         if self.block and self.is_tracked(entry):
             self.block.stats.append(NameReference(node, entry))
             # Local variable is definitely bound after this reference
-            if not allow_null(node):
+            if not reaching.allow_null(node):
                 self.block.bound.add(entry)
             self.entries.add(entry)
 
@@ -527,6 +502,8 @@ class ControlFlow(object):
             for block in self.blocks:
                 print 'DF(%d) = %s' % (block.id, block.dominance_frontier)
 
+        argnames = [name.id for name in ast.args.args]
+
         #
         ### 1) Insert phi nodes in the right places
         #
@@ -559,7 +536,7 @@ class ControlFlow(object):
         for var_name, var in symbol_table.items():
             if var.renameable:
                 new_var = symbol_table.rename(var, self.blocks[0])
-                new_var.set_uninitialized = True
+                new_var.uninitialized = var.name not in argnames
 
         self.rename_assignments(self.blocks[0])
 
@@ -583,6 +560,8 @@ class ControlFlow(object):
                     incoming_var = parent.symtab.lookup_most_recent(variable.name)
                     phi.incoming.add(incoming_var)
 
+                    phi_node.variable.uninitialized |= incoming_var.uninitialized
+
                     # Update def-use chain
                     incoming_var.cf_references.append(phi)
 
@@ -597,441 +576,6 @@ class ControlFlow(object):
                 current_var = block.symtab.lookup_most_recent(stat.entry.name)
                 stat.node.variable = current_var
                 current_var.cf_references.append(stat.node)
-
-
-class StatementDescr(object):
-    is_assignment = False
-
-class LoopDescr(object):
-    def __init__(self, next_block, loop_block):
-        self.next_block = next_block
-        self.loop_block = loop_block
-        self.exceptions = []
-
-
-class ExceptionDescr(object):
-    """Exception handling helper.
-
-    entry_point   ControlBlock Exception handling entry point
-    finally_enter ControlBlock Normal finally clause entry point
-    finally_exit  ControlBlock Normal finally clause exit point
-    """
-
-    def __init__(self, entry_point, finally_enter=None, finally_exit=None):
-        self.entry_point = entry_point
-        self.finally_enter = finally_enter
-        self.finally_exit = finally_exit
-
-
-class NameAssignment(object):
-
-    is_assignment = True
-
-    def __init__(self, lhs, rhs, entry, assignment_node, warn_unused=True):
-        if not hasattr(lhs, 'cf_state'):
-            lhs.cf_state = set()
-        if not hasattr(lhs, 'cf_is_null'):
-            lhs.cf_is_null = False
-
-        self.lhs = lhs
-        self.rhs = rhs
-        self.assignment_node = assignment_node
-
-        self.entry = entry
-        self.pos = getpos(lhs)
-        self.refs = set()
-        self.is_arg = False
-        self.is_deletion = False
-
-        # NOTE: this is imperfect, since it means warnings are disabled for
-        # *all* definitions in the function...
-        self.entry.warn_unused = warn_unused
-
-    def __repr__(self):
-        return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
-
-    def infer_type(self, scope):
-        return self.rhs.infer_type(scope)
-
-    def type_dependencies(self, scope):
-        return self.rhs.type_dependencies(scope)
-
-class Argument(NameAssignment):
-    def __init__(self, lhs, rhs, entry):
-        NameAssignment.__init__(self, lhs, rhs, entry)
-        self.is_arg = True
-
-
-class PhiNode(nodes.Node):
-
-    def __init__(self, block, variable):
-        self.block = block
-        # Unrenamed variable. This will be replaced by the renamed version
-        self.variable = variable
-        self.type = None
-        # self.incoming_blocks = []
-        self.incoming = set()
-        self.phis = set()
-
-        self.assignment_node = self
-
-    @property
-    def entry(self):
-        return self.variable
-
-    def add_incoming_block(self, block):
-        self.incoming_blocks.append(block)
-
-    def add(self, block, assmnt):
-        if assmnt is not self:
-            self.phis.add((block, assmnt))
-
-    def __repr__(self):
-        lhs = self.variable.name
-        if self.variable.renamed_name:
-            lhs = self.variable.unmangled_name
-        incoming = ", ".join("var(%s, %s)" % (var_in.unmangled_name, var_in.type)
-                                 for var_in in self.incoming)
-        if self.variable.type:
-            type = str(self.variable.type)
-        else:
-            type = ""
-        return "%s %s = phi(%s)" % (type, lhs, incoming)
-
-    def find_incoming(self):
-        for parent_block in self.block.parents:
-            name = self.variable.name
-            incoming_var = parent_block.symtab.lookup_most_recent(name)
-            yield parent_block, incoming_var
-
-
-class NameDeletion(NameAssignment):
-    def __init__(self, lhs, entry):
-        NameAssignment.__init__(self, lhs, lhs, entry)
-        self.is_deletion = True
-
-    def infer_type(self, scope):
-        inferred_type = self.rhs.infer_type(scope)
-        if (not inferred_type.is_pyobject and
-            inferred_type.can_coerce_to_pyobject(scope)):
-            return py_object_type
-        return inferred_type
-
-
-class Uninitialized(object):
-    pass
-
-def getpos(node):
-    if isinstance(node, NameAssignment):
-        return node.pos
-    return node.lineno, node.col_offset
-
-class NameReference(object):
-    def __init__(self, node, entry):
-        if not hasattr(node, 'cf_state'):
-            node.cf_state = set()
-        self.node = node
-        self.entry = entry
-        self.pos = getpos(node)
-
-    def __repr__(self):
-        return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
-
-
-class ControlFlowState(list):
-    # Keeps track of Node's entry assignments
-    #
-    # cf_is_null        [boolean] It is uninitialized
-    # cf_maybe_null     [boolean] May be uninitialized
-    # is_single         [boolean] Has only one assignment at this point
-
-    cf_maybe_null = False
-    cf_is_null = False
-    is_single = False
-
-    def __init__(self, state):
-        if Uninitialized in state:
-            state.discard(Uninitialized)
-            self.cf_maybe_null = True
-            if not state:
-                self.cf_is_null = True
-        else:
-            if len(state) == 1:
-                self.is_single = True
-        super(ControlFlowState, self).__init__(state)
-
-    def one(self):
-        return self[0]
-
-
-class GVContext(object):
-    """Graphviz subgraph object."""
-
-    def __init__(self):
-        self.blockids = {}
-        self.nextid = 0
-        self.children = []
-        self.sources = {}
-
-    def add(self, child):
-        self.children.append(child)
-
-    def nodeid(self, block):
-        if block not in self.blockids:
-            self.blockids[block] = 'block%d' % self.nextid
-            self.nextid += 1
-        return self.blockids[block]
-
-    def extract_sources(self, block):
-        if not block.positions:
-            return ''
-        start = min(block.positions)
-        stop = max(block.positions)
-        srcdescr = start[0]
-        if not srcdescr in self.sources:
-            self.sources[srcdescr] = list(srcdescr.get_lines())
-        lines = self.sources[srcdescr]
-
-        src_descr, begin_line, begin_col = start
-        src_descr, end_line, end_col = stop
-        lines = lines[begin_line - 1:end_line]
-        if not lines:
-            return ''
-        #lines[0] = lines[0][begin_col:]
-        #lines[-1] = lines[-1][:end_col]
-        return '\\n'.join([line.strip() for line in lines if line.strip()])
-
-    def render(self, fp, name, annotate_defs=False):
-        """Render graphviz dot graph"""
-        fp.write('digraph %s {\n' % name)
-        fp.write(' node [shape=box];\n')
-        for child in self.children:
-            child.render(fp, self, annotate_defs)
-        fp.write('}\n')
-
-    def escape(self, text):
-        return text.replace('"', '\\"').replace('\n', '\\n')
-
-
-class GV(object):
-    """
-    Graphviz DOT renderer.
-    """
-
-    def __init__(self, name, flow):
-        self.name = name
-        self.flow = flow
-
-    def format_phis(self, block):
-        result = "\\l".join(str(phi) for var, phi in block.phis.iteritems())
-        return result
-
-    def render(self, fp, ctx, annotate_defs=False):
-        fp.write(' subgraph %s {\n' % self.name)
-        for block in self.flow.blocks:
-            if block.have_code:
-                code = ctx.extract_sources(block)
-                if annotate_defs:
-                    for stat in block.stats:
-                        if isinstance(stat, NameAssignment):
-                            code += '\n %s [definition]' % stat.entry.name
-                        elif isinstance(stat, NameReference):
-                            if stat.entry:
-                                code += '\n %s [reference]' % stat.entry.name
-            else:
-                code = ""
-
-            if block.have_code and block.label == 'empty':
-                label = ''
-            else:
-                label = '%s: ' % block.label
-
-            phis = self.format_phis(block)
-            label = '%d\\l%s%s\\n%s' % (block.id, label, phis, code)
-
-            pid = ctx.nodeid(block)
-            fp.write('  %s [label="%s"];\n' % (pid, ctx.escape(label)))
-        for block in self.flow.blocks:
-            pid = ctx.nodeid(block)
-            for child in block.children:
-                fp.write('  %s -> %s;\n' % (pid, ctx.nodeid(child)))
-        fp.write(' }\n')
-
-class SourceDescr(object):
-    def __init__(self, func, ast):
-        self.func = func
-        self.ast = ast
-
-    def get_lines(self):
-        if self.func:
-            source = inspect.getsource(self.func)
-        else:
-            try:
-                source = asttools.dump_python_source(self.ast)
-            except Exception:
-                source = ""
-
-        source = "\n" * (self.ast.lineno - 2) + source
-        return source.splitlines()
-
-class MessageCollection:
-    """Collect error/warnings messages first then sort"""
-
-    def __init__(self):
-        self.messages = []
-
-    def error(self, node, message):
-        self.messages.append((getpos(node), node, True, message))
-
-    def warning(self, node, message):
-        self.messages.append((getpos(node), node, False, message))
-
-    def report(self):
-        self.messages.sort()
-        errors = []
-        for pos, node, is_error, message in self.messages:
-            if is_error:
-                errors.append((node, message))
-            warning(node, message)
-
-        if errors:
-            raise error.NumbaError(*errors[0])
-
-def warning(node, message):
-    # printing allows us to test the code
-    print "Warning %s%s" % (error.format_pos(node), message)
-    # logger.warning("Warning %s: %s", error.format_postup(getpos(node)), message)
-
-def warn_unreachable(node):
-    if hasattr(node, 'lineno'):
-        print "Warning, unreachable code at %s" % error.format_pos(node).rstrip(': ')
-
-def allow_null(node):
-    return False
-
-def check_definitions(flow, compiler_directives):
-    flow.initialize()
-    flow.reaching_definitions()
-
-    # Track down state
-    assignments = set()
-    # Node to entry map
-    references = {}
-    assmt_nodes = set()
-
-    for block in flow.blocks:
-        i_state = block.i_input
-        for stat in block.stats:
-            i_assmts = flow.assmts[stat.entry]
-            state = flow.map_one(i_state, stat.entry)
-            if isinstance(stat, NameAssignment):
-                stat.lhs.cf_state.update(state)
-                assmt_nodes.add(stat.lhs)
-                i_state = i_state & ~i_assmts.mask
-                if stat.is_deletion:
-                    i_state |= i_assmts.bit
-                else:
-                    i_state |= stat.bit
-                assignments.add(stat)
-                # if stat.rhs is not fake_rhs_expr:
-                stat.entry.cf_assignments.append(stat)
-            elif isinstance(stat, NameReference):
-                references[stat.node] = stat.entry
-                stat.entry.cf_references.append(stat)
-                stat.node.cf_state.update(state)
-                if not allow_null(stat.node):
-                    i_state &= ~i_assmts.bit
-                state.discard(Uninitialized)
-                for assmt in state:
-                    assmt.refs.add(stat)
-
-    # Check variable usage
-    warn_maybe_uninitialized = compiler_directives['warn.maybe_uninitialized']
-    warn_unused_result = compiler_directives['warn.unused_result']
-    warn_unused = compiler_directives['warn.unused']
-    warn_unused_arg = compiler_directives['warn.unused_arg']
-
-    messages = MessageCollection()
-
-    # assignment hints
-    for node in assmt_nodes:
-        if Uninitialized in node.cf_state:
-            node.cf_maybe_null = True
-            if len(node.cf_state) == 1:
-                # node.cf_state == set([Uninitialized])
-                node.cf_is_null = True
-            else:
-                node.cf_is_null = False
-        else:
-            node.cf_is_null = False
-            node.cf_maybe_null = False
-
-    # Find uninitialized references and cf-hints
-    for node, entry in references.iteritems():
-        if Uninitialized in node.cf_state:
-            node.cf_maybe_null = True
-            from_closure = False # entry.from_closure
-            if not from_closure and len(node.cf_state) == 1:
-                node.cf_is_null = True
-            if allow_null(node) or from_closure: # or entry.is_pyclass_attr:
-                pass # Can be uninitialized here
-            elif node.cf_is_null:
-                is_object = True #entry.type.is_pyobject
-                is_unspecified = False #entry.type.is_unspecified
-                error_on_uninitialized = False #entry.error_on_uninitialized
-                if entry.renameable and (is_object or is_unspecified or
-                                         error_on_uninitialized):
-                    messages.error(
-                        node,
-                        "local variable '%s' referenced before assignment"
-                        % entry.name)
-                else:
-                    messages.warning(
-                        node,
-                        "local variable '%s' referenced before assignment"
-                        % entry.name)
-            elif warn_maybe_uninitialized:
-                messages.warning(
-                    node,
-                    "local variable '%s' might be referenced before assignment"
-                    % entry.name)
-        else:
-            node.cf_is_null = False
-            node.cf_maybe_null = False
-
-    # Unused result
-    for assmt in assignments:
-        if not assmt.refs: # and not assmt.entry.is_pyclass_attr
-                           # and not assmt.entry.in_closure):
-            if assmt.entry.cf_references and warn_unused_result:
-                if assmt.is_arg:
-                    messages.warning(assmt, "Unused argument value '%s'" %
-                                     assmt.entry.name)
-                else:
-                    messages.warning(assmt, "Unused result in '%s'" %
-                                     assmt.entry.name)
-            assmt.lhs.cf_used = False
-
-    # Unused entries
-    for entry in flow.entries:
-        if (not entry.cf_references and not entry.is_cellvar and
-                entry.renameable): # and not entry.is_pyclass_attr
-            if entry.is_arg:
-                if warn_unused_arg:
-                    messages.warning(entry, "Unused argument '%s'" %
-                                     entry.name)
-            else:
-                if warn_unused and entry.warn_unused and flow.is_tracked(entry):
-                    messages.warning(entry, "Unused variable '%s'" %
-                                     entry.name)
-            entry.cf_used = False
-
-    messages.report()
-
-    for node in assmt_nodes:
-        node.cf_state = None #ControlFlowState(node.cf_state)
-    for node in references:
-        node.cf_state = None #ControlFlowState(node.cf_state)
 
 
 class FuncDefExprNode(nodes.Node):
@@ -1066,8 +610,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         self.graphviz = self.current_directives['control_flow.dot_output']
         if self.graphviz:
-            self.gv_ctx = GVContext()
-            self.source_descr = SourceDescr(func, ast)
+            self.gv_ctx = graphviz.GVContext()
+            self.source_descr = reporting.SourceDescr(func, ast)
 
         # Stack of control flow blocks
         self.stack = []
@@ -1115,7 +659,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             # Unreachable code
             # NOTE: removing this here means there is no validation of the
             # unreachable code!
-            warn_unreachable(node)
+            reporting.warn_unreachable(node)
             return None
 
         return super(ControlFlowAnalysis, self).visit(node)
@@ -1171,7 +715,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         # Cleanup graph
         # self.flow.normalize()
-        check_definitions(self.flow, self.current_directives)
+        reaching.check_definitions(self.flow, self.current_directives)
 
         # self.render_gv(node)
 
@@ -1182,7 +726,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         return node
 
     def render_gv(self, node):
-        render_gv(node, self.gv_ctx, self.flow, self.current_directives)
+        graphviz.render_gv(node, self.gv_ctx, self.flow, self.current_directives)
 
     def mark_assignment(self, lhs, rhs=None, assignment=None, warn_unused=True):
         assert self.flow.block
@@ -1494,6 +1038,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         return node
 
     def visit_Raise(self, node):
+        raise error.NumbaError(node, "Raise statement not implemented yet")
+
         self.visitchildren(node)
         if self.flow.exceptions:
             self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
@@ -1557,105 +1103,3 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
     def visit_Print(self, node):
         self.generic_visit(node)
         return node
-
-class DeleteStatement(visitors.NumbaVisitor):
-    """
-    Delete a (compound) statement that contains basic blocks.
-    The statement must be at the start of the entry block.
-
-    idom: the immediate dominator of
-    """
-
-    def __init__(self, flow):
-        self.flow = flow
-
-    def visit_If(self, node):
-        self.generic_visit(node)
-
-        # Visit ControlBlocks
-        self.visit(node.cond_block)
-        self.visit(node.if_block)
-        if node.orelse:
-            self.visit(node.else_block)
-        if node.exit_block:
-            self.visit(node.exit_block)
-
-    visit_While = visit_If
-
-    def visit_For(self, node):
-        self.generic_visit(node)
-
-        # Visit ControlBlocks
-        self.visit(node.cond_block)
-        self.visit(node.if_block)
-        self.visit(node.incr_block)
-        if node.orelse:
-            self.visit(node.else_block)
-        if node.exit_block:
-            self.visit(node.exit_block)
-
-
-    def visit_ControlBlock(self, node):
-        #print "deleting block", node
-        for phi in node.phi_nodes:
-            for incoming in phi.incoming:
-                #print "deleting", incoming, phi
-                incoming.cf_references.remove(phi)
-
-        self.generic_visit(node)
-        node.delete(self.flow)
-
-    def visit_Name(self, node):
-        references = node.variable.cf_references
-        if isinstance(node.ctx, ast.Load) and node in references:
-            references.remove(node)
-
-
-#----------------------------------------------------------------------------
-# Graphviz Rendering
-#----------------------------------------------------------------------------
-
-def get_png_output_name(dot_output):
-    prefix, ext = os.path.splitext(dot_output)
-    i = 0
-    while True:
-        png_output = "%s%d.png" % (prefix, i)
-        if not os.path.exists(png_output):
-            break
-
-        i += 1
-
-    return png_output
-
-
-def write_dotfile(current_directives, dot_output, gv_ctx):
-    annotate_defs = current_directives['control_flow.dot_annotate_defs']
-    fp = open(dot_output, 'wt')
-    try:
-        gv_ctx.render(fp, 'module', annotate_defs=annotate_defs)
-    finally:
-        fp.close()
-
-
-def write_image(dot_output):
-    png_output = get_png_output_name(dot_output)
-    fp = open(png_output, 'wb')
-    try:
-        p = subprocess.Popen(['dot', '-Tpng', dot_output],
-                             stdout=fp.fileno(),
-                             stderr=subprocess.PIPE)
-        p.wait()
-    except EnvironmentError, e:
-        logger.warn("Unable to write png: %s. Wrote %s" % (e, dot_output))
-    else:
-        logger.warn("Wrote %s" % png_output)
-    finally:
-        fp.close()
-
-
-def render_gv(node, gv_ctx, flow, current_directives):
-    gv_ctx.add(GV(node.name, flow))
-    dot_output = current_directives['control_flow.dot_output']
-    if dot_output:
-        write_dotfile(current_directives, dot_output, gv_ctx)
-        write_image(dot_output)

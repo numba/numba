@@ -1,7 +1,14 @@
+"""
+This module adds a way to declare external functions.
+
+See numba.function_util on how to call them.
+"""
+
 from numba.minivect import minitypes
 
 class ExternalFunction(object):
-    _attributes = ('func_name', 'arg_types', 'return_type', 'is_vararg')
+    _attributes = ('func_name', 'arg_types', 'return_type', 'is_vararg',
+                   'check_pyerr_occurred')
     func_name = None
     arg_types = None
     return_type = None
@@ -13,7 +20,16 @@ class ExternalFunction(object):
     exc_msg = None
     exc_args = None
 
-    def __init__(self, **kwargs):
+    check_pyerr_occurred = False
+
+    def __init__(self, return_type=None, arg_types=None, **kwargs):
+        # Add positional arguments to keyword arguments
+        if return_type is not None:
+            kwargs['return_type'] = return_type
+        if arg_types is not None:
+            kwargs['arg_types'] = arg_types
+
+        # Process keyword arguments
         if __debug__:
             # Only accept keyword arguments defined _attributes
             for k, v in kwargs.items():
@@ -33,6 +49,11 @@ class ExternalFunction(object):
             return type(self).__name__
         else:
             return self.func_name
+
+    def declare_lfunc(self, context, llvm_module):
+        lfunc_type = self.signature.to_llvm(context)
+        lfunc = llvm_module.get_or_insert_function(lfunc_type, name=self.name)
+        return lfunc
 
 class ExternalLibrary(object):
     def __init__(self, context):

@@ -278,8 +278,11 @@ class NumbaVisitorMixin(CooperativeBase):
         Callback for when a new cfg block is encountered.
         """
 
-    def handle_phis(self):
-        for block in self.ast.flow.blocks:
+    def handle_phis(self, reversed=False):
+        blocks = self.ast.flow.blocks
+        if reversed:
+            blocks = blocks[::-1]
+        for block in blocks:
             for phi_node in block.phi_nodes:
                 self.handle_phi(phi_node)
 

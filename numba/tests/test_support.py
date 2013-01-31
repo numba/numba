@@ -13,18 +13,57 @@ jit_ = jit
 
 import __builtin__
 
-def checkSkipFlag(reason):
-    def _checkSkipFlag(fn):
-        @nottest
-        def _checkSkipWrapper(self, *args, **kws):
-            self.skipTest(reason)
-        return _checkSkipWrapper
-    return _checkSkipFlag
-
 class ASTTestCase(unittest.TestCase):
     jit = staticmethod(lambda *args, **kw: jit_(*args, **dict(kw, backend='ast')))
     backend = 'ast'
     autojit = staticmethod(autojit(backend=backend))
+
+#------------------------------------------------------------------------
+# Support for unittest in < py2.7
+#------------------------------------------------------------------------
+
+have_unit_skip = sys.version_info[:2] > (2, 6)
+
+if have_unit_skip:
+    from unittest import SkipTest
+else:
+    class SkipTest(Exception):
+        "Skip a test in < py27"
+
+@nottest
+def skip_test(reason):
+    if have_unit_skip:
+        raise SkipTest(reason)
+    else:
+        print >>sys.stderr, "Skipping: " + reason
+
+def skip_if(should_skip, message):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            if should_skip:
+                skip_test(message)
+            else:
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def skip_unless(should_skip, message):
+    return skip_if(not should_skip, message)
+
+def skip(message):
+    return skip_if(True, message)
+
+def checkSkipFlag(reason):
+    def _checkSkipFlag(fn):
+        @nottest
+        def _checkSkipWrapper(self, *args, **kws):
+            skip_test(reason)
+        return _checkSkipWrapper
+    return _checkSkipFlag
+
+#------------------------------------------------------------------------
+# Test running
+#------------------------------------------------------------------------
 
 def main():
     import sys, logging
@@ -60,4 +99,4 @@ def testmod(module=None, runit=False):
 
     doctest_support.testmod(module, run_doctests=runit or modname == '__main__')
     #if modname == '__main__':
-    #    numba.nose_run(mod)
+    #numba.nose_run(mod)

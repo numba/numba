@@ -1,7 +1,7 @@
 from numba.nodes import *
 import numba.nodes
 
-class CheckErrorNode(Node):
+class CheckErrorNode(ExprNode):
     """
     Check for an exception.
 
@@ -10,6 +10,8 @@ class CheckErrorNode(Node):
 
     If exc_type, exc_msg and optionally exc_args are given, an error is
     raised instead of propagating it.
+
+    See RaiseNode for the exc_* arguments.
     """
 
     _fields = ['return_value', 'badval', 'raise_node']
@@ -30,7 +32,22 @@ class CheckErrorNode(Node):
 
         self.raise_node = RaiseNode(exc_type, exc_msg, exc_args)
 
-class RaiseNode(Node):
+class RaiseNode(ExprNode):
+    """
+    Raise an exception.
+
+        exception_type: The Python exception type
+
+        exc_type: The Python exception as an AST node
+            May be passed in as a Python exception type
+
+        exc_msg: The message to print as an AST node
+            May be passed in as a string
+
+        exc_args: If given, must be an list of AST nodes representing the
+                  arguments to PyErr_Format (matching the format specifiers
+                  at runtime in exc_msg)
+    """
 
     _fields = ['exc_type', 'exc_msg', 'exc_args']
 
@@ -50,7 +67,26 @@ class RaiseNode(Node):
 
         self.print_on_trap = print_on_trap
 
-class PropagateNode(Node):
+class PropagateNode(ExprNode):
     """
-    Propagate an exception (jump to the error label).
+    Propagate an exception (jump to the error label). This is resolved
+    at code generation time and can be generated at any moment.
     """
+
+class PyErr_OccurredNode(ExprNode):
+    """
+    Check for a set Python exception using PyErr_Occurred().
+
+    Can be set any time after type inference. This node is resolved during
+    late specialization.
+    """
+
+    # TODO: support checking for (value == badval && PyErr_Occurred()) for
+    #       efficiency
+
+    _fields = ['node']
+
+    def __init__(self, node):
+        self.node = node
+        self.variable = node.variable
+        self.type = node.type

@@ -5,6 +5,7 @@ Version 0.5
     * Allow referring to variables before lexical definition
 * Support multiple comparisons
 * Support for template types
+* List comprehensions
 * Support for pointers
 * Many bug fixes
 * Added user documentation

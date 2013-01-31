@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+from numba.tests import test_support
 
 #docutils = py.test.importorskip("theano")
 import unittest
@@ -8,7 +9,7 @@ try:
     import theano
     raise ImportError
 except ImportError:
-    raise unittest.SkipTest
+    raise test_support.SkipTest("Theano is not available")
 
 from numba.ad import Watcher
 

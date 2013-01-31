@@ -97,7 +97,8 @@ from . import macros, utils, typesystem
 from .symtab import Variable
 from . import visitors, nodes, error, functions
 from numba import stdio_util, function_util
-from numba.typesystem import is_obj, promote_closest
+from numba.typesystem import is_obj, promote_closest, promote_to_native
+from numba.external import utility
 from numba.utils import dump
 
 import llvm.core
@@ -488,7 +489,7 @@ class TransformForIterable(visitors.NumbaTransformer):
             node.iter = ast.Call(func=call_func, args=call_args)
             node.iter.type = call_func.type
 
-            node.index = target_temp.load()
+            node.index = target_temp.load(invariant=True)
             # add assignment to new target variable at the start of the body
             index = ast.Index(value=node.index)
             index.type = target_temp.type
@@ -639,6 +640,25 @@ class ResolveCoercions(visitors.NumbaTransformer):
         self.generic_visit(new_node)
         return new_node
 
+    def object_to_int(self, node, dst_type):
+        """
+        Return node that converts the given node to the dst_type.
+        This also performs overflow/underflow checking, and conversion to
+        a Python int or long if necessary.
+
+        PyLong_AsLong and friends do not do this (overflow/underflow checking
+        is only for longs, and conversion to int|long depends on the Python
+        version).
+        """
+        dst_type = promote_to_native(dst_type)
+        assert dst_type in utility.object_to_numeric
+        utility_func = utility.object_to_numeric[dst_type]
+        result = function_util.external_call_func(self.context,
+                                                  self.llvm_module,
+                                                  utility_func,
+                                                  args=[node])
+        return result
+
     def visit_CoerceToNative(self, node):
         """
         Try to perform fast coercion using e.g. PyLong_AsLong(), with a
@@ -655,12 +675,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 node_type = ulonglong
 
             if node_type.is_int: # and not
-                cls = self._get_int_conversion_func(node_type,
-                                                    pyapi._as_long)
-                if not node_type.signed or node_type == Py_ssize_t:
-                    # PyLong_AsLong calls __int__, but
-                    # PyLong_AsUnsignedLong doesn't...
-                    node.node = nodes.call_pyfunc(long, [node.node])
+                new_node = self.object_to_int(node.node, node_type)
             elif node_type.is_float:
                 cls = pyapi.PyFloat_AsDouble
             elif node_type.is_complex:
@@ -897,7 +912,8 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
         args = [n] + objs
         new_node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
-        new_node.type = typesystem.TupleType(size=len(node.elts))
+        # TODO: determine element type of node.elts
+        new_node.type = typesystem.TupleType(object_, size=len(node.elts))
         return nodes.ObjectTempNode(new_node)
 
     def visit_List(self, node):
@@ -1137,7 +1153,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         elif node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif node.type.is_numpy_dtype:
-            dtype_type = node.type.resolve()
+            dtype_type = node.type.dtype
             return nodes.ObjectInjectNode(dtype_type.get_dtype())
         elif is_obj(node.value.type):
             if node.value.type.is_module:
@@ -1268,7 +1284,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             assert node.exc_msg
 
             if node.exc_args:
-                args = [node.exc_type, node.exc_msg, node.exc_args]
+                args = [node.exc_type, node.exc_msg] + node.exc_args
                 raise_node = function_util.external_call(self.context,
                                                          self.llvm_module,
                                                          'PyErr_Format',
@@ -1329,6 +1345,18 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         check = nodes.build_if(test=test, body=[node.raise_node], orelse=[])
         return self.visit(check)
 
+    def visit_PyErr_OccurredNode(self, node):
+        check_err = nodes.CheckErrorNode(
+            nodes.ptrtoint(function_util.external_call(
+                self.context,
+                self.llvm_module,
+                'PyErr_Occurred')),
+            goodval=nodes.ptrtoint(nodes.NULL))
+        result = nodes.CloneableNode(node.node)
+        result = nodes.ExpressionNode(stmts=[result, check_err],
+                                      expr=result.clone)
+        return self.visit(result)
+
     def visit_Name(self, node):
         if node.type.is_builtin and not node.variable.is_local:
             obj = getattr(builtins, node.name)
@@ -1363,6 +1391,9 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         return node
 
     def visit_Compare(self, node):
+        if node.left.type.is_object:
+            raise error.NumbaError(node,
+                                   "Comparing objects is not yet supported")
         if node.left.type.is_pointer and node.comparators[0].type.is_pointer:
             node.left = nodes.CoercionNode(node.left, Py_uintptr_t)
             node.comparators = [nodes.CoercionNode(node.comparators[0],
