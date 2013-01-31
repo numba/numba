@@ -64,6 +64,7 @@ class ModuleTypeInfererRegistry(object):
         if self.is_registered(value):
             raise ValueAlreadyRegistered((value, module, inferer))
 
+        self.value_to_module[value] = (module, attr)
         self.value_to_inferer[value] = (inferer, pass_in_types)
 
     def register_unbound_method(self, module, attr, method_name, inferer,
