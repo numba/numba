@@ -4,6 +4,7 @@
 Optimizations module.
 """
 
+import ast
 from itertools import imap
 
 from numba import typesystem
@@ -88,7 +89,7 @@ class Preloader(visitors.NumbaTransformer):
 
     def visit_Subscript(self, node):
         if (node.value.type.is_array and not node.type.is_array and
-                node.slice.type.is_int):
+                node.slice.type.is_int and isinstance(node.value, ast.Name)):
             array_variable = node.value.variable
 
             # Set the preload conditions
