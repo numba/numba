@@ -449,8 +449,8 @@ def func_with_promotion2(x):
 def test_simple_call_promotion2():
     """
     >>> result =test_simple_call_promotion2()
-    >>> round(result.real, 4)
-    3.9818
+    >>> "%.4f" % round(result.real, 4)
+    '3.9818'
     >>> round(result.imag, 4)
     3.9312
     >>> infer_simple(test_simple_call_promotion2, 'x')
