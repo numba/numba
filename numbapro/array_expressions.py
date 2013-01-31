@@ -11,7 +11,7 @@ from numba import error, pipeline, nodes, ufunc_builder
 from numba.minivect import minierror, minitypes, specializers, miniast
 from numba import translate, utils, functions, nodes, transforms
 from numba.symtab import Variable
-from numba import visitors, nodes, error, ast_type_inference, ast_translate
+from numba import visitors, nodes, error, type_inference, ast_translate
 from numba.utils import dump
 
 from numbapro import vectorize, dispatch, array_slicing
@@ -34,7 +34,7 @@ def is_elementwise_assignment(context, assmnt_node):
 
 
 class ArrayExpressionRewrite(visitors.NumbaTransformer,
-                             ast_type_inference.NumpyMixin,
+                             type_inference.infer.NumpyMixin,
                              transforms.MathMixin):
     """
     Find element-wise expressions and run ElementalMapper to turn it into

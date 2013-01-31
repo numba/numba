@@ -10,8 +10,7 @@ from llvm_cbuilder import shortnames as C
 from llvm_cbuilder import builder
 
 from numba import *
-from numba import (visitors, nodes, error,
-                   ast_type_inference, ast_translate,
+from numba import (visitors, nodes, error, type_inference, ast_translate,
                    ndarray_helpers, llvm_types)
 from numba.minivect import minitypes
 from numbapro.vectorize.gufunc import PyArray

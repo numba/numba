@@ -17,7 +17,7 @@ from _cuda.transform import context
 from _cuda import ptx
 from numba.minivect import minitypes
 from numba import void
-from numba import pipeline
+from numba import pipeline, numbawrapper
 import numba.decorators
 
 cached = {}
@@ -225,7 +225,7 @@ def _link_device_function(lfunc):
 
 
 
-class CudaDeviceFunction(numba.decorators.NumbaFunction):
+class CudaDeviceFunction(numbawrapper.NumbaCompiledWrapper):
     def __init__(self, py_func, wrapper=None, ctypes_func=None,
                  signature=None, lfunc=None, extra=None):
         super(CudaDeviceFunction, self).__init__(py_func, wrapper, ctypes_func,
@@ -234,7 +234,7 @@ class CudaDeviceFunction(numba.decorators.NumbaFunction):
     def __call__(self, *args, **kws):
         raise TypeError("")
 
-class CudaBaseFunction(numba.decorators.NumbaFunction):
+class CudaBaseFunction(numbawrapper.NumbaCompiledWrapper):
 
     _griddim = 1, 1, 1      # default grid dimension
     _blockdim = 1, 1, 1     # default block dimension
@@ -370,7 +370,7 @@ class CudaAutoJitNumbaFunction(CudaBaseFunction):
 
 # Patch numba
 numba.decorators.jit_targets[('gpu', 'ast')] = jit2 # give up on bytecode path
-numba.decorators.numba_function_autojit_targets['gpu'] = CudaAutoJitNumbaFunction
+#numba.decorators.numba_function_autojit_targets['gpu'] = CudaAutoJitNumbaFunction
 
 
 # NDarray device helper

@@ -23,8 +23,7 @@ from llvm_cbuilder import builder
 
 import numba.decorators
 from numba import *
-from numba import (error, visitors, nodes, templating, ast_type_inference,
-                   transforms)
+from numba import error, visitors, nodes, templating, transforms, type_inference
 from numba.minivect import  minitypes
 from numba import typesystem, pipeline
 
@@ -455,7 +454,7 @@ class PrangeExpander(visitors.NumbaTransformer):
 
     def visit_Call(self, node):
         if self.is_numba_prange(node.func):
-            ast_type_inference.no_keywords(node)
+            type_inference.infer.no_keywords(node)
             start, stop, step = self.visitlist(transforms.unpack_range_args(node))
             node = PrangeNode(start, stop, step)
 

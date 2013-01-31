@@ -5,10 +5,10 @@ import numpy as np
 # modify numba behavior
 
 from numba import utils, functions, ast_translate, llvm_types
-from numba import visitors, nodes, error, ast_type_inference
+from numba import visitors, nodes, error
 from numba import pipeline, naming, f4
 import ast
-from numba import ast_type_inference as type_inference
+from numba import type_inference
 from numba.symtab import Variable
 from .nvvm import ADDRSPACE_SHARED, ADDRSPACE_GENERIC
 from llvm.core import *
@@ -209,7 +209,7 @@ class CudaAttrRewriteMixin(object):
 
 
 class CudaTypeInferer(CudaAttrRewriteMixin,
-                      type_inference.TypeInferer):
+                      type_inference.infer.TypeInferer):
     pass
 
 class CudaCodeGenerator(ast_translate.LLVMCodeGenerator):
