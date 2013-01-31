@@ -208,3 +208,111 @@ def reduce_(a, axis, dtype, out):
 
 register_inferer(np, 'sum', reduce_)
 register_inferer(np, 'prod', reduce_)
+
+@register(np)
+def vdot(context, a, b):
+    raise NotImplementedError("XXX")
+
+@register(np)
+def inner(context, a, b):
+    raise NotImplementedError("XXX")
+
+@register(np)
+def outer(context, a, b):
+    raise NotImplementedError("XXX")
+
+@register(np)
+def tensordot(context, a, b):
+    raise NotImplementedError("XXX")
+
+@register(np)
+def einsum(context, subs, *operands, **kws):
+    raise NotImplementedError("XXX")
+
+@register(np)
+def kron(context, a, b):
+    raise NotImplementedError("XXX")
+
+@register(np)
+def trace(context, a, offset, axis1, axis2, dtype, out):
+    raise NotImplementedError("XXX")
+
+#------------------------------------------------------------------------
+# numpy.linalg
+#------------------------------------------------------------------------
+
+@register(np.linalg)
+def cholesky(context, a):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def cond(context, x, p):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def det(context, a):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def eig(context, a):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def eigh(context, a, UPLO):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def eigvals(context, a):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def eigvalsh(context, a, UPLO):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def inv(context, a):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def lstsq(context, a, b, rcond):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def matrix_power(context, M, n):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def matrix_rank(context, M, tol):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def norm(context, x, ord):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def pinv(context, a, rcond):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def qr(context, a, mode):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def slogdet(context, a):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def solve(context, a, b):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def svd(context, a, full_matrices, compute_uv):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def tensorinv(context, a, ind):
+    raise NotImplementedError("XXX")
+
+@register(np.linalg)
+def tensorsolve(context, a, b, axes):
+    raise NotImplementedError("XXX")
