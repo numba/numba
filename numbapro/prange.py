@@ -289,7 +289,7 @@ def perform_reductions(context, prange_node):
 class PrangeType(typesystem.RangeType):
     is_prange = True
 
-class PrangeNode(nodes.Node):
+class PrangeNode(nodes.ExprNode):
     """
     Prange node. This replaces the For loop iterator in the initial stage.
     After type inference and before closure type inference it replaces the
