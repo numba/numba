@@ -88,8 +88,10 @@ class Preloader(visitors.NumbaTransformer):
         return node
 
     def visit_Subscript(self, node):
-        if (node.value.type.is_array and not node.type.is_array and
-                node.slice.type.is_int and isinstance(node.value, ast.Name)):
+        is_full_index = node.value.type.is_array and not node.type.is_array
+        # is_index = node.slice.type.is_int
+        is_name = isinstance(node.value, ast.Name)
+        if is_full_index and is_name and not node.value.cf_maybe_null:
             array_variable = node.value.variable
 
             # Set the preload conditions
