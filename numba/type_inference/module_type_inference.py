@@ -101,7 +101,7 @@ class ModuleTypeInfererRegistry(object):
         return self.value_to_inferer[value]
 
     def lookup_module_attribute(self, value):
-        if value in self.value_to_module:
+        if self.is_registered(value) and value in self.value_to_module:
             return self.value_to_module[value]
 
 
