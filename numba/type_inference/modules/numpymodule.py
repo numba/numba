@@ -30,6 +30,9 @@ index_array_t = npy_intp[:]
 # Some utilities
 #------------------------------------------------------------------------
 
+def promote(context, *types):
+    return reduce(context.promote_types, map(array_from_type, types))
+
 def resolve_attribute_dtype(dtype, default=None):
     "Resolve the type for numpy dtype attributes"
     if dtype.is_numpy_dtype:
@@ -67,13 +70,13 @@ def array_from_object(a):
 
         array_from_object(ASTNode([[1, 2], [3, 4]])) => int64[:, :]
     """
-    return array_from_type(a)
+    return array_from_type(get_type(a))
 
 def array_from_type(type):
     if type.is_array:
         return type
     elif type.is_tuple or type.is_list:
-        dtype = array_from_object(type.dtype)
+        dtype = array_from_type(type.dtype)
         if dtype.is_array:
             type = dtype.copy()
             type.ndim += 1
@@ -161,7 +164,7 @@ def dot(context, a, b, out):
 
 @register(np)
 def array(object, dtype, order, subok):
-    type = array_from_object(object)
+    type = array_from_type(object)
     if dtype is not None:
         type = type.copy(dtype=dtype)
 
@@ -169,7 +172,7 @@ def array(object, dtype, order, subok):
 
 @register(np)
 def nonzero(a):
-    return _nonzero(array_from_object(a))
+    return _nonzero(array_from_type(a))
 
 def _nonzero(type):
     if type.is_array:
@@ -182,10 +185,7 @@ def where(context, condition, x, y):
     if x is None and y is None:
         return nonzero(condition)
 
-    xtype = array_from_object(x)
-    ytype = array_from_object(y)
-    type = context.promote_types(xtype, ytype)
-    return type
+    return promote(context, x, y)
 
 @register(np)
 def vdot(context, a, b):

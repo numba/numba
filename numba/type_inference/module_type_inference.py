@@ -92,7 +92,7 @@ class ModuleTypeInfererRegistry(object):
                 inferrer=my_inferer
         """
         value = getattr(module, attr)
-        if self.is_registered(value):
+        if self.is_registered((value, dotted_path)):
             raise ValueAlreadyRegistered((value, inferer))
 
         self.value_to_inferer[value, dotted_path] = (inferer, pass_in_types)

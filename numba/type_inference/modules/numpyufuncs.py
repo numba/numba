@@ -1,3 +1,7 @@
+"""
+Type inference for NumPy ufuncs.
+"""
+
 import numpy as np
 
 from numba import *
@@ -7,10 +11,21 @@ from numba.type_inference.module_type_inference import (register,
                                                         register_inferer,
                                                         register_unbound)
 from numba.typesystem import get_type
-from numba.type_inference.modules.numpymodule import get_dtype
+from numba.type_inference.modules.numpymodule import (get_dtype,
+                                                      array_from_type,
+                                                      promote)
 
-def reduce_bool(a, axis, dtype, out):
-    return reduce_(a, axis, dtype, out, bool_)
+def binary_map(context, a, b, out):
+    if out is not None:
+        return out
+
+    return promote(context, a, b)
+
+def binary_map_bool(a, b, out):
+    if out is not None:
+        return out
+
+    return bool_
 
 def reduce_(a, axis, dtype, out, static_dtype=None):
     if out is not None:
@@ -36,9 +51,13 @@ def reduce_(a, axis, dtype, out, static_dtype=None):
         # axis=(something unknown)
         return object_
 
-register_inferer(np, 'sum', reduce_)
-register_inferer(np, 'prod', reduce_)
+def reduce_bool(a, axis, dtype, out):
+    return reduce_(a, axis, dtype, out, bool_)
 
+
+#------------------------------------------------------------------------
+# Binary Ufuncs
+#------------------------------------------------------------------------
 
 binary_ufuncs_compare = (
     # Comparisons
@@ -77,8 +96,17 @@ binary_ufuncs_arithmetic = (
     'divide',
 )
 
+#------------------------------------------------------------------------
+# Register our type functions
+#------------------------------------------------------------------------
+
+register_inferer(np, 'sum', reduce_)
+register_inferer(np, 'prod', reduce_)
+
 for binary_ufunc in binary_ufuncs_bitwise + binary_ufuncs_arithmetic:
+    register_inferer(np, binary_ufunc, binary_map)
     register_unbound(np, binary_ufunc, "reduce", reduce_)
 
 for binary_ufunc in binary_ufuncs_compare + binary_ufuncs_logical:
+    register_inferer(np, binary_ufunc, binary_map_bool)
     register_unbound(np, binary_ufunc, "reduce", reduce_bool)
