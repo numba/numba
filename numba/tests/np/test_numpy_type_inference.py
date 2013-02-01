@@ -59,15 +59,6 @@ def sum_dtype(a, dtype):
 def sum_out(a, out):
     return numba.typeof(np.sum(a, out=out))
 
-@autojit
-def add_reduce(a):
-    return numba.typeof(np.add.reduce(a))
-
-@autojit
-def add_reduce_axis(a, axis):
-    return numba.typeof(np.add.reduce(a, axis=axis))
-
-
 #------------------------------------------------------------------------
 # Tests
 #------------------------------------------------------------------------
@@ -167,13 +158,6 @@ def test_sum():
     equals(sum_dtype(a, np.double), double)
     equals(sum_out(b, a), int32[:]) # Not a valid call to sum :)
 
-def test_ufunc_reduce():
-    a = np.array([1, 2, 3], dtype=np.int32)
-    b = np.array([[1, 2], [3, 4]], dtype=np.int64)
-
-    equals(add_reduce(a), int32)
-    equals(add_reduce_axis(b, 1), int64[:])
-
 if __name__ == "__main__":
     test_array()
     test_nonzero()
@@ -182,4 +166,3 @@ if __name__ == "__main__":
     test_numba_vdot()
     test_numba_inner()
     test_sum()
-    test_ufunc_reduce()

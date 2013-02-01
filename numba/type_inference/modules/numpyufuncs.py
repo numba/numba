@@ -21,11 +21,12 @@ def binary_map(context, a, b, out):
 
     return promote(context, a, b)
 
-def binary_map_bool(a, b, out):
-    if out is not None:
-        return out
-
-    return bool_
+def binary_map_bool(context, a, b, out):
+    type = binary_map(context, a, b, out)
+    if type.is_array:
+        return type.copy(dtype=bool_)
+    else:
+        return bool_
 
 def reduce_(a, axis, dtype, out, static_dtype=None):
     if out is not None:

@@ -7,57 +7,33 @@ from numba import typesystem
 tup_t = typesystem.TupleType
 
 #------------------------------------------------------------------------
+# Test data
+#------------------------------------------------------------------------
+
+a = np.array([1, 2, 3], dtype=np.int32)
+b = np.array([[1, 2], [3, 4]], dtype=np.int64)
+
+#------------------------------------------------------------------------
 # Test functions
 #------------------------------------------------------------------------
 
-@autojit
-def array(value):
-    return numba.typeof(np.array(value))
+# ________________ unary ufuncs _______________
+
+# ________________ binary ufuncs _______________
 
 @autojit
-def nonzero(value):
-    return numba.typeof(np.nonzero(value))
+def binary_ufunc(ufunc, a, b):
+    return numba.typeof(ufunc(a, b))
 
 @autojit
-def where(value):
-    return numba.typeof(np.where(value))
+def binary_ufunc_dtype(ufunc, a, b, dtype):
+    return numba.typeof(ufunc(a, b, dtype=dtype))
 
 @autojit
-def where3(value, x, y):
-    return numba.typeof(np.where(value, x, y))
+def binary_ufunc_dtype_positional(ufunc, a, b, dtype):
+    return numba.typeof(ufunc(a, b, dtype=dtype))
 
-@autojit
-def numba_dot(A, B):
-    result = np.dot(A, B)
-    return numba.typeof(result), result
-
-@autojit
-def numba_vdot(A, B):
-    result = np.vdot(A, B)
-    return numba.typeof(result), result
-
-@autojit
-def numba_inner(a, b):
-    result = np.inner(a, b)
-    return numba.typeof(result), result
-
-# ------------- Test sum ------------
-
-@autojit
-def sum_(a):
-    return numba.typeof(np.sum(a))
-
-@autojit
-def sum_axis(a, axis):
-    return numba.typeof(np.sum(a, axis=axis))
-
-@autojit
-def sum_dtype(a, dtype):
-    return numba.typeof(np.sum(a, dtype=dtype))
-
-@autojit
-def sum_out(a, out):
-    return numba.typeof(np.sum(a, out=out))
+# ________________ binary ufunc methods _______________
 
 @autojit
 def add_reduce(a):
@@ -67,7 +43,6 @@ def add_reduce(a):
 def add_reduce_axis(a, axis):
     return numba.typeof(np.add.reduce(a, axis=axis))
 
-
 #------------------------------------------------------------------------
 # Tests
 #------------------------------------------------------------------------
@@ -76,110 +51,36 @@ def equals(a, b):
     assert a == b, (a, b, type(a), type(b),
                     a.comparison_type_list, b.comparison_type_list)
 
-def test_array():
-    equals(array(np.array([1, 2, 3], dtype=np.double)), float64[:])
-    equals(array(np.array([[1, 2, 3]], dtype=np.int32)), int32[:, :])
-    equals(array(np.array([[1, 2, 3],
-                           [4, 5, 6]], dtype=np.int32).T), int32[:, :])
+def test_binary_ufunc():
+    equals(binary_ufunc(np.add, a, b), int64[:, :])
+    equals(binary_ufunc(np.subtract, a, b), int64[:, :])
+    equals(binary_ufunc(np.multiply, a, b), int64[:, :])
+    equals(binary_ufunc(np.true_divide, a, b), int64[:, :])
+    equals(binary_ufunc(np.floor_divide, a, b), int64[:, :])
+    equals(binary_ufunc(np.divide, a, b), int64[:, :])
 
-def test_nonzero():
-    equals(nonzero(np.array([1, 2, 3], dtype=np.double)),
-           tup_t(npy_intp[:], 1))
-    equals(nonzero(np.array([[1, 2, 3]], dtype=np.double)),
-           tup_t(npy_intp[:], 2))
-    equals(nonzero(np.array((((1, 2, 3),),), dtype=np.double)),
-           tup_t(npy_intp[:], 3))
+    equals(binary_ufunc(np.bitwise_and, a, b), int64[:, :])
+    equals(binary_ufunc(np.bitwise_or, a, b), int64[:, :])
+    equals(binary_ufunc(np.bitwise_xor, a, b), int64[:, :])
+    equals(binary_ufunc(np.left_shift, a, b), int64[:, :])
+    equals(binary_ufunc(np.right_shift, a, b), int64[:, :])
 
-def test_where():
-    equals(where(np.array([1, 2, 3], dtype=np.double)),
-           tup_t(npy_intp[:], 1))
+    equals(binary_ufunc(np.logical_and, a, b), bool_[:, :])
+    equals(binary_ufunc(np.logical_or, a, b), bool_[:, :])
+    equals(binary_ufunc(np.logical_xor, a, b), bool_[:, :])
+    equals(binary_ufunc(np.logical_not, a, b), bool_[:, :])
 
-    equals(where3(np.array([True, False, True]),
-                  np.array([1, 2, 3], dtype=np.double),
-                  np.array([1, 2, 3], dtype=np.complex128)),
-           complex128[:])
-
-    equals(where3(np.array([True, False, True]),
-                  np.array([1, 2, 3], dtype=np.float32),
-                  np.array([1, 2, 3], dtype=np.int64)),
-           float64[:])
-
-def test_numba_dot():
-    A = np.array(1)
-    B = np.array(2)
-
-    dtype = typesystem.from_numpy_dtype(A.dtype).dtype
-
-    for i in range(1, 10):
-        for j in range(1, 10):
-            # print i, j
-
-            shape_A = (1,) * i
-            shape_B = (1,) * j
-
-            x = A.reshape(*shape_A)
-            y = B.reshape(*shape_B)
-
-            result_type, result = numba_dot(x, y)
-
-            assert result == np.dot(x, y)
-            if i + j - 2 > 0:
-                assert result.ndim == result_type.ndim
-            else:
-                assert result_type == dtype
-
-def test_numba_vdot():
-    for a, b in ((np.array([1+2j,3+4j]),
-                  np.array([5+6j,7+8j])),
-                 (np.array([[1, 4], [5, 6]]),
-                  np.array([[4, 1], [2, 2]]))):
-        result_type, result = numba_vdot(a, b)
-        assert result == np.vdot(a, b)
-        assert result_type == typesystem.from_numpy_dtype(a.dtype).dtype
-        result_type, result = numba_vdot(b, a)
-        assert result == np.vdot(b, a)
-        assert result_type == typesystem.from_numpy_dtype(b.dtype).dtype
-
-def test_numba_inner():
-    # Note these tests assume that the lhs' type is the same as the
-    # promotion type for both arguments.  They will fail if additional
-    # test data doesn't adhere to this policy.
-    for a, b in ((np.array([1,2,3]), np.array([0,1,0])),
-                 (np.arange(24).reshape((2,3,4)), np.arange(4)),
-                 (np.eye(2), 7)):
-        result_type, result = numba_inner(a, b)
-        if result_type.is_array:
-            assert (result == np.inner(a, b)).all()
-            assert (result_type.dtype ==
-                    typesystem.from_numpy_dtype(result.dtype).dtype)
-            assert (result_type.dtype ==
-                    typesystem.from_numpy_dtype(a.dtype).dtype)
-        else:
-            assert result == np.inner(a, b)
-            assert result_type == typesystem.from_numpy_dtype(a.dtype).dtype
-
-def test_sum():
-    a = np.array([1, 2, 3], dtype=np.int32)
-    b = np.array([[1, 2], [3, 4]], dtype=np.int64)
-
-    equals(sum_(a), int32)
-    equals(sum_axis(a, 0), int32)
-    equals(sum_dtype(a, np.double), double)
-    equals(sum_out(b, a), int32[:]) # Not a valid call to sum :)
+    equals(binary_ufunc(np.greater, a, b), bool_[:, :])
+    equals(binary_ufunc(np.greater_equal, a, b), bool_[:, :])
+    equals(binary_ufunc(np.less, a, b), bool_[:, :])
+    equals(binary_ufunc(np.less_equal, a, b), bool_[:, :])
+    equals(binary_ufunc(np.not_equal, a, b), bool_[:, :])
+    equals(binary_ufunc(np.equal, a, b), bool_[:, :])
 
 def test_ufunc_reduce():
-    a = np.array([1, 2, 3], dtype=np.int32)
-    b = np.array([[1, 2], [3, 4]], dtype=np.int64)
-
     equals(add_reduce(a), int32)
     equals(add_reduce_axis(b, 1), int64[:])
 
 if __name__ == "__main__":
-    test_array()
-    test_nonzero()
-    test_where()
-    test_numba_dot()
-    test_numba_vdot()
-    test_numba_inner()
-    test_sum()
-    test_ufunc_reduce()
+    test_binary_ufunc()
+#    test_ufunc_reduce()
