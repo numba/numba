@@ -2,14 +2,14 @@
 
 # # cython: profile=True
 
+import types
+
 import numpy as np
 cimport numpy as cnp
 
 from numba._numba cimport *
 from numba import error
 from numba.minivect import minitypes
-
-cdef object numba_type = minitypes.Type
 
 cdef class NumbaWrapper(object):
     """
@@ -104,6 +104,17 @@ cdef inline void setkey(t, int i, k):
     Py_INCREF(<PyObject *> k)
     PyTuple_SET_ITEM(t, i, k)
 
+cdef tuple hash_on_value_types = (
+    minitypes.Type,
+    np.ufunc,
+    NumbaWrapper,
+    types.FunctionType,
+    types.BuiltinFunctionType,
+    types.MethodType,
+    types.UnboundMethodType,
+    types.BuiltinMethodType,
+)
+
 cpdef inline getkey(tuple args): # 3.0x
     """
     Get the tuple key we need to look up the right specialization from the
@@ -137,7 +148,7 @@ cpdef inline getkey(tuple args): # 3.0x
             setkey(key, i*3+2, array.ndim | (cnp.PyArray_FLAGS(arg) << 5))
             continue
 
-        elif isinstance(arg, numba_type):
+        elif isinstance(arg, hash_on_value_types):
             # A type is passed in as a value, hash the thing (this will be slow)
             setkey(key, i*3, arg)
 
