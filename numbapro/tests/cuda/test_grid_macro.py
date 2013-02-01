@@ -40,8 +40,14 @@ class TestCudaMacro(support.CudaTestCase):
 
     def test_grid_3d(self):
         # this just complains
-        with self.assertRaises(ValueError):
+        try:
             jit(argtypes=[f4[:, :]], target='gpu')(cu_array_double_3d)
+        except ValueError:
+            pass
+        else:
+            self.assertTrue(False, "Should raise ValueError")
+
+
 
                       
 if __name__ == '__main__':

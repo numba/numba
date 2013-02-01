@@ -62,7 +62,7 @@ class TestParallelVectorize(unittest.TestCase):
         for x, y in zip(ans, gold):
             if y != 0:
                 err = abs(x - y)/y
-                self.assertLess(err, 1e-6)
+                self.assertTrue(err < 1e-6)
             else:
                 self.assertEqual(x, y)
 

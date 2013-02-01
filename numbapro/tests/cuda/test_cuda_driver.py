@@ -59,8 +59,8 @@ class TestCudaDriver(support.CudaTestCase):
         driver = Driver()
         self.assertTrue(driver.get_device_count())
         device = Device(0)
-        self.assertIn('COMPUTE_CAPABILITY', device.attributes)
-        self.assertIn('MAX_THREADS_PER_BLOCK', device.attributes)
+        self.assertTrue('COMPUTE_CAPABILITY' in device.attributes)
+        self.assertTrue('MAX_THREADS_PER_BLOCK' in device.attributes)
 
         ccmajor, _ = device.COMPUTE_CAPABILITY
         if ccmajor >= 2:

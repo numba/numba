@@ -31,16 +31,16 @@ class TestNvvmDriver(support.CudaTestCase):
         cu.add_module(nvvmir)
         ptx = cu.compile()
         print ptx
-        self.assertIn('simple', ptx)
-        self.assertIn('ave', ptx)
+        self.assertTrue('simple' in ptx)
+        self.assertTrue('ave' in ptx)
         print cu.log
 
     def test_nvvm_compile_simple(self):
         nvvmir = self.get_ptx()
         ptx = llvm_to_ptx(nvvmir)
         print ptx
-        self.assertIn('simple', ptx)
-        self.assertIn('ave', ptx)
+        self.assertTrue('simple' in ptx)
+        self.assertTrue('ave' in ptx)
 
     def test_nvvm_from_llvm(self):
         m = Module.new("test_nvvm_from_llvm")
@@ -54,11 +54,11 @@ class TestNvvmDriver(support.CudaTestCase):
         fix_data_layout(m)
         ptx = llvm_to_ptx(str(m))
         print ptx
-        self.assertIn('mycudakernel', ptx)
+        self.assertTrue('mycudakernel' in ptx)
         if is64bit:
-            self.assertIn('.address_size 64', ptx)
+            self.assertTrue('.address_size 64' in ptx)
         else:
-            self.assertIn('.address_size 32', ptx)
+            self.assertTrue('.address_size 32' in ptx)
 
 if __name__ == '__main__':
     unittest.main()

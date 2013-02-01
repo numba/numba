@@ -31,7 +31,7 @@ class TestCudaInlineAsm(support.CudaTestCase):
         ptx = nvvm.llvm_to_ptx(nvvmir)
         print ptx
 
-        self.assertIn('rsqrt.approx.f32', ptx)
+        self.assertTrue('rsqrt.approx.f32' in ptx)
 
 
 if __name__ == '__main__':

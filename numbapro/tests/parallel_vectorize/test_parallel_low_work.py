@@ -48,7 +48,7 @@ class TestParallelLowWorkCount(unittest.TestCase):
 
 
             for expect, got in zip(gold, result):
-                self.assertLess(abs(got - expect) / (expect + 1e-31), 1e-6)
+                self.assertTrue(abs(got - expect) / (expect + 1e-31) < 1e-6)
 
         test(np.double)
         test(np.float32)

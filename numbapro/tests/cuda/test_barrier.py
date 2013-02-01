@@ -51,7 +51,7 @@ class TestCudaBarrier(support.CudaTestCase):
         The document is useless.
         '''
         ptx = nvvm.llvm_to_ptx(llvm)
-        self.assertIn('bar.sync', ptx)
+        self.assertTrue('bar.sync' in ptx)
 
     def test_barrier_in_use(self):
         A = np.array(np.random.random(256), dtype=np.float32)
