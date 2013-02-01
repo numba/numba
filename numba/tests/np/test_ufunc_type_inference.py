@@ -43,6 +43,15 @@ def add_reduce(a):
 def add_reduce_axis(a, axis):
     return numba.typeof(np.add.reduce(a, axis=axis))
 
+@autojit
+def accumulate(ufunc, a):
+    return numba.typeof(ufunc.accumulate(a))
+
+@autojit
+def accumulate_dtype(ufunc, a, dtype):
+    return numba.typeof(ufunc.accumulate(a, dtype=dtype))
+
+
 #------------------------------------------------------------------------
 # Tests
 #------------------------------------------------------------------------
@@ -81,6 +90,15 @@ def test_ufunc_reduce():
     equals(add_reduce(a), int32)
     equals(add_reduce_axis(b, 1), int64[:])
 
+def test_ufunc_accumulate():
+    equals(accumulate(np.add, a), int32[:])
+    equals(accumulate(np.multiply, a), int32[:])
+
+    equals(accumulate(np.bitwise_and, a), int32[:])
+
+    equals(accumulate(np.logical_and, a), bool_[:])
+
 if __name__ == "__main__":
-    test_binary_ufunc()
+#    test_binary_ufunc()
 #    test_ufunc_reduce()
+    test_ufunc_accumulate()

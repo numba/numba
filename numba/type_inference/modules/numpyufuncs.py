@@ -13,7 +13,20 @@ from numba.type_inference.module_type_inference import (register,
 from numba.typesystem import get_type
 from numba.type_inference.modules.numpymodule import (get_dtype,
                                                       array_from_type,
-                                                      promote)
+                                                      promote,
+                                                      promote_to_array)
+
+def _dtype(a, dtype, static_dtype):
+    if static_dtype:
+        return static_dtype
+    elif dtype:
+        return dtype
+    elif a.is_array:
+        return a.dtype
+    elif not a.is_object:
+        return a
+    else:
+        return None
 
 def binary_map(context, a, b, out):
     if out is not None:
@@ -32,29 +45,37 @@ def reduce_(a, axis, dtype, out, static_dtype=None):
     if out is not None:
         return out
 
-    if static_dtype:
-        dtype_type = static_dtype
-    else:
-        dtype_type = get_dtype(dtype, default_dtype=a.dtype).dtype
+    dtype_type = _dtype(a, dtype, static_dtype)
 
     if axis is None:
         # Return the scalar type
         return dtype_type
 
-    # Handle the axis parameter
-    if axis.is_tuple and axis.is_sized:
-        # axis=(tuple with a constant size)
-        return typesystem.array(dtype_type, a.ndim - axis.size)
-    elif axis.is_int:
-        # axis=1
-        return typesystem.array(dtype_type, a.ndim - 1)
-    else:
-        # axis=(something unknown)
-        return object_
+    if dtype_type:
+        # Handle the axis parameter
+        if axis.is_tuple and axis.is_sized:
+            # axis=(tuple with a constant size)
+            return typesystem.array(dtype_type, a.ndim - axis.size)
+        elif axis.is_int:
+            # axis=1
+            return typesystem.array(dtype_type, a.ndim - 1)
+        else:
+            # axis=(something unknown)
+            return object_
 
 def reduce_bool(a, axis, dtype, out):
     return reduce_(a, axis, dtype, out, bool_)
 
+def accumulate(a, axis, dtype, out, static_dtype=None):
+    if out is not None:
+        return out
+
+    dtype = _dtype(a, dtype, static_dtype)
+    if dtype:
+        return promote_to_array(a).copy(dtype=dtype)
+
+def accumulate_bool(a, axis, dtype, out):
+    return accumulate(a, axis, dtype, out, bool_)
 
 #------------------------------------------------------------------------
 # Binary Ufuncs
@@ -107,7 +128,9 @@ register_inferer(np, 'prod', reduce_)
 for binary_ufunc in binary_ufuncs_bitwise + binary_ufuncs_arithmetic:
     register_inferer(np, binary_ufunc, binary_map)
     register_unbound(np, binary_ufunc, "reduce", reduce_)
+    register_unbound(np, binary_ufunc, "accumulate", accumulate)
 
 for binary_ufunc in binary_ufuncs_compare + binary_ufuncs_logical:
     register_inferer(np, binary_ufunc, binary_map_bool)
     register_unbound(np, binary_ufunc, "reduce", reduce_bool)
+    register_unbound(np, binary_ufunc, "accumulate", accumulate_bool)
