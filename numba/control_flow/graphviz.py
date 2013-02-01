@@ -131,7 +131,8 @@ def write_image(dot_output):
                              stderr=subprocess.PIPE)
         p.wait()
     except EnvironmentError, e:
-        logger.warn("Unable to write png: %s. Wrote %s" % (e, dot_output))
+        logger.warn("Unable to write png: %s (did you install the "
+                    "'dot' program?). Wrote %s" % (e, dot_output))
     else:
         logger.warn("Wrote %s" % png_output)
     finally:

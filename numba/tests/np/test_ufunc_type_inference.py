@@ -132,8 +132,8 @@ def test_ufunc_outer():
     equals(outer(np.logical_and, a), bool_[:, :])
 
 if __name__ == "__main__":
-#    test_binary_ufunc()
-#    test_ufunc_reduce()
+    test_binary_ufunc()
+    test_ufunc_reduce()
     test_ufunc_accumulate()
     test_ufunc_reduceat()
     test_ufunc_outer()

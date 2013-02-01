@@ -12,6 +12,7 @@ from numba import error, transforms, closure, control_flow, visitors, nodes
 from numba.type_inference import module_type_inference
 from numba.minivect import minierror, minitypes
 from numba import translate, utils, typesystem
+from numba.control_flow import ssa
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
 from numba import stdio_util, function_util
@@ -444,40 +445,13 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         #print "handled", node.variable
         return node
 
-    def kill_unused_phis(self, cfg):
-        """
-        Kill phis which are not referenced. We need to do this bottom-up,
-        i.e. in reverse topological dominator-tree order, since in SSA
-        a definition always lexically precedes a reference.
-
-        This is important, since it kills any unnecessary promotions (e.g.
-        ones to object, which LLVM wouldn't be able to optimize out).
-        """
-        for block in cfg.blocks[::-1]:
-            phi_nodes = []
-            for i, phi in enumerate(block.phi_nodes):
-                if phi.variable.cf_references:
-                    # Used phi
-                    phi_nodes.append(phi)
-                else:
-                    # Unused phi
-                    logging.info("Killing phi: %s", phi)
-                    block.symtab.pop(phi.variable.renamed_name)
-                    for incoming_var in phi.incoming:
-                        # A single definition can reach a block multiple times,
-                        # remove= all references
-                        refs = [ref for ref in incoming_var.cf_references
-                                        if ref.variable is not phi.variable]
-                        incoming_var.cf_references = refs
-
-            block.phi_nodes = phi_nodes
 
     def analyse_assignments(self):
         """
         Analyze all variable assignments and phis.
         """
         cfg = self.ast.flow
-        self.kill_unused_phis(cfg)
+        ssa.kill_unused_phis(cfg)
 
         self.analyse = False
         self.function_level += 1
