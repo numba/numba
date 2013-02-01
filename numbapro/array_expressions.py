@@ -173,6 +173,7 @@ class ArrayExpressionRewriteUfunc(ArrayExpressionRewrite):
 
 class NumbaproStaticArgsContext(utils.NumbaContext):
     "Use a static argument list: shape, data1, strides1, data2, strides2, ..."
+
     astbuilder_cls = miniast.ASTBuilder
 
 class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
@@ -245,7 +246,7 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
 
         # print lfunc
         operands = ufunc_builder.operands
-        self.func.live_objects.append(lfunc)
+        functions.keep_alive(self.func, lfunc)
 
         operands = [nodes.CloneableNode(operand) for operand in operands]
 

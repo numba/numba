@@ -15,7 +15,7 @@ from numba import (visitors, nodes, error, type_inference, ast_translate,
 from numba.minivect import minitypes
 from numbapro.vectorize.gufunc import PyArray
 
-class SliceDimNode(nodes.Node):
+class SliceDimNode(nodes.ExprNode):
     """
     Array is sliced, and this dimension contains an integer index or newaxis.
     """
@@ -48,7 +48,7 @@ class SliceSliceNode(SliceDimNode):
         self.stop = subslice.upper and nodes.CoercionNode(subslice.upper, npy_intp)
         self.step = subslice.step and nodes.CoercionNode(subslice.step, npy_intp)
 
-class BroadcastNode(nodes.Node):
+class BroadcastNode(nodes.ExprNode):
     """
     Broadcast a bunch of operands:
 
@@ -86,7 +86,7 @@ def create_slice_dim_node(subslice, *args):
     else:
         return SliceDimNode(subslice, *args)
 
-class NativeSliceNode(nodes.Node):
+class NativeSliceNode(nodes.ExprNode):
     """
     Aggregate of slices in all dimensions.
 
