@@ -525,6 +525,7 @@ class ArrayType(Type):
     def __init__(self, dtype, ndim, is_c_contig=False, is_f_contig=False,
                  inner_contig=False, broadcasting=None):
         super(ArrayType, self).__init__()
+        assert dtype is not None
         self.dtype = dtype
         self.ndim = ndim
         self.is_c_contig = is_c_contig
@@ -558,6 +559,8 @@ class ArrayType(Type):
         return "%s[%s]" % (self.dtype, ", ".join(axes))
 
     def copy(self, **kwargs):
+        if 'dtype' in kwargs:
+            assert kwargs['dtype'] is not None
         array_type = copy.copy(self)
         vars(array_type).update(kwargs)
         return array_type
