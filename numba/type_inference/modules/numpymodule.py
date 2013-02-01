@@ -82,7 +82,7 @@ def array_from_type(type):
     if type.is_array:
         return type
     elif type.is_tuple or type.is_list:
-        dtype = array_from_type(type.dtype)
+        dtype = array_from_type(type.base_type)
         if dtype.is_array:
             type = dtype.copy()
             type.ndim += 1
@@ -171,7 +171,7 @@ def dot(context, a, b, out):
 @register(np)
 def array(object, dtype, order, subok):
     type = array_from_type(object)
-    if dtype is not None:
+    if type.is_array:
         type = type.copy(dtype=dtype)
 
     return type
