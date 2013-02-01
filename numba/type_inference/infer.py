@@ -535,8 +535,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         portions in the graph
         """
         for u in list(unvisited):
-            if self.is_trivial_cycle(u):
-                u.simplify()
+            u.simplify()
             if not u.resolve().is_unresolved:
                 unvisited.remove(u)
 
