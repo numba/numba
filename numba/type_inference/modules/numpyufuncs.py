@@ -14,19 +14,38 @@ from numba.typesystem import get_type
 from numba.type_inference.modules.numpymodule import (get_dtype,
                                                       array_from_type,
                                                       promote,
-                                                      promote_to_array)
+                                                      promote_to_array,
+                                                      demote_to_scalar)
+
+#----------------------------------------------------------------------------
+# Utilities
+#----------------------------------------------------------------------------
+
+def array_of_dtype(a, dtype, static_dtype, out):
+    if out is not None:
+        return out
+
+    a = array_from_type(a)
+    if not a.is_object:
+        dtype = _dtype(a, dtype, static_dtype)
+        if dtype is not None:
+            return a.copy(dtype=dtype)
 
 def _dtype(a, dtype, static_dtype):
     if static_dtype:
         return static_dtype
     elif dtype:
-        return dtype
+        return dtype.dtype
     elif a.is_array:
         return a.dtype
     elif not a.is_object:
         return a
     else:
         return None
+
+#----------------------------------------------------------------------------
+# Ufunc type inference
+#----------------------------------------------------------------------------
 
 def binary_map(context, a, b, out):
     if out is not None:
@@ -67,15 +86,17 @@ def reduce_bool(a, axis, dtype, out):
     return reduce_(a, axis, dtype, out, bool_)
 
 def accumulate(a, axis, dtype, out, static_dtype=None):
-    if out is not None:
-        return out
-
-    dtype = _dtype(a, dtype, static_dtype)
-    if dtype:
-        return promote_to_array(a).copy(dtype=dtype)
+    return demote_to_scalar(array_of_dtype(a, dtype, static_dtype, out))
 
 def accumulate_bool(a, axis, dtype, out):
     return accumulate(a, axis, dtype, out, bool_)
+
+def reduceat(a, indices, axis, dtype, out, static_dtype=None):
+    return accumulate(a, axis, dtype, out, static_dtype)
+
+def reduceat_bool(a, indices, axis, dtype, out):
+    return reduceat(a, indices, axis, dtype, out, bool_)
+
 
 #------------------------------------------------------------------------
 # Binary Ufuncs
@@ -129,8 +150,10 @@ for binary_ufunc in binary_ufuncs_bitwise + binary_ufuncs_arithmetic:
     register_inferer(np, binary_ufunc, binary_map)
     register_unbound(np, binary_ufunc, "reduce", reduce_)
     register_unbound(np, binary_ufunc, "accumulate", accumulate)
+    register_unbound(np, binary_ufunc, "reduceat", reduceat)
 
 for binary_ufunc in binary_ufuncs_compare + binary_ufuncs_logical:
     register_inferer(np, binary_ufunc, binary_map_bool)
     register_unbound(np, binary_ufunc, "reduce", reduce_bool)
     register_unbound(np, binary_ufunc, "accumulate", accumulate_bool)
+    register_unbound(np, binary_ufunc, "reduceat", reduceat_bool)

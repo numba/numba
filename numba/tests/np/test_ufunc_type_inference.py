@@ -51,6 +51,13 @@ def accumulate(ufunc, a):
 def accumulate_dtype(ufunc, a, dtype):
     return numba.typeof(ufunc.accumulate(a, dtype=dtype))
 
+@autojit
+def reduceat(ufunc, a):
+    return numba.typeof(ufunc.reduceat(a))
+
+@autojit
+def reduceat_dtype(ufunc, a, dtype):
+    return numba.typeof(ufunc.reduceat(a, dtype=dtype))
 
 #------------------------------------------------------------------------
 # Tests
@@ -98,7 +105,22 @@ def test_ufunc_accumulate():
 
     equals(accumulate(np.logical_and, a), bool_[:])
 
+    # Test with dtype
+    equals(accumulate_dtype(np.add, a, np.double), double[:])
+
+def test_ufunc_reduceat():
+    equals(reduceat(np.add, a), int32[:])
+    equals(reduceat(np.multiply, a), int32[:])
+
+    equals(reduceat(np.bitwise_and, a), int32[:])
+
+    equals(reduceat(np.logical_and, a), bool_[:])
+
+    # Test with dtype
+    equals(reduceat_dtype(np.add, a, np.double), double[:])
+
 if __name__ == "__main__":
 #    test_binary_ufunc()
 #    test_ufunc_reduce()
     test_ufunc_accumulate()
+    test_ufunc_reduceat()

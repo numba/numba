@@ -64,6 +64,12 @@ def promote_to_array(dtype):
         dtype = minitypes.ArrayType(dtype, 0)
     return dtype
 
+def demote_to_scalar(type):
+    "Demote 0d arrays to scalars"
+    if type and type.is_array and type.ndim == 0:
+        return type.dtype
+    return type
+
 def array_from_object(a):
     """
     object -> array type:
