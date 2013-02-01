@@ -1426,7 +1426,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
                                                 call_node.keywords,
                                                 py_func)
 
-        if not func_type.is_object:
+        if not func_type.is_object and not func_type.is_known_value:
             raise error.NumbaError(
                 call_node, "Cannot call object of type %s" % (func_type,))
 

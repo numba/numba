@@ -158,4 +158,5 @@ from numba.type_inference.module_type_inference import (is_registered,
                                                         register,
                                                         register_inferer,
                                                         get_inferer,
-                                                        register_unbound)
+                                                        register_unbound,
+                                                        register_callable)

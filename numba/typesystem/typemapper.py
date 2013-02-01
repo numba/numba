@@ -40,6 +40,8 @@ class NumbaTypeMapper(minitypes.TypeMapper):
         return super(NumbaTypeMapper, self).to_llvm(type)
 
     def from_python(self, value):
+        from numba.type_inference import module_type_inference
+
         if isinstance(value, np.ndarray):
             dtype = map_dtype(value.dtype)
             return minitypes.ArrayType(dtype, value.ndim) #,
@@ -86,12 +88,12 @@ class NumbaTypeMapper(minitypes.TypeMapper):
 
         result_type = super(NumbaTypeMapper, self).from_python(value)
 
-        if result_type == object_:
-            from numba.type_inference import module_type_inference
-
+        if result_type == object_ and module_type_inference.is_registered(value):
             result = module_type_inference.module_attribute_type(value)
             if result is not None:
                 result_type = result
+            else:
+                result_type = KnownValueType(value)
 
         return result_type
 

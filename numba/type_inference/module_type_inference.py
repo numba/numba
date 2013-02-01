@@ -67,6 +67,9 @@ class ModuleTypeInfererRegistry(object):
         self.value_to_module[value] = (module, attr)
         self.value_to_inferer[value] = (inferer, pass_in_types)
 
+    def register_value(self, value, inferer, pass_in_types=True):
+        self.value_to_inferer[value] = (inferer, pass_in_types)
+
     def register_unbound_method(self, module, attr, method_name, inferer,
                                 pass_in_types=True):
         """
@@ -95,7 +98,7 @@ class ModuleTypeInfererRegistry(object):
         if self.is_registered((value, dotted_path)):
             raise ValueAlreadyRegistered((value, inferer))
 
-        self.value_to_inferer[value, dotted_path] = (inferer, pass_in_types)
+        self.register_value((value, dotted_path), inferer, pass_in_types)
 
     def get_inferer(self, value, func_type=None):
         return self.value_to_inferer[value]
@@ -109,6 +112,7 @@ module_registry = ModuleTypeInfererRegistry()
 
 is_registered = module_registry.is_registered
 register_inferer = module_registry.register_inferer
+register_value = module_registry.register_value
 get_inferer = module_registry.get_inferer
 register_unbound = module_registry.register_unbound_method
 
@@ -117,6 +121,13 @@ def register(module):
         register_inferer(module, inferer.__name__, inferer)
         return inferer
 
+    return decorator
+
+def register_callable(signature):
+    def decorator(function):
+        inferer = lambda: signature.return_type
+        register_value(function, inferer)
+        return function
     return decorator
 
 def module_attribute_type(obj):
@@ -166,7 +177,7 @@ def dispatch_on_value(context, call_node, func_type):
     inferer, pass_in_types = get_inferer(func_type.value)
 
     argnames = inspect.getargspec(inferer).args
-    if argnames[0] == "context":
+    if argnames and argnames[0] == "context":
         argnames.pop(0)
         args = (context,)
     else:
@@ -211,7 +222,6 @@ def resolve_call(context, call_node, obj_call_node, func_type):
         result = nodes.CoercionNode(result, type)
 
     return result
-
 
 # Register type inferrer functions
 from numba.type_inference.modules import (numbamodule,

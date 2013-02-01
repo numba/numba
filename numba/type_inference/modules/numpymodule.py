@@ -171,10 +171,12 @@ def dot(context, a, b, out):
 @register(np)
 def array(object, dtype, order, subok):
     type = array_from_type(object)
-    if type.is_array:
+    if type.is_array and dtype is not None:
         type = type.copy(dtype=dtype)
-
-    return type
+    elif dtype is not None:
+        return dtype
+    else:
+        return type
 
 @register(np)
 def nonzero(a):
