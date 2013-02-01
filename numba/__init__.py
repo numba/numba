@@ -153,6 +153,7 @@ def nose_run(module=None):
 
 __all__ = typesystem.__all__ + decorators.__all__ + special.__all__
 
+from numba.typesystem import map_dtype
 from numba.type_inference.module_type_inference import (is_registered,
                                                         register,
                                                         register_inferer,
