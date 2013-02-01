@@ -97,6 +97,13 @@ def reduceat(a, indices, axis, dtype, out, static_dtype=None):
 def reduceat_bool(a, indices, axis, dtype, out):
     return reduceat(a, indices, axis, dtype, out, bool_)
 
+def outer(context, a, b, static_dtype=None):
+    a = array_of_dtype(a, None, static_dtype, out=None)
+    if a and a.is_array:
+        return a.dtype[:, :]
+
+def outer_bool(context, a, b):
+    return outer(context, a, b, bool_)
 
 #------------------------------------------------------------------------
 # Binary Ufuncs
@@ -151,9 +158,11 @@ for binary_ufunc in binary_ufuncs_bitwise + binary_ufuncs_arithmetic:
     register_unbound(np, binary_ufunc, "reduce", reduce_)
     register_unbound(np, binary_ufunc, "accumulate", accumulate)
     register_unbound(np, binary_ufunc, "reduceat", reduceat)
+    register_unbound(np, binary_ufunc, "outer", outer)
 
 for binary_ufunc in binary_ufuncs_compare + binary_ufuncs_logical:
     register_inferer(np, binary_ufunc, binary_map_bool)
     register_unbound(np, binary_ufunc, "reduce", reduce_bool)
     register_unbound(np, binary_ufunc, "accumulate", accumulate_bool)
     register_unbound(np, binary_ufunc, "reduceat", reduceat_bool)
+    register_unbound(np, binary_ufunc, "outer", outer_bool)

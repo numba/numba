@@ -59,6 +59,10 @@ def reduceat(ufunc, a):
 def reduceat_dtype(ufunc, a, dtype):
     return numba.typeof(ufunc.reduceat(a, dtype=dtype))
 
+@autojit
+def outer(ufunc, a):
+    return numba.typeof(ufunc.outer(a, a))
+
 #------------------------------------------------------------------------
 # Tests
 #------------------------------------------------------------------------
@@ -119,8 +123,17 @@ def test_ufunc_reduceat():
     # Test with dtype
     equals(reduceat_dtype(np.add, a, np.double), double[:])
 
+def test_ufunc_outer():
+    equals(outer(np.add, a), int32[:, :])
+    equals(outer(np.multiply, a), int32[:, :])
+
+    equals(outer(np.bitwise_and, a), int32[:, :])
+
+    equals(outer(np.logical_and, a), bool_[:, :])
+
 if __name__ == "__main__":
 #    test_binary_ufunc()
 #    test_ufunc_reduce()
     test_ufunc_accumulate()
     test_ufunc_reduceat()
+    test_ufunc_outer()

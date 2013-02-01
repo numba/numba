@@ -220,7 +220,9 @@ def inner(context, a, b):
 
 @register(np)
 def outer(context, a, b):
-    raise NotImplementedError("XXX")
+    result_type = promote(context, a, b)
+    if result_type.is_array:
+        return result_type.dtype[:, :]
 
 @register(np)
 def tensordot(context, a, b):
