@@ -116,9 +116,9 @@ register_value = module_registry.register_value
 get_inferer = module_registry.get_inferer
 register_unbound = module_registry.register_unbound_method
 
-def register(module):
+def register(module, **kws):
     def decorator(inferer):
-        register_inferer(module, inferer.__name__, inferer)
+        register_inferer(module, inferer.__name__, inferer, **kws)
         return inferer
 
     return decorator

@@ -13,7 +13,7 @@ import numpy as np
 
 from numba import *
 from numba.minivect import minitypes
-from numba import typesystem
+from numba import typesystem, error
 from numba.type_inference.module_type_inference import (register,
                                                         register_inferer,
                                                         register_unbound)
@@ -207,7 +207,6 @@ def inner(context, a, b):
     lhs_type = promote_to_array(a)
     rhs_type = promote_to_array(b)
     dtype = context.promote_types(lhs_type.dtype, rhs_type.dtype)
-    print lhs_type.ndim, rhs_type.ndim, dtype
     if lhs_type.ndim == 0:
         result_ndim = rhs_type.ndim
     elif rhs_type.ndim == 0:
@@ -223,12 +222,47 @@ def inner(context, a, b):
 @register(np)
 def outer(context, a, b):
     result_type = promote(context, a, b)
-    if result_type.is_array:
-        return result_type.dtype[:, :]
+    # promote() converts scalar types to 0-dim arrays, so it should
+    # always return an array type.  Ensure this continues to hold...
+    assert result_type.is_array
+    return result_type.dtype[:, :]
 
-@register(np)
-def tensordot(context, a, b):
-    raise NotImplementedError("XXX")
+@register(np, pass_in_types=False)
+def tensordot(context, a, b, axes):
+    '''Typing function for numpy.tensordot().
+
+    Defaults to Python object for any caller that isn't using the
+    default argument to axes.
+
+    Otherwise, it is similar to inner(), but subtracts four dimensions
+    from the result instead of two.
+
+    Without symbolic execution of the actual axes argument, this can't
+    determine the number of axes to sum over, so it punts.  This
+    typing function could use an array type of unknown dimensionality,
+    were one available.  See:
+    https://www.pivotaltracker.com/story/show/43687249
+    '''
+    lhs_type = array_from_object(a)
+    rhs_type = array_from_object(b)
+    if lhs_type.ndim < 1:
+        raise error.NumbaError(a, 'First argument to numpy.tensordot() '
+                               'requires array of dimensionality >= 1.')
+    elif rhs_type.ndim < 1:
+        raise error.NumbaError(b, 'First argument to numpy.tensordot() '
+                               'requires array of dimensionality >= 1.')
+    dtype = context.promote_types(lhs_type.dtype, rhs_type.dtype)
+    if axes is None:
+        result_ndim = lhs_type.ndim + rhs_type.ndim - 4
+        if result_ndim < 0:
+            raise error.NumbaError(a, 'Arguments to numpy.tensordot() should '
+                                   'have combined dimensionality >= 4 (when '
+                                   'axes argument is not specified).')
+        result_type = typesystem.array(dtype, result_ndim)
+    else:
+        # XXX Issue warning to user?
+        result_type = object_
+    return result_type
 
 @register(np)
 def einsum(context, subs, operands, kws):

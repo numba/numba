@@ -41,6 +41,26 @@ def numba_inner(a, b):
     result = np.inner(a, b)
     return numba.typeof(result), result
 
+@autojit
+def numba_outer(a, b):
+    result = np.outer(a, b)
+    return numba.typeof(result), result
+
+@autojit
+def numba_tensordot(a, b, axes):
+    result = np.tensordot(a, b, axes)
+    return numba.typeof(result), result
+
+@autojit
+def numba_tensordot2(a, b):
+    result = np.tensordot(a, b)
+    return numba.typeof(result), result
+
+@autojit
+def numba_kron(a, b):
+    result = np.kron(a, b)
+    return numba.typeof(result), result
+
 # ------------- Test sum ------------
 
 @autojit
@@ -101,8 +121,8 @@ def test_numba_dot():
 
     dtype = typesystem.from_numpy_dtype(A.dtype).dtype
 
-    for i in range(1, 10):
-        for j in range(1, 10):
+    for i in range(1, 5):
+        for j in range(1, 5):
             # print i, j
 
             shape_A = (1,) * i
@@ -149,6 +169,50 @@ def test_numba_inner():
             assert result == np.inner(a, b)
             assert result_type == typesystem.from_numpy_dtype(a.dtype).dtype
 
+def test_numba_outer():
+    for a, b in ((np.ones((5,)), np.linspace(-2, 2, 5)),
+                 (1j * np.linspace(2, -2, 5), np.ones((5,))),
+                 (np.array(['a', 'b', 'c'], dtype=object), np.arange(1,4)),
+                 (np.array([1]), 1),
+                 (np.ones((2,2,2)), np.linspace(-2, 2, 5))):
+        result_type, result = numba_outer(a, b)
+        assert (result == np.outer(a, b)).all()
+        assert (result_type.is_array and result_type.ndim == 2)
+        assert result_type.dtype == typesystem.from_numpy_dtype(a.dtype).dtype
+
+def test_numba_tensordot():
+    for a, b, axes in ((np.arange(60.).reshape(3, 4, 5),
+                        np.arange(24.).reshape(4, 3, 2), ([1,0],[0,1])),
+                       ):
+        result_type, result = numba_tensordot(a, b, axes)
+        assert (result == np.tensordot(a, b, axes)).all()
+        # See comments in the docstring for
+        # numba.type_inference.modules.numpymodule.tensordot().
+        assert result_type == object_
+
+def test_numba_tensordot2():
+    A = np.array(1)
+    B = np.array(2)
+
+    dtype = typesystem.from_numpy_dtype(A.dtype).dtype
+    for i in range(2, 5):
+        for j in range(2, 5):
+
+            shape_A = (1,) * i
+            shape_B = (1,) * j
+
+            x = A.reshape(*shape_A)
+            y = B.reshape(*shape_B)
+
+            result_type, result = numba_tensordot2(x, y)
+            control = np.tensordot(x, y)
+            assert result == control
+            #assert result_type == numba.typeof(control)
+            if i + j - 4 > 0:
+                assert result.ndim == result_type.ndim
+            else:
+                assert result_type == dtype
+
 def test_sum():
     a = np.array([1, 2, 3], dtype=np.int32)
     b = np.array([[1, 2], [3, 4]], dtype=np.int64)
@@ -165,4 +229,7 @@ if __name__ == "__main__":
     test_numba_dot()
     test_numba_vdot()
     test_numba_inner()
+    test_numba_outer()
+    test_numba_tensordot()
+    test_numba_tensordot2()
     test_sum()
