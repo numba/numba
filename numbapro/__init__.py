@@ -1,4 +1,6 @@
-__version__ = '0.8.1'
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions
 
 #def test(verbosity=2, failfast=False):
 #    import unittest

@@ -9,6 +9,14 @@ import numpy
 from Cython.Distutils import build_ext
 from Cython.Distutils.extension import Extension as CythonExtension
 
+import versioneer
+
+
+versioneer.versionfile_source = 'numbapro/_version.py'
+versioneer.versionfile_build = 'numbapro/_version.py'
+versioneer.tag_prefix = ''
+versioneer.parentdir_prefix = 'numbapro-'
+
 # NOTE: On OSX 10.8.2, XCode 4.2 you need -D_FORTIFY_SOURCE=0
 #       http://comments.gmane.org/gmane.comp.compilers.llvm.devel/37989
 #       This is a problem with GCC builtin.
@@ -89,8 +97,12 @@ def find_packages(where='.', exclude=()):
     return out
 
 
+cmdclass = versioneer.get_cmdclass()
+cmdclass['build_ext'] = build_ext
+
 setup(
     name = "numbapro",
+    version = versioneer.get_version(),
     author = "Continuum Analytics, Inc.",
     author_email = "support@continuum.io",
     url = "http://www.continuum.io",
@@ -98,6 +110,5 @@ setup(
     description = "compile Python code",
     ext_modules = ext_modules,
     packages = find_packages(),
-    version = "0.8.1",
-    cmdclass={'build_ext': build_ext},
+    cmdclass = cmdclass,
 )
