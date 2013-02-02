@@ -126,7 +126,7 @@ def versions_from_vcs(tag_prefix, versionfile_source, verbose=False):
             print("no .git in %s" % root)
         return {}
 
-    stdout = run_command([GIT, "describe", "--tags", "--dirty", "--always"],
+    stdout = run_command([GIT, "describe", "--tags", "--always"],
                          cwd=root)
     if stdout is None:
         return {}
@@ -139,8 +139,6 @@ def versions_from_vcs(tag_prefix, versionfile_source, verbose=False):
     if stdout is None:
         return {}
     full = stdout.strip()
-    if tag.endswith("-dirty"):
-        full += "-dirty"
     return {"version": tag, "full": full}
 
 
