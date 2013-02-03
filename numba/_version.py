@@ -12,7 +12,7 @@ IN_LONG_VERSION_PY = True
 # these strings will be replaced by git during git-archive
 git_refnames = "$Format:%d$"
 git_full = "$Format:%H$"
-
+GIT = "git"
 
 import subprocess
 import sys
@@ -191,4 +191,3 @@ def get_versions(default={"version": "unknown", "full": ""}, verbose=False):
     if not ver:
         ver = default
     return ver
-
