@@ -6,6 +6,7 @@ See modules/numpy*.py for type inference for NumPy.
 
 import ast
 import inspect
+from itertools import imap
 import types
 
 import numba
@@ -167,6 +168,11 @@ def parse_args(call_node, arg_names):
 
     return result
 
+def _build_arg(pass_in_types, node):
+    if pass_in_types:
+        return get_type(node)
+    return node
+
 def dispatch_on_value(context, call_node, func_type):
     """
     Dispatch a call of a module attribute by value.
@@ -183,19 +189,30 @@ def dispatch_on_value(context, call_node, func_type):
     """
     inferer, pass_in_types = get_inferer(func_type.value)
 
-    argnames = inspect.getargspec(inferer).args
+    argspec = inspect.getargspec(inferer)
+
+    argnames = argspec.args
     if argnames and argnames[0] == "context":
         argnames.pop(0)
-        args = (context,)
+        args = [context]
     else:
-        args = ()
+        args = []
 
     method_kwargs = parse_args(call_node, argnames)
 
-    if pass_in_types:
-        for argname, node in method_kwargs.iteritems():
-            if node is not None:
-                method_kwargs[argname] = get_type(node)
+    # Build keyword arguments
+    for argname, node in method_kwargs.iteritems():
+        if node is not None:
+            method_kwargs[argname] = _build_arg(pass_in_types, node)
+
+    # In the case of *args, clear keyword arguments and build positional list
+    if argspec.varargs and len(argnames) < call_node.args:
+        extra_args = call_node.args[len(argnames):]
+
+        args.extend(method_kwargs[argname] for argname in argnames)
+        args.extend(_build_arg(pass_in_types, arg) for arg in extra_args)
+
+        method_kwargs.clear()
 
     return inferer(*args, **method_kwargs)
 
