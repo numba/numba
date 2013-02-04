@@ -278,18 +278,23 @@ def register_callable(signature):
     def my_function(...):
         ...
     """
-    assert isinstance(signature, (typeset, minitypes.Type))
+    assert isinstance(signature, (typeset.typeset, minitypes.Type))
 
     def decorator(function):
-        def infer(*args):
-            if isinstance(signature, typeset):
-                specialization = signature.from_argtypes(args)
+        def infer(context, *args):
+            if signature.is_typeset:
+                specialization = signature.find_match(context, args)
                 if specialization is None:
-                    raise p
+                    raise UnmatchedTypeError((function, args))
+            else:
+                specialization = typeset.match(context, signature, args)
 
-        inferer = lambda: signature.return_type
-        register_value(function, inferer)
+            assert specialization.is_function
+            return specialization.return_type
+
+        register_value(function, infer)
         return function
+
     return decorator
 
 #----------------------------------------------------------------------------
