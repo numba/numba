@@ -5,12 +5,23 @@ Adding Type Inference for External Code
 ***************************************
 
 Users can add type inference for non-numba functions, to specify to
-numba what the result of an operation will look like.
+numba what the result of an operation will look like. This can make
+numba code much more efficient by knowing the lower-level types.
 
-Static Signatures
------------------
+Type Functions
+--------------
 
-Static signatures can be easily handled by registering a callable with
+Users can write type functions to tell Numba what the return type of
+a certain function call in numba code will be. The return type may
+be always the same, or it may depend on the input types in a simple
+or complicated way.
+
+Below we will describe ways to handle all these cases.
+
+Simple Signatures
++++++++++++++++++
+
+Simple signatures can be easily handled by registering a callable with
 a static signature::
 
     from numba import register_callable
@@ -20,7 +31,9 @@ a static signature::
     def square(arg):
         return arg * 2
 
-Or if your function is statically polymorphic, a typeset can be used to
+This specifies that the function takes only a double and returns a double.
+
+If a function is statically polymorphic, a typeset can be used to
 represent a variety of inputs::
 
     import numba as nb
@@ -32,8 +45,9 @@ represent a variety of inputs::
 
 Here ``numba.numeric`` represents the set of numeric types. The set is
 then bound in a similar way to Cython's fused types, in that the argument
-types instantiate the set to a concrete type. This means the signature above
-allows signatures like ``double(double)`` but not for instance ``double(int)``.
+types instantiate the sets to concrete types. This means the signature above
+allows signatures like ``double(double)`` and ``int_(int_)``, but not for
+instance ``double(int)``.
 
 Type sets can be created explicitly::
 
@@ -46,9 +60,10 @@ Type sets can be created explicitly::
 Parametric Polymorphism
 -----------------------
 
-Type sets are fine for small typesets, but not general enough for a large
+Type sets are fine for small sets, but not general enough for a large
 or infinite type universe. Instead, we allow parametric polymorphism through
-simple templates and type infering callbacks. For an introduction to templates
+simple templates and type functions (functions that return the type at compile
+time given the input types). For an introduction to templates
 we refer the reader to templates_.
 
 Templates can be used as follows::
@@ -62,63 +77,51 @@ Templates can be used as follows::
 
 More general type expressions are listed under templates_.
 
-.. NOTE:: Type sets and templates for user exposed type inference is not yet implemented.
+.. NOTE:: Templates for user-based type inference is not yet implemented.
 
 For full control a user can write an explicit function that performs the type
-inference based on the input types::
+inference based on the input types. The input types are passed in as objects
+and inferred from the function's signature::
 
     from numba import typesystem
     from numba.typesystem import get_type
-    from numba.type_inference.modules import numpymodule
 
-    def get_dtype(dtype, default_dtype):
-        # Simple helper function to map an AST node dtype keyword argument => NumPy dtype
-        ...
-
-    def reduce_(a, axis, dtype, out):
+    def infer_reduce(a, axis, dtype, out):
         if out is not None:
-            return get_type(out)
+            return out
     
-        # Get the type of the array argument AST node
-        array_type = get_type(a)
-        
-        # Get the NumpyDtypeType that represents the type for a np.dtype(...) object 
-        # The 'dtype' attribute of the type gives the concrete dtype type, i.e. for
-        # an AST node `dt` representing `np.dtype(np.double)`, `get_dtype(dt).dtype` will return
-        # the Numba type `double`
-        dtype_type = numpymodule.get_dtype(dtype, default_dtype=array_type.dtype)
+        dtype_type = get_dtype(a, dtype, static_dtype)
     
         if axis is None:
             # Return the scalar type
-            return dtype_type.dtype
+            return dtype_type
     
-        # Handle the axis parameter
-        axis_type = get_type(axis)
-        if axis_type.is_tuple and axis_type.is_sized:
-            # axis=(tuple with a constant size)
-            return typesystem.array(dtype_type.dtype, array_type.ndim - axis_type.size)
-        elif axis_type.is_int:
-            # axis=1
-            return typesystem.array(dtype_type.dtype, array_type.ndim - 1)
-        else:
-            # axis=(something unknown)
-            return object_
-    
-    register_inferer(np, 'sum', reduce_)    # Register type inference for np.sum
-    register_inferer(np, 'prod', reduce_)   # Register type inference for np.prod
+        if dtype_type:
+            # Handle the axis parameter
+            if axis.is_tuple and axis.is_sized:
+                # axis=(tuple with a constant size)
+                return typesystem.array(dtype_type, a.ndim - axis.size)
+            elif axis.is_int:
+                # axis=1
+                return typesystem.array(dtype_type, a.ndim - 1)
+            else:
+                # axis=(something unknown)
+                return object_
+   
+    register_inferer(np, 'sum', infer_reduce)    # Register type inference for np.sum
+    register_inferer(np, 'prod', infer_reduce)   # Register type inference for np.prod
 
 The above works through introspection of the function using the ``inspect`` module. A call
-in the user code to ``np.sum`` or ``np.prod`` will now ask this function to resolve its
-type at Numba compile time, passing in the AST nodes representing the arguments, or None
-when abscent::
+in the user code to ``np.sum`` or ``np.prod`` will now ask the above function to resolve its
+type at Numba compile time, passing in the types representing the arguments, or None
+when absent::
 
     # Numba code
-    np.sum(a)              # => reduce_(a=ast.Name(id='a', ctx=ast.Load(), type=double[:, :]),
-                           #            axis=None, dtype=None, out=None)
-    np.sum(a, axis=(1, 2)) # => reduce_(a=ast.Name(id='a', ctx=ast.Load(), type=double[:, :, :]),
-                           #            axis=tuple(base_type=int_, size=2), dtype=None, out=None)
+    np.sum(a)              # => infer_reduce(a=double[:, :]), axis=None, dtype=None, out=None)
+    np.sum(a, axis=(1, 2)) # => infer_reduce(a=double[:, :, :]), axis=tuple(base_type=int_, size=2),
+                           #                 dtype=None, out=None)
 
-A shorthand function to register type inferering functions is provided by ``numba.register``::
+A shorthand function to register type functions is provided by ``numba.register``::
 
     @numba.register(np)
     def sum(a, axis, dtype, out):
@@ -126,6 +129,18 @@ A shorthand function to register type inferering functions is provided by ``numb
 
 This retrieves ``np.sum`` based on the name of the type inferring function (hence it must be called
 ``sum``).
+
+Registering Unbound Methods
+---------------------------
+
+Unbound methods are transient, and hence can not be registered by value. Instead we register
+a dotted path starting at a value, e.g.::
+
+    numba.register_unbound(np, "add", "reduce", infer_reduce)
+
+To allow type inference for ``np.add.reduce()``. The first string specifies the module (``np``), the
+second the object (``"add"``), the third the dotted path (``"reduce"``) and the last the type
+function (``infer_reduce``).
 
 Future Directions
 -----------------
