@@ -1,5 +1,6 @@
 __all__ = ['autojit', 'jit', 'export', 'exportmany']
 
+import types
 import functools
 import logging
 import inspect
@@ -342,7 +343,7 @@ def _jit(restype=None, argtypes=None, backend='bytecode', **kws):
 
 jit_targets = {
     ('cpu', 'bytecode') : _jit,
-    ('cpu', 'ast') : _jit2
+    ('cpu', 'ast') : _jit2,
 }
 
 autojit_wrappers = {
@@ -394,7 +395,7 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
     deprecated as of the 0.3 release.*
     """
     kws.update(nopython=nopython, backend=backend)
-    if isinstance(restype, type):
+    if isinstance(restype, (type, types.ClassType)):
         cls = restype
         return jit_extension_class(cls, kws)
 

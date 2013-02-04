@@ -13,7 +13,8 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
 
     def __init__(self, py_class, **kwds):
         super(ExtensionType, self).__init__(**kwds)
-        assert isinstance(py_class, type), "Must be a new-style class"
+        assert isinstance(py_class, type), ("Must be a new-style class "
+                                            "(inherit from 'object')")
         self.name = py_class.__name__
         self.py_class = py_class
         self.symtab = {}  # attr_name -> attr_type
