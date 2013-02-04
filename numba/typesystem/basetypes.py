@@ -73,7 +73,7 @@ class IteratorType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "iterator<%s>" % (self.base_type,)
 
-class KnownValueType(NumbaType):
+class KnownValueType(NumbaType, minitypes.ObjectType):
     """
     Type which is associated with a known value or well-defined symbolic
     expression:
