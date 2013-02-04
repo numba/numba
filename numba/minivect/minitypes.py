@@ -144,7 +144,7 @@ class TypeMapper(object):
 
     def to_llvm(self, type):
         "Return an LLVM type for the given type."
-        raise NotImplementedError
+        raise NotImplementedError(type)
 
     def from_python(self, value):
         "Get a type from a python value"
