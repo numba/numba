@@ -91,6 +91,7 @@ class typeset(minitypes.Type):
 
         self.types = frozenset(types)
         self.name = name
+        self.first_type = types[0]
 
         self._from_argtypes = {}
         for type in types:
@@ -110,7 +111,7 @@ class typeset(minitypes.Type):
         return None
 
     def __repr__(self):
-        return "typeset(%s)" % self.types
+        return "typeset(%s, ...)" % (self.first_type,)
 
     def __hash__(self):
         return hash(id(self))
