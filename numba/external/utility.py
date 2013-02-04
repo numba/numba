@@ -41,13 +41,13 @@ load2 = lambda name, sig: load(name, sig, check_pyerr_occurred=True)
 object_to_numeric = {
     char       : load2("__Numba_PyInt_AsSignedChar", char(object_)),
     uchar      : load2("__Numba_PyInt_AsUnsignedChar", uchar(object_)),
-    short      : load2("__Numba_PyInt_AsShort", short(object_)),
+    short      : load2("__Numba_PyInt_AsSignedShort", short(object_)),
     ushort     : load2("__Numba_PyInt_AsUnsignedShort", ushort(object_)),
-    int_       : load2("__Numba_PyInt_AsInt", int_(object_)),
+    int_       : load2("__Numba_PyInt_AsSignedInt", int_(object_)),
     uint       : load2("__Numba_PyInt_AsUnsignedInt", uint(object_)),
-    long_      : load2("__Numba_PyInt_AsLong", long_(object_)),
+    long_      : load2("__Numba_PyInt_AsSignedLong", long_(object_)),
     ulong      : load2("__Numba_PyInt_AsUnsignedLong", ulong(object_)),
-    longlong   : load2("__Numba_PyInt_AsLongLong", longlong(object_)),
+    longlong   : load2("__Numba_PyInt_AsSignedLongLong", longlong(object_)),
     ulonglong  : load2("__Numba_PyInt_AsUnsignedLongLong", ulonglong(object_)),
 }
 

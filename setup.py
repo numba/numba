@@ -15,9 +15,17 @@ from Cython.Distutils.extension import Extension as CythonExtension
 if sys.version_info[:2] < (2, 6):
     raise Exception('numba requires Python 2.6 or greater.')
 
-cmdclasses = {
-    'build_ext': build_ext,
-}
+import versioneer
+
+
+versioneer.versionfile_source = 'numba/_version.py'
+versioneer.versionfile_build = 'numba/_version.py'
+versioneer.tag_prefix = ''
+versioneer.parentdir_prefix = 'numba-'
+
+
+cmdclass = versioneer.get_cmdclass()
+cmdclass['build_ext'] = build_ext
 
 setup_args = {
     'long_description': open('README').read(),
@@ -50,8 +58,8 @@ def run_2to3():
               if fix.split('fix_')[-1] not in bad_fixers]
 
     build_py.fixer_names = fixes
-    cmdclasses["build_py"] = build_py
-    # cmdclasses["build"] = build_py
+    cmdclass["build_py"] = build_py
+    # cmdclass["build"] = build_py
 
     # Distribute options
     # setup_args["use_2to3"] = True
@@ -72,6 +80,7 @@ gen_type_conversion.run()
 
 setup(
     name = "numba",
+    version = versioneer.get_version(),
     author = "Continuum Analytics, Inc.",
     author_email = "numba-users@continuum.io",
     url = "http://numba.github.com",
@@ -114,7 +123,6 @@ setup(
             include_dirs=[numpy.get_include()],
             cython_gdb=True),
     ],
-    version = '0.6.0',
-    cmdclass=cmdclasses,
+    cmdclass = cmdclass,
     **setup_args
 )

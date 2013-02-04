@@ -154,7 +154,7 @@ static NUMBA_INLINE Py_UCS4 __Numba_PyObject_AsPy_UCS4(PyObject* x) {
                     "got length %" CYTHON_FORMAT_SSIZE_T "d", length);
        return (Py_UCS4)-1;
    }
-   ival = __Numba_PyInt_AsLong(x);
+   ival = __Numba_PyInt_AsSignedLong(x);
    if (unlikely(ival < 0)) {
        if (!PyErr_Occurred())
            PyErr_SetString(PyExc_OverflowError,
@@ -202,7 +202,7 @@ static NUMBA_INLINE Py_UNICODE __Numba_PyObject_AsPy_UNICODE(PyObject* x) {
         if (unlikely(!maxval))
             maxval = (long)PyUnicode_GetMax();
         #endif
-        ival = __Numba_PyInt_AsLong(x);
+        ival = __Numba_PyInt_AsSignedLong(x);
     }
     if (unlikely(ival < 0)) {
         if (!PyErr_Occurred())
@@ -233,16 +233,15 @@ static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
 static int
 export_type_conversion(PyObject *module)
 {
-    EXPORT_FUNCTION(__Numba_PyInt_AsChar, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsSignedChar, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedChar, module, error)
-    EXPORT_FUNCTION(__Numba_PyInt_AsShort, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsSignedShort, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedShort, module, error)
-    EXPORT_FUNCTION(__Numba_PyInt_AsInt, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsSignedInt, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedInt, module, error)
-    EXPORT_FUNCTION(__Numba_PyInt_AsLong, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsSignedLong, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedLong, module, error)
-    EXPORT_FUNCTION(__Numba_PyInt_AsLongLong, module, error)
+    EXPORT_FUNCTION(__Numba_PyInt_AsSignedLongLong, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedLongLong, module, error)
 
     EXPORT_FUNCTION(__Numba_PyIndex_AsSsize_t, module, error);
