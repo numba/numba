@@ -63,11 +63,11 @@ size_t closure_field_offset = offsetof(NumbaFunctionObject, func_closure);
 
 static PyTypeObject *NumbaFunctionType = 0;
 
-static PyObject *NumbaFunction_New(PyTypeObject *type,
-                                   PyMethodDef *ml, int flags,
-                                   PyObject *closure,
-                                   PyObject *self, PyObject *module,
-                                   PyObject* code);
+static NumbaFunctionObject *NumbaFunction_New(PyTypeObject *type,
+                                              PyMethodDef *ml, int flags,
+                                              PyObject *closure,
+                                              PyObject *self, PyObject *module,
+                                              PyObject* code);
 
 static NUMBA_INLINE void *NumbaFunction_InitDefaults(PyObject *m,
                                                    size_t size,
@@ -285,7 +285,7 @@ static PyMethodDef NumbaFunction_methods[] = {
 };
 
 
-static PyObject *NumbaFunction_New(
+static NumbaFunctionObject *NumbaFunction_New(
             PyTypeObject *type, PyMethodDef *ml, int flags, PyObject *closure,
             PyObject *module, PyObject *code, PyObject *keep_alive)
 {
@@ -319,8 +319,8 @@ static PyObject *NumbaFunction_New(
     op->native_func = NULL;
     op->native_signature = NULL;
 
-    PyObject_GC_Track(op);
-    return (PyObject *) op;
+    PyObject_GC_Track((PyObject *)op);
+    return op;
 }
 
 /* Create a new function and set the closure scope */
@@ -337,7 +337,7 @@ NumbaFunction_NewEx(PyMethodDef *ml, PyObject *module, PyObject *code,
         Py_XINCREF(native_signature);
         result->native_signature = native_signature;
     }
-    return result;
+    return (PyObject *)result;
 }
 
 static int
