@@ -141,6 +141,26 @@ def module_attribute_type(obj):
 
     return None
 
+def parse_args(call_node, arg_names):
+    """
+    Parse positional and keyword arguments.
+    """
+    result = dict.fromkeys(arg_names)
+
+    # parse positional arguments
+    i = 0
+    for i, (arg_name, arg) in enumerate(zip(arg_names, call_node.args)):
+        result[arg_name] = arg
+
+    arg_names = arg_names[i:]
+    if arg_names:
+        # parse keyword arguments
+        for keyword in call_node.keywords:
+            if keyword.arg in result:
+                result[keyword.arg] = keyword.value
+
+    return result
+
 def dispatch_on_value(context, call_node, func_type):
     """
     Dispatch a call of a module attribute by value.
@@ -215,6 +235,11 @@ get_inferer = module_registry.get_inferer
 register_unbound = module_registry.register_unbound_method
 
 def register(module, **kws):
+    """
+    @register(module)
+    def my_type_function(arg1, ..., argN):
+        ...
+    """
     def decorator(inferer):
         register_inferer(module, inferer.__name__, inferer, **kws)
         return inferer
@@ -222,29 +247,18 @@ def register(module, **kws):
     return decorator
 
 def register_callable(signature):
+    """
+    signature := FunctionType | typeset(signature *)
+
+    @register_callable(signature)
+    def my_function(...):
+        ...
+    """
     def decorator(function):
         inferer = lambda: signature.return_type
         register_value(function, inferer)
         return function
     return decorator
-
-def parse_args(call_node, arg_names):
-    "Parse positional and keyword arguments"
-    result = dict.fromkeys(arg_names)
-
-    # parse positional arguments
-    i = 0
-    for i, (arg_name, arg) in enumerate(zip(arg_names, call_node.args)):
-        result[arg_name] = arg
-
-    arg_names = arg_names[i:]
-    if arg_names:
-        # parse keyword arguments
-        for keyword in call_node.keywords:
-            if keyword.arg in result:
-                result[keyword.arg] = keyword.value
-
-    return result
 
 #----------------------------------------------------------------------------
 # Registry of internal Type Functions
