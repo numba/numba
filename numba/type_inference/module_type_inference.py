@@ -12,7 +12,7 @@ import numba
 from numba import *
 from numba.minivect import minitypes
 from numba import typesystem, symtab, error, nodes
-from numba.typesystem import get_type
+from numba.typesystem import get_type, typeset
 
 import numpy.random
 import numpy as np
@@ -35,6 +35,12 @@ class ValueAlreadyRegistered(error.NumbaError):
     """
     Raised when a type inferer is registered multiple times for the same
     value.
+    """
+
+class UnmatchedTypeError(error.NumbaError):
+    """
+    Raised when no matching specialization is found for a registered
+    signature (`register_callable`).
     """
 
 #----------------------------------------------------------------------------
@@ -224,6 +230,7 @@ def resolve_call(context, call_node, obj_call_node, func_type):
 
     return result
 
+
 #----------------------------------------------------------------------------
 # User-exposed functions to register type functions
 #----------------------------------------------------------------------------
@@ -254,7 +261,15 @@ def register_callable(signature):
     def my_function(...):
         ...
     """
+    assert isinstance(signature, (typeset, minitypes.Type))
+
     def decorator(function):
+        def infer(*args):
+            if isinstance(signature, typeset):
+                specialization = signature.from_argtypes(args)
+                if specialization is None:
+                    raise p
+
         inferer = lambda: signature.return_type
         register_value(function, inferer)
         return function
