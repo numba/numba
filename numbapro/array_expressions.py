@@ -50,6 +50,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
         """
         Start the mapping process for the outermost node in the array expression.
         """
+        self.elementwise = False
 
     def visit_elementwise(self, elementwise, node):
         if elementwise and self.nesting_level == 0:
@@ -151,6 +152,7 @@ class ArrayExpressionRewriteUfunc(ArrayExpressionRewrite):
         self.vectorizer_cls = vectorizer_cls or basic.BasicASTVectorize
 
     def register_array_expression(self, node, lhs=None):
+        super(ArrayExpressionRewriteUfunc, self).register_array_expression(node, lhs)
         py_ufunc, signature, ufunc_builder = self.get_py_ufunc(lhs, node)
 
         # Vectorize Python function
@@ -219,6 +221,8 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         return nodes.ArrayAttributeNode(attr, array)
 
     def register_array_expression(self, node, lhs=None):
+        super(ArrayExpressionRewriteNative, self).register_array_expression(node, lhs)
+
         lhs_type = lhs.type if lhs else node.type
         is_expr = lhs is None
 
