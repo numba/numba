@@ -1,3 +1,9 @@
+"""
+Support for type functions for external code.
+
+See modules/numpy*.py for type inference for NumPy.
+"""
+
 import ast
 import inspect
 import types
@@ -21,11 +27,19 @@ logger = logging.getLogger(__name__)
 if debug:
     logger.setLevel(logging.DEBUG)
 
+#----------------------------------------------------------------------------
+# Exceptions
+#----------------------------------------------------------------------------
+
 class ValueAlreadyRegistered(error.NumbaError):
     """
     Raised when a type inferer is registered multiple times for the same
     value.
     """
+
+#----------------------------------------------------------------------------
+# Global Registry for Type Functions
+#----------------------------------------------------------------------------
 
 class ModuleTypeInfererRegistry(object):
     "Builds the module type inferers for the modules we can handle"
@@ -104,31 +118,16 @@ class ModuleTypeInfererRegistry(object):
         return self.value_to_inferer[value]
 
     def lookup_module_attribute(self, value):
+        "Return the module (or None) to which a registered value belongs"
         if self.is_registered(value) and value in self.value_to_module:
             return self.value_to_module[value]
 
 
 module_registry = ModuleTypeInfererRegistry()
 
-is_registered = module_registry.is_registered
-register_inferer = module_registry.register_inferer
-register_value = module_registry.register_value
-get_inferer = module_registry.get_inferer
-register_unbound = module_registry.register_unbound_method
-
-def register(module, **kws):
-    def decorator(inferer):
-        register_inferer(module, inferer.__name__, inferer, **kws)
-        return inferer
-
-    return decorator
-
-def register_callable(signature):
-    def decorator(function):
-        inferer = lambda: signature.return_type
-        register_value(function, inferer)
-        return function
-    return decorator
+#----------------------------------------------------------------------------
+# Dispatch Functions for the Type Inferencer
+#----------------------------------------------------------------------------
 
 def module_attribute_type(obj):
     """
@@ -141,24 +140,6 @@ def module_attribute_type(obj):
         return typesystem.ModuleAttributeType(module=module, attr=attr)
 
     return None
-
-def parse_args(call_node, arg_names):
-    "Parse positional and keyword arguments"
-    result = dict.fromkeys(arg_names)
-
-    # parse positional arguments
-    i = 0
-    for i, (arg_name, arg) in enumerate(zip(arg_names, call_node.args)):
-        result[arg_name] = arg
-
-    arg_names = arg_names[i:]
-    if arg_names:
-        # parse keyword arguments
-        for keyword in call_node.keywords:
-            if keyword.arg in result:
-                result[keyword.arg] = keyword.value
-
-    return result
 
 def dispatch_on_value(context, call_node, func_type):
     """
@@ -222,6 +203,52 @@ def resolve_call(context, call_node, obj_call_node, func_type):
         result = nodes.CoercionNode(result, type)
 
     return result
+
+#----------------------------------------------------------------------------
+# User-exposed functions to register type functions
+#----------------------------------------------------------------------------
+
+is_registered = module_registry.is_registered
+register_inferer = module_registry.register_inferer
+register_value = module_registry.register_value
+get_inferer = module_registry.get_inferer
+register_unbound = module_registry.register_unbound_method
+
+def register(module, **kws):
+    def decorator(inferer):
+        register_inferer(module, inferer.__name__, inferer, **kws)
+        return inferer
+
+    return decorator
+
+def register_callable(signature):
+    def decorator(function):
+        inferer = lambda: signature.return_type
+        register_value(function, inferer)
+        return function
+    return decorator
+
+def parse_args(call_node, arg_names):
+    "Parse positional and keyword arguments"
+    result = dict.fromkeys(arg_names)
+
+    # parse positional arguments
+    i = 0
+    for i, (arg_name, arg) in enumerate(zip(arg_names, call_node.args)):
+        result[arg_name] = arg
+
+    arg_names = arg_names[i:]
+    if arg_names:
+        # parse keyword arguments
+        for keyword in call_node.keywords:
+            if keyword.arg in result:
+                result[keyword.arg] = keyword.value
+
+    return result
+
+#----------------------------------------------------------------------------
+# Registry of internal Type Functions
+#----------------------------------------------------------------------------
 
 # Register type inferrer functions
 from numba.type_inference.modules import (numbamodule,

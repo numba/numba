@@ -27,4 +27,4 @@ class typeset(object):
 numeric = typeset(minitypes.numeric)
 integral = typeset(minitypes.integral)
 floating = typeset(minitypes.floating)
-complex = typeset(minitypes.complextypes)
+complextypes = typeset(minitypes.complextypes)
