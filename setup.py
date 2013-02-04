@@ -105,6 +105,7 @@ setup(
         CythonExtension(
             name = "numba.extension_types",
             sources = ["numba/extension_types.pyx", "numba/numbafunction.c"],
+            depends = ["numba/numbafunction.h"],
             include_dirs=[numba_include_dir],
             cython_gdb=True),
         CythonExtension(

@@ -31,11 +31,12 @@ cdef extern from *:
     ctypedef struct PyMethodDef:
         pass
 
-cdef extern size_t closure_field_offset
-cdef extern int NumbaFunction_init() except -1
-cdef extern object NumbaFunction_NewEx(
-                PyMethodDef *ml, module, code, PyObject *closure,
-                void *native_func, native_signature, keep_alive)
+cdef extern from "numbafunction.h":
+    cdef size_t closure_field_offset
+    cdef int NumbaFunction_init() except -1
+    cdef object NumbaFunction_NewEx(
+                    PyMethodDef *ml, module, code, PyObject *closure,
+                    void *native_func, native_signature, keep_alive)
 
 NumbaFunction_init()
 NumbaFunction_NewEx_pointer = <Py_uintptr_t> &NumbaFunction_NewEx
