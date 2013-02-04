@@ -162,3 +162,4 @@ from numba.type_inference.module_type_inference import (is_registered,
                                                         register_callable)
 
 from numba.typesystem.typeset import *
+__all__.extend(["numeric", "floating", "complextypes"])
