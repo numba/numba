@@ -107,6 +107,8 @@ cdef inline void setkey(t, int i, k):
 cdef tuple hash_on_value_types = (
     minitypes.Type,
     np.ufunc,
+    np.dtype,
+    np.generic,
     NumbaWrapper,
     types.FunctionType,
     types.BuiltinFunctionType,
