@@ -2,6 +2,10 @@ Version 0.6
 ===========
 * Python 2.6 support
 * Programmable typing
+    * Allow users to add type inference for external code
+* Better NumPy type inference
+    * outer, inner, dot, vdot, tensordot, nonzero, where,
+      binary ufuncs + methods (reduce, accumulate, reduceat, outer)
 * Type based alias analysis
     * Support for strict aliasing
 * Much faster autojit dispatch when calling from Python
