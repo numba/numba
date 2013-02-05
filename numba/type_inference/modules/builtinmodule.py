@@ -1,3 +1,7 @@
+"""
+Type functions for Python builtins.
+"""
+
 import functools
 import __builtin__ as builtins
 
@@ -63,6 +67,9 @@ def cast(node, dst_type):
 #----------------------------------------------------------------------------
 # Type Functions for Builtins
 #----------------------------------------------------------------------------
+
+# TODO: add specializer functions to insert coercions before late specialization
+# TODO: don't rewrite AST here
 
 @register_builtin((1, 2, 3))
 def range_(context, node, start, stop, step):
@@ -157,7 +164,11 @@ def round_(context, node, number, ndigits):
         # round(myint) -> float(myint)
         return nodes.CoercionNode(node.args[0], double)
 
-    dst_type = argtype
+    if (argtype.is_float or argtype.is_int) and is_math:
+        dst_type = argtype
+    else:
+        dst_type = object_
+        node.args[0] = nodes.CoercionNode(node.args[0], object_)
 
     node.variable = Variable(dst_type)
     return nodes.CoercionNode(node, double)
