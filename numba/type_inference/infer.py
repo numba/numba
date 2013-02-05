@@ -39,128 +39,6 @@ def no_keywords(node):
             node, "Function call does not support keyword or star arguments")
 
 
-class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
-    """
-    Resolve builtin calls for type inference. Only applies high-level
-    transformations such as type coercions. A subsequent pass in
-    LateSpecializer performs low-level transformations.
-    """
-
-    def _resolve_range(self, func, node, argtype):
-        node.variable = Variable(typesystem.RangeType())
-        args = self.visitlist(node.args)
-        node.args = nodes.CoercionNode.coerce(args, dst_type=Py_ssize_t)
-        return node
-
-    _resolve_xrange = _resolve_range
-
-    def _resolve_len(self, func, node, argtype):
-        # Simplify len(array) to ndarray.shape[0]
-        self._expect_n_args(func, node, 1)
-        if argtype.is_array:
-            shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
-            new_node = nodes.index(shape_attr, 0)
-            return self.visit(new_node)
-
-        return None
-
-    dst_types = {
-        int: numba.int_,
-        float: numba.double,
-        complex: numba.complex128
-    }
-
-    def _resolve_int(self, func, node, argtype):
-        # Resolve int(x) and float(x) to an equivalent cast
-        self._expect_n_args(func, node, (0, 1, 2))
-        dst_type = self.dst_types[func]
-
-        if len(node.args) == 0:
-            return nodes.ConstNode(func(0), dst_type)
-        elif len(node.args) == 1:
-            return nodes.CoercionNode(node.args[0], dst_type=dst_type)
-        else:
-            # XXX Moved the unary version to the late specializer,
-            # what about the 2-ary version?
-            arg1, arg2 = node.args
-            if arg1.variable.type.is_c_string:
-                assert dst_type.is_int
-                return nodes.CoercionNode(
-                    nodes.ObjectTempNode(
-                        function_util.external_call(
-                                         self.context,
-                                         self.llvm_module,
-                                         'PyInt_FromString',
-                                         args=[arg1, nodes.NULL, arg2])),
-                    dst_type=dst_type)
-            return None
-
-    _resolve_float = _resolve_int
-
-    def _resolve_complex(self, func, node, argtype):
-        if len(node.args) == 2:
-            args = nodes.CoercionNode.coerce(node.args, double)
-            result = nodes.ComplexNode(real=args[0], imag=args[1])
-        else:
-            result = self._resolve_int(func, node, argtype)
-
-        return result
-
-    def _resolve_abs(self, func, node, argtype):
-        self._expect_n_args(func, node, 1)
-
-        # Result type of the substitution during late
-        # specialization
-        result_type = object_
-
-        # What we actually get back regardless of implementation,
-        # e.g. abs(complex) goes throught the object layer, but we know the result
-        # will be a double
-        dst_type = argtype
-
-        is_math = self._is_math_function(node.args, abs)
-
-        if argtype.is_complex:
-            dst_type = double
-        elif is_math and argtype.is_int and argtype.signed:
-            # Use of labs or llabs returns long_ and longlong respectively
-            result_type = promote_closest(self.context, argtype,
-                                          [long_, longlong])
-        elif is_math and (argtype.is_float or argtype.is_int):
-            result_type = argtype
-
-        node.variable = Variable(result_type)
-        return nodes.CoercionNode(node, dst_type)
-
-    def _resolve_pow(self, func, node, argtype):
-        self._expect_n_args(func, node, (2, 3))
-        return self.pow(*node.args)
-
-    def _resolve_round(self, func, node, argtype):
-        self._expect_n_args(func, node, (1, 2))
-        is_math = self._is_math_function(node.args, round)
-        if len(node.args) == 1 and argtype.is_int:
-            # round(myint) -> myint
-            return nodes.CoercionNode(node.args[0], double)
-
-        if (argtype.is_float or argtype.is_int) and is_math:
-            dst_type = argtype
-        else:
-            dst_type = object_
-            node.args[0] = nodes.CoercionNode(node.args[0], object_)
-
-        node.variable = Variable(dst_type)
-        return nodes.CoercionNode(node, double)
-
-    def _resolve_globals(self, func, node, argtype):
-        self._expect_n_args(func, node, 0)
-        return nodes.ObjectInjectNode(self.func.func_globals)
-
-    def _resolve_locals(self, func, node, argtype):
-        self._expect_n_args(func, node, 0)
-        raise error.NumbaError("locals() is not supported in numba functions")
-
-
 class NumpyMixin(object):
     """
     Mixing that deals with NumPy array slicing.
@@ -260,8 +138,8 @@ class NumpyMixin(object):
         return result_type, node
 
 
-class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
-                  NumpyMixin, closure.ClosureMixin, transforms.MathMixin):
+class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
+                  closure.ClosureMixin, transforms.MathMixin):
     """
     Type inference. Initialize with a minivect context, a Python ast,
     and a function type with a given or absent, return type.
