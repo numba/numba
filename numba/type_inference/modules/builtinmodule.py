@@ -49,7 +49,6 @@ def register_builtin(nargs):
             return func(context, node, *args)
 
         name = infer.__name__.strip("_")
-        infer.__name__ = name
         value = getattr(builtins, name)
 
         register_value(value, infer, pass_in_types=False, pass_in_callnode=True)
@@ -141,8 +140,8 @@ def abs_(context, node, x):
     return nodes.CoercionNode(node, dst_type)
 
 @register_builtin((2, 3))
-def pow_(context, node, base, exponent):
-    return mathmodule.pow(*node.args)
+def pow_(context, node, base, exponent, mod):
+    return mathmodule.pow_(context, *node.args)
 
 @register_builtin((1, 2))
 def round_(context, node, number, ndigits):
