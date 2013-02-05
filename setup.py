@@ -102,6 +102,7 @@ setup(
         'numba.minivect' : ['include/*'],
         'numba.asdl.common': ['*.asdl'],
         'numba.asdl.py2_7': ['*.asdl'],
+        'numba' : ['include/*'],
     },
     ext_modules = [
         Extension(
