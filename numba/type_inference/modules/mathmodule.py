@@ -11,6 +11,7 @@ import __builtin__ as builtins
 
 from numba import *
 from numba import nodes
+from numba.minivect import minitypes
 from numba import error
 from numba import function_util
 from numba.symtab import Variable
@@ -149,8 +150,8 @@ def binop_type(context, x, y):
     signature = minitypes.FunctionType(return_type=type, args=[type, type])
     return dst_type, type, signature
 
-def pow(context, node, power, mod=None):
-    dst_type, pow_type, signature = binop_type(node, power)
+def pow_(context, node, power, mod=None):
+    dst_type, pow_type, signature = binop_type(context, node, power)
     args = [node, power]
     if pow_type.is_float and mod is None:
         result = resolve_intrinsic(args, pow, signature)
