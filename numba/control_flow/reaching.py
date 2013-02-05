@@ -34,6 +34,9 @@ def check_definitions(flow, compiler_directives):
     for block in flow.blocks:
         i_state = block.i_input
         for stat in block.stats:
+            if not isinstance(stat, (NameAssignment, NameReference)):
+                continue
+
             i_assmts = flow.assmts[stat.entry]
             state = flow.map_one(i_state, stat.entry)
             if isinstance(stat, NameAssignment):

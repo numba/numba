@@ -445,7 +445,6 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         #print "handled", node.variable
         return node
 
-
     def analyse_assignments(self):
         """
         Analyze all variable assignments and phis.
@@ -465,9 +464,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             block.phi_nodes = phis
 
             for stat in block.stats:
-                if isinstance(stat, control_flow.NameAssignment):
+                # TODO: inject back in AST...
+                if isinstance(stat, control_flow.AttributeAssignment):
+                    stat.assignment_node = self.visit(stat.assignment_node)
+                elif isinstance(stat, control_flow.NameAssignment):
                     assmnt = self.handle_NameAssignment(stat.assignment_node)
-                    # TODO: inject back in AST...
                     stat.assignment_node = assmnt
 
         self.analyse = True

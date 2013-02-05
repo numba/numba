@@ -745,6 +745,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             name_assignment = self.flow.mark_assignment(
                     lhs, rhs, self.symtab[lhs.name], assignment,
                     warn_unused=warn_unused)
+        elif isinstance(lhs, ast.Attribute) and self.flow.block:
+            self.flow.block.stats.append(AttributeAssignment(assignment))
 
         if self.flow.exceptions:
             exc_descr = self.flow.exceptions[-1]
