@@ -146,13 +146,16 @@ def test(whitelist=None, blacklist=None):
 def nose_run(module=None):
     import nose.config
     import __main__
+
+    os.environ["NOSE_EXCLUDE"] = "(test_all|test_all_noskip|.*compile_with_pycc.*|bytecode)"
+    os.environ["NOSE_VERBOSE"] = "4"
+
     config = nose.config.Config()
     config.configure(['--logging-level=DEBUG',
                       '--verbosity=3',      # why is this ignored?
                       # '--with-doctest=1', # not recognized?
                       #'--doctest-tests'
                       ])
-    config.verbosity = 3
     nose.run(module=module or __main__, config=config)
 
 __all__ = typesystem.__all__ + decorators.__all__ + special.__all__
