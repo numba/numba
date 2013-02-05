@@ -950,7 +950,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if variable.type.is_global: # or variable.type.is_module:
                 # TODO: look up globals in dict at call time if not
                 #       available now
-                obj = self.func_globals[node.name]
+                try:
+                    obj = self.func_globals[node.name]
+                except KeyError, e:
+                    raise error.NumbaError(node, "No global named %s" % (e,))
+
                 if not self.function_cache.is_registered(obj):
                     type = self.context.typemapper.from_python(obj)
                     return nodes.const(obj, type)
