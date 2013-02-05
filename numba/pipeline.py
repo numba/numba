@@ -176,11 +176,11 @@ class Pipeline(object):
 
             if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
                 te = _timer() #  for profiling individual stage
-                logger.info("%X pipeline stage %30s:\t%.3fms",
+                logger.debug("%X pipeline stage %30s:\t%.3fms",
                             id(self), method_name, (te - ts) * 1000)
 
         tomega = _timer() # for profiling complete pipeline
-        logger.info("%X pipeline entire:\t\t\t\t\t%.3fms",
+        logger.debug("%X pipeline entire:\t\t\t\t\t%.3fms",
                     id(self), (tomega - talpha) * 1000)
 
         return self.func_signature, self.symtab, ast

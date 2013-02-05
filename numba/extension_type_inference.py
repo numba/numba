@@ -345,8 +345,8 @@ def create_extension(context, py_class, translator_kwargs):
 
     vtab, vtab_type = build_vtab(ext_type.vtab_type, method_pointers)
 
-    logger.info("struct: %s" % ext_type.attribute_struct)
-    logger.info("ctypes struct: %s" % ext_type.attribute_struct.to_ctypes())
+    logger.debug("struct: %s" % ext_type.attribute_struct)
+    logger.debug("ctypes struct: %s" % ext_type.attribute_struct.to_ctypes())
     extension_type = extension_types.create_new_extension_type(
             py_class.__name__, py_class.__bases__, class_dict,
             ext_type, vtab, vtab_type,

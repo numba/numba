@@ -6,7 +6,7 @@ def kill_unused_phis(cfg):
         changed = _kill_unused_phis(cfg)
 
 def kill_phi(block, phi):
-    logger.info("Killing phi: %s", phi)
+    logger.debug("Killing phi: %s", phi)
 
     block.symtab.pop(phi.variable.renamed_name)
 
