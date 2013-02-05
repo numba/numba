@@ -7,6 +7,9 @@ __pycache__
 *.bak
 *.pybackup
 numba/extension_types.c
+numba/external/utilities/generated_conversions.[ch]
+numba/external/utilities/generated_conversions.c
+numba/numbawrapper.c
 
 .idea/
 build/
