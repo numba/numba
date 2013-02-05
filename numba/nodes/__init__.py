@@ -8,6 +8,7 @@ from numba import *
 from numba.symtab import Variable
 from numba import typesystem
 from numba import utils, translate, error
+from numba import typesystem
 from numba.minivect import minitypes, minierror
 
 import llvm.core
@@ -43,7 +44,11 @@ def index(node, constant_index, load=True, type=int_):
     index = ast.Index(ConstNode(constant_index, type))
     index.type = type
     index.variable = Variable(type)
-    return ast.Subscript(value=node, slice=index, ctx=ctx)
+
+    result_type = typesystem.index_type(node.variable.type)
+    subscr = ast.Subscript(value=node, slice=index, ctx=ctx)
+    subscr.variable = Variable(result_type)
+    return subscr
 
 
 printing = False
