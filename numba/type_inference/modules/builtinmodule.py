@@ -93,29 +93,18 @@ def len_(context, node, obj):
     return Py_ssize_t
 
 @register_builtin((0, 1, 2))
-def int_(context, node, x, base):
+def _int(context, node, x, base, dst_type=int_):
     # Resolve int(x) and float(x) to an equivalent cast
-    dst_type = numba.int_
 
-    if len(node.args) == 2:
-        # XXX Moved the unary version to the late specializer,
-        # what about the 2-ary version?
-        arg1, arg2 = node.args
-        if arg1.variable.type.is_c_string:
-            assert dst_type.is_int
-            return nodes.CoercionNode(
-                nodes.ObjectTempNode(
-                    function_util.external_call(
-                        context,
-                        self.llvm_module,
-                        'PyInt_FromString',
-                        args=[arg1, nodes.NULL, arg2])),
-                dst_type=dst_type)
+    if len(node.args) < 2:
+        return cast(node, dst_type)
 
-        return None
+    node.variable = Variable(dst_type)
+    return node
 
-    else:
-        return cast(node, int_)
+@register_builtin((0, 1, 2))
+def _long(context, node, x, base):
+    return _int(context, node, x, base)
 
 @register_builtin((0, 1))
 def float_(context, node, x):
