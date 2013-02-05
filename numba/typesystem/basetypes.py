@@ -56,8 +56,10 @@ class ListType(ContainerListType):
     name = "list"
 
 class DictType(NumbaType, minitypes.ObjectType):
+
     is_dict = True
     name = "dict"
+    size = 0
 
     def __str__(self):
         return "dict(%s)" % ", ".join(["..."] * self.size)
