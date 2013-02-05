@@ -1508,13 +1508,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         # TODO: Resolve variable types based on how they are used as arguments
         # TODO: in calls with known signatures
         new_node = None
-        if func_type.is_builtin:
-            # Call to Python built-in function
-            node.variable = Variable(object_)
-            new_node = self._resolve_builtin_call(node, func)
-            if new_node is None:
-                new_node = node
-        elif func_type.is_function:
+        if func_type.is_function:
             # Native function call
             no_keywords(node)
             new_node = nodes.NativeFunctionCallNode(

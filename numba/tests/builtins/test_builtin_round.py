@@ -29,6 +29,6 @@ def round2(a, b):
 
 if __name__ == '__main__':
 #    round2(10.497, 2)
-#    round_val(5)
+#    round_val(object())
     import doctest
     doctest.testmod()
