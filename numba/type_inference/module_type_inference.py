@@ -206,6 +206,7 @@ def dispatch_on_value(context, call_node, func_type):
         args = []
 
     if pass_in_callnode:
+        argnames.pop(0)
         args.append(call_node)
 
     # Parse argument names from introspection
@@ -307,6 +308,7 @@ def register_callable(signature):
         return function
 
     return decorator
+
 
 #----------------------------------------------------------------------------
 # Registry of internal Type Functions
