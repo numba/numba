@@ -1,3 +1,14 @@
+Version 0.6
+===========
+* Python 2.6 support
+* Programmable typing
+* Type based alias analysis
+    * Support for strict aliasing
+* Much faster autojit dispatch when calling from Python
+* Faster numerical loops through data and stride pre-loading
+* Integral overflow and underflow checking for conversions from objects
+* Make Meta dependency optional
+
 Version 0.5
 ===========
 * SSA-based type inference
