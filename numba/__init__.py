@@ -150,7 +150,8 @@ def nose_run(module=None):
     #os.environ["NOSE_EXCLUDE"] = "(test_all|test_all_noskip|.*compile_with_pycc.*|bytecode)"
     #os.environ["NOSE_VERBOSE"] = "4"
 
-    nose.main()
+    result = nose.main()
+    return len(result.errors), len(result.failures)
 
 __all__ = typesystem.__all__ + decorators.__all__ + special.__all__
 
