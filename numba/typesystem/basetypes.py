@@ -426,6 +426,7 @@ class ReferenceType(NumbaType):
 #------------------------------------------------------------------------
 
 tuple_ = TupleType(object_, size=0)
+dict_ = DictType()
 none = NoneType()
 null_type = NULLType()
 intp = minitypes.npy_intp
