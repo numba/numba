@@ -54,12 +54,13 @@ class ModuleTypeInfererRegistry(object):
     def __init__(self):
         super(ModuleTypeInfererRegistry, self).__init__()
 
+        # value := (typefunc, pass_in_types, pass_in_callnode)
         # function calls: (np.add)
-        #     { value                               : (typefunc, pass_in_types) }
+        #     { value                               :  value }
         # unbound methods: (np.add.reduce)
-        #     { (value, unbound_dotted_path, False) : (typefunc, pass_in_types) }
+        #     { (value, unbound_dotted_path, False) : value }
         # bound methods: (obj.method where type(obj) is registered)
-        #     { (type, bound_dotted_path, True)     : (typefunc, pass_in_types) }
+        #     { (type, bound_dotted_path, True)     : value }
         self.value_to_inferer = {}
 
         # { value : (module, 'attribute') }  (e.g. {np.add : (np, 'add')})
@@ -73,7 +74,8 @@ class ModuleTypeInfererRegistry(object):
         else:
             return value in self.value_to_inferer
 
-    def register_inferer(self, module, attr, inferer, pass_in_types=True):
+    def register_inferer(self, module, attr, inferer,
+                         pass_in_types=True, pass_in_callnode=False):
         """
         Register an type function (a type inferer) for a known function value.
 
@@ -86,13 +88,15 @@ class ModuleTypeInfererRegistry(object):
             raise ValueAlreadyRegistered((value, module, inferer))
 
         self.value_to_module[value] = (module, attr)
-        self.value_to_inferer[value] = (inferer, pass_in_types)
+        self.register_value(value, inferer, pass_in_types, pass_in_callnode)
 
-    def register_value(self, value, inferer, pass_in_types=True):
-        self.value_to_inferer[value] = (inferer, pass_in_types)
+    def register_value(self, value, inferer, pass_in_types=True,
+                       pass_in_callnode=False):
+        self.value_to_inferer[value] = (inferer, pass_in_types,
+                                                 pass_in_callnode)
 
     def register_unbound_method(self, module, attr, method_name, inferer,
-                                pass_in_types=True):
+                                pass_in_types=True, pass_in_callnode=False):
         """
         Register an unbound method or dotted attribute path
         (allow for transience).
@@ -103,10 +107,10 @@ class ModuleTypeInfererRegistry(object):
                 inferrer=my_inferer
         """
         self.register_unbound_dotted(module, attr, method_name, inferer,
-                                     pass_in_types)
+                                     pass_in_types, pass_in_callnode)
 
     def register_unbound_dotted(self, module, attr, dotted_path, inferer,
-                                pass_in_types=True):
+                                pass_in_types=True, pass_in_callnode=False):
         """
         Register an type function for a dotted attribute path of a value,
 
@@ -119,7 +123,8 @@ class ModuleTypeInfererRegistry(object):
         if self.is_registered((value, dotted_path)):
             raise ValueAlreadyRegistered((value, inferer))
 
-        self.register_value((value, dotted_path), inferer, pass_in_types)
+        self.register_value((value, dotted_path), inferer, pass_in_types,
+                            pass_in_callnode)
 
     def get_inferer(self, value, func_type=None):
         return self.value_to_inferer[value]
@@ -187,10 +192,12 @@ def dispatch_on_value(context, call_node, func_type):
 
     Returns the result type, or None
     """
-    inferer, pass_in_types = get_inferer(func_type.value)
+    inferer, pass_in_types, pass_in_callnode = get_inferer(func_type.value)
 
+    # Detect needed arguments
     argspec = inspect.getargspec(inferer)
 
+    # Pass in additional arguments (context and call_node)
     argnames = argspec.args
     if argnames and argnames[0] == "context":
         argnames.pop(0)
@@ -198,6 +205,10 @@ def dispatch_on_value(context, call_node, func_type):
     else:
         args = []
 
+    if pass_in_callnode:
+        args.append(call_node)
+
+    # Parse argument names from introspection
     method_kwargs = parse_args(call_node, argnames)
 
     # Build keyword arguments
@@ -304,4 +315,6 @@ def register_callable(signature):
 # Register type inferrer functions
 from numba.type_inference.modules import (numbamodule,
                                           numpymodule,
-                                          numpyufuncs)
+                                          numpyufuncs,
+                                          builtinmodule,
+                                          mathmodule)
