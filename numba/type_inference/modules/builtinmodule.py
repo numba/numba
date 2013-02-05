@@ -3,7 +3,10 @@ import __builtin__ as builtins
 from numba import *
 from numba import nodes
 from numba import error
+from numba import function_util
 from numba.symtab import Variable
+from numba import typesystem
+from numba.typesystem import is_obj, promote_closest
 
 from numba.type_inference.module_type_inference import (register,
                                                         register_inferer,
@@ -324,6 +327,9 @@ class BuiltinResolverMixin(BuiltinResolverMixinBase):
         self._expect_n_args(func, node, 0)
         raise error.NumbaError("locals() is not supported in numba functions")
 
+#----------------------------------------------------------------------------
+#
+#----------------------------------------------------------------------------
 
 def _expect_n_args(func, node, n):
     if not isinstance(n, tuple):
@@ -342,11 +348,131 @@ def register_builtin(nargs):
             _expect_n_args()
             return func(context, *args)
 
+        wrapper.__name__ = wrapper.__name__.strip("_")
         register(builtins)(wrapper, pass_in_types=False)
-        return wrapper
+        return func # wrapper
 
     return decorator
 
+@register_builtin((1, 2, 3))
+def range_(context, node, start, stop, step):
+    node.variable = Variable(typesystem.RangeType())
+    args = self.visitlist(node.args)
+    node.args = nodes.CoercionNode.coerce(args, dst_type=Py_ssize_t)
+    return node
+
+@register_builtin((1, 2, 3))
+def xrange_(context, node, start, stop, step):
+    return range_(context, node, start, stop, step)
+
+@register_builtin(1)
+def len_(context, node, obj):
+    # Simplify len(array) to ndarray.shape[0]
+    argtype = get_type(obj)
+    if argtype.is_array:
+        shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
+        new_node = nodes.index(shape_attr, 0)
+        return new_node
+
+    return Py_ssize_t
+
+def cast(node, dst_type):
+    if len(node.args) == 0:
+        return nodes.ConstNode(0, dst_type)
+    else:
+        return nodes.CoercionNode(node.args[0], dst_type=dst_type)
+
+@register_builtin((0, 1, 2))
+def int_(context, node, x, base):
+    # Resolve int(x) and float(x) to an equivalent cast
+    dst_type = numba.int_
+
+    if len(node.args) == 2:
+        # XXX Moved the unary version to the late specializer,
+        # what about the 2-ary version?
+        arg1, arg2 = node.args
+        if arg1.variable.type.is_c_string:
+            assert dst_type.is_int
+            return nodes.CoercionNode(
+                nodes.ObjectTempNode(
+                    function_util.external_call(
+                        self.context,
+                        self.llvm_module,
+                        'PyInt_FromString',
+                        args=[arg1, nodes.NULL, arg2])),
+                dst_type=dst_type)
+
+        return None
+
+    else:
+        return cast(node, int_)
+
+@register_builtin((0, 1))
+def float_(context, node, x):
+    return cast(node, double)
+
+@register_builtin((0, 1, 2))
+def complex_(context, node, a, b):
+    if len(node.args) == 2:
+        args = nodes.CoercionNode.coerce(node.args, double)
+        return nodes.ComplexNode(real=args[0], imag=args[1])
+    else:
+        return cast(node, complex128)
+
+@register_builtin(1)
+def _resolve_abs(context, node, x):
+    # Result type of the substitution during late
+    # specialization
+    result_type = object_
+    argtype = get_type(x)
+
+    # What we actually get back regardless of implementation,
+    # e.g. abs(complex) goes throught the object layer, but we know the result
+    # will be a double
+    dst_type = argtype
+
+    is_math = _is_math_function(node.args, abs)
+
+    if argtype.is_complex:
+        dst_type = double
+    elif is_math and argtype.is_int and argtype.signed:
+        # Use of labs or llabs returns long_ and longlong respectively
+        result_type = promote_closest(context, argtype,
+                                      [long_, longlong])
+    elif is_math and (argtype.is_float or argtype.is_int):
+        result_type = argtype
+
+    node.variable = Variable(result_type)
+    return nodes.CoercionNode(node, dst_type)
+
+@register_builtin((2, 3))
+def _resolve_pow(context, node, base, exponent):
+    # TODO:
+    return self.pow(*node.args)
+
+@register_builtin((1, 2))
+def _resolve_round(context, node, number, ndigits):
+    is_math = _is_math_function(node.args, round)
+    argtype = get_type(number)
+
+    if len(node.args) == 1 and argtype.is_int:
+        # round(myint) -> myint
+        return nodes.CoercionNode(node.args[0], double)
+
+    if (argtype.is_float or argtype.is_int) and is_math:
+        dst_type = argtype
+    else:
+        dst_type = object_
+        node.args[0] = nodes.CoercionNode(node.args[0], object_)
+
+    node.variable = Variable(dst_type)
+    return nodes.CoercionNode(node, double)
+
 @register_builtin(0)
-def locals(context):
+def _resolve_globals(context, node):
+    return typesystem.dict_
+    # return nodes.ObjectInjectNode(func.func_globals)
+
+@register_builtin(0)
+def locals(context, node):
     raise error.NumbaError("locals() is not supported in numba functions")
