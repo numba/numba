@@ -57,6 +57,17 @@ class NameAssignment(object):
     def type_dependencies(self, scope):
         return self.rhs.type_dependencies(scope)
 
+class AttributeAssignment(object):
+    """
+    Assignment to some attribute. We need to detect assignments in the
+    constructor of extension types.
+    """
+
+    def __init__(self, assmnt):
+        self.assignment_node = assmnt
+        self.lhs = assmnt.targets[0]
+        self.rhs = assmnt.value
+
 class Argument(NameAssignment):
     def __init__(self, lhs, rhs, entry):
         NameAssignment.__init__(self, lhs, rhs, entry)
