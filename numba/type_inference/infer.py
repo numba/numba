@@ -928,6 +928,10 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
             node.variable = Variable(minitypes.bool_)
         else:
             node.variable = Variable(node.operand.variable.type)
+
+        if isinstance(node.op, ast.Invert):
+            typesystem.require([node], ["is_int", "is_object"])
+
         return node
 
     def visit_Compare(self, node):

@@ -3,7 +3,7 @@ import sys
 import numba
 from numba import *
 
-
+# NOTE: See also issues/test_issue_56
 
 @autojit
 def test_bitwise_and(a, b):
@@ -100,6 +100,16 @@ def test_shift_right(a, b):
     -5L
     """
     return a >> b
+
+@autojit
+def test_invert(a):
+    """
+    >>> test_invert(5)
+    -6L
+    >>> test_invert(-5)
+    4L
+    """
+    return ~a
 
 
 numba.testmod()
