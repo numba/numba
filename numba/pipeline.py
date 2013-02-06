@@ -682,36 +682,6 @@ class PipelineEnvironment(object):
         # Additional keyword arguments
         self.kwargs = kws
 
-class NumbaEnvironment(object):
-    '''Defines global state for a Numba translator. '''
-    pipelines = TypedProperty(dict, 'Map from entry point names to '
-                              'PipelineStages.')
-
-    default_pipeline = TypedProperty(str, '', 'numba')
-
-    specializations = TypedProperty(object, '') # FIXME: FunctionCache, '')
-
-    debug = TypedProperty(bool, '', False)
-
-class FunctionEnvironment(object):
-    '''State for a function under translation.'''
-
-class TranslationEnvironment(object):
-    '''State for a given translation.'''
-    numba = TypedProperty(NumbaEnvironment, 'Parent environment')
-
-    crnt = TypedProperty(
-        FunctionEnvironment,
-        'The current function being processed by the pipeline.')
-
-    stack = TypedProperty(list, 'A stack consisting of FunctionEnvironment '
-                          'instances.  Used to manage lexical closures.')
-
-    functions = TypedProperty(dict, 'map from functions under compilation to '
-                              'FunctionEnvironments')
-
-    stages = TypedProperty(list, '') # FIXME: Not well defined.
-
 def check_stage(stage):
     if isinstance(stage, str):
         def _stage(ast, env):

@@ -8,7 +8,6 @@ import inspect
 from numba import *
 from numba import typesystem, numbawrapper
 from . import utils, functions, ast_translate as translate
-from numba import translate as bytecode_translate
 from numba import  pipeline, extension_type_inference
 from .minivect import minitypes
 from numba.utils import debugout
@@ -327,18 +326,8 @@ def _jit(restype=None, argtypes=None, backend='bytecode', **kws):
         if use_ast:
             return jit2(restype=restype, argtypes=argtypes)(func)
         else:
-            if argtypes is None:
-                argtyps = [double]
-            else:
-                argtyps = argtypes
-            t = bytecode_translate.Translate(func, restype=restype or double,
-                                             argtypes=argtyps, **kws)
-            t.translate()
-            # print t.lfunc
-            __tr_map__[func] = t
-            ctypes_func = t.get_ctypes_func(llvm)
-            return NumbaFunction(func, ctypes_func=ctypes_func, lfunc=t.lfunc)
-
+            raise NotImplementedError('Bytecode backend is no longer '
+                                      'supported.')
     return _jit
 
 jit_targets = {
