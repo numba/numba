@@ -48,5 +48,5 @@ def require(ast_nodes, properties):
     "Assert that the types of the given nodes meets a certainrequirement"
     for ast_node in ast_nodes:
         if not any(getattr(get_type(ast_node), p) for p in properties):
-            typenames = " or, ".join(p[3:] for p in properties) # remove 'is_' prefix
+            typenames = ", or ".join(p[3:] for p in properties) # remove 'is_' prefix
             raise error.NumbaError(ast_node, "Expected an %s" % (typenames,))

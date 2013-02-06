@@ -16,12 +16,12 @@ def test_bitwise_and(a, b):
     >>> test_bitwise_and(0b01, 2.0)
     Traceback (most recent call last):
         ...
-    NumbaError: 27:15: Expected an int
+    NumbaError: 27:15: Expected an int, or object
 
     >>> test_bitwise_and(2.0, 0b01)
     Traceback (most recent call last):
         ...
-    NumbaError: 27:11: Expected an int
+    NumbaError: 27:11: Expected an int, or object
 
     """
     return a & b
@@ -43,12 +43,12 @@ def test_bitwise_or(a, b):
     >>> test_bitwise_or(0b01, 2.0)
     Traceback (most recent call last):
         ...
-    NumbaError: 54:15: Expected an int
+    NumbaError: 54:15: Expected an int, or object
 
     >>> test_bitwise_or(2.0, 0b01)
     Traceback (most recent call last):
         ...
-    NumbaError: 54:11: Expected an int
+    NumbaError: 54:11: Expected an int, or object
 
     """
     return a | b
@@ -71,14 +71,35 @@ def test_bitwise_xor(a, b):
     >>> test_bitwise_xor(0b01, 2.0)
     Traceback (most recent call last):
         ...
-    NumbaError: 82:15: Expected an int
+    NumbaError: 82:15: Expected an int, or object
 
     >>> test_bitwise_xor(2.0, 0b01)
     Traceback (most recent call last):
         ...
-    NumbaError: 82:11: Expected an int
+    NumbaError: 82:11: Expected an int, or object
 
     """
     return a ^ b
+
+@autojit
+def test_shift_left(a, b):
+    """
+    >>> test_shift_left(5, 2)
+    20L
+    >>> test_shift_left(-5, 2)
+    -20L
+    """
+    return a << b
+
+@autojit
+def test_shift_right(a, b):
+    """
+    >>> test_shift_right(20, 2)
+    5L
+    >>> test_shift_right(-20, 2)
+    -5L
+    """
+    return a >> b
+
 
 numba.testmod()
