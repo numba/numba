@@ -106,7 +106,7 @@ def _long(context, node, x, base):
     return _int(context, node, x, base)
 
 @register_builtin((0, 1))
-def float_(context, node, x):
+def _float(context, node, x):
     return cast(node, double)
 
 @register_builtin((0, 1, 2))
