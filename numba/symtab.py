@@ -22,7 +22,7 @@ class Variable(object):
     is_builtin = False
 
     def __init__(self, type, is_constant=False, is_local=False,
-                 is_global=False, is_builtin=False, global_constant=None,
+                 is_global=False, is_builtin=False,
                  name=None, lvalue=None, constant_value=None,
                  promotable_type=True, is_arg=False):
         self.type = type
@@ -36,7 +36,6 @@ class Variable(object):
 
         self.is_global = is_global
         self.is_builtin = is_builtin
-        self.global_constant = global_constant
 
         self.lvalue = lvalue
         self.promotable_type = promotable_type

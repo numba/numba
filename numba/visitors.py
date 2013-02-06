@@ -189,6 +189,12 @@ class NumbaVisitorMixin(CooperativeBase):
     def run_template(self, s, vars=None, **substitutions):
         from numba import templating
 
+        func = self.func
+        if func is None:
+            d = dict(self.func_globals)
+            exec 'def __numba_func(): pass' in d, d
+            func = d['__numba_func']
+
         templ = templating.TemplateContext(self.context, s)
         if vars:
             for name, type in vars.iteritems():
@@ -197,7 +203,7 @@ class NumbaVisitorMixin(CooperativeBase):
         symtab, tree = templ.template_type_infer(
                 substitutions, symtab=self.symtab,
                 closure_scope=getattr(self.ast, "closure_scope", None),
-                func=self.func)
+                func=func)
         self.symtab.update(templ.get_vars_symtab())
         return tree
 

@@ -1377,7 +1377,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
     def visit_Name(self, node):
         is_global_constant = node.variable.is_builtin or node.variable.is_global
         if is_global_constant and not node.variable.is_local:
-            obj = node.variable.global_constant
+            obj = node.variable.constant_value
             return nodes.const(obj, node.type)
 
         if (is_obj(node.type) and isinstance(node.ctx, ast.Load) and

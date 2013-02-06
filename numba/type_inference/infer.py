@@ -789,9 +789,9 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
             else:
                 type = typesystem.GlobalType(global_name, globals, name_node)
 
-        variable = Variable(type, name=global_name,
+        variable = Variable(type, name=global_name, is_constant=True,
                             is_global=is_global, is_builtin=is_builtin,
-                            global_constant=type.value)
+                            constant_value=type.value)
         self.symtab[global_name] = variable
         return variable
 
