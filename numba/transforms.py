@@ -342,6 +342,23 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
         self._expect_n_args(func, node, (2, 3))
         return self.pow(*node.args)
 
+    def _resolve_int(self, func, node, argtype, dst_type=int_):
+        assert len(node.args) == 2
+
+        arg1, arg2 = node.args
+        if arg1.variable.type.is_c_string:
+            return nodes.CoercionNode(
+                nodes.ObjectTempNode(
+                    function_util.external_call(
+                        self.context,
+                        self.llvm_module,
+                        'PyInt_FromString',
+                        args=[arg1, nodes.NULL, arg2])),
+                dst_type=dst_type)
+
+    def _resolve_long(self, func, node, argtype):
+        return self._resolve_int(func, node, argtype, long_)
+
 
 def unpack_range_args(node):
     start, stop, step = (nodes.const(0, Py_ssize_t),

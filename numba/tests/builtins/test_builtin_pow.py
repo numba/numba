@@ -43,7 +43,6 @@ def pow2_const():
     return pow(2,3)
 
 if __name__ == '__main__':
-#    pow2(1.0, 2.0)
 #    import logging; logging.getLogger().setLevel(0)
 #    c1, c2 = 1.2 + 4.1j, 0.6 + 0.5j
 #    pow2(c1, c2) == pow(c1, c2)

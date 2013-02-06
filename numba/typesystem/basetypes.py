@@ -1,4 +1,4 @@
-import __builtin__
+import __builtin__ as builtins
 import math
 
 import numpy as np
@@ -56,8 +56,10 @@ class ListType(ContainerListType):
     name = "list"
 
 class DictType(NumbaType, minitypes.ObjectType):
+
     is_dict = True
     name = "dict"
+    size = 0
 
     def __str__(self):
         return "dict(%s)" % ", ".join(["..."] * self.size)
@@ -249,13 +251,16 @@ class GlobalType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "global(%s)" % self.name
 
-class BuiltinType(NumbaType, minitypes.ObjectType):
+class BuiltinType(KnownValueType):
+
     is_builtin = True
 
     def __init__(self, name, **kwds):
-        super(BuiltinType, self).__init__(**kwds)
+        value = getattr(builtins, name)
+        super(BuiltinType, self).__init__(value, **kwds)
+
         self.name = name
-        self.func = getattr(__builtin__, name)
+        self.func = self.value
 
     def __repr__(self):
         return "builtin(%s)" % self.name
@@ -423,6 +428,7 @@ class ReferenceType(NumbaType):
 #------------------------------------------------------------------------
 
 tuple_ = TupleType(object_, size=0)
+dict_ = DictType()
 none = NoneType()
 null_type = NULLType()
 intp = minitypes.npy_intp
