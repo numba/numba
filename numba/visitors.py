@@ -192,7 +192,8 @@ class NumbaVisitorMixin(CooperativeBase):
 
         symtab, tree = templ.template_type_infer(
                 substitutions, symtab=self.symtab,
-                closure_scope=getattr(self.ast, "closure_scope", None))
+                closure_scope=getattr(self.ast, "closure_scope", None),
+                func=self.func)
         self.symtab.update(templ.get_vars_symtab())
         return tree
 

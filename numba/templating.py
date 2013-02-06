@@ -169,10 +169,8 @@ class TemplateContext(object):
 
 
 def dummy_type_infer(context, tree, order=['type_infer', 'type_set'], **kwargs):
-    def dummy():
-        pass
     result = numba.pipeline.run_pipeline(
-                    context, dummy, tree, void(), order=order,
+                    context, kwargs.pop('func'), tree, void(), order=order,
                     # Allow closures to be recognized
                     function_level=1, **kwargs)
     pipeline, (sig, symtab, ast) = result
