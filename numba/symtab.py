@@ -18,7 +18,11 @@ class Variable(object):
     _type = None
     warn_unused = True
 
+    is_global = False
+    is_builtin = False
+
     def __init__(self, type, is_constant=False, is_local=False,
+                 is_global=False, is_builtin=False, global_constant=None,
                  name=None, lvalue=None, constant_value=None,
                  promotable_type=True, is_arg=False):
         self.type = type
@@ -29,6 +33,11 @@ class Variable(object):
 
         self.is_constant = is_constant
         self.constant_value = constant_value
+
+        self.is_global = is_global
+        self.is_builtin = is_builtin
+        self.global_constant = global_constant
+
         self.lvalue = lvalue
         self.promotable_type = promotable_type
         self.deleted = False
@@ -130,9 +139,9 @@ class Variable(object):
         vars(result).update(dict(kwds, **vars(variable)))
         return result
 
-    @property
-    def is_global(self):
-        return self.type and self.type.is_global
+#    @property
+#    def is_global(self):
+#        return self.type and self.type.is_global
 
     @property
     def ltype(self):

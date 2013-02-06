@@ -773,10 +773,13 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
         global_name = name_node.id
         globals = self.func_globals
 
+        is_builtin = (global_name not in globals and
+                      getattr(builtins, global_name, None))
+        is_global = not is_builtin
+
         # Determine the type of the global, i.e. a builtin, global
         # or (numpy) module
-        if (global_name not in globals and
-                getattr(builtins, global_name, None)):
+        if is_builtin:
             type = typesystem.BuiltinType(name=global_name)
         else:
             # FIXME: analyse the bytecode of the entire module, to determine
@@ -786,7 +789,9 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
             else:
                 type = typesystem.GlobalType(global_name, globals, name_node)
 
-        variable = Variable(type, name=global_name)
+        variable = Variable(type, name=global_name,
+                            is_global=is_global, is_builtin=is_builtin,
+                            global_constant=type.value)
         self.symtab[global_name] = variable
         return variable
 
