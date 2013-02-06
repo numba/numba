@@ -900,6 +900,9 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
             node = self.visit(node)
             return node
 
+        if nodes.is_bitwise(node.op):
+            typesystem.require("is_int", node.left, node.right)
+
         v1, v2 = node.left.variable, node.right.variable
         promotion_type = self.promote(v1, v2)
 

@@ -1607,11 +1607,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return lconstant
 
     _binops = {
-        ast.Add: ('fadd', ('add', 'add')),
-        ast.Sub: ('fsub', ('sub', 'sub')),
-        ast.Mult: ('fmul', ('mul', 'mul')),
-        ast.Div: ('fdiv', ('udiv', 'sdiv')),
-        # TODO: reuse previously implemented modulo
+        ast.Add:    ('fadd', ('add', 'add')),
+        ast.Sub:    ('fsub', ('sub', 'sub')),
+        ast.Mult:   ('fmul', ('mul', 'mul')),
+        ast.Div:    ('fdiv', ('udiv', 'sdiv')),
+        ast.BitAnd: ('and_', ('and_', 'and_')),
+        ast.BitOr:  ('or_',  ('or_', 'or_')),
+        ast.BitXor: ('xor',  ('xor', 'xor')),
     }
 
     _opnames = {
