@@ -244,9 +244,18 @@ class NewAxisType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "newaxis"
 
-class GlobalType(NumbaType, minitypes.ObjectType):
+class GlobalType(KnownValueType):
     is_global = True
     name = None
+
+    def __init__(self, name, func_globals, position_node=None, **kwds):
+        try:
+            value = func_globals[name]
+        except KeyError, e:
+            raise error.NumbaError(position_node, "No global named %s" % (e,))
+
+        super(GlobalType, self).__init__(value, **kwds)
+        self.name = name
 
     def __repr__(self):
         return "global(%s)" % self.name

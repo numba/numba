@@ -769,8 +769,10 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
     # Variable Assignments and References
     #------------------------------------------------------------------------
 
-    def init_global(self, global_name):
+    def init_global(self, name_node):
+        global_name = name_node.id
         globals = self.func_globals
+
         # Determine the type of the global, i.e. a builtin, global
         # or (numpy) module
         if (global_name not in globals and
@@ -782,7 +784,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
             if isinstance(globals.get(global_name), types.ModuleType):
                 type = typesystem.ModuleType(globals.get(global_name))
             else:
-                type = typesystem.GlobalType(name=global_name)
+                type = typesystem.GlobalType(global_name, globals, name_node)
 
         variable = Variable(type, name=global_name)
         self.symtab[global_name] = variable
@@ -823,20 +825,14 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
             self.symtab[node.id] = variable
         else:
             # Global or builtin
-            variable = self.init_global(node.id)
+            variable = self.init_global(node)
 
         if variable.type and not variable.type.is_deferred:
             if variable.type.is_global: # or variable.type.is_module:
                 # TODO: look up globals in dict at call time if not
-                #       available now
-                try:
-                    obj = self.func_globals[node.name]
-                except KeyError, e:
-                    raise error.NumbaError(node, "No global named %s" % (e,))
-
+                obj = variable.type.value
                 if not self.function_cache.is_registered(obj):
-                    type = self.context.typemapper.from_python(obj)
-                    return nodes.const(obj, type)
+                    variable.type = self.context.typemapper.from_python(obj)
             elif variable.type.is_builtin:
                 # Rewrite builtin-ins later on, give other code the chance
                 # to handle them first
@@ -845,6 +841,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
         node.variable = variable
         if variable.type and variable.type.is_unresolved:
             variable.type = variable.type.resolve()
+
         return node
 
     #------------------------------------------------------------------------
@@ -1214,7 +1211,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
         if func_type.is_builtin:
             func = getattr(builtins, func_name)
         elif func_type.is_global:
-            func = self.func.__globals__[func_name]
+            func = func_type.value
         elif func_type.is_module_attribute:
             func = getattr(func_type.module, func_type.attr)
         elif func_type.is_autojit_function:

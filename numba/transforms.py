@@ -1375,9 +1375,10 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         return self.visit(result)
 
     def visit_Name(self, node):
-        if node.type.is_builtin and not node.variable.is_local:
-            obj = getattr(builtins, node.name)
-            return nodes.ObjectInjectNode(obj, node.type)
+        if (node.type.is_builtin or
+                node.type.is_global) and not node.variable.is_local:
+            obj = node.type.value
+            return nodes.const(obj, node.type)
 
         if (is_obj(node.type) and isinstance(node.ctx, ast.Load) and
                 getattr(node, 'cf_maybe_null', False)):
