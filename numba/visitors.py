@@ -297,22 +297,6 @@ class NumbaVisitorMixin(CooperativeBase):
             for phi_node in block.phi_nodes:
                 self.handle_phi(phi_node)
 
-    @property
-    def type(self):
-        assert self.is_expr and len(node.body) == 1
-        return node.body[0].type
-
-    @property
-    def variable(self):
-        assert self.is_expr and len(node.body) == 1
-        return node.body[0].variable
-
-x = 0
-for i in range(10):
-    if x > 1:
-        print x
-    y = 14.2
-    x = x * y
 
 class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
     "Non-mutating visitor"
