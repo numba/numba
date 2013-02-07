@@ -690,6 +690,9 @@ class PipelineEnvironment(object):
 def check_stage(stage):
     if isinstance(stage, str):
         def _stage(ast, env):
+            if hasattr(env, 'pipeline_stages'):
+                env = env.pipeline_stages
+            # XXX else: warn that we are using the old PipelineEnvrionment
             return getattr(env, stage)(ast, env)
         name = stage
         _stage.__name__ = stage
