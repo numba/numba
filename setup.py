@@ -114,6 +114,11 @@ setup(
                      "numba/external/utilities/generated_conversions.c",
                      "numba/external/utilities/generated_conversions.h"]),
         CythonExtension(
+            name = "numba.pyconsts",
+            sources = ["numba/pyconsts.pyx"],
+            depends = ["numba/_pyconsts.pxd"],
+            include_dirs=[numba_include_dir]),
+        CythonExtension(
             name = "numba.extension_types",
             sources = ["numba/extension_types.pyx", "numba/numbafunction.c"],
             depends = ["numba/numbafunction.h"],
