@@ -215,7 +215,10 @@ class Symtab(object):
         self.symtab = symtab_dict or {}
         self.parent = parent
         self.local_counters = {}
+
+        # { (var_name, var_type) : PromotionNode }
         self.promotions = {}
+
         if parent:
             self.counters = parent.counters
             self.local_counters.update(parent.local_counters)

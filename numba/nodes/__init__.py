@@ -90,6 +90,25 @@ def typednode(node, type):
     node.type = type
     return node
 
+def badval(type):
+    if type.is_object or type.is_array:
+        value = NULL_obj
+        if type != object_:
+            value = value.coerce(type)
+    elif type.is_void:
+        value = None
+    elif type.is_float:
+        value = ConstNode(float('nan'), type=type)
+    elif type.is_int or type.is_complex:
+        # TODO: adjust for type.itemsize
+        bad = 0xbadbad # This pattern is hard to detect in llvm code
+        bad = 123456789
+        value = ConstNode(bad, type=type)
+    else:
+        value = BadValue(type)
+
+    return value
+
 #----------------------------------------------------------------------------
 # Imports
 #----------------------------------------------------------------------------

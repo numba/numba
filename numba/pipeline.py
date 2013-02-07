@@ -16,6 +16,7 @@ import numba.closure
 from numba import error
 from numba import functions, naming, transforms, control_flow, optimize
 from numba import ast_constant_folding as constant_folding
+from numba.control_flow import ssa
 from numba import codegen
 from numba import utils
 from numba.type_inference import infer as type_inference
@@ -53,6 +54,7 @@ class Pipeline(object):
         'transform_for',
         'specialize',
         'specialize_comparisons',
+        'specialize_ssa',
         'optimize',
         'preloader',
         'late_specializer',
@@ -271,6 +273,10 @@ class Pipeline(object):
     def specialize_comparisons(self, ast):
         transform = self.make_specializer(comparisons.SpecializeComparisons, ast)
         return transform.visit(ast)
+
+    def specialize_ssa(self, ast):
+        ssa.specialize_ssa(ast)
+        return ast
 
     def optimize(self, ast):
         return ast
