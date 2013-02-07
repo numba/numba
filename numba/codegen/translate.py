@@ -946,42 +946,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         raise error.NumbaError(node, "Unary operator %s" % node.op)
 
     def visit_Compare(self, node):
-        blocks_false = []
+        op = node.ops[0]
 
-        pos = error.format_pos(node)
-        if pos:
-            pos = "." + pos
+        lhs = node.left
+        rhs = node.comparators[0]
 
-        end_block = self.append_basic_block('compare.end' + pos)
-        cur_block = self.append_basic_block('compare.cmp' + pos)
-        self.builder.branch(cur_block)
-
-        next_block = None
-        left = node.left
-        for op, right in zip(node.ops, node.comparators):
-            self.builder.position_at_end(cur_block)
-            test = self._compare(node, op, left, right)
-            cur_block = self.builder.basic_block
-            blocks_false.append(cur_block)
-            next_block = self.append_basic_block('compare.cmp' + pos)
-            self.builder.cbranch(test, next_block, end_block)
-            left = right
-            cur_block = next_block
-
-        self.builder.position_at_end(next_block)
-        self.builder.branch(end_block)
-        self.builder.position_at_end(end_block)
-
-        booltype = _int1
-        phi = self.builder.phi(booltype)
-        phi.add_incoming(lc.Constant.int(booltype, 1), next_block)
-        for b in blocks_false:
-            phi.add_incoming(lc.Constant.int(booltype, 0), b)
-        return phi
-
-    def _compare(self, node, op, lhs, rhs):
         lhs_lvalue = self.visit(lhs)
         rhs_lvalue = self.visit(rhs)
+
         op_map = {
             ast.Gt    : '>',
             ast.Lt    : '<',
@@ -990,6 +962,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             ast.Eq    : '==',
             ast.NotEq : '!=',
         }
+
         op = op_map[type(op)]
 
         if lhs.type.is_float and rhs.type.is_float:
@@ -1005,6 +978,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             lop = mapping[op]
         else:
             raise error.NumbaError(node, lhs.type)
+
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 
     def _init_phis(self, node):

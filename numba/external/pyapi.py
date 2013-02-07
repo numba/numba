@@ -211,6 +211,12 @@ class PyObject_IsTrue(ExternalFunction):
     arg_types = [object_]
     return_type = int_
 
+class PyObject_RichCompareBool(ExternalFunction):
+    arg_types = [object_, object_, int_]
+    return_type = int_
+    # badval = -1
+    # check_pyerr_occurred = True
+
 __all__ = [k for k, v in globals().items()
            if (v != ExternalFunction
                and isinstance(v, type)

@@ -524,6 +524,7 @@ class TransformForIterable(visitors.NumbaTransformer):
         else:
             raise error.NumbaError("Unsupported for loop pattern")
 
+
 class ResolveCoercions(visitors.NumbaTransformer):
 
     def visit_CoercionNode(self, node):
@@ -557,8 +558,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                        "coerced to a pointer type")
             result = self.visit(nodes.NULL.coerce(dst_type))
         elif node_type.is_numeric and dst_type.is_bool:
-            result = self.visit(ast.Compare(node.node, [ast.NotEq()],
-                                            [nodes.const(0, node_type)]))
+            to_bool = ast.Compare(node.node, [ast.NotEq()],
+                                  [nodes.const(0, node_type)])
+            to_bool = nodes.typednode(to_bool, bool_)
+            result = self.visit(to_bool)
         elif node_type.is_c_string and dst_type.is_numeric:
             # TODO: int <-> string conversions are explicit, this should not
             # TODO: be a coercion
@@ -1359,6 +1362,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         test = ast.Compare(left=node.return_value, ops=[eq],
                            comparators=[badval])
         test.right = badval
+        test = nodes.typednode(test, bool_)
 
         check = nodes.build_if(test=test, body=[node.raise_node], orelse=[])
         return self.visit(check)
@@ -1406,31 +1410,6 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         return node
 
     def visit_For(self, node):
-        self.generic_visit(node)
-        return node
-
-    def compare_objects(self, node):
-        opmap = {
-            ast.Eq        : pyconsts.Py_EQ,
-            ast.NotEq     : pyconsts.Py_NE,
-            ast.Lt        : pyconsts.Py_LT,
-            ast.LtE       : pyconsts.Py_LE,
-            ast.Gt        : pyconsts.Py_GT,
-            ast.GtE       : pyconsts.Py_GE,
-        }
-
-        if node.op not in opmap:
-            raise error.NumbaError(node, "%s not yet implemented")
-
-    def visit_Compare(self, node):
-        if node.left.type.is_object:
-            raise error.NumbaError(node,
-                                   "Comparing objects is not yet supported")
-        if node.left.type.is_pointer and node.comparators[0].type.is_pointer:
-            node.left = nodes.CoercionNode(node.left, Py_uintptr_t)
-            node.comparators = [nodes.CoercionNode(node.comparators[0],
-                                                   Py_uintptr_t)]
-
         self.generic_visit(node)
         return node
 
@@ -1513,7 +1492,7 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
                                                self.llvm_module,
                                                'PyObject_IsTrue',
                                                args=[node.operand])
-        cmpnode = nodes.Compare(callnode, [nodes.Eq()], [nodes.ConstNode(0)])
+        cmpnode = ast.Compare(callnode, [nodes.Eq()], [nodes.ConstNode(0)])
         return self.visit(nodes.IfExp(cmpnode,
                                       nodes.ObjectInjectNode(True),
                                       nodes.ObjectInjectNode(False)))

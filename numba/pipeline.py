@@ -22,6 +22,7 @@ from numba.type_inference import infer as type_inference
 from numba.asdl import schema
 from numba.minivect import minitypes
 import numba.visitors
+from numba.specialize import comparisons
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ class Pipeline(object):
         'closure_type_inference',
         'transform_for',
         'specialize',
+        'specialize_comparisons',
         'optimize',
         'preloader',
         'late_specializer',
@@ -265,6 +267,10 @@ class Pipeline(object):
 
     def specialize(self, ast):
         return ast
+
+    def specialize_comparisons(self, ast):
+        transform = self.make_specializer(comparisons.SpecializeComparisons, ast)
+        return transform.visit(ast)
 
     def optimize(self, ast):
         return ast

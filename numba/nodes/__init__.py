@@ -84,6 +84,12 @@ def is_name(node):
         node = node.node
     return isinstance(node, ast.Name)
 
+def typednode(node, type):
+    "Set a type and simple typed variable on a node"
+    node.variable = Variable(type)
+    node.type = type
+    return node
+
 #----------------------------------------------------------------------------
 # Imports
 #----------------------------------------------------------------------------
