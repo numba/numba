@@ -99,14 +99,14 @@ def _compile(context, func, restype=None, argtypes=None, ctypes=False,
         - run type inference using the given input types
         - compile the function to LLVM
     """
-    import numba.ast_translate as translate
+    from numba import codegen
 
     func_signature, symtab, ast = _infer_types(context, func,
                                                restype, argtypes, **kwds)
     func_name = name or naming.specialized_mangle(func.__name__, func_signature.args)
     func_signature.name = func_name
 
-    t = translate.LLVMCodeGenerator(
+    t = codegen.LLVMCodeGenerator(
         context, func, ast, func_signature=func_signature,
         symtab=symtab, **kwds)
     t.translate()

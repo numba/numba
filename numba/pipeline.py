@@ -16,7 +16,7 @@ import numba.closure
 from numba import error
 from numba import functions, naming, transforms, control_flow, optimize
 from numba import ast_constant_folding as constant_folding
-from numba import ast_translate
+from numba import codegen
 from numba import utils
 from numba.type_inference import infer as type_inference
 from numba.asdl import schema
@@ -290,7 +290,7 @@ class Pipeline(object):
         return ast
 
     def codegen(self, ast):
-        self.translator = self.make_specializer(ast_translate.LLVMCodeGenerator,
+        self.translator = self.make_specializer(codegen.LLVMCodeGenerator,
                                                 ast, **self.kwargs)
         self.translator.translate()
         return ast
@@ -498,7 +498,7 @@ class FixASTLocations(PipelineStage):
 class CodeGen(PipelineStage):
     def transform(self, ast, env):
         env.crnt.translator = self.make_specializer(
-            ast_translate.LLVMCodeGenerator, ast, env, **env.crnt.kwargs)
+            codegen.LLVMCodeGenerator, ast, env, **env.crnt.kwargs)
         env.crnt.translator.translate()
         return ast
 

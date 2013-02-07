@@ -6,14 +6,14 @@ import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 
-from .llvm_types import _int1, _int32, _LLVMCaster
-from .multiarray_api import MultiarrayAPI # not used
-from .symtab import Variable
+from numba.llvm_types import _int1, _int32, _LLVMCaster
+from numba.multiarray_api import MultiarrayAPI # not used
+from numba.symtab import Variable
 from numba import typesystem
 
 from numba import *
-from . import visitors, nodes, llvm_types, utils, function_util
-from .minivect import minitypes, llvm_codegen
+from numba import visitors, nodes, llvm_types, utils, function_util
+from numba.minivect import minitypes, llvm_codegen
 from numba import ndarray_helpers, error, extension_types
 from numba.typesystem import is_obj, promote_to_native
 from numba.utils import dump
