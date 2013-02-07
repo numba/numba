@@ -99,6 +99,7 @@ from . import visitors, nodes, error, functions
 from numba import stdio_util, function_util
 from numba.typesystem import is_obj, promote_closest, promote_to_native
 from numba.external import utility
+from numba import pyconsts
 from numba.utils import dump
 
 import llvm.core
@@ -1407,6 +1408,19 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
     def visit_For(self, node):
         self.generic_visit(node)
         return node
+
+    def compare_objects(self, node):
+        opmap = {
+            ast.Eq        : pyconsts.Py_EQ,
+            ast.NotEq     : pyconsts.Py_NE,
+            ast.Lt        : pyconsts.Py_LT,
+            ast.LtE       : pyconsts.Py_LE,
+            ast.Gt        : pyconsts.Py_GT,
+            ast.GtE       : pyconsts.Py_GE,
+        }
+
+        if node.op not in opmap:
+            raise error.NumbaError(node, "%s not yet implemented")
 
     def visit_Compare(self, node):
         if node.left.type.is_object:
