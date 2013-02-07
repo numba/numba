@@ -24,6 +24,9 @@ Dependencies:
   * Cython (build dependency only)
   * nose (for unit tests)
 
+The easiest way to install numba and get updates is by using the Anaconda
+Distribution: http://continuum.io/anacondace.html
+
 * Compile LLVM 3.2
 
 wget http://llvm.org/releases/3.2/llvm-3.2.src.tar.gz 
