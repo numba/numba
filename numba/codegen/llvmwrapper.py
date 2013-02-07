@@ -5,7 +5,7 @@ from Python.
 
 import ctypes
 
-import llvm
+import llvm.core
 
 from numba import *
 from numba import extension_types
