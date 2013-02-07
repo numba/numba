@@ -30,35 +30,6 @@ debug_conversion = False
 
 _int32_zero = lc.Constant.int(_int32, 0)
 
-def map_to_function(func, typs, mod):
-    typs = [str_to_llvmtype(x) if isinstance(x, str) else x for x in typs]
-    INTR = getattr(lc, 'INTR_%s' % func.__name__.upper())
-    return lc.Function.intrinsic(mod, INTR, typs)
-
-class DelayedObj(object):
-    def __init__(self, base, args):
-        self.base = base
-        self.args = args
-
-    def get_start(self):
-        if len(self.args) > 1:
-            ret_val = self.args[0]
-        else:
-            # FIXME: Need to infer case where this might be over floats.
-            ret_val = Variable(typesystem.int32, lvalue=lc.Constant.int(_int32, 0))
-        return ret_val
-
-    def get_inc(self):
-        if len(self.args) > 2:
-            ret_val = self.args[2]
-        else:
-            # FIXME: Need to infer case where this might be over floats.
-            ret_val = Variable(type=typesystem.int32, lvalue=lc.Constant.int(_int32, 1))
-        return ret_val
-
-    def get_stop(self):
-        return self.args[0 if (len(self.args) == 1) else 1]
-
 def _create_methoddef(py_func, func_name, func_doc, func_pointer):
     # struct PyMethodDef {
     #     const char  *ml_name;   /* The name of the built-in function/method */
@@ -102,11 +73,6 @@ def numbafunction_new(py_func, func_name, func_doc, module_name, func_pointer,
                                               wrapped_lfunc_pointer,
                                               wrapped_signature, module_name)
     return methoddef, wrapper
-
-class MethodReference(object):
-    def __init__(self, object_var, py_method):
-        self.object_var = object_var
-        self.py_method = py_method
 
 
 _compare_mapping_float = {'>':lc.FCMP_OGT,
