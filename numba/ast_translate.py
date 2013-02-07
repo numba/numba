@@ -19,6 +19,7 @@ from numba.typesystem import is_obj, promote_to_native
 from numba.utils import dump
 from numba import naming, metadata
 from numba.functions import keep_alive
+from numba.control_flow import ssa
 
 import logging
 logger = logging.getLogger(__name__)
@@ -688,37 +689,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         if not self.have_cfg:
             return
 
-        for block in self.ast.flow.blocks:
-            for phi_node in block.phi_nodes:
-                phi = phi_node.variable.lvalue
-                assert phi, phi_node.variable
-                for parent_block, incoming_var in phi_node.find_incoming():
-                    assert parent_block.exit_block, parent_block
+        # Initialize uninitialized incoming values to bad values
+        for phi in ssa.iter_phi_vars(self.ast.flow):
+            if phi.type.is_uninitialized:
+                #print incoming_var.cf_references
+                #print phi_node.variable.cf_references
+                #print "incoming", phi_node.incoming, block
 
-                    if incoming_var.type.is_uninitialized:
-                        #print incoming_var.cf_references
-                        #print phi_node.variable.cf_references
-                        #print "incoming", phi_node.incoming, block
+                assert phi.uninitialized_value, phi
+                assert phi.lvalue is None
+                phi.lvalue = self.visit(phi.uninitialized_value)
 
-                        assert incoming_var.uninitialized_value, incoming_var
-                        if incoming_var.lvalue is None:
-                            lval = self.visit(incoming_var.uninitialized_value)
-                            incoming_var.lvalue = lval
-                    elif not incoming_var.type == phi_node.type:
-                        promotion = parent_block.symtab.lookup_promotion(
-                                        phi_node.variable.name, phi_node.type)
-                        incoming_var = promotion.variable
-
-                    assert incoming_var.lvalue, incoming_var
-                    # assert incoming_var.type == phi_node.type, msg
-                    phi.add_incoming(incoming_var.lvalue,
-                                     parent_block.exit_block)
-
-                    if phi_node.type.is_array:
-                        nodes.update_preloaded_phi(phi_node.variable,
-                                                   incoming_var,
-                                                   parent_block.exit_block)
-
+        # Add all incoming values to all our phi values
+        ssa.handle_phis(self.ast.flow)
 
     def get_ctypes_func(self, llvm=True):
         import ctypes
