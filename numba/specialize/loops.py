@@ -182,3 +182,11 @@ class TransformForIterable(visitors.NumbaTransformer):
         else:
             raise error.NumbaError("Unsupported for loop pattern")
 
+#------------------------------------------------------------------------
+# Transform for loops over Objects
+#------------------------------------------------------------------------
+
+class SpecializeObjectIteration(visitors.NumbaTransformer):
+    """
+    This transforms for loops over objects.
+    """

@@ -214,7 +214,7 @@ class PyObject_IsTrue(ExternalFunction):
 class PyObject_RichCompareBool(ExternalFunction):
     arg_types = [object_, object_, int_]
     return_type = int_
-    # badval = -1
+    badval = -1
     # check_pyerr_occurred = True
 
 __all__ = [k for k, v in globals().items()

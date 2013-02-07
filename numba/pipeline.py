@@ -23,7 +23,7 @@ from numba.type_inference import infer as type_inference
 from numba.asdl import schema
 from numba.minivect import minitypes
 import numba.visitors
-from numba.specialize import comparisons, loops
+from numba.specialize import comparisons, loops, exceptions, funccalls
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,8 @@ class Pipeline(object):
         'optimize',
         'preloader',
         'late_specializer',
+        'specialize_funccalls',
+        'specialize_exceptions',
         'fix_ast_locations',
         'cleanup_symtab',
         'codegen',
@@ -277,6 +279,14 @@ class Pipeline(object):
     def specialize_ssa(self, ast):
         ssa.specialize_ssa(ast)
         return ast
+
+    def specialize_funccalls(self, ast):
+        transform = self.make_specializer(funccalls.FunctionCallSpecializer, ast)
+        return transform.visit(ast)
+
+    def specialize_exceptions(self, ast):
+        transform = self.make_specializer(exceptions.ExceptionSpecializer, ast)
+        return transform.visit(ast)
 
     def optimize(self, ast):
         return ast

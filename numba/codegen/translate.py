@@ -560,7 +560,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # return types, etc)
         pipeline_ = pipeline.Pipeline(self.context, node.fake_pyfunc,
                                       node, self.func_signature,
-                                      order=['late_specializer'])
+                                      order=['late_specializer',
+                                             'specialize_funccalls',
+                                             'specialize_exceptions'])
         sig, symtab, return_stmt_ast = pipeline_.run_pipeline()
         self.generic_visit(return_stmt_ast)
 
