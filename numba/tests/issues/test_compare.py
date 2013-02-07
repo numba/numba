@@ -51,10 +51,28 @@ def test_compare_while(a):
         break
     return a * 2
 
+class Class(object):
+    def __eq__(self, other):
+        raise Exception("I cannot compare!")
+
+@autojit
+def compare_error():
+    return 0 == Class()
+
+def test_compare_error():
+    try:
+        compare_error()
+    except Exception, e:
+        assert str(e) == "I cannot compare!", str(e)
+    else:
+        raise Exception("Expected exception!")
+
 if __name__ == "__main__":
     # autojit(test_compare_span_basic_blocks)(5)
 #    autojit(test_compare_while)(10)
     for test in tests:
         test()
+
+    test_compare_error()
 #    import numba
 #    numba.nose_run()
