@@ -23,7 +23,7 @@ from numba.type_inference import infer as type_inference
 from numba.asdl import schema
 from numba.minivect import minitypes
 import numba.visitors
-from numba.specialize import comparisons
+from numba.specialize import comparisons, loops
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +264,7 @@ class Pipeline(object):
         return type_inferer.visit(ast)
 
     def transform_for(self, ast):
-        transform = self.make_specializer(transforms.TransformForIterable, ast)
+        transform = self.make_specializer(loops.TransformForIterable, ast)
         return transform.visit(ast)
 
     def specialize(self, ast):
@@ -487,7 +487,7 @@ class ClosureTypeInference(PipelineStage):
 
 class TransformFor(PipelineStage):
     def transform(self, ast, env):
-        transform = self.make_specializer(transforms.TransformForIterable, ast,
+        transform = self.make_specializer(loops.TransformForIterable, ast,
                                           env)
         return transform.visit(ast)
 
