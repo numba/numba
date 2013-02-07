@@ -968,7 +968,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         if lhs.type.is_float and rhs.type.is_float:
             lfunc = self.builder.fcmp
             lop = _compare_mapping_float[op]
-            return self.builder.fcmp(lop, lhs_lvalue, rhs_lvalue)
         elif lhs.type.is_int_like and rhs.type.is_int_like:
             lfunc = self.builder.icmp
             if lhs.type.signed:
