@@ -1,4 +1,4 @@
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 Control flow for the AST backend.
@@ -600,7 +600,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
     function_level = 0
 
-    def __init__(self, context, func, ast, allow_rebind_args, env, **kwargs):
+    def __init__(self, context, func, ast, allow_rebind_args, env=None,
+                 **kwargs):
         super(ControlFlowAnalysis, self).__init__(context, func, ast, **kwargs)
         self.visitchildren = self.generic_visit
         self.current_directives = kwargs.get('directives', None) or {}
@@ -616,7 +617,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         # Stack of control flow blocks
         self.stack = []
         self.flow = ControlFlow(self.source_descr)
-        env.crnt.cfg_transform = self
+        if env and env.crnt:
+            env.crnt.cfg_transform = self
 
     def set_default_directives(self):
         "Set some defaults for warnings"

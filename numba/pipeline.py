@@ -601,6 +601,11 @@ class PipelineEnvironment(object):
         ]
 
     def __init__(self, parent=None, doc='', *args, **kws):
+        import warnings
+        warnings.warn('The PipelineEnvironment class is slated to be '
+                      'replaced by various classes in the numba.environment '
+                      'package.',
+                      stacklevel=3)
         self.reset(parent, doc, *args, **kws)
 
     @classmethod

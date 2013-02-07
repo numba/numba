@@ -10,7 +10,7 @@ from numba import typesystem, numbawrapper
 from . import utils, functions, ast_translate as translate
 from numba import  pipeline, extension_type_inference
 from .minivect import minitypes
-from numba.utils import debugout
+from numba.utils import debugout, process_signature
 from numba.intrinsic import default_intrinsic_library
 from numba.external import default_external_library
 from numba.external.utility import default_utility_library
@@ -60,20 +60,13 @@ def _init_exports(environment=pipeline_env):
 
 _init_exports()
 
-def _internal_export(name=None, restype=double, argtypes=[double],
-                     backend='ast', **kws):
+def _internal_export(function_signature, backend='ast', **kws):
     def _iexport(func):
         if backend == 'bytecode':
             raise NotImplementedError(
                'Bytecode translation has been removed for exported functions.')
         else:
-            # to reassign need to setup this variable
-            # with no 'nonlocal'
-            artypes = argtypes
-            if func.func_code.co_argcount == 0 and artypes is None:
-                artypes = []
-            function_signature = minitypes.FunctionType(restype, artypes,
-                                                        name=name)
+            name = function_signature.name
             llvm_module = _lc.Module.new('export_%s' % name)
             func.live_objects = []
             func._is_numba_func = True
@@ -105,8 +98,7 @@ def export(signature, **kws):
 
     name ret_type(arg_type, argtype, ...)
     """
-    name, restype, argtypes = _process_sig(signature)
-    return _internal_export(name=name, restype=restype, argtypes=argtypes, **kws)   
+    return _internal_export(process_signature(signature), **kws)
 
 def exportmany(signatures, **kws):
     """
@@ -114,8 +106,7 @@ def exportmany(signatures, **kws):
     """   
     def _export(func):
         for signature in signatures:
-            name, restype, argtypes = _process_sig(signature)
-            tocall = _internal_export(name=name, restype=restype, argtypes=argtypes, **kws)
+            tocall = _internal_export(process_signature(signature), **kws)
             tocall(func)
 
     return _export
@@ -340,24 +331,6 @@ autojit_wrappers = {
     ('cpu', 'ast')      : numbawrapper.NumbaSpecializingWrapper,
 }
 
-def _process_sig(sigstr, name=None):
-    sigstr = sigstr.replace('*', '.pointer()')    
-    parts = sigstr.split()
-    types_dict = dict(globals(), d=double, i=int_)    
-    loc = {}
-    # FIXME:  Need something more robust to differentiate between
-    #   name ret(arg1,arg2)
-    #   and ret(arg1, arg2) or ret ( arg1, arg2 )
-    if len(parts) < 2 or '(' in parts[0] or '[' in parts[0] or '('==parts[1][0]:
-        signature = eval(sigstr, loc, types_dict)
-        signature.name = None
-    else: # Signature has a name
-        signature = eval(' '.join(parts[1:]), loc, types_dict)
-        signature.name = parts[0]
-    if name is not None:
-        signature.name = name
-    return signature.name, signature.return_type, signature.args
-
 def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False,
         **kws):
     """
@@ -396,7 +369,9 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
         restype = restype.return_type
     # Called with a string like 'f8(f8)'
     elif isinstance(restype, str) and argtypes is None:
-        name, restype, argtypes = _process_sig(restype, kws.get('name', None))
+        signature = process_signature(restype, kws.get('name', None))
+        name, restype, argtypes = (signature.name, signature.return_type,
+                                   signature.args)
         if name is not None:
             kws['func_name'] = name
     if restype is not None:

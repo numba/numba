@@ -114,11 +114,14 @@ class ClosureMixin(object):
         if restype_node is not None:
             restype = self._assert_constant(decorator, restype_node)
             if isinstance(restype, (str, unicode)):
-                name, restype, argtypes = numba.decorators._process_sig(restype)
+                signature = utils.process_signature(restype)
+                name, restype, argtypes = (signature.name,
+                                           signature.return_type,
+                                           signature.args)
                 self._check_valid_argtype(restype_node, restype)
                 for argtype in argtypes:
                     self._check_valid_argtype(restype_node, argtype)
-                restype = restype(*argtypes)
+                restype = signature
             else:
                 self._check_valid_argtype(restype_node, restype)
         else:

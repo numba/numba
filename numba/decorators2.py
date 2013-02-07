@@ -8,7 +8,7 @@
 
 __all__ = 'autojit', 'jit', 'export', 'exportmany'
 
-from numba import environment
+from numba import environment, utils
 
 def autojit(*args, **kws):
     env = environment.NumbaEnvironment.get_environment(kws.pop('env', None))
@@ -18,10 +18,10 @@ def jit(*args, **kws):
     env = environment.NumbaEnvironment.get_environment(kws.pop('env', None))
     raise NotImplementedError('XXX')
 
-def export(*args, **kws):
+def export(signature, *args, **kws):
     env = environment.NumbaEnvironment.get_environment(kws.pop('env', None))
     raise NotImplementedError('XXX')
 
-def exportmany(*args, **kws):
+def exportmany(signatures, *args, **kws):
     env = environment.NumbaEnvironment.get_environment(kws.pop('env', None))
     raise NotImplementedError('XXX')

@@ -2,6 +2,7 @@ import opcode
 import ast
 import pprint
 
+import numba
 from .minivect.complex_support import Complex64, Complex128, Complex256
 from .minivect import miniast, minitypes
 from numba import typesystem
@@ -40,6 +41,27 @@ def debugout(*args):
         print("debugout (non-translated): %s" % (''.join((str(arg)
                                                           for arg in args)),))
 
+def process_signature(sigstr, name=None):
+    '''
+    Given a signature string consisting of a return type, argument
+    types, and possibly a function name, return a signature object.
+    '''
+    sigstr = sigstr.replace('*', '.pointer()')
+    parts = sigstr.split()
+    types_dict = dict(numba.__dict__, d=numba.double, i=numba.int_)
+    loc = {}
+    # FIXME:  Need something more robust to differentiate between
+    #   name ret(arg1,arg2)
+    #   and ret(arg1, arg2) or ret ( arg1, arg2 )
+    if len(parts) < 2 or '(' in parts[0] or '[' in parts[0] or '('==parts[1][0]:
+        signature = eval(sigstr, loc, types_dict)
+        signature.name = None
+    else: # Signature has a name
+        signature = eval(' '.join(parts[1:]), loc, types_dict)
+        signature.name = parts[0]
+    if name is not None:
+        signature.name = name
+    return signature
 
 class NumbaContext(miniast.LLVMContext):
     # debug = True
