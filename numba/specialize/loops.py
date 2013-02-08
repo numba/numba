@@ -3,7 +3,7 @@ import textwrap
 
 import numba
 from numba import *
-from numba import error, closure
+from numba import error, closure, function_util
 from numba import macros, utils, typesystem
 from numba.symtab import Variable
 from numba import visitors, nodes, error, functions
@@ -31,6 +31,29 @@ def unpack_range_args(node):
 
     return [start, stop, step]
 
+def make_while_loop(flow_node):
+    "Create a while loop from a flow node (a While or If node)"
+    while_node = nodes.While(test=flow_node.test,
+                             body=flow_node.body,
+                             orelse=flow_node.orelse)
+    return while_node
+
+def copy_basic_blocks(flow_node_src, flow_node_dst):
+    "Copy cfg basic blocks from one flow node to another"
+    flow_node_dst.cond_block = flow_node_src.cond_block
+    flow_node_dst.if_block   = flow_node_src.if_block
+    flow_node_dst.else_block = flow_node_src.else_block
+    flow_node_dst.exit_block = flow_node_src.exit_block
+
+def make_while_from_for(for_node):
+    "Create a While from a For. The 'test' (loop condition) must still be set."
+    while_node = nodes.While(test=None,
+                             body=for_node.body,
+                             orelse=for_node.orelse)
+    copy_basic_blocks(for_node, while_node)
+    while_node = nodes.build_while(**vars(while_node))
+    return while_node
+
 
 #------------------------------------------------------------------------
 # Transform for loops
@@ -38,19 +61,26 @@ def unpack_range_args(node):
 
 class TransformForIterable(visitors.NumbaTransformer):
     """
-    This transforms for loops such as loops over 1D arrays:
-
-            for value in my_array:
-                ...
-
-        into
-
-            for i in my_array.shape[0]:
-                value = my_array[i]
+    This transforms loops over 1D arrays and loops over range().
     """
 
     def rewrite_range_iteration(self, node):
-        "Handle range iteration"
+        """
+        Handle range iteration:
+
+            for i in range(start, stop, step):
+                ...
+
+        becomes
+
+            nsteps = compute_nsteps(start, stop, step)
+            temp = 0
+
+            while temp < nsteps:
+                target = start + temp * step
+                ...
+                temp += 1
+        """
         self.generic_visit(node)
 
         temp = nodes.TempNode(node.target.type, 'target_temp')
@@ -125,21 +155,35 @@ class TransformForIterable(visitors.NumbaTransformer):
         node.incr_block.body = [target_increment]
         while_node.body[-1] = node.incr_block
 
+        #--------------------------------------------------------------------
+        # Create a While with the ForNode's cfg blocks merged in
+        #--------------------------------------------------------------------
+
+        while_node = make_while_loop(while_node)
+        copy_basic_blocks(node, while_node)
+        while_node = nodes.build_while(**vars(while_node))
+
         # Create the place to jump to for 'continue'
         while_node.continue_block = node.incr_block
 
-        #--------------------------------------------------------------------
-        # Patch the while with the For nodes cfg blocks
-        #--------------------------------------------------------------------
-
-        attrs = dict(vars(node), **vars(while_node))
-        while_node = nodes.build_while(**attrs)
+        # Set the new while loop in the templated Suite
         result.body[-1] = while_node
 
         return result
 
     def rewrite_array_iteration(self, node):
-        "Convert 1D array iteration to for-range and indexing"
+        """
+        Convert 1D array iteration to for-range and indexing:
+
+            for value in my_array:
+                ...
+
+        becomes
+
+            for i in my_array.shape[0]:
+                value = my_array[i]
+                ...
+        """
         logger.debug(ast.dump(node))
 
         orig_target = node.target
@@ -195,7 +239,6 @@ class TransformForIterable(visitors.NumbaTransformer):
         # Add assignment to new target variable at the start of the body
         #--------------------------------------------------------------------
 
-        coercion = nodes.CoercionNode(subscript, orig_target.type)
         assign = ast.Assign(targets=[orig_target], value=subscript)
 
         node.body = [assign] + node.body
