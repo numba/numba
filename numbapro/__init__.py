@@ -29,8 +29,7 @@ del get_versions
 
 EXCLUDE_TEST_PACKAGES = []
 
-def split_path(path):
-    return path.split(os.sep)
+from numba import whitelist_match, map_returncode_to_message, split_path
 
 def exclude_package_dirs(dirs, cuda=False):
     excludes = EXCLUDE_TEST_PACKAGES
@@ -45,18 +44,6 @@ def qualified_test_name(root):
     qname = root.replace("/", ".").replace("\\", ".").replace(os.sep, ".") + "."
     offset = qname.rindex('numbapro.tests.')
     return qname[offset:]
-
-def whitelist_match(whitelist, modname):
-    if whitelist:
-        return any(item in modname for item in whitelist)
-    return True
-
-def map_returncode_to_message(retcode):
-    if retcode < 0:
-        retcode = -retcode
-        return signal_to_name.get(retcode, "Signal %d" % retcode)
-
-    return ""
 
 def test(whitelist=None, blacklist=None, cuda=False):
     import sys, os
