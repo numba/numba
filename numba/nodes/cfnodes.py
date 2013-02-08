@@ -22,6 +22,9 @@ def delete_control_blocks(flow_node, flow):
     control_flow.DeleteStatement(flow).visit(flow_node)
 
 class FlowNode(Node):
+    """
+    Node that has control flow basic blocks.
+    """
 
     cond_block = None
     if_block = None

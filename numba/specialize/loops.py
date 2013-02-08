@@ -240,7 +240,6 @@ class TransformForIterable(visitors.NumbaTransformer):
         #--------------------------------------------------------------------
 
         assign = ast.Assign(targets=[orig_target], value=subscript)
-
         node.body = [assign] + node.body
 
         #--------------------------------------------------------------------
@@ -255,11 +254,54 @@ class TransformForIterable(visitors.NumbaTransformer):
         elif node.iter.type.is_array and node.iter.type.ndim == 1:
             return self.rewrite_array_iteration(node)
         else:
-            raise error.NumbaError("Unsupported for loop pattern")
+            return node
 
 #------------------------------------------------------------------------
 # Transform for loops over Objects
 #------------------------------------------------------------------------
+
+class IteratorImpl(object):
+    "Implementation of an iterator over a value of a certain type"
+
+    def getiter(self, context, for_node, llvm_module):
+        "Set up an iterator (statement or None)"
+        raise NotImplementedError
+
+    def body(self, context, for_node, llvm_module):
+        "Get the loop body as a list of statements"
+        raise NotImplementedError
+
+    def next(self, context, for_node, llvm_module):
+        "Get the next iterator element (ExprNode)"
+        raise NotImplementedError
+
+iterator_impls = {}
+
+def register_iterator_implementation(iterator_type, iterator_impl):
+    iterator_impls[iterator_type] = iterator_impl
+
+
+class NativeIteratorImpl(IteratorImpl):
+
+    def __init__(self, getiter_func, next_func):
+        self.getiter_func = getiter_func
+        self.next_func = next_func
+        self.iterator = None
+
+    def getiter(self, context, for_node, llvm_module):
+        self.iterator = function_util.external_call(context, llvm_module,
+                                                    self.getiter_func,
+                                                    args=[for_node.iter])
+        self.iterator = nodes.CloneableNode(self.iterator)
+        return self.iterator
+
+    def next(self, context, for_node, llvm_module):
+        return function_util.external_call(context, llvm_module,
+                                           self.next_func,
+                                           args=[self.iterator])
+
+register_iterator_implementation(object_, NativeIteratorImpl("PyObject_GetIter",
+                                                             "PyIter_Next"))
 
 class SpecializeObjectIteration(visitors.NumbaTransformer):
     """
@@ -267,4 +309,31 @@ class SpecializeObjectIteration(visitors.NumbaTransformer):
     """
 
     def visit_For(self, node):
-        pass
+        while_node = make_while_from_for(node)
+        while_node.test = nodes.const(True, bool_)
+
+        # Find iterator implementation
+        type = node.iter.type
+        if type not in iterator_impls:
+            if is_obj(type):
+                type = object_
+            else:
+                raise error.NumbaError(node, "Unsupported iterator "
+                                             "type: %s" % (type,))
+
+        impl = iterator_impls[type]
+
+        # Get the iterator, loop body, and the item
+        iter = impl.getiter(node)
+        body = impl.body(node)
+        item = impl.next(node)
+
+        # Coerce item to LHS and assign
+        item = nodes.CoercionNode(item, node.target.type)
+        target_assmnt = ast.Assign(targets=[node.target], value=item)
+
+        # Update While node body
+        body.insert(0, target_assmnt)
+        while_node.body = body
+
+        return ast.Suite(body=[iter, while_node])
