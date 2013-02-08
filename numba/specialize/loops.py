@@ -108,10 +108,6 @@ class TransformForIterable(visitors.NumbaTransformer):
         body.body.extend(node.body)
         else_body.body.extend(node.orelse)
 
-        # Patch cfg block of target variable to the 'body' block of the
-        # while
-        node.target.variable.block = node.if_block
-
         # Create the place to jump to for 'continue'
         while_node = result.body[-1]
         assert isinstance(while_node, ast.While)
