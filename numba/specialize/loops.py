@@ -7,6 +7,7 @@ from numba import error, closure
 from numba import macros, utils, typesystem
 from numba.symtab import Variable
 from numba import visitors, nodes, error, functions
+from numba.typesystem import get_type
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,10 @@ class TransformForIterable(visitors.NumbaTransformer):
         body = ast.Suite(body=[])
         else_body = ast.Suite(body=[])
 
-        # Substitute template and type infer
+        #--------------------------------------------------------------------
+        # Substitute template and infer types
+        #--------------------------------------------------------------------
+
         result = self.run_template(
             templ, vars=dict(length=Py_ssize_t),
             start=start, stop=stop, step=step,
@@ -104,23 +108,30 @@ class TransformForIterable(visitors.NumbaTransformer):
             target=node.target,
             body=body, else_body=else_body)
 
+        #--------------------------------------------------------------------
         # Patch the body and else clause
+        #--------------------------------------------------------------------
+
         body.body.extend(node.body)
         else_body.body.extend(node.orelse)
 
-        # Create the place to jump to for 'continue'
         while_node = result.body[-1]
         assert isinstance(while_node, ast.While)
 
         target_increment = while_node.body[-1]
         assert isinstance(target_increment, ast.Assign)
-        #incr_block = nodes.LowLevelBasicBlockNode(node=target_increment,
-        #                                          name='for_increment')
+
+        # Add target variable increment basic block
         node.incr_block.body = [target_increment]
         while_node.body[-1] = node.incr_block
+
+        # Create the place to jump to for 'continue'
         while_node.continue_block = node.incr_block
 
+        #--------------------------------------------------------------------
         # Patch the while with the For nodes cfg blocks
+        #--------------------------------------------------------------------
+
         attrs = dict(vars(node), **vars(while_node))
         while_node = nodes.build_while(**attrs)
         result.body[-1] = while_node
@@ -134,42 +145,64 @@ class TransformForIterable(visitors.NumbaTransformer):
         orig_target = node.target
         orig_iter = node.iter
 
-        # replace node.target with a temporary
+        #--------------------------------------------------------------------
+        # Replace node.target with a temporary
+        #--------------------------------------------------------------------
+
         target_name = orig_target.id + '.idx'
         target_temp = nodes.TempNode(Py_ssize_t)
         node.target = target_temp.store()
 
-        # replace node.iter
+        #--------------------------------------------------------------------
+        # Create range(A.shape[0])
+        #--------------------------------------------------------------------
+
         call_func = ast.Name(id='range', ctx=ast.Load())
-        call_func.type = typesystem.RangeType()
-        call_func.variable = Variable(call_func.type)
+        nodes.typednode(call_func, typesystem.RangeType())
 
         shape_index = ast.Index(nodes.ConstNode(0, typesystem.Py_ssize_t))
         shape_index.type = typesystem.npy_intp
+
         stop = ast.Subscript(value=nodes.ShapeAttributeNode(orig_iter),
                              slice=shape_index,
                              ctx=ast.Load())
-        stop.type = typesystem.intp
-        stop.variable = Variable(stop.type)
+        nodes.typednode(stop, npy_intp)
+
+        #--------------------------------------------------------------------
+        # Create range iterator and replace node.iter
+        #--------------------------------------------------------------------
+
         call_args = [nodes.ConstNode(0, typesystem.Py_ssize_t),
                      nodes.CoercionNode(stop, typesystem.Py_ssize_t),
                      nodes.ConstNode(1, typesystem.Py_ssize_t),]
 
         node.iter = ast.Call(func=call_func, args=call_args)
-        node.iter.type = call_func.type
+        nodes.typednode(node.iter, call_func.type)
 
         node.index = target_temp.load(invariant=True)
-        # add assignment to new target variable at the start of the body
+
+        #--------------------------------------------------------------------
+        # Add assignment to new target variable at the start of the body
+        #--------------------------------------------------------------------
+
         index = ast.Index(value=node.index)
         index.type = target_temp.type
         subscript = ast.Subscript(value=orig_iter,
                                   slice=index, ctx=ast.Load())
-        subscript.type = orig_iter.variable.type.dtype
-        subscript.variable = Variable(subscript.type)
+        nodes.typednode(subscript, get_type(orig_iter).dtype)
+
+        #--------------------------------------------------------------------
+        # Add assignment to new target variable at the start of the body
+        #--------------------------------------------------------------------
+
         coercion = nodes.CoercionNode(subscript, orig_target.type)
         assign = ast.Assign(targets=[orig_target], value=subscript)
 
         node.body = [assign] + node.body
+
+        #--------------------------------------------------------------------
+        # Specialize new for loop through range iteration
+        #--------------------------------------------------------------------
 
         return self.visit(node)
 

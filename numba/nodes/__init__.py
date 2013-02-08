@@ -42,13 +42,11 @@ def index(node, constant_index, load=True, type=int_):
         ctx = ast.Store()
 
     index = ast.Index(ConstNode(constant_index, type))
-    index.type = type
-    index.variable = Variable(type)
+    index = typednode(index, type)
 
     result_type = typesystem.index_type(node.variable.type)
     subscr = ast.Subscript(value=node, slice=index, ctx=ctx)
-    subscr.variable = Variable(result_type)
-    return subscr
+    return typednode(subscr, result_type)
 
 
 printing = False
