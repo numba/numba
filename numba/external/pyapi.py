@@ -67,6 +67,10 @@ class PyObject_SetItem(ExternalFunction):
     arg_types = [object_, object_, object_]
     return_type = int_
 
+class PyObject_GetIter(ExternalFunction):
+    arg_types = [object_]
+    return_type = int_
+
 class PySlice_New(ExternalFunction):
     arg_types = [object_, object_, object_]
     return_type = object_
