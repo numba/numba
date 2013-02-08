@@ -38,6 +38,29 @@ NVVM_ERROR_COMPILATION
 for i, k in enumerate(RESULT_CODE_NAMES):
     setattr(sys.modules[__name__], k, i)
 
+
+def find_libnvvm():
+    from os.path import dirname, isfile, join
+
+    # search locations
+    search_paths = [
+        dirname(__file__), # always look in this directory first
+        join(sys.prefix, 'DLLs' if sys.platform == 'win32' else 'lib'),
+    ]
+    # determine DLL name
+    dllname = {'linux2': 'libnvvm.so',
+               'darwin': 'libnvvm.dylib',
+               'win32': 'nvvm.dll'}[sys.platform]
+
+    for dir_path in search_paths:
+        path = join(dir_path, dllname)
+        if isfile(path):
+            return path
+
+    raise Exception("Could not find %r in directories %r" % (dllname,
+                                                             search_paths))
+
+
 class NVVM(object):
     '''Process-wide singleton.
     '''
@@ -87,24 +110,12 @@ class NVVM(object):
     def __new__(cls, override_path=None):
         if not cls.__INSTANCE:
             inst = cls.__INSTANCE = object.__new__(cls)
-            # Determine DLL name
-            dlldir = 'lib' # common for linux and darwin
-            if sys.platform.startswith('linux'):
-                dllname = 'libnvvm.so'
-            elif sys.platform.startswith('win32'):
-                dllname = 'nvvm.dll'
-                dlldir = 'DLLs' # override only for win32
-            elif sys.platform.startswith('darwin'):
-                dllname = 'libnvvm.dylib'
-            else:
-                raise Exception("Unsupported platform.")
 
-            path = os.path.join(sys.prefix, dlldir, dllname)
-
-            if not override_path: # Try to discover libNVVM automatically
+            if override_path is None:
+                # Try to discover libNVVM automatically
                 # Environment variable always override if present
                 # and override_path is not defined.
-                path = os.environ.get('NUMBAPRO_NVVM', path)
+                path = os.getenv('NUMBAPRO_NVVM', find_libnvvm())
             else:
                 path = override_path
 
