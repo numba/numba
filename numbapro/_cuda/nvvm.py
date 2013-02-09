@@ -115,9 +115,7 @@ class NVVM(object):
                 # Try to discover libNVVM automatically
                 # Environment variable always override if present
                 # and override_path is not defined.
-                path = os.getenv('NUMBAPRO_NVVM', None)
-                if not os.path.isfile(path):
-                    path = find_libnvvm()
+                path = os.getenv('NUMBAPRO_NVVM') or find_libnvvm()
             else:
                 path = override_path
 
