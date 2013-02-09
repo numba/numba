@@ -4,11 +4,14 @@ import types
 
 import llvm.core
 
-from numba import pipeline, naming
-from numba.control_flow import ControlFlowAnalysis
-from numba.functions import FunctionCache
+from numba import pipeline, naming, error
 from numba.utils import TypedProperty, NumbaContext
 from numba.minivect.minitypes import FunctionType
+from numba import functions, symtab
+
+from numba.intrinsic import default_intrinsic_library
+from numba.external import default_external_library
+from numba.external.utility import default_utility_library
 
 # ______________________________________________________________________
 
@@ -58,7 +61,7 @@ class FunctionEnvironment(object):
         'object.')
 
     symtab = TypedProperty(
-        dict,
+        (symtab.Symtab, dict),
         'A map from local variable names to symbol table variables for all '
         'local variables. '
         '({ "local_var_name" : numba.symtab.Variable(local_var_type) })')
@@ -74,10 +77,23 @@ class FunctionEnvironment(object):
         'Template signature for @autojit.  E.g. T(T[:, :]).  See '
         'numba.typesystem.templatetypes.')
 
+    # FIXME: Get rid of this.  See comment for translator property,
+    # below.
     cfg_transform = TypedProperty(
-        (ControlFlowAnalysis, types.NoneType),
+        object, # Should be ControlFlowAnalysis.
         'The Control Flow Analysis transform object '
         '(control_flow.ControlFlowAnalysis). Set during the cfg pass.')
+
+    # FIXME: Get rid of this property; pipeline stages are users and
+    # transformers of the environment.  Any state needed beyond a
+    # given stage should be put in the environment instead of keeping
+    # around the whole transformer.
+    translator = TypedProperty(
+        object, # FIXME: Should be LLVMCodeGenerator, but that causes
+                # module coupling.
+        'The code generator instance used to generate the target LLVM '
+        'function.  Set during the code generation pass, and used for '
+        'after-the-fact wrapper generation.')
 
     kwargs = TypedProperty(
         dict,
@@ -134,8 +150,8 @@ class TranslationEnvironment(object):
 
     functions = TypedProperty(
         dict,
-        'A map from functions under compilation to their corresponding '
-        'FunctionEnvironments')
+        'A map from target function names that are under compilation to their '
+        'corresponding FunctionEnvironments')
 
     nopython = TypedProperty(
         bool,
@@ -244,14 +260,14 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         'representations.')
 
     specializations = TypedProperty(
-        FunctionCache, 'Cache for previously specialized functions.')
+        functions.FunctionCache, 'Cache for previously specialized functions.')
 
     exports = TypedProperty(
         PyccEnvironment, 'Translation environment for pycc usage')
 
     debug = TypedProperty(bool, 'Global debugging flag.', False)
 
-    verify_stages = TypedProperty(
+    stage_checks = TypedProperty(
         bool,
         'Global flag for enabling detailed checks in translation pipeline '
         'stages.',
@@ -271,8 +287,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     # Methods
 
     def __init__(self, *args, **kws):
-        self.pipelines = {
-            self.default_pipeline : pipeline.ComposedPipelineStage([
+        actual_default_pipeline = pipeline.ComposedPipelineStage([
                 'resolve_templates',
                 'validate_signature',
                 'ControlFlowAnalysis',
@@ -287,10 +302,22 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
                 'FixASTLocations',
                 'cleanup_symtab',
                 'CodeGen',
-                ])}
+                ])
+        self.pipelines = {self.default_pipeline : actual_default_pipeline}
         self.context = NumbaContext()
-        self.specializations = FunctionCache(self.context)
+        self.specializations = functions.FunctionCache(self.context)
         self.exports = PyccEnvironment()
+
+        # FIXME: NumbaContext has up to now been used as a stand in
+        # for NumbaEnvironment, so the following member definitions
+        # should be moved into the environment, and the code that uses
+        # them should be updated.
+        context = self.context
+        context.numba_pipeline = actual_default_pipeline
+        context.function_cache = self.specializations
+        context.intrinsic_library = default_intrinsic_library(context)
+        context.external_library = default_external_library(context)
+        context.utility_library = default_utility_library(context)
 
     @classmethod
     def get_environment(cls, environment_key = None, *args, **kws):
@@ -314,23 +341,37 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         and returns an ast).'''
         if pipeline_name is None:
             pipeline_name = self.default_pipeline
-        return self.pipelines
+        return self.pipelines[pipeline_name]
+
+    def start_function_translation(self, *args, **kws):
+        if self.translation is not None:
+            raise error.InternalError('Translation already underway for '
+                                      'current pipeline environment (%r)!' %
+                                      (self,))
+        self.translation = TranslationEnvironment(self, *args, **kws)
+
+    def end_function_translation(self):
+        if self.translation is None:
+            raise error.InternalError('Translation not current underway in '
+                                      'current pipeline environment (%r)!' %
+                                      (self,))
+        self.translation = None
 
 # ______________________________________________________________________
 # Main (self-test) routine
 
 def main(*args):
     import numba as nb
-    test_fn_ast = ast_module.parse('def test_fn(a, b):\n  return a + b\n\n',
+    test_ast = ast_module.parse('def test_fn(a, b):\n  return a + b\n\n',
                                    '<string>', 'exec')
-    exec compile(test_fn_ast, '<string>', 'exec')
+    exec compile(test_ast, '<string>', 'exec')
+    test_fn_ast = test_ast.body[-1]
     test_fn_sig = nb.double(nb.double, nb.double)
     test_fn_sig.name = test_fn.__name__
     env = NumbaEnvironment.get_environment()
-    env.translation = TranslationEnvironment(env, test_fn, test_fn_ast,
-                                             test_fn_sig)
-    env.translation.numba = env
-    env.translation = None
+    env.start_function_translation(test_fn, test_fn_ast, test_fn_sig)
+    env.get_pipeline()(test_fn_ast, env)
+    env.end_function_translation()
     assert env.pipeline_stages == pipeline
 
 if __name__ == "__main__":

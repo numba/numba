@@ -15,6 +15,7 @@ from numba.intrinsic import default_intrinsic_library
 from numba.external import default_external_library
 from numba.external.utility import default_utility_library
 from numba import double, int_
+from numba import environment
 import llvm.core as _lc
 
 context = utils.get_minivect_context()
@@ -24,43 +25,8 @@ function_cache = context.function_cache = functions.FunctionCache(context)
 context.intrinsic_library = default_intrinsic_library(context)
 context.external_library = default_external_library(context)
 context.utility_library = default_utility_library(context)
-pipeline_env = pipeline.PipelineEnvironment.init_env(
-    context, "Top-level compilation environment (in %s).\n" % __name__)
 
-_EXPORTS_DOC = '''pycc environment
-
-Includes flags, and modules for exported functions.
-
-wrap - Boolean flag used to indicate that Python wrappers should be
-generated for exported functions.
-
-function_signature_map - Map from function names to type signatures
-for the translated function (used for header generation).
-
-function_module_map - Map from function names to LLVM modules that
-define the translated function.
-
-function_wrapper_map - Map from function names to tuples containing
-LLVM wrapper functions and LLVM modules that define the wrapper
-function.
-'''
-
-def _init_exports(environment=pipeline_env):
-    '''
-    Initialize the sub-environment specific to exporting functions.
-    See environment documentation in decorators._EXPORTS_DOC.
-    '''
-    exports_env = pipeline.PipelineEnvironment(pipeline_env,
-                                               _EXPORTS_DOC)
-    environment.exports = exports_env
-    exports_env.wrap = False
-    exports_env.function_signature_map = {}
-    exports_env.function_module_map = {}
-    exports_env.function_wrapper_map = {}
-
-_init_exports()
-
-def _internal_export(function_signature, backend='ast', **kws):
+def _internal_export(env, function_signature, backend='ast', **kws):
     def _iexport(func):
         if backend == 'bytecode':
             raise NotImplementedError(
@@ -68,26 +34,30 @@ def _internal_export(function_signature, backend='ast', **kws):
         else:
             name = function_signature.name
             llvm_module = _lc.Module.new('export_%s' % name)
-            func.live_objects = []
+            if not hasattr(func, 'live_objects'):
+                func.live_objects = []
             func._is_numba_func = True
             func_ast = functions._get_ast(func)
-            func_ast.pipeline = pipeline_env.pipeline
+            pipeline = env.get_pipeline()
+            func_ast.pipeline = pipeline
             # FIXME: Hacked "mangled_name" into the translation
             # environment.  Should do something else.  See comment in
             # ast_translate.LLVMCodeGenerator.__init__().
-            pipeline_env.crnt.init_func(func, func_ast, function_signature,
-                                        name=name, llvm_module=llvm_module,
-                                        mangled_name=name)
-            pipeline_env.pipeline(func_ast, pipeline_env)
-            func_env = pipeline_env.crnt
-            exports_env = pipeline_env.exports
+            env.start_function_translation(func, func_ast, function_signature,
+                                           name=name, llvm_module=llvm_module,
+                                           mangled_name=name)
+            pipeline(func_ast, env)
+            func_env = env.translation.functions[name]
+            exports_env = env.exports
             exports_env.function_signature_map[name] = function_signature
             exports_env.function_module_map[name] = llvm_module
-            if not exports_env.wrap:
+            if not exports_env.wrap_exports:
                 exports_env.function_wrapper_map[name] = None
             else:
                 wrapper_tup = func_env.translator.build_wrapper_module()
                 exports_env.function_wrapper_map[name] = wrapper_tup
+            env.end_function_translation()
+        return func
     return _iexport
 
 def export(signature, **kws):
@@ -98,17 +68,19 @@ def export(signature, **kws):
 
     name ret_type(arg_type, argtype, ...)
     """
-    return _internal_export(process_signature(signature), **kws)
+    env = environment.NumbaEnvironment.get_environment(kws.pop('env', None))
+    return _internal_export(env, process_signature(signature), **kws)
 
 def exportmany(signatures, **kws):
     """
     A Decorator that exports many signatures for a single function
-    """   
+    """
+    env = environment.NumbaEnvironment.get_environment(kws.pop('env', None))
     def _export(func):
         for signature in signatures:
-            tocall = _internal_export(process_signature(signature), **kws)
+            tocall = _internal_export(env, process_signature(signature), **kws)
             tocall(func)
-
+        return func
     return _export
 
 logger = logging.getLogger(__name__)

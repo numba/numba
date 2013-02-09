@@ -424,15 +424,16 @@ class PipelineStage(object):
                                   type(self))
 
     def make_specializer(self, cls, ast, env, **kws):
-        return cls(env.context, env.crnt.func, ast,
-                   func_signature=env.crnt.func_signature,
-                   nopython=env.crnt.nopython,
-                   symtab=env.crnt.symtab,
-                   func_name=env.crnt.func_name,
-                   llvm_module=env.crnt.llvm_module,
-                   locals=env.crnt.locals,
-                   allow_rebind_args=env.crnt.allow_rebind_args,
-                   warn=env.crnt.warn,
+        crnt = env.translation.crnt
+        return cls(env.context, crnt.func, ast,
+                   func_signature=crnt.func_signature,
+                   nopython=env.translation.nopython,
+                   symtab=crnt.symtab,
+                   func_name=crnt.func_name,
+                   llvm_module=crnt.llvm_module,
+                   locals=crnt.locals,
+                   allow_rebind_args=env.translation.allow_rebind_args,
+                   warn=env.translation.warn,
                    env=env,
                    **kws)
 
@@ -442,24 +443,27 @@ class PipelineStage(object):
         if env.stage_checks: self.check_postconditions(ast, env)
         return ast
 
+
 def resolve_templates(ast, env):
     # TODO: Unify with decorators module
-    if env.crnt.template_signature is not None:
+    crnt = env.translation.crnt
+    if crnt.template_signature is not None:
         from numba import typesystem
 
         argnames = [arg.id for arg in ast.args.args]
-        argtypes = list(env.crnt.func_signature.args)
+        argtypes = list(crnt.func_signature.args)
 
-        typesystem.resolve_templates(env.crnt.locals, env.crnt.template_signature,
+        typesystem.resolve_templates(crnt.locals, crnt.template_signature,
                                      argnames, argtypes)
-        env.crnt.func_signature = minitypes.FunctionType(
-            return_type=env.crnt.func_signature.return_type,
+        crnt.func_signature = minitypes.FunctionType(
+            return_type=crnt.func_signature.return_type,
             args=tuple(argtypes))
 
     return ast
 
+
 def validate_signature(tree, env):
-    arg_types = env.crnt.func_signature.args
+    arg_types = env.translation.crnt.func_signature.args
     if (isinstance(tree, ast_module.FunctionDef) and
         len(arg_types) != len(tree.args.args)):
         raise error.NumbaError(
@@ -485,15 +489,15 @@ class ControlFlowAnalysis(PipelineStage):
         transform = self.make_specializer(control_flow.ControlFlowAnalysis,
                                           ast, env)
         ast = transform.visit(ast)
-        env.crnt.symtab = transform.symtab
+        env.translation.crnt.symtab = transform.symtab
         ast.flow = transform.flow
-        env.crnt.ast.cfg_transform = transform
+        env.translation.crnt.ast.cfg_transform = transform
         return ast
 
-def dump_cfg(ast, env):
-    if env.crnt.cfg_transform.graphviz:
-        env.crnt.cfg_transform.render_gv(ast)
 
+def dump_cfg(ast, env):
+    if env.translation.crnt.cfg_transform.graphviz:
+        env.translation.crnt.cfg_transform.render_gv(ast)
     return ast
 
 
@@ -516,21 +520,23 @@ class ConstFolding(PipelineStage):
                                              ast, env, constvars=constvars)
         return const_folder.visit(ast)
 
+
 class TypeInfer(PipelineStage):
     def check_preconditions(self, ast, env):
-        assert env.crnt.symtab is not None
+        assert env.translation.crnt.symtab is not None
         return super(TypeInfer, self).check_preconditions(ast, env)
 
     def transform(self, ast, env):
+        crnt = env.translation.crnt
         type_inferer = self.make_specializer(type_inference.TypeInferer,
-                                             ast, env,
-                                             **env.crnt.kwargs)
+                                             ast, env, **crnt.kwargs)
         type_inferer.infer_types()
-        env.crnt.func_signature = type_inferer.func_signature
-        logger.debug("signature for %s: %s", env.crnt.func_name,
-                     env.crnt.func_signature)
-        env.crnt.symtab = type_inferer.symtab
+        crnt.func_signature = type_inferer.func_signature
+        logger.debug("signature for %s: %s", crnt.func_name,
+                     crnt.func_signature)
+        crnt.symtab = type_inferer.symtab
         return ast
+
 
 class TypeSet(PipelineStage):
     def transform(self, ast, env):
@@ -539,11 +545,13 @@ class TypeSet(PipelineStage):
         visitor.visit(ast)
         return ast
 
+
 class ClosureTypeInference(PipelineStage):
     def transform(self, ast, env):
         type_inferer = self.make_specializer(
                             numba.closure.ClosureTypeInferer, ast, env)
         return type_inferer.visit(ast)
+
 
 class TransformFor(PipelineStage):
     def transform(self, ast, env):
@@ -551,9 +559,11 @@ class TransformFor(PipelineStage):
                                           env)
         return transform.visit(ast)
 
+
 class Specialize(PipelineStage):
     def transform(self, ast, env):
         return ast
+
 
 class LateSpecializer(PipelineStage):
     def transform(self, ast, env):
@@ -561,13 +571,14 @@ class LateSpecializer(PipelineStage):
                                             env)
         return specializer.visit(ast)
 
+
 def cleanup_symtab(ast, env):
     "Pop original variables from the symtab"
-    for var in env.crnt.symtab.values():
+    for var in env.translation.crnt.symtab.values():
         if not var.parent_var and var.renameable:
-            env.crnt.symtab.pop(var.name, None)
-
+            env.translation.crnt.symtab.pop(var.name, None)
     return ast
+
 
 class FixASTLocations(PipelineStage):
     def transform(self, ast, env):
@@ -575,12 +586,15 @@ class FixASTLocations(PipelineStage):
         fixer.visit(ast)
         return ast
 
+
 class CodeGen(PipelineStage):
     def transform(self, ast, env):
-        env.crnt.translator = self.make_specializer(
-            ast_translate.LLVMCodeGenerator, ast, env, **env.crnt.kwargs)
-        env.crnt.translator.translate()
+        env.translation.crnt.translator = self.make_specializer(
+            ast_translate.LLVMCodeGenerator, ast, env,
+            **env.translation.crnt.kwargs)
+        env.translation.crnt.translator.translate()
         return ast
+
 
 class PipelineEnvironment(object):
     init_stages=[
@@ -614,9 +628,6 @@ class PipelineEnvironment(object):
         ret_val.context = context
         for stage in cls.init_stages:
             setattr(ret_val, stage.__name__, stage)
-        #pipe = cls.init_stages[:]
-        #pipe.reverse()
-        #ret_val.pipeline = reduce(compose_stages, pipe)
         ret_val.pipeline = ComposedPipelineStage(cls.init_stages)
         ret_val.stage_checks = kws.pop('stage_checks', True)
         ret_val.__dict__.update(kws)
@@ -687,39 +698,33 @@ class PipelineEnvironment(object):
         # Additional keyword arguments
         self.kwargs = kws
 
-def check_stage(stage):
-    if isinstance(stage, str):
-        def _stage(ast, env):
-            if hasattr(env, 'pipeline_stages'):
-                env = env.pipeline_stages
-            # XXX else: warn that we are using the old PipelineEnvrionment
-            return getattr(env, stage)(ast, env)
-        name = stage
-        _stage.__name__ = stage
-        stage = _stage
-    elif isinstance(stage, type) and issubclass(stage, PipelineStage):
-        name = stage.__name__
-        stage = stage()
-    else:
-        name = stage.__name__
-    return name, stage
-
-def compose_stages(f0, f1):
-    f0_name, f0 = check_stage(f0)
-    f1_name, f1 = check_stage(f1)
-    def _numba_pipeline_composition(ast, env):
-        f1_result = f1(ast, env)
-        f0_result = f0(f1_result, env)
-        return f0_result
-    name = '_o_'.join((f0_name, f1_name))
-    _numba_pipeline_composition.__name__ = name
-    return _numba_pipeline_composition
 
 class ComposedPipelineStage(PipelineStage):
     def __init__(self, stages=None):
         if stages is None:
             stages = []
-        self.stages = [check_stage(stage)[1] for stage in stages]
+        self.stages = [self.check_stage(stage)[1] for stage in stages]
+
+    @staticmethod
+    def check_stage(stage):
+        def _check_stage_object(stage_obj):
+            if (isinstance(stage_obj, type) and
+                    issubclass(stage_obj, PipelineStage)):
+                stage_obj = stage_obj()
+            return stage_obj
+
+        if isinstance(stage, str):
+            name = stage
+            def _stage(ast, env):
+                stage_obj = getattr(env.pipeline_stages, name)
+                return _check_stage_object(stage_obj)(ast, env)
+            _stage.__name__ = name
+            stage = _stage
+        else:
+            name = stage.__name__
+            stage = _check_stage_object(stage)
+
+        return name, stage
 
     def transform(self, ast, env):
         for stage in self.stages:

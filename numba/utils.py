@@ -132,8 +132,8 @@ class TypedProperty(object):
     def setter(self, _, new_val):
         if not isinstance(new_val, self.ty):
             raise ValueError(
-                'Invalid property setting, expected instance of type(s) %r.' %
-                self.ty)
+                'Invalid property setting, expected instance of type(s) %r '
+                '(got %r).' % (self.ty, type(new_val)))
         self.val = new_val
 
     def deleter(self, obj):

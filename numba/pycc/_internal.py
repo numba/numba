@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 import functools
-from numba import decorators
+from numba import environment
 from numba import llvm_types
 import llvm.core as lc
 logger = logging.getLogger(__name__)
@@ -54,6 +54,7 @@ class Compiler(object):
         self.inputs = inputs
         self.exported_signatures = {}
         self.module_name = module_name
+        self.env = environment.NumbaEnvironment.get_environment()
 
     def _emit_wrapper_init(self, llvm_module, method_defs):
         # Figure out the Python C API module creation function, and
@@ -104,12 +105,12 @@ class Compiler(object):
 
         Resets the export environment.
         '''
-        exports_env = decorators.pipeline_env.exports
+        exports_env = self.env.exports
         self.exported_signatures = exports_env.function_signature_map
         ret_val = lc.Module.new(self.module_name)
         for submod in exports_env.function_module_map.values():
             ret_val.link_in(submod)
-        if exports_env.wrap:
+        if exports_env.wrap_exports:
             method_defs = []
             wrappers = exports_env.function_wrapper_map.items()
             for name, (submod, lfunc) in wrappers:
@@ -125,11 +126,11 @@ class Compiler(object):
                         METH_VARARGS, NULL])
                 method_defs.append(method_def_const)
             self._emit_wrapper_init(ret_val, method_defs)
-        decorators._init_exports()
+        exports_env.reset()
         return ret_val
 
     def _process_inputs(self, wrap=False, **kws):
-        decorators.pipeline_env.exports.wrap = wrap
+        self.env.exports.wrap_exports = wrap
         for ifile in self.inputs:
             execfile(ifile)
 

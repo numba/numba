@@ -37,8 +37,8 @@ class NumbaVisitorMixin(CooperativeBase):
             nopython=nopython, symtab=symtab, **kwargs)
 
         self.context = context
-        self.ast = ast
         self.function_cache = context.function_cache
+        self.ast = ast
         self.symtab = symtab
         self.func_signature = func_signature
         self.nopython = nopython

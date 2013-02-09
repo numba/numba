@@ -617,8 +617,9 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         # Stack of control flow blocks
         self.stack = []
         self.flow = ControlFlow(self.source_descr)
-        if env and env.crnt:
-            env.crnt.cfg_transform = self
+        if env:
+            if hasattr(env, 'translation'):
+                env.translation.crnt.cfg_transform = self
 
     def set_default_directives(self):
         "Set some defaults for warnings"
