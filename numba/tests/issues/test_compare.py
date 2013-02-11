@@ -12,7 +12,7 @@ def _make_test(f):
                 assert f_(v)==f(v)
                 assert f_(float(v))==f(float(v))
 
-    test.func_name = f.func_name
+    test.__name__ = f.__name__
     tests.append(test)
     return test
 
