@@ -12,6 +12,7 @@ import sys
 import logging
 from numba import typesystem
 
+PY3 = sys.version_info[0] == 3
 
 
 def get_include():
