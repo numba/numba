@@ -7,7 +7,7 @@ from numba import error, closure, function_util
 from numba import macros, utils, typesystem
 from numba.symtab import Variable
 from numba import visitors, nodes, error, functions
-from numba.typesystem import get_type
+from numba.typesystem import get_type, is_obj
 
 logger = logging.getLogger(__name__)
 

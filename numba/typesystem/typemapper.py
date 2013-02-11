@@ -1,7 +1,10 @@
+from itertools import imap, izip
 import copy
 import types
+
 import llvm.core
 import numpy as np
+
 import numba
 from numba import llvm_types
 from numba.minivect.ctypes_conversion import convert_from_ctypes
@@ -14,6 +17,28 @@ import numba.typesystem
 
 def is_dtype_constructor(value):
     return isinstance(value, type) and issubclass(value, np.generic)
+
+def infer_container_type(typemapper, value):
+    assert isinstance(value, (tuple, list, dict))
+
+    if isinstance(value, tuple):
+        container_type = TupleType
+    elif isinstance(value, list):
+        container_type = ListType
+    else:
+        key_type = infer_container_type(typemapper, value.keys())
+        value_type = infer_container_type(typemapper, value.values())
+        return DictType(key_type, value_type, size=len(value))
+
+    if len(value) < 30:
+        # Figure out base type if the container is not too large
+        unify = typemapper.promote_types
+        base_type = reduce(unify, imap(typemapper.from_python, value))
+    else:
+        base_type = object_
+
+    return container_type(base_type, size=len(value))
+
 
 class NumbaTypeMapper(minitypes.TypeMapper):
     """
@@ -51,8 +76,8 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return numba.typesystem.from_numpy_dtype(value)
         elif is_dtype_constructor(value):
             return numba.typesystem.from_numpy_dtype(np.dtype(value))
-        elif isinstance(value, tuple):
-            return tuple_
+        elif isinstance(value, (tuple, list, dict)):
+            return infer_container_type(self, value)
         elif isinstance(value, types.ModuleType):
             return ModuleType(value)
         # elif isinstance(value, (self.ctypes_func_type, self.ctypes_func_type2)):

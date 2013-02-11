@@ -5,6 +5,7 @@ import copy
 import opcode
 import types
 import __builtin__ as builtins
+from itertools import imap, izip
 
 import numba
 from numba import *
@@ -827,7 +828,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
                 # TODO: look up globals in dict at call time if not
                 obj = variable.type.value
                 if not self.function_cache.is_registered(obj):
-                    variable.type = self.context.typemapper.from_python(obj)
+                    variable.type = self.type_from_pyval(obj)
             elif variable.type.is_builtin:
                 # Rewrite builtin-ins later on, give other code the chance
                 # to handle them first
@@ -1192,12 +1193,18 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
         self.generic_visit(node)
         constant_keys = self._get_constants(node.keys)
         constant_values = self._get_constants(node.values)
-        type = typesystem.DictType(size=len(node.keys))
+
         if constant_keys and constant_values:
+            unify = self.promote_types
+            key_type = reduce(unify, imap(self.type_from_pyval, constant_keys))
+            value_type = reduce(unify, imap(self.type_from_pyval, constant_keys))
+            type = typesystem.DictType(key_type, value_type, size=len(node.keys))
+
             variable = Variable(type, is_constant=True,
                                 constant_value=dict(zip(constant_keys,
                                                         constant_values)))
         else:
+            type = typesystem.DictType(object_, object_, size=len(node.keys))
             variable = Variable(type)
 
         node.variable = variable
