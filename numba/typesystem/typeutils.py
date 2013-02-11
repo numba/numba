@@ -39,10 +39,13 @@ def index_type(type):
         result.ndim -= 1
         if result.ndim == 0:
             result = result.dtype
+    elif type.is_container:
+        result = type.base_type
     elif type.is_object:
         result = object_
     else:
-        result = type.base_type
+        raise error.NumbaError("Type %s can not be indexed or "
+                               "iterated over" % (type,))
 
     return result
 

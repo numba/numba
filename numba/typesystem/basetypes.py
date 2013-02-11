@@ -29,6 +29,7 @@ class NumbaKeyHashingType(minitypes.KeyHashingType):
 
 class ContainerListType(NumbaKeyHashingType, minitypes.ObjectType):
 
+    is_container = True
     subtypes = ['base_type']
 
     def __init__(self, base_type, size=-1):
@@ -55,7 +56,17 @@ class ListType(ContainerListType):
     is_list = True
     name = "list"
 
-class DictType(NumbaType, minitypes.ObjectType):
+class MapContainerType(NumbaType):
+
+    is_map = True
+
+    def __init__(self, key_type, value_type, size=-1):
+        super(MapContainerType, self).__init__()
+        self.key_type = key_type
+        self.value_type = value_type
+        self.size = size
+
+class DictType(MapContainerType, minitypes.ObjectType):
 
     is_dict = True
     name = "dict"
@@ -437,7 +448,7 @@ class ReferenceType(NumbaType):
 #------------------------------------------------------------------------
 
 tuple_ = TupleType(object_, size=0)
-dict_ = DictType()
+dict_ = DictType(object_, object_)
 none = NoneType()
 null_type = NULLType()
 intp = minitypes.npy_intp
