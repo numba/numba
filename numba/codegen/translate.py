@@ -160,15 +160,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 self.incref(larg)
 
     def _init_constants(self):
-        bool_ltype = llvm.core.Type.int(1)
-        if "False" in self.symtab:
-            lfalse = llvm.core.Constant.int(bool_ltype, 0)
-            self.symtab["False"].lvalue = lfalse
-
-        if "True" in self.symtab:
-            ltrue = llvm.core.Constant.int(bool_ltype, 1)
-            self.symtab["True"].lvalue = ltrue
-
+        pass
         # self.symtab["None"]
 
     def _init_args(self):
