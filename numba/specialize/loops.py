@@ -8,6 +8,7 @@ from numba import macros, utils, typesystem
 from numba.symtab import Variable
 from numba import visitors, nodes, error, functions
 from numba.typesystem import get_type, is_obj
+from numba.specialize import loopimpl
 
 logger = logging.getLogger(__name__)
 
@@ -260,54 +261,10 @@ class TransformForIterable(visitors.NumbaTransformer):
 # Transform for loops over Objects
 #------------------------------------------------------------------------
 
-class IteratorImpl(object):
-    "Implementation of an iterator over a value of a certain type"
-
-    def getiter(self, context, for_node, llvm_module):
-        "Set up an iterator (statement or None)"
-        raise NotImplementedError
-
-    def body(self, context, for_node, llvm_module):
-        "Get the loop body as a list of statements"
-        return list(for_node.body)
-
-    def next(self, context, for_node, llvm_module):
-        "Get the next iterator element (ExprNode)"
-        raise NotImplementedError
-
-iterator_impls = {}
-
-def register_iterator_implementation(iterator_type, iterator_impl):
-    iterator_impls[iterator_type] = iterator_impl
-
-
-class NativeIteratorImpl(IteratorImpl):
-
-    def __init__(self, getiter_func, next_func):
-        self.getiter_func = getiter_func
-        self.next_func = next_func
-        self.iterator = None
-
-    def getiter(self, context, for_node, llvm_module):
-        iterator = function_util.external_call(context, llvm_module,
-                                               self.getiter_func,
-                                               args=[for_node.iter])
-        iterator = nodes.CloneableNode(iterator)
-        self.iterator = iterator.clone
-        return iterator
-
-    def next(self, context, for_node, llvm_module):
-        return function_util.external_call(context, llvm_module,
-                                           self.next_func,
-                                           args=[self.iterator])
-
-register_iterator_implementation(object_, NativeIteratorImpl("PyObject_GetIter",
-                                                             "PyIter_Next"))
-
 def find_iterator_type(node):
     "Find a suitable iterator type for which we have an implementation"
     type = node.iter.type
-    if type not in iterator_impls:
+    if type not in loopimpl.iterator_impls:
         if is_obj(type):
             type = object_
         else:
@@ -315,6 +272,7 @@ def find_iterator_type(node):
                                          "type: %s" % (type,))
 
     return type
+
 
 class SpecializeObjectIteration(visitors.NumbaTransformer):
     """
@@ -328,7 +286,7 @@ class SpecializeObjectIteration(visitors.NumbaTransformer):
         while_node.test = test
 
         type = find_iterator_type(node)
-        impl = iterator_impls[type]
+        impl = loopimpl.iterator_impls[type]
 
         # Get the iterator, loop body, and the item
         iter = impl.getiter(self.context, node, self.llvm_module)
