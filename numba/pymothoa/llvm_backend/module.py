@@ -36,7 +36,7 @@ class LLVMModule(object):
         is_func_def = not isinstance(name_or_func, basestring)
         if is_func_def:
             func = name_or_func
-            namespace = func.func_globals['__name__']
+            namespace = func.__globals__['__name__']
             realname = '.'.join([namespace, func.__name__])
         else:
             name = name_or_func

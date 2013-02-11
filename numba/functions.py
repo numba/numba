@@ -71,7 +71,7 @@ def _get_ast(func):
         module_ast = ast.parse(source)
 
         # fix line numbering
-        lineoffset = func.func_code.co_firstlineno + decorators
+        lineoffset = func.__code__.co_firstlineno + decorators
         ast.increment_lineno(module_ast, lineoffset)
 
         assert len(module_ast.body) == 1

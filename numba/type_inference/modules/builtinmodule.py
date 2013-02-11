@@ -166,7 +166,7 @@ def round_(context, node, number, ndigits):
 @register_builtin(0)
 def globals_(context, node):
     return typesystem.dict_
-    # return nodes.ObjectInjectNode(func.func_globals)
+    # return nodes.ObjectInjectNode(func.__globals__)
 
 @register_builtin(0)
 def locals_(context, node):

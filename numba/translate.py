@@ -916,16 +916,16 @@ class Translate(object):
         self.func_name = kws.get('name', None)
         if not self.func_name:
             self.func_name = self.func.func_name
-        self.fco = func.func_code
+        self.fco = func.__code__
         self.names = self.fco.co_names
         self.varnames = self.fco.co_varnames
         self.constants = self.fco.co_consts
-        self.costr = func.func_code.co_code
+        self.costr = func.__code__.co_code
         # Just the globals we will use
         self._myglobals = {}
         for name in self.names:
             try:
-                self._myglobals[name] = func.func_globals[name]
+                self._myglobals[name] = func.__globals__[name]
             except KeyError:
                 # Assumption here is that any name not in globals or
                 # builtins is an attribtue.

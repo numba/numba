@@ -61,8 +61,8 @@ def wrap_by_function(e, func):
     import inspect
     from pymothoa.util import terminal_helpers as term
     # Handle error and print useful information
-    modname = func.func_globals['__name__']
-    filename = func.func_globals['__file__']
+    modname = func.__globals__['__name__']
+    filename = func.__globals__['__file__']
     corrsource = inspect.getsourcelines(func)
     lineno = e.line-1
     corrline = corrsource[0][lineno].rstrip()

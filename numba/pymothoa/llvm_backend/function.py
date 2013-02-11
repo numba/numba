@@ -59,7 +59,7 @@ class LLVMFuncDef(LLVMFunction):
                             self.code_llvm,
                             self.retty,
                             self.argtys,
-                            symbols=func.func_globals
+                            symbols=func.__globals__
                         )
             codegen.visit(tree.body[0])
         except CompilerError as e:

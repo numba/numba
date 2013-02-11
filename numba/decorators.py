@@ -71,7 +71,7 @@ def _internal_export(name=None, restype=double, argtypes=[double],
             # to reassign need to setup this variable
             # with no 'nonlocal'
             artypes = argtypes
-            if func.func_code.co_argcount == 0 and artypes is None:
+            if func.__code__.co_argcount == 0 and artypes is None:
                 artypes = []
             function_signature = minitypes.FunctionType(restype, artypes,
                                                         name=name)
@@ -284,7 +284,7 @@ def _jit2(restype=None, argtypes=None, nopython=False,
           _llvm_module=None, **kwargs):
     def _jit2_decorator(func):
         argtys = argtypes
-        if func.func_code.co_argcount == 0 and argtys is None:
+        if func.__code__.co_argcount == 0 and argtys is None:
             argtys = []
 
         assert argtys is not None

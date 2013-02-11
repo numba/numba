@@ -29,7 +29,7 @@ class JITModule(object):
 
     def declaration(self, ret=types.Void, args=[]):
         def wrapper(func):
-            namespace = func.func_globals['__name__']
+            namespace = func.__globals__['__name__']
             realname = '.'.join([namespace, func.__name__])
             return self.module.new_declaration(realname, ret, args)
         return wrapper

@@ -44,7 +44,7 @@ class ClosureNode(ExprNode):
         self.need_closure_scope = False
 
     def make_pyfunc(self):
-        d = self.outer_py_func.func_globals
+        d = self.outer_py_func.__globals__
 #        argnames = tuple(arg.id for arg in self.func_def.args.args)
 #        dummy_func_string = """
 #def __numba_closure_func(%s):

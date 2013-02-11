@@ -71,7 +71,7 @@ class NumbaVisitorMixin(CooperativeBase):
             self.cellvars = cellvars
             self.freevars = freevars
         else:
-            f_code = self.func.func_code
+            f_code = self.func.__code__
             self.names = self.global_names = f_code.co_names
             self.varnames = self.local_names = list(f_code.co_varnames)
 
@@ -89,7 +89,7 @@ class NumbaVisitorMixin(CooperativeBase):
             self.func_globals = kwargs.get('func_globals', {})
             self.module_name = self.func_globals.get("__name__", "")
         else:
-            self.func_globals = func.func_globals
+            self.func_globals = func.__globals__
             self.module_name = self.func.__module__
 
         # Add variables declared in locals=dict(...)
