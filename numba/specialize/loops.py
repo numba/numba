@@ -269,7 +269,7 @@ class IteratorImpl(object):
 
     def body(self, context, for_node, llvm_module):
         "Get the loop body as a list of statements"
-        raise NotImplementedError
+        return list(for_node.body)
 
     def next(self, context, for_node, llvm_module):
         "Get the next iterator element (ExprNode)"
@@ -289,11 +289,12 @@ class NativeIteratorImpl(IteratorImpl):
         self.iterator = None
 
     def getiter(self, context, for_node, llvm_module):
-        self.iterator = function_util.external_call(context, llvm_module,
-                                                    self.getiter_func,
-                                                    args=[for_node.iter])
-        self.iterator = nodes.CloneableNode(self.iterator)
-        return self.iterator
+        iterator = function_util.external_call(context, llvm_module,
+                                               self.getiter_func,
+                                               args=[for_node.iter])
+        iterator = nodes.CloneableNode(iterator)
+        self.iterator = iterator.clone
+        return iterator
 
     def next(self, context, for_node, llvm_module):
         return function_util.external_call(context, llvm_module,
@@ -303,6 +304,18 @@ class NativeIteratorImpl(IteratorImpl):
 register_iterator_implementation(object_, NativeIteratorImpl("PyObject_GetIter",
                                                              "PyIter_Next"))
 
+def find_iterator_type(node):
+    "Find a suitable iterator type for which we have an implementation"
+    type = node.iter.type
+    if type not in iterator_impls:
+        if is_obj(type):
+            type = object_
+        else:
+            raise error.NumbaError(node, "Unsupported iterator "
+                                         "type: %s" % (type,))
+
+    return type
+
 class SpecializeObjectIteration(visitors.NumbaTransformer):
     """
     This transforms for loops over objects.
@@ -310,23 +323,17 @@ class SpecializeObjectIteration(visitors.NumbaTransformer):
 
     def visit_For(self, node):
         while_node = make_while_from_for(node)
-        while_node.test = nodes.const(True, bool_)
 
-        # Find iterator implementation
-        type = node.iter.type
-        if type not in iterator_impls:
-            if is_obj(type):
-                type = object_
-            else:
-                raise error.NumbaError(node, "Unsupported iterator "
-                                             "type: %s" % (type,))
+        test = nodes.const(True, bool_)
+        while_node.test = test
 
+        type = find_iterator_type(node)
         impl = iterator_impls[type]
 
         # Get the iterator, loop body, and the item
-        iter = impl.getiter(node)
-        body = impl.body(node)
-        item = impl.next(node)
+        iter = impl.getiter(self.context, node, self.llvm_module)
+        body = impl.body(self.context, node, self.llvm_module)
+        item = impl.next(self.context, node, self.llvm_module)
 
         # Coerce item to LHS and assign
         item = nodes.CoercionNode(item, node.target.type)
@@ -335,5 +342,7 @@ class SpecializeObjectIteration(visitors.NumbaTransformer):
         # Update While node body
         body.insert(0, target_assmnt)
         while_node.body = body
+
+        nodes.merge_cfg_in_while(while_node)
 
         return ast.Suite(body=[iter, while_node])
