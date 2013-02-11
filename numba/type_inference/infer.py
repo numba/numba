@@ -646,20 +646,10 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
         "Get the type of an iterator Variable"
         if iterator_type.is_iterator:
             base_type = iterator_type.base_type
-        elif iterator_type.is_array:
-            if iterator_type.ndim > 1:
-                slices = (slice(None),) * (iterator_type.ndim - 1)
-                base_type = iterator_type.dtype[slices]
-                base_type.is_c_contig = iterator_type.is_c_contig
-                base_type.is_inner_contig = iterator_type.is_inner_contig
-            else:
-                base_type = iterator_type.dtype
         elif iterator_type.is_range:
-            # base_type = target_type or Py_ssize_t
             base_type = Py_ssize_t
         else:
-            raise error.NumbaError(
-                node, "Cannot iterate over value of type %s" % (iterator_type,))
+            base_type = typesystem.index_type(iterator_type)
 
         return base_type
 
