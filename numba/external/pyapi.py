@@ -69,7 +69,7 @@ class PyObject_SetItem(ExternalFunction):
 
 class PyObject_GetIter(ExternalFunction):
     arg_types = [object_]
-    return_type = int_
+    return_type = object_
 
 class PyIter_Next(ExternalFunction):
     arg_types = [object_]

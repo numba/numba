@@ -89,7 +89,7 @@ class TestForLoop(unittest.TestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    print for_loop_fn_2(10)
+    print for_loop_fn_2(10)
 #    print for_loop_fn_2(10.0)
     unittest.main()
 

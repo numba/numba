@@ -5,6 +5,9 @@ from numba import *
 def test_object_iteration(obj):
     """
     >>> test_object_iteration([1, 2, 3])
+    1
+    2
+    3
     """
     for x in obj:
         print x
