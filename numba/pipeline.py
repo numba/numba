@@ -57,6 +57,7 @@ class Pipeline(object):
         'specialize_ssa',
         'optimize',
         'preloader',
+        'specialize_loops',
         'late_specializer',
         'specialize_funccalls',
         'specialize_exceptions',
@@ -279,6 +280,10 @@ class Pipeline(object):
     def specialize_ssa(self, ast):
         ssa.specialize_ssa(ast)
         return ast
+
+    def specialize_loops(self, ast):
+        transform = self.make_specializer(loops.SpecializeObjectIteration, ast)
+        return transform.visit(ast)
 
     def specialize_funccalls(self, ast):
         transform = self.make_specializer(funccalls.FunctionCallSpecializer, ast)
