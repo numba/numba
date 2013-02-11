@@ -76,9 +76,10 @@ def range_(context, node, start, stop, step):
     node.args = nodes.CoercionNode.coerce(node.args, dst_type=Py_ssize_t)
     return node
 
-@register_builtin((1, 2, 3))
-def xrange_(context, node, start, stop, step):
-    return range_(context, node, start, stop, step)
+if not PY3:
+    @register_builtin((1, 2, 3))
+    def xrange_(context, node, start, stop, step):
+        return range_(context, node, start, stop, step)
 
 @register_builtin(1)
 def len_(context, node, obj):
@@ -101,9 +102,10 @@ def _int(context, node, x, base, dst_type=int_):
     node.variable = Variable(dst_type)
     return node
 
-@register_builtin((0, 1, 2))
-def _long(context, node, x, base):
-    return _int(context, node, x, base)
+if not PY3:
+    @register_builtin((0, 1, 2))
+    def _long(context, node, x, base):
+        return _int(context, node, x, base)
 
 @register_builtin((0, 1))
 def _float(context, node, x):
