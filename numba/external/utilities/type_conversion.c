@@ -4,6 +4,11 @@
 
 /////////////// TypeConversions.proto ///////////////
 
+#if PY_MAJOR_VERSION >= 3
+  #define PyInt_FromSize_t             PyLong_FromSize_t
+  #define PyInt_AsSsize_t              PyLong_AsSsize_t
+#endif
+
 /* Type Conversion Predeclarations */
 
 #define __Numba_PyBytes_FromUString(s) PyBytes_FromString((char*)s)
