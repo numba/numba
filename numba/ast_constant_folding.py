@@ -8,6 +8,7 @@ such as
                     that's only assigned once)
 '''
 import operator, ast
+from functools import reduce
 from . import visitors
 
 # shamelessly copied from Cython

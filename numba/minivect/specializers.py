@@ -11,6 +11,8 @@ https://github.com/markflorisson88/cython/blob/_array_expressions/Cython/Utility
 
 import sys
 import copy
+from functools import reduce
+
 try:
     from functools import wraps
 except ImportError:

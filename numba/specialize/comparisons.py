@@ -1,4 +1,5 @@
 import ast
+from functools import reduce
 
 import numba
 from numba import *

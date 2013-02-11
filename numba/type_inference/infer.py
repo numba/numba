@@ -5,6 +5,7 @@ import copy
 import opcode
 import types
 import __builtin__ as builtins
+from functools import reduce
 
 import numba
 from numba import *

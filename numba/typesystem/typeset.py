@@ -3,6 +3,7 @@ Defines the typeset class and a number of builtin type sets.
 """
 
 import collections
+from functools import reduce
 from itertools import izip, starmap
 
 from numba.typesystem import basetypes

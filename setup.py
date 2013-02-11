@@ -53,7 +53,7 @@ def run_2to3():
     print("Installing 2to3 fixers")
     # need to convert sources to Py3 on installation
     fixes = 'print dict imports imports2 tuple_params unicode ' \
-            'xrange itertools itertools_imports repr long reduce types'.split()
+            'xrange itertools itertools_imports repr long types'.split()
     fixes = ['lib2to3.fixes.fix_' + fix 
              for fix in fixes]
     build_py.fixer_names = fixes

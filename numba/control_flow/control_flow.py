@@ -9,6 +9,7 @@ Adapted from Cython/Compiler/FlowControl.py
 import re
 import ast
 import copy
+from functools import reduce
 
 from numba import error, visitors, symtab, nodes
 

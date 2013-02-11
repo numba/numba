@@ -9,6 +9,8 @@ Infer types for NumPy functionality. This includes:
     2) Function calls such as np.empty/np.empty_like/np.arange/etc
 """
 
+from functools import reduce
+
 import numpy as np
 
 from numba import *
