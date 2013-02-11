@@ -49,7 +49,7 @@ def get_effective_argtypes(context, signature, argtypes):
             result_type = reduce(context.promote_types, types)
 
             # Update promotion table
-            type_set = signature.args[i]
+            type_set = signature.args[poslist[-1]]
             promotion_table[type_set] = result_type
 
             # Build coherent argument type list
