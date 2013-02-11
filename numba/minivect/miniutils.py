@@ -32,7 +32,7 @@ except ImportError:
     llvm = UnavailableImport("llvm")
     lc = UnavailableImport("llvm.core")
 
-import treepath
+from . import treepath
 
 #
 ### Convenience utilities
@@ -43,7 +43,7 @@ def specialize(context, specializer_cls, ast, print_tree=False):
     "Specialize an AST with given specializer and compile"
     context = context or getcontext()
     specializers = [specializer_cls]
-    result = iter(context.run(ast, specializers, print_tree=print_tree)).next()
+    result = next(iter(context.run(ast, specializers, print_tree=print_tree)))
     _, specialized_ast, _, code_result = result
     if not context.use_llvm:
         prototype, code_result = code_result
@@ -65,7 +65,7 @@ class MiniFunction(object):
                                         context, specializer, self.minifunc)
 
     def get_ctypes_func_and_args(self, arrays):
-        from ctypes_conversion import get_data_pointer
+        from .ctypes_conversion import get_data_pointer
 
         fist_array = arrays[0]
         shape = fist_array.shape
@@ -98,7 +98,7 @@ class MiniFunction(object):
         assert not kwargs, kwargs
 
         if out is None:
-            import minitypes
+            from . import minitypes
             dtype = minitypes.map_minitype_to_dtype(self.variables[0].type)
             broadcast = np.broadcast(*args)
             out = np.empty(broadcast.shape, dtype=dtype)

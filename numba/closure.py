@@ -245,7 +245,7 @@ def lookup_scope_attribute(cur_scope, var_name, ctx=None):
                                        ctx=ctx, ext_type=scope_type)
         try:
             return lookup_scope_attribute(scope, var_name, ctx)
-        except error.InternalError, e:
+        except error.InternalError as e:
             # Re-raise with full scope type
             pass
 

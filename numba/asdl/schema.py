@@ -1,6 +1,6 @@
 import sys
 import ast
-import asdl
+from . import asdl
 from collections import defaultdict, namedtuple
 import contextlib
 

@@ -131,7 +131,7 @@ class Compiler(object):
     def _process_inputs(self, wrap=False, **kws):
         decorators.pipeline_env.exports.wrap = wrap
         for ifile in self.inputs:
-            execfile(ifile)
+            exec(compile(open(ifile).read(), ifile, 'exec'))
 
     def write_llvm_bitcode(self, output, **kws):
         self._process_inputs(**kws)

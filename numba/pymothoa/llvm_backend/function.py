@@ -6,9 +6,9 @@ import ast, inspect
 
 from pymothoa.util.descriptor import Descriptor, instanceof
 from pymothoa.compiler_errors import FunctionDeclarationError
-from module import LLVMModule
-from backend import LLVMCodeGenerator
-from types import *
+from .module import LLVMModule
+from .backend import LLVMCodeGenerator
+from .types import *
 
 logger = logging.getLogger(__name__)
 

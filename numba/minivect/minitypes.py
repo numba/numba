@@ -41,11 +41,11 @@ import struct as struct_
 import types
 import textwrap
 
-import miniutils
-import minierror
+from . import miniutils
+from . import minierror
 
-from miniutils import *
-from miniutils import have_ctypes, ctypes
+from .miniutils import *
+from .miniutils import have_ctypes, ctypes
 
 _plat_bits = struct_.calcsize('@P') * 8
 
@@ -411,7 +411,7 @@ class Type(miniutils.ComparableObjectMixin):
         if not cmps:
             return id(self) == id(other)
 
-        return (type(self) is type(other) and
+        return (isinstance(self, type(other)) and
                 cmps == other.comparison_type_list)
 
     def __ne__(self, other):
@@ -473,7 +473,7 @@ class Type(miniutils.ComparableObjectMixin):
         Convert type to ctypes. The result may be cached!
         """
         if self._ctypes_type is None:
-            import ctypes_conversion
+            from . import ctypes_conversion
             self._ctypes_type = ctypes_conversion.convert_to_ctypes(self)
             self.mutated = False
 

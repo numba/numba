@@ -161,14 +161,14 @@ class NumbaVisitorMixin(CooperativeBase):
 
         try:
             return super(NumbaVisitorMixin, self).visit(node)
-        except error.NumbaError, e:
+        except error.NumbaError as e:
             # Try one of the overloads
             cls_name = type(node).__name__
             for i, cls_name in enumerate(self._overloads):
                 for overload_name, func in self._overloads[cls_name]:
                     try:
                         return func(self, node)
-                    except error.NumbaError, e:
+                    except error.NumbaError as e:
                         if i == len(self._overloads) - 1:
                             raise
 
@@ -192,7 +192,7 @@ class NumbaVisitorMixin(CooperativeBase):
         func = self.func
         if func is None:
             d = dict(self.func_globals)
-            exec 'def __numba_func(): pass' in d, d
+            exec('def __numba_func(): pass', d, d)
             func = d['__numba_func']
 
         templ = templating.TemplateContext(self.context, s)

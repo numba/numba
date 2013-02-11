@@ -1,5 +1,5 @@
 from numba import *
-from intrinsic import Intrinsic
+from .intrinsic import Intrinsic
 from llpython.byte_translator import LLVMTranslator
 
 __all__ = ['CStringSlice2',

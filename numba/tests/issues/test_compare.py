@@ -42,8 +42,8 @@ def test_compare_span_basic_blocks(a):
 
 @_make_test
 def test_compare_while(a):
-    while 1:
-        while 1:
+    while True:
+        while True:
             break
         else:
             print "hello"

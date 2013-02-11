@@ -10,8 +10,8 @@ from pymothoa import dialect
 from pymothoa.compiler_errors import *
 from pymothoa.backend import CodeGenerationBase
 
-from types import *
-from values import *
+from .types import *
+from .values import *
 
 import llvm # binding
 
@@ -78,7 +78,7 @@ class LLVMCodeGenerator(CodeGenerationBase):
                 self.symbols[name] = var
 
     def generate_call(self, fn, args):
-        from function import LLVMFunction
+        from .function import LLVMFunction
         if isinstance(fn, LLVMFunction): # another function
             retty = fn.retty
             argtys = fn.argtys

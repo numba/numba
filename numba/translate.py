@@ -10,7 +10,7 @@ import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 
-from utils import itercode, debugout, Complex64, Complex128
+from .utils import itercode, debugout, Complex64, Complex128
 #from ._ext import make_ufunc
 from .cfg import ControlFlowGraph
 from .llvm_types import _plat_bits, _int1, _int8, _int32, _intp, _intp_star, \
@@ -264,7 +264,7 @@ def str_to_llvmtype(str):
     elif str.startswith('arr['):
         ret_val = _numpy_array
     else:
-        raise TypeError, "Invalid Type: %s" % str
+        raise TypeError("Invalid Type: %s" % str)
     for _ in xrange(n_pointer):
         ret_val = lc.Type.pointer(ret_val)
     return ret_val
@@ -394,7 +394,7 @@ def resolve_type(arg1, arg2, builder = None):
         except TypeError:
             pass
     if typ1 is None and typ2 is None:
-        raise TypeError, "Both types not valid"
+        raise TypeError("Both types not valid")
     # The following is trying to enforce C-like upcasting rules where
     # we try to do the following:
     # * Use higher precision if the types are identical in kind.
@@ -446,7 +446,7 @@ def func_resolve_type(mod, func, args):
                 choicetype = typ
                 break
         if choicetype is None:
-            raise TypeError, "All types are unspecified"
+            raise TypeError("All types are unspecified")
         typs = [choicetype if x is None else x for x in typs]
         lfunc = map_to_function(func.val, typs, mod)
 
@@ -947,7 +947,7 @@ class Translate(object):
         global _ObjectCache
         setattr(_ObjectCache, '_ObjectCache__instances', WeakValueDictionary())
 
-        if kws.has_key('module'):
+        if 'module' in kws:
             self.mod = kws['module']
         else:
             self.mod = lc.Module.new('%s_mod_%x' % (func.__name__, id(self)))
@@ -1240,8 +1240,7 @@ class Translate(object):
         see if one of them has already been symbolically executed.  If
         so, return the symbolic locals recorded as leaving that basic
         block.  Returns None otherwise.'''
-        pred_list = list(preds)
-        pred_list.sort()
+        pred_list = sorted(preds)
         pred_list.reverse()
         next_locals = None
         for next_pred in pred_list:
@@ -1327,7 +1326,7 @@ class Translate(object):
                     choicetype = typ
                     break
             if choicetype is None:
-                raise TypeError, "All types are unspecified"
+                raise TypeError("All types are unspecified")
             typs = [choicetype if x is None else x for x in typs]
             lfunc = map_to_function(func.val, typs, self.mod)
 

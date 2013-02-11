@@ -63,7 +63,7 @@ class ClosureNode(ExprNode):
         ast_mod = ast.Module(body=[self.func_def])
         numba.functions.fix_ast_lineno(ast_mod)
         c = compile(ast_mod, '<string>', 'exec')
-        exec c in d, d
+        exec(c, d, d)
         self.func_def.name = name
 
         self.py_func = d['__numba_closure_func']

@@ -10,7 +10,7 @@ logger = logging.getLogger()
 
 from pymothoa import types
 from pymothoa.util.descriptor import Descriptor, instanceof
-from types import LLVMType
+from .types import LLVMType
 import llvm # binding
 
 class LLVMModule(object):
@@ -32,7 +32,7 @@ class LLVMModule(object):
         return self.jit_engine.dump()
 
     def _new_func_def_or_decl(self, ret, args, name_or_func):
-        from function import LLVMFuncDef, LLVMFuncDecl, LLVMFuncDef_BoolRet
+        from .function import LLVMFuncDef, LLVMFuncDecl, LLVMFuncDef_BoolRet
         is_func_def = not isinstance(name_or_func, basestring)
         if is_func_def:
             func = name_or_func

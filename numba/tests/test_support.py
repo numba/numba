@@ -7,7 +7,7 @@ from nose.tools import nottest
 import nose.plugins.skip
 import numba
 from numba import *
-import doctest_support
+from . import doctest_support
 
 jit_ = jit
 
@@ -84,7 +84,7 @@ class StdoutReplacer(object):
     def __exit__(self, *args):
         sys.stdout = self.out
 
-from bytecode.test_support import ByteCodeTestCase
+from .bytecode.test_support import ByteCodeTestCase
 
 def testmod(module=None, runit=False):
     """

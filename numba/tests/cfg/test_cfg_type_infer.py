@@ -224,7 +224,7 @@ def test_error_array_variable1(value, obj1):
     return obj1
 
 def test():
-    import test_cfg_type_infer
+    from . import test_cfg_type_infer
     testmod(test_cfg_type_infer, runit=True)
 
 if __name__ == '__main__':

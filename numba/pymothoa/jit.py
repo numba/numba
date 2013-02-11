@@ -3,11 +3,11 @@
 #
 #
 
-import types
+from . import types
 
 class JITModule(object):
     def __init__(self, name, modargs={}):
-        from llvm_backend.module import LLVMModule
+        from .llvm_backend.module import LLVMModule
         self.module = LLVMModule(name, **modargs)
 
     def function(self, func=None, ret=types.Void, args=[], later=False):

@@ -30,7 +30,7 @@ def _namelist(instance):
         for b in c.__bases__:
             classlist.append(b)
         for name in c.__dict__.keys():
-            if not namedict.has_key(name):
+            if name not in namedict:
                 namelist.append(name)
                 namedict[name] = 1
     return namelist
@@ -72,7 +72,7 @@ class GenericScanner:
 
             groups = m.groups()
             for i in range(len(groups)):
-                if groups[i] and self.index2func.has_key(i):
+                if groups[i] and i in self.index2func:
                     self.index2func[i](groups[i])
             pos = m.end()
 
@@ -140,7 +140,7 @@ class GenericParser:
             for k, v in self.edges.items():
                 if v is None:
                     state, sym = k
-                    if self.states.has_key(state):
+                    if state in self.states:
                         self.goto(state, sym)
                         changes = 1
         rv = self.__dict__.copy()
@@ -187,7 +187,7 @@ class GenericParser:
             if _preprocess:
                 rule, fn = self.preprocess(rule, func)
 
-            if self.rules.has_key(lhs):
+            if lhs in self.rules:
                 self.rules[lhs].append(rule)
             else:
                 self.rules[lhs] = [ rule ]
@@ -225,7 +225,7 @@ class GenericParser:
                 #  grammars.
                 #
                 for sym in rhs:
-                    if not self.rules.has_key(sym):
+                    if sym not in self.rules:
                         break
                 else:
                     tbd.append(rule)
@@ -268,7 +268,7 @@ class GenericParser:
             n = len(rhs)
             while i < n:
                 sym = rhs[i]
-                if not self.rules.has_key(sym) or \
+                if sym not in self.rules or \
                    not self.nullable[sym]:
                     candidate = 0
                     i = i + 1
@@ -285,7 +285,7 @@ class GenericParser:
                 if candidate:
                     lhs = self._NULLABLE+lhs
                     rule = (lhs, rhs)
-                if self.newrules.has_key(lhs):
+                if lhs in self.newrules:
                     self.newrules[lhs].append(rule)
                 else:
                     self.newrules[lhs] = [ rule ]
@@ -360,11 +360,10 @@ class GenericParser:
             lhs, rhs = rule
             if rhs[pos:pos+1] == (sym,):
                 kitems.append((rule, self.skip(rule, pos+1)))
-        core = kitems
+        core = sorted(kitems)
 
-        core.sort()
         tcore = tuple(core)
-        if self.cores.has_key(tcore):
+        if tcore in self.cores:
             return self.cores[tcore]
         #
         #  Nope, doesn't exist.  Compute it and the associated
@@ -388,13 +387,13 @@ class GenericParser:
 
                 nextSym = rhs[pos]
                 key = (X.stateno, nextSym)
-                if not rules.has_key(nextSym):
-                    if not edges.has_key(key):
+                if nextSym not in rules:
+                    if key not in edges:
                         edges[key] = None
                         X.T.append(nextSym)
                 else:
                     edges[key] = None
-                    if not predicted.has_key(nextSym):
+                    if nextSym not in predicted:
                         predicted[nextSym] = 1
                         for prule in rules[nextSym]:
                             ppos = self.skip(prule)
@@ -421,7 +420,7 @@ class GenericParser:
         core = predicted.keys()
         core.sort()
         tcore = tuple(core)
-        if self.cores.has_key(tcore):
+        if tcore in self.cores:
             self.edges[(k, None)] = self.cores[tcore]
             return k
 
@@ -432,7 +431,7 @@ class GenericParser:
 
     def goto(self, state, sym):
         key = (state, sym)
-        if not self.edges.has_key(key):
+        if key not in self.edges:
             #
             #  No transitions from state on sym.
             #
@@ -630,7 +629,7 @@ class GenericParser:
 
         for i in range(len(rhs)-1, -1, -1):
             sym = rhs[i]
-            if not self.newrules.has_key(sym):
+            if sym not in self.newrules:
                 if sym != self._BOF:
                     attr[i] = tokens[k-1]
                     key = (item, k)

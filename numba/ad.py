@@ -154,7 +154,7 @@ class FrameVM(object):
         # or pop tos and send (arg)
         tos = self.stack[-1]
         try:
-            next = tos.next()
+            next = next(tos)
             print 'next', next
             self.stack.append(next)
         except StopIteration:

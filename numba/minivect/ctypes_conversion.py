@@ -5,8 +5,8 @@ ctypes function.
 
 import math
 
-from miniutils import ctypes
-from minitypes import *
+from .miniutils import ctypes
+from .minitypes import *
 
 try:
     from ctypes import *
@@ -34,7 +34,7 @@ def convert_to_ctypes(type):
     >>> #convert_to_ctypes(complex128)
     >>> #convert_to_ctypes(complex256)
     """
-    import minitypes
+    from . import minitypes
 
     if type.is_pointer:
         return ctypes.POINTER(convert_to_ctypes(type.base_type))
@@ -71,7 +71,7 @@ def convert_to_ctypes(type):
                       ctypes.c_uint64]
         return values[item_idx]
     elif type.is_complex:
-        import complex_support
+        from . import complex_support
         if type.itemsize == 8:
             return complex_support.Complex64
         elif type.itemsize == 16:

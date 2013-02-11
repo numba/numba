@@ -402,7 +402,7 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
     # Called with f8(f8) syntax which returns a dictionary of argtypes and restype
     if isinstance(restype, minitypes.FunctionType):
         if argtypes is not None:
-            raise TypeError, "Cannot use both calling syntax and argtypes keyword"
+            raise TypeError("Cannot use both calling syntax and argtypes keyword")
         argtypes = restype.args
         restype = restype.return_type
     # Called with a string like 'f8(f8)'

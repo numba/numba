@@ -1,4 +1,4 @@
-from external import ExternalFunction
+from .external import ExternalFunction
 from numba import *
 
 class ofunc(ExternalFunction):

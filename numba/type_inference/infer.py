@@ -882,7 +882,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
                     node, "Expected pointer and int types, got (%s, %s)" %
                                                         (v1.type, v2.type))
 
-        if not isinstance(node.op, (ast.Add,)): # ast.Sub)):
+        if not isinstance(node.op, ast.Add): # ast.Sub)):
             # TODO: pointer subtraction
             raise error.NumbaError(
                     node, "Can only perform pointer arithmetic with +")
