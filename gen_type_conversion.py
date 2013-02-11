@@ -129,12 +129,12 @@ def generate_conversions(out_c, out_h):
 
     # write_utility("char", "Char", out_c, out_h, "signed")
 
-    print "Wrote %s and %s" % (out_c.name, out_h.name)
+    print("Wrote %s and %s" % (out_c.name, out_h.name))
 
 
 def print_export(fmtargs):
     "Code to put in type_conversion.c"
-    print "EXPORT_FUNCTION(%(FuncName)s, module, error)" % fmtargs
+    print("EXPORT_FUNCTION(%(FuncName)s, module, error)" % fmtargs)
 
 def print_utility_load(fmtargs, signedness):
     "Code to put in numba.external.utility"
@@ -142,8 +142,8 @@ def print_utility_load(fmtargs, signedness):
     if signedness == "unsigned":
         typename = "u" + typename
 
-    print '%-10s : load("%s", %s(object_)),' % (typename, fmtargs['FuncName'],
-                                                typename)
+    print('%-10s : load("%s", %s(object_)),' % (typename, fmtargs['FuncName'],
+                                                typename))
 
 
 def open_files():
