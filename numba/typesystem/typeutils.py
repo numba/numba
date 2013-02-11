@@ -32,6 +32,12 @@ def get_type(ast_node):
     """
     return ast_node.variable.type
 
+
+def error_index(type):
+    raise error.NumbaError("Type %s can not be indexed or "
+                           "iterated over" % (type,))
+
+
 def index_type(type):
     "Result of indexing a value of the given type with an integer index"
     if type.is_array:
@@ -39,15 +45,27 @@ def index_type(type):
         result.ndim -= 1
         if result.ndim == 0:
             result = result.dtype
-    elif type.is_container:
+    elif type.is_container or type.is_pointer:
         result = type.base_type
+    elif type.is_dict:
+        result = type.value_type
+    elif type.is_range:
+        result = Py_ssize_t
     elif type.is_object:
         result = object_
     else:
-        raise error.NumbaError("Type %s can not be indexed or "
-                               "iterated over" % (type,))
+        error_index(type)
 
     return result
+
+def element_type(type):
+    "Result type of iterating over something"
+    if type.is_dict:
+        return type.key_type
+    elif type.is_pointer and not type.is_sized_pointer:
+        error_index(type)
+    else:
+        return index_type(type)
 
 def require(ast_nodes, properties):
     "Assert that the types of the given nodes meets a certainrequirement"

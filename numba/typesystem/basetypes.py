@@ -6,9 +6,10 @@ import numpy as np
 
 import numba
 from numba import  error
+import numba.typesystem
 from numba.minivect.minitypes import *
 from numba.minivect.minitypes import map_dtype
-from numba.minivect import minitypes, minierror
+from numba.minivect import minitypes
 
 #------------------------------------------------------------------------
 # Numba's extension of the minivect type system
@@ -79,12 +80,13 @@ class IteratorType(NumbaType, minitypes.ObjectType):
     is_iterator = True
     subtypes = ['base_type']
 
-    def __init__(self, base_type, **kwds):
+    def __init__(self, iterable_type, **kwds):
         super(IteratorType, self).__init__(**kwds)
-        self.base_type = base_type
+        self.iterable_type = iterable_type
+        self.base_type = numba.typesystem.element_type(iterable_type)
 
     def __repr__(self):
-        return "iterator<%s>" % (self.base_type,)
+        return "iterator<%s>" % (self.iterable_type,)
 
 class KnownValueType(NumbaType, minitypes.ObjectType):
     """

@@ -662,8 +662,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
 
         node.target = self.visit(node.target)
         node.iter = self.visit(node.iter)
-        base_type = self._get_iterator_type(node.iter, node.iter.variable.type,
-                                            node.target.variable.type)
+        base_type = typesystem.element_type(node.iter.variable.type)
         self.assign(node.target, None, rhs_var=Variable(base_type))
 
         if self.analyse:
