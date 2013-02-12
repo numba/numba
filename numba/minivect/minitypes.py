@@ -1044,6 +1044,9 @@ class struct(Type):
     def copy(self):
         return struct(self.fields, self.name, self.readonly, self.packed)
 
+    def __eq__(self, other):
+        return other.is_struct and self.fields == other.fields
+
     def __repr__(self):
         if self.name:
             name = self.name + ' '
