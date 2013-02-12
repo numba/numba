@@ -581,6 +581,13 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
 
     def visit_FunctionDef(self, node):
         node.decorator_list = self.visitlist(node.decorator_list)
+
+        # Make sure to visit the entry block (not part of the CFG) and the
+        # first actual code block which may have synthetically
+        # inserted promotions
+        self.visit_ControlBlock(node.flow.blocks[0])
+        self.visit_ControlBlock(node.flow.blocks[1])
+
         node.body = self.visitlist(node.body)
 
         ret_type = self.func_signature.return_type
@@ -603,6 +610,11 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             error_return = nodes.WithPythonNode(body=[error_return])
 
         node.error_return = error_return
+        return node
+
+    def visit_ControlBlock(self, node):
+        # print node
+        self.visitchildren(node)
         return node
 
     def visit_While(self, node):
