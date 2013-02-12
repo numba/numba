@@ -14,6 +14,32 @@ from numba.external import default_external_library
 from numba.external.utility import default_utility_library
 
 # ______________________________________________________________________
+# Module data
+
+default_pipeline_order = [
+    'resolve_templates',
+    'validate_signature',
+    'ControlFlowAnalysis',
+    #'ConstFolding',
+    'TypeInfer',
+    'TypeSet',
+    'dump_cfg',
+    'ClosureTypeInference',
+    'TransformFor',
+    'Specialize',
+    'LateSpecializer',
+    'FixASTLocations',
+    'cleanup_symtab',
+    'CodeGen',
+]
+
+default_type_infer_pipeline_order = [
+    'ControlFlowAnalysis',
+    'TypeInfer',
+]
+
+# ______________________________________________________________________
+# Class definitions
 
 class _AbstractNumbaEnvironment(object):
     '''Used to break circular type dependency between the translation
@@ -139,7 +165,7 @@ class TranslationEnvironment(object):
     numba = TypedProperty(_AbstractNumbaEnvironment, 'Parent environment')
 
     crnt = TypedProperty(
-        FunctionEnvironment,
+        (FunctionEnvironment, types.NoneType),
         'The environment corresponding to the current function under '
         'translation.')
 
@@ -173,22 +199,48 @@ class TranslationEnvironment(object):
     # ____________________________________________________________
     # Methods
 
-    def __init__(self, parent, func, ast, func_signature, **kws):
+    def __init__(self, parent, **kws):
         self.numba = parent
-        self.stack = []
+        self.crnt = None
+        self.stack = [(kws, None)]
         self.functions = {}
-        self.nopython = kws.pop('nopython', False)
-        self.allow_rebind_args = kws.pop('allow_rebind_args', True)
-        self.warn = kws.pop('warn', True)
-        self.push(func, ast, func_signature, **kws)
+        self.set_flags(**kws)
+
+    def set_flags(self, **kws):
+        self.nopython = kws.get('nopython', False)
+        self.allow_rebind_args = kws.get('allow_rebind_args', True)
+        self.warn = kws.get('warn', True)
 
     def push(self, func, ast, func_signature, **kws):
+        self.set_flags(**kws)
         self.crnt = FunctionEnvironment(self, func, ast, func_signature, **kws)
-        self.stack.append(self.crnt)
+        self.stack.append((kws, self.crnt))
         self.functions[self.crnt.func_name] = self.crnt
+        return self.crnt
 
     def pop(self):
-        return self.stack.pop()
+        ret_val = self.stack.pop()
+        kws, self.crnt = self.stack[-1]
+        self.set_flags(**kws)
+        return ret_val
+
+# ______________________________________________________________________
+
+class TranslationContext(object):
+    """Context manager for handling a translation.  Pushes a
+    FunctionEnvironment input onto the given translation environment's
+    stack, and pops it when leaving the translation context.
+    """
+    def __init__(self, env, *args, **kws):
+        self.translation_environment = env.translation
+        self.args = args
+        self.kws = kws
+
+    def __enter__(self):
+        return self.translation_environment.push(*self.args, **self.kws)
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.translation_environment.pop()
 
 # ______________________________________________________________________
 
@@ -274,7 +326,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         False)
 
     translation = TypedProperty(
-        (TranslationEnvironment, types.NoneType),
+        TranslationEnvironment,
         'Current translation environment, specific to the current pipeline '
         'being run.')
 
@@ -283,30 +335,23 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
 
     environment_map = {}
 
+    TranslationContext = TranslationContext
+
     # ____________________________________________________________
     # Methods
 
     def __init__(self, *args, **kws):
-        actual_default_pipeline = pipeline.ComposedPipelineStage([
-                'resolve_templates',
-                'validate_signature',
-                'ControlFlowAnalysis',
-                #'ConstFolding',
-                'TypeInfer',
-                'TypeSet',
-                #'dump_cfg',
-                'ClosureTypeInference',
-                'TransformFor',
-                'Specialize',
-                'LateSpecializer',
-                'FixASTLocations',
-                'cleanup_symtab',
-                'CodeGen',
-                ])
-        self.pipelines = {self.default_pipeline : actual_default_pipeline}
+        actual_default_pipeline = pipeline.ComposedPipelineStage(
+            default_pipeline_order)
+        self.pipelines = {
+            self.default_pipeline : actual_default_pipeline,
+            'type_infer' : pipeline.ComposedPipelineStage(
+                default_type_infer_pipeline_order),
+            }
         self.context = NumbaContext()
         self.specializations = functions.FunctionCache(self.context)
         self.exports = PyccEnvironment()
+        self.translation = TranslationEnvironment(self)
 
         # FIXME: NumbaContext has up to now been used as a stand in
         # for NumbaEnvironment, so the following member definitions
@@ -343,19 +388,14 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
             pipeline_name = self.default_pipeline
         return self.pipelines[pipeline_name]
 
-    def start_function_translation(self, *args, **kws):
-        if self.translation is not None:
-            raise error.InternalError('Translation already underway for '
-                                      'current pipeline environment (%r)!' %
-                                      (self,))
-        self.translation = TranslationEnvironment(self, *args, **kws)
-
-    def end_function_translation(self):
-        if self.translation is None:
-            raise error.InternalError('Translation not current underway in '
-                                      'current pipeline environment (%r)!' %
-                                      (self,))
-        self.translation = None
+    def get_or_add_pipeline(self, pipeline_name=None, pipeline_ctor=None):
+        if pipeline_name is None:
+            pipeline_name = self.default_pipeline
+        if pipeline_name in self.pipelines:
+            pipeline_obj = self.pipelines[pipeline_name]
+        else:
+            pipeline_obj = self.pipelines[pipeline_name] = pipeline_ctor()
+        return pipeline_obj
 
 # ______________________________________________________________________
 # Main (self-test) routine
@@ -369,9 +409,8 @@ def main(*args):
     test_fn_sig = nb.double(nb.double, nb.double)
     test_fn_sig.name = test_fn.__name__
     env = NumbaEnvironment.get_environment()
-    env.start_function_translation(test_fn, test_fn_ast, test_fn_sig)
-    env.get_pipeline()(test_fn_ast, env)
-    env.end_function_translation()
+    with TranslationContext(env, test_fn, test_fn_ast, test_fn_sig):
+        env.get_pipeline()(test_fn_ast, env)
     assert env.pipeline_stages == pipeline
 
 if __name__ == "__main__":

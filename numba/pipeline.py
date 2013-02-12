@@ -322,11 +322,28 @@ def run_pipeline(context, func, ast, func_signature,
                                                   func_signature, **kwargs)
     return pipeline, pipeline.run_pipeline()
 
+def run_pipeline2(env, func, func_ast, func_signature,
+                  pipeline=None, **kwargs):
+    assert pipeline is None
+    with env.TranslationContext(env, func, func_ast, func_signature,
+                                **kwargs) as func_env:
+        pipeline = env.get_pipeline(kwargs.get('pipeline_name', None))
+        post_ast = pipeline(func_ast, env)
+        func_signature = func_env.func_signature
+        symtab = func_env.symtab
+    return pipeline, (func_signature, symtab, post_ast)
+
 def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
     ast = functions._get_ast(func)
     func_signature = minitypes.FunctionType(return_type=restype,
                                             args=argtypes)
     return run_pipeline(context, func, ast, func_signature, **kwargs)
+
+def _infer_types2(env, func, restype=None, argtypes=None, **kwargs):
+    ast = functions._get_ast(func)
+    func_signature = minitypes.FunctionType(return_type=restype,
+                                            args=argtypes)
+    return run_pipeline2(env, func, ast, func_signature, **kwargs)
 
 def infer_types(context, func, restype=None, argtypes=None, **kwargs):
     """
@@ -335,6 +352,14 @@ def infer_types(context, func, restype=None, argtypes=None, **kwargs):
     pipeline, (sig, symtab, ast) = _infer_types(context, func, restype,
                                                 argtypes, order=['cfg', 'type_infer'],
                                                 **kwargs)
+    return sig, symtab, ast
+
+def infer_types2(env, func, restype=None, argtypes=None, **kwargs):
+    """
+    Like run_pipeline, but takes restype and argtypes instead of a FunctionType
+    """
+    pipeline, (sig, symtab, ast) = _infer_types2(
+        env, func, restype, argtypes, pipeline_name='type_infer', **kwargs)
     return sig, symtab, ast
 
 def infer_types_from_ast_and_sig(context, dummy_func, ast, signature, **kwargs):
@@ -371,6 +396,40 @@ def compile(context, func, restype=None, argtypes=None, ctypes=False,
     t.link()
     return func_signature, t, get_wrapper(t, ctypes)
 
+def compile2(env, func, restype=None, argtypes=None, ctypes=False,
+             compile_only=False, **kwds):
+    """
+    Compile a numba annotated function.
+
+        - decompile function into a Python ast
+        - run type inference using the given input types
+        - compile the function to LLVM
+    """
+    assert 'llvm_module' not in kwds
+
+    func_ast = functions._get_ast(func)
+    func_signature = minitypes.FunctionType(return_type=restype,
+                                            args=argtypes)
+    #pipeline, (func_signature, symtab, ast) = _infer_types2(
+    #            env, func, restype, argtypes, codegen=True, **kwds)
+    with env.TranslationContext(env, func, func_ast, func_signature,
+                                **kwds) as func_env:
+        pipeline = env.get_pipeline(kwds.get('pipeline_name', None))
+        post_ast = pipeline(func_ast, env)
+        func_signature = func_env.func_signature
+        symtab = func_env.symtab
+        t = func_env.translator
+
+    if compile_only:
+        return func_signature, t, None
+
+    # link intrinsic library
+    env.context.intrinsic_library.link(t.lfunc.module)
+
+    # link into the JIT module
+    t.link()
+    return func_signature, t, get_wrapper(t, ctypes)
+
 def compile_from_sig(context, func, signature, **kwds):
     return compile(context, func, signature.return_type, signature.args,
                    **kwds)
@@ -378,39 +437,6 @@ def compile_from_sig(context, func, signature, **kwds):
 #------------------------------------------------------------------------
 # Pipeline refactored code
 #------------------------------------------------------------------------
-
-def setup_env(context, func, func_ast, func_signature, name, **kwds):
-    # to reassign need to setup this variable
-    # with no 'nonlocal'
-    pipeline_env = PipelineEnvironment.init_env(
-            context, "Top-level compilation environment (in %s).\n" % __name__)
-
-    llvm_module = lc.Module.new('export_%s' % name)
-    if func_ast is None:
-        func_ast = functions._get_ast(func)
-
-    # Monkeypatch AST root to hold the pipeline environment
-    func_ast.pipeline = pipeline_env.pipeline
-
-    # FIXME: Hacked "mangled_name" into the translation
-    # environment.  Should do something else.  See comment in
-    # ast_translate.LLVMCodeGenerator.__init__().
-    pipeline_env.crnt.init_func(func, func_ast, func_signature,
-                                name=name, **kwds)
-
-    # Run pipeline
-    pipeline_env.pipeline(func_ast, pipeline_env)
-
-    env = pipeline_env.crnt
-    env.function_signature_map[name] = func_signature
-    env.function_module_map[name] = llvm_module
-
-    if not env.wrap:
-        env.function_wrapper_map[name] = None
-    else:
-        wrapper_tup = pipeline_env.crnt.translator.build_wrapper_module()
-        exports_env.function_wrapper_map[name] = wrapper_tup
-
 
 class PipelineStage(object):
     def check_preconditions(self, ast, env):
@@ -425,8 +451,8 @@ class PipelineStage(object):
 
     def make_specializer(self, cls, ast, env, **kws):
         crnt = env.translation.crnt
-        return cls(env.context, crnt.func, ast,
-                   func_signature=crnt.func_signature,
+        kws = kws.copy()
+        kws.update(func_signature=crnt.func_signature,
                    nopython=env.translation.nopython,
                    symtab=crnt.symtab,
                    func_name=crnt.func_name,
@@ -434,8 +460,8 @@ class PipelineStage(object):
                    locals=crnt.locals,
                    allow_rebind_args=env.translation.allow_rebind_args,
                    warn=env.translation.warn,
-                   env=env,
-                   **kws)
+                   env=env)
+        return cls(env.context, crnt.func, ast, **kws)
 
     def __call__(self, ast, env):
         if env.stage_checks: self.check_preconditions(ast, env)
@@ -594,109 +620,6 @@ class CodeGen(PipelineStage):
             **env.translation.crnt.kwargs)
         env.translation.crnt.translator.translate()
         return ast
-
-
-class PipelineEnvironment(object):
-    init_stages=[
-        resolve_templates,
-        validate_signature,
-        ControlFlowAnalysis,
-        #ConstFolding,
-        TypeInfer,
-        TypeSet,
-        # dump_cfg,
-        ClosureTypeInference,
-        TransformFor,
-        Specialize,
-        LateSpecializer,
-        FixASTLocations,
-        cleanup_symtab,
-        CodeGen,
-        ]
-
-    def __init__(self, parent=None, doc='', *args, **kws):
-        import warnings
-        warnings.warn('The PipelineEnvironment class is slated to be '
-                      'replaced by various classes in the numba.environment '
-                      'package.',
-                      stacklevel=3)
-        self.reset(parent, doc, *args, **kws)
-
-    @classmethod
-    def init_env(cls, context, init_stages, doc='', **kws):
-        ret_val = cls(doc=doc)
-        ret_val.context = context
-        for stage in cls.init_stages:
-            setattr(ret_val, stage.__name__, stage)
-        ret_val.pipeline = ComposedPipelineStage(cls.init_stages)
-        ret_val.stage_checks = kws.pop('stage_checks', True)
-        ret_val.__dict__.update(kws)
-        ret_val.crnt = cls(ret_val)
-        return ret_val
-
-    def reset(self, parent=None, doc='', *args, **kws):
-        self.__dict__ = {}
-        super(PipelineEnvironment, self).__init__()
-        self.parent = parent
-        self.__doc__ = doc
-
-    def init_func(self, func, ast, func_signature, **kws):
-        self.reset(self.parent, self.__doc__)
-        self.func = func
-        self.ast = ast
-        self.func_signature = func_signature
-        self.func_name = kws.get('name')
-
-        if not self.func_name:
-            if func:
-                module_name = inspect.getmodule(func).__name__
-                name = '.'.join([module_name, func.__name__])
-            else:
-                name = ast.name
-            self.func_name = naming.specialized_mangle(
-                name, self.func_signature.args)
-
-        # LLVM module for this function. This module is first optimized
-        # and then linked into a global module.
-        # The Python wrapper function goes directly into the main fat module
-        self.llvm_module = kws.pop('llvm_module',
-                                   self.parent.context.llvm_module)
-
-        # Whether the function needs a wrapper function to be callable from
-        # Python
-        self.wrap = kws.pop('wrap', True)
-
-        # LLVM wrapper function that accept python object arguments and
-        # returns an object
-        self.llvm_wrapper_func = None
-
-        self.nopython = kws.pop('nopython', False)
-
-
-        # { 'local_var_name' : numba.symtab.Variable(local_var_type) } for
-        # all local variables
-        self.symtab = kws.pop('symtab', {})
-
-        # { 'local_var_name' : local_var_type } for @autojit(locals=...)
-        self.locals = kws.pop('locals', {})
-
-        # Template signature for @autojit. E.g. T(T[:, :])
-        # See numba.typesystem.templatetypes
-        self.template_signature = kws.pop('template_signature', None)
-
-        # Whether the type of arguments may be overridden for @jit functions
-        # This is always true (except for in tests perhaps!)
-        self.allow_rebind_args = kws.pop('allow_rebind_args', True)
-
-        # Control flow warnings
-        self.warn = kws.pop('warn', True)
-
-        # The Control Flow Analysis transform object
-        # (control_flow.ControlFlowAnalysis). Set during the cfg pass
-        self.cfg_transform = None
-
-        # Additional keyword arguments
-        self.kwargs = kws
 
 
 class ComposedPipelineStage(PipelineStage):

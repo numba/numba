@@ -38,25 +38,24 @@ def _internal_export(env, function_signature, backend='ast', **kws):
                 func.live_objects = []
             func._is_numba_func = True
             func_ast = functions._get_ast(func)
-            pipeline = env.get_pipeline()
-            func_ast.pipeline = pipeline
             # FIXME: Hacked "mangled_name" into the translation
             # environment.  Should do something else.  See comment in
             # ast_translate.LLVMCodeGenerator.__init__().
-            env.start_function_translation(func, func_ast, function_signature,
-                                           name=name, llvm_module=llvm_module,
-                                           mangled_name=name)
-            pipeline(func_ast, env)
-            func_env = env.translation.functions[name]
-            exports_env = env.exports
-            exports_env.function_signature_map[name] = function_signature
-            exports_env.function_module_map[name] = llvm_module
-            if not exports_env.wrap_exports:
-                exports_env.function_wrapper_map[name] = None
-            else:
-                wrapper_tup = func_env.translator.build_wrapper_module()
-                exports_env.function_wrapper_map[name] = wrapper_tup
-            env.end_function_translation()
+            with environment.TranslationContext(
+                    env, func, func_ast, function_signature,
+                    name=name, llvm_module=llvm_module,
+                    mangled_name=name) as func_env:
+                pipeline = env.get_pipeline()
+                func_ast.pipeline = pipeline
+                pipeline(func_ast, env)
+                exports_env = env.exports
+                exports_env.function_signature_map[name] = function_signature
+                exports_env.function_module_map[name] = llvm_module
+                if not exports_env.wrap_exports:
+                    exports_env.function_wrapper_map[name] = None
+                else:
+                    wrapper_tup = func_env.translator.build_wrapper_module()
+                    exports_env.function_wrapper_map[name] = wrapper_tup
         return func
     return _iexport
 
@@ -85,43 +84,15 @@ def exportmany(signatures, **kws):
 
 logger = logging.getLogger(__name__)
 
-# A simple fast-vectorize example was removed because it only supports one
-#  use-case --- slower NumPy vectorize is included here instead.
-#  The required code is still in _ext.c which is not compiled by default
-#   and here is the decorator:
-#def vectorize(func):
-#    global __tr_map__
-#    try:
-#        if func not in __tr_map__:
-#            t = Translate(func)
-#            t.translate()
-#            __tr_map__[func] = t
-#        else:
-#            t = __tr_map__[func]
-#        return t.make_ufunc()
-#    except Exception as msg:
-#        print "Warning: Could not create fast version...", msg
-#        import traceback
-#        traceback.print_exc()
-#        import numpy
-#        return numpy.vectorize(func)
-
-# The __tr_map__ global maps from Python functions to a Translate
-# object.  This added reference prevents the translator and its
-# generated LLVM code from being garbage collected when we leave the
-# scope of a decorator.
-
-# See: https://github.com/ContinuumIO/numba/issues/5
-
-__tr_map__ = {}
-
 def jit_extension_class(py_class, translator_kwargs):
-    llvm_module = translator_kwargs.get('llvm_module')
+    env = environment.NumbaEnvironment.get_environment(
+        translator_kwargs.get('env', None))
+    llvm_module = translator_kwargs.get('llvm_module', None)
     if llvm_module is None:
         llvm_module = _lc.Module.new('tmp.extension_class.%X' % id(py_class))
         translator_kwargs['llvm_module'] = llvm_module
     return extension_type_inference.create_extension(
-                        context, py_class, translator_kwargs)
+        context, py_class, translator_kwargs)
 
 def resolve_argtypes(numba_func, template_signature,
                      args, kwargs, translator_kwargs):
@@ -137,7 +108,9 @@ def resolve_argtypes(numba_func, template_signature,
 
     return_type = None
     argnames = inspect.getargspec(numba_func.py_func).args
-    argtypes = map(context.typemapper.from_python, args)
+    env = environment.NumbaEnvironment.get_environment(
+        translator_kwargs.get('env', None))
+    argtypes = map(env.context.typemapper.from_python, args)
 
     if template_signature is not None:
         template_context, signature = typesystem.resolve_templates(
@@ -153,9 +126,8 @@ def resolve_argtypes(numba_func, template_signature,
 
     return minitypes.FunctionType(return_type, tuple(argtypes))
 
-# TODO: make these two implementations the same
-def _autojit2(template_signature, target, nopython, **translator_kwargs):
-    def _autojit2_decorator(f):
+def _autojit(template_signature, target, nopython, **translator_kwargs):
+    def _autojit_decorator(f):
         """
         Defines a numba function, that, when called, specializes on the input
         types. Uses the AST translator backend. For the bytecode translator,
@@ -165,7 +137,7 @@ def _autojit2(template_signature, target, nopython, **translator_kwargs):
             "Compile the function given its positional and keyword arguments"
             signature = resolve_argtypes(numba_func, template_signature,
                                          args, kwargs, translator_kwargs)
-            dec = jit2(restype=signature.return_type,
+            dec = _jit(restype=signature.return_type,
                        argtypes=signature.args,
                        target=target, nopython=nopython,
                        **translator_kwargs)
@@ -178,43 +150,6 @@ def _autojit2(template_signature, target, nopython, **translator_kwargs):
 
         wrapper = autojit_wrappers[(target, 'ast')]
         numba_func = wrapper(f, compile_function, cache)
-        return numba_func
-
-    return _autojit2_decorator
-
-_func_cache = {}
-
-def _autojit(target, nopython):
-    def _autojit_decorator(f):
-        """
-        Defines a numba function, that, when called, specializes on the input
-        types. Uses the bytecode translator backend. For the AST backend use
-        @autojit2
-        """
-        @functools.wraps(f)
-        def wrapper(args, kwargs):
-            # Infer argument types
-            arguments = args + tuple(kwargs[k] for k in sorted(kwargs))
-            types = tuple(context.typemapper.from_python(value)
-                              for value in arguments)
-            if types in _func_cache:
-                compiled_numba_func = _func_cache[types]
-            else:
-                # Infer the return type
-                func_signature, symtab, ast = pipeline.infer_types(
-                                            context, f, argtypes=types)
-
-                decorator = jit(restype=func_signature.return_type,
-                                argtypes=types, target=target)
-                compiled_numba_func = decorator(f)
-                _func_cache[types] = compiled_numba_func
-
-            return compiled_numba_func
-
-        pyfunc_cache = function_cache.register(f)
-
-        wrapper = autojit_wrappers[(target, 'bytecode')]
-        numba_func = wrapper(f, wrapper, pyfunc_cache)
         return numba_func
 
     return _autojit_decorator
@@ -234,17 +169,17 @@ def autojit(template_signature=None, backend='ast', target='cpu',
                            nopython=nopython, locals=locals, **kwargs)(func)
         else:
             raise Exception("The autojit decorator should be called: "
-                            "@autojit(backend='bytecode|ast')")
+                            "@autojit(backend='ast')")
 
     if backend == 'bytecode':
-        return _autojit(target, nopython, **kwargs)
+        return _not_implemented
     else:
-        return _autojit2(template_signature, target, nopython,
-                         locals=locals, **kwargs)
+        return _autojit(template_signature, target, nopython,
+                        locals=locals, **kwargs)
 
-def _jit2(restype=None, argtypes=None, nopython=False,
-          _llvm_module=None, **kwargs):
-    def _jit2_decorator(func):
+def _jit(restype=None, argtypes=None, nopython=False,
+         _llvm_module=None, **kwargs):
+    def _jit_decorator(func):
         argtys = argtypes
         if func.func_code.co_argcount == 0 and argtys is None:
             argtys = []
@@ -263,43 +198,18 @@ def _jit2(restype=None, argtypes=None, nopython=False,
         return numbawrapper.NumbaCompiledWrapper(func, wrapper_func,
                                                  signature, lfunc)
 
-    return _jit2_decorator
+    return _jit_decorator
 
-def _jit(restype=None, argtypes=None, backend='bytecode', **kws):
-    assert 'arg_types' not in kws
-    assert 'ret_type' not in kws
-    def _jit(func):
-        global __tr_map__
-
-        llvm = kws.pop('llvm', True)
-        if func in __tr_map__:
-            logger.warning("Warning: Previously compiled version of %r may be "
-                           "garbage collected!" % (func,))
-
-        use_ast = False
-        if backend == 'ast':
-            use_ast = True
-            if argtypes and restype:
-                for arg_type in list(argtypes) + [restype]:
-                    if not isinstance(arg_type, minitypes.Type):
-                        use_ast = False
-                        debugout("String type specified, using bytecode translator...")
-                        break
-
-        if use_ast:
-            return jit2(restype=restype, argtypes=argtypes)(func)
-        else:
-            raise NotImplementedError('Bytecode backend is no longer '
-                                      'supported.')
-    return _jit
+def _not_implemented(*args, **kws):
+    raise NotImplementedError('Bytecode backend is no longer supported.')
 
 jit_targets = {
-    ('cpu', 'bytecode') : _jit,
-    ('cpu', 'ast') : _jit2,
+    ('cpu', 'bytecode') : _not_implemented,
+    ('cpu', 'ast') : _jit,
 }
 
 autojit_wrappers = {
-    ('cpu', 'bytecode') : numbawrapper.NumbaSpecializingWrapper,
+    ('cpu', 'bytecode') : _not_implemented,
     ('cpu', 'ast')      : numbawrapper.NumbaSpecializingWrapper,
 }
 
@@ -352,12 +262,3 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
         kws['argtypes'] = argtypes
 
     return jit_targets[target, backend](**kws)
-
-def jit2(restype=None, argtypes=None, _llvm_module=None, _llvm_ee=None,
-          target='cpu', nopython=False, **kwargs):
-    """
-    Use the AST translator to translate the function.
-    """
-    return jit_targets[target, 'ast'](restype, argtypes, nopython=nopython,
-                                _llvm_module=_llvm_module, _llvm_ee=_llvm_ee,
-                                **kwargs)

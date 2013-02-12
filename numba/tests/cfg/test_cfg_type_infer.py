@@ -2,10 +2,12 @@ import numpy as np
 
 from numba.tests.test_support import *
 from numba.minivect import minitypes
-from numba import pipeline, decorators, functions, error
+from numba import pipeline, environment, functions, error
 
-order = pipeline.Pipeline.order
-order = order[:order.index('dump_cfg') + 1]
+def construct_infer_pipeline():
+    order = environment.default_pipeline_order
+    dump_cfg_index = order.index('dump_cfg')
+    return pipeline.ComposedPipelineStage(order[:dump_cfg_index+1])
 
 def functype(restype=None, argtypes=()):
     return minitypes.FunctionType(return_type=restype, args=list(argtypes))
@@ -24,12 +26,13 @@ def types(symtab, *varnames):
     return tuple(symtab[varname].type for varname in varnames)
 
 def infer(func, signature=functype(), warn=True, **kwargs):
-    ast = functions._get_ast(func)
-    pipe, (signature, symtab, ast) = pipeline.run_pipeline(
-                        decorators.context, func, ast, signature,
-                        order=order, warn=warn, **kwargs)
-
-    last_block = ast.flow.blocks[-2]
+    func_ast = functions._get_ast(func)
+    env = environment.NumbaEnvironment.get_environment(kwargs.get('env', None))
+    infer_pipe = env.get_or_add_pipeline('infer', construct_infer_pipeline)
+    kwargs.update(warn=warn, pipeline_name='infer')
+    pipe, (signature, symtab, func_ast) = pipeline.run_pipeline2(
+        env, func, func_ast, signature, **kwargs)
+    last_block = func_ast.flow.blocks[-2]
     symbols = {}
     #for block in ast.flow.blocks: print block.symtab
     for var_name, var in symtab.iteritems():
@@ -199,7 +202,7 @@ def test_conditional_assignment(value):
     >>> test_conditional_assignment(1)
     Traceback (most recent call last):
         ...
-    UnboundLocalError: 207:11: obj1
+    UnboundLocalError: 210:11: obj1
     """
     if value < 1:
         obj1 = np.ones(10, dtype=np.float32)
