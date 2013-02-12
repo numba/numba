@@ -10,7 +10,7 @@ from itertools import imap, izip
 import numba
 from numba import *
 from numba import error, transforms, closure, control_flow, visitors, nodes
-from numba.type_inference import module_type_inference
+from numba.type_inference import module_type_inference, infer_call
 from numba.minivect import minierror, minitypes
 from numba import translate, utils, typesystem
 from numba.control_flow import ssa
@@ -1213,22 +1213,6 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
     # Function and Method Calls
     #------------------------------------------------------------------------
 
-    def _resolve_function(self, func_type, func_name):
-        func = None
-
-        if func_type.is_builtin:
-            func = getattr(builtins, func_name)
-        elif func_type.is_global:
-            func = func_type.value
-        elif func_type.is_module_attribute:
-            func = getattr(func_type.module, func_type.attr)
-        elif func_type.is_autojit_function:
-            func = func_type.autojit_func
-        elif func_type.is_jit_function:
-            func = func_type.jit_func
-
-        return func
-
     def _create_deferred_call(self, arg_types, call_node):
         "Set the statement as uninferable for now"
         deferred_type = self.create_deferred(call_node,
@@ -1252,8 +1236,14 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
         signature = None
         llvm_func = None
         new_node = None
-        if (any(arg_type.is_unresolved for arg_type in arg_types) and
-                not func_type == object_):
+
+        have_unresolved_argtypes = any(arg_type.is_unresolved
+                                           for arg_type in arg_types)
+
+        if func_type.is_jit_function:
+            llvm_func = func_type.jit_func.lfunc
+            signature = func_type.jit_func.signature
+        elif have_unresolved_argtypes and not func_type == object_:
             result = self.function_cache.get_function(py_func, arg_types,
                                                       flags)
             if result is not None:
@@ -1263,11 +1253,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
         elif self.function_cache.is_registered(py_func):
             fn_info = self.function_cache.compile_function(py_func, arg_types)
             signature, llvm_func, py_func = fn_info
-        elif func_type.is_jit_function:
-            llvm_func = func_type.jit_func.lfunc
-            signature = func_type.jit_func.signature
         else:
-            assert arg_types is not None
             # This should not be a function-cache method
             # signature = self.function_cache.get_signature(arg_types)
             signature = minitypes.FunctionType(args=(object_,) * len(arg_types),
@@ -1377,7 +1363,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
 
         func_variable = node.func.variable
         func_type = func_variable.type
-        func = self._resolve_function(func_type, func_variable.name)
+        func = infer_call.resolve_function(func_type, func_variable.name)
 
         #if not self.analyse and func_type.is_cast and len(node.args) == 1:
         #    # Short-circuit casts

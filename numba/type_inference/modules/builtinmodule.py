@@ -34,7 +34,7 @@ def _expect_n_args(node, name, nargs):
             node, "builtin %s expects %s arguments" % (name,
                                                        expected))
 
-def register_builtin(nargs):
+def register_builtin(nargs, can_handle_deferred_types=False):
     if not isinstance(nargs, tuple):
         nargs = (nargs,)
 
@@ -51,7 +51,8 @@ def register_builtin(nargs):
         name = infer.__name__.strip("_")
         value = getattr(builtins, name)
 
-        register_value(value, infer, pass_in_types=False, pass_in_callnode=True)
+        register_value(value, infer, pass_in_types=False, pass_in_callnode=True,
+                       can_handle_deferred_types=can_handle_deferred_types)
 
         return func # wrapper
 

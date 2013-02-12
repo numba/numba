@@ -75,8 +75,7 @@ class ModuleTypeInfererRegistry(object):
         else:
             return value in self.value_to_inferer
 
-    def register_inferer(self, module, attr, inferer,
-                         pass_in_types=True, pass_in_callnode=False):
+    def register_inferer(self, module, attr, inferer, **kwds):
         """
         Register an type function (a type inferer) for a known function value.
 
@@ -89,15 +88,19 @@ class ModuleTypeInfererRegistry(object):
             raise ValueAlreadyRegistered((value, module, inferer))
 
         self.value_to_module[value] = (module, attr)
-        self.register_value(value, inferer, pass_in_types, pass_in_callnode)
+        self.register_value(value, inferer, **kwds)
 
     def register_value(self, value, inferer, pass_in_types=True,
-                       pass_in_callnode=False):
-        self.value_to_inferer[value] = (inferer, pass_in_types,
-                                                 pass_in_callnode)
+                       pass_in_callnode=False, can_handle_deferred_types=False):
+        flags = dict(
+            pass_in_types=pass_in_types,
+            pass_in_callnode=pass_in_callnode,
+            can_handle_deferred_types=can_handle_deferred_types,
+        )
+        self.value_to_inferer[value] = (inferer, flags)
 
-    def register_unbound_method(self, module, attr, method_name, inferer,
-                                pass_in_types=True, pass_in_callnode=False):
+    def register_unbound_method(self, module, attr, method_name,
+                                inferer, **kwds):
         """
         Register an unbound method or dotted attribute path
         (allow for transience).
@@ -108,10 +111,10 @@ class ModuleTypeInfererRegistry(object):
                 inferrer=my_inferer
         """
         self.register_unbound_dotted(module, attr, method_name, inferer,
-                                     pass_in_types, pass_in_callnode)
+                                     **kwds)
 
     def register_unbound_dotted(self, module, attr, dotted_path, inferer,
-                                pass_in_types=True, pass_in_callnode=False):
+                                **kwds):
         """
         Register an type function for a dotted attribute path of a value,
 
@@ -124,8 +127,7 @@ class ModuleTypeInfererRegistry(object):
         if self.is_registered((value, dotted_path)):
             raise ValueAlreadyRegistered((value, inferer))
 
-        self.register_value((value, dotted_path), inferer, pass_in_types,
-                            pass_in_callnode)
+        self.register_value((value, dotted_path), inferer, **kwds)
 
     def get_inferer(self, value, func_type=None):
         return self.value_to_inferer[value]
@@ -193,7 +195,7 @@ def dispatch_on_value(context, call_node, func_type):
 
     Returns the result type, or None
     """
-    inferer, pass_in_types, pass_in_callnode = get_inferer(func_type.value)
+    inferer, flags = get_inferer(func_type.value)
 
     # Detect needed arguments
     argspec = inspect.getargspec(inferer)
@@ -206,7 +208,7 @@ def dispatch_on_value(context, call_node, func_type):
     else:
         args = []
 
-    if pass_in_callnode:
+    if flags['pass_in_callnode']:
         argnames.pop(0)
         args.append(call_node)
 
@@ -216,14 +218,14 @@ def dispatch_on_value(context, call_node, func_type):
     # Build keyword arguments
     for argname, node in method_kwargs.iteritems():
         if node is not None:
-            method_kwargs[argname] = _build_arg(pass_in_types, node)
+            method_kwargs[argname] = _build_arg(flags['pass_in_types'], node)
 
     # In the case of *args, clear keyword arguments and build positional list
     if argspec.varargs and len(argnames) < call_node.args:
         extra_args = call_node.args[len(argnames):]
 
         args.extend(method_kwargs[argname] for argname in argnames)
-        args.extend(_build_arg(pass_in_types, arg) for arg in extra_args)
+        args.extend(_build_arg(flags['pass_in_types'], arg) for arg in extra_args)
 
         method_kwargs.clear()
 
