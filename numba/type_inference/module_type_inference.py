@@ -262,6 +262,18 @@ def resolve_call(context, call_node, obj_call_node, func_type):
 
     return result
 
+def resolve_call_or_none(context, call_node, func_type):
+    if (func_type.is_known_value and
+            is_registered(func_type.value)):
+        # Try the module type inferers
+        py_func = func_type.value
+        new_node = nodes.call_obj(call_node, py_func)
+        return resolve_call(context, call_node, new_node, func_type)
+
+def can_handle_deferred(py_func):
+    "Return whether the type function can handle deferred argument types"
+    inferer, flags = get_inferer(py_func)
+    return flags['can_handle_deferred_types']
 
 #----------------------------------------------------------------------------
 # User-exposed functions to register type functions
