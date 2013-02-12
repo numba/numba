@@ -8,13 +8,30 @@ import numba
 from numba import *
 from numba import function_util
 from numba import visitors, nodes, error, functions
+from numba.typesystem import typematch
 
 logger = logging.getLogger(__name__)
 
-iterator_impls = {}
+iterator_impls = []
 
-def register_iterator_implementation(iterator_type, iterator_impl):
-    iterator_impls[iterator_type] = iterator_impl
+def register_iterator_implementation(iterator_pattern, iterator_impl):
+    iterator_impls.append((iterator_pattern, iterator_impl))
+
+def find_iterator_impl(node):
+    "Find a suitable iterator type for which we have an implementation"
+    type = node.iter.type
+
+    for pattern, impl in iterator_impls:
+        if typematch(pattern, type):
+            return impl
+
+    raise error.NumbaError(node, "Unsupported iterator "
+                                 "type: %s" % (type,))
+
+
+#------------------------------------------------------------------------
+# Interface for Loop Implementations
+#------------------------------------------------------------------------
 
 class IteratorImpl(object):
     "Implementation of an iterator over a value of a certain type"

@@ -7,7 +7,7 @@ from numba import error, closure, function_util
 from numba import macros, utils, typesystem
 from numba.symtab import Variable
 from numba import visitors, nodes, error, functions
-from numba.typesystem import get_type, is_obj
+from numba.typesystem import get_type, is_obj, typematch
 from numba.specialize import loopimpl
 
 logger = logging.getLogger(__name__)
@@ -261,19 +261,6 @@ class TransformForIterable(visitors.NumbaTransformer):
 # Transform for loops over Objects
 #------------------------------------------------------------------------
 
-def find_iterator_type(node):
-    "Find a suitable iterator type for which we have an implementation"
-    type = node.iter.type
-    if type not in loopimpl.iterator_impls:
-        if is_obj(type):
-            type = object_
-        else:
-            raise error.NumbaError(node, "Unsupported iterator "
-                                         "type: %s" % (type,))
-
-    return type
-
-
 class SpecializeObjectIteration(visitors.NumbaTransformer):
     """
     This transforms for loops over objects.
@@ -285,8 +272,7 @@ class SpecializeObjectIteration(visitors.NumbaTransformer):
         test = nodes.const(True, bool_)
         while_node.test = test
 
-        type = find_iterator_type(node)
-        impl = loopimpl.iterator_impls[type]
+        impl = loopimpl.find_iterator_impl(node)
 
         # Get the iterator, loop body, and the item
         iter = impl.getiter(self.context, node, self.llvm_module)
