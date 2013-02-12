@@ -14,7 +14,7 @@ on the fly::
             sum += my_double_array[i]
         return sum
 
-To make the above example work for any compatile input types automatically,
+To make the above example work for any compatible input types automatically,
 we can create a function that specializes automatically::
 
     @autojit()
