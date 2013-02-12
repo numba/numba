@@ -266,8 +266,7 @@ def resolve_call_or_none(context, call_node, func_type):
     if (func_type.is_known_value and
             is_registered(func_type.value)):
         # Try the module type inferers
-        py_func = func_type.value
-        new_node = nodes.call_obj(call_node, py_func)
+        new_node = nodes.call_obj(call_node, None)
         return resolve_call(context, call_node, new_node, func_type)
 
 def can_handle_deferred(py_func):

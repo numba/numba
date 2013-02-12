@@ -99,6 +99,13 @@ class ClosureCallNode(NativeCallNode):
     def __init__(self, closure_type, call_node, **kwargs):
         self.call_node = call_node
         args, keywords = call_node.args, call_node.keywords
+
+        if closure_type.closure.need_closure_scope:
+            # Insert fake closure scope type argument
+            # This is replaced in ClosureCompilingMixin.visit_ClosureCallNode
+            # during late specialization
+            args.insert(0, const(object(), closure_type.signature.args[0]))
+
         args = args + self._resolve_keywords(closure_type, args, keywords)
         super(ClosureCallNode, self).__init__(closure_type.signature, args,
                                               llvm_func=None, **kwargs)

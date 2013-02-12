@@ -1305,7 +1305,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
             new_node = self._infer_complex_math(
                     func_type, new_node, node, argtypes[0])
 
-        return infer_call.infer_typefunc(self.context, node, func_type, new_node)
+        return infer_call.infer_typefunc(self.context, node,
+                                         func_type, new_node)
 
     def visit_Call(self, node, visitchildren=True):
         if node.starargs or node.kwargs:
@@ -1374,7 +1375,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
             else:
                 arg_types = [a.variable.type for a in node.args]
 
-            new_node = self._resolve_external_call(node, func_type, func, arg_types)
+            new_node = self._resolve_external_call(node, func_type,
+                                                   func, arg_types)
 
         return new_node
 

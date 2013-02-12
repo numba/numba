@@ -586,7 +586,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
     def visit_ClosureCallNode(self, node):
         if node.closure_type.closure.need_closure_scope:
             assert self.ast.cur_scope is not None
-            node.args.insert(0, self.ast.cur_scope)
+            node.args[0] = self.ast.cur_scope
 
         self.generic_visit(node)
         return node
