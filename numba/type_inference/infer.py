@@ -860,7 +860,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
         #       Only meta is doing 2 items.
         # if len(node.values) != 2:
         #     raise AssertionError
-        assert node.values >= 2
+        assert len(node.values) >= 2
         node.values = self.visitlist(node.values)
         node.values[:] = nodes.CoercionNode.coerce(node.values, minitypes.bool_)
         node.variable = Variable(minitypes.bool_)
