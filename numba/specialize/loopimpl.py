@@ -49,6 +49,10 @@ class IteratorImpl(object):
         raise NotImplementedError
 
 
+#------------------------------------------------------------------------
+# External Function Iterator
+#------------------------------------------------------------------------
+
 class NativeIteratorImpl(IteratorImpl):
     """
     Implement iteration over an iterator which has externally callable
@@ -73,11 +77,42 @@ class NativeIteratorImpl(IteratorImpl):
                                            self.next_func,
                                            args=[self.iterator])
 
+#------------------------------------------------------------------------
+# Indexing Iterator
+#------------------------------------------------------------------------
+
+def assign(target, value):
+    return ast.Assign(targets=target, value=value)
+
+def index(value, index):
+    return ast.Subscript(value=value, slice=index, ctx=ast.Load())
+
+class IndexingIteratorImpl(IteratorImpl):
+    """
+    Implement iteration using indexing.
+    """
+
+    def getiter(self, context, for_node, llvm_module):
+        self.index = nodes.TempNode(Py_ssize_t, "iterator_index")
+        return assign(self.index, nodes.const(0, Py_ssize_t))
+
+    def next(self, context, for_node, llvm_module):
+        "Index element and update index"
+        index = self.index.load
+        value = nodes.CloneableNode(index(for_node.iter, index))
+        add = ast.BinOp(index, ast.Add(), nodes.const(1, Py_ssize_t))
+
+        return nodes.ExpressionNode(stmts=[value, assign(self.index.store, add)],
+                                    expr=value.clone)
+
+    def length(self, context, for_node, llvm_module):
+        "Length of the iterable"
+        raise NotImplementedError
 
 #------------------------------------------------------------------------
 # Register Loop Implementations
 #------------------------------------------------------------------------
 
-register_iterator_implementation(object_, NativeIteratorImpl("PyObject_GetIter",
-                                                             "PyIter_Next"))
+register_iterator_implementation("object_", NativeIteratorImpl("PyObject_GetIter",
+                                                               "PyIter_Next"))
 
