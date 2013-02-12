@@ -10,7 +10,7 @@ from itertools import imap, izip
 import numba
 from numba import *
 from numba import error, transforms, closure, control_flow, visitors, nodes
-from numba.type_inference import module_type_inference, infer_call
+from numba.type_inference import module_type_inference, infer_call, deferred
 from numba.minivect import minierror, minitypes
 from numba import translate, utils, typesystem
 from numba.control_flow import ssa
@@ -989,13 +989,6 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
         else:
             return type, None
 
-    def create_deferred(self, node, deferred_cls):
-        variable = Variable(None)
-        deferred_type = deferred_cls(variable, self, node)
-        variable.type = deferred_type
-        node.variable = variable
-        return deferred_type
-
     def visit_Subscript(self, node, visitchildren=True):
         if visitchildren:
             node.value = self.visit(node.value)
@@ -1003,7 +996,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
 
         value = node.value
         value_type = node.value.variable.type
-        deferred_type = self.create_deferred(node, typesystem.DeferredIndexType)
+        deferred_type = deferred.create_deferred(self, node,
+                                                 typesystem.DeferredIndexType)
         if value_type and value_type.is_unresolved:
             deferred_type.dependences.append(node.value)
             deferred_type.update()
@@ -1213,17 +1207,6 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
     # Function and Method Calls
     #------------------------------------------------------------------------
 
-    def _create_deferred_call(self, arg_types, call_node):
-        "Set the statement as uninferable for now"
-        deferred_type = self.create_deferred(call_node,
-                                             typesystem.DeferredCallType)
-        for arg, arg_type in zip(call_node.args, arg_types):
-            if arg_type.is_unresolved:
-                deferred_type.dependences.append(arg)
-
-        deferred_type.update()
-        return call_node
-
     def _resolve_external_call(self, call_node, func_type, py_func, arg_types):
         """
         Resolve a call to a function. If we know about the function,
@@ -1232,10 +1215,15 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
         if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
             logger.debug('func_type = %r, py_func = %r, call_node = %s' %
                          (func_type, py_func, utils.pformat_ast(call_node)))
-        flags = None # FIXME: Stub.
+
+        if not func_type.is_object and not func_type.is_known_value:
+            raise error.NumbaError(
+                    call_node, "Cannot call object of type %s" % (func_type,))
+
+        flags = None        # TODO: stub
         signature = None
         llvm_func = None
-        new_node = None
+        new_node = nodes.call_obj(call_node, py_func)
 
         have_unresolved_argtypes = any(arg_type.is_unresolved
                                            for arg_type in arg_types)
@@ -1244,42 +1232,33 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
             llvm_func = func_type.jit_func.lfunc
             signature = func_type.jit_func.signature
         elif have_unresolved_argtypes and not func_type == object_:
-            result = self.function_cache.get_function(py_func, arg_types,
-                                                      flags)
+            result = self.function_cache.get_function(py_func, arg_types, flags)
             if result is not None:
-                signature, llvm_func, py_func = result
+                signature, llvm_func, _ = result
             else:
-                new_node = self._create_deferred_call(arg_types, call_node)
+                new_node = deferred.create_deferred_call(
+                                self, arg_types, call_node)
+                if (module_type_inference.is_registered(py_func) and
+                        module_type_inference.can_handle_deferred(py_func)):
+                    new_node = infer_call.infer_typefunc(self.context, call_node,
+                                                         func_type, new_node)
         elif self.function_cache.is_registered(py_func):
             fn_info = self.function_cache.compile_function(py_func, arg_types)
-            signature, llvm_func, py_func = fn_info
+            signature, llvm_func, _ = fn_info
+        elif not call_node.keywords and self._is_math_function(call_node.args,
+                                                               py_func):
+            new_node = self._resolve_math_call(call_node, py_func)
         else:
             # This should not be a function-cache method
             # signature = self.function_cache.get_signature(arg_types)
-            signature = minitypes.FunctionType(args=(object_,) * len(arg_types),
-                                               return_type=object_)
-
-        if new_node is None:
-            assert signature is not None
-            if llvm_func is not None:
-                new_node = nodes.NativeCallNode(signature, call_node.args,
-                                                llvm_func, py_func)
-            elif not call_node.keywords and self._is_math_function(
-                                            call_node.args, py_func):
-                new_node = self._resolve_math_call(call_node, py_func)
-            else:
-                new_node = nodes.ObjectCallNode(signature, call_node.func,
-                                                call_node.args,
-                                                call_node.keywords,
-                                                py_func)
-
-        if not func_type.is_object and not func_type.is_known_value:
-            raise error.NumbaError(
-                call_node, "Cannot call object of type %s" % (func_type,))
-
-        if signature and new_node.type.is_object:
             new_node = self._resolve_return_type(func_type, new_node,
                                                  call_node, arg_types)
+
+        if llvm_func is not None:
+            # Generate a native call instead of an object call
+            assert signature is not None
+            new_node = nodes.NativeCallNode(signature, call_node.args,
+                                            llvm_func, py_func)
 
         return new_node
 
@@ -1301,7 +1280,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
 
         return new_node
 
-    def _infer_complex_math(self, func_type, new_node, node, result_type, argtype):
+    def _infer_complex_math(self, func_type, new_node, node, argtype):
         "Infer types for cmath.somefunc()"
         # Check for cmath.{sqrt,sin,etc}
         # FIXME: This is not visited when the input is a non-complex scalar.
@@ -1312,48 +1291,21 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
             is_math = self._is_math_function(args, func_type.value)
             if len(node.args) == 1 and is_math:
                 new_node = nodes.CoercionNode(new_node, complex128)
-                result_type = complex128
 
-        return new_node, result_type
+        return new_node
 
     def _resolve_return_type(self, func_type, new_node, node, argtypes):
         """
         We are performing a call through PyObject_Call, but we may be able
         to infer a more specific return value than 'object'.
         """
-        result_type = None
-
-        if (func_type.is_known_value and
-                module_type_inference.is_registered(func_type.value)):
-            # Try the module type inferers
-            result_node = module_type_inference.resolve_call(
-                        self.context, node, new_node, func_type)
-            if result_node is not None:
-                return result_node
-
         if ((func_type.is_module_attribute and func_type.module is cmath) or
                  (func_type.is_numpy_attribute and len(argtypes) == 1 and
                   argtypes[0].is_complex)):
-            new_node, result_type = self._infer_complex_math(
-                    func_type, new_node, node, result_type, argtypes[0])
+            new_node = self._infer_complex_math(
+                    func_type, new_node, node, argtypes[0])
 
-        if result_type is None:
-            result_type = object_
-
-        new_node.variable = Variable(result_type)
-        return new_node
-
-    def _parse_signature(self, node, func_type):
-        types = []
-        for arg in node.args:
-            if not arg.variable.type.is_cast:
-                self.error(arg, "Expected a numba type")
-            else:
-                types.append(arg.variable.type)
-
-        signature = func_type.dst_type(*types)
-        new_node = nodes.const(signature, typesystem.CastType(signature))
-        return new_node
+        return infer_call.infer_typefunc(self.context, node, func_type, new_node)
 
     def visit_Call(self, node, visitchildren=True):
         if node.starargs or node.kwargs:
@@ -1406,7 +1358,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
             #       this specifies a function signature
             no_keywords(node)
             if len(node.args) != 1 or node.args[0].variable.type.is_cast:
-                new_node = self._parse_signature(node, func_type)
+                new_node = infer_call.parse_signature(node, func_type)
             else:
                 new_node = nodes.CoercionNode(node.args[0], func_type.dst_type)
 

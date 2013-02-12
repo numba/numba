@@ -35,6 +35,15 @@ def call_pyfunc(py_func, args):
     func = ObjectInjectNode(py_func)
     return ObjectCallNode(None, func, args)
 
+def call_obj(call_node, py_func):
+    nargs = len(call_node.args)
+    signature = typesystem.pyfunc_signature(nargs)
+    node = ObjectCallNode(signature, call_node.func,
+                          call_node.args,
+                          call_node.keywords,
+                          py_func)
+    return node
+
 def index(node, constant_index, load=True, type=int_):
     if load:
         ctx = ast.Load()
