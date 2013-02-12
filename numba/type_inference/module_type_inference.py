@@ -44,6 +44,7 @@ class UnmatchedTypeError(error.NumbaError):
     signature (`register_callable`).
     """
 
+
 #----------------------------------------------------------------------------
 # Global Registry for Type Functions
 #----------------------------------------------------------------------------
@@ -296,10 +297,13 @@ def register_callable(signature):
         def infer(context, *args):
             if signature.is_typeset:
                 specialization = signature.find_match(context, args)
-                if specialization is None:
-                    raise UnmatchedTypeError((function, args))
             else:
                 specialization = typeset.match(context, signature, args)
+
+            if specialization is None:
+                raise UnmatchedTypeError(
+                        "Unmatched argument types for function '%s': %s" %
+                                                    (function.__name__, args))
 
             assert specialization.is_function
             return specialization.return_type
