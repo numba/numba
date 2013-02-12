@@ -107,7 +107,7 @@ def test_simple_circular_binop_promotion():
 # Test Unary/Binary Operations and Comparisons
 #------------------------------------------------------------------------
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_circular_binop():
     """
     >>> test_circular_binop()
@@ -168,7 +168,7 @@ def test_circular_compare2():
 
     return x, y
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_circular_compare3():
     """
     >>> test_circular_compare3()
@@ -202,7 +202,7 @@ def test_circular_compare3():
 # Test Indexing
 #------------------------------------------------------------------------
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_delayed_array_indexing():
     """
     >>> test_delayed_array_indexing()
@@ -278,7 +278,7 @@ def test_delayed_array_slicing2():
     print array
     print row
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_delayed_string_indexing_simple():
     """
     >>> test_delayed_string_indexing_simple()
@@ -324,7 +324,7 @@ def test_delayed_string_indexing():
 
     return s, x
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_delayed_string_indexing2():
     """
     >>> test_delayed_string_indexing2()
@@ -405,7 +405,7 @@ def simple_func(x):
     y = x * x + 4
     return y
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_simple_call():
     """
     >>> test_simple_call()

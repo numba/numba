@@ -11,7 +11,22 @@ from . import doctest_support
 
 jit_ = jit
 
-import __builtin__
+if PY3:
+    import re
+    def autojit_py3doc(*args, **kwargs):
+        def p(fun):
+            fun.__doc__ = re.sub(r'(\d+)L', r'\1', fun.__doc__)
+            fun.__doc__ = re.sub(r'([^\.])NumbaError', r'\1numba.error.NumbaError', fun.__doc__)
+            return fun
+        if kwargs:
+            tmp = autojit(**kwargs)
+            def _inner(fun):
+                return tmp(p(fun))
+            return _inner
+        else:
+            return autojit(p(args[0]))
+else:
+    autojit_py3doc = autojit
 
 class ASTTestCase(unittest.TestCase):
     jit = staticmethod(lambda *args, **kw: jit_(*args, **dict(kw, backend='ast')))
