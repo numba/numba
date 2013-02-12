@@ -114,7 +114,7 @@ This error should have been caught by the Python parser.''')
             if node.keywords or node.starargs or node.kwargs:
                 raise InvalidCall(node, 'Cannot use keyword or star arguments.')
 
-            args = map(self.visit, node.args)
+            args = [self.visit(arg) for arg in node.args]
             return self.generate_call(fn, args) # return value
 
         raise InternalError(self.current_node, 'Unreachable')

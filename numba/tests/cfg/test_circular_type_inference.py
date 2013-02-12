@@ -179,7 +179,7 @@ def test_circular_compare3():
     (False, 10L)
     >>> sig, syms = infer(test_circular_compare3.py_func,
     ...                   functype(None, []), warn=False)
-    >>> map(str, types(syms, 'cond', 'x'))
+    >>> [str(x) for x in types(syms, 'cond', 'x')]
     ['bool', 'Py_ssize_t']
     """
     x = 1

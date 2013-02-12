@@ -175,7 +175,7 @@ def resolve_argtypes(numba_func, template_signature,
 
     return_type = None
     argnames = inspect.getargspec(numba_func.py_func).args
-    argtypes = map(context.typemapper.from_python, args)
+    argtypes = [context.typemapper.from_python(arg) for arg in args]
 
     if template_signature is not None:
         template_context, signature = typesystem.resolve_templates(

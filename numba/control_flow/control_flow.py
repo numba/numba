@@ -503,7 +503,10 @@ class ControlFlow(object):
             for block in self.blocks:
                 print 'DF(%d) = %s' % (block.id, block.dominance_frontier)
 
-        argnames = [name.id for name in ast.args.args]
+        if PY3:
+            argnames = [name.arg for name in ast.args.args]
+        else:
+            argnames = [name.id for name in ast.args.args]
 
         #
         ### 1) Insert phi nodes in the right places
@@ -704,7 +707,10 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         # Function body block
         node.body_block = self.flow.nextblock()
         for arg in node.args.args:
-            self.visit_Name(arg)
+            if hasattr(arg, 'id') and hasattr(arg, 'ctx'):
+                self.visit_Name(arg)
+            else:
+                self.visit_arg(arg, node.lineno, 0)
 
         self.visitlist(node.body)
         self.function_level -= 1
@@ -801,10 +807,18 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         assignment.inplace_op = node.op
         return self.visit(assignment)
 
+    def visit_arg(self, old_node, lineno, col_offset):
+        node = nodes.Name(old_node.arg, ast.Param())
+        node.lineno = lineno
+        node.col_offset = col_offset
+        return self._visit_Name(node)
+
     def visit_Name(self, old_node):
         node = nodes.Name(old_node.id, old_node.ctx)
         ast.copy_location(node, old_node)
+        return self._visit_Name(node)
 
+    def _visit_Name(self, node):
         # Set some defaults
         node.cf_maybe_null = True
         node.cf_is_null = False

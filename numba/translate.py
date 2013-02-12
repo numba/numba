@@ -498,15 +498,15 @@ class _LLVMModuleUtils(object):
 
     @classmethod
     def get_string_constant(cls, module, const_str):
-        if (module, const_str) in cls.__string_constants:
-            ret_val = cls.__string_constants[(module, const_str)]
+        if (module.id, const_str) in cls.__string_constants:
+            ret_val = cls.__string_constants[(module.id, const_str)]
         else:
             lconst_str = lc.Constant.stringz(const_str)
             ret_val = module.add_global_variable(lconst_str.type, "__STR_%d" %
                                                  (len(cls.__string_constants),))
             ret_val.initializer = lconst_str
             ret_val.linkage = lc.LINKAGE_LINKONCE_ODR
-            cls.__string_constants[(module, const_str)] = ret_val
+            cls.__string_constants[(module.id, const_str)] = ret_val
         return ret_val
 
     @classmethod

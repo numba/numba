@@ -68,7 +68,7 @@ class LLVMModule(object):
         fn_decl = self.jit_engine.make_function(
                     realname,
                     retty.type(),
-                    map(lambda X: X.type(), argtys),
+                    [X.type() for X in argtys],
                   )
 
         if fn_decl.name() != realname:

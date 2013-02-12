@@ -46,7 +46,7 @@ def get_classmethod_func(func):
     attribute.
     """
     if isinstance(func, classmethod):
-        return func.__get__(object()).im_func
+        return func.__get__(object()).__func__
     else:
         assert isinstance(func, staticmethod)
         return func.__get__(object())

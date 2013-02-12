@@ -78,7 +78,7 @@ class LLVMFuncDef(LLVMFunction):
         addr = self.manager.jit_engine.get_pointer_to_function(self.code_llvm)
         # Create binding with ctypes library
         from ctypes import CFUNCTYPE, cast
-        c_argtys = map(lambda T: T.ctype(), self.argtys)
+        c_argtys = [T.ctype() for T in self.argtys]
         c_retty = self.retty.ctype()
         self.c_funcptr_type = CFUNCTYPE(c_retty, *c_argtys)
         self.c_funcptr = cast( int(addr), self.c_funcptr_type )

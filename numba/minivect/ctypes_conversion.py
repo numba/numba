@@ -139,7 +139,7 @@ def convert_from_ctypes(type):
         return CArrayType(base_type, type._length_)
     elif isinstance(type, _ctypes_func_type):
         restype = convert_from_ctypes(type.restype)
-        argtypes = map(convert_from_ctypes, type.argtypes)
+        argtypes = [convert_from_ctypes(at) for at in type.argtypes]
         return FunctionType(return_type=restype, args=argtypes)
     else:
         raise NotImplementedError(type)

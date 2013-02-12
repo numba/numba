@@ -886,7 +886,7 @@ class FunctionType(Type):
                                 self.is_vararg)
 
     def __repr__(self):
-        args = map(str, self.args)
+        args = [str(arg) for arg in self.args]
         if self.is_vararg:
             args.append("...")
         if self.name:

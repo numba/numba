@@ -37,6 +37,12 @@ def _create_methoddef(py_func, func_name, func_doc, func_pointer):
     keep_alive(py_func, func_doc)
 
     methoddef = c_PyMethodDef()
+    if PY3:
+        if func_name is not None:
+            func_name = func_name.encode('utf-8')
+        if func_doc is not None:
+            func_doc = func_doc.encode('utf-8')
+
     methoddef.name = func_name
     methoddef.doc = func_doc
     methoddef.method = ctypes.c_void_p(func_pointer)
