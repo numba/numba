@@ -591,6 +591,12 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         node.body = self.visitlist(node.body)
 
         ret_type = self.func_signature.return_type
+        self.verify_context(ret_type)
+
+        self.setup_error_return(node, ret_type)
+        return node
+
+    def verify_context(self, ret_type):
         if ret_type.is_object or ret_type.is_array:
             # This will require some increfs, but allow it if people
             # use 'with python' later on. If 'with python' isn't used, a
@@ -601,16 +607,22 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
             #                  "nopython context")
             pass
 
+    def setup_error_return(self, node, ret_type):
+        """
+        Set FunctionDef.error_return to the AST statement that returns a
+        "bad value" that can be used as error indicator.
+        """
         value = nodes.badval(ret_type)
+
         if value is not None:
             value = nodes.CoercionNode(value, dst_type=ret_type).cloneable
 
         error_return = ast.Return(value=value)
+
         if self.nopython and is_obj(self.func_signature.return_type):
             error_return = nodes.WithPythonNode(body=[error_return])
 
         node.error_return = error_return
-        return node
 
     def visit_ControlBlock(self, node):
         # print node
