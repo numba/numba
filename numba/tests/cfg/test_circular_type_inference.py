@@ -5,7 +5,7 @@ def test_circular_error():
     """
     >>> try:
     ...     test_circular_error()
-    ... except error.NumbaError, e:
+    ... except error.NumbaError as e:
     ...     print str(e).replace('var1', '<var>').replace('var2', '<var>')
     Warning 16:19: local variable 'var2' might be referenced before assignment
     Warning 18:19: local variable 'var1' might be referenced before assignment
@@ -298,7 +298,7 @@ def test_delayed_string_indexing_simple():
 
     return s[1:], x
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_delayed_string_indexing():
     """
     >>> test_delayed_string_indexing()

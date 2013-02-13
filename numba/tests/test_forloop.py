@@ -12,7 +12,10 @@ from numba.tests import test_support
 import numpy
 
 import unittest
-import __builtin__
+if PY3:
+    import builtins
+else:
+    import __builtin__ as builtins
 
 # ______________________________________________________________________
 
@@ -93,7 +96,7 @@ def for_loop_fn_4(i, u, p, U):
 # ______________________________________________________________________
 
 class TestForLoop(unittest.TestCase):
-    @test_support.skip_unless(hasattr(__builtin__, '__noskip__'),
+    @test_support.skip_unless(hasattr(builtins, '__noskip__'),
                               "Requires implementation of iteration "
                               "over arrays.")
     def test_compiled_for_loop_fn_0(self):

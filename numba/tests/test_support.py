@@ -12,20 +12,24 @@ from . import doctest_support
 jit_ = jit
 
 if PY3:
+    def rewrite_doc(doc):
+        doc = re.sub(r'(\d+)L', r'\1', doc)
+        doc = re.sub(r'([^\.])NumbaError', r'\1numba.error.NumbaError', doc)
+        return doc
     import re
     def autojit_py3doc(*args, **kwargs):
-        def p(fun):
-            fun.__doc__ = re.sub(r'(\d+)L', r'\1', fun.__doc__)
-            fun.__doc__ = re.sub(r'([^\.])NumbaError', r'\1numba.error.NumbaError', fun.__doc__)
-            return fun
         if kwargs:
-            tmp = autojit(**kwargs)
             def _inner(fun):
-                return tmp(p(fun))
+                fun.__doc__ = rewrite_doc(fun.__doc__)
+                return autojit(**kwargs)(fun)
             return _inner
         else:
-            return autojit(p(args[0]))
+            fun = args[0]
+            fun.__doc__ = rewrite_doc(fun.__doc__)
+            return autojit(fun)
 else:
+    def rewrite_doc(doc):
+        return doc
     autojit_py3doc = autojit
 
 class ASTTestCase(unittest.TestCase):

@@ -34,7 +34,7 @@ def test_cellvar_promotion_error(a):
     >>> from numba.minivect import minierror
     >>> try:
     ...     test_cellvar_promotion_error(10)
-    ... except minierror.UnpromotableTypeError, e:
+    ... except minierror.UnpromotableTypeError as e:
     ...     msg = sorted(e.args, key=str)
     ...
     >>> msg

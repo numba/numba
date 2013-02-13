@@ -1,5 +1,5 @@
 from numba import *
-
+from numba.tests.test_support import rewrite_doc
 @autojit
 def error1():
     def inner():
@@ -367,6 +367,8 @@ def test_closure_outer_locals():
         var = "hello"
 
     inner()
+
+__doc__ = rewrite_doc(__doc__)
 
 if __name__ == '__main__':
 #    closure1 = closure_arg(1)
