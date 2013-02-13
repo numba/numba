@@ -9,13 +9,15 @@ from itertools import imap, izip
 
 import numba
 from numba import *
-from numba import error, transforms, closure, control_flow, visitors, nodes
+from numba import error, transforms, control_flow, visitors, nodes
 from numba.type_inference import module_type_inference, infer_call, deferred
 from numba.minivect import minierror, minitypes
 from numba import translate, utils, typesystem
 from numba.control_flow import ssa
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
+from numba import closure as closures
+
 from numba import stdio_util, function_util
 from numba.typesystem import is_obj, promote_closest
 from numba.utils import dump
@@ -139,8 +141,7 @@ class NumpyMixin(object):
         return result_type, node
 
 
-class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
-                  closure.ClosureMixin, transforms.MathMixin):
+class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
     """
     Type inference. Initialize with a minivect context, a Python ast,
     and a function type with a given or absent, return type.
@@ -535,6 +536,28 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
     def visit_PhiNode(self, node):
         # Already handled
         return node
+
+    #------------------------------------------------------------------------
+    # Closures
+    #------------------------------------------------------------------------
+
+    def visit_FunctionDef(self, node):
+        if self.function_level == 0:
+            return self.visit_func_children(node)
+
+        signature = closures.process_decorators(self.visit, node)
+        type = typesystem.ClosureType(signature)
+        self.symtab[node.name] = Variable(type, is_local=True)
+
+        # Generates ClosureNodes that hold inner functions. When visited, they
+        # do not recurse into the inner functions themselves!
+        closure = nodes.ClosureNode(node, type, self.func)
+        type.closure = closure
+        self.ast.closures.append(closure)
+        self.closures[node.name] = closure
+
+        return closure
+
 
     #------------------------------------------------------------------------
     # Assignments
