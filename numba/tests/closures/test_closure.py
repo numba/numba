@@ -331,6 +331,20 @@ __doc__ += """
 """
 
 @autojit
+def test_call_closure_from_closure():
+    closure = get_closure(10.0)
+    @void()
+    def inner():
+        closure()
+    return inner
+
+__doc__ += """
+>>> test_call_closure_from_closure()()
+10.0
+10.0
+"""
+
+@autojit
 def test_closure_loop():
     """
     >>> test_closure_loop()

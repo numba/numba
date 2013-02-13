@@ -588,9 +588,17 @@ class ClosureSpecializer(ClosureTransformer):
 
     def visit_ClosureCallNode(self, node):
         if node.closure_type.closure.need_closure_scope:
-            if self.ast.cur_scope is None:
+            if (self.ast.cur_scope is None or
+                    self.ast.cur_scope.type != node.closure_type):
+                # Call to closure from outside outer function
+                # TODO: optimize calling a closure from an inner function, e.g.
+                # def outer():
+                #     a = 1
+                #     def inner1(): print a
+                #     def inner2(): inner1()
                 cur_scope = self.retrieve_closure_from_numbafunc(node)
             else:
+                # Call to closure from within outer function
                 cur_scope = self.ast.cur_scope
 
             # node.args[0] = cur_scope
