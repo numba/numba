@@ -12,10 +12,10 @@ from numba.tests import test_support
 import numpy
 
 import unittest
-if PY3:
-    import builtins
-else:
+try:
     import __builtin__ as builtins
+except ImportError:
+    import builtins
 
 # ______________________________________________________________________
 

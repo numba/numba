@@ -11,7 +11,7 @@ from . import doctest_support
 
 jit_ = jit
 
-if PY3:
+if numba.PY3:
     def rewrite_doc(doc):
         doc = re.sub(r'(\d+)L', r'\1', doc)
         doc = re.sub(r'([^\.])NumbaError', r'\1numba.error.NumbaError', doc)
