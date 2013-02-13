@@ -96,14 +96,18 @@ class ClosureCallNode(NativeCallNode):
     Call to closure or inner function.
     """
 
+    _fields = ['func', 'args']
+
     def __init__(self, closure_type, call_node, **kwargs):
         self.call_node = call_node
+        self.func = call_node.func
         args, keywords = call_node.args, call_node.keywords
 
         if closure_type.closure.need_closure_scope:
             # Insert fake closure scope type argument
             # This is replaced in ClosureCompilingMixin.visit_ClosureCallNode
             # during late specialization
+            # print "insert closure scope", closure_type
             args.insert(0, const(object(), closure_type.signature.args[0]))
 
         args = args + self._resolve_keywords(closure_type, args, keywords)

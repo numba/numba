@@ -15,6 +15,9 @@ def ptrtoint(node):
 def ptrfromint(intval, dst_ptr_type):
     return CoercionNode(ConstNode(intval, Py_uintptr_t), dst_ptr_type)
 
+def ptrfromobj(obj):
+    return PointerFromObject(obj)
+
 def value_at_offset(obj_node, offset, dst_type):
     """
     Perform (dst_type) (((char *) my_object) + offset)

@@ -1365,6 +1365,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
             new_node = self._resolve_method_calls(func_type, new_node, node)
 
         elif func_type.is_closure:
+            assert node.func
+            # TODO: what if node.func is not an ast.Name?
             # Call to closure/inner function
             return nodes.ClosureCallNode(func_type, node)
 

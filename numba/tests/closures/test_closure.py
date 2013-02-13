@@ -369,14 +369,14 @@ def test_closure_outer_locals():
     inner()
 
 if __name__ == '__main__':
-#    closure1 = closure_arg(1)
-#    print closure1.__name__
-#    closure1()
+    closure1 = closure_arg(1)
+    print closure1.__name__
+    closure1(10)
     test_call_closure()
-#    closure4()
-#    signature_dec()()
-#    test_closure_outer_locals()
-#    test_closure_loop()
-#    test_closure_outer_locals()
+    closure4()
+    signature_dec()()
+    test_closure_outer_locals()
+    test_closure_loop()
+    test_closure_outer_locals()
     import numba
     numba.testmod()

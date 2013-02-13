@@ -50,23 +50,23 @@ These scopes are instances of a numba extension class.
 """
 
 import ast
-import types
 import ctypes
-import inspect
 
-import llvm.core as lc
 import numba.decorators
 from numba import *
-from numba import error, visitors, nodes
+from numba import error
+from numba import visitors
+from numba import nodes
+from numba import typesystem
+from numba import typedefs
+from numba import extension_types
 from numba.type_inference import module_type_inference
 from numba.minivect import  minitypes
-from numba import typesystem
 from numba.symtab import Variable
-from numba import extension_types
 
 import logging
 logger = logging.getLogger(__name__)
-#logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 #------------------------------------------------------------------------
 # Closure Signature Validation (type inference of outer function)
@@ -407,7 +407,7 @@ class ClosureSpecializer(ClosureTransformer):
 
     def __init__(self, *args, **kwargs):
         super(ClosureSpecializer, self).__init__(*args, **kwargs)
-        if hasattr(self.ast, 'cellvars') and not self.ast.cellvars:
+        if not self.ast.cellvars:
             self.ast.cur_scope = self.outer_scope
 
     def _load_name(self, var_name, is_cellvar=False):
@@ -560,7 +560,9 @@ class ClosureSpecializer(ClosureTransformer):
 
     def visit_Name(self, node):
         "Resolve cellvars and freevars"
-        if node.variable.is_cellvar or node.variable.is_freevar:
+        is_param = isinstance(node.ctx, ast.Param)
+        if not is_param and (node.variable.is_cellvar or
+                             node.variable.is_freevar):
             logger.debug("Function %s, lookup %s in scope %s: %s",
                          self.ast.name, node.id, self.ast.cur_scope.type,
                          self.ast.cur_scope.type.attribute_struct)
@@ -572,8 +574,16 @@ class ClosureSpecializer(ClosureTransformer):
 
     def visit_ClosureCallNode(self, node):
         if node.closure_type.closure.need_closure_scope:
-            assert self.ast.cur_scope is not None
-            node.args[0] = self.ast.cur_scope
+            if self.ast.cur_scope is None:
+                pointer = nodes.ptrfromobj(node.func)
+                type = typedefs.PyCFunctionObject.ref()
+                closure_obj_struct = nodes.CoercionNode(pointer, type)
+                cur_scope = nodes.StructAttribute(closure_obj_struct, 'm_self',
+                                                  ctx=ast.Load(), type=type)
+            else:
+                cur_scope = self.ast.cur_scope
+
+            node.args[0] = cur_scope
 
         self.generic_visit(node)
         return node
