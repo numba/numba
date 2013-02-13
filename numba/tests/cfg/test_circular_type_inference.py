@@ -1,4 +1,4 @@
-">>> import test_circular_type_inference" # UGH nosetests :(
+">>> from numba.tests.cfg import test_circular_type_inference" # UGH nosetests :(
 from numba.tests.cfg.test_cfg_type_infer import *
 @autojit
 def test_circular_error():
@@ -6,7 +6,7 @@ def test_circular_error():
     >>> try:
     ...     test_circular_error()
     ... except error.NumbaError as e:
-    ...     print str(e).replace('var1', '<var>').replace('var2', '<var>')
+    ...     print(str(e).replace('var1', '<var>').replace('var2', '<var>'))
     Warning 16:19: local variable 'var2' might be referenced before assignment
     Warning 18:19: local variable 'var1' might be referenced before assignment
     Unable to infer type for assignment to '<var>', insert a cast or initialize the variable.

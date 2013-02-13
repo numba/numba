@@ -1,5 +1,5 @@
 """
->>> import test_closure_type_inference
+>>> from numba.tests.closures import test_closure_type_inference
 """
 
 import numpy as np
@@ -35,9 +35,7 @@ def test_cellvar_promotion_error(a):
     >>> try:
     ...     test_cellvar_promotion_error(10)
     ... except minierror.UnpromotableTypeError as e:
-    ...     msg = sorted(e.args, key=str)
-    ...
-    >>> msg
+    ...     print(sorted(e.args, key=str))
     [(int, const char *)]
     """
     b = int(a) * 2
