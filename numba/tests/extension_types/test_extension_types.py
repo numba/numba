@@ -109,7 +109,7 @@ exttype = ObjectAttrExtension.exttype
 @jit
 class ExtensionTypeAsAttribute(object):
     """
-    >>> print ExtensionTypeAsAttribute.exttype
+    >>> print(ExtensionTypeAsAttribute.exttype)
     <Extension ExtensionTypeAsAttribute({'attr': <Extension ObjectAttrExtension>})>
     """
 

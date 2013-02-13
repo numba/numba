@@ -137,13 +137,13 @@ TypeError: an integer is required
 >>> closure3()
 12
 >>> func = closure4()
->>> print func.__name__
+>>> print(func.__name__)
 inner
 >>> field, = func.__closure__._numba_attrs._fields_
 >>> import ctypes
->>> print field[0], field[1] == ctypes.c_int
+>>> print(field[0], field[1] == ctypes.c_int)
 a True
->>> print func.__closure__._numba_attrs.a
+>>> print(func.__closure__._numba_attrs.a)
 12
 >>> func()
 12

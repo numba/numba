@@ -13,7 +13,7 @@ def test_typeof_pure(arg):
     int
     >>> test_typeof_pure(10.0)
     double
-    >>> print test_typeof_pure(Foo(10))
+    >>> print(test_typeof_pure(Foo(10)))
     <Extension Foo({'arg': double})>
     """
     return numba.typeof(arg)
@@ -43,9 +43,9 @@ def test_typeof_numba2(arg):
 @autojit
 def test_typeof_numba3(arg):
     """
-    >>> print test_typeof_numba3(10)
+    >>> print(test_typeof_numba3(10))
     int
-    >>> print test_typeof_numba3(Foo(10))
+    >>> print(test_typeof_numba3(Foo(10)))
     <Extension Foo({'arg': double})>
     """
     return numba.typeof(arg)
