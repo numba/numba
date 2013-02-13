@@ -1436,7 +1436,10 @@ class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
         return self._object_binop(node, 'PyNumber_Multiply')
 
     def _object_Div(self, node):
-        return self._object_binop(node, 'PyNumber_Divide')
+        if PY3:
+            return self._object_binop(node, 'PyNumber_TrueDivide')
+        else:
+            return self._object_binop(node, 'PyNumber_Divide')
 
     def _object_Mod(self, node):
         return self._object_binop(node, 'PyNumber_Remainder')

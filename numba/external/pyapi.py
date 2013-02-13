@@ -189,7 +189,10 @@ def create_binary_pyfunc(name):
 create_binary_pyfunc('PyNumber_Add')
 create_binary_pyfunc('PyNumber_Subtract')
 create_binary_pyfunc('PyNumber_Multiply')
-create_binary_pyfunc('PyNumber_Divide')
+if PY3:
+    create_binary_pyfunc('PyNumber_TrueDivide')
+else:
+    create_binary_pyfunc('PyNumber_Divide')
 create_binary_pyfunc('PyNumber_Remainder')
 
 class PyNumber_Power(ExternalFunction):
