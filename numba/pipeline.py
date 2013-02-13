@@ -628,11 +628,56 @@ class Specialize(PipelineStage):
         return ast
 
 
+class SpecializeComparisons(PipelineStage):
+    def transform(self, ast, env):
+        transform = self.make_specializer(comparisons.SpecializeComparisons,
+                                          ast, env)
+        return transform.visit(ast)
+
+
+class SpecializeSSA(PipelineStage):
+    def transform(self, ast, env):
+        ssa.specialize_ssa(ast)
+        return ast
+
+
+class Optimize(PipelineStage):
+    def transform(self, ast, env):
+        return ast
+
+
+class Preloader(PipelineStage):
+    def transform(self, ast, env):
+        transform = self.make_specializer(optimize.Preloader, ast, env)
+        return transform.visit(ast)
+
+
+class SpecializeLoops(PipelineStage):
+    def transform(self, ast, env):
+        transform = self.make_specializer(loops.SpecializeObjectIteration, ast,
+                                          env)
+        return transform.visit(ast)
+
+
 class LateSpecializer(PipelineStage):
     def transform(self, ast, env):
         specializer = self.make_specializer(transforms.LateSpecializer, ast,
                                             env)
         return specializer.visit(ast)
+
+
+class SpecializeFunccalls(PipelineStage):
+    def transform(self, ast, env):
+        transform = self.make_specializer(funccalls.FunctionCallSpecializer,
+                                          ast, env)
+        return transform.visit(ast)
+
+
+class SpecializeExceptions(PipelineStage):
+    def transform(self, ast, env):
+        transform = self.make_specializer(exceptions.ExceptionSpecializer, ast,
+                                          env)
+        return transform.visit(ast)
 
 
 def cleanup_symtab(ast, env):

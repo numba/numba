@@ -2,6 +2,7 @@ import ast as ast_module
 import inspect
 import types
 import logging
+import pprint
 
 import llvm.core
 
@@ -30,7 +31,14 @@ default_pipeline_order = [
     'ClosureTypeInference',
     'TransformFor',
     'Specialize',
+    'SpecializeComparisons',
+    'SpecializeSSA',
+    'Optimize',
+    'Preloader',
+    'SpecializeLoops',
     'LateSpecializer',
+    'SpecializeFunccalls',
+    'SpecializeExceptions',
     'FixASTLocations',
     'cleanup_symtab',
     'CodeGen',
@@ -226,8 +234,8 @@ class TranslationEnvironment(object):
         self.stack.append((kws, self.crnt))
         self.functions[self.crnt.func_name] = self.crnt
         if self.numba.debug:
-            logger.debug('stack=%r\ncrnt=%r (%r)', self.stack, self.crnt,
-                         self.crnt.func if self.crnt else None)
+            logger.debug('stack=%s\ncrnt=%r (%r)', pprint.pformat(self.stack),
+                         self.crnt, self.crnt.func if self.crnt else None)
         return self.crnt
 
     def pop(self):
@@ -235,8 +243,8 @@ class TranslationEnvironment(object):
         kws, self.crnt = self.stack[-1]
         self.set_flags(**kws)
         if self.numba.debug:
-            logger.debug('stack=%r\ncrnt=%r (%r)', self.stack, self.crnt,
-                         self.crnt.func if self.crnt else None)
+            logger.debug('stack=%s\ncrnt=%r (%r)', pprint.pformat(self.stack),
+                         self.crnt, self.crnt.func if self.crnt else None)
         return ret_val
 
 # ______________________________________________________________________
@@ -377,6 +385,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         self.specializations = functions.FunctionCache(self.context)
         self.exports = PyccEnvironment()
         self.translation = TranslationEnvironment(self)
+        self.debug = logger.getEffectiveLevel() < logging.DEBUG
 
         # FIXME: NumbaContext has up to now been used as a stand in
         # for NumbaEnvironment, so the following member definitions
