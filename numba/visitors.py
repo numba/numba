@@ -1,7 +1,10 @@
 import ast
 from pprint import pprint, pformat
 import ast as ast_module
-import __builtin__ as builtins
+try:
+    import __builtin__ as builtins
+except:
+    import builtins
 from numba import functions
 from numba import nodes
 from numba.typesystem.typemapper import have_properties
@@ -63,10 +66,15 @@ class NumbaVisitorMixin(CooperativeBase):
                                                                    self.locals)
             self.names = self.global_names = freevars
 
-            if PY3:
-                self.argnames = tuple(name.arg for name in ast.args.args)
-            else:
-                self.argnames = tuple(name.id for name in ast.args.args)
+            #TODO: Using a guard for PY3 does not work.
+            #Sometimes ast.args.args has objects of type ast.Name
+            tmp_ = []
+            for name in ast.args.args:
+                if hasattr(name, 'arg'):
+                    tmp_.append(name.arg)
+                else:
+                    tmp_.append(name.id)
+            self.argnames = tuple(tmp_)
 
             argnames = set(self.argnames)
             local_names = [local_name for local_name in locals
