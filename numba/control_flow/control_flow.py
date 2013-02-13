@@ -602,7 +602,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
     def __init__(self, context, func, ast, allow_rebind_args, env=None,
                  **kwargs):
-        super(ControlFlowAnalysis, self).__init__(context, func, ast, **kwargs)
+        super(ControlFlowAnalysis, self).__init__(context, func, ast, env=env,
+                                                  **kwargs)
         self.visitchildren = self.generic_visit
         self.current_directives = kwargs.get('directives', None) or {}
         self.current_directives['warn'] = kwargs.get('warn', True)

@@ -1,7 +1,7 @@
 import unittest
 import ast, inspect
 import numpy as np
-from numba import utils, decorators
+from numba import utils, decorators, environment, pipeline
 from numba.minivect import minitypes
 from numba import *
 
@@ -54,13 +54,17 @@ def cf_12(a):
 
 
 class TestConstFolding(unittest.TestCase):
+    env = environment.NumbaEnvironment.get_environment()
+
     def run_pipeline(self, func):
         func_sig = minitypes.FunctionType(minitypes.void, [])
         source = inspect.getsource(func)
         astree = ast.parse(source)
-        pipeline = decorators.context.numba_pipeline(decorators.context,
-                                                     func, astree, func_sig)
-        return pipeline.const_folding(astree)
+        with environment.TranslationContext(self.env, func, astree, func_sig):
+            pipeline_callable = self.env.get_or_add_pipeline(
+                'const_folding', pipeline.ConstFolding)
+            ret_val = pipeline_callable(astree, self.env)
+        return ret_val
 
     def iter_all(self, astree, target):
         for node in ast.walk(astree):

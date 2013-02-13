@@ -24,7 +24,7 @@ import ast
 import string
 import textwrap
 
-import numba.decorators, numba.pipeline, numba.functions
+import numba.decorators, numba.pipeline, numba.environment, numba.functions
 from numba import *
 from numba import nodes, symtab as symtab_module
 from numba.symtab import Variable
@@ -86,11 +86,13 @@ class TemplateContext(object):
     into the function being compiled.
     """
 
-    def __init__(self, context, template):
+    def __init__(self, context, template, env=None):
+        # FIXME: Replace context with env.
         self.context = context
         self.templ = template
         self.variables = []
         self.nodes = {}
+        self.env = env
 
         self.substituted_template = None
 
@@ -164,18 +166,26 @@ class TemplateContext(object):
             vars = self.get_vars_symtab()
             symtab = dict(symtab or {}, **vars)
             kwargs['symtab'] = symtab_module.Symtab(symtab)
+        kwargs.update(env=self.env)
 
         return dummy_type_infer(self.context, tree, **kwargs)
 
-
-def dummy_type_infer(context, tree, order=['type_infer', 'type_set'], **kwargs):
+def dummy_type_infer(context, tree, order=['type_infer', 'type_set'], env=None,
+                     **kwargs):
     def dummy():
         pass
-    result = numba.pipeline.run_pipeline(
-                    context, dummy, tree, void(), order=order,
-                    # Allow closures to be recognized
-                    function_level=1, **kwargs)
-    pipeline, (sig, symtab, ast) = result
+    # FIXME: Remove this check, using only the newer run_pipeline2(),
+    # and make env required.
+    if env is None:
+         result = numba.pipeline.run_pipeline(
+                        context, dummy, tree, void(), order=order,
+                        # Allow closures to be recognized
+                        function_level=1, **kwargs)
+    else:
+        result = numba.pipeline.run_pipeline2(
+            env, dummy, tree, void(), pipeline_name='dummy_type_infer',
+            function_level=1, **kwargs)
+    _, (_, symtab, ast) = result
     return symtab, ast
 
 def template(s, substitutions, template_variables=None):

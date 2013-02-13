@@ -6,8 +6,7 @@ import numba
 from numba import pipeline, error, symtab
 from numba import typesystem
 from numba.minivect import minitypes
-
-from numba import *
+import extension_types
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ def get_signature(ext_type, is_class, is_static, sig):
     if is_static:
         leading_arg_types = ()
     elif is_class:
-        leading_arg_types = (object_,)
+        leading_arg_types = (numba.object_,)
     else:
         leading_arg_types = (ext_type,)
 
@@ -69,7 +68,8 @@ def _process_signature(ext_type, method, default_signature,
             # TODO: delayed types
             raise error.NumbaError(
                 "Method '%s' does not have signature" % (method.__name__,))
-        validate_method(method, default_signature or object_(), is_static)
+        validate_method(method, default_signature or numba.object_(),
+                        is_static)
         if default_signature is None:
             default_signature = minitypes.FunctionType(return_type=None,
                                                        args=[])
@@ -115,8 +115,8 @@ def _process_method_signatures(class_dict, ext_type):
         default_signature = None
         if (method_name == '__init__' and
                 isinstance(method, types.FunctionType)):
-            argtypes = [object_] * (method.func_code.co_argcount - 1)
-            default_signature = void(*argtypes)
+            argtypes = [numba.object_] * (method.func_code.co_argcount - 1)
+            default_signature = numba.void(*argtypes)
 
         method, restype, argtypes = _process_signature(ext_type, method,
                                                        default_signature)
@@ -129,7 +129,7 @@ def _process_method_signatures(class_dict, ext_type):
         ext_type.add_method(method_name, signature)
         class_dict[method_name] = method
 
-def _type_infer_method(context, ext_type, method, method_name, class_dict,
+def _type_infer_method(env, ext_type, method, method_name, class_dict,
                        llvm_module):
     if method_name not in ext_type.methoddict:
         return
@@ -138,27 +138,27 @@ def _type_infer_method(context, ext_type, method, method_name, class_dict,
     restype, argtypes = signature.return_type, signature.args
 
     class_dict[method_name] = method
-    func_signature, symtab, ast = pipeline.infer_types(
-                        context, method.py_func, restype, argtypes)
+    func_signature, symtab, ast = pipeline.infer_types2(
+                        env, method.py_func, restype, argtypes)
     ext_type.add_method(method_name, func_signature)
 
-def _type_infer_init_method(context, class_dict, ext_type, llvm_module):
+def _type_infer_init_method(env, class_dict, ext_type, llvm_module):
     initfunc = class_dict.get('__init__', None)
     if initfunc is None:
         return
 
-    _type_infer_method(context, ext_type, initfunc, '__init__', class_dict,
+    _type_infer_method(env, ext_type, initfunc, '__init__', class_dict,
                        llvm_module)
 
-def _type_infer_methods(context, class_dict, ext_type, llvm_module):
+def _type_infer_methods(env, class_dict, ext_type, llvm_module):
     for method_name, method in class_dict.iteritems():
         if method_name in ('__new__', '__init__') or method is None:
             continue
 
-        _type_infer_method(context, ext_type, method, method_name, class_dict,
+        _type_infer_method(env, ext_type, method, method_name, class_dict,
                            llvm_module)
 
-def _compile_methods(class_dict, context, ext_type, lmethods, method_pointers,
+def _compile_methods(class_dict, env, ext_type, lmethods, method_pointers,
                      llvm_module):
     parent_method_pointers = getattr(
                     ext_type.py_class, '__numba_method_pointers', None)
@@ -175,9 +175,10 @@ def _compile_methods(class_dict, context, ext_type, lmethods, method_pointers,
         # Don't use compile_after_type_inference, re-infer, since we may
         # have inferred some return types
         # TODO: delayed types and circular calls/variable assignments
-        sig, translator, wrapper = pipeline.compile(context, method.py_func,
-                                                    func_signature.return_type,
-                                                    func_signature.args)
+        logger.debug(method.py_func)
+        sig, translator, wrapper = pipeline.compile2(
+            env, method.py_func, func_signature.return_type,
+            func_signature.args, name=method.py_func.__name__)
         lmethods.append(translator.lfunc)
         method_pointers.append((method_name, translator.lfunc_pointer))
         class_dict[method_name] = method.result(wrapper)
@@ -199,7 +200,7 @@ def _construct_native_attribute_struct(ext_type):
         fields = numba.struct(fields).fields
         ext_type.attribute_struct.fields.extend(fields)
 
-def compile_extension_methods(context, py_class, ext_type, class_dict, llvm_module):
+def compile_extension_methods(env, py_class, ext_type, class_dict, llvm_module):
     """
     Compile extension methods:
 
@@ -216,16 +217,17 @@ def compile_extension_methods(context, py_class, ext_type, class_dict, llvm_modu
     class_dict['__numba_py_class'] = py_class
 
     _process_method_signatures(class_dict, ext_type)
-    _type_infer_init_method(context, class_dict, ext_type, llvm_module)
+    _type_infer_init_method(env, class_dict, ext_type, llvm_module)
     _construct_native_attribute_struct(ext_type)
-    _type_infer_methods(context, class_dict, ext_type, llvm_module)
+    _type_infer_methods(env, class_dict, ext_type, llvm_module)
 
     # TODO: patch method call types
 
     # Set vtab type before compiling
-    ext_type.vtab_type = struct([(field_name, field_type.pointer())
-                                    for field_name, field_type in ext_type.methods])
-    _compile_methods(class_dict, context, ext_type, lmethods, method_pointers,
+    ext_type.vtab_type = numba.struct(
+        [(field_name, field_type.pointer())
+         for field_name, field_type in ext_type.methods])
+    _compile_methods(class_dict, env, ext_type, lmethods, method_pointers,
                      llvm_module)
     return method_pointers, lmethods
 
@@ -236,7 +238,7 @@ def _create_descr(attr_name):
         return setattr(self._numba_attrs, attr_name, value)
     return property(_get, _set)
 
-def inject_descriptors(context, py_class, ext_type, class_dict):
+def inject_descriptors(env, py_class, ext_type, class_dict):
     for attr_name, attr_type in ext_type.symtab.iteritems():
         descriptor = _create_descr(attr_name)
         class_dict[attr_name] = descriptor
@@ -309,7 +311,7 @@ def build_vtab(vtab_type, method_pointers):
     vtab = vtab_ctype(*methods)
     return vtab, vtab_type
 
-def create_extension(context, py_class, translator_kwargs):
+def create_extension(env, py_class, translator_kwargs):
     """
     Compile an extension class
 
@@ -339,9 +341,9 @@ def create_extension(context, py_class, translator_kwargs):
     inherit_attributes(ext_type, class_dict)
 
     method_pointers, lmethods = compile_extension_methods(
-                                        context, py_class, ext_type, class_dict,
+                                        env, py_class, ext_type, class_dict,
                                         llvm_module)
-    inject_descriptors(context, py_class, ext_type, class_dict)
+    inject_descriptors(env, py_class, ext_type, class_dict)
 
     vtab, vtab_type = build_vtab(ext_type.vtab_type, method_pointers)
 

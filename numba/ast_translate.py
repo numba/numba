@@ -790,7 +790,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
                               symtab, llvm_module=wrapper_module,
                               locals={}, refcount_args=False,
-                              func_name=func_name)
+                              func_name=func_name, env=self.env)
         t.translate()
         # func.live_objects.append(t.lfunc)
         keep_alive(func, t.lfunc)

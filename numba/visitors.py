@@ -50,6 +50,7 @@ class NumbaVisitorMixin(CooperativeBase):
         self.closures = kwargs.get('closures')
         self.is_closure = kwargs.get('is_closure', False)
         self.kwargs = kwargs
+        self.env = kwargs.get('env', None)
 
         if self.have_cfg:
             self.flow_block = self.ast.flow.blocks[1]
@@ -185,7 +186,7 @@ class NumbaVisitorMixin(CooperativeBase):
     def run_template(self, s, vars=None, **substitutions):
         from numba import templating
 
-        templ = templating.TemplateContext(self.context, s)
+        templ = templating.TemplateContext(self.context, s, env=self.env)
         if vars:
             for name, type in vars.iteritems():
                 templ.temp_var(name, type)

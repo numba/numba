@@ -1,11 +1,12 @@
 import ast as ast_module
 import inspect
 import types
+import logging
 
 import llvm.core
 
 from numba import pipeline, naming, error
-from numba.utils import TypedProperty, NumbaContext
+from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
 from numba.minivect.minitypes import FunctionType
 from numba import functions, symtab
 
@@ -15,6 +16,8 @@ from numba.external.utility import default_utility_library
 
 # ______________________________________________________________________
 # Module data
+
+logger = logging.getLogger(__name__)
 
 default_pipeline_order = [
     'resolve_templates',
@@ -38,6 +41,11 @@ default_type_infer_pipeline_order = [
     'TypeInfer',
 ]
 
+default_dummy_type_infer_pipeline_order = [
+    'TypeInfer',
+    'TypeSet',
+]
+
 # ______________________________________________________________________
 # Class definitions
 
@@ -52,11 +60,12 @@ class FunctionEnvironment(object):
     # ____________________________________________________________
     # Properties
 
-    numba = TypedProperty(
+    numba = WriteOnceTypedProperty(
         _AbstractNumbaEnvironment,
         'Grandparent environment (top-level Numba environment).')
 
-    func = TypedProperty(object, 'Function (or similar) being translated.')
+    func = WriteOnceTypedProperty(
+        object, 'Function (or similar) being translated.')
 
     ast = TypedProperty(
         ast_module.AST,
@@ -216,12 +225,18 @@ class TranslationEnvironment(object):
         self.crnt = FunctionEnvironment(self, func, ast, func_signature, **kws)
         self.stack.append((kws, self.crnt))
         self.functions[self.crnt.func_name] = self.crnt
+        if self.numba.debug:
+            logger.debug('stack=%r\ncrnt=%r (%r)', self.stack, self.crnt,
+                         self.crnt.func if self.crnt else None)
         return self.crnt
 
     def pop(self):
         ret_val = self.stack.pop()
         kws, self.crnt = self.stack[-1]
         self.set_flags(**kws)
+        if self.numba.debug:
+            logger.debug('stack=%r\ncrnt=%r (%r)', self.stack, self.crnt,
+                         self.crnt.func if self.crnt else None)
         return ret_val
 
 # ______________________________________________________________________
@@ -317,7 +332,15 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     exports = TypedProperty(
         PyccEnvironment, 'Translation environment for pycc usage')
 
-    debug = TypedProperty(bool, 'Global debugging flag.', False)
+    debug = TypedProperty(
+        bool,
+        'Global flag indicating verbose debugging output should be enabled.',
+        False)
+
+    debug_coercions = TypedProperty(
+        bool,
+        'Flag for checking type coercions done during late specialization.',
+        False)
 
     stage_checks = TypedProperty(
         bool,
@@ -347,6 +370,8 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
             self.default_pipeline : actual_default_pipeline,
             'type_infer' : pipeline.ComposedPipelineStage(
                 default_type_infer_pipeline_order),
+            'dummy_type_infer' : pipeline.ComposedPipelineStage(
+                default_dummy_type_infer_pipeline_order),
             }
         self.context = NumbaContext()
         self.specializations = functions.FunctionCache(self.context)

@@ -1,12 +1,14 @@
 import numba
 from numba import *
 from numba.typesystem import typeset
-from numba.decorators import context
+from numba.environment import NumbaEnvironment
 
 def s(type):
     return type(type, type)
 
 def test_typeset_matching():
+    context = NumbaEnvironment.get_environment().context
+
     numeric = typeset.typeset([int_, longlong])
     n = numeric(numeric, numeric)
     f = numba.floating(numba.floating, numba.floating)

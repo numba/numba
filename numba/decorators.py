@@ -18,13 +18,13 @@ from numba import double, int_
 from numba import environment
 import llvm.core as _lc
 
-context = utils.get_minivect_context()
-context.llvm_context = translate.LLVMContextManager()
-context.numba_pipeline = pipeline.Pipeline
-function_cache = context.function_cache = functions.FunctionCache(context)
-context.intrinsic_library = default_intrinsic_library(context)
-context.external_library = default_external_library(context)
-context.utility_library = default_utility_library(context)
+_FIXME_ctx = utils.get_minivect_context()
+_FIXME_ctx.llvm_context = translate.LLVMContextManager()
+_FIXME_ctx.numba_pipeline = pipeline.Pipeline
+function_cache = _FIXME_ctx.function_cache = functions.FunctionCache(_FIXME_ctx)
+_FIXME_ctx.intrinsic_library = default_intrinsic_library(_FIXME_ctx)
+_FIXME_ctx.external_library = default_external_library(_FIXME_ctx)
+_FIXME_ctx.utility_library = default_utility_library(_FIXME_ctx)
 
 def _internal_export(env, function_signature, backend='ast', **kws):
     def _iexport(func):
@@ -92,7 +92,7 @@ def jit_extension_class(py_class, translator_kwargs):
         llvm_module = _lc.Module.new('tmp.extension_class.%X' % id(py_class))
         translator_kwargs['llvm_module'] = llvm_module
     return extension_type_inference.create_extension(
-        context, py_class, translator_kwargs)
+        env, py_class, translator_kwargs)
 
 def resolve_argtypes(numba_func, template_signature,
                      args, kwargs, translator_kwargs):

@@ -35,6 +35,18 @@ def get_locals(ast, locals_dict):
     ast.locals_dict = locals_dict
     return locals_dict
 
+
+def module_name(func):
+    if func is None:
+        name = "NoneFunc"
+        func_id = random.randrange(1000000)
+    else:
+        name = '%s.%s' % (func.__module__, func.__name__)
+        func_id = id(func)
+
+    return 'tmp.module.%s.%x' % (name, func_id)
+
+
 class Pipeline(object):
     """
     Runs a pipeline of transforms.
@@ -89,7 +101,7 @@ class Pipeline(object):
         # Let the pipeline create a module for the function it is compiling
         # and the user will link that in.
         assert 'llvm_module' not in kwargs
-        self.llvm_module = lc.Module.new(self.module_name(func))
+        self.llvm_module = lc.Module.new(module_name(func))
 
         self.nopython = nopython
         self.locals = get_locals(ast, locals)
@@ -104,16 +116,6 @@ class Pipeline(object):
                 self.order.remove('codegen')
         else:
             self.order = order
-
-    def module_name(self, func):
-        if func is None:
-            name = "NoneFunc"
-            func_id = random.randrange(1000000)
-        else:
-            name = '%s.%s' % (func.__module__, func.__name__)
-            func_id = id(func)
-
-        return 'tmp.module.%s.%x' % (name, func_id)
 
     def make_specializer(self, cls, ast, **kwds):
         "Create a visitor or transform and add any mixins"
@@ -325,6 +327,8 @@ def run_pipeline(context, func, ast, func_signature,
 def run_pipeline2(env, func, func_ast, func_signature,
                   pipeline=None, **kwargs):
     assert pipeline is None
+    assert kwargs.get('order', None) is None
+    logger.debug(pprint.pformat(kwargs))
     with env.TranslationContext(env, func, func_ast, func_signature,
                                 **kwargs) as func_env:
         pipeline = env.get_pipeline(kwargs.get('pipeline_name', None))
@@ -405,8 +409,11 @@ def compile2(env, func, restype=None, argtypes=None, ctypes=False,
         - run type inference using the given input types
         - compile the function to LLVM
     """
+    # Let the pipeline create a module for the function it is compiling
+    # and the user will link that in.
     assert 'llvm_module' not in kwds
-
+    kwds['llvm_module'] = lc.Module.new(module_name(func))
+    logger.debug(kwds)
     func_ast = functions._get_ast(func)
     func_signature = minitypes.FunctionType(return_type=restype,
                                             args=argtypes)
@@ -415,6 +422,7 @@ def compile2(env, func, restype=None, argtypes=None, ctypes=False,
     with env.TranslationContext(env, func, func_ast, func_signature,
                                 **kwds) as func_env:
         pipeline = env.get_pipeline(kwds.get('pipeline_name', None))
+        func_ast.pipeline = pipeline
         post_ast = pipeline(func_ast, env)
         func_signature = func_env.func_signature
         symtab = func_env.symtab
@@ -541,7 +549,9 @@ class ConstFolding(PipelineStage):
                                              ast, env)
         const_marker.visit(ast)
         constvars = const_marker.get_constants()
-        env.crnt.constvars = constvars
+        # FIXME: Make constvars a property of the FunctionEnvironment,
+        # or nix this transformation pass.
+        env.translation.crnt.constvars = constvars
         const_folder = self.make_specializer(constant_folding.ConstantFolder,
                                              ast, env, constvars=constvars)
         return const_folder.visit(ast)
@@ -650,7 +660,11 @@ class ComposedPipelineStage(PipelineStage):
         return name, stage
 
     def transform(self, ast, env):
+        logger.debug('Running composed stages: %s', self.stages)
         for stage in self.stages:
+            if env.debug:
+                stage_tuple = (stage, utils.ast2tree(ast))
+                logger.debug(pprint.pformat(stage_tuple))
             ast = stage(ast, env)
         return ast
 
