@@ -141,8 +141,8 @@ TypeError: an integer is required
 inner
 >>> field, = func.__closure__._numba_attrs._fields_
 >>> import ctypes
->>> print(field[0], field[1] == ctypes.c_int)
-a True
+>>> print((field[0], field[1] == ctypes.c_int))
+('a', True)
 >>> print(func.__closure__._numba_attrs.a)
 12
 >>> func()

@@ -8,7 +8,7 @@ Test Numba's ability to generate code that supports complex numbers.
 
 import cmath
 import unittest
-
+import numba
 from numba import *
 from numba.decorators import jit
 from numba.utils import debugout
@@ -168,7 +168,8 @@ class TestASTComplex(test_support.ASTTestCase):
         self.assertAlmostEqual(self.autojit(sub)(m, n), sub(m, n))
         self.assertAlmostEqual(self.autojit(mul)(m, n), mul(m, n))
         self.assertAlmostEqual(self.autojit(div)(m, n), div(m, n))
-        self.assertAlmostEqual(self.autojit(floordiv)(m, n), floordiv(m, n))
+        if not numba.PY3:
+            self.assertAlmostEqual(self.autojit(floordiv)(m, n), floordiv(m, n))
 
     def test_complex_math(self):
         self.assertAlmostEqual(self.autojit(sqrt)(m, n), sqrt(m, n))

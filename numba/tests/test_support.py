@@ -12,16 +12,16 @@ from . import doctest_support
 jit_ = jit
 
 if numba.PY3:
+    import re
     def rewrite_doc(doc):
         doc = re.sub(r'(\d+)L', r'\1', doc)
         doc = re.sub(r'([^\.])NumbaError', r'\1numba.error.NumbaError', doc)
         return doc
-    import re
     def autojit_py3doc(*args, **kwargs):
         if kwargs:
             def _inner(fun):
                 fun.__doc__ = rewrite_doc(fun.__doc__)
-                return autojit(**kwargs)(fun)
+                return autojit(*args, **kwargs)(fun)
             return _inner
         else:
             fun = args[0]
