@@ -100,9 +100,9 @@ class NumbaVisitorMixin(CooperativeBase):
         if self.is_closure_signature(func_signature) and func is not None:
             # If a closure is backed up by an actual Python function, the
             # closure scope argument is absent
-            from numba import closure
-            self.argnames = (closure.CLOSURE_SCOPE_ARG_NAME,) + self.argnames
-            self.varnames.append(closure.CLOSURE_SCOPE_ARG_NAME)
+            from numba import closures
+            self.argnames = (closures.CLOSURE_SCOPE_ARG_NAME,) + self.argnames
+            self.varnames.append(closures.CLOSURE_SCOPE_ARG_NAME)
 
         # Just the globals we will use
         self._myglobals = {}

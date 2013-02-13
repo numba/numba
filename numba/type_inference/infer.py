@@ -16,7 +16,7 @@ from numba import translate, utils, typesystem
 from numba.control_flow import ssa
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
-from numba import closure as closures
+from numba import closures as closures
 
 from numba import stdio_util, function_util
 from numba.typesystem import is_obj, promote_closest

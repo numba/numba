@@ -9,7 +9,7 @@ from itertools import imap, izip
 
 import numba
 from numba import *
-from numba import error, transforms, closure, control_flow, visitors, nodes
+from numba import error, transforms, closures, control_flow, visitors, nodes
 from numba.type_inference import module_type_inference, deferred
 from numba.minivect import minierror, minitypes
 from numba import translate, utils, typesystem

@@ -85,7 +85,7 @@ if __debug__:
 
 import numba
 from numba import *
-from numba import error, closure
+from numba import error, closures
 from .minivect import minierror, minitypes, codegen
 from numba import macros, utils, typesystem
 from numba.symtab import Variable
@@ -576,7 +576,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
         return new_node
 
 
-class LateSpecializer(closure.ClosureCompilingMixin, ResolveCoercions,
+class LateSpecializer(closures.ClosureCompilingMixin, ResolveCoercions,
                       LateBuiltinResolverMixin, visitors.NoPythonContextMixin):
 
     def visit_FunctionDef(self, node):

@@ -12,7 +12,7 @@ from timeit import default_timer as _timer
 
 import llvm.core as lc
 
-import numba.closure
+import numba.closures
 from numba import error
 from numba import functions, naming, transforms, control_flow, optimize
 from numba import ast_constant_folding as constant_folding
@@ -262,7 +262,7 @@ class Pipeline(object):
 
     def closure_type_inference(self, ast):
         type_inferer = self.make_specializer(
-                            numba.closure.ClosureTypeInferer, ast,
+                            numba.closures.ClosureTypeInferer, ast,
                             warn=self.kwargs.get("warn", True))
         return type_inferer.visit(ast)
 
@@ -497,7 +497,7 @@ class TypeSet(PipelineStage):
 class ClosureTypeInference(PipelineStage):
     def transform(self, ast, env):
         type_inferer = self.make_specializer(
-                            numba.closure.ClosureTypeInferer, ast, env)
+                            numba.closures.ClosureTypeInferer, ast, env)
         return type_inferer.visit(ast)
 
 class TransformFor(PipelineStage):
