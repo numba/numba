@@ -12,9 +12,14 @@ from timeit import default_timer as _timer
 
 import llvm.core as lc
 
-import numba.closures
+# import numba.closures
 from numba import error
-from numba import functions, naming, transforms, control_flow, optimize
+from numba import functions
+from numba import naming
+from numba import transforms
+from numba import control_flow
+from numba import optimize
+from numba import closures
 from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
 from numba import codegen
@@ -55,6 +60,7 @@ class Pipeline(object):
         'specialize',
         'specialize_comparisons',
         'specialize_ssa',
+        'specialize_closures',
         'optimize',
         'preloader',
         'specialize_loops',
@@ -262,7 +268,7 @@ class Pipeline(object):
 
     def closure_type_inference(self, ast):
         type_inferer = self.make_specializer(
-                            numba.closures.ClosureTypeInferer, ast,
+                            closures.ClosureTypeInferer, ast,
                             warn=self.kwargs.get("warn", True))
         return type_inferer.visit(ast)
 
@@ -280,6 +286,10 @@ class Pipeline(object):
     def specialize_ssa(self, ast):
         ssa.specialize_ssa(ast)
         return ast
+
+    def specialize_closures(self, ast):
+        transform = self.make_specializer(closures.ClosureSpecializer, ast)
+        return transform.visit(ast)
 
     def specialize_loops(self, ast):
         transform = self.make_specializer(loops.SpecializeObjectIteration, ast)

@@ -576,8 +576,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
         return new_node
 
 
-class LateSpecializer(closures.ClosureCompilingMixin, ResolveCoercions,
-                      LateBuiltinResolverMixin, visitors.NoPythonContextMixin):
+class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
+                      visitors.NoPythonContextMixin):
 
     def visit_FunctionDef(self, node):
         node.decorator_list = self.visitlist(node.decorator_list)
@@ -1059,7 +1059,7 @@ class LateSpecializer(closures.ClosureCompilingMixin, ResolveCoercions,
             obj = node.variable.constant_value
             return nodes.const(obj, node.type)
 
-        return super(LateSpecializer, self).visit_Name(node)
+        return node
 
     def visit_Return(self, node):
         return_type = self.func_signature.return_type

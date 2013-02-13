@@ -62,6 +62,7 @@ from numba.type_inference import module_type_inference
 from numba.minivect import  minitypes
 from numba import typesystem
 from numba.symtab import Variable
+from numba import extension_types
 
 import logging
 logger = logging.getLogger(__name__)
@@ -206,12 +207,6 @@ def process_decorators(visit_func, node):
 def mangle(name, scope):
     return name
 
-    if not scope.is_closure_type or name in scope.unmangled_symtab:
-        return '__numba_scope%s_var_%s' % (scope.scope_prefix, name)
-    else:
-        scope_attr_name, scope_type = scope.attribute_struct.fields[0]
-        return mangle(name, scope_type)
-
 def outer_scope_field(scope_type):
     return scope_type.attribute_struct.fields[0]
 
@@ -242,7 +237,7 @@ def lookup_scope_attribute(cur_scope, var_name, ctx=None):
 
 CLOSURE_SCOPE_ARG_NAME = '__numba_closure_scope'
 
-class ClosureBaseVisitor(object):
+class ClosureTransformer(visitors.NumbaTransformer):
 
     @property
     def outer_scope(self):
@@ -254,7 +249,7 @@ class ClosureBaseVisitor(object):
 
         return outer_scope
 
-class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
+class ClosureTypeInferer(ClosureTransformer):
     """
     Runs just after type inference after the outer variables types are
     resolved.
@@ -395,18 +390,23 @@ def process_closures(context, outer_func_def, outer_symtab, **kwds):
 
         process_closures(context, closure.func_def, p.symtab, **kwds)
 
+#------------------------------------------------------------------------
+# Closure Lowering
+#------------------------------------------------------------------------
 
-class ClosureCompilingMixin(ClosureBaseVisitor):
+class ClosureSpecializer(ClosureTransformer):
     """
-    Runs during late specialization.
+    Lowering of closure instantiation and calling.
 
         - Instantiates the closure scope and makes the necessary assignments
         - Rewrites local variable accesses to accesses on the instantiated scope
         - Instantiate function with closure scope
+
+    Also rewrite calls to closures.
     """
 
     def __init__(self, *args, **kwargs):
-        super(ClosureCompilingMixin, self).__init__(*args, **kwargs)
+        super(ClosureSpecializer, self).__init__(*args, **kwargs)
         if hasattr(self.ast, 'cellvars') and not self.ast.cellvars:
             self.ast.cur_scope = self.outer_scope
 
