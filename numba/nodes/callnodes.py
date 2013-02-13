@@ -156,6 +156,9 @@ class ObjectCallNode(FunctionCallNode):
 
         self.type = signature.return_type
 
+    def __repr__(self):
+        return 'objcall(%s, %s)' % (self.function, self.original_args)
+
 class ComplexConjugateNode(ExprNode):
     "mycomplex.conjugate()"
 

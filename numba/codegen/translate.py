@@ -1527,6 +1527,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_ClosureCallNode(self, node):
         lfunc = node.closure_type.closure.lfunc
         assert lfunc is not None
+        assert len(node.args) == node.expected_nargs + node.need_closure_scope
         self.visit(node.func)
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)

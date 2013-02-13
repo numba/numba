@@ -348,7 +348,7 @@ class ClosureTypeInferer(ClosureTransformer):
             closure.need_closure_scope = True
 
             # patch closure signature
-            closure.type.signature.args = (scope_type,) + closure.type.signature.args
+            closure.type.add_scope_arg(scope_type)
 
 
 def get_locals(symtab):
@@ -583,7 +583,8 @@ class ClosureSpecializer(ClosureTransformer):
             else:
                 cur_scope = self.ast.cur_scope
 
-            node.args[0] = cur_scope
+            # node.args[0] = cur_scope
+            node.args.insert(0, cur_scope)
 
         self.generic_visit(node)
         return node
