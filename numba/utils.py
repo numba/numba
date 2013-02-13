@@ -1,3 +1,4 @@
+import sys
 import opcode
 import ast
 import pprint
@@ -89,3 +90,22 @@ def pformat_ast (node, include_attrs = True, **kws):
 
 def dump(node):
     print pformat_ast(node)
+
+
+#------------------------------------------------------------------------
+# File Opening Utilities
+#------------------------------------------------------------------------
+
+# file name encodings (function copied from Cython)
+
+def decode_filename(filename):
+    if isinstance(filename, unicode):
+        return filename
+    try:
+        filename_encoding = sys.getfilesystemencoding()
+        if filename_encoding is None:
+            filename_encoding = sys.getdefaultencoding()
+        filename = filename.decode(filename_encoding)
+    except UnicodeDecodeError:
+        pass
+    return filename
