@@ -6,9 +6,9 @@ import ast, inspect
 
 from pymothoa.util.descriptor import Descriptor, instanceof
 from pymothoa.compiler_errors import FunctionDeclarationError
-from module import LLVMModule
-from backend import LLVMCodeGenerator
-from types import *
+from .module import LLVMModule
+from .backend import LLVMCodeGenerator
+from .types import *
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class LLVMFuncDef(LLVMFunction):
                             self.code_llvm,
                             self.retty,
                             self.argtys,
-                            symbols=func.func_globals
+                            symbols=func.__globals__
                         )
             codegen.visit(tree.body[0])
         except CompilerError as e:
@@ -78,7 +78,7 @@ class LLVMFuncDef(LLVMFunction):
         addr = self.manager.jit_engine.get_pointer_to_function(self.code_llvm)
         # Create binding with ctypes library
         from ctypes import CFUNCTYPE, cast
-        c_argtys = map(lambda T: T.ctype(), self.argtys)
+        c_argtys = [T.ctype() for T in self.argtys]
         c_retty = self.retty.ctype()
         self.c_funcptr_type = CFUNCTYPE(c_retty, *c_argtys)
         self.c_funcptr = cast( int(addr), self.c_funcptr_type )

@@ -218,7 +218,7 @@ def dispatch_on_value(context, call_node, func_type):
             method_kwargs[argname] = _build_arg(pass_in_types, node)
 
     # In the case of *args, clear keyword arguments and build positional list
-    if argspec.varargs and len(argnames) < call_node.args:
+    if argspec.varargs and len(argnames) < len(call_node.args):
         extra_args = call_node.args[len(argnames):]
 
         args.extend(method_kwargs[argname] for argname in argnames)

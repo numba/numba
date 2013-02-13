@@ -9,7 +9,7 @@ Grand unified unit test script for Numba.
 import __builtin__
 __builtin__.__noskip__ = True
 
-from test_all import *
+from .test_all import *
 from numba.tests import test_support
 
 # ______________________________________________________________________

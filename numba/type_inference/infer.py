@@ -5,6 +5,7 @@ import copy
 import opcode
 import types
 import __builtin__ as builtins
+from functools import reduce
 
 import numba
 from numba import *
@@ -859,7 +860,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
         #       Only meta is doing 2 items.
         # if len(node.values) != 2:
         #     raise AssertionError
-        assert node.values >= 2
+        assert len(node.values) >= 2
         node.values = self.visitlist(node.values)
         node.values[:] = nodes.CoercionNode.coerce(node.values, minitypes.bool_)
         node.variable = Variable(minitypes.bool_)
@@ -882,7 +883,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
                     node, "Expected pointer and int types, got (%s, %s)" %
                                                         (v1.type, v2.type))
 
-        if not isinstance(node.op, (ast.Add,)): # ast.Sub)):
+        if not isinstance(node.op, ast.Add): # ast.Sub)):
             # TODO: pointer subtraction
             raise error.NumbaError(
                     node, "Can only perform pointer arithmetic with +")

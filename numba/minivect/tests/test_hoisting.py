@@ -5,7 +5,7 @@ NOTE: most of the tests are part of Cython:
     https://github.com/markflorisson88/cython/tree/_array_expressions/tests/array_expressions
 """
 
-from testutils import *
+from .testutils import *
 
 import pytest
 

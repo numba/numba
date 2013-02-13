@@ -124,7 +124,7 @@ def test_if_reassign2(value, obj1, obj2):
 
     return obj1, obj2, obj3
 
-@autojit
+@autojit_py3doc
 def test_for_reassign(obj1, obj2, obj3, obj4):
     """
     >>> test_for_reassign(*values[:4])
@@ -153,7 +153,7 @@ def test_for_reassign(obj1, obj2, obj3, obj4):
 
     return obj1, obj2, obj3, obj4
 
-@autojit
+@autojit_py3doc
 def test_while_reassign(obj1, obj2, obj3, obj4):
     """
     >>> test_while_reassign(*values[:4])
@@ -224,7 +224,7 @@ def test_error_array_variable1(value, obj1):
     return obj1
 
 def test():
-    import test_cfg_type_infer
+    from . import test_cfg_type_infer
     testmod(test_cfg_type_infer, runit=True)
 
 if __name__ == '__main__':

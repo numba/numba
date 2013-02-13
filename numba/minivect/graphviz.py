@@ -2,9 +2,9 @@
 Visitor to generate a Graphviz .dot file with an AST representation.
 """
 
-from pydot import pydot
+from .pydot import pydot
 
-import minivisitor
+from . import minivisitor
 
 class GraphvizGenerator(minivisitor.PrintTree):
     """

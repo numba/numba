@@ -105,7 +105,7 @@ class TemplateIndexType(TemplateType):
 template = TemplateType
 
 def validate_template(concrete_type, template_type):
-    if type(template_type) != type(concrete_type):
+    if not isinstance(template_type, type(concrete_type)):
         raise error.InvalidTemplateError(
                 "Type argument does not match template type: %s and %s" % (
                 concrete_type, template_type))

@@ -57,7 +57,7 @@ class UFuncBuilder(object):
 
         # Create Python ufunc function
         d = dict(globals)
-        exec compile(module, '<ast>', 'exec') in d, d
+        exec(compile(module, '<ast>', 'exec'), d, d)
         d.pop('__builtins__')
         py_ufunc = d[ufunc_ast.name]
 

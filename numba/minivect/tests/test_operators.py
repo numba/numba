@@ -1,6 +1,6 @@
 import pytest
 
-from llvm_testutils import *
+from .llvm_testutils import *
 
 def build_expr(type, op):
     out, v1, v2 = vars = build_vars(type, type, type)

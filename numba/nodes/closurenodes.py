@@ -44,7 +44,7 @@ class ClosureNode(ExprNode):
         self.need_closure_scope = False
 
     def make_pyfunc(self):
-        d = self.outer_py_func.func_globals
+        d = self.outer_py_func.__globals__
 #        argnames = tuple(arg.id for arg in self.func_def.args.args)
 #        dummy_func_string = """
 #def __numba_closure_func(%s):
@@ -63,7 +63,7 @@ class ClosureNode(ExprNode):
         ast_mod = ast.Module(body=[self.func_def])
         numba.functions.fix_ast_lineno(ast_mod)
         c = compile(ast_mod, '<string>', 'exec')
-        exec c in d, d
+        exec(c, d, d)
         self.func_def.name = name
 
         self.py_func = d['__numba_closure_func']
@@ -107,7 +107,11 @@ class ClosureCallNode(NativeCallNode):
     def _resolve_keywords(self, closure_type, args, keywords):
         "Map keyword arguments to positional arguments"
         func_def = closure_type.closure.func_def
-        argnames = [name.id for name in func_def.args.args]
+
+        if PY3:
+            argnames = [name.arg for name in func_def.args.args]
+        else:
+            argnames = [name.id for name in func_def.args.args]
 
         expected = len(argnames) - len(args)
         if len(keywords) != expected:

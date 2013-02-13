@@ -6,7 +6,7 @@ explanations.
 import inspect
 
 miniast = None # avoid circular import AttributeError for sphinx-apidoc
-import treepath
+from . import treepath
 
 class TreeVisitor(object):
     """
@@ -99,14 +99,14 @@ class VisitorTransform(TreeVisitor):
     def visitchildren(self, parent, attrs=None):
         result = super(VisitorTransform, self).visitchildren(parent, attrs)
         for attr, newnode in result.iteritems():
-            if not type(newnode) is list:
+            if not isinstance(newnode, list):
                 setattr(parent, attr, newnode)
             else:
                 # Flatten the list one level and remove any None
                 newlist = []
                 for x in newnode:
                     if x is not None:
-                        if type(x) is list:
+                        if isinstance(x, list):
                             newlist += x
                         else:
                             newlist.append(x)
@@ -151,7 +151,7 @@ class PrintTree(TreeVisitor):
     want_access_path = True
 
     def format_value(self, node):
-        import miniast
+        from . import miniast
 
         if node.is_temp:
             format_value = node.repr_name

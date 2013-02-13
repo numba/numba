@@ -246,7 +246,7 @@ class PromotionType(UnresolvedType):
     def simplify(self, seen=None):
         try:
             return self._simplify(seen)
-        except minierror.UnpromotableTypeError, e:
+        except minierror.UnpromotableTypeError as e:
             if self.variable.name:
                 name = "variable %s" % self.variable.name
             else:

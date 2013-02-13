@@ -1,7 +1,7 @@
 import numpy as np
 
-import testutils
-from testutils import *
+from . import testutils
+from .testutils import *
 
 llvm_context = context = get_llvm_context()
 b = context.astbuilder

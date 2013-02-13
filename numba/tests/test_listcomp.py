@@ -1,9 +1,9 @@
 # Based on cython/tests/run/listcomp.pyx
 
 from numba import *
-from numba.tests.test_support import testmod
+from numba.tests.test_support import testmod, autojit_py3doc
 
-@autojit
+@autojit_py3doc
 def smoketest():
     """
     >>> smoketest()
@@ -14,7 +14,7 @@ def smoketest():
     # assert x != -10 # 'abc'
     return result, x
 
-@autojit
+@autojit_py3doc
 def list_genexp():
     """
     >>> list_genexp()
@@ -27,7 +27,7 @@ def list_genexp():
     # assert x == 'abc'
     return result, x
 
-@autojit(locals={"x": int_})
+@autojit_py3doc(locals={"x": int_})
 def int_runvar():
     """
     >>> int_runvar()
@@ -61,7 +61,7 @@ def int_runvar():
 #    l.sort()
 #    print l
 
-@autojit
+@autojit_py3doc
 def nested_result():
     """
     >>> nested_result()
@@ -71,7 +71,7 @@ def nested_result():
     return result
 
 # TODO: object and string iteration
-#@autojit
+#@autojit_py3doc
 #def listcomp_as_condition(sequence):
 #    """
 #    >>> listcomp_as_condition(['a', 'b', '+'])
@@ -85,7 +85,7 @@ def nested_result():
 #        return True
 #    return False
 
-#@autojit
+#@autojit_py3doc
 #def sorted_listcomp(sequence):
 #    """
 #    >>> sorted_listcomp([3,2,4])
@@ -93,7 +93,7 @@ def nested_result():
 #    """
 #    return sorted([ n+1 for n in sequence ])
 
-@autojit
+@autojit_py3doc
 def listcomp_const_condition_false():
     """
     >>> listcomp_const_condition_false()
@@ -101,7 +101,7 @@ def listcomp_const_condition_false():
     """
     return [x*2 for x in range(3) if 0]
 
-@autojit
+@autojit_py3doc
 def listcomp_const_condition_true():
     """
     >>> listcomp_const_condition_true()

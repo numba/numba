@@ -1,11 +1,11 @@
 import sys
 
 import numba
-from numba import *
 
+from numba.tests.test_support import autojit_py3doc
 # NOTE: See also issues/test_issue_56
 
-@autojit
+@autojit_py3doc
 def test_bitwise_and(a, b):
     """
     >>> test_bitwise_and(0b01, 0b10)
@@ -26,7 +26,7 @@ def test_bitwise_and(a, b):
     """
     return a & b
 
-@autojit
+@autojit_py3doc
 def test_bitwise_or(a, b):
     """
     >>> test_bitwise_or(0b00, 0b00)
@@ -54,7 +54,7 @@ def test_bitwise_or(a, b):
     return a | b
 
 
-@autojit
+@autojit_py3doc
 def test_bitwise_xor(a, b):
     """
     >>> test_bitwise_xor(0b00, 0b00)
@@ -81,7 +81,7 @@ def test_bitwise_xor(a, b):
     """
     return a ^ b
 
-@autojit
+@autojit_py3doc
 def test_shift_left(a, b):
     """
     >>> test_shift_left(5, 2)
@@ -91,7 +91,7 @@ def test_shift_left(a, b):
     """
     return a << b
 
-@autojit
+@autojit_py3doc
 def test_shift_right(a, b):
     """
     >>> test_shift_right(20, 2)
@@ -101,7 +101,7 @@ def test_shift_right(a, b):
     """
     return a >> b
 
-@autojit
+@autojit_py3doc
 def test_invert(a):
     """
     >>> test_invert(5)

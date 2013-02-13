@@ -10,8 +10,8 @@ from pymothoa import dialect
 from pymothoa.compiler_errors import *
 from pymothoa.backend import CodeGenerationBase
 
-from types import *
-from values import *
+from .types import *
+from .values import *
 
 import llvm # binding
 
@@ -78,7 +78,7 @@ class LLVMCodeGenerator(CodeGenerationBase):
                 self.symbols[name] = var
 
     def generate_call(self, fn, args):
-        from function import LLVMFunction
+        from .function import LLVMFunction
         if isinstance(fn, LLVMFunction): # another function
             retty = fn.retty
             argtys = fn.argtys
@@ -140,7 +140,7 @@ class LLVMCodeGenerator(CodeGenerationBase):
 
 
     def _call_function(self, fn, args, retty, argtys):
-        arg_values = map(lambda X: LLVMTempValue(X.value(self.builder), X.type), args)
+        arg_values = [LLVMTempValue(X.value(self.builder), X.type) for X in args]
         # cast types
         try:
             for i, argty in enumerate(argtys):
@@ -163,7 +163,7 @@ class LLVMCodeGenerator(CodeGenerationBase):
 
     def generate_vector_store_elem(self, ptr, idx):
         zero = self.generate_constant_int(0)
-        indices = map(lambda X: X.value(self.builder), [zero, idx])
+        indices = [X.value(self.builder) for X in [zero, idx]]
         addr = self.builder.gep2(ptr.pointer, indices)
         return LLVMTempPointer(addr, ptr.type.elemtype)
 

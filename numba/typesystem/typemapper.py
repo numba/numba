@@ -62,7 +62,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
                 return object_
 
             restype = convert_from_ctypes(value.restype)
-            argtypes = map(convert_from_ctypes, value.argtypes)
+            argtypes = [convert_from_ctypes(v) for v in value.argtypes]
             return CTypesFunctionType(value, restype, argtypes)
         elif isinstance(value, minitypes.Type):
             return CastType(dst_type=value)

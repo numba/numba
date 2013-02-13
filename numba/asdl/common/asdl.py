@@ -13,7 +13,7 @@ Changes for Python: Add support for module versions
 import os
 import traceback
 
-import spark
+from . import spark
 
 class Token(object):
     # spark seems to dispatch in the parser based on a token's
@@ -96,7 +96,7 @@ class ASDLScanner(spark.GenericScanner, object):
 
     def t_default(self, s):
         r" . +"
-        raise ValueError, "unmatched input: %s" % `s`
+        raise ValueError("unmatched input: %r" % s)
 
 class ASDLParser(spark.GenericParser, object):
     def __init__(self):
@@ -304,7 +304,7 @@ class VisitorBase(object):
             return
         try:
             meth(object, *args)
-        except Exception, err:
+        except Exception as err:
             print "Error visiting", repr(object)
             print err
             traceback.print_exc()
@@ -386,7 +386,7 @@ def parse(file):
     tokens = scanner.tokenize(buf)
     try:
         return parser.parse(tokens)
-    except ASDLSyntaxError, err:
+    except ASDLSyntaxError as err:
         print err
         lines = buf.split("\n")
         print lines[err.lineno - 1] # lines starts at 0, files at 1

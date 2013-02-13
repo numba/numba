@@ -8,6 +8,7 @@ such as
                     that's only assigned once)
 '''
 import operator, ast
+from functools import reduce
 from . import visitors
 
 # shamelessly copied from Cython
@@ -224,7 +225,7 @@ class ConstantFolder(visitors.NumbaTransformer):
         operators = iter(reversed(node.ops))
 
         def operation(x, y):
-            op = operators.next()
+            op = next(operators)
             return self.eval_binary_operation(op, x, y)
 
         if all(self.is_constant(nd) for nd in operands):

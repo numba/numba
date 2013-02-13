@@ -31,7 +31,7 @@ def from_module(module, object):
     elif inspect.getmodule(object) is not None:
         return module is inspect.getmodule(object)
     elif inspect.isfunction(object):
-        return module.__dict__ is object.func_globals
+        return module.__dict__ is object.__globals__
     elif inspect.isclass(object):
         return module.__name__ == object.__module__
     elif hasattr(object, '__module__'):
