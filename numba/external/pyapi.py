@@ -138,8 +138,13 @@ class PyComplex_FromCComplex(ExternalFunction):
     arg_types = [complex128]
     return_type = object_
 
-class PyInt_FromString(ExternalFunction):
-    arg_types = [c_string_type, c_string_type.pointer(), int_]
+if not PY3:
+    class PyInt_FromString(ExternalFunction):
+        arg_types = [c_string_type, c_string_type.pointer(), int_]
+        return_type = object_
+
+class PyLong_FromString(ExternalFunction):
+    arg_types = [c_string_type, c_string_type.pointer(), long_]
     return_type = object_
 
 class PyFloat_FromString(ExternalFunction):
