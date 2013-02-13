@@ -4,7 +4,10 @@ Miscellaneous (convenience) utilities.
 
 __all__ = ['ctypes', 'np', 'llvm', 'lc', 'MiniFunction']
 
-import __builtin__
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
 
 class UnavailableImport(object):
     def __init__(self, import_name):
@@ -128,18 +131,6 @@ def all(it):
         if not obj:
             return False
     return True
-
-def max(it, key=None):
-    if key is not None:
-        k, value = max((key(value), value) for value in it)
-        return value
-    return __builtin__.max(it)
-
-def min(it, key=None):
-    if key is not None:
-        k, value = min((key(value), value) for value in it)
-        return value
-    return __builtin__.min(it)
 
 class ComparableObjectMixin(object):
     "Make sure subclasses implement comparison and hashing methods"

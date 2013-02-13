@@ -171,7 +171,7 @@ class TypeMapper(object):
 
     def promote_numeric(self, type1, type2):
         "Promote two numeric types"
-        type = miniutils.max([type1, type2], key=lambda type: type.rank)
+        type = max([type1, type2], key=lambda type: type.rank)
         if type1.kind != type2.kind:
             def itemsize(type):
                 return type.itemsize // 2 if type.is_complex else type.itemsize
@@ -191,7 +191,7 @@ class TypeMapper(object):
         "Promote two array types in an expression to a new array type"
         equal_ndim = type1.ndim == type2.ndim
         return ArrayType(self.promote_types(type1.dtype, type2.dtype),
-                         ndim=miniutils.max((type1.ndim, type2.ndim)),
+                         ndim=max((type1.ndim, type2.ndim)),
                          is_c_contig=(equal_ndim and type1.is_c_contig and
                                       type2.is_c_contig),
                          is_f_contig=(equal_ndim and type1.is_f_contig and
