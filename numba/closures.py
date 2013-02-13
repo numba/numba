@@ -517,7 +517,7 @@ class ClosureSpecializer(ClosureTransformer):
         modname = self.module_name
         self.keep_alive(modname)
 
-        # Create function with closure scope at runtime
+        # Create function signature with closure scope at runtime
         create_numbafunc_signature = node.type(
             void.pointer(),     # PyMethodDef *ml
             object_,            # PyObject *module
@@ -527,6 +527,8 @@ class ClosureSpecializer(ClosureTransformer):
             object_,            # PyObject *native_signature
             object_,            # PyObject *keep_alive
         )
+
+        # Create function with closure scope at runtime
         create_numbafunc = nodes.ptrfromint(
                         extension_types.NumbaFunction_NewEx_pointer,
                         create_numbafunc_signature.pointer())
@@ -572,14 +574,22 @@ class ClosureSpecializer(ClosureTransformer):
         else:
             return node
 
+    def retrieve_closure_from_numbafunc(self, node):
+        """
+        Retrieve the closure scope from ((NumbaFunctionObject *)
+                                             numba_func).func_closure
+        """
+        pointer = nodes.ptrfromobj(node.func)
+        type = typedefs.NumbaFunctionObject.ref()
+        closure_obj_struct = nodes.CoercionNode(pointer, type)
+        cur_scope = nodes.StructAttribute(closure_obj_struct, 'func_closure',
+                                          ctx=ast.Load(), type=type)
+        return cur_scope
+
     def visit_ClosureCallNode(self, node):
         if node.closure_type.closure.need_closure_scope:
             if self.ast.cur_scope is None:
-                pointer = nodes.ptrfromobj(node.func)
-                type = typedefs.PyCFunctionObject.ref()
-                closure_obj_struct = nodes.CoercionNode(pointer, type)
-                cur_scope = nodes.StructAttribute(closure_obj_struct, 'm_self',
-                                                  ctx=ast.Load(), type=type)
+                cur_scope = self.retrieve_closure_from_numbafunc(node)
             else:
                 cur_scope = self.ast.cur_scope
 
