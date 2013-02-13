@@ -107,7 +107,11 @@ class ClosureCallNode(NativeCallNode):
     def _resolve_keywords(self, closure_type, args, keywords):
         "Map keyword arguments to positional arguments"
         func_def = closure_type.closure.func_def
-        argnames = [name.id for name in func_def.args.args]
+
+        if PY3:
+            argnames = [name.arg for name in func_def.args.args]
+        else:
+            argnames = [name.id for name in func_def.args.args]
 
         expected = len(argnames) - len(args)
         if len(keywords) != expected:

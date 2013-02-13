@@ -5,7 +5,7 @@
 
 import logging
 import ast
-
+from numba import PY3
 from . import types, dialect
 
 from pymothoa.util.descriptor import Descriptor, instanceof
@@ -76,7 +76,10 @@ class CodeGenerationBase(ast.NodeVisitor):
         for arg in node.args:
             if not isinstance(arg.ctx, ast.Param):
                 raise InternalError('Argument is not ast.Param?')
-            name = arg.id
+            if PY3:
+                name = arg.arg
+            else:
+                name = arg.id
             arguments.append(name)
 
         if len(set(arguments)) != len(arguments):

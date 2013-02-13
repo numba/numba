@@ -458,10 +458,16 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
 
         # Assign function arguments that are cellvars
         for arg in self.ast.args.args:
-            assert isinstance(arg, ast.Name)
-            if arg.id in node.scope_type.unmangled_symtab:
-                dst = lookup_scope_attribute(scope, arg.id, ast.Store())
-                src = self._load_name(arg.id)
+            if isinstance(arg, ast.Name):
+                name = arg.id
+            elif isinstance(arg, ast.arg):
+                name = ast.arg
+            else:
+                raise TypeError('Cannot handle %r' % arg)
+
+            if name in node.scope_type.unmangled_symtab:
+                dst = lookup_scope_attribute(scope, name, ast.Store())
+                src = self._load_name(name)
                 src.variable.assign_in_closure_scope = True
                 assmt = ast.Assign(targets=[dst], value=src)
                 stats.append(assmt)

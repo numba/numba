@@ -12,7 +12,7 @@ except ImportError:
     # pre-2.6
     numbers = None
 
-from numba import error
+from numba import error, PY3
 
 import logging
 logger = logging.getLogger(__name__)
@@ -62,7 +62,12 @@ class NumbaVisitorMixin(CooperativeBase):
             locals, cellvars, freevars = determine_variable_status(context, ast,
                                                                    self.locals)
             self.names = self.global_names = freevars
-            self.argnames = tuple(arg.id for arg in ast.args.args)
+
+            if PY3:
+                self.argnames = tuple(name.arg for name in ast.args.args)
+            else:
+                self.argnames = tuple(name.id for name in ast.args.args)
+
             argnames = set(self.argnames)
             local_names = [local_name for local_name in locals
                                           if local_name not in argnames]
@@ -410,7 +415,10 @@ def determine_variable_status(context, ast, locals_dict):
 
     locals = set(v.assigned)
     locals.update(locals_dict)
-    locals.update(arg.id for arg in ast.args.args)
+    if PY3:
+        locals.update(arg.arg for arg in ast.args.args)
+    else:
+        locals.update(arg.id for arg in ast.args.args)
     locals.update(func_def.name for func_def in v.func_defs)
 
     freevars = set(v.referenced) - locals
