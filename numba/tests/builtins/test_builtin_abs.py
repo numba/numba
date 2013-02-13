@@ -99,6 +99,6 @@ def complex128_abs(a):
     return _abs(a)
 
 if __name__ == '__main__':
-    # print long_long_abs(-(2**33)), 2**33
+#    print long(int32_abs(-5))
     import doctest
     doctest.testmod()

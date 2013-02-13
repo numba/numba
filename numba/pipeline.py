@@ -16,13 +16,15 @@ import numba.closure
 from numba import error
 from numba import functions, naming, transforms, control_flow, optimize
 from numba import ast_constant_folding as constant_folding
-from numba import ast_translate
+from numba.control_flow import ssa
+from numba import codegen
 from numba import utils
 from numba.type_inference import infer as type_inference
 from numba.utils import dump, TypedProperty
 from numba.asdl import schema
 from numba.minivect import minitypes
 import numba.visitors
+from numba.specialize import comparisons, loops, exceptions, funccalls
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +66,14 @@ class Pipeline(object):
         'closure_type_inference',
         'transform_for',
         'specialize',
+        'specialize_comparisons',
+        'specialize_ssa',
         'optimize',
         'preloader',
+        'specialize_loops',
         'late_specializer',
+        'specialize_funccalls',
+        'specialize_exceptions',
         'fix_ast_locations',
         'cleanup_symtab',
         'codegen',
@@ -263,11 +270,31 @@ class Pipeline(object):
         return type_inferer.visit(ast)
 
     def transform_for(self, ast):
-        transform = self.make_specializer(transforms.TransformForIterable, ast)
+        transform = self.make_specializer(loops.TransformForIterable, ast)
         return transform.visit(ast)
 
     def specialize(self, ast):
         return ast
+
+    def specialize_comparisons(self, ast):
+        transform = self.make_specializer(comparisons.SpecializeComparisons, ast)
+        return transform.visit(ast)
+
+    def specialize_ssa(self, ast):
+        ssa.specialize_ssa(ast)
+        return ast
+
+    def specialize_loops(self, ast):
+        transform = self.make_specializer(loops.SpecializeObjectIteration, ast)
+        return transform.visit(ast)
+
+    def specialize_funccalls(self, ast):
+        transform = self.make_specializer(funccalls.FunctionCallSpecializer, ast)
+        return transform.visit(ast)
+
+    def specialize_exceptions(self, ast):
+        transform = self.make_specializer(exceptions.ExceptionSpecializer, ast)
+        return transform.visit(ast)
 
     def optimize(self, ast):
         return ast
@@ -293,7 +320,7 @@ class Pipeline(object):
         return ast
 
     def codegen(self, ast):
-        self.translator = self.make_specializer(ast_translate.LLVMCodeGenerator,
+        self.translator = self.make_specializer(codegen.LLVMCodeGenerator,
                                                 ast, **self.kwargs)
         self.translator.translate()
         return ast
@@ -591,7 +618,7 @@ class ClosureTypeInference(PipelineStage):
 
 class TransformFor(PipelineStage):
     def transform(self, ast, env):
-        transform = self.make_specializer(transforms.TransformForIterable, ast,
+        transform = self.make_specializer(loops.TransformForIterable, ast,
                                           env)
         return transform.visit(ast)
 
@@ -626,7 +653,7 @@ class FixASTLocations(PipelineStage):
 class CodeGen(PipelineStage):
     def transform(self, ast, env):
         env.translation.crnt.translator = self.make_specializer(
-            ast_translate.LLVMCodeGenerator, ast, env,
+            codegen.LLVMCodeGenerator, ast, env,
             **env.translation.crnt.kwargs)
         env.translation.crnt.translator.translate()
         return ast

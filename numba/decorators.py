@@ -7,7 +7,7 @@ import inspect
 
 from numba import *
 from numba import typesystem, numbawrapper
-from . import utils, functions, ast_translate as translate
+from . import utils, functions, codegen as translate
 from numba import  pipeline, extension_type_inference
 from .minivect import minitypes
 from numba.utils import debugout, process_signature
@@ -40,7 +40,7 @@ def _internal_export(env, function_signature, backend='ast', **kws):
             func_ast = functions._get_ast(func)
             # FIXME: Hacked "mangled_name" into the translation
             # environment.  Should do something else.  See comment in
-            # ast_translate.LLVMCodeGenerator.__init__().
+            # codegen.translate.LLVMCodeGenerator.__init__().
             with environment.TranslationContext(
                     env, func, func_ast, function_signature,
                     name=name, llvm_module=llvm_module,

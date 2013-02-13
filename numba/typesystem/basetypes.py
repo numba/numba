@@ -1,4 +1,4 @@
-import __builtin__
+import __builtin__ as builtins
 import math
 
 import numpy as np
@@ -6,9 +6,10 @@ import numpy as np
 
 import numba
 from numba import  error
+import numba.typesystem
 from numba.minivect.minitypes import *
 from numba.minivect.minitypes import map_dtype
-from numba.minivect import minitypes, minierror
+from numba.minivect import minitypes
 
 #------------------------------------------------------------------------
 # Numba's extension of the minivect type system
@@ -29,6 +30,7 @@ class NumbaKeyHashingType(minitypes.KeyHashingType):
 
 class ContainerListType(NumbaKeyHashingType, minitypes.ObjectType):
 
+    is_container = True
     subtypes = ['base_type']
 
     def __init__(self, base_type, size=-1):
@@ -55,9 +57,21 @@ class ListType(ContainerListType):
     is_list = True
     name = "list"
 
-class DictType(NumbaType, minitypes.ObjectType):
+class MapContainerType(NumbaType):
+
+    is_map = True
+
+    def __init__(self, key_type, value_type, size=-1):
+        super(MapContainerType, self).__init__()
+        self.key_type = key_type
+        self.value_type = value_type
+        self.size = size
+
+class DictType(MapContainerType, minitypes.ObjectType):
+
     is_dict = True
     name = "dict"
+    size = 0
 
     def __str__(self):
         return "dict(%s)" % ", ".join(["..."] * self.size)
@@ -66,12 +80,13 @@ class IteratorType(NumbaType, minitypes.ObjectType):
     is_iterator = True
     subtypes = ['base_type']
 
-    def __init__(self, base_type, **kwds):
+    def __init__(self, iterable_type, **kwds):
         super(IteratorType, self).__init__(**kwds)
-        self.base_type = base_type
+        self.iterable_type = iterable_type
+        self.base_type = numba.typesystem.element_type(iterable_type)
 
     def __repr__(self):
-        return "iterator<%s>" % (self.base_type,)
+        return "iterator<%s>" % (self.iterable_type,)
 
 class KnownValueType(NumbaType, minitypes.ObjectType):
     """
@@ -242,20 +257,32 @@ class NewAxisType(NumbaType, minitypes.ObjectType):
     def __repr__(self):
         return "newaxis"
 
-class GlobalType(NumbaType, minitypes.ObjectType):
+class GlobalType(KnownValueType):
     is_global = True
     name = None
+
+    def __init__(self, name, func_globals, position_node=None, **kwds):
+        try:
+            value = func_globals[name]
+        except KeyError, e:
+            raise error.NumbaError(position_node, "No global named %s" % (e,))
+
+        super(GlobalType, self).__init__(value, **kwds)
+        self.name = name
 
     def __repr__(self):
         return "global(%s)" % self.name
 
-class BuiltinType(NumbaType, minitypes.ObjectType):
+class BuiltinType(KnownValueType):
+
     is_builtin = True
 
     def __init__(self, name, **kwds):
-        super(BuiltinType, self).__init__(**kwds)
+        value = getattr(builtins, name)
+        super(BuiltinType, self).__init__(value, **kwds)
+
         self.name = name
-        self.func = getattr(__builtin__, name)
+        self.func = self.value
 
     def __repr__(self):
         return "builtin(%s)" % self.name
@@ -423,6 +450,7 @@ class ReferenceType(NumbaType):
 #------------------------------------------------------------------------
 
 tuple_ = TupleType(object_, size=0)
+dict_ = DictType(object_, object_)
 none = NoneType()
 null_type = NULLType()
 intp = minitypes.npy_intp

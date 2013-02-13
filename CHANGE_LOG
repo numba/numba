@@ -1,3 +1,7 @@
+Version 0.6.1
+=============
+* Support for bitwise operations
+
 Version 0.6
 ===========
 * Python 2.6 support

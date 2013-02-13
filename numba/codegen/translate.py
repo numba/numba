@@ -6,106 +6,29 @@ import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 
-from .llvm_types import _int1, _int32, _LLVMCaster
-from .multiarray_api import MultiarrayAPI # not used
-from .symtab import Variable
+from numba.llvm_types import _int1, _int32, _LLVMCaster
+from numba.multiarray_api import MultiarrayAPI # not used
+from numba.symtab import Variable
 from numba import typesystem
 
 from numba import *
-from . import visitors, nodes, llvm_types, utils, function_util
-from .minivect import minitypes, llvm_codegen
+
+from numba.codegen.debug import *
+from numba.codegen.codeutils import llvm_alloca
+from numba.codegen import (coerce, complexsupport, refcounting, llvmwrapper,
+                           llvmcontext)
+from numba.codegen.llvmcontext import LLVMContextManager
+
+from numba import visitors, nodes, llvm_types, utils, function_util
+from numba.minivect import minitypes, llvm_codegen
 from numba import ndarray_helpers, error, extension_types
 from numba.typesystem import is_obj, promote_to_native
 from numba.utils import dump
 from numba import naming, metadata
 from numba.functions import keep_alive
-
-import logging
-logger = logging.getLogger(__name__)
-debug_conversion = False
-
-#logger.setLevel(logging.DEBUG)
-#debug_conversion = True
+from numba.control_flow import ssa
 
 _int32_zero = lc.Constant.int(_int32, 0)
-
-def map_to_function(func, typs, mod):
-    typs = [str_to_llvmtype(x) if isinstance(x, str) else x for x in typs]
-    INTR = getattr(lc, 'INTR_%s' % func.__name__.upper())
-    return lc.Function.intrinsic(mod, INTR, typs)
-
-class DelayedObj(object):
-    def __init__(self, base, args):
-        self.base = base
-        self.args = args
-
-    def get_start(self):
-        if len(self.args) > 1:
-            ret_val = self.args[0]
-        else:
-            # FIXME: Need to infer case where this might be over floats.
-            ret_val = Variable(typesystem.int32, lvalue=lc.Constant.int(_int32, 0))
-        return ret_val
-
-    def get_inc(self):
-        if len(self.args) > 2:
-            ret_val = self.args[2]
-        else:
-            # FIXME: Need to infer case where this might be over floats.
-            ret_val = Variable(type=typesystem.int32, lvalue=lc.Constant.int(_int32, 1))
-        return ret_val
-
-    def get_stop(self):
-        return self.args[0 if (len(self.args) == 1) else 1]
-
-def _create_methoddef(py_func, func_name, func_doc, func_pointer):
-    # struct PyMethodDef {
-    #     const char  *ml_name;   /* The name of the built-in function/method */
-    #     PyCFunction  ml_meth;   /* The C function that implements it */
-    #     int      ml_flags;      /* Combination of METH_xxx flags, which mostly
-    #                                describe the args expected by the C func */
-    #     const char  *ml_doc;    /* The __doc__ attribute, or NULL */
-    # };
-    PyMethodDef = struct([('name', c_string_type),
-                          ('method', void.pointer()),
-                          ('flags', int_),
-                          ('doc', c_string_type)])
-    c_PyMethodDef = PyMethodDef.to_ctypes()
-
-    PyCFunction_NewEx = ctypes.pythonapi.PyCFunction_NewEx
-    PyCFunction_NewEx.argtypes = [ctypes.POINTER(c_PyMethodDef),
-                                  ctypes.py_object,
-                                  ctypes.c_void_p]
-    PyCFunction_NewEx.restype = ctypes.py_object
-
-    # It is paramount to put these into variables first, since every
-    # access may return a new string object!
-    keep_alive(py_func, func_name)
-    keep_alive(py_func, func_doc)
-
-    methoddef = c_PyMethodDef()
-    methoddef.name = func_name
-    methoddef.doc = func_doc
-    methoddef.method = ctypes.c_void_p(func_pointer)
-    methoddef.flags = 1 # METH_VARARGS
-
-    return methoddef
-
-def numbafunction_new(py_func, func_name, func_doc, module_name, func_pointer,
-                      wrapped_lfunc_pointer, wrapped_signature):
-    methoddef = _create_methoddef(py_func, func_name, func_doc, func_pointer)
-    keep_alive(py_func, methoddef)
-    keep_alive(py_func, module_name)
-
-    wrapper = extension_types.create_function(methoddef, py_func,
-                                              wrapped_lfunc_pointer,
-                                              wrapped_signature, module_name)
-    return methoddef, wrapper
-
-class MethodReference(object):
-    def __init__(self, object_var, py_method):
-        self.object_var = object_var
-        self.py_method = py_method
 
 
 _compare_mapping_float = {'>':lc.FCMP_OGT,
@@ -130,257 +53,12 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
                           '!=':lc.ICMP_NE}
 
 
-class LLVMContextManager(object):
-    '''TODO: Make this class not a singleton.  
-             A possible design is to let each Numba Context owns a
-             LLVMContextManager.
-    '''
+# TODO: use composition instead of mixins
 
-    __singleton = None
-    
-    def __new__(cls, opt=3, cg=3, inline=1000):
-        '''
-        opt --- Optimization level for LLVM optimization pass [0 - 3].
-        cg  --- Optimization level for code generator [0 - 3].
-                Use `3` for SSE support on Intel.
-        inline --- Inliner threshold.
-        '''
-        inst = cls.__singleton
-        if not inst:
-            inst = object.__new__(cls)
-            inst.__initialize(opt, cg, inline)
-            cls.__singleton = inst
-        return inst
-
-    def __initialize(self, opt, cg, inline):
-        assert self.__singleton is None
-        m = self.__module = lc.Module.new("numba_executable_module")
-        # Create the TargetMachine
-        # FIXME: The follow is a workaround for missing AVX support
-        #        in old linux kernel.
-        from llvm.ee import FORCE_DISABLE_AVX
-        if FORCE_DISABLE_AVX:
-            features = '-avx'
-        else:
-            features = ''
-        tm = self.__machine = le.TargetMachine.new(opt=cg, cm=le.CM_JITDEFAULT,
-                                                   features=features)
-        # Create the ExceutionEngine
-        self.__engine = le.EngineBuilder.new(m).create(tm)
-        # Build a PassManager which will be used for every module/
-        has_loop_vectorizer = llvm.version >= (3, 2)
-        passmanagers = lp.build_pass_managers(tm, opt=opt,
-                                              inline_threshold=inline,
-                                              loop_vectorize=has_loop_vectorizer,
-                                              fpm=False)
-        self.__pm = passmanagers.pm
-
-    @property
-    def module(self):
-        return self.__module
-
-    @property
-    def execution_engine(self):
-        return self.__engine
-
-    @property
-    def pass_manager(self):
-        return self.__pm
-
-    @property
-    def target_machine(self):
-        return self.__machine
-
-    def link(self, lfunc):
-        if lfunc.module is not self.module:
-            # optimize
-            self.pass_manager.run(lfunc.module)
-            # link module
-            func_name = lfunc.name
-#
-#            print 'lfunc.module'.center(80, '-')
-#            print lfunc.module
-#
-#            print 'self.module'.center(80, '-')
-#            print self.module
-
-            # XXX: Better safe than sorry.
-            #      Check duplicated function definitions and remove them.
-            #      This problem should not exists.
-            def is_duplicated_function(f):
-                if f.is_declaration:
-                    return False
-                try:
-                    self.module.get_function_named(f.name)
-                except llvm.LLVMException as e:
-                    return False
-                else:
-                    return True
-
-            lfunc_module = lfunc.module
-            #print "LINKING", lfunc.name, lfunc.module.id
-            #print [f.name for f in lfunc.module.functions]
-            #print '-----'
-
-            for func in lfunc_module.functions:
-                if is_duplicated_function(func):
-                    import warnings
-                    if func is lfunc:
-                        # If the duplicated function is the currently compiling
-                        # function, rename it.
-                        ct = 0
-                        while is_duplicated_function(func):
-                            func.name = "%s_duplicated%d" % (func_name, ct)
-                            ct += 1
-                        warnings.warn("Renamed duplicated function %s to %s" %
-                                      (func_name, func.name))
-                        func_name = func.name
-                    else:
-                        # If the duplicated function is not the currently
-                        # compiling function, ignore it.
-                        # We assume this is a utility function.
-                        assert func.linkage == lc.LINKAGE_LINKONCE_ODR, func.name
-
-            self.module.link_in(lfunc_module, preserve=False)
-#
-#            print 'linked'.center(80, '='), lfunc.module, lfunc.name
-#            print self.module
-
-            lfunc = self.module.get_function_named(func_name)
-
-        assert lfunc.module is self.module
-        self.verify(lfunc)
-#        print lfunc
-        return lfunc
-
-    def get_pointer_to_function(self, lfunc):
-        return self.execution_engine.get_pointer_to_function(lfunc)
-
-    def verify(self, lfunc):
-        lfunc.module.verify()
-        # XXX: remove the following extra checking before release
-        for bb in lfunc.basic_blocks:
-            for instr in bb.instructions:
-                if isinstance(instr, lc.CallOrInvokeInstruction):
-                    callee = instr.called_function
-                    if callee is not None:
-                        assert callee.module is lfunc.module, \
-                            "Inter module call for call to %s" % callee.name
-
-class ComplexSupportMixin(object):
-    "Support for complex numbers"
-
-    def _generate_complex_op(self, op, arg1, arg2):
-        (r1, i1), (r2, i2) = self._extract(arg1), self._extract(arg2)
-        real, imag = op(r1, i1, r2, i2)
-        return self._create_complex(real, imag)
-
-    def _extract(self, value):
-        "Extract the real and imaginary parts of the complex value"
-        return (self.builder.extract_value(value, 0),
-                self.builder.extract_value(value, 1))
-
-    def _create_complex(self, real, imag):
-        assert real.type == imag.type, (str(real.type), str(imag.type))
-        complex = lc.Constant.undef(llvm.core.Type.struct([real.type, real.type]))
-        complex = self.builder.insert_value(complex, real, 0)
-        complex = self.builder.insert_value(complex, imag, 1)
-        return complex
-
-    def _promote_complex(self, src_type, dst_type, value):
-        "Promote a complex value to value with a larger or smaller complex type"
-        real, imag = self._extract(value)
-
-        if dst_type.is_complex:
-            dst_type = dst_type.base_type
-        dst_ltype = dst_type.to_llvm(self.context)
-
-        real = self.caster.cast(real, dst_ltype)
-        imag = self.caster.cast(imag, dst_ltype)
-        return self._create_complex(real, imag)
-
-    def _complex_add(self, arg1r, arg1i, arg2r, arg2i):
-        return (self.builder.fadd(arg1r, arg2r),
-                self.builder.fadd(arg1i, arg2i))
-
-    def _complex_sub(self, arg1r, arg1i, arg2r, arg2i):
-        return (self.builder.fsub(arg1r, arg2r),
-                self.builder.fsub(arg1i, arg2i))
-
-    def _complex_mul(self, arg1r, arg1i, arg2r, arg2i):
-        return (self.builder.fsub(self.builder.fmul(arg1r, arg2r),
-                                  self.builder.fmul(arg1i, arg2i)),
-                self.builder.fadd(self.builder.fmul(arg1i, arg2r),
-                                  self.builder.fmul(arg1r, arg2i)))
-
-    def _complex_div(self, arg1r, arg1i, arg2r, arg2i):
-        divisor = self.builder.fadd(self.builder.fmul(arg2r, arg2r),
-                                    self.builder.fmul(arg2i, arg2i))
-        return (self.builder.fdiv(
-                        self.builder.fadd(self.builder.fmul(arg1r, arg2r),
-                                          self.builder.fmul(arg1i, arg2i)),
-                        divisor),
-                self.builder.fdiv(
-                        self.builder.fsub(self.builder.fmul(arg1i, arg2r),
-                                          self.builder.fmul(arg1r, arg2i)),
-                        divisor))
-
-    def _complex_floordiv(self, arg1r, arg1i, arg2r, arg2i):
-        real, imag = self._complex_div(arg1r, arg1i, arg2r, arg2i)
-        long_type = long_.to_llvm(self.context)
-        real = self.caster.cast(real, long_type)
-        imag = self.caster.cast(imag, long_type)
-        real = self.caster.cast(real, arg1r.type)
-        imag = self.caster.cast(imag, arg1r.type)
-        return real, imag
-
-
-class RefcountingMixin(object):
-
-    def decref(self, value, func='Py_DecRef'):
-        "Py_DECREF a value"
-        assert not self.nopython
-        object_ltype = object_.to_llvm(self.context)
-        b = self.builder
-        mod = b.basic_block.function.module
-        sig, py_decref = self.context.external_library.declare(mod, func)
-        return b.call(py_decref, [b.bitcast(value, object_ltype)])
-
-    def incref(self, value):
-        "Py_INCREF a value"
-        assert not self.nopython
-        return self.decref(value, func='Py_IncRef')
-
-    # TODO: generate efficient refcounting code, distinguish between dec/xdec
-    xdecref = decref
-    xincref = incref
-
-    def xdecref_temp(self, temp, decref=None):
-        "Py_XDECREF a temporary"
-        assert not self.nopython
-        decref = decref or self.decref
-        decref(self.load_tbaa(temp, object_))
-
-    def xincref_temp(self, temp):
-        "Py_XINCREF a temporary"
-        assert not self.nopython
-        return self.xdecref_temp(temp, decref=self.incref)
-
-    def xdecref_temp_cleanup(self, temp):
-        "Cleanup a temp at the end of the function"
-        
-        assert not self.nopython
-        bb = self.builder.basic_block
-
-        self.builder.position_at_end(self.current_cleanup_bb)
-        self.xdecref_temp(temp)
-        self.current_cleanup_bb = self.builder.basic_block
-
-        self.builder.position_at_end(bb)
-
-
-class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
-                        RefcountingMixin, visitors.NoPythonContextMixin):
+class LLVMCodeGenerator(visitors.NumbaVisitor,
+                        complexsupport.ComplexSupportMixin,
+                        refcounting.RefcountingMixin,
+                        visitors.NoPythonContextMixin):
     """
     Translate a Python AST to LLVM. Each visit_* method should directly
     return an LLVM value.
@@ -482,15 +160,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
                 self.incref(larg)
 
     def _init_constants(self):
-        bool_ltype = llvm.core.Type.int(1)
-        if "False" in self.symtab:
-            lfalse = llvm.core.Constant.int(bool_ltype, 0)
-            self.symtab["False"].lvalue = lfalse
-
-        if "True" in self.symtab:
-            ltrue = llvm.core.Constant.int(bool_ltype, 1)
-            self.symtab["True"].lvalue = ltrue
-
+        pass
         # self.symtab["None"]
 
     def _init_args(self):
@@ -598,7 +268,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         self.builder = lc.Builder.new(entry)
         self.caster = _LLVMCaster(self.builder)
-        self.object_coercer = ObjectCoercer(self)
+        self.object_coercer = coerce.ObjectCoercer(self)
         self.multiarray_api.set_PyArray_API(self.llvm_module)
         self.tbaa = metadata.TBAAMetadata(self.llvm_module)
 
@@ -688,37 +358,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         if not self.have_cfg:
             return
 
-        for block in self.ast.flow.blocks:
-            for phi_node in block.phi_nodes:
-                phi = phi_node.variable.lvalue
-                assert phi, phi_node.variable
-                for parent_block, incoming_var in phi_node.find_incoming():
-                    assert parent_block.exit_block, parent_block
+        # Initialize uninitialized incoming values to bad values
+        for phi in ssa.iter_phi_vars(self.ast.flow):
+            if phi.type.is_uninitialized:
+                #print incoming_var.cf_references
+                #print phi_node.variable.cf_references
+                #print "incoming", phi_node.incoming, block
 
-                    if incoming_var.type.is_uninitialized:
-                        #print incoming_var.cf_references
-                        #print phi_node.variable.cf_references
-                        #print "incoming", phi_node.incoming, block
+                assert phi.uninitialized_value, phi
+                assert phi.lvalue is None
+                phi.lvalue = self.visit(phi.uninitialized_value)
 
-                        assert incoming_var.uninitialized_value, incoming_var
-                        if incoming_var.lvalue is None:
-                            lval = self.visit(incoming_var.uninitialized_value)
-                            incoming_var.lvalue = lval
-                    elif not incoming_var.type == phi_node.type:
-                        promotion = parent_block.symtab.lookup_promotion(
-                                        phi_node.variable.name, phi_node.type)
-                        incoming_var = promotion.variable
-
-                    assert incoming_var.lvalue, incoming_var
-                    # assert incoming_var.type == phi_node.type, msg
-                    phi.add_incoming(incoming_var.lvalue,
-                                     parent_block.exit_block)
-
-                    if phi_node.type.is_array:
-                        nodes.update_preloaded_phi(phi_node.variable,
-                                                   incoming_var,
-                                                   parent_block.exit_block)
-
+        # Add all incoming values to all our phi values
+        ssa.handle_phis(self.ast.flow)
 
     def get_ctypes_func(self, llvm=True):
         import ctypes
@@ -811,7 +463,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
         # Return a PyCFunctionObject holding the wrapper
         func_pointer = t.lfunc_pointer
-        methoddef, wrapper = numbafunction_new(
+        methoddef, wrapper = llvmwrapper.numbafunction_new(
                 self.func, self.func_name, self.func_doc, self.module_name,
                 func_pointer, self.lfunc_pointer, self.func_signature)
 
@@ -900,7 +552,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         # return types, etc)
         pipeline_ = pipeline.Pipeline(self.context, node.fake_pyfunc,
                                       node, self.func_signature,
-                                      order=['late_specializer'])
+                                      order=['late_specializer',
+                                             'specialize_funccalls',
+                                             'specialize_exceptions'])
         sig, symtab, return_stmt_ast = pipeline_.run_pipeline()
         self.generic_visit(return_stmt_ast)
 
@@ -1286,42 +940,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         raise error.NumbaError(node, "Unary operator %s" % node.op)
 
     def visit_Compare(self, node):
-        blocks_false = []
+        op = node.ops[0]
 
-        pos = error.format_pos(node)
-        if pos:
-            pos = "." + pos
+        lhs = node.left
+        rhs = node.comparators[0]
 
-        end_block = self.append_basic_block('compare.end' + pos)
-        cur_block = self.append_basic_block('compare.cmp' + pos)
-        self.builder.branch(cur_block)
-
-        next_block = None
-        left = node.left
-        for op, right in zip(node.ops, node.comparators):
-            self.builder.position_at_end(cur_block)
-            test = self._compare(node, op, left, right)
-            cur_block = self.builder.basic_block
-            blocks_false.append(cur_block)
-            next_block = self.append_basic_block('compare.cmp' + pos)
-            self.builder.cbranch(test, next_block, end_block)
-            left = right
-            cur_block = next_block
-
-        self.builder.position_at_end(next_block)
-        self.builder.branch(end_block)
-        self.builder.position_at_end(end_block)
-
-        booltype = _int1
-        phi = self.builder.phi(booltype)
-        phi.add_incoming(lc.Constant.int(booltype, 1), next_block)
-        for b in blocks_false:
-            phi.add_incoming(lc.Constant.int(booltype, 0), b)
-        return phi
-
-    def _compare(self, node, op, lhs, rhs):
         lhs_lvalue = self.visit(lhs)
         rhs_lvalue = self.visit(rhs)
+
         op_map = {
             ast.Gt    : '>',
             ast.Lt    : '<',
@@ -1330,12 +956,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             ast.Eq    : '==',
             ast.NotEq : '!=',
         }
+
         op = op_map[type(op)]
 
         if lhs.type.is_float and rhs.type.is_float:
             lfunc = self.builder.fcmp
             lop = _compare_mapping_float[op]
-            return self.builder.fcmp(lop, lhs_lvalue, rhs_lvalue)
         elif lhs.type.is_int_like and rhs.type.is_int_like:
             lfunc = self.builder.icmp
             if lhs.type.signed:
@@ -1345,6 +971,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
             lop = mapping[op]
         else:
             raise error.NumbaError(node, lhs.type)
+
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 
     def _init_phis(self, node):
@@ -1607,11 +1234,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
         return lconstant
 
     _binops = {
-        ast.Add: ('fadd', ('add', 'add')),
-        ast.Sub: ('fsub', ('sub', 'sub')),
-        ast.Mult: ('fmul', ('mul', 'mul')),
-        ast.Div: ('fdiv', ('udiv', 'sdiv')),
-        # TODO: reuse previously implemented modulo
+        ast.Add:    ('fadd', ('add', 'add')),
+        ast.Sub:    ('fsub', ('sub', 'sub')),
+        ast.Mult:   ('fmul', ('mul', 'mul')),
+        ast.Div:    ('fdiv', ('udiv', 'sdiv')),
+        ast.BitAnd: ('and_', ('and_', 'and_')),
+        ast.BitOr:  ('or_',  ('or_', 'or_')),
+        ast.BitXor: ('xor',  ('xor', 'xor')),
+        ast.LShift: ('shl',  ('shl',  'shl')),   # shift left
+        ast.RShift: ('ashr', ('ashr',  'ashr')), # arithmetic shift right
     }
 
     _opnames = {
@@ -2052,248 +1683,3 @@ class LLVMCodeGenerator(visitors.NumbaVisitor, ComplexSupportMixin,
 
     def visit_UserNode(self, node):
         return node.codegen(self)
-
-
-def llvm_alloca(lfunc, builder, ltype, name='', change_bb=True):
-    "Use alloca only at the entry bock of the function"
-    if change_bb:
-        bb = builder.basic_block
-    builder.position_at_beginning(lfunc.get_entry_basic_block())
-    lstackvar = builder.alloca(ltype, name)
-    if change_bb:
-        builder.position_at_end(bb)
-    return lstackvar
-
-def if_badval(translator, llvm_result, badval, callback,
-              cmp=llvm.core.ICMP_EQ, name='cleanup'):
-    # Use llvm_cbuilder :(
-    b = translator.builder
-
-    bb_true = translator.append_basic_block('%s.if.true' % name)
-    bb_endif = translator.append_basic_block('%s.if.end' % name)
-
-    test = b.icmp(cmp, llvm_result, badval)
-    b.cbranch(test, bb_true, bb_endif)
-
-    b.position_at_end(bb_true)
-    callback(b, bb_true, bb_endif)
-    # b.branch(bb_endif)
-    b.position_at_end(bb_endif)
-
-    return llvm_result
-
-
-class ObjectCoercer(object):
-    type_to_buildvalue_str = {
-        char: "b",
-        short: "h",
-        int_: "i",
-        long_: "l",
-        longlong: "L",
-        Py_ssize_t: "n",
-        npy_intp: "n", # ?
-        size_t: "n", # ?
-        uchar: "B",
-        ushort: "H",
-        uint: "I",
-        ulong: "k",
-        ulonglong: "K",
-
-        float_: "f",
-        double: "d",
-        complex128: "D",
-
-        object_: "O",
-        bool_: "b", # ?
-        c_string_type: "s",
-        char.pointer() : "s",
-    }
-
-    def __init__(self, translator):
-        self.context = translator.context
-        self.translator = translator
-        self.builder = translator.builder
-        self.llvm_module = self.builder.basic_block.function.module
-        sig, self.py_buildvalue = self.context.external_library.declare(
-                                            self.llvm_module, 'Py_BuildValue')
-        sig, self.pyarg_parsetuple = self.context.external_library.declare(
-                                        self.llvm_module, 'PyArg_ParseTuple')
-        sig, self.pyerr_clear = self.context.external_library.declare(
-                                            self.llvm_module, 'PyErr_Clear')
-        self.function_cache = translator.function_cache
-        self.NULL = self.translator.visit(nodes.NULL_obj)
-
-    def check_err(self, llvm_result, callback=None, cmp=llvm.core.ICMP_EQ,
-                  pos_node=None):
-        """
-        Check for errors. If the result is NULL, and error should have been set
-        Jumps to translator.error_label if an exception occurred.
-        """
-        assert llvm_result.type.kind == llvm.core.TYPE_POINTER, llvm_result.type
-        int_result = self.translator.builder.ptrtoint(llvm_result,
-                                                       llvm_types._intp)
-        NULL = llvm.core.Constant.int(int_result.type, 0)
-
-        if callback:
-            if_badval(self.translator, int_result, NULL,
-                      callback=callback or default_callback, cmp=cmp)
-        else:
-            test = self.builder.icmp(cmp, int_result, NULL)
-            name = 'no_error'
-            if hasattr(pos_node, 'lineno'):
-                name = 'no_error_%s' % error.format_pos(pos_node).rstrip(": ")
-            bb = self.translator.append_basic_block(name)
-            self.builder.cbranch(test, self.translator.error_label, bb)
-            self.builder.position_at_end(bb)
-
-        return llvm_result
-
-    def check_err_int(self, llvm_result, badval):
-        llvm_badval = llvm.core.Constant.int(llvm_result.type, badval)
-        if_badval(self.translator, llvm_result, llvm_badval,
-                  callback=lambda b, *args: b.branch(self.translator.error_label))
-
-    def _create_llvm_string(self, str):
-        return self.translator.visit(nodes.ConstNode(str, c_string_type))
-
-    def lstr(self, types, fmt=None):
-        "Get an llvm format string for the given types"
-        typestrs = []
-        result_types = []
-        for type in types:
-            if is_obj(type):
-                type = object_
-            elif type.is_int:
-                type = promote_to_native(type)
-
-            result_types.append(type)
-            typestrs.append(self.type_to_buildvalue_str[type])
-
-        str = "".join(typestrs)
-        if fmt is not None:
-            str = fmt % str
-
-        if debug_conversion:
-            self.translator.puts("fmt: %s" % str)
-
-        result = self._create_llvm_string(str)
-        return result_types, result
-
-    def buildvalue(self, types, *largs, **kwds):
-        # The caller should check for errors using check_err or by wrapping
-        # its node in an ObjectTempNode
-        name = kwds.get('name', '')
-        fmt = kwds.get('fmt', None)
-        types, lstr = self.lstr(types, fmt)
-        largs = (lstr,) + largs
-
-        if debug_conversion:
-            self.translator.puts("building... %s" % name)
-        # func_type = object_(*types).pointer()
-        # py_buildvalue = self.builder.bitcast(
-        #         self.py_buildvalue, func_type.to_llvm(self.context))
-        py_buildvalue = self.py_buildvalue
-        result = self.builder.call(py_buildvalue, largs, name=name)
-
-        if debug_conversion:
-            self.translator.puts("done building... %s" % name)
-            nodes.print_llvm(self.translator, object_, result)
-            self.translator.puts("--------------------------")
-
-        return result
-
-    def npy_intp_to_py_ssize_t(self, llvm_result, type):
-#        if type == minitypes.npy_intp:
-#            lpy_ssize_t = minitypes.Py_ssize_t.to_llvm(self.context)
-#            llvm_result = self.translator.caster.cast(llvm_result, lpy_ssize_t)
-#            type = minitypes.Py_ssize_t
-
-        return llvm_result, type
-
-    def py_ssize_t_to_npy_intp(self, llvm_result, type):
-#        if type == minitypes.npy_intp:
-#            lnpy_intp = minitypes.npy_intp.to_llvm(self.context)
-#            llvm_result = self.translator.caster.cast(llvm_result, lnpy_intp)
-#            type = minitypes.Py_ssize_t
-
-        return llvm_result, type
-
-    def convert_single_struct(self, llvm_result, type):
-        types = []
-        largs = []
-        for i, (field_name, field_type) in enumerate(type.fields):
-            types.extend((c_string_type, field_type))
-            largs.append(self._create_llvm_string(field_name))
-            struct_attr = self.builder.extract_value(llvm_result, i)
-            largs.append(struct_attr)
-
-        return self.buildvalue(types, *largs, name='struct', fmt="{%s}")
-
-    def convert_single(self, type, llvm_result, name=''):
-        "Generate code to convert an LLVM value to a Python object"
-        llvm_result, type = self.npy_intp_to_py_ssize_t(llvm_result, type)
-        if type.is_struct:
-            return self.convert_single_struct(llvm_result, type)
-        elif type.is_complex:
-            # We have a Py_complex value, construct a Py_complex * temporary
-            new_result = llvm_alloca(self.translator.lfunc, self.builder,
-                                     llvm_result.type, name='complex_temp')
-            self.builder.store(llvm_result, new_result)
-            llvm_result = new_result
-
-        return self.buildvalue([type], llvm_result, name=name)
-
-    def build_tuple(self, types, llvm_values):
-        "Build a tuple from a bunch of LLVM values"
-        assert len(types) == len(llvm_values)
-        return self.buildvalue(lstr, *llvm_values, name='tuple', fmt="(%s)")
-
-    def build_list(self, types, llvm_values):
-        "Build a tuple from a bunch of LLVM values"
-        assert len(types) == len(llvm_values)
-        return self.buildvalue(types, *llvm_values, name='list',  fmt="[%s]")
-
-    def build_dict(self, key_types, value_types, llvm_keys, llvm_values):
-        "Build a dict from a bunch of LLVM values"
-        types = []
-        largs = []
-        for k, v, llvm_key, llvm_value in zip(key_types, value_types,
-                                              llvm_keys, llvm_values):
-            types.append(k)
-            types.append(v)
-            largs.append(llvm_key)
-            largs.append(llvm_value)
-
-        return self.buildvalue(types, *largs, name='dict', fmt="{%s}")
-
-    def parse_tuple(self, lstr, llvm_tuple, types, name=''):
-        "Unpack a Python tuple into typed llvm variables"
-        lresults = []
-        for i, type in enumerate(types):
-            var = llvm_alloca(self.translator.lfunc, self.builder,
-                              type.to_llvm(self.context),
-                              name=name and "%s%d" % (name, i))
-            lresults.append(var)
-
-        largs = [llvm_tuple, lstr] + lresults
-
-        if debug_conversion:
-            self.translator.puts("parsing tuple... %s" % (types,))
-            nodes.print_llvm(self.translator, object_, llvm_tuple)
-
-        parse_result = self.builder.call(self.pyarg_parsetuple, largs)
-        self.check_err_int(parse_result, 0)
-
-        # Some conversion functions don't reset the exception state...
-        # self.builder.call(self.pyerr_clear, [])
-
-        if debug_conversion:
-            self.translator.puts("successfully parsed tuple...")
-
-        return map(self.builder.load, lresults)
-
-    def to_native(self, type, llvm_tuple, name=''):
-        "Generate code to convert a Python object to an LLVM value"
-        types, lstr = self.lstr([type])
-        lresult, = self.parse_tuple(lstr, llvm_tuple, [type], name=name)
-        return lresult

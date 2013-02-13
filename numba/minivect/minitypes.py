@@ -611,6 +611,7 @@ class PointerType(Type):
     def __init__(self, base_type, **kwds):
         super(PointerType, self).__init__(**kwds)
         self.base_type = base_type
+        self.itemsize = struct_.calcsize("P")
 
     def __repr__(self):
         return "%s *%s" % (self.base_type, " ".join(self.qualifiers))
@@ -829,6 +830,7 @@ class VoidType(NamedType):
 
 class ObjectType(Type):
     is_object = True
+    itemsize = VoidType().pointer().itemsize
 
     def __repr__(self):
         return "PyObject *"
@@ -1041,6 +1043,9 @@ class struct(Type):
 
     def copy(self):
         return struct(self.fields, self.name, self.readonly, self.packed)
+
+    def __eq__(self, other):
+        return other.is_struct and self.fields == other.fields
 
     def __repr__(self):
         if self.name:

@@ -5,6 +5,7 @@ import copy
 import opcode
 import types
 import __builtin__ as builtins
+from itertools import imap, izip
 
 import numba
 from numba import *
@@ -37,128 +38,6 @@ def no_keywords(node):
     if node.keywords or node.starargs or node.kwargs:
         raise error.NumbaError(
             node, "Function call does not support keyword or star arguments")
-
-
-class BuiltinResolverMixin(transforms.BuiltinResolverMixinBase):
-    """
-    Resolve builtin calls for type inference. Only applies high-level
-    transformations such as type coercions. A subsequent pass in
-    LateSpecializer performs low-level transformations.
-    """
-
-    def _resolve_range(self, func, node, argtype):
-        node.variable = Variable(typesystem.RangeType())
-        args = self.visitlist(node.args)
-        node.args = nodes.CoercionNode.coerce(args, dst_type=Py_ssize_t)
-        return node
-
-    _resolve_xrange = _resolve_range
-
-    def _resolve_len(self, func, node, argtype):
-        # Simplify len(array) to ndarray.shape[0]
-        self._expect_n_args(func, node, 1)
-        if argtype.is_array:
-            shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
-            new_node = nodes.index(shape_attr, 0)
-            return self.visit(new_node)
-
-        return None
-
-    dst_types = {
-        int: numba.int_,
-        float: numba.double,
-        complex: numba.complex128
-    }
-
-    def _resolve_int(self, func, node, argtype):
-        # Resolve int(x) and float(x) to an equivalent cast
-        self._expect_n_args(func, node, (0, 1, 2))
-        dst_type = self.dst_types[func]
-
-        if len(node.args) == 0:
-            return nodes.ConstNode(func(0), dst_type)
-        elif len(node.args) == 1:
-            return nodes.CoercionNode(node.args[0], dst_type=dst_type)
-        else:
-            # XXX Moved the unary version to the late specializer,
-            # what about the 2-ary version?
-            arg1, arg2 = node.args
-            if arg1.variable.type.is_c_string:
-                assert dst_type.is_int
-                return nodes.CoercionNode(
-                    nodes.ObjectTempNode(
-                        function_util.external_call(
-                                         self.context,
-                                         self.llvm_module,
-                                         'PyInt_FromString',
-                                         args=[arg1, nodes.NULL, arg2])),
-                    dst_type=dst_type)
-            return None
-
-    _resolve_float = _resolve_int
-
-    def _resolve_complex(self, func, node, argtype):
-        if len(node.args) == 2:
-            args = nodes.CoercionNode.coerce(node.args, double)
-            result = nodes.ComplexNode(real=args[0], imag=args[1])
-        else:
-            result = self._resolve_int(func, node, argtype)
-
-        return result
-
-    def _resolve_abs(self, func, node, argtype):
-        self._expect_n_args(func, node, 1)
-
-        # Result type of the substitution during late
-        # specialization
-        result_type = object_
-
-        # What we actually get back regardless of implementation,
-        # e.g. abs(complex) goes throught the object layer, but we know the result
-        # will be a double
-        dst_type = argtype
-
-        is_math = self._is_math_function(node.args, abs)
-
-        if argtype.is_complex:
-            dst_type = double
-        elif is_math and argtype.is_int and argtype.signed:
-            # Use of labs or llabs returns long_ and longlong respectively
-            result_type = promote_closest(self.context, argtype,
-                                          [long_, longlong])
-        elif is_math and (argtype.is_float or argtype.is_int):
-            result_type = argtype
-
-        node.variable = Variable(result_type)
-        return nodes.CoercionNode(node, dst_type)
-
-    def _resolve_pow(self, func, node, argtype):
-        self._expect_n_args(func, node, (2, 3))
-        return self.pow(*node.args)
-
-    def _resolve_round(self, func, node, argtype):
-        self._expect_n_args(func, node, (1, 2))
-        is_math = self._is_math_function(node.args, round)
-        if len(node.args) == 1 and argtype.is_int:
-            # round(myint) -> myint
-            return nodes.CoercionNode(node.args[0], double)
-
-        if (argtype.is_float or argtype.is_int) and is_math:
-            dst_type = argtype
-        else:
-            dst_type = object_
-            node.args[0] = nodes.CoercionNode(node.args[0], object_)
-
-        node.variable = Variable(dst_type)
-        return nodes.CoercionNode(node, double)
-
-    def _resolve_globals(self, func, node, argtype):
-        self._expect_n_args(func, node, 0)
-        return nodes.ObjectInjectNode(self.func.func_globals)
-
-    def _resolve_locals(self, func, node, argtype):
-        self._expect_n_args(func, node, 0)
-        raise error.NumbaError("locals() is not supported in numba functions")
 
 
 class NumpyMixin(object):
@@ -260,8 +139,8 @@ class NumpyMixin(object):
         return result_type, node
 
 
-class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
-                  NumpyMixin, closure.ClosureMixin, transforms.MathMixin):
+class TypeInferer(visitors.NumbaTransformer, NumpyMixin,
+                  closure.ClosureMixin, transforms.MathMixin):
     """
     Type inference. Initialize with a minivect context, a Python ast,
     and a function type with a given or absent, return type.
@@ -768,20 +647,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         "Get the type of an iterator Variable"
         if iterator_type.is_iterator:
             base_type = iterator_type.base_type
-        elif iterator_type.is_array:
-            if iterator_type.ndim > 1:
-                slices = (slice(None),) * (iterator_type.ndim - 1)
-                base_type = iterator_type.dtype[slices]
-                base_type.is_c_contig = iterator_type.is_c_contig
-                base_type.is_inner_contig = iterator_type.is_inner_contig
-            else:
-                base_type = iterator_type.dtype
         elif iterator_type.is_range:
-            # base_type = target_type or Py_ssize_t
             base_type = Py_ssize_t
         else:
-            raise error.NumbaError(
-                node, "Cannot iterate over value of type %s" % (iterator_type,))
+            base_type = typesystem.index_type(iterator_type)
 
         return base_type
 
@@ -793,8 +662,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
 
         node.target = self.visit(node.target)
         node.iter = self.visit(node.iter)
-        base_type = self._get_iterator_type(node.iter, node.iter.variable.type,
-                                            node.target.variable.type)
+        base_type = typesystem.element_type(node.iter.variable.type)
         self.assign(node.target, None, rhs_var=Variable(base_type))
 
         if self.analyse:
@@ -891,12 +759,17 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
     # Variable Assignments and References
     #------------------------------------------------------------------------
 
-    def init_global(self, global_name):
+    def init_global(self, name_node):
+        global_name = name_node.id
         globals = self.func_globals
+
+        is_builtin = (global_name not in globals and
+                      getattr(builtins, global_name, None))
+        is_global = not is_builtin
+
         # Determine the type of the global, i.e. a builtin, global
         # or (numpy) module
-        if (global_name not in globals and
-                getattr(builtins, global_name, None)):
+        if is_builtin:
             type = typesystem.BuiltinType(name=global_name)
         else:
             # FIXME: analyse the bytecode of the entire module, to determine
@@ -904,9 +777,11 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             if isinstance(globals.get(global_name), types.ModuleType):
                 type = typesystem.ModuleType(globals.get(global_name))
             else:
-                type = typesystem.GlobalType(name=global_name)
+                type = typesystem.GlobalType(global_name, globals, name_node)
 
-        variable = Variable(type, name=global_name)
+        variable = Variable(type, name=global_name, is_constant=True,
+                            is_global=is_global, is_builtin=is_builtin,
+                            constant_value=type.value)
         self.symtab[global_name] = variable
         return variable
 
@@ -945,20 +820,14 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             self.symtab[node.id] = variable
         else:
             # Global or builtin
-            variable = self.init_global(node.id)
+            variable = self.init_global(node)
 
         if variable.type and not variable.type.is_deferred:
             if variable.type.is_global: # or variable.type.is_module:
                 # TODO: look up globals in dict at call time if not
-                #       available now
-                try:
-                    obj = self.func_globals[node.name]
-                except KeyError, e:
-                    raise error.NumbaError(node, "No global named %s" % (e,))
-
+                obj = variable.type.value
                 if not self.function_cache.is_registered(obj):
-                    type = self.context.typemapper.from_python(obj)
-                    return nodes.const(obj, type)
+                    variable.type = self.type_from_pyval(obj)
             elif variable.type.is_builtin:
                 # Rewrite builtin-ins later on, give other code the chance
                 # to handle them first
@@ -967,6 +836,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         node.variable = variable
         if variable.type and variable.type.is_unresolved:
             variable.type = variable.type.resolve()
+
         return node
 
     #------------------------------------------------------------------------
@@ -1020,6 +890,9 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             node = self.visit(node)
             return node
 
+        if nodes.is_bitwise(node.op):
+            typesystem.require([node.left, node.right], ["is_int", 'is_object'])
+
         v1, v2 = node.left.variable, node.right.variable
         promotion_type = self.promote(v1, v2)
 
@@ -1045,6 +918,10 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
             node.variable = Variable(minitypes.bool_)
         else:
             node.variable = Variable(node.operand.variable.type)
+
+        if isinstance(node.op, ast.Invert):
+            typesystem.require([node], ["is_int", "is_object"])
+
         return node
 
     def visit_Compare(self, node):
@@ -1315,12 +1192,18 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         self.generic_visit(node)
         constant_keys = self._get_constants(node.keys)
         constant_values = self._get_constants(node.values)
-        type = typesystem.DictType(size=len(node.keys))
+
         if constant_keys and constant_values:
+            unify = self.promote_types
+            key_type = reduce(unify, imap(self.type_from_pyval, constant_keys))
+            value_type = reduce(unify, imap(self.type_from_pyval, constant_keys))
+            type = typesystem.DictType(key_type, value_type, size=len(node.keys))
+
             variable = Variable(type, is_constant=True,
                                 constant_value=dict(zip(constant_keys,
                                                         constant_values)))
         else:
+            type = typesystem.DictType(object_, object_, size=len(node.keys))
             variable = Variable(type)
 
         node.variable = variable
@@ -1336,7 +1219,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         if func_type.is_builtin:
             func = getattr(builtins, func_name)
         elif func_type.is_global:
-            func = self.func.__globals__[func_name]
+            func = func_type.value
         elif func_type.is_module_attribute:
             func = getattr(func_type.module, func_type.attr)
         elif func_type.is_autojit_function:
@@ -1508,13 +1391,7 @@ class TypeInferer(visitors.NumbaTransformer, BuiltinResolverMixin,
         # TODO: Resolve variable types based on how they are used as arguments
         # TODO: in calls with known signatures
         new_node = None
-        if func_type.is_builtin:
-            # Call to Python built-in function
-            node.variable = Variable(object_)
-            new_node = self._resolve_builtin_call(node, func)
-            if new_node is None:
-                new_node = node
-        elif func_type.is_function:
+        if func_type.is_function:
             # Native function call
             no_keywords(node)
             new_node = nodes.NativeFunctionCallNode(

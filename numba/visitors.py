@@ -37,8 +37,8 @@ class NumbaVisitorMixin(CooperativeBase):
             nopython=nopython, symtab=symtab, **kwargs)
 
         self.context = context
-        self.function_cache = context.function_cache
         self.ast = ast
+        self.function_cache = context.function_cache
         self.symtab = symtab
         self.func_signature = func_signature
         self.nopython = nopython
@@ -58,7 +58,7 @@ class NumbaVisitorMixin(CooperativeBase):
             self.flow_block = None
 
         self.func = func
-        if func is None or not getattr(func, "__numba_valid_code_object", True):
+        if not self.valid_locals(func):
             assert isinstance(ast, ast_module.FunctionDef)
             locals, cellvars, freevars = determine_variable_status(context, ast,
                                                                    self.locals)
@@ -146,6 +146,10 @@ class NumbaVisitorMixin(CooperativeBase):
         self.func_level -= 1
         return node
 
+    def valid_locals(self, func):
+        return (func is not None and
+                getattr(func, "__numba_valid_code_object", True))
+
     def invalidate_locals(self, ast=None):
         ast = ast or self.ast
         if hasattr(ast, "variable_status_tuple"):
@@ -186,14 +190,22 @@ class NumbaVisitorMixin(CooperativeBase):
     def run_template(self, s, vars=None, **substitutions):
         from numba import templating
 
+        func = self.func
+        if func is None:
+            d = dict(self.func_globals)
+            exec 'def __numba_func(): pass' in d, d
+            func = d['__numba_func']
+
         templ = templating.TemplateContext(self.context, s, env=self.env)
+
         if vars:
             for name, type in vars.iteritems():
                 templ.temp_var(name, type)
 
         symtab, tree = templ.template_type_infer(
                 substitutions, symtab=self.symtab,
-                closure_scope=getattr(self.ast, "closure_scope", None))
+                closure_scope=getattr(self.ast, "closure_scope", None),
+                func=func)
         self.symtab.update(templ.get_vars_symtab())
         return tree
 
@@ -287,22 +299,6 @@ class NumbaVisitorMixin(CooperativeBase):
             for phi_node in block.phi_nodes:
                 self.handle_phi(phi_node)
 
-    @property
-    def type(self):
-        assert self.is_expr and len(node.body) == 1
-        return node.body[0].type
-
-    @property
-    def variable(self):
-        assert self.is_expr and len(node.body) == 1
-        return node.body[0].variable
-
-x = 0
-for i in range(10):
-    if x > 1:
-        print x
-    y = 14.2
-    x = x * y
 
 class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
     "Non-mutating visitor"

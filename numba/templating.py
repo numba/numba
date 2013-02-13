@@ -172,18 +172,17 @@ class TemplateContext(object):
 
 def dummy_type_infer(context, tree, order=['type_infer', 'type_set'], env=None,
                      **kwargs):
-    def dummy():
-        pass
+    func_obj = kwargs.pop('func')
     # FIXME: Remove this check, using only the newer run_pipeline2(),
     # and make env required.
     if env is None:
          result = numba.pipeline.run_pipeline(
-                        context, dummy, tree, void(), order=order,
+                        context, func_obj, tree, void(), order=order,
                         # Allow closures to be recognized
                         function_level=1, **kwargs)
     else:
         result = numba.pipeline.run_pipeline2(
-            env, dummy, tree, void(), pipeline_name='dummy_type_infer',
+            env, func_obj, tree, void(), pipeline_name='dummy_type_infer',
             function_level=1, **kwargs)
     _, (_, symtab, ast) = result
     return symtab, ast

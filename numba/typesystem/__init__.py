@@ -4,10 +4,12 @@ from closuretypes import *
 from ssatypes import *
 from templatetypes import *
 from typemapper import *
+from typeutils import *
 
 from shorthands import *
 
 # from typeset import *
+from typematch import *
 
 __all__ = minitypes.__all__ + [
     'O', 'b1', 'i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8',

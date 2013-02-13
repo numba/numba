@@ -37,6 +37,7 @@ haven't been processed yet, or circular dependences.
 """
 
 from numba import oset
+from numba.minivect import minierror
 from numba.typesystem import *
 
 class UninitializedType(NumbaType):

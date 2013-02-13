@@ -17,23 +17,26 @@ data structures such as those that exist in NumPy.
 
 Dependencies:
 
-  * LLVM 3.1
-  * llvm-py (from llvmpy/llvmpy fork)
-  * numpy
-  * Meta (from numba/Meta fork)
-  * Cython
+  * LLVM 3.1 or 3.2
+  * llvmpy (from llvmpy/llvmpy fork)
+  * numpy (version 1.6 or higher)
+  * Meta (from numba/Meta fork (optional))
+  * Cython (build dependency only)
   * nose (for unit tests)
 
-* Compile LLVM 3.1
+The easiest way to install numba and get updates is by using the Anaconda
+Distribution: http://continuum.io/anacondace.html
 
-wget http://llvm.org/releases/3.1/llvm-3.1.src.tar.gz 
-tar zxvf llvm-3.1.src.tar.gz
+* Compile LLVM 3.2
+
+wget http://llvm.org/releases/3.2/llvm-3.2.src.tar.gz 
+tar zxvf llvm-3.2.src.tar.gz
 ./configure --enable-optimized
 # Be sure your compiler architecture is same as version of Python you will use
 #  e.g. -arch i386 or -arch x86_64.  It might be best to be explicit about this.
 make install
 
-* Clone LLVM-py from github
+* Clone llvmpy from github
 
 git clone https://github.com/llvmpy/llvmpy.git
 python setup.py install

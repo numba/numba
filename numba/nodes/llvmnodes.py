@@ -40,8 +40,8 @@ class LLVMCBuilderNode(UserNode):
         cdef = self.cbuilder_cdefinition(self.dependencies, dependencies)
         lfunc = cdef.define(codegen.llvm_module) #, optimize=False)
 
-        from numba import ast_translate
-        self.llvm_context = ast_translate.LLVMContextManager()
+        from numba import codegen
+        self.llvm_context = codegen.LLVMContextManager()
 
         # lfunc = self.llvm_context.link(lfunc)
         self.lfunc = lfunc

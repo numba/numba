@@ -1,6 +1,8 @@
 import types
 import ctypes
 import logging
+import warnings
+import inspect
 
 import numba
 from numba import pipeline, error, symtab
@@ -115,6 +117,11 @@ def _process_method_signatures(class_dict, ext_type):
         default_signature = None
         if (method_name == '__init__' and
                 isinstance(method, types.FunctionType)):
+            if inspect.getargspec(method).args:
+                warnings.warn(
+                    "Constructor for class '%s' has no signature, "
+                    "assuming arguments have type 'object'" %
+                                        ext_type.py_class.__name__)
             argtypes = [numba.object_] * (method.func_code.co_argcount - 1)
             default_signature = numba.void(*argtypes)
 

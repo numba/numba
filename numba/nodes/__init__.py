@@ -8,6 +8,7 @@ from numba import *
 from numba.symtab import Variable
 from numba import typesystem
 from numba import utils, translate, error
+from numba import typesystem
 from numba.minivect import minitypes, minierror
 
 import llvm.core
@@ -41,9 +42,11 @@ def index(node, constant_index, load=True, type=int_):
         ctx = ast.Store()
 
     index = ast.Index(ConstNode(constant_index, type))
-    index.type = type
-    index.variable = Variable(type)
-    return ast.Subscript(value=node, slice=index, ctx=ctx)
+    index = typednode(index, type)
+
+    result_type = typesystem.index_type(node.variable.type)
+    subscr = ast.Subscript(value=node, slice=index, ctx=ctx)
+    return typednode(subscr, result_type)
 
 
 printing = False
@@ -79,6 +82,31 @@ def is_name(node):
         node = node.node
     return isinstance(node, ast.Name)
 
+def typednode(node, type):
+    "Set a type and simple typed variable on a node"
+    node.variable = Variable(type)
+    node.type = type
+    return node
+
+def badval(type):
+    if type.is_object or type.is_array:
+        value = NULL_obj
+        if type != object_:
+            value = value.coerce(type)
+    elif type.is_void:
+        value = None
+    elif type.is_float:
+        value = ConstNode(float('nan'), type=type)
+    elif type.is_int or type.is_complex:
+        # TODO: adjust for type.itemsize
+        bad = 0xbadbad # This pattern is hard to detect in llvm code
+        bad = 123456789
+        value = ConstNode(bad, type=type)
+    else:
+        value = BadValue(type)
+
+    return value
+
 #----------------------------------------------------------------------------
 # Imports
 #----------------------------------------------------------------------------
@@ -105,3 +133,5 @@ from numba.nodes.pointernodes import *
 from numba.nodes.structnodes import *
 from numba.nodes.objectnodes import *
 from numba.nodes.llvmnodes import *
+
+from numba.nodes.bitwise import *

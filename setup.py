@@ -102,6 +102,8 @@ setup(
         'numba.minivect' : ['include/*'],
         'numba.asdl.common': ['*.asdl'],
         'numba.asdl.py2_7': ['*.asdl'],
+        'numba.external.utilities': ['*.c', '*.h'],
+        'numba' : ['*.c', '*.h', 'include/*'],
     },
     ext_modules = [
         Extension(
@@ -111,6 +113,11 @@ setup(
             depends=["numba/external/utilities/type_conversion.c",
                      "numba/external/utilities/generated_conversions.c",
                      "numba/external/utilities/generated_conversions.h"]),
+        CythonExtension(
+            name = "numba.pyconsts",
+            sources = ["numba/pyconsts.pyx"],
+            depends = ["numba/_pyconsts.pxd"],
+            include_dirs=[numba_include_dir]),
         CythonExtension(
             name = "numba.extension_types",
             sources = ["numba/extension_types.pyx", "numba/numbafunction.c"],

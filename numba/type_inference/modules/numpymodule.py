@@ -184,9 +184,9 @@ def nonzero(a):
 
 def _nonzero(type):
     if type.is_array:
-        return typesystem.tuple_(index_array_t, type.ndim)
+        return typesystem.TupleType(index_array_t, type.ndim)
     else:
-        return typesystem.tuple_(index_array_t)
+        return typesystem.TupleType(index_array_t)
 
 @register(np)
 def where(context, condition, x, y):

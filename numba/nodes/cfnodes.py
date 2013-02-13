@@ -22,6 +22,9 @@ def delete_control_blocks(flow_node, flow):
     control_flow.DeleteStatement(flow).visit(flow_node)
 
 class FlowNode(Node):
+    """
+    Node that has control flow basic blocks.
+    """
 
     cond_block = None
     if_block = None
@@ -39,9 +42,10 @@ class FlowNode(Node):
 
 
 class If(ast.If, FlowNode):
-    pass
+    "An if statement node. Has the basic block attributes from FlowNode"
 
 class While(ast.While, FlowNode):
+    "A while loop node. Has the basic block attributes from FlowNode"
 
     # Place to jump to when we see a 'continue'. The default is
     # 'the condition block'. For 'for' loops we set this to
@@ -49,27 +53,42 @@ class While(ast.While, FlowNode):
     continue_block = None
 
 class For(ast.For, FlowNode):
-    pass
+    "A for loop node. Has the basic block attributes from FlowNode"
 
 def merge_cfg_in_ast(basic_block_fields, bodies, node):
+    """
+    Merge CFG blocks into the AST. E.g.
+
+        While(test=x, body=y)
+
+    becomes
+
+        While(test=ControlBlock(0, body=[x]), body=ControlBlock(1, body=[y]))
+    """
     for bb_name, body_name in zip(basic_block_fields, bodies):
         body = getattr(node, body_name)
+        bb = getattr(node, bb_name)
+
         if not body:
             continue
-        bb = getattr(node, bb_name)
-        if not bb.body:
-            if isinstance(body, list):
-                bb.body.extend(body)
-                bb = [bb]
-            else:
-                bb.body.append(body)
 
+        # Merge AST child in body list of CFG block
+        if isinstance(body, list):
+            bb.body = body
+            bb = [bb]
+        else:
+            bb.body = [body]
+
+        # Set basic block as an AST child of the node
         setattr(node, body_name, bb)
+
+def merge_cfg_in_while(node):
+    bodies = ['test', 'body', 'orelse']
+    merge_cfg_in_ast(basic_block_fields, bodies, node)
 
 def build_if(cls=If, **kwargs):
     node = cls(**kwargs)
-    bodies = ['test', 'body', 'orelse']
-    merge_cfg_in_ast(basic_block_fields, bodies, node)
+    merge_cfg_in_while(node)
     return node
 
 def build_while(**kwargs):
