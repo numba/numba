@@ -38,27 +38,34 @@ NVVM_ERROR_COMPILATION
 for i, k in enumerate(RESULT_CODE_NAMES):
     setattr(sys.modules[__name__], k, i)
 
-
-def find_libnvvm():
-    from os.path import dirname, isfile, join
-
-    # search locations
-    search_paths = [
-        dirname(__file__), # always look in this directory first
-        join(sys.prefix, 'DLLs' if sys.platform == 'win32' else 'lib'),
-    ]
-    # determine DLL name
+def find_libnvvm(override_path):
+    '''
+    Try to discover libNVVM automatically in the following order:
+    1) `override_path` if defined
+    2) environment variable NUMBAPRO_NVVM if defines
+    3) specify Anaconda path
+    4) default library path
+    '''
+    from os.path import join
+    # Determine DLL name
     dllname = {'linux2': 'libnvvm.so',
                'darwin': 'libnvvm.dylib',
-               'win32': 'nvvm.dll'}[sys.platform]
+               'win32' : 'nvvm.dll'}[sys.platform]
 
-    for dir_path in search_paths:
-        path = join(dir_path, dllname)
-        if isfile(path):
-            return path
+    # This is Anaconda specific search directories
+    dlldir = join(sys.prefix, 'DLLs' if sys.platform == 'win32' else 'lib')
 
-    raise Exception("Could not find %r in directories %r" % (dllname,
-                                                             search_paths))
+    # Search in default library path as well
+    candidates = [join(dlldir, dllname), dllname]
+
+    if override_path:
+        return [override_path]
+    else:
+        envpath = os.getenv('NUMBAPRO_NVVM')
+        if envpath:
+            return [os.getenv('NUMBAPRO_NVVM')]
+        else:
+            return candidates
 
 
 class NVVM(object):
@@ -108,25 +115,23 @@ class NVVM(object):
     def __new__(cls, override_path=None):
         if not cls.__INSTANCE:
             inst = cls.__INSTANCE = object.__new__(cls)
-
-            if override_path is None:
-                # Try to discover libNVVM automatically
-                # Environment variable always override if present
-                # and override_path is not defined.
-                path = os.getenv('NUMBAPRO_NVVM') or find_libnvvm()
-            else:
-                path = override_path
-
             # Load the driver
-            try:
-                inst.driver = CDLL(path)
-                inst.path = path
-            except OSError:
+            for path in find_libnvvm(override_path):
+                try:
+                    inst.driver = CDLL(path)
+                    inst.path = path
+                except OSError:
+                    pass # continue
+                else:
+                    break # got it, break out
+            else:
+                cls.__INSTANCE = None
                 raise NvvmSupportError(
-                      "libNVVM cannot be found. "
-                      "Try setting environment variable NUMBAPRO_NVVM "
-                      "with the path of the libNVVM shared library.")
+                           "libNVVM cannot be found. "
+                           "Try setting environment variable NUMBAPRO_NVVM "
+                           "with the path of the libNVVM shared library.")
 
+            # Find & populate functions
             for name, proto in inst._PROTOTYPES.items():
                 func = getattr(inst.driver, name)
                 func.restype = proto[0]
