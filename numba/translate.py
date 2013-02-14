@@ -5,7 +5,8 @@ import __builtin__
 
 import numpy as np
 
-from llvm import _ObjectCache, WeakValueDictionary
+# NOTE: llvmpy has changed.  _ObjectCache is removed
+# from llvm import _ObjectCache, WeakValueDictionary
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
