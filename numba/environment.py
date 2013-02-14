@@ -138,6 +138,16 @@ class FunctionEnvironment(object):
         'function.  Set during the code generation pass, and used for '
         'after-the-fact wrapper generation.')
 
+    is_closure = TypedProperty(
+        bool,
+        'Flag indicating if the current function under translation is a '
+        'closure or not.',
+        False)
+
+    closures = TypedProperty(
+        dict, 'Map from ast nodes to closures.')
+
+
     kwargs = TypedProperty(
         dict,
         'Additional keyword arguments.  Deprecated, but kept for backward '
@@ -149,6 +159,7 @@ class FunctionEnvironment(object):
     def __init__(self, parent, func, ast, func_signature,
                  name=None, llvm_module=None, wrap=True, symtab=None,
                  locals=None, template_signature=None, cfg_transform=None,
+                 is_closure=False, closures=None,
                  **kws):
         self.numba = parent.numba
         self.func = func
@@ -170,6 +181,8 @@ class FunctionEnvironment(object):
         self.locals = locals if locals is not None else {}
         self.template_signature = template_signature
         self.cfg_transform = cfg_transform
+        self.is_closure = is_closure
+        self.closures = closures if closures is not None else {}
         self.kwargs = kws
 
 # ______________________________________________________________________
@@ -382,7 +395,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
                 default_dummy_type_infer_pipeline_order),
             }
         self.context = NumbaContext()
-        self.specializations = functions.FunctionCache(self.context)
+        self.specializations = functions.FunctionCache(env=self)
         self.exports = PyccEnvironment()
         self.translation = TranslationEnvironment(self)
         self.debug = logger.getEffectiveLevel() < logging.DEBUG

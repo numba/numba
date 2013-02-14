@@ -18,13 +18,6 @@ from numba import double, int_
 from numba import environment
 import llvm.core as _lc
 
-_FIXME_ctx = utils.get_minivect_context()
-_FIXME_ctx.llvm_context = translate.LLVMContextManager()
-_FIXME_ctx.numba_pipeline = pipeline.Pipeline
-function_cache = _FIXME_ctx.function_cache = functions.FunctionCache(_FIXME_ctx)
-_FIXME_ctx.intrinsic_library = default_intrinsic_library(_FIXME_ctx)
-_FIXME_ctx.external_library = default_external_library(_FIXME_ctx)
-_FIXME_ctx.utility_library = default_utility_library(_FIXME_ctx)
 
 def _internal_export(env, function_signature, backend='ast', **kws):
     def _iexport(func):
@@ -59,7 +52,7 @@ def _internal_export(env, function_signature, backend='ast', **kws):
         return func
     return _iexport
 
-def export(signature, **kws):
+def export(signature, env_name=None, env=None, **kws):
     """
     Construct a decorator that takes a function and exports one
 
@@ -67,14 +60,16 @@ def export(signature, **kws):
 
     name ret_type(arg_type, argtype, ...)
     """
-    env = environment.NumbaEnvironment.get_environment(kws.pop('env', None))
+    if env is None:
+        env = environment.NumbaEnvironment.get_environment(env_name)
     return _internal_export(env, process_signature(signature), **kws)
 
-def exportmany(signatures, **kws):
+def exportmany(signatures, env_name=None, env=None, **kws):
     """
     A Decorator that exports many signatures for a single function
     """
-    env = environment.NumbaEnvironment.get_environment(kws.pop('env', None))
+    if env is None:
+        env = environment.NumbaEnvironment.get_environment(env_name)
     def _export(func):
         for signature in signatures:
             tocall = _internal_export(env, process_signature(signature), **kws)
@@ -126,7 +121,10 @@ def resolve_argtypes(numba_func, template_signature,
 
     return minitypes.FunctionType(return_type, tuple(argtypes))
 
-def _autojit(template_signature, target, nopython, **translator_kwargs):
+def _autojit(template_signature, target, nopython, env_name=None, env=None,
+             **translator_kwargs):
+    if env is None:
+        env = environment.NumbaEnvironment.get_environment(env_name)
     def _autojit_decorator(f):
         """
         Defines a numba function, that, when called, specializes on the input
@@ -139,14 +137,14 @@ def _autojit(template_signature, target, nopython, **translator_kwargs):
                                          args, kwargs, translator_kwargs)
             dec = _jit(restype=signature.return_type,
                        argtypes=signature.args,
-                       target=target, nopython=nopython,
+                       target=target, nopython=nopython, env=env,
                        **translator_kwargs)
 
             compiled_function = dec(f)
             return compiled_function
 
-        function_cache.register(f)
-        cache = function_cache.get_autojit_cache(f)
+        env.specializations.register(f)
+        cache = env.specializations.get_autojit_cache(f)
 
         wrapper = autojit_wrappers[(target, 'ast')]
         numba_func = wrapper(f, compile_function, cache)
@@ -178,22 +176,24 @@ def autojit(template_signature=None, backend='ast', target='cpu',
                         locals=locals, **kwargs)
 
 def _jit(restype=None, argtypes=None, nopython=False,
-         _llvm_module=None, **kwargs):
+         _llvm_module=None, env_name=None, env=None, **kwargs):
+    if env is None:
+        env = environment.NumbaEnvironment.get_environment(env_name)
     def _jit_decorator(func):
         argtys = argtypes
         if func.func_code.co_argcount == 0 and argtys is None:
             argtys = []
 
         assert argtys is not None
-        function_cache.register(func)
+        env.specializations.register(func)
 
         assert kwargs.get('llvm_module') is None # TODO link to user module
         assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
-        result = function_cache.compile_function(func, argtys,
-                                                 restype=restype,
-                                                 nopython=nopython,
-                                                 ctypes=False,
-                                                 **kwargs)
+        result = env.specializations.compile_function(func, argtys,
+                                                      restype=restype,
+                                                      nopython=nopython,
+                                                      ctypes=False,
+                                                      **kwargs)
         signature, lfunc, wrapper_func = result
         return numbawrapper.NumbaCompiledWrapper(func, wrapper_func,
                                                  signature, lfunc)

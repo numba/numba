@@ -96,8 +96,9 @@ class FunctionCache(object):
     """
     Cache for compiler functions, declared external functions and constants.
     """
-    def __init__(self, context):
+    def __init__(self, context=None, env=None):
         self.context = context
+        self.env = env
 
         # All numba-compiled functions
         # (py_func) -> (arg_types, flags) -> (signature, llvm_func, ctypes_func)
@@ -147,6 +148,9 @@ class FunctionCache(object):
         argtypes_flags = tuple(argtypes), flags
         self.__compiled_funcs[func][argtypes_flags] = compiled
 
+    # FIXME: Kill this entry point into the translator, or move it to
+    # a function on the environment, and defined in decorators, or an
+    # intermediary module.
     def compile_function(self, func, argtypes, restype=None,
                          ctypes=False, **kwds):
         """
@@ -179,8 +183,13 @@ class FunctionCache(object):
 
         assert kwds.get('llvm_module') is None, kwds.get('llvm_module')
 
-        compiled = pipeline.compile(self.context, func, restype, argtypes,
-                                    ctypes=ctypes, **kwds)
+        if self.env:
+            assert self.context is None
+            compiled = pipeline.compile2(self.env, func, restype, argtypes,
+                                        ctypes=ctypes, **kwds)
+        else:
+            compiled = pipeline.compile(self.context, func, restype, argtypes,
+                                        ctypes=ctypes, **kwds)
         func_signature, translator, ctypes_func = compiled
     
         self.register_specialization(func, compiled, func_signature.args, flags)

@@ -495,6 +495,8 @@ class PipelineStage(object):
                    locals=crnt.locals,
                    allow_rebind_args=env.translation.allow_rebind_args,
                    warn=env.translation.warn,
+                   is_closure=crnt.is_closure,
+                   closures=crnt.closures,
                    env=env)
         return cls(env.context, crnt.func, ast, **kws)
 
