@@ -313,26 +313,41 @@ class Driver(object):
             # Determine DLL type
             if sys.platform == 'win32':
                 dlloader = WinDLL
-                path = '\\windows\\system32\\nvcuda.dll'
+                dldir = '\\windows\\system32'
+                dlname = 'nvcuda.dll'
             elif sys.platform == 'darwin':
                 dlloader = CDLL
-                path = '/usr/local/cuda/lib/libcuda.dylib'
+                dldir = '/usr/local/cuda/lib'
+                dlname = 'libcuda.dylib'
             else:
                 dlloader = CDLL
-                path = '/usr/lib/libcuda.so'
+                dldir = '/usr/lib'
+                dlname = 'libcuda.so'
 
-            if not override_path: # Try to discover cuda driver automatically
-                # Environment variable always override if present
-                # and override_path is not defined.
-                path = os.environ.get('NUMBAPRO_CUDA_DRIVER', path)
+            # First search for the name in the default library path.
+            # If that is not found, try the specific path.
+            candidates = [dlname, os.path.join(dldir, dlname)]
+
+            if override_path:
+                # If override_path is provided, use it and ignore the others
+                candidates = [override_path]
             else:
-                path = override_path
+                envpath = os.environ.get('NUMBAPRO_CUDA_DRIVER')
+                if envpath:
+                    # If envvar is provided, use it and ignore the others
+                    candidates = [envpath]
 
             # Load the driver
-            try:
-                inst.driver = dlloader(path)
-                inst.path = path
-            except OSError:
+            for path in candidates:
+                try:
+                    inst.driver = dlloader(path)
+                    inst.path = path
+                except OSError:
+                    pass # can't find it, continue
+                else:
+                    break # got it; break out
+            else:
+                # not found, barf
                 cls.__INSTANCE = None
                 cls._raise_driver_not_found()
 

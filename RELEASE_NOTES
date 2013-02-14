@@ -1,6 +1,6 @@
 Version (dev)
 =============
-* Fix driver discovery bug where driver does not exists.
+* Improve CUDA driver discovery.
 
 Version 0.8
 ============
