@@ -333,10 +333,8 @@ class Driver(object):
                 inst.driver = dlloader(path)
                 inst.path = path
             except OSError:
-                raise CudaSupportError(
-                      "CUDA is not supported or the library cannot be found. "
-                      "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
-                      "with the path of the CUDA driver shared library.")
+                cls.__INSTANCE = None
+                cls._raise_driver_not_found()
 
             # Obtain function pointers
             for func, prototype in inst.API_PROTOTYPES.items():
@@ -346,6 +344,8 @@ class Driver(object):
                     ct_func = inst._cu_symbol_newer(func)
                 except AttributeError:
                     if func in inst.NOT_IN_OLD_API:
+                        # Symbol not found and is not in the old API?
+                        # This indicates the driver is old
                         inst.old_api = True
                 else:
                     ct_func.restype = restype
@@ -367,6 +367,13 @@ class Driver(object):
             inst.check_error(error, "Failed to initialize CUDA driver")
 
         return cls.__INSTANCE
+
+    @classmethod
+    def _raise_driver_not_found(cls):
+        raise CudaSupportError(
+                   "CUDA is not supported or the library cannot be found. "
+                   "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
+                   "with the path of the CUDA driver shared library.")
 
     def _cu_symbol_newer(self, symbol):
         try:

@@ -1,3 +1,7 @@
+Version (dev)
+=============
+* Fix driver discovery bug where driver does not exists.
+
 Version 0.8
 ============
 * Update for SSA types inference in Numba
