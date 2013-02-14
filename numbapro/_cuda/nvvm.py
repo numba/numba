@@ -105,8 +105,6 @@ class NVVM(object):
     # Singleton reference
     __INSTANCE = None
 
-    __TEARDOWN = False
-
     def __new__(cls, override_path=None):
         if not cls.__INSTANCE:
             inst = cls.__INSTANCE = object.__new__(cls)
