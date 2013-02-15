@@ -293,6 +293,23 @@ def register_callable(signature):
     """
     assert isinstance(signature, (typeset.typeset, minitypes.Type))
 
+    # convert void return type to object_ (None)
+    def convert_void_to_object(sig):
+        from copy import copy
+        if sig.return_type == void:
+            sig = copy(sig)
+            sig.return_type = object_
+        return sig
+
+    if isinstance(signature, typeset.typeset):
+        signature = typeset.typeset(map(convert_void_to_object,
+                                         signature.types),
+                                    name=signature.name)
+    else:
+        assert isinstance(signature, minitypes.Type)
+        signature = convert_void_to_object(signature)
+
+
     def decorator(function):
         def infer(context, *args):
             if signature.is_typeset:
