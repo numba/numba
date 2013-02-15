@@ -1,9 +1,9 @@
 Version 0.6.1
-=============
+--------------
 * Support for bitwise operations
 
 Version 0.6
-===========
+--------------
 * Python 2.6 support
 * Programmable typing
     * Allow users to add type inference for external code
@@ -18,7 +18,7 @@ Version 0.6
 * Make Meta dependency optional
 
 Version 0.5
-===========
+--------------
 * SSA-based type inference
     * Allows variable reuse
     * Allow referring to variables before lexical definition
@@ -30,10 +30,16 @@ Version 0.5
 * Added user documentation
 
 Version 0.4
-===========
+--------------
+
+Version 0.3.2
+--------------
+
+* Add support for object arithmetic (issue 56).
+* Bug fixes (issue 55).
 
 Version 0.3
-===========
+--------------
 * Changed default compilation approach to ast
 * Added support for cross-module linking
 * Added support for closures (can jit inner functions and return them) (see examples/closure.py)
@@ -49,7 +55,7 @@ Many features need to be documented still.  Look at examples and tests for more 
 
 
 Version 0.2
-============
+--------------
 * Added an ast approach to compilation
 * Removed d, f, i, b from numba namespace (use f8, f4, i4, b1)
 * Changed function to autojit2
