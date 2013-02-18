@@ -494,6 +494,13 @@ class Type(miniutils.ComparableObjectMixin):
     def __call__(self, *args):
         """Return a FunctionType with return_type and args set
         """
+        if len(args) == 1 and not isinstance(args[0], Type):
+            # Cast in Python space
+            # TODO: Create proxy object
+            # TODO: Fully customizable type system (do this in Numba, not
+            #       minivect)
+            return args[0]
+
         return FunctionType(self, args)
 
 class KeyHashingType(Type):
