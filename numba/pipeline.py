@@ -525,6 +525,13 @@ class PipelineStage(object):
         if env.stage_checks: self.check_postconditions(ast, env)
         return ast
 
+class SimplePipelineStage(PipelineStage):
+
+    transformer = None
+
+    def transform(self, ast, env):
+        transform = self.make_specializer(self.transformer, ast, env)
+        return transform.visit(ast)
 
 def resolve_templates(ast, env):
     # TODO: Unify with decorators module
@@ -660,6 +667,10 @@ class SpecializeSSA(PipelineStage):
     def transform(self, ast, env):
         ssa.specialize_ssa(ast)
         return ast
+
+class SpecializeClosures(SimplePipelineStage):
+
+    transformer = closures.ClosureSpecializer
 
 
 class Optimize(PipelineStage):

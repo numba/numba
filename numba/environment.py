@@ -33,6 +33,7 @@ default_pipeline_order = [
     'Specialize',
     'SpecializeComparisons',
     'SpecializeSSA',
+    'SpecializeClosures',
     'Optimize',
     'Preloader',
     'SpecializeLoops',
