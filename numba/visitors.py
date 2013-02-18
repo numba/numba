@@ -87,7 +87,7 @@ class NumbaVisitorMixin(CooperativeBase):
             self.freevars = set(f_code.co_freevars)
 
         if func is None:
-            self.func_globals = kwargs.get('func_globals', {})
+            self.func_globals = kwargs.get('func_globals', None) or {}
             self.module_name = self.func_globals.get("__name__", "")
         else:
             self.func_globals = func.func_globals
@@ -101,9 +101,9 @@ class NumbaVisitorMixin(CooperativeBase):
         if self.is_closure_signature(func_signature) and func is not None:
             # If a closure is backed up by an actual Python function, the
             # closure scope argument is absent
-            from numba import closure
-            self.argnames = (closure.CLOSURE_SCOPE_ARG_NAME,) + self.argnames
-            self.varnames.append(closure.CLOSURE_SCOPE_ARG_NAME)
+            from numba import closures
+            self.argnames = (closures.CLOSURE_SCOPE_ARG_NAME,) + self.argnames
+            self.varnames.append(closures.CLOSURE_SCOPE_ARG_NAME)
 
         # Just the globals we will use
         self._myglobals = {}

@@ -92,5 +92,6 @@ def last_value():
     print i
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    backward3()
+    # import doctest
+    # doctest.testmod()

@@ -180,11 +180,16 @@ def dummy_type_infer(context, tree, order=['type_infer', 'type_set'], env=None,
                         context, func_obj, tree, void(), order=order,
                         # Allow closures to be recognized
                         function_level=1, **kwargs)
+         _, (_, symtab, ast) = result
     else:
-        result = numba.pipeline.run_pipeline2(
-            env, func_obj, tree, void(), pipeline_name='dummy_type_infer',
-            function_level=1, **kwargs)
-    _, (_, symtab, ast) = result
+        func_env = env.translation.crnt.inherit(func=func_obj, ast=tree,
+                                                func_signature=void(),
+                                                **kwargs)
+        numba.pipeline.run_env(
+            env, func_env, pipeline_name='dummy_type_infer',
+            function_level=1, locals=func_env.locals, **kwargs)
+        symtab = func_env.symtab
+        ast = func_env.ast
     return symtab, ast
 
 def template(s, substitutions, template_variables=None):

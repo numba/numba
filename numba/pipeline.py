@@ -12,9 +12,14 @@ from timeit import default_timer as _timer
 
 import llvm.core as lc
 
-import numba.closure
+# import numba.closures
 from numba import error
-from numba import functions, naming, transforms, control_flow, optimize
+from numba import functions
+from numba import naming
+from numba import transforms
+from numba import control_flow
+from numba import optimize
+from numba import closures
 from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
 from numba import codegen
@@ -68,6 +73,7 @@ class Pipeline(object):
         'specialize',
         'specialize_comparisons',
         'specialize_ssa',
+        'specialize_closures',
         'optimize',
         'preloader',
         'specialize_loops',
@@ -265,7 +271,7 @@ class Pipeline(object):
 
     def closure_type_inference(self, ast):
         type_inferer = self.make_specializer(
-                            numba.closure.ClosureTypeInferer, ast,
+                            closures.ClosureTypeInferer, ast,
                             warn=self.kwargs.get("warn", True))
         return type_inferer.visit(ast)
 
@@ -283,6 +289,10 @@ class Pipeline(object):
     def specialize_ssa(self, ast):
         ssa.specialize_ssa(ast)
         return ast
+
+    def specialize_closures(self, ast):
+        transform = self.make_specializer(closures.ClosureSpecializer, ast)
+        return transform.visit(ast)
 
     def specialize_loops(self, ast):
         transform = self.make_specializer(loops.SpecializeObjectIteration, ast)
@@ -362,7 +372,13 @@ def run_pipeline2(env, func, func_ast, func_signature,
         post_ast = pipeline(func_ast, env)
         func_signature = func_env.func_signature
         symtab = func_env.symtab
-    return pipeline, (func_signature, symtab, post_ast)
+    return func_env, (func_signature, symtab, post_ast)
+
+def run_env(env, func_env, **kwargs):
+    env.translation.push_env(func_env)
+    pipeline = env.get_pipeline(kwargs.get('pipeline_name', None))
+    pipeline(func_env.ast, env)
+    env.translation.pop()
 
 def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
     ast = functions._get_ast(func)
@@ -492,20 +508,30 @@ class PipelineStage(object):
                    symtab=crnt.symtab,
                    func_name=crnt.func_name,
                    llvm_module=crnt.llvm_module,
+                   func_globals=crnt.function_globals,
                    locals=crnt.locals,
                    allow_rebind_args=env.translation.allow_rebind_args,
                    warn=env.translation.warn,
                    is_closure=crnt.is_closure,
                    closures=crnt.closures,
+                   closure_scope=crnt.closure_scope,
                    env=env)
         return cls(env.context, crnt.func, ast, **kws)
 
     def __call__(self, ast, env):
         if env.stage_checks: self.check_preconditions(ast, env)
         ast = self.transform(ast, env)
+        env.translation.crnt.ast = ast
         if env.stage_checks: self.check_postconditions(ast, env)
         return ast
 
+class SimplePipelineStage(PipelineStage):
+
+    transformer = None
+
+    def transform(self, ast, env):
+        transform = self.make_specializer(self.transformer, ast, env)
+        return transform.visit(ast)
 
 def resolve_templates(ast, env):
     # TODO: Unify with decorators module
@@ -614,7 +640,7 @@ class TypeSet(PipelineStage):
 class ClosureTypeInference(PipelineStage):
     def transform(self, ast, env):
         type_inferer = self.make_specializer(
-                            numba.closure.ClosureTypeInferer, ast, env)
+                            numba.closures.ClosureTypeInferer, ast, env)
         return type_inferer.visit(ast)
 
 
@@ -641,6 +667,10 @@ class SpecializeSSA(PipelineStage):
     def transform(self, ast, env):
         ssa.specialize_ssa(ast)
         return ast
+
+class SpecializeClosures(SimplePipelineStage):
+
+    transformer = closures.ClosureSpecializer
 
 
 class Optimize(PipelineStage):

@@ -6,7 +6,6 @@ import llvm.core
 import numpy as np
 
 import numba
-from numba import llvm_types
 from numba.minivect.ctypes_conversion import convert_from_ctypes
 import numba.minivect.minitypes
 from numba.minivect.minitypes import map_dtype, object_
@@ -52,6 +51,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
         # self.ctypes_func_type2 = type(libc.printf)
 
     def to_llvm(self, type):
+        from numba import llvm_types
         if type.is_array:
             return llvm_types._numpy_array
         elif type.is_complex:

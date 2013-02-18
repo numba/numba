@@ -3,7 +3,7 @@ import textwrap
 
 import numba
 from numba import *
-from numba import error, closure, function_util
+from numba import error, closures, function_util
 from numba import macros, utils, typesystem
 from numba.symtab import Variable
 from numba import visitors, nodes, error, functions
