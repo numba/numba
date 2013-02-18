@@ -20,6 +20,7 @@ from numba import transforms
 from numba import control_flow
 from numba import optimize
 from numba import closures
+from numba import reporting
 from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
 from numba import codegen
@@ -735,6 +736,13 @@ class CodeGen(PipelineStage):
         env.translation.crnt.translator.translate()
         return ast
 
+class ErrorReporting(PipelineStage):
+    "Sort and issue warnings and errors"
+    def transform(self, ast, env):
+        error_env = env.translation.crnt.error_env
+        post_mortem = error_env.enable_post_mortem
+        reporting.report(error_env, post_mortem=post_mortem)
+        return ast
 
 class ComposedPipelineStage(PipelineStage):
     def __init__(self, stages=None):

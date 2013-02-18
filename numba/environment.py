@@ -1,3 +1,4 @@
+import copy
 import ast as ast_module
 import inspect
 import types
@@ -6,7 +7,7 @@ import pprint
 
 import llvm.core
 
-from numba import pipeline, naming, error
+from numba import pipeline, naming, error, reporting
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
 from numba.minivect.minitypes import FunctionType
 from numba import functions, symtab
@@ -43,6 +44,7 @@ default_pipeline_order = [
     'FixASTLocations',
     'cleanup_symtab',
     'CodeGen',
+    'ErrorReporting',
 ]
 
 default_type_infer_pipeline_order = [
@@ -64,6 +66,44 @@ default_dummy_type_infer_pipeline_order = [
 class _AbstractNumbaEnvironment(object):
     '''Used to break circular type dependency between the translation
     and function environments and the top-level NumbaEnvironment.'''
+
+# ______________________________________________________________________
+
+class FunctionErrorEnvironment(object):
+    """
+    Environment for errors or warnings that occurr during translation of
+    a function.
+    """
+
+    func = WriteOnceTypedProperty(
+        types.FunctionType, 'Function (or similar) being translated.')
+
+    ast = TypedProperty(
+        ast_module.AST,
+        'Original Abstract Syntax Tree for the function being translated.')
+
+    source = TypedProperty(
+        list, #(str, unicode),
+        "Function source code")
+
+    enable_post_mortem = TypedProperty(
+        bool,
+        "Enable post-mortem debugging for the Numba compiler",
+        True)
+
+    collection = TypedProperty(
+        reporting.MessageCollection,
+        "Collection of error and warning messages")
+
+    def __init__(self, func, ast):
+        self.func = func
+        self.ast = ast # copy.deepcopy(ast)
+
+        # Retrieve the source code now
+        source_descr = reporting.SourceDescr(func, ast)
+        self.source = source_descr.get_lines()
+
+        self.collection = reporting.MessageCollection()
 
 # ______________________________________________________________________
 
@@ -94,6 +134,10 @@ class FunctionEnvironment(object):
         'LLVM module for this function.  This module is first optimized and '
         'then linked into a global module.  The Python wrapper function goes '
         'directly into the main fat module.')
+
+    error_env = TypedProperty(
+        FunctionErrorEnvironment,
+        "Error environment for this function.")
 
     wrap = TypedProperty(
         bool,
@@ -171,7 +215,7 @@ class FunctionEnvironment(object):
 
     def __init__(self, parent, func, ast, func_signature,
                  name=None, llvm_module=None, wrap=True, symtab=None,
-                 function_globals=None, locals=None,
+                 error_env=None, function_globals=None, locals=None,
                  template_signature=None, cfg_transform=None,
                  is_closure=False, closures=None, closure_scope=None,
                  **kws):
@@ -193,6 +237,8 @@ class FunctionEnvironment(object):
         self.wrap = wrap
         self.llvm_wrapper_func = None
         self.symtab = symtab if symtab is not None else {}
+
+        self.error_env = error_env or FunctionErrorEnvironment(func, ast)
 
         if function_globals is not None:
             self.function_globals = function_globals
@@ -216,6 +262,7 @@ class FunctionEnvironment(object):
             name=self.func_name,
             llvm_module=self.llvm_module,
             wrap=self.wrap,
+            error_env=self.error_env,
             symtab=self.symtab,
             function_globals=self.function_globals,
             locals=self.locals,

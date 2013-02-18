@@ -140,6 +140,22 @@ class NumbaVisitorMixin(CooperativeBase):
             qname = "%s.%s" % (self.module_name, self.func_name)
         return qname
 
+    @property
+    def current_env(self):
+        return self.env.translation.crnt
+
+    def error(self, node, msg):
+        "Issue a terminating error"
+        raise error.NumbaError(node, msg)
+
+    def deferred_error(self, node, msg):
+        "Issue a deferred-terminating error"
+        self.current_env.error_env.collection.error(node, msg)
+
+    def warn(self, node, msg):
+        "Issue a warning"
+        self.current_env.error_env.collection.warning(node, msg)
+
     def visit_func_children(self, node):
         self.func_level += 1
         self.generic_visit(node)
@@ -208,9 +224,6 @@ class NumbaVisitorMixin(CooperativeBase):
                 func=func)
         self.symtab.update(templ.get_vars_symtab())
         return tree
-
-    def error(self, node, msg):
-        raise error.NumbaError(node, msg)
 
     def keep_alive(self, obj):
         """
