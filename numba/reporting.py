@@ -1,8 +1,9 @@
 import inspect
 
 from numba import error
-from numba.control_flow.cfstats import NameReference, getpos
 
+def getpos(node):
+    return node.lineno, node.col_offset
 
 class SourceDescr(object):
     def __init__(self, func, ast):

@@ -10,10 +10,10 @@ import re
 import ast
 import copy
 
-from numba import error, visitors, symtab, nodes
+from numba import error, visitors, symtab, nodes, reporting
 
 from numba import *
-from numba.control_flow import reporting, graphviz, reaching
+from numba.control_flow import  graphviz, reaching
 from numba.control_flow.cfstats import *
 from numba.control_flow.debug import *
 

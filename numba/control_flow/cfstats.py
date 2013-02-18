@@ -1,4 +1,5 @@
 from numba import nodes
+from numba.reporting import getpos
 
 class StatementDescr(object):
     is_assignment = False
@@ -137,8 +138,3 @@ class NameReference(object):
 
     def __repr__(self):
         return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
-
-def getpos(node):
-    if isinstance(node, NameAssignment):
-        return node.pos
-    return node.lineno, node.col_offset
