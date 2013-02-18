@@ -34,7 +34,7 @@ def _expect_n_args(node, name, nargs):
             node, "builtin %s expects %s arguments" % (name,
                                                        expected))
 
-def register_builtin(nargs):
+def register_builtin(nargs, can_handle_deferred_types=False):
     if not isinstance(nargs, tuple):
         nargs = (nargs,)
 
@@ -51,7 +51,8 @@ def register_builtin(nargs):
         name = infer.__name__.strip("_")
         value = getattr(builtins, name)
 
-        register_value(value, infer, pass_in_types=False, pass_in_callnode=True)
+        register_value(value, infer, pass_in_types=False, pass_in_callnode=True,
+                       can_handle_deferred_types=can_handle_deferred_types)
 
         return func # wrapper
 
@@ -70,13 +71,13 @@ def cast(node, dst_type):
 # TODO: add specializer functions to insert coercions before late specialization
 # TODO: don't rewrite AST here
 
-@register_builtin((1, 2, 3))
+@register_builtin((1, 2, 3), can_handle_deferred_types=True)
 def range_(context, node, start, stop, step):
     node.variable = Variable(typesystem.RangeType())
     node.args = nodes.CoercionNode.coerce(node.args, dst_type=Py_ssize_t)
     return node
 
-@register_builtin((1, 2, 3))
+@register_builtin((1, 2, 3), can_handle_deferred_types=True)
 def xrange_(context, node, start, stop, step):
     return range_(context, node, start, stop, step)
 
@@ -91,7 +92,7 @@ def len_(context, node, obj):
 
     return Py_ssize_t
 
-@register_builtin((0, 1, 2))
+@register_builtin((0, 1, 2), can_handle_deferred_types=True)
 def _int(context, node, x, base, dst_type=int_):
     # Resolve int(x) and float(x) to an equivalent cast
 
@@ -101,15 +102,15 @@ def _int(context, node, x, base, dst_type=int_):
     node.variable = Variable(dst_type)
     return node
 
-@register_builtin((0, 1, 2))
+@register_builtin((0, 1, 2), can_handle_deferred_types=True)
 def _long(context, node, x, base):
     return _int(context, node, x, base)
 
-@register_builtin((0, 1))
+@register_builtin((0, 1), can_handle_deferred_types=True)
 def _float(context, node, x):
     return cast(node, double)
 
-@register_builtin((0, 1, 2))
+@register_builtin((0, 1, 2), can_handle_deferred_types=True)
 def complex_(context, node, a, b):
     if len(node.args) == 2:
         args = nodes.CoercionNode.coerce(node.args, double)

@@ -36,13 +36,14 @@ class LLVMContextManager(object):
         assert self.__singleton is None
         m = self.__module = lc.Module.new("numba_executable_module")
         # Create the TargetMachine
-        # FIXME: The follow is a workaround for missing AVX support
-        #        in old linux kernel.
-        from llvm.ee import FORCE_DISABLE_AVX
-        if FORCE_DISABLE_AVX:
-            features = '-avx'
-        else:
-            features = ''
+        ## FIXME: Use a better CPU feature control
+        ##
+        #        from llvm.ee import FORCE_DISABLE_AVX
+        #        if FORCE_DISABLE_AVX:
+        #            features = '-avx'
+        #        else:
+        #            features = ''
+        features = ''
         tm = self.__machine = le.TargetMachine.new(opt=cg, cm=le.CM_JITDEFAULT,
                                                    features=features)
         # Create the ExceutionEngine

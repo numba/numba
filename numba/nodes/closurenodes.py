@@ -97,28 +97,42 @@ class ClosureCallNode(NativeCallNode):
     Call to closure or inner function.
     """
 
+    _fields = ['func', 'args']
+
     def __init__(self, closure_type, call_node, **kwargs):
         self.call_node = call_node
-        args, keywords = call_node.args, call_node.keywords
-        args = args + self._resolve_keywords(closure_type, args, keywords)
-        super(ClosureCallNode, self).__init__(closure_type.signature, args,
-                                              llvm_func=None, **kwargs)
+        self.func = call_node.func
         self.closure_type = closure_type
 
-    def _resolve_keywords(self, closure_type, args, keywords):
-        "Map keyword arguments to positional arguments"
-        func_def = closure_type.closure.func_def
-        argnames = [name.id for name in func_def.args.args]
+        self.argnames = [name.id for name in self.func_def.args.args]
+        self.argnames = self.argnames[self.need_closure_scope:]
+        self.expected_nargs = len(self.argnames)
 
-        expected = len(argnames) - len(args)
+        args, keywords = call_node.args, call_node.keywords
+        args = args + self._resolve_keywords(args, keywords)
+        super(ClosureCallNode, self).__init__(
+                closure_type.signature, args, llvm_func=None,
+                skip_self=self.need_closure_scope, **kwargs)
+
+    @property
+    def need_closure_scope(self):
+        return self.closure_type.closure.need_closure_scope
+
+    @property
+    def func_def(self):
+        return self.closure_type.closure.func_def
+
+    def _resolve_keywords(self, args, keywords):
+        "Map keyword arguments to positional arguments"
+        expected = self.expected_nargs - len(args)
         if len(keywords) != expected:
             raise error.NumbaError(
                     self.call_node,
-                    "Expected %d arguments, got %d" % (len(argnames),
+                    "Expected %d arguments, got %d" % (self.expected_nargs,
                                                        len(args) + len(keywords)))
 
-        argpositions = dict(zip(argnames, range(len(argnames))))
-        positional = [None] * (len(argnames) - len(args))
+        argpositions = dict(zip(self.argnames, range(self.expected_nargs)))
+        positional = [None] * (self.expected_nargs - len(args))
 
         for keyword in keywords:
             argname = keyword.arg

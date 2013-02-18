@@ -16,6 +16,9 @@ class ClosureType(NumbaType, minitypes.ObjectType):
         self.signature = signature
         self.closure = None
 
+    def add_scope_arg(self, scope_type):
+        self.signature.args = (scope_type,) + self.signature.args
+
     def __repr__(self):
         return "<closure(%s)>" % self.signature
 

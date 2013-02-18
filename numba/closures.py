@@ -50,183 +50,162 @@ These scopes are instances of a numba extension class.
 """
 
 import ast
-import types
 import ctypes
-import inspect
 
-import llvm.core as lc
 import numba.decorators
 from numba import *
-from numba import error, visitors, nodes
+from numba import error
+from numba import visitors
+from numba import nodes
+from numba import typesystem
+from numba import typedefs
+from numba import extension_types
 from numba.type_inference import module_type_inference
 from numba.minivect import  minitypes
-from numba import typesystem
 from numba.symtab import Variable
 
 import logging
 logger = logging.getLogger(__name__)
-#logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
-class ClosureMixin(object):
-    """
-    Handles closures during type inference. Mostly performs error checking
-    for closure signatures.
+#------------------------------------------------------------------------
+# Closure Signature Validation (type inference of outer function)
+#------------------------------------------------------------------------
 
-    Generates ClosureNodes that hold inner functions. When visited, they
-    do not recurse into the inner functions themselves!
-    """
+# Handle closures during type inference. Mostly performs error checking
+# for closure signatures.
 
-    def _err_decorator(self, decorator):
+def err_decorator(decorator):
+    raise error.NumbaError(
+            decorator, "Only @jit and @autojit and signature decorators "
+                       "are supported")
+
+def check_valid_argtype(argtype_node, argtype):
+    if not isinstance(argtype, minitypes.Type):
+        raise error.NumbaError(argtype_node, "Invalid type: %r" % (argtype,))
+
+def assert_constant(visit_func, decorator, result_node):
+    result = visit_func(result_node)
+    if not result.variable.is_constant:
+        raise error.NumbaError(decorator, "Expected a constant")
+
+    return result.variable.constant_value
+
+def parse_argtypes(visit_func, decorator, func_def, jit_args):
+    argtypes_node = jit_args['argtypes']
+    if argtypes_node is None:
+        raise error.NumbaError(func_def.args[0],
+                               "Expected an argument type")
+
+    argtypes = assert_constant(visit_func, decorator, argtypes_node)
+
+    if not isinstance(argtypes, (list, tuple)):
+        raise error.NumbaError(argtypes_node,
+                               'Invalid argument for argtypes')
+    for argtype in argtypes:
+        check_valid_argtype(argtypes_node, argtype)
+
+    return argtypes
+
+def parse_restype(visit_func, decorator, jit_args):
+    restype_node = jit_args['restype']
+
+    if restype_node is not None:
+        restype = assert_constant(visit_func, decorator, restype_node)
+        if isinstance(restype, (str, unicode)):
+            name, restype, argtypes = numba.decorators._process_sig(restype)
+            check_valid_argtype(restype_node, restype)
+            for argtype in argtypes:
+                check_valid_argtype(restype_node, argtype)
+            restype = restype(*argtypes)
+        else:
+            check_valid_argtype(restype_node, restype)
+    else:
+        raise error.NumbaError(restype_node, "Return type expected")
+
+    return restype
+
+def handle_jit_decorator(visit_func, func_def, decorator):
+    jit_args = module_type_inference.parse_args(
+            decorator, ['restype', 'argtypes', 'backend',
+                        'target', 'nopython'])
+
+    if decorator.args or decorator.keywords:
+        restype = parse_restype(visit_func, decorator, jit_args)
+        if restype is not None and restype.is_function:
+            signature = restype
+        else:
+            argtypes = parse_argtypes(visit_func, decorator, func_def, jit_args)
+            signature = minitypes.FunctionType(restype, argtypes,
+                                               name=func_def.name)
+    else: #elif func_def.args:
+        raise error.NumbaError(decorator,
+                               "The argument types and return type "
+                               "need to be specified")
+    #else:
+    #    signature = minitypes.FunctionType(None, [])
+
+    # TODO: Analyse closure at call or outer function return time to
+    # TODO:     infer return type
+    # TODO: parse out nopython argument
+    return signature
+
+def check_signature_decorator(visit_func, decorator):
+    dec = visit_func(decorator)
+    type = dec.variable.type
+    if type.is_cast and type.dst_type.is_function:
+        return type.dst_type
+    else:
+        err_decorator(decorator)
+
+def process_decorators(visit_func, node):
+    if not node.decorator_list:
+        if hasattr(node, 'func_signature'):
+            return node.func_signature
+
         raise error.NumbaError(
-                decorator, "Only @jit and @autojit and signature decorators "
-                           "are supported")
+            node, "Closure must be decorated with 'jit' or 'autojit'")
 
-    def _check_valid_argtype(self, argtype_node, argtype):
-        if not isinstance(argtype, minitypes.Type):
-            raise error.NumbaError(argtype_node, "Invalid type: %r" % (argtype,))
+    if len(node.decorator_list) > 1:
+        raise error.NumbaError(
+                    node, "Only one decorator may be specified for "
+                          "closure (@jit/@autojit)")
 
-    def _assert_constant(self, decorator, result_node):
-        result = self.visit(result_node)
-        if not result.variable.is_constant:
-            raise error.NumbaError(decorator, "Expected a constant")
+    decorator, = node.decorator_list
 
-        return result.variable.constant_value
+    if isinstance(decorator, ast.Name):
+        decorator_name = decorator.id
+    elif (not isinstance(decorator, ast.Call) or not
+              isinstance(decorator.func, ast.Name)):
+        err_decorator(decorator)
+    else:
+        decorator_name = decorator.func.id
 
-    def _parse_argtypes(self, decorator, func_def, jit_args):
-        argtypes_node = jit_args['argtypes']
-        if argtypes_node is None:
-            raise error.NumbaError(func_def.args[0],
-                                   "Expected an argument type")
-
-        argtypes = self._assert_constant(decorator, argtypes_node)
-
-        if not isinstance(argtypes, (list, tuple)):
-            raise error.NumbaError(argtypes_node,
-                                   'Invalid argument for argtypes')
-        for argtype in argtypes:
-            self._check_valid_argtype(argtypes_node, argtype)
-
-        return argtypes
-
-    def _parse_restype(self, decorator, jit_args):
-        restype_node = jit_args['restype']
-
-        if restype_node is not None:
-            restype = self._assert_constant(decorator, restype_node)
-            if isinstance(restype, (str, unicode)):
-                signature = utils.process_signature(restype)
-                name, restype, argtypes = (signature.name,
-                                           signature.return_type,
-                                           signature.args)
-                self._check_valid_argtype(restype_node, restype)
-                for argtype in argtypes:
-                    self._check_valid_argtype(restype_node, argtype)
-                restype = signature
-            else:
-                self._check_valid_argtype(restype_node, restype)
-        else:
-            raise error.NumbaError(restype_node, "Return type expected")
-
-        return restype
-
-    def _handle_jit_decorator(self, func_def, decorator):
-        jit_args = module_type_inference.parse_args(
-                decorator, ['restype', 'argtypes', 'backend',
-                            'target', 'nopython'])
-
-        if decorator.args or decorator.keywords:
-            restype = self._parse_restype(decorator, jit_args)
-            if restype is not None and restype.is_function:
-                signature = restype
-            else:
-                argtypes = self._parse_argtypes(decorator, func_def, jit_args)
-                signature = minitypes.FunctionType(restype, argtypes,
-                                                   name=func_def.name)
-        else: #elif func_def.args:
-            raise error.NumbaError(decorator,
-                                   "The argument types and return type "
-                                   "need to be specified")
-        #else:
-        #    signature = minitypes.FunctionType(None, [])
-
-        # TODO: Analyse closure at call or outer function return time to
-        # TODO:     infer return type
-        # TODO: parse out nopython argument
-        return signature
-
-    def _check_signature_decorator(self, decorator):
-        dec = self.visit(decorator)
-        type = dec.variable.type
-        if type.is_cast and type.dst_type.is_function:
-            return type.dst_type
-        else:
-            self._err_decorator(decorator)
-
-    def _process_decorators(self, node):
-        if not node.decorator_list:
-            if hasattr(node, 'func_signature'):
-                return node.func_signature
-
+    if decorator_name not in ('jit', 'autojit'):
+        signature = check_signature_decorator(visit_func, decorator)
+    else:
+        if decorator_name == 'autojit':
             raise error.NumbaError(
-                node, "Closure must be decorated with 'jit' or 'autojit'")
+                decorator, "Dynamic closures not yet supported, use @jit")
 
-        if len(node.decorator_list) > 1:
-            raise error.NumbaError(
-                        node, "Only one decorator may be specified for "
-                              "closure (@jit/@autojit)")
+        signature = handle_jit_decorator(visit_func, node, decorator)
 
-        decorator, = node.decorator_list
+    del node.decorator_list[:]
 
-        if isinstance(decorator, ast.Name):
-            decorator_name = decorator.id
-        elif (not isinstance(decorator, ast.Call) or not
-                  isinstance(decorator.func, ast.Name)):
-            self._err_decorator(decorator)
-        else:
-            decorator_name = decorator.func.id
+    if len(signature.args) != len(node.args.args):
+        raise error.NumbaError(
+            decorator,
+            "Expected %d arguments type(s), got %d" % (
+                            len(signature.args), len(node.args.args)))
 
-        if decorator_name not in ('jit', 'autojit'):
-            signature = self._check_signature_decorator(decorator)
-        else:
-            if decorator_name == 'autojit':
-                raise error.NumbaError(
-                    decorator, "Dynamic closures not yet supported, use @jit")
+    return signature
 
-            signature = self._handle_jit_decorator(node, decorator)
-
-        del node.decorator_list[:]
-
-        if len(signature.args) != len(node.args.args):
-            raise error.NumbaError(
-                decorator,
-                "Expected %d arguments type(s), got %d" % (
-                                len(signature.args), len(node.args.args)))
-
-        return signature
-
-    def visit_FunctionDef(self, node):
-        if self.function_level == 0:
-            return self.visit_func_children(node)
-
-        signature = self._process_decorators(node)
-        type = typesystem.ClosureType(signature)
-        self.symtab[node.name] = Variable(type, is_local=True)
-
-        closure = nodes.ClosureNode(node, type, self.func)
-        type.closure = closure
-        self.ast.closures.append(closure)
-        self.closures[node.name] = closure
-
-        return closure
+#------------------------------------------------------------------------
+# Closure Type Inference
+#------------------------------------------------------------------------
 
 def mangle(name, scope):
     return name
-
-    if not scope.is_closure_type or name in scope.unmangled_symtab:
-        return '__numba_scope%s_var_%s' % (scope.scope_prefix, name)
-    else:
-        scope_attr_name, scope_type = scope.attribute_struct.fields[0]
-        return mangle(name, scope_type)
 
 def outer_scope_field(scope_type):
     return scope_type.attribute_struct.fields[0]
@@ -258,7 +237,7 @@ def lookup_scope_attribute(cur_scope, var_name, ctx=None):
 
 CLOSURE_SCOPE_ARG_NAME = '__numba_closure_scope'
 
-class ClosureBaseVisitor(object):
+class ClosureTransformer(visitors.NumbaTransformer):
 
     @property
     def outer_scope(self):
@@ -270,7 +249,7 @@ class ClosureBaseVisitor(object):
 
         return outer_scope
 
-class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
+class ClosureTypeInferer(ClosureTransformer):
     """
     Runs just after type inference after the outer variables types are
     resolved.
@@ -369,7 +348,7 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
             closure.need_closure_scope = True
 
             # patch closure signature
-            closure.type.signature.args = (scope_type,) + closure.type.signature.args
+            closure.type.add_scope_arg(scope_type)
 
 
 def get_locals(symtab):
@@ -421,19 +400,24 @@ def process_closures(env, outer_func_def, outer_symtab, **kwds):
         process_closures(env, closure.func_def, func_env.symtab, **kwds)
         env.translation.pop()
 
+#------------------------------------------------------------------------
+# Closure Lowering
+#------------------------------------------------------------------------
 
-class ClosureCompilingMixin(ClosureBaseVisitor):
+class ClosureSpecializer(ClosureTransformer):
     """
-    Runs during late specialization.
+    Lowering of closure instantiation and calling.
 
         - Instantiates the closure scope and makes the necessary assignments
         - Rewrites local variable accesses to accesses on the instantiated scope
         - Instantiate function with closure scope
+
+    Also rewrite calls to closures.
     """
 
     def __init__(self, *args, **kwargs):
-        super(ClosureCompilingMixin, self).__init__(*args, **kwargs)
-        if hasattr(self.ast, 'cellvars') and not self.ast.cellvars:
+        super(ClosureSpecializer, self).__init__(*args, **kwargs)
+        if not self.ast.cellvars:
             self.ast.cur_scope = self.outer_scope
 
     def _load_name(self, var_name, is_cellvar=False):
@@ -540,7 +524,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         modname = self.module_name
         self.keep_alive(modname)
 
-        # Create function with closure scope at runtime
+        # Create function signature with closure scope at runtime
         create_numbafunc_signature = node.type(
             void.pointer(),     # PyMethodDef *ml
             object_,            # PyObject *module
@@ -550,6 +534,8 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
             object_,            # PyObject *native_signature
             object_,            # PyObject *keep_alive
         )
+
+        # Create function with closure scope at runtime
         create_numbafunc = nodes.ptrfromint(
                         extension_types.NumbaFunction_NewEx_pointer,
                         create_numbafunc_signature.pointer())
@@ -583,7 +569,9 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
 
     def visit_Name(self, node):
         "Resolve cellvars and freevars"
-        if node.variable.is_cellvar or node.variable.is_freevar:
+        is_param = isinstance(node.ctx, ast.Param)
+        if not is_param and (node.variable.is_cellvar or
+                             node.variable.is_freevar):
             logger.debug("Function %s, lookup %s in scope %s: %s",
                           self.ast.name, node.id, self.ast.cur_scope.type,
                           self.ast.cur_scope.type.attribute_struct)
@@ -593,10 +581,35 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         else:
             return node
 
+    def retrieve_closure_from_numbafunc(self, node):
+        """
+        Retrieve the closure scope from ((NumbaFunctionObject *)
+                                             numba_func).func_closure
+        """
+        pointer = nodes.ptrfromobj(node.func)
+        type = typedefs.NumbaFunctionObject.ref()
+        closure_obj_struct = nodes.CoercionNode(pointer, type)
+        cur_scope = nodes.StructAttribute(closure_obj_struct, 'func_closure',
+                                          ctx=ast.Load(), type=type)
+        return cur_scope
+
     def visit_ClosureCallNode(self, node):
         if node.closure_type.closure.need_closure_scope:
-            assert self.ast.cur_scope is not None
-            node.args.insert(0, self.ast.cur_scope)
+            if (self.ast.cur_scope is None or
+                    self.ast.cur_scope.type != node.closure_type):
+                # Call to closure from outside outer function
+                # TODO: optimize calling a closure from an inner function, e.g.
+                # def outer():
+                #     a = 1
+                #     def inner1(): print a
+                #     def inner2(): inner1()
+                cur_scope = self.retrieve_closure_from_numbafunc(node)
+            else:
+                # Call to closure from within outer function
+                cur_scope = self.ast.cur_scope
+
+            # node.args[0] = cur_scope
+            node.args.insert(0, cur_scope)
 
         self.generic_visit(node)
         return node

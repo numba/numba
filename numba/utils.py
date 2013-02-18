@@ -1,3 +1,4 @@
+import sys
 import opcode
 import ast
 import pprint
@@ -146,3 +147,21 @@ class WriteOnceTypedProperty(TypedProperty):
     def setter(self, obj, *args, **kws):
         assert not hasattr(obj, self.propname)
         return super(WriteOnceTypedProperty, self).setter(obj, *args, **kws)
+
+#------------------------------------------------------------------------
+# File Opening Utilities
+#------------------------------------------------------------------------
+
+# file name encodings (function copied from Cython)
+
+def decode_filename(filename):
+    if isinstance(filename, unicode):
+        return filename
+    try:
+        filename_encoding = sys.getfilesystemencoding()
+        if filename_encoding is None:
+            filename_encoding = sys.getdefaultencoding()
+        filename = filename.decode(filename_encoding)
+    except UnicodeDecodeError:
+        pass
+    return filename

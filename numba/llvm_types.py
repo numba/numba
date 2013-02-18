@@ -10,6 +10,10 @@ import struct as struct_
 import platform
 import llvm.core as lc
 
+from numba import utils
+from numba.typedefs import _trace_refs_, PyObject_HEAD
+from numba.minivect.minitypes import *
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -38,17 +42,13 @@ _double = lc.Type.double()
 _complex64 = lc.Type.struct([_float, _float])
 _complex128 = lc.Type.struct([_double, _double])
 
-_pyobject_head = [_intp, lc.Type.pointer(_int32)]
-_pyobject_head_struct = lc.Type.struct(_pyobject_head)
-_pyobject_head_struct_p = lc.Type.pointer(_pyobject_head_struct)
 
-if hasattr(sys, 'getobjects'):
-    _trace_refs_ = True
-    _pyobject_head = [lc.Type.pointer(_int32),
-                      lc.Type.pointer(_int32)] + \
-                      _pyobject_head
-else:
-    _trace_refs_ = False
+def to_llvm(type):
+    return type.to_llvm(utils.context)
+
+_pyobject_head = [to_llvm(ty) for name, ty in PyObject_HEAD.fields]
+_pyobject_head_struct = to_llvm(PyObject_HEAD)
+_pyobject_head_struct_p = lc.Type.pointer(_pyobject_head_struct)
 
 _head_len = len(_pyobject_head)
 _numpy_struct = lc.Type.struct(_pyobject_head+\

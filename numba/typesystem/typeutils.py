@@ -73,3 +73,9 @@ def require(ast_nodes, properties):
         if not any(getattr(get_type(ast_node), p) for p in properties):
             typenames = ", or ".join(p[3:] for p in properties) # remove 'is_' prefix
             raise error.NumbaError(ast_node, "Expected an %s" % (typenames,))
+
+def pyfunc_signature(nargs):
+    "Signature of a python function with N arguments"
+    signature = minitypes.FunctionType(args=(object_,) * nargs,
+                                       return_type=object_)
+    return signature

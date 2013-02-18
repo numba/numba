@@ -316,6 +316,7 @@ def get_closure(arg):
     def closure():
         print arg
 
+    closure()
     return closure
 
 @autojit
@@ -325,6 +326,21 @@ def test_call_closure():
 
 __doc__ += """
 >>> test_call_closure()
+10.0
+10.0
+"""
+
+@autojit
+def test_call_closure_from_closure():
+    closure = get_closure(10.0)
+    @void()
+    def inner():
+        closure()
+    return inner
+
+__doc__ += """
+>>> test_call_closure_from_closure()()
+10.0
 10.0
 """
 
@@ -369,14 +385,14 @@ def test_closure_outer_locals():
     inner()
 
 if __name__ == '__main__':
-#    closure1 = closure_arg(1)
-#    print closure1.__name__
-#    closure1()
-#    test_call_closure()
-#    closure4()
-#    signature_dec()()
-#    test_closure_outer_locals()
-    test_closure_loop()
-#    test_closure_outer_locals()
+    # closure1 = closure_arg(1)
+    # print closure1.__name__
+    # closure1(10)
+    # test_call_closure()
+    # closure4()
+    # signature_dec()()
+    # test_closure_outer_locals()
+    # test_closure_loop()
+    # test_closure_outer_locals()
     import numba
     numba.testmod()
