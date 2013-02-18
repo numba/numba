@@ -14,13 +14,31 @@ from StringIO import StringIO
 
 import numba
 from numba import utils
+from numba import visitors
+
+class AnnotationVisitor(visitors.NumbaVisitor):
+    """
+    Annotate Python source to produce a static webpage showing where
+    code is using the Python C API.
+
+    Runs somewhere after type inference.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(AnnotationVisitor, self).__init__(*args, **kwargs)
+        self.annotations = []
+
+    def produce(self, node, ):
+
+    def visit_Name(self, node):
+        return AnnotationItem(node, "py_code", size=len(node.id))
+
+
 
 # need one-characters subsitutions (for now) so offsets aren't off
 special_chars = [(u'<', u'\xF0', u'&lt;'),
                  (u'>', u'\xF1', u'&gt;'),
                  (u'&', u'\xF2', u'&amp;')]
-
-line_pos_comment = re.compile(r'/\*.*?<<<<<<<<<<<<<<.*?\*/\n*', re.DOTALL)
 
 class AnnotationCodeWriter(object):
 
@@ -88,25 +106,7 @@ class AnnotationCodeWriter(object):
 
 body { font-family: courier; font-size: 12; }
 
-.code  { font-size: 9; color: #444444; display: none; margin-left: 20px; }
-.py_c_api  { color: red; }
-.py_macro_api  { color: #FF7000; }
-.pyx_c_api  { color: #FF3000; }
-.pyx_macro_api  { color: #FF7000; }
-.refnanny  { color: #FFA000; }
-
-.error_goto  { color: #FFA000; }
-
 .tag  {  }
-
-.coerce  { color: #008000; border: 1px dotted #008000 }
-
-.py_attr { color: #FF0000; font-weight: bold; }
-.c_attr  { color: #0000FF; }
-
-.py_call { color: #FF0000; font-weight: bold; }
-.c_call  { color: #0000FF; }
-
 .line { margin: 0em }
 
 </style>
@@ -176,17 +176,64 @@ def escape(raw_string):
     raw_string = raw_string.replace(u'\t', ur'\t')
     return raw_string
 
+styles = {
+    "py_code": "{}",
+    "code": ("{ font-size: 9; color: #444444; display: none; " # LLVM code
+             "margin-left: 20px; }"),
+    "py_c_api": "{ color: red; }",
+    "error_goto": "{ color: #FFA000; }",
+    "coerce": ("{ color: #008000; " # (object <-> native coercion)
+               "border: 1px dotted #008000 }"),
+    "py_attr": "{ color: #FF0000; font-weight: bold; }",
+    "c_attr": "{ color: #0000FF; }",
+    "py_call": "{ color: #FF0000; font-weight: bold; }",
+    "c_call": "{ color: #0000FF; }",
+    "line": "{ margin: 0em }",
+}
+
+titles = {
+    "code":         "LLVM Code",
+    "py_c_api":     "Python C API",
+    "error_goto":   "Error Checking",
+    "coerce":       "Coercion to/from object",
+    "py_attr":      "Python Attribute Access",
+    "c_attr":       "Native Attribute Access",
+    "py_call":      "Python Function Call",
+    "c_call":       "Native Call",
+}
 
 class AnnotationItem(object):
+    """
+    Annotation of some code.
 
-    def __init__(self, style, text, tag="", size=0):
+    Style is one of the following:
+
+        * py_code           (Python Code)
+        * code              (LLVM code)
+        * py_c_api
+        * py_macro_api      (NA)
+        * error_goto        (error checking)
+        * coerce            (object <-> native coercion)
+        * py_attr
+        * c_attr
+        * py_call
+        * c_call
+    """
+
+    def __init__(self, node, style, tag="", size=0):
+        self.node = node
         self.style = style
-        self.text = text
         self.tag = tag
         self.size = size
 
+    @property
+    def title(self):
+        return titles[self.style]
+
     def start(self):
-        return u"<span class='tag %s' title='%s'>%s" % (self.style, self.text, self.tag)
+        return u"<span class='tag %s' title='%s'>%s" % (self.style,
+                                                        self.title,
+                                                        self.tag)
 
     def end(self):
         return self.size, u"</span>"
