@@ -1,3 +1,50 @@
+"""
+Compiling extension classes works as follows:
+
+    * Create an extension Numba/minivect type holding a symtab
+    * Capture attribute types in the symtab ...
+
+        * ... from the class attributes:
+
+            @jit
+            class Foo(object):
+                attr = double
+
+        * ... from __init__
+
+            @jit
+            class Foo(object):
+                def __init__(self, attr):
+                    self.attr = double(attr)
+
+    * Type infer all methods
+    * Compile all extension methods
+
+        * Process signatures such as @void(double)
+        * Infer native attributes through type inference on __init__
+        * Path the extension type with a native attributes struct
+        * Infer types for all other methods
+        * Update the ext_type with a vtab type
+        * Compile all methods
+
+    * Create descriptors that wrap the native attributes
+    * Create an extension type:
+
+      {
+        PyObject_HEAD
+        ...
+        virtual function table (func **)
+        native attributes
+      }
+
+    The virtual function table (vtab) is a ctypes structure set as
+    attribute of the extension types. Objects have a direct pointer
+    for efficiency.
+
+See also extension_types.pyx
+"""
+
+
 import types
 import ctypes
 import logging
@@ -11,6 +58,10 @@ from numba.minivect import minitypes
 import extension_types
 
 logger = logging.getLogger(__name__)
+
+#------------------------------------------------------------------------
+# Parse method signatures
+#------------------------------------------------------------------------
 
 def validate_method(py_func, sig, is_static):
     assert isinstance(py_func, types.FunctionType)
@@ -59,15 +110,10 @@ def _process_signature(ext_type, method, default_signature,
 
     Returns a Method object and the resolved signature.
     """
-    if isinstance(method, minitypes.Function):
-        # @double(...)
-        # def func(self, ...): ...
-        return _process_signature(ext_type, method.py_func,
-                                  method.signature, is_static, is_class)
-    elif isinstance(method, types.FunctionType):
+    if isinstance(method, types.FunctionType):
+        # Process function
         if default_signature is None:
-            # TODO: construct dependency graph, toposort, type infer
-            # TODO: delayed types
+            # TODO: support deferred type inference and autojit methods
             raise error.NumbaError(
                 "Method '%s' does not have signature" % (method.__name__,))
         validate_method(method, default_signature or numba.object_(),
@@ -77,7 +123,13 @@ def _process_signature(ext_type, method, default_signature,
                                                        args=[])
         sig = get_signature(ext_type, is_class, is_static, default_signature)
         return Method(method, is_class, is_static), sig.return_type, sig.args
+    elif isinstance(method, minitypes.Function):
+        # @double(...)
+        # def func(self, ...): ...
+        return _process_signature(ext_type, method.py_func,
+                                  method.signature, is_static, is_class)
     else:
+        # Process staticmethod and classmethod
         if isinstance(method, staticmethod):
             is_static = True
         elif isinstance(method, classmethod):
@@ -85,11 +137,9 @@ def _process_signature(ext_type, method, default_signature,
         else:
             return None, None, None
 
-        method, restype, argtypes = _process_signature(
+        return _process_signature(
                     ext_type, get_classmethod_func(method),
                     default_signature, is_static=is_static, is_class=is_class)
-
-    return method, restype, argtypes
 
 class Method(object):
     """
@@ -111,8 +161,17 @@ class Method(object):
         else:
             return py_func
 
+#------------------------------------------------------------------------
+# Populate Extension Type with Methods
+#------------------------------------------------------------------------
+
 def _process_method_signatures(class_dict, ext_type):
-    "Process all method signatures in order"
+    """
+    Process all method signatures:
+
+        * Verify signatures
+        * Populate ext_type with method signatures (ExtMethodType)
+    """
     for method_name, method in class_dict.iteritems():
         default_signature = None
         if (method_name == '__init__' and
@@ -190,7 +249,14 @@ def _compile_methods(class_dict, env, ext_type, lmethods, method_pointers,
         method_pointers.append((method_name, translator.lfunc_pointer))
         class_dict[method_name] = method.result(wrapper)
 
+#------------------------------------------------------------------------
+# Build Attributes Struct
+#------------------------------------------------------------------------
+
 def _construct_native_attribute_struct(ext_type):
+    """
+    Create attribute struct type from symbol table.
+    """
     attrs = dict((name, var.type) for name, var in ext_type.symtab.iteritems())
     if ext_type.attribute_struct is None:
         # No fields to inherit
@@ -207,38 +273,10 @@ def _construct_native_attribute_struct(ext_type):
         fields = numba.struct(fields).fields
         ext_type.attribute_struct.fields.extend(fields)
 
-def compile_extension_methods(env, py_class, ext_type, class_dict, llvm_module):
-    """
-    Compile extension methods:
-
-        1) Process signatures such as @void(double)
-        2) Infer native attributes through type inference on __init__
-        3) Path the extension type with a native attributes struct
-        4) Infer types for all other methods
-        5) Update the ext_type with a vtab type
-        6) Compile all methods
-    """
-    method_pointers = []
-    lmethods = []
-
-    class_dict['__numba_py_class'] = py_class
-
-    _process_method_signatures(class_dict, ext_type)
-    _type_infer_init_method(env, class_dict, ext_type, llvm_module)
-    _construct_native_attribute_struct(ext_type)
-    _type_infer_methods(env, class_dict, ext_type, llvm_module)
-
-    # TODO: patch method call types
-
-    # Set vtab type before compiling
-    ext_type.vtab_type = numba.struct(
-        [(field_name, field_type.pointer())
-         for field_name, field_type in ext_type.methods])
-    _compile_methods(class_dict, env, ext_type, lmethods, method_pointers,
-                     llvm_module)
-    return method_pointers, lmethods
-
 def _create_descr(attr_name):
+    """
+    Create a descriptor that accesses the attribute on the ctypes struct.
+    """
     def _get(self):
         return getattr(self._numba_attrs, attr_name)
     def _set(self, value):
@@ -246,14 +284,20 @@ def _create_descr(attr_name):
     return property(_get, _set)
 
 def inject_descriptors(env, py_class, ext_type, class_dict):
+    "Cram descriptors into the class dict"
     for attr_name, attr_type in ext_type.symtab.iteritems():
         descriptor = _create_descr(attr_name)
         class_dict[attr_name] = descriptor
+
+#------------------------------------------------------------------------
+# Attribute Inheritance
+#------------------------------------------------------------------------
 
 def is_numba_class(cls):
     return hasattr(cls, '__numba_struct_type')
 
 def verify_base_class_compatibility(cls, struct_type, vtab_type):
+    "Verify that we can build a compatible class layout"
     bases = [cls]
     for base in cls.__bases__:
         if is_numba_class(base):
@@ -295,12 +339,58 @@ def inherit_attributes(ext_type, class_dict):
     ext_type.parent_attr_struct = struct_type
     ext_type.parent_vtab_type = vtab_type
 
+#------------------------------------------------------------------------
+# Compile Methods and Build Attributes
+#------------------------------------------------------------------------
+
+def compile_extension_methods(env, py_class, ext_type, class_dict, llvm_module):
+    """
+    Compile extension methods:
+
+        1) Process signatures such as @void(double)
+        2) Infer native attributes through type inference on __init__
+        3) Path the extension type with a native attributes struct
+        4) Infer types for all other methods
+        5) Update the ext_type with a vtab type
+        6) Compile all methods
+    """
+    method_pointers = []
+    lmethods = []
+
+    class_dict['__numba_py_class'] = py_class
+
+    _process_method_signatures(class_dict, ext_type)
+    _type_infer_init_method(env, class_dict, ext_type, llvm_module)
+    _construct_native_attribute_struct(ext_type)
+    _type_infer_methods(env, class_dict, ext_type, llvm_module)
+
+    # TODO: patch method call types
+
+    # Set vtab type before compiling
+    ext_type.vtab_type = numba.struct(
+        [(field_name, field_type.pointer())
+         for field_name, field_type in ext_type.methods])
+    _compile_methods(class_dict, env, ext_type, lmethods, method_pointers,
+                     llvm_module)
+    return method_pointers, lmethods
+
+#------------------------------------------------------------------------
+# Virtual Methods
+#------------------------------------------------------------------------
+
 def vtab_name(field_name):
+    "Mangle method names for the vtab (ctypes doesn't handle this)"
     if field_name.startswith("__") and field_name.endswith("__"):
         field_name = '__numba_' + field_name.strip("_")
     return field_name
 
 def build_vtab(vtab_type, method_pointers):
+    """
+    Create ctypes virtual method table.
+
+    vtab_type: the vtab struct type (typesystem.struct)
+    method_pointers: a list of method pointers ([int])
+    """
     assert len(method_pointers) == len(vtab_type.fields)
 
     vtab_ctype = numba.struct(
@@ -318,27 +408,14 @@ def build_vtab(vtab_type, method_pointers):
     vtab = vtab_ctype(*methods)
     return vtab, vtab_type
 
+#------------------------------------------------------------------------
+# Build Extension Type
+#------------------------------------------------------------------------
+
 def create_extension(env, py_class, translator_kwargs):
     """
-    Compile an extension class
-
-        1) Create an extension Numba/minivect type holding a symtab
-        2) Capture native extension attributes from __init__ in the symtab
-        3) Type infer all methods
-        4) Compile all methods
-        5) Create descriptors that wrap the native attributes
-        6) Create an extension type:
-
-          {
-            PyObject_HEAD
-            ...
-            virtual function table (func **)
-            native attributes
-          }
-
-        The virtual function table (vtab) is a ctypes structure set as
-        attribute of the extension types. Objects have a direct pointer
-        for efficiency.
+    Compile an extension class given the NumbaEnvironment and the Python
+    class that contains the functions that are to be compiled.
     """
     
     llvm_module = translator_kwargs.pop('llvm_module')
