@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 try:
     from meta.decompiler import decompile_func
 except Exception, exn:
-    logger.warn("Could not import Meta - AST translation will not work "
-                "if the source is not available.")
-    decompile_func = None
+    def decompile_func(*args, **kwargs):
+        raise Exception("Could not import Meta -- Cannot recreate source "
+                        "from bytecode")
 
 def fix_ast_lineno(tree):
     # NOTE: A hack to fix assertion error in debug mode due to bad lineno.
