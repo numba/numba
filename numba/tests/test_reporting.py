@@ -48,5 +48,6 @@ def compile_func2():
 
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    compile_func1()
+#    import doctest
+#    doctest.testmod()
