@@ -32,8 +32,23 @@ class SourceDescr(object):
             except Exception:
                 source = ""
 
-        source = "\n" * (self.ast.lineno - 2) + source
+        first_lineno = getattr(self.ast, "lineno", 2)
+        line_offset = offset(source.splitlines())
+
+        newlines = "\n" * (first_lineno - line_offset)
+        source = newlines + source
+
         return source.splitlines()
+
+def offset(source_lines):
+    offset = 0
+    for line in source_lines:
+        if line.strip().startswith("def"):
+            break
+
+        offset += 1
+
+    return offset
 
 # ______________________________________________________________________
 
@@ -55,6 +70,11 @@ class MessageCollection(object):
 
     def report(self, post_mortem=False):
         self.messages.sort()
+
+        if self.messages:
+            print " Numba Encountered Errors or Warnings ".center(80, "-")
+            print
+
         errors = []
         for node, is_error, message in self.messages:
             if is_error:
@@ -64,6 +84,9 @@ class MessageCollection(object):
                 type = "Warning"
 
             self.report_message(message, node, type)
+
+        if self.messages:
+            print "-" * 80
 
         if errors and not post_mortem:
             raise error.NumbaError(*errors[0])
@@ -76,14 +99,14 @@ class FancyMessageCollection(MessageCollection):
         self.source_lines = source_lines
 
     def report_message(self, message, node, type):
-        format_msg(type, self.source_lines, self.ast.lineno, node, message)
+        format_msg(type, self.source_lines, node, message)
 
 # ______________________________________________________________________
 
-def format_msg(type, source_lines, first_lineno, node, msg):
+def format_msg(type, source_lines, node, msg):
     if hasattr(node, 'lineno'):
         lineno, colno = getpos(node)
-        line = source_lines[lineno - first_lineno]
+        line = source_lines[lineno]
 
         print line
         print "%s^" % ("-" * colno)
@@ -94,6 +117,7 @@ def format_msg_simple(type, node, message):
     "Issue a warning"
     # printing allows us to test the code
     print "%s %s%s" % (type, error.format_pos(node), message)
+    print
     # logger.warning("Warning %s: %s", error.format_postup(getpos(node)), message)
 
 def warn_unreachable(node):

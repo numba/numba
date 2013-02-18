@@ -255,7 +255,7 @@ class PromotionType(UnresolvedType):
 
             types = sorted(e.args[0], key=str)
             types = tuple(types)
-            raise TypeError("Cannot promote types %s for %s" % (types, name))
+            raise error.NumbaError("Cannot promote types %s for %s" % (types, name))
 
     @classmethod
     def promote(cls, *types):
