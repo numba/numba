@@ -339,6 +339,19 @@ def inherit_attributes(ext_type, class_dict):
     ext_type.parent_attr_struct = struct_type
     ext_type.parent_vtab_type = vtab_type
 
+def process_class_attribute_types(ext_type, class_dict):
+    """
+    Process class attribute types:
+
+        @jit
+        class Foo(object):
+
+            attr = double
+    """
+    for name, value in class_dict.iteritems():
+        if isinstance(value, minitypes.Type):
+            ext_type.symtab[name] = symtab.Variable(value, promotable_type=False)
+
 #------------------------------------------------------------------------
 # Compile Methods and Build Attributes
 #------------------------------------------------------------------------
@@ -422,7 +435,9 @@ def create_extension(env, py_class, translator_kwargs):
     assert llvm_module is not None
     ext_type = typesystem.ExtensionType(py_class)
     class_dict = dict(vars(py_class))
+
     inherit_attributes(ext_type, class_dict)
+    process_class_attribute_types(ext_type, class_dict)
 
     method_pointers, lmethods = compile_extension_methods(
                                         env, py_class, ext_type, class_dict,
