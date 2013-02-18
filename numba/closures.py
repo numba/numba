@@ -66,7 +66,7 @@ from numba.symtab import Variable
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 
 #------------------------------------------------------------------------
 # Closure Signature Validation (type inference of outer function)
@@ -501,14 +501,6 @@ class ClosureSpecializer(ClosureTransformer):
             # return nodes.NoneNode()
             return nodes.ObjectInjectNode(None, type=object_)
 
-    def assign_closure(self, func_call, node):
-        "Assign closure to its name. NOT USED, already happened in CFG"
-        func_name = node.func_def.name
-        dst = self._load_name(func_name, self.symtab[func_name].is_cellvar)
-        dst.ctx = ast.Store()
-        result = ast.Assign(targets=[dst], value=func_call)
-        return result
-
     def create_numba_function(self, node, translator):
         closure_scope = self.ast.cur_scope
 
@@ -561,7 +553,6 @@ class ClosureSpecializer(ClosureTransformer):
                             function_node=create_numbafunc,
                             args=args)
 
-        # result = self.assign_closure(func_call, node)
         result = func_call
 
         #stats = [nodes.inject_print(nodes.const("calling...", c_string_type)),
