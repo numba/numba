@@ -87,7 +87,7 @@ class NumbaVisitorMixin(CooperativeBase):
             self.freevars = set(f_code.co_freevars)
 
         if func is None:
-            self.func_globals = kwargs.get('func_globals', {})
+            self.func_globals = kwargs.get('func_globals', None) or {}
             self.module_name = self.func_globals.get("__name__", "")
         else:
             self.func_globals = func.func_globals

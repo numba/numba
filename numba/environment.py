@@ -49,6 +49,9 @@ default_type_infer_pipeline_order = [
     'TypeInfer',
 ]
 
+compile_idx = default_pipeline_order.index('TypeInfer') + 1
+default_compile_pipeline_order = default_pipeline_order[compile_idx:]
+
 default_dummy_type_infer_pipeline_order = [
     'TypeInfer',
     'TypeSet',
@@ -109,6 +112,10 @@ class FunctionEnvironment(object):
         'local variables. '
         '({ "local_var_name" : numba.symtab.Variable(local_var_type) })')
 
+    function_globals = TypedProperty(
+        (dict, types.NoneType),
+        "Globals dict of the function",)
+
     locals = TypedProperty(
         dict,
         'A map from local variable names to types.  Used to handle the locals '
@@ -131,6 +138,7 @@ class FunctionEnvironment(object):
     # transformers of the environment.  Any state needed beyond a
     # given stage should be put in the environment instead of keeping
     # around the whole transformer.
+    # TODO: Create linking stage
     translator = TypedProperty(
         object, # FIXME: Should be LLVMCodeGenerator, but that causes
                 # module coupling.
@@ -147,6 +155,10 @@ class FunctionEnvironment(object):
     closures = TypedProperty(
         dict, 'Map from ast nodes to closures.')
 
+    closure_scope = TypedProperty(
+        (dict, types.NoneType),
+        'Collective symtol table containing all entries from outer '
+        'functions.')
 
     kwargs = TypedProperty(
         dict,
@@ -158,16 +170,18 @@ class FunctionEnvironment(object):
 
     def __init__(self, parent, func, ast, func_signature,
                  name=None, llvm_module=None, wrap=True, symtab=None,
-                 locals=None, template_signature=None, cfg_transform=None,
-                 is_closure=False, closures=None,
+                 function_globals=None, locals=None,
+                 template_signature=None, cfg_transform=None,
+                 is_closure=False, closures=None, closure_scope=None,
                  **kws):
+        self.parent = parent
         self.numba = parent.numba
         self.func = func
         self.ast = ast
         self.func_signature = func_signature
         if name is None:
-            if func:
-                module_name = inspect.getmodule(func).__name__
+            if func and func.__module__:
+                module_name = func.__module__
                 name = '.'.join([module_name, func.__name__])
             else:
                 name = ast.name
@@ -178,12 +192,49 @@ class FunctionEnvironment(object):
         self.wrap = wrap
         self.llvm_wrapper_func = None
         self.symtab = symtab if symtab is not None else {}
+
+        if function_globals is not None:
+            self.function_globals = function_globals
+        else:
+            self.function_globals = func.func_globals
+
         self.locals = locals if locals is not None else {}
         self.template_signature = template_signature
         self.cfg_transform = cfg_transform
         self.is_closure = is_closure
         self.closures = closures if closures is not None else {}
+        self.closure_scope = closure_scope
         self.kwargs = kws
+
+    def getstate(self):
+        state = dict(
+            parent=self.parent,
+            func=self.func,
+            ast=self.ast,
+            func_signature=self.func_signature,
+            name=self.func_name,
+            llvm_module=self.llvm_module,
+            wrap=self.wrap,
+            symtab=self.symtab,
+            function_globals=self.function_globals,
+            locals=self.locals,
+            template_signature=self.template_signature,
+            cfg_transform=self.cfg_transform,
+            is_closure=self.is_closure,
+            closures=self.closures,
+            closure_scope=self.closure_scope,
+        )
+        return state
+
+    def inherit(self, **kwds):
+        """
+        Inherit from a parent FunctionEnvironment (e.g. to run pipeline stages
+        on a subset of the AST).
+        """
+        # TODO: link these things together
+        state = self.getstate()
+        state.update(kwds)
+        return FunctionEnvironment(**state)
 
 # ______________________________________________________________________
 
@@ -242,8 +293,12 @@ class TranslationEnvironment(object):
         self.warn = kws.get('warn', True)
 
     def push(self, func, ast, func_signature, **kws):
+        func_env = FunctionEnvironment(self, func, ast, func_signature, **kws)
+        return self.push_env(func_env, **kws)
+
+    def push_env(self, func_env, **kws):
         self.set_flags(**kws)
-        self.crnt = FunctionEnvironment(self, func, ast, func_signature, **kws)
+        self.crnt = func_env
         self.stack.append((kws, self.crnt))
         self.functions[self.crnt.func_name] = self.crnt
         if self.numba.debug:
@@ -393,6 +448,8 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
                 default_type_infer_pipeline_order),
             'dummy_type_infer' : pipeline.ComposedPipelineStage(
                 default_dummy_type_infer_pipeline_order),
+            'compile' : pipeline.ComposedPipelineStage(
+                default_compile_pipeline_order),
             }
         self.context = NumbaContext()
         self.specializations = functions.FunctionCache(env=self)

@@ -362,7 +362,13 @@ def run_pipeline2(env, func, func_ast, func_signature,
         post_ast = pipeline(func_ast, env)
         func_signature = func_env.func_signature
         symtab = func_env.symtab
-    return pipeline, (func_signature, symtab, post_ast)
+    return func_env, (func_signature, symtab, post_ast)
+
+def run_env(env, func_env, **kwargs):
+    env.translation.push_env(func_env)
+    pipeline = env.get_pipeline(kwargs.get('pipeline_name', None))
+    pipeline(func_env.ast, env)
+    env.translation.pop()
 
 def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
     ast = functions._get_ast(func)
@@ -492,17 +498,20 @@ class PipelineStage(object):
                    symtab=crnt.symtab,
                    func_name=crnt.func_name,
                    llvm_module=crnt.llvm_module,
+                   func_globals=crnt.function_globals,
                    locals=crnt.locals,
                    allow_rebind_args=env.translation.allow_rebind_args,
                    warn=env.translation.warn,
                    is_closure=crnt.is_closure,
                    closures=crnt.closures,
+                   closure_scope=crnt.closure_scope,
                    env=env)
         return cls(env.context, crnt.func, ast, **kws)
 
     def __call__(self, ast, env):
         if env.stage_checks: self.check_preconditions(ast, env)
         ast = self.transform(ast, env)
+        env.translation.crnt.ast = ast
         if env.stage_checks: self.check_postconditions(ast, env)
         return ast
 

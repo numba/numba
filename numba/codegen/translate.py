@@ -412,7 +412,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                                             self.func,
                                             fake_pyfunc,
                                             self.func_name)
-        wrapper.pipeline = self.ast.pipeline
+#        wrapper.pipeline = self.ast.pipeline
         wrapper.cellvars = []
         return wrapper
 

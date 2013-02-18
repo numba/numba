@@ -289,7 +289,7 @@ class ClosureTypeInferer(ClosureBaseVisitor, visitors.NumbaTransformer):
             # Process inner functions and determine cellvars and freevars
             # codes = [c for c in self.constants
             #                if isinstance(c, types.CodeType)]
-            process_closures(self.context, node, self.symtab,
+            process_closures(self.env, node, self.symtab,
                              func_globals=self.func_globals,
                              closures=self.closures,
                              warn=self.warn)
@@ -376,7 +376,7 @@ def get_locals(symtab):
     return dict((name, var) for name, var in symtab.iteritems()
                     if var.is_local)
 
-def process_closures(context, outer_func_def, outer_symtab, **kwds):
+def process_closures(env, outer_func_def, outer_symtab, **kwds):
     """
     Process closures recursively and for each variable in each function
     determine whether it is a freevar, a cellvar, a local or otherwise.
@@ -397,19 +397,29 @@ def process_closures(context, outer_func_def, outer_symtab, **kwds):
         # closure.make_pyfunc()
         closure_py_func = None # closure.py_func
         #symtab = {}
-        p, result = numba.pipeline.infer_types_from_ast_and_sig(
-                    context, closure_py_func, closure.func_def,
-                    closure.type.signature,
-                    closure_scope=closure_scope,
-                    locals=closure.locals,
-                    is_closure=True,
-                    **kwds)
+        func_env, _ = numba.pipeline.run_pipeline2(
+                env,
+                closure_py_func,
+                closure.func_def,
+                closure.type.signature,
+                closure_scope=closure_scope,
+                function_globals=env.translation.crnt.function_globals,
+                **kwds)
 
-        _, _, ast = result
-        closure.symtab = p.symtab
-        closure.type_inferred_ast = ast
+#        p, result = numba.pipeline.infer_types_from_ast_and_sig(
+#                    context, closure_py_func, closure.func_def,
+#                    closure.type.signature,
+#                    closure_scope=closure_scope,
+#                    locals=closure.locals,
+#                    is_closure=True,
+#                    **kwds)
 
-        process_closures(context, closure.func_def, p.symtab, **kwds)
+#        _, _, ast = result
+        closure.func_env = func_env
+
+        env.translation.push_env(func_env)
+        process_closures(env, closure.func_def, func_env.symtab, **kwds)
+        env.translation.pop()
 
 
 class ClosureCompilingMixin(ClosureBaseVisitor):
@@ -485,19 +495,16 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         closure_name = node.name
         fullname = "%s.__closure__.%s" % (ns, closure_name)
 
-        p, result = numba.pipeline.run_pipeline(
-                    self.context, None, node.type_inferred_ast,
-                    node.type.signature, symtab=node.symtab,
-                    order=order, # skip type inference
-                    qualified_name=fullname,
-                    locals=node.locals,
-                    )
-        p.translator.link()
-        node.lfunc = p.translator.lfunc
-        node.lfunc_pointer = p.translator.lfunc_pointer
+        # Compile closure, skip CFA and type inference
+        numba.pipeline.run_env(self.env, node.func_env, pipeline_name='compile')
+
+        translator = node.func_env.translator
+        translator.link()
+        node.lfunc = translator.lfunc
+        node.lfunc_pointer = translator.lfunc_pointer
 
         if node.need_numba_func:
-            return self.create_numba_function(node, p)
+            return self.create_numba_function(node, translator)
         else:
             func_name = node.func_def.name
             self.symtab[func_name] = Variable(name=func_name, type=node.type,
@@ -515,7 +522,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         result = ast.Assign(targets=[dst], value=func_call)
         return result
 
-    def create_numba_function(self, node, p):
+    def create_numba_function(self, node, translator):
         closure_scope = self.ast.cur_scope
 
         if closure_scope is None:
@@ -526,7 +533,7 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
             scope_type = closure_scope.type
 
         node.wrapper_func, node.wrapper_lfunc, methoddef = (
-                    p.translator.build_wrapper_function(get_lfunc=True))
+                    translator.build_wrapper_function(get_lfunc=True))
 
         # Keep methoddef alive
         # assert methoddef in node.py_func.live_objects
@@ -578,8 +585,8 @@ class ClosureCompilingMixin(ClosureBaseVisitor):
         "Resolve cellvars and freevars"
         if node.variable.is_cellvar or node.variable.is_freevar:
             logger.debug("Function %s, lookup %s in scope %s: %s",
-                         self.ast.name, node.id, self.ast.cur_scope.type,
-                         self.ast.cur_scope.type.attribute_struct)
+                          self.ast.name, node.id, self.ast.cur_scope.type,
+                          self.ast.cur_scope.type.attribute_struct)
             attr = lookup_scope_attribute(self.ast.cur_scope,
                                           var_name=node.id, ctx=node.ctx)
             return self.visit(attr)
