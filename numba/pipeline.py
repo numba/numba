@@ -491,6 +491,9 @@ def compile_from_sig(context, func, signature, **kwds):
 #------------------------------------------------------------------------
 
 class PipelineStage(object):
+
+    is_composed = False
+
     def check_preconditions(self, ast, env):
         return True
 
@@ -521,7 +524,17 @@ class PipelineStage(object):
 
     def __call__(self, ast, env):
         if env.stage_checks: self.check_preconditions(ast, env)
-        ast = self.transform(ast, env)
+
+        if self.is_composed:
+            ast = self.transform(ast, env)
+        else:
+            try:
+                ast = self.transform(ast, env)
+            except error.NumbaError, e:
+                error_env = env.translation.crnt.error_env
+                reporting.report(error_env, error_env.enable_post_mortem, exc=e)
+                raise
+
         env.translation.crnt.ast = ast
         if env.stage_checks: self.check_postconditions(ast, env)
         return ast
@@ -745,6 +758,9 @@ class ErrorReporting(PipelineStage):
         return ast
 
 class ComposedPipelineStage(PipelineStage):
+
+    is_composed = True
+
     def __init__(self, stages=None):
         if stages is None:
             stages = []

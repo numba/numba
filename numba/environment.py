@@ -76,7 +76,8 @@ class FunctionErrorEnvironment(object):
     """
 
     func = WriteOnceTypedProperty(
-        types.FunctionType, 'Function (or similar) being translated.')
+        (types.NoneType, types.FunctionType),
+        'Function (or similar) being translated.')
 
     ast = TypedProperty(
         ast_module.AST,
@@ -89,7 +90,8 @@ class FunctionErrorEnvironment(object):
     enable_post_mortem = TypedProperty(
         bool,
         "Enable post-mortem debugging for the Numba compiler",
-        True)
+        False#|1
+    )
 
     collection = TypedProperty(
         reporting.MessageCollection,
@@ -103,7 +105,8 @@ class FunctionErrorEnvironment(object):
         source_descr = reporting.SourceDescr(func, ast)
         self.source = source_descr.get_lines()
 
-        self.collection = reporting.MessageCollection()
+        self.collection = reporting.FancyMessageCollection(self.ast,
+                                                           self.source)
 
 # ______________________________________________________________________
 
