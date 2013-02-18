@@ -66,7 +66,7 @@ from numba.symtab import Variable
 
 import logging
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 
 #------------------------------------------------------------------------
 # Closure Signature Validation (type inference of outer function)
@@ -349,6 +349,7 @@ class ClosureTypeInferer(ClosureTransformer):
 
             # patch closure signature
             closure.type.add_scope_arg(scope_type)
+            closure.func_env.func_signature = closure.type.signature
 
 
 def get_locals(symtab):
@@ -383,6 +384,7 @@ def process_closures(env, outer_func_def, outer_symtab, **kwds):
                 closure.type.signature,
                 closure_scope=closure_scope,
                 function_globals=env.translation.crnt.function_globals,
+                pipeline_name='type_infer',
                 **kwds)
 
 #        p, result = numba.pipeline.infer_types_from_ast_and_sig(
@@ -395,6 +397,7 @@ def process_closures(env, outer_func_def, outer_symtab, **kwds):
 
 #        _, _, ast = result
         closure.func_env = func_env
+        closure.symtab = func_env.symtab
 
         env.translation.push_env(func_env)
         process_closures(env, closure.func_def, func_env.symtab, **kwds)
