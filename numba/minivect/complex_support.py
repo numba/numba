@@ -1,5 +1,5 @@
-from miniutils import ctypes
-from minitypes import *
+from .miniutils import ctypes
+from .minitypes import *
 
 ### Taken from Numba ###
 

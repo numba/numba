@@ -1,5 +1,5 @@
 from numba import *
-
+from numba.tests.test_support import rewrite_doc
 @autojit
 def error1():
     def inner():
@@ -137,13 +137,13 @@ TypeError: an integer is required
 >>> closure3()
 12
 >>> func = closure4()
->>> print func.__name__
+>>> print(func.__name__)
 inner
 >>> field, = func.__closure__._numba_attrs._fields_
 >>> import ctypes
->>> print field[0], field[1] == ctypes.c_int
-a True
->>> print func.__closure__._numba_attrs.a
+>>> print((field[0], field[1] == ctypes.c_int))
+('a', True)
+>>> print(func.__closure__._numba_attrs.a)
 12
 >>> func()
 12
@@ -383,6 +383,8 @@ def test_closure_outer_locals():
         var = "hello"
 
     inner()
+
+__doc__ = rewrite_doc(__doc__)
 
 if __name__ == '__main__':
     # closure1 = closure_arg(1)

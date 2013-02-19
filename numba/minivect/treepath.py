@@ -26,7 +26,7 @@ def iterchildren(node, attr_name):
     # returns an iterable of all child nodes of that name
     child = getattr(node, attr_name)
     if child is not None:
-        if type(child) is list:
+        if isinstance(child, list):
             return child
         else:
             return [child]
@@ -36,7 +36,7 @@ def iterchildren(node, attr_name):
 def _get_first_or_none(it):
     try:
         try:
-            _next = it.next
+            _next = it.__next__
         except AttributeError:
             return next(it)
         else:
@@ -254,14 +254,14 @@ def _build_path_iterator(path):
                     for (special,text) in path_tokenizer(path)
                     if special or text ])
     try:
-        _next = stream.next
+        _next = stream.__next__
     except AttributeError:
         # Python 3
         def _next():
             return next(stream)
     token = _next()
     selector = []
-    while 1:
+    while True:
         try:
             selector.append(operations[token[0]](_next, token))
         except StopIteration:

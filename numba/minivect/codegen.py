@@ -6,9 +6,9 @@ as a visitor.
 import sys
 import string
 
-import minierror
-import minitypes
-import minivisitor
+from . import minierror
+from . import minitypes
+from . import minivisitor
 
 class CodeGen(minivisitor.TreeVisitor):
     """

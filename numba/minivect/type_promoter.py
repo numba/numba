@@ -7,10 +7,10 @@ operations.
 import sys
 import copy
 
-import minivisitor
-import miniutils
-import minitypes
-import minierror
+from . import minivisitor
+from . import miniutils
+from . import minitypes
+from . import minierror
 
 comparison_ops = set(['<', '>', '==', '!=', '>=', '<=',])
 

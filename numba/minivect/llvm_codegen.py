@@ -11,11 +11,11 @@ try:
 except ImportError:
     llvm = None
 
-import codegen
-import minierror
-import minitypes
-import minivisitor
-import ctypes_conversion
+from . import codegen
+from . import minierror
+from . import minitypes
+from . import minivisitor
+from . import ctypes_conversion
 
 def handle_struct_passing(builder, alloca_func, largs, signature):
     """

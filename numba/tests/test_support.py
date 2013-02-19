@@ -7,11 +7,32 @@ from nose.tools import nottest
 import nose.plugins.skip
 import numba
 from numba import *
-import doctest_support
+from . import doctest_support
 
 jit_ = jit
 
-import __builtin__
+if numba.PY3:
+    import re
+    def rewrite_doc(doc):
+        doc = re.sub(r'(\d+)L', r'\1', doc)
+        doc = re.sub(r'([^\.])NumbaError', r'\1numba.error.NumbaError', doc)
+        doc = re.sub(r'([^\.])InvalidTemplateError', r'\1numba.error.InvalidTemplateError', doc)
+        doc = re.sub(r'([^\.])UnpromotableTypeError', r'\1numba.minivect.minierror.UnpromotableTypeError', doc)
+        return doc
+    def autojit_py3doc(*args, **kwargs):
+        if kwargs:
+            def _inner(fun):
+                fun.__doc__ = rewrite_doc(fun.__doc__)
+                return autojit(*args, **kwargs)(fun)
+            return _inner
+        else:
+            fun = args[0]
+            fun.__doc__ = rewrite_doc(fun.__doc__)
+            return autojit(fun)
+else:
+    def rewrite_doc(doc):
+        return doc
+    autojit_py3doc = autojit
 
 class ASTTestCase(unittest.TestCase):
     jit = staticmethod(lambda *args, **kw: jit_(*args, **dict(kw, backend='ast')))
@@ -84,7 +105,7 @@ class StdoutReplacer(object):
     def __exit__(self, *args):
         sys.stdout = self.out
 
-from bytecode.test_support import ByteCodeTestCase
+from .bytecode.test_support import ByteCodeTestCase
 
 def testmod(module=None, runit=False):
     """

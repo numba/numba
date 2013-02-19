@@ -221,7 +221,7 @@ class ObjectCoercer(object):
         if debug_conversion:
             self.translator.puts("successfully parsed tuple...")
 
-        return map(self.builder.load, lresults)
+        return [self.builder.load(result) for result in lresults]
 
     def to_native(self, type, llvm_tuple, name=''):
         "Generate code to convert a Python object to an LLVM value"

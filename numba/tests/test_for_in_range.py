@@ -2,7 +2,7 @@
 
 from numba.tests.test_support import *
 
-@autojit
+@autojit_py3doc
 def test_modify():
     """
     >>> test_modify()
@@ -22,7 +22,7 @@ def test_modify():
     print
     return i,n
 
-@autojit
+@autojit_py3doc
 def test_negindex():
     """
     >>> test_negindex()
@@ -40,7 +40,7 @@ def test_negindex():
         n = 0
     return i,n
 
-@autojit
+@autojit_py3doc
 def test_negindex_inferred():
     """
     >>> test_negindex_inferred()
@@ -57,7 +57,7 @@ def test_negindex_inferred():
         n = 0
     return i,n
 
-@autojit
+@autojit_py3doc
 def test_fix():
     """
     >>> test_fix()
@@ -75,7 +75,7 @@ def test_fix():
     print
     return i
 
-@autojit
+@autojit_py3doc
 def test_break():
     """
     >>> test_break()
@@ -97,7 +97,7 @@ def test_break():
     print
     return i, n
 
-@autojit
+@autojit_py3doc
 def test_else_clause1():
     """
     >>> test_else_clause1()
@@ -112,7 +112,7 @@ def test_else_clause1():
     else:
         print "else clause"
 
-@autojit
+@autojit_py3doc
 def test_else_clause2():
     """
     >>> test_else_clause2()
@@ -128,7 +128,7 @@ def test_else_clause2():
     else:
         print "else clause"
 
-@autojit
+@autojit_py3doc
 def test_else_clause3():
     """
     >>> test_else_clause3()
@@ -144,7 +144,7 @@ def test_else_clause3():
     else:
         print "else clause"
 
-@autojit
+@autojit_py3doc
 def test_else_clause4():
     """
     >>> test_else_clause4()
@@ -190,7 +190,7 @@ def test_else_clause4():
     else:
         print "else clause"
 
-@autojit
+@autojit_py3doc
 def test_return():
     """
     >>> test_return()
@@ -208,7 +208,7 @@ def test_return():
     print
     return "FAILED!"
 
-@autojit
+@autojit_py3doc
 def test_return2():
     """
     >>> test_return2()

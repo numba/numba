@@ -13,6 +13,7 @@ from timeit import default_timer as _timer
 import llvm.core as lc
 
 # import numba.closures
+from numba import PY3
 from numba import error
 from numba import functions
 from numba import naming
@@ -207,7 +208,11 @@ class Pipeline(object):
         if self.template_signature is not None:
             from numba import typesystem
 
-            argnames = [arg.id for arg in ast.args.args]
+            if PY3:
+                argnames = [name.arg for name in ast.args.args]
+            else:
+                argnames = [name.id for name in ast.args.args]
+
             argtypes = list(self.func_signature.args)
 
             typesystem.resolve_templates(self.locals, self.template_signature,

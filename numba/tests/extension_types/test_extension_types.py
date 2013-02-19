@@ -23,7 +23,7 @@ class MyExtension(object):
     'getvalue'
     >>> obj.getvalue.__doc__
     'Return value'
-    >>> type(obj.getvalue.im_func)
+    >>> type(obj.getvalue.__func__)
     <type 'numba_function_or_method'>
     >>> obj._numba_attrs._fields_
     [('value', <class 'ctypes.c_double'>)]
@@ -109,7 +109,7 @@ exttype = ObjectAttrExtension.exttype
 @jit
 class ExtensionTypeAsAttribute(object):
     """
-    >>> print ExtensionTypeAsAttribute.exttype
+    >>> print(ExtensionTypeAsAttribute.exttype)
     <Extension ExtensionTypeAsAttribute({'attr': <Extension ObjectAttrExtension>})>
     """
 

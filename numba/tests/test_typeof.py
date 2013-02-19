@@ -1,7 +1,7 @@
 import numpy as np
 import numba
 from numba import *
-
+from numba.tests.test_support import autojit_py3doc
 @jit
 class Foo(object):
     def __init__(self, arg):
@@ -13,12 +13,12 @@ def test_typeof_pure(arg):
     int
     >>> test_typeof_pure(10.0)
     double
-    >>> print test_typeof_pure(Foo(10))
+    >>> print(test_typeof_pure(Foo(10)))
     <Extension Foo({'arg': double})>
     """
     return numba.typeof(arg)
 
-@autojit
+@autojit_py3doc
 def test_typeof_numba(a, b):
     """
     >>> test_typeof_numba(10, 11.0)
@@ -43,9 +43,9 @@ def test_typeof_numba2(arg):
 @autojit
 def test_typeof_numba3(arg):
     """
-    >>> print test_typeof_numba3(10)
+    >>> print(test_typeof_numba3(10))
     int
-    >>> print test_typeof_numba3(Foo(10))
+    >>> print(test_typeof_numba3(Foo(10)))
     <Extension Foo({'arg': double})>
     """
     return numba.typeof(arg)

@@ -1,12 +1,12 @@
-from basetypes import *
-from exttypes import *
-from closuretypes import *
-from ssatypes import *
-from templatetypes import *
-from typemapper import *
-from typeutils import *
+from .basetypes import *
+from .exttypes import *
+from .closuretypes import *
+from .ssatypes import *
+from .templatetypes import *
+from .typemapper import *
+from .typeutils import *
 
-from shorthands import *
+from .shorthands import *
 
 # from typeset import *
 from typematch import *

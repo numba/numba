@@ -11,6 +11,8 @@ https://github.com/markflorisson88/cython/blob/_array_expressions/Cython/Utility
 
 import sys
 import copy
+from functools import reduce
+
 try:
     from functools import wraps
 except ImportError:
@@ -19,11 +21,11 @@ except ImportError:
             return wrapper
         return decorator
 
-import minivisitor
-import miniutils
-import minitypes
-import minierror
-import codegen
+from . import minivisitor
+from . import miniutils
+from . import minitypes
+from . import minierror
+from . import codegen
 
 strength_reduction = True
 
@@ -125,7 +127,7 @@ class BaseSpecializer(ASTMapper):
         """
         Fuse consecutive OpenMPConditionalNodes.
         """
-        import miniast
+        from . import miniast
 
         if not node.stats:
             return node
@@ -317,7 +319,7 @@ class FinalSpecializer(BaseSpecializer):
         Run any optimizations on the AST. Currently only loop-invariant code
         motion is implemented when broadcasting information is present.
         """
-        import optimize
+        from . import optimize
 
         # TODO: support vectorized specializations
         if (self.context.optimize_broadcasting and not
@@ -702,7 +704,7 @@ class FinalSpecializer(BaseSpecializer):
         """
         Generate a call to PyErr_Format() to set an exception.
         """
-        from minitypes import FunctionType, object_
+        from .minitypes import FunctionType, object_
         b = self.astbuilder
 
         args = [object_] * (2 + len(node.fmt_args))

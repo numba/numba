@@ -41,11 +41,11 @@ import struct as struct_
 import types
 import textwrap
 
-import miniutils
-import minierror
+from . import miniutils
+from . import minierror
 
-from miniutils import *
-from miniutils import have_ctypes, ctypes
+from .miniutils import *
+from .miniutils import have_ctypes, ctypes
 
 _plat_bits = struct_.calcsize('@P') * 8
 
@@ -171,7 +171,7 @@ class TypeMapper(object):
 
     def promote_numeric(self, type1, type2):
         "Promote two numeric types"
-        type = miniutils.max([type1, type2], key=lambda type: type.rank)
+        type = max([type1, type2], key=lambda type: type.rank)
         if type1.kind != type2.kind:
             def itemsize(type):
                 return type.itemsize // 2 if type.is_complex else type.itemsize
@@ -191,7 +191,7 @@ class TypeMapper(object):
         "Promote two array types in an expression to a new array type"
         equal_ndim = type1.ndim == type2.ndim
         return ArrayType(self.promote_types(type1.dtype, type2.dtype),
-                         ndim=miniutils.max((type1.ndim, type2.ndim)),
+                         ndim=max((type1.ndim, type2.ndim)),
                          is_c_contig=(equal_ndim and type1.is_c_contig and
                                       type2.is_c_contig),
                          is_f_contig=(equal_ndim and type1.is_f_contig and
@@ -411,7 +411,7 @@ class Type(miniutils.ComparableObjectMixin):
         if not cmps:
             return id(self) == id(other)
 
-        return (type(self) is type(other) and
+        return (isinstance(self, type(other)) and
                 cmps == other.comparison_type_list)
 
     def __ne__(self, other):
@@ -473,7 +473,7 @@ class Type(miniutils.ComparableObjectMixin):
         Convert type to ctypes. The result may be cached!
         """
         if self._ctypes_type is None:
-            import ctypes_conversion
+            from . import ctypes_conversion
             self._ctypes_type = ctypes_conversion.convert_to_ctypes(self)
             self.mutated = False
 
@@ -886,7 +886,7 @@ class FunctionType(Type):
                                 self.is_vararg)
 
     def __repr__(self):
-        args = map(str, self.args)
+        args = [str(arg) for arg in self.args]
         if self.is_vararg:
             args.append("...")
         if self.name:

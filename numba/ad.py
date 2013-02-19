@@ -34,11 +34,11 @@ class FrameVM(object):
         print 'FrameVM', func
         self.watcher = watcher
         self.func = func
-        self.fco = func.func_code
+        self.fco = func.__code__
         self.names = self.fco.co_names
         self.varnames = self.fco.co_varnames
         self.constants = self.fco.co_consts
-        self.costr = func.func_code.co_code
+        self.costr = func.__code__.co_code
         self.argnames = self.fco.co_varnames[:self.fco.co_argcount]
         self.stack = []
 
@@ -48,7 +48,7 @@ class FrameVM(object):
         for name in self.names:
             #print 'name', name
             try:
-                self._myglobals[name] = self.func.func_globals[name]
+                self._myglobals[name] = self.func.__globals__[name]
             except KeyError:
                 try:
                     self._myglobals[name] = __builtin__.__getattribute__(name)
@@ -154,7 +154,7 @@ class FrameVM(object):
         # or pop tos and send (arg)
         tos = self.stack[-1]
         try:
-            next = tos.next()
+            next = next(tos)
             print 'next', next
             self.stack.append(next)
         except StopIteration:

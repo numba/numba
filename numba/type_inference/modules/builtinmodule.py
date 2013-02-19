@@ -77,9 +77,10 @@ def range_(context, node, start, stop, step):
     node.args = nodes.CoercionNode.coerce(node.args, dst_type=Py_ssize_t)
     return node
 
-@register_builtin((1, 2, 3), can_handle_deferred_types=True)
-def xrange_(context, node, start, stop, step):
-    return range_(context, node, start, stop, step)
+if not PY3:
+    @register_builtin((1, 2, 3), can_handle_deferred_types=True)
+    def xrange_(context, node, start, stop, step):
+        return range_(context, node, start, stop, step)
 
 @register_builtin(1)
 def len_(context, node, obj):
@@ -102,9 +103,10 @@ def _int(context, node, x, base, dst_type=int_):
     node.variable = Variable(dst_type)
     return node
 
-@register_builtin((0, 1, 2), can_handle_deferred_types=True)
-def _long(context, node, x, base):
-    return _int(context, node, x, base)
+if not PY3:
+    @register_builtin((0, 1, 2), can_handle_deferred_types=True)
+    def _long(context, node, x, base):
+        return _int(context, node, x, base)
 
 @register_builtin((0, 1), can_handle_deferred_types=True)
 def _float(context, node, x):
@@ -165,7 +167,7 @@ def round_(context, node, number, ndigits):
 @register_builtin(0)
 def globals_(context, node):
     return typesystem.dict_
-    # return nodes.ObjectInjectNode(func.func_globals)
+    # return nodes.ObjectInjectNode(func.__globals__)
 
 @register_builtin(0)
 def locals_(context, node):

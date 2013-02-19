@@ -44,7 +44,7 @@ class ClosureNode(ExprNode):
         self.need_closure_scope = False
 
     def make_pyfunc(self):
-        d = self.outer_py_func.func_globals
+        d = self.outer_py_func.__globals__
 #        argnames = tuple(arg.id for arg in self.func_def.args.args)
 #        dummy_func_string = """
 #def __numba_closure_func(%s):
@@ -63,7 +63,7 @@ class ClosureNode(ExprNode):
         ast_mod = ast.Module(body=[self.func_def])
         numba.functions.fix_ast_lineno(ast_mod)
         c = compile(ast_mod, '<string>', 'exec')
-        exec c in d, d
+        exec(c, d, d)
         self.func_def.name = name
 
         self.py_func = d['__numba_closure_func']
@@ -103,7 +103,10 @@ class ClosureCallNode(NativeCallNode):
         self.func = call_node.func
         self.closure_type = closure_type
 
-        self.argnames = [name.id for name in self.func_def.args.args]
+        if PY3:
+            self.argnames = [name.arg for name in self.func_def.args.args]
+        else:
+            self.argnames = [name.id for name in self.func_def.args.args]
         self.argnames = self.argnames[self.need_closure_scope:]
         self.expected_nargs = len(self.argnames)
 

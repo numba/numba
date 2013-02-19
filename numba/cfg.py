@@ -361,11 +361,11 @@ def main (*args, **kws):
         if func is None:
             print("Don't know how to handle %r, expecting <module.member> "
                   "arguments.  Skipping..." % (arg,))
-        elif not hasattr(func, 'func_code'):
+        elif not hasattr(func, '__code__'):
             print("Don't know how to handle %r, module member does not "
                   "have a code object.  Skipping..." % (arg,))
         else:
-            cfg = cls.build_cfg(func.func_code)
+            cfg = cls.build_cfg(func.__code__)
             cfg.compute_dataflow()
             if dot_out is not None:
                 dot_out.write(cfg.to_dot())

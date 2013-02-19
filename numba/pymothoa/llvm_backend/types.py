@@ -7,7 +7,7 @@ from pymothoa.util.descriptor import Descriptor, instanceof
 from pymothoa import types
 
 import llvm # binding
-import values
+from . import values
 
 _array_type_code_to_ctype = {
     'c': ctypes.c_char,
@@ -42,7 +42,7 @@ class LLVMType(object):
             def is_array(datatype):
                 if isinstance(datatype, types.Array):
                     return True
-                elif type(datatype) is not type:
+                elif not isinstance(datatype, type):
                     return False
                 elif issubclass(datatype, types.GenericBoundedArray):
                     return True
@@ -56,7 +56,7 @@ class LLVMType(object):
                 obj = object.__new__(LLVMUnboundedArray)
                 obj.elemtype = LLVMType(elemtype)
                 return obj
-            elif type(datatype) is type and issubclass(datatype, types.GenericVector):
+            elif isinstance(datatype, type) and issubclass(datatype, types.GenericVector):
                 elemtype = LLVMType(datatype.elemtype)
                 elemcount = datatype.elemcount
                 # determine mixin classes to install
@@ -160,7 +160,7 @@ class LLVMBasicIntMixin(LLVMIntBinOpMixin):
         return llvm.TypeFactory.make_int(self.bitsize)
 
     def constant(self, val):
-        if type(val) is not int:
+        if not isinstance(val, int):
             raise TypeError(type(val))
         else:
             return llvm.ConstantFactory.make_int(self.type(), val)
@@ -320,7 +320,7 @@ class LLVMVector(types.GenericVector):
         return llvm.TypeFactory.make_vector(self.elemtype.type(), self.elemcount)
 
     def cast(self, old, builder):
-        from values import LLVMTempValue, LLVMConstant
+        from .values import LLVMTempValue, LLVMConstant
         if not isinstance(old.type, LLVMVector): # from scalar to vector
             elem_casted = self.elemtype.cast(old, builder)
             vector = llvm.ConstantFactory.make_undef(self.type())

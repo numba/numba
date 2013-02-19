@@ -9,15 +9,15 @@ import copy
 import string
 import types
 
-import minitypes
-import miniutils
-import minivisitor
-import specializers
-import type_promoter
-import minicode
-import codegen
-import llvm_codegen
-import graphviz
+from . import minitypes
+from . import miniutils
+from . import minivisitor
+from . import specializers
+from . import type_promoter
+from . import minicode
+from . import codegen
+from . import llvm_codegen
+from . import graphviz
 
 try:
     import llvm.core
@@ -204,7 +204,7 @@ class Context(object):
         context.strides_type = self.strides_type
 
         context.debug = self.debug
-        result = context.run(ast, [specializer]).next()
+        result = next(context.run(ast, [specializer]))
         _, specialized_ast, _, (proto, impl) = result
         return impl
 
@@ -1027,7 +1027,7 @@ class Node(miniutils.ComparableObjectMixin):
     def __eq__(self, other):
         # Don't use isinstance here, compare on exact type to be consistent
         # with __hash__. Override where sensible
-        return (type(self) is type(other) and
+        return (isinstance(self, type(other)) and
                 self.comparison_objects == other.comparison_objects)
 
     def __hash__(self):
