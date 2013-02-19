@@ -11,6 +11,7 @@ from numba import pipeline, naming, error, reporting
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
 from numba.minivect.minitypes import FunctionType
 from numba import functions, symtab
+from numba.utility.cbuilder import library
 from numba.codegen import translate
 
 from numba.intrinsic import default_intrinsic_library
@@ -237,7 +238,7 @@ class FunctionEnvironment(object):
             name = naming.specialized_mangle(name, func_signature.args)
         self.func_name = name
         self.llvm_module = (llvm_module if llvm_module
-                            else self.numba.context.llvm_module)
+                                 else self.numba.context.llvm_module)
         self.wrap = wrap
         self.llvm_wrapper_func = None
         self.symtab = symtab if symtab is not None else {}
@@ -524,6 +525,9 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         context.intrinsic_library = default_intrinsic_library(context)
         context.external_library = default_external_library(context)
         context.utility_library = default_utility_library(context)
+        context.cbuilder_library = library.CBuilderLibrary()
+
+        self.llvm_context = translate.LLVMContextManager()
 
     @classmethod
     def get_environment(cls, environment_key = None, *args, **kws):
