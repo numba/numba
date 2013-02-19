@@ -19,7 +19,7 @@ class NumbaCDefinition(builder.CDefinition):
         self.set_signature(self.env, self.context)
 
         type(self)._name_ = type(self).__name__
-        super(NumbaCDefinition, self).__init__(env)
+        super(NumbaCDefinition, self).__init__()
 
     #------------------------------------------------------------------------
     # Convenience Methods

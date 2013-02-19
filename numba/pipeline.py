@@ -755,15 +755,15 @@ class LinkingStage(PipelineStage):
 
     def transform(self, ast, env):
         func_env = env.translation.crnt
-        if not func_env.link:
-            return ast
 
-        # Link intrinsic library
+        # Link libraries into module
         env.context.intrinsic_library.link(func_env.lfunc.module)
+        # env.context.cbuilder_library.link(func_env.lfunc.module)
 
-        # Link function into fat LLVM module
-        func_env.lfunc = env.llvm_context.link(func_env.lfunc)
-        func_env.translator.lfunc = func_env.lfunc
+        if func_env.link:
+            # Link function into fat LLVM module
+            func_env.lfunc = env.llvm_context.link(func_env.lfunc)
+            func_env.translator.lfunc = func_env.lfunc
 
         return ast
 

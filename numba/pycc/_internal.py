@@ -107,9 +107,17 @@ class Compiler(object):
         '''
         exports_env = self.env.exports
         self.exported_signatures = exports_env.function_signature_map
+
+        # Create new module containing everything
         ret_val = lc.Module.new(self.module_name)
+
+        # Link in all exported functions
         for submod in exports_env.function_module_map.values():
             ret_val.link_in(submod)
+
+        # Link in cbuilder utilities
+        self.env.context.cbuilder_library.link(ret_val)
+
         if exports_env.wrap_exports:
             method_defs = []
             wrappers = exports_env.function_wrapper_map.items()
