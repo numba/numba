@@ -1,3 +1,5 @@
+import os
+
 from numba.utility.cbuilder import numbacdef
 
 def get_module(env):
@@ -53,5 +55,8 @@ class CBuilderLibrary(object):
             name = numba_cdef._name_
             lfunc_type = specialized_cdef.signature()
             lfunc = llvm_module.get_or_insert_function(lfunc_type, name)
+        else:
+            pass
+            # os.write(1, "Using global module\n")
 
         return lfunc
