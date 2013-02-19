@@ -11,6 +11,7 @@ from numba import pipeline, naming, error, reporting
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
 from numba.minivect.minitypes import FunctionType
 from numba import functions, symtab
+from numba.codegen import translate
 
 from numba.intrinsic import default_intrinsic_library
 from numba.external import default_external_library
@@ -479,6 +480,11 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         TranslationEnvironment,
         'Current translation environment, specific to the current pipeline '
         'being run.')
+
+    llvm_context = TypedProperty(
+        translate.LLVMContextManager,
+        "Manages the global LLVM module and linkages of new translations."
+    )
 
     # ____________________________________________________________
     # Class members
