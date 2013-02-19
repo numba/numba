@@ -66,7 +66,7 @@ class MessageCollection(object):
         self.messages.append((node, False, message))
 
     def report_message(self, message, node, type):
-        format_msg_simple(type, getpos(node), message)
+        format_msg_simple(type, node, message)
 
     def report(self, post_mortem=False):
         self.messages.sort()
