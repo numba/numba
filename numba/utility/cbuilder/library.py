@@ -19,7 +19,7 @@ def declare(numba_cdef, env):
     # print numba_cdef
     global_module = env.llvm_context.module
     specialized_cdef = numba_cdef(env, global_module)
-    lfunc = specialized_cdef(global_module)
+    lfunc = specialized_cdef.define(global_module) #, optimize=False)
     return specialized_cdef, lfunc
 
 registered_utilities = []
@@ -47,13 +47,11 @@ class CBuilderLibrary(object):
         else:
             specialized_cdef, lfunc = self.funcs[numba_cdef]
 
-        global_module = env.llvm_context.module
-        llvm_module = get_module(env)
-
-        if global_module is not llvm_module:
+        if env.translation.crnt:
             # Generate external declaration for module
             name = numba_cdef._name_
             lfunc_type = specialized_cdef.signature()
+            llvm_module = env.translation.crnt.llvm_module
             lfunc = llvm_module.get_or_insert_function(lfunc_type, name)
         else:
             pass
