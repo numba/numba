@@ -98,7 +98,6 @@ class Py_XDECREF(Refcounter):
     "LLVM inline version of Py_XDECREF"
 
     def body(self, obj):
-        NULL = self.cbuilder.constant_null(obj.type)
         py_decref = self.cbuilder_cfunc(Py_DECREF)
 
         with self.ifelse(not_null(obj)) as ifelse:

@@ -20,6 +20,7 @@ def declare(numba_cdef, env):
     global_module = env.llvm_context.module
     specialized_cdef = numba_cdef(env, global_module)
     lfunc = specialized_cdef.define(global_module) #, optimize=False)
+    assert lfunc.module is global_module
     return specialized_cdef, lfunc
 
 registered_utilities = []

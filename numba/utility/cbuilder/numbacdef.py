@@ -28,7 +28,6 @@ class NumbaCDefinition(builder.CDefinition):
     def external_cfunc(self, func_name):
         "Get a CFunc from an external function"
         signature, lfunc = self.env.context.external_library.declare(
-                # self.global_llvm_module,
                 self.llvm_module,
                 func_name)
         return builder.CFunc(self, lfunc)
