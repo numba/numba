@@ -3,6 +3,7 @@ from exttypes import *
 from closuretypes import *
 from ssatypes import *
 from templatetypes import *
+from containertypes import *
 from typemapper import *
 from typeutils import *
 
