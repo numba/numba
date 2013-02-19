@@ -1,7 +1,6 @@
 import llvm.core
 
 from numba import *
-from numba.utility.cbuilder import declare
 from numba.utility.cbuilder import refcounting
 
 class RefcountingMixin(object):
@@ -10,7 +9,7 @@ class RefcountingMixin(object):
         "Refcount a value with a refcounting function"
         assert not self.nopython
 
-        refcounter = declare(func, self.env)
+        refcounter = self.context.cbuilder_library.declare(func, self.env)
         object_ltype = object_.to_llvm(self.context)
 
         b = self.builder
@@ -32,7 +31,7 @@ class RefcountingMixin(object):
         "Py_XINCREF a value"
         return self.refcount(refcounting.Py_XINCREF, value)
 
-    def xincref_temp(self, temp):
+    def xdecref_temp(self, temp):
         "Py_XDECREF a temporary"
         return self.xdecref(self.load_tbaa(temp, object_))
 
