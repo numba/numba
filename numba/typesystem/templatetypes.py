@@ -95,10 +95,10 @@ class TemplateIndexType(TemplateType):
         return attrib[self.index]
 
     def __repr__(self):
-        return "%r[%d]" % (self.template_type, self.index)
+        return "%r[%r]" % (self.template_type, self.index)
 
     def __str__(self):
-        return "%s[%d]" % (self.template_type, self.index)
+        return "%s[%r]" % (self.template_type, self.index)
 
 
 

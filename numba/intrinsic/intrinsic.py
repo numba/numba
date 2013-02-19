@@ -135,4 +135,3 @@ class IntrinsicLibrary(object):
         '''Link the intrinsic library into the target module.
         '''
         module.link_in(self._module, preserve=True)
-

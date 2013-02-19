@@ -31,9 +31,10 @@ class ClosureNode(ExprNode):
         self.wrapper_lfunc = None
         self.lfunc_pointer = None
 
-        # ast and symtab after type inference
-        self.type_inferred_ast = None
-        self.symtab = None
+        # FunctionEnvironment after type inference
+        self.func_env = None
+        # self.type_inferred_ast = None
+        # self.symtab = None
 
         from numba import pipeline
         self.locals = pipeline.get_locals(func_def, None)

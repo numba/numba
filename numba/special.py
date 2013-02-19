@@ -15,5 +15,6 @@ def typeof(variable):
 
     Used outside of Numba code, infers the type for the object.
     """
-    from numba.decorators import context
+    from numba.environment import NumbaEnvironment
+    context = NumbaEnvironment.get_environment().context
     return context.typemapper.from_python(variable)

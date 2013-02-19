@@ -1,5 +1,5 @@
 from numba.control_flow.cfstats import *
-from numba.control_flow.reporting import *
+from numba.reporting import *
 
 def compute_uninitialized_phis(flow):
     """

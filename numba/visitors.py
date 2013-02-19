@@ -53,6 +53,7 @@ class NumbaVisitorMixin(CooperativeBase):
         self.closures = kwargs.get('closures')
         self.is_closure = kwargs.get('is_closure', False)
         self.kwargs = kwargs
+        self.env = kwargs.get('env', None)
 
         if self.have_cfg:
             self.flow_block = self.ast.flow.blocks[1]
@@ -99,7 +100,7 @@ class NumbaVisitorMixin(CooperativeBase):
             self.freevars = set(f_code.co_freevars)
 
         if func is None:
-            self.func_globals = kwargs.get('func_globals', {})
+            self.func_globals = kwargs.get('func_globals', None) or {}
             self.module_name = self.func_globals.get("__name__", "")
         else:
             self.func_globals = func.__globals__
@@ -151,6 +152,22 @@ class NumbaVisitorMixin(CooperativeBase):
         if qname is None:
             qname = "%s.%s" % (self.module_name, self.func_name)
         return qname
+
+    @property
+    def current_env(self):
+        return self.env.translation.crnt
+
+    def error(self, node, msg):
+        "Issue a terminating error"
+        raise error.NumbaError(node, msg)
+
+    def deferred_error(self, node, msg):
+        "Issue a deferred-terminating error"
+        self.current_env.error_env.collection.error(node, msg)
+
+    def warn(self, node, msg):
+        "Issue a warning"
+        self.current_env.error_env.collection.warning(node, msg)
 
     def visit_func_children(self, node):
         self.func_level += 1
@@ -208,7 +225,8 @@ class NumbaVisitorMixin(CooperativeBase):
             exec('def __numba_func(): pass', d, d)
             func = d['__numba_func']
 
-        templ = templating.TemplateContext(self.context, s)
+        templ = templating.TemplateContext(self.context, s, env=self.env)
+
         if vars:
             for name, type in vars.iteritems():
                 templ.temp_var(name, type)
@@ -219,9 +237,6 @@ class NumbaVisitorMixin(CooperativeBase):
                 func=func)
         self.symtab.update(templ.get_vars_symtab())
         return tree
-
-    def error(self, node, msg):
-        raise error.NumbaError(node, msg)
 
     def keep_alive(self, obj):
         """

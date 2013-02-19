@@ -369,7 +369,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
 
         node_type = node.node.type
         dst_type = node.dst_type
-        if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
+        if __debug__ and self.env and self.env.debug_coercions:
             logger.debug('coercion: %s --> %s\n%s',
                          node_type, dst_type, utils.pformat_ast(node))
 
@@ -434,7 +434,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
             else:
                 result = node
 
-        if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
+        if __debug__ and self.env and self.env.debug_coercions:
             logger.debug('result = %s', utils.pformat_ast(result))
 
         return result

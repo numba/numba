@@ -28,54 +28,6 @@ class NumbaKeyHashingType(minitypes.KeyHashingType):
 # Python Types
 #------------------------------------------------------------------------
 
-class ContainerListType(NumbaKeyHashingType, minitypes.ObjectType):
-
-    is_container = True
-    subtypes = ['base_type']
-
-    def __init__(self, base_type, size=-1):
-        super(ContainerListType, self).__init__()
-        self.base_type = base_type
-        self.size = size
-
-    @property
-    def key(self):
-        return self.base_type, self.size
-
-    def is_sized(self):
-        return self.size >= 0
-
-    def __repr__(self):
-        return "%s(%s, %s)" % (self.name, self.base_type, self.size)
-
-class TupleType(ContainerListType):
-
-    is_tuple = True
-    name = "tuple"
-
-class ListType(ContainerListType):
-    is_list = True
-    name = "list"
-
-class MapContainerType(NumbaType):
-
-    is_map = True
-
-    def __init__(self, key_type, value_type, size=-1):
-        super(MapContainerType, self).__init__()
-        self.key_type = key_type
-        self.value_type = value_type
-        self.size = size
-
-class DictType(MapContainerType, minitypes.ObjectType):
-
-    is_dict = True
-    name = "dict"
-    size = 0
-
-    def __str__(self):
-        return "dict(%s)" % ", ".join(["..."] * self.size)
-
 class IteratorType(NumbaType, minitypes.ObjectType):
     is_iterator = True
     subtypes = ['base_type']
@@ -449,8 +401,6 @@ class ReferenceType(NumbaType):
 # END OF TYPE DEFINITIONS
 #------------------------------------------------------------------------
 
-tuple_ = TupleType(object_, size=0)
-dict_ = DictType(object_, object_)
 none = NoneType()
 null_type = NULLType()
 intp = minitypes.npy_intp

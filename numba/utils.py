@@ -3,6 +3,7 @@ import opcode
 import ast
 import pprint
 
+import numba
 from .minivect.complex_support import Complex64, Complex128, Complex256
 from .minivect import miniast, minitypes
 from numba import typesystem
@@ -41,6 +42,27 @@ def debugout(*args):
         print("debugout (non-translated): %s" % (''.join((str(arg)
                                                           for arg in args)),))
 
+def process_signature(sigstr, name=None):
+    '''
+    Given a signature string consisting of a return type, argument
+    types, and possibly a function name, return a signature object.
+    '''
+    sigstr = sigstr.replace('*', '.pointer()')
+    parts = sigstr.split()
+    types_dict = dict(numba.__dict__, d=numba.double, i=numba.int_)
+    loc = {}
+    # FIXME:  Need something more robust to differentiate between
+    #   name ret(arg1,arg2)
+    #   and ret(arg1, arg2) or ret ( arg1, arg2 )
+    if len(parts) < 2 or '(' in parts[0] or '[' in parts[0] or '('==parts[1][0]:
+        signature = eval(sigstr, loc, types_dict)
+        signature.name = None
+    else: # Signature has a name
+        signature = eval(' '.join(parts[1:]), loc, types_dict)
+        signature.name = parts[0]
+    if name is not None:
+        signature.name = name
+    return signature
 
 class NumbaContext(miniast.LLVMContext):
     # debug = True
@@ -91,6 +113,40 @@ def pformat_ast (node, include_attrs = True, **kws):
 def dump(node):
     print pformat_ast(node)
 
+class TypedProperty(object):
+    '''Defines a class property that does a type check in the setter.'''
+
+    def __new__(cls, ty, doc, default=None):
+        rv = super(TypedProperty, cls).__new__(cls)
+        cls.__init__(rv, ty, doc, default)
+        return property(rv.getter, rv.setter, rv.deleter, doc)
+
+    def __init__(self, ty, doc, default=None):
+        self.propname = '_numba_property_%d' % (id(self),)
+        self.default = default
+        self.ty = ty
+        self.doc = doc
+
+    def getter(self, obj):
+        return getattr(obj, self.propname, self.default)
+
+    def setter(self, obj, new_val):
+        if not isinstance(new_val, self.ty):
+            raise ValueError(
+                'Invalid property setting, expected instance of type(s) %r '
+                '(got %r).' % (self.ty, type(new_val)))
+        setattr(obj, self.propname, new_val)
+
+    def deleter(self, obj):
+        delattr(obj, self.propname)
+
+class WriteOnceTypedProperty(TypedProperty):
+    def __init__(self, ty, doc, default=None):
+        super(WriteOnceTypedProperty, self).__init__(ty, doc, default)
+
+    def setter(self, obj, *args, **kws):
+        assert not hasattr(obj, self.propname)
+        return super(WriteOnceTypedProperty, self).setter(obj, *args, **kws)
 
 #------------------------------------------------------------------------
 # File Opening Utilities

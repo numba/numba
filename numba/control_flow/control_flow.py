@@ -1,4 +1,4 @@
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 Control flow for the AST backend.
@@ -11,10 +11,10 @@ import ast
 import copy
 from functools import reduce
 
-from numba import error, visitors, symtab, nodes
+from numba import error, visitors, symtab, nodes, reporting
 
 from numba import *
-from numba.control_flow import reporting, graphviz, reaching
+from numba.control_flow import  graphviz, reaching
 from numba.control_flow.cfstats import *
 from numba.control_flow.debug import *
 
@@ -604,8 +604,10 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
     function_level = 0
 
-    def __init__(self, context, func, ast, allow_rebind_args, **kwargs):
-        super(ControlFlowAnalysis, self).__init__(context, func, ast, **kwargs)
+    def __init__(self, context, func, ast, allow_rebind_args, env=None,
+                 **kwargs):
+        super(ControlFlowAnalysis, self).__init__(context, func, ast, env=env,
+                                                  **kwargs)
         self.visitchildren = self.generic_visit
         self.current_directives = kwargs.get('directives', None) or {}
         self.current_directives['warn'] = kwargs.get('warn', True)
@@ -620,6 +622,9 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         # Stack of control flow blocks
         self.stack = []
         self.flow = ControlFlow(self.source_descr)
+        if env:
+            if hasattr(env, 'translation'):
+                env.translation.crnt.cfg_transform = self
 
     def set_default_directives(self):
         "Set some defaults for warnings"
