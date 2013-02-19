@@ -392,7 +392,8 @@ if __name__ == '__main__':
     # closure4()
     # signature_dec()()
     # test_closure_outer_locals()
-    test_closure_loop()
+    # test_closure_loop()
     # test_closure_outer_locals()
+    test_call_closure_from_closure()()
     import numba
     numba.testmod()

@@ -345,10 +345,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 self.lfunc.delete()
             raise
 
-    def link(self):
-        '''Link the lfunc into the execution context
-        '''
-        self.lfunc = LLVMContextManager().link(self.lfunc)
+#    def link(self):
+#        '''Link the lfunc into the execution context
+#        '''
+#        self.lfunc = LLVMContextManager().link(self.lfunc)
 
     def handle_phis(self):
         """
@@ -401,18 +401,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         else:
             return prototype(self.func)
 
-    def _build_wrapper_function_ast(self, fake_pyfunc, llvm_module = None):
-        if llvm_module is None:
-            lfunc = self.lfunc
-        else:
-            lfunc = llvm_module.get_or_insert_function(
-                self.func_signature.to_llvm(self.context), self.lfunc.name)
+    def _build_wrapper_function_ast(self, fake_pyfunc):
+        lfunc = self.env.translation.crnt.lfunc
         wrapper = nodes.FunctionWrapperNode(lfunc,
                                             self.func_signature,
                                             self.func,
                                             fake_pyfunc,
                                             self.func_name)
-#        wrapper.pipeline = self.ast.pipeline
         wrapper.cellvars = []
         return wrapper
 
@@ -420,7 +415,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # PyObject *(*)(PyObject *self, PyObject *args)
         def func(self, args):
             pass
-        # func.live_objects = self.func.live_objects
 
         if llvm_module:
             wrapper_module = llvm_module
@@ -433,18 +427,22 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                                            args=[void.pointer(), object_])
         symtab = dict(self=Variable(object_, is_local=True),
                       args=Variable(object_, is_local=True))
-        wrapper_call = self._build_wrapper_function_ast(
-            func, llvm_module=wrapper_module)
+        wrapper_call = self._build_wrapper_function_ast(func)
         error_return = ast.Return(nodes.CoercionNode(nodes.NULL_obj,
                                                      object_))
         wrapper_call.error_return = error_return
 
-        t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
-                              symtab, llvm_module=wrapper_module,
-                              locals={}, refcount_args=False,
-                              func_name=func_name, env=self.env)
-        t.translate()
-        # func.live_objects.append(t.lfunc)
+        func_env = self.env.translation.crnt.inherit(llvm_module=wrapper_module)
+        self.env.translation.push_env(func_env)
+        try:
+            t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
+                                  symtab, llvm_module=wrapper_module,
+                                  locals={}, refcount_args=False,
+                                  func_name=func_name, env=self.env)
+            t.translate()
+        finally:
+            self.env.translation.pop()
+
         keep_alive(func, t.lfunc)
         return t
 

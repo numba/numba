@@ -464,6 +464,7 @@ def compile2(env, func, restype=None, argtypes=None, ctypes=False,
     #pipeline, (func_signature, symtab, ast) = _infer_types2(
     #            env, func, restype, argtypes, codegen=True, **kwds)
     with env.TranslationContext(env, func, func_ast, func_signature,
+                                need_lfunc_wrapper=not compile_only,
                                 **kwds) as func_env:
         pipeline = env.get_pipeline(kwds.get('pipeline_name', None))
         func_ast.pipeline = pipeline
@@ -475,12 +476,8 @@ def compile2(env, func, restype=None, argtypes=None, ctypes=False,
     if compile_only:
         return func_signature, t, None
 
-    # link intrinsic library
-    env.context.intrinsic_library.link(t.lfunc.module)
-
     # link into the JIT module
-    t.link()
-    return func_signature, t, get_wrapper(t, ctypes)
+    return func_signature, t, func_env.numba_wrapper_func
 
 def compile_from_sig(context, func, signature, **kwds):
     return compile(context, func, signature.return_type, signature.args,
@@ -743,10 +740,46 @@ class FixASTLocations(PipelineStage):
 
 class CodeGen(PipelineStage):
     def transform(self, ast, env):
-        env.translation.crnt.translator = self.make_specializer(
+        func_env = env.translation.crnt
+        func_env.translator = self.make_specializer(
             codegen.LLVMCodeGenerator, ast, env,
-            **env.translation.crnt.kwargs)
-        env.translation.crnt.translator.translate()
+            **func_env.kwargs)
+        func_env.translator.translate()
+        func_env.lfunc = func_env.translator.lfunc
+        return ast
+
+class LinkingStage(PipelineStage):
+    """
+    Link the resulting LLVM function into the global fat module.
+    """
+
+    def transform(self, ast, env):
+        func_env = env.translation.crnt
+        # print id(func_env.lfunc)
+
+        # Link intrinsic library
+        env.context.intrinsic_library.link(func_env.lfunc.module)
+
+        # Link function into fat LLVM module
+        func_env.lfunc = env.llvm_context.link(func_env.lfunc)
+        func_env.translator.lfunc = func_env.lfunc
+
+        # print id(func_env.lfunc)
+        return ast
+
+class WrapperStage(PipelineStage):
+    """
+    Build a wrapper LLVM function around the compiled numba function to call
+    it from Python.
+    """
+
+    def transform(self, ast, env):
+        func_env = env.translation.crnt
+        if func_env.wrap:
+            numbawrapper, lfuncwrapper, _ = (
+                func_env.translator.build_wrapper_function(get_lfunc=True))
+            func_env.numba_wrapper_func = numbawrapper
+            func_env.llvm_wrapper_func = lfuncwrapper
         return ast
 
 class ErrorReporting(PipelineStage):

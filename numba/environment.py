@@ -46,6 +46,8 @@ default_pipeline_order = [
     'FixASTLocations',
     'cleanup_symtab',
     'CodeGen',
+    'LinkingStage',
+    'WrapperStage',
     'ErrorReporting',
 ]
 
@@ -144,6 +146,11 @@ class FunctionEnvironment(object):
         FunctionErrorEnvironment,
         "Error environment for this function.")
 
+    lfunc = TypedProperty(
+        (types.NoneType, llvm.core.Function),
+        "Compiled, native, Numba function",
+        None)
+
     wrap = TypedProperty(
         bool,
         'Flag indicating whether the function needs a wrapper function to be '
@@ -155,6 +162,12 @@ class FunctionEnvironment(object):
         'The LLVM wrapper function for the target function.  This is a '
         'wrapper function that accept python object arguments and returns an '
         'object.')
+
+    numba_wrapper_func = TypedProperty(
+        object,
+        'The Numba wrapper function (see numbafunction.c) for the target '
+        'function.  This is a wrapper function that accept python object '
+        'arguments and returns an object.')
 
     symtab = TypedProperty(
         (symtab.Symtab, dict),
@@ -229,6 +242,7 @@ class FunctionEnvironment(object):
         self.func = func
         self.ast = ast
         self.func_signature = func_signature
+
         if name is None:
             if func and func.__module__:
                 module_name = func.__module__
@@ -236,6 +250,7 @@ class FunctionEnvironment(object):
             else:
                 name = ast.name
             name = naming.specialized_mangle(name, func_signature.args)
+
         self.func_name = name
         self.llvm_module = (llvm_module if llvm_module
                                  else self.numba.context.llvm_module)

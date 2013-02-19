@@ -99,7 +99,7 @@ class LLVMContextManager(object):
                     return True
 
             lfunc_module = lfunc.module
-            #print "LINKING", lfunc.name, lfunc.module.id
+            #print "LINKING", lfunc.name, lfunc.module.id, "in", self.module.id
             #print [f.name for f in lfunc.module.functions]
             #print '-----'
 
