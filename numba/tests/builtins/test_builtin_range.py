@@ -23,7 +23,11 @@ done
 >>> empty_assign()
 14
 >>> last_value()
-Warning 92:10: local variable 'i' might be referenced before assignment
+--------------------- Numba Encountered Errors or Warnings ---------------------
+<BLANKLINE>
+Warning 96:10: local variable 'i' might be referenced before assignment
+<BLANKLINE>
+--------------------------------------------------------------------------------
 9
 """
 
@@ -92,6 +96,6 @@ def last_value():
     print i
 
 if __name__ == '__main__':
-    backward3()
-    # import doctest
-    # doctest.testmod()
+    # backward3()
+    import doctest
+    doctest.testmod()
