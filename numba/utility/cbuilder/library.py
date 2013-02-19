@@ -14,15 +14,29 @@ def declare(numba_cdef, env):
     """
     Declare a NumbaCDefinition in the current translation environment.
     """
+    # print numba_cdef
     global_module = env.llvm_context.module
     specialized_cdef = numba_cdef(env, global_module)
     lfunc = specialized_cdef(global_module)
     return specialized_cdef, lfunc
 
+registered_utilities = []
+
+def register(utility):
+    registered_utilities.append(utility)
+    return utility
+
 class CBuilderLibrary(object):
+    """
+    Library of cbuilder functions.
+    """
 
     def __init__(self):
         self.funcs = {}
+
+    def declare_registered(self, env):
+        for registered_utility in registered_utilities:
+            self.declare(registered_utility, env)
 
     def declare(self, numba_cdef, env):
         if numba_cdef not in self.funcs:

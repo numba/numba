@@ -525,9 +525,10 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         context.intrinsic_library = default_intrinsic_library(context)
         context.external_library = default_external_library(context)
         context.utility_library = default_utility_library(context)
-        context.cbuilder_library = library.CBuilderLibrary()
-
         self.llvm_context = translate.LLVMContextManager()
+
+        context.cbuilder_library = library.CBuilderLibrary()
+        context.cbuilder_library.declare_registered(self)
 
     @classmethod
     def get_environment(cls, environment_key = None, *args, **kws):
