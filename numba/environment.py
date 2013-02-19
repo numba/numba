@@ -354,6 +354,11 @@ class TranslationEnvironment(object):
         'Flag that enables control flow warnings.',
         True)
 
+    is_pycc = TypedProperty(
+        bool,
+        'Flag that tells us whether this function is being exported with pycc.',
+        False)
+
     # ____________________________________________________________
     # Methods
 
@@ -368,6 +373,7 @@ class TranslationEnvironment(object):
         self.nopython = kws.get('nopython', False)
         self.allow_rebind_args = kws.get('allow_rebind_args', True)
         self.warn = kws.get('warn', True)
+        self.is_pycc = kws.get('is_pycc', False)
 
     def push(self, func, ast, func_signature, **kws):
         func_env = FunctionEnvironment(self, func, ast, func_signature, **kws)
