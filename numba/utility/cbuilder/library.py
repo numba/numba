@@ -2,16 +2,6 @@ import os
 
 from numba.utility.cbuilder import numbacdef
 
-def get_module(env):
-    func_env = env.translation.crnt
-    if func_env:
-        mod = func_env.llvm_module
-    else:
-        # FunctionEnvironment is None for the numba wrapper function
-        mod = env.llvm_context.module
-
-    return mod
-
 def declare(numba_cdef, env):
     """
     Declare a NumbaCDefinition in the current translation environment.
@@ -39,23 +29,17 @@ class CBuilderLibrary(object):
 
     def declare_registered(self, env):
         for registered_utility in registered_utilities:
-            self.declare(registered_utility, env)
+            self.declare(registered_utility, env, env.llvm_context.module)
 
-    def declare(self, numba_cdef, env):
+    def declare(self, numba_cdef, env, llvm_module):
         if numba_cdef not in self.funcs:
             specialized_cdef, lfunc = declare(numba_cdef, env)
             self.funcs[numba_cdef] = specialized_cdef, lfunc
         else:
             specialized_cdef, lfunc = self.funcs[numba_cdef]
 
-        if env.translation.crnt:
-            # Generate external declaration for module
-            name = numba_cdef._name_
-            lfunc_type = specialized_cdef.signature()
-            llvm_module = env.translation.crnt.llvm_module
-            lfunc = llvm_module.get_or_insert_function(lfunc_type, name)
-        else:
-            pass
-            # os.write(1, "Using global module\n")
+        name = numba_cdef._name_
+        lfunc_type = specialized_cdef.signature()
+        lfunc = llvm_module.get_or_insert_function(lfunc_type, name)
 
         return lfunc

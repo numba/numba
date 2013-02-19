@@ -35,7 +35,8 @@ class NumbaCDefinition(builder.CDefinition):
 
     def cbuilder_cfunc(self, numba_cdef):
         "Get a CFunc from a NumbaCDefinition"
-        lfunc = self.env.context.cbuilder_library.declare(numba_cdef, self.env)
+        lfunc = self.env.context.cbuilder_library.declare(numba_cdef, self.env,
+                                                          self.llvm_module)
         assert lfunc.module is self.llvm_module
         return builder.CFunc(self, lfunc)
 

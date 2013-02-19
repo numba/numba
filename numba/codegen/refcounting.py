@@ -9,7 +9,8 @@ class RefcountingMixin(object):
         "Refcount a value with a refcounting function"
         assert not self.nopython
 
-        refcounter = self.context.cbuilder_library.declare(func, self.env)
+        refcounter = self.context.cbuilder_library.declare(func, self.env,
+                                                           self.llvm_module)
         object_ltype = object_.to_llvm(self.context)
 
         b = self.builder
