@@ -151,6 +151,12 @@ class FunctionEnvironment(object):
         "Compiled, native, Numba function",
         None)
 
+    link = TypedProperty(
+        bool,
+        'Flag indicating whether the LLVM function needs to be linked into '
+        'the global fast module from LLVMContextManager',
+        True)
+
     wrap = TypedProperty(
         bool,
         'Flag indicating whether the function needs a wrapper function to be '
@@ -232,7 +238,8 @@ class FunctionEnvironment(object):
     # Methods
 
     def __init__(self, parent, func, ast, func_signature,
-                 name=None, llvm_module=None, wrap=True, symtab=None,
+                 name=None, llvm_module=None, wrap=True, link=True,
+                 symtab=None,
                  error_env=None, function_globals=None, locals=None,
                  template_signature=None, cfg_transform=None,
                  is_closure=False, closures=None, closure_scope=None,
@@ -255,6 +262,7 @@ class FunctionEnvironment(object):
         self.llvm_module = (llvm_module if llvm_module
                                  else self.numba.context.llvm_module)
         self.wrap = wrap
+        self.link = link
         self.llvm_wrapper_func = None
         self.symtab = symtab if symtab is not None else {}
 
@@ -282,6 +290,7 @@ class FunctionEnvironment(object):
             name=self.func_name,
             llvm_module=self.llvm_module,
             wrap=self.wrap,
+            link=self.link,
             error_env=self.error_env,
             symtab=self.symtab,
             function_globals=self.function_globals,

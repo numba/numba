@@ -755,7 +755,8 @@ class LinkingStage(PipelineStage):
 
     def transform(self, ast, env):
         func_env = env.translation.crnt
-        # print id(func_env.lfunc)
+        if not func_env.link:
+            return ast
 
         # Link intrinsic library
         env.context.intrinsic_library.link(func_env.lfunc.module)
@@ -764,7 +765,6 @@ class LinkingStage(PipelineStage):
         func_env.lfunc = env.llvm_context.link(func_env.lfunc)
         func_env.translator.lfunc = func_env.lfunc
 
-        # print id(func_env.lfunc)
         return ast
 
 class WrapperStage(PipelineStage):

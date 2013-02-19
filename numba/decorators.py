@@ -37,7 +37,7 @@ def _internal_export(env, function_signature, backend='ast', **kws):
             with environment.TranslationContext(
                     env, func, func_ast, function_signature,
                     name=name, llvm_module=llvm_module,
-                    mangled_name=name) as func_env:
+                    mangled_name=name, link=False, wrap=False) as func_env:
                 pipeline = env.get_pipeline()
                 func_ast.pipeline = pipeline
                 pipeline(func_ast, env)

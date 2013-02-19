@@ -401,8 +401,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         else:
             return prototype(self.func)
 
-    def _build_wrapper_function_ast(self, fake_pyfunc):
-        lfunc = self.env.translation.crnt.lfunc
+    def _build_wrapper_function_ast(self, fake_pyfunc, llvm_module):
+        if llvm_module is None:
+            lfunc = self.lfunc
+        else:
+            lfunc = llvm_module.get_or_insert_function(
+                self.func_signature.to_llvm(self.context), self.lfunc.name)
+        # lfunc = self.env.translation.crnt.lfunc
         wrapper = nodes.FunctionWrapperNode(lfunc,
                                             self.func_signature,
                                             self.func,
@@ -427,7 +432,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                                            args=[void.pointer(), object_])
         symtab = dict(self=Variable(object_, is_local=True),
                       args=Variable(object_, is_local=True))
-        wrapper_call = self._build_wrapper_function_ast(func)
+        wrapper_call = self._build_wrapper_function_ast(
+            func, llvm_module=wrapper_module)
         error_return = ast.Return(nodes.CoercionNode(nodes.NULL_obj,
                                                      object_))
         wrapper_call.error_return = error_return
