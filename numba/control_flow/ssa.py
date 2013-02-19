@@ -1,7 +1,7 @@
 from itertools import imap, chain
 
 from numba import nodes
-from debug import logger
+from .debug import logger
 
 #------------------------------------------------------------------------
 # Kill unused Phis

@@ -1,4 +1,5 @@
 import ast
+from functools import reduce
 
 import numba
 from numba import *
@@ -73,7 +74,7 @@ class SpecializeComparisons(visitors.NumbaTransformer):
         self.generic_visit(node)
 
         compare_nodes = []
-        comparators = map(nodes.CloneableNode, node.comparators)
+        comparators = [nodes.CloneableNode(c) for c in node.comparators]
 
         # Build comparison nodes
         left = node.left

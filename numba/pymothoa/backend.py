@@ -5,11 +5,11 @@
 
 import logging
 import ast
-
-import types, dialect
+from numba import PY3
+from . import types, dialect
 
 from pymothoa.util.descriptor import Descriptor, instanceof
-from compiler_errors import *
+from .compiler_errors import *
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,10 @@ class CodeGenerationBase(ast.NodeVisitor):
         for arg in node.args:
             if not isinstance(arg.ctx, ast.Param):
                 raise InternalError('Argument is not ast.Param?')
-            name = arg.id
+            if PY3:
+                name = arg.arg
+            else:
+                name = arg.id
             arguments.append(name)
 
         if len(set(arguments)) != len(arguments):
@@ -98,7 +101,7 @@ This error should have been caught by the Python parser.''')
     def visit_Call(self, node):
         fn = self.visit(node.func)
 
-        if type(fn) is type and issubclass(fn, dialect.Construct):
+        if isinstance(fn, type) and issubclass(fn, dialect.Construct):
             # Special construct for our dialect
             try:
                 handler = {
@@ -114,7 +117,7 @@ This error should have been caught by the Python parser.''')
             if node.keywords or node.starargs or node.kwargs:
                 raise InvalidCall(node, 'Cannot use keyword or star arguments.')
 
-            args = map(self.visit, node.args)
+            args = [self.visit(arg) for arg in node.args]
             return self.generate_call(fn, args) # return value
 
         raise InternalError(self.current_node, 'Unreachable')
@@ -171,7 +174,7 @@ This error should have been caught by the Python parser.''')
 
                 elemty = self.visit(node.args[0])
 
-                if type(elemty) is not type or not issubclass(elemty, types.Type):
+                if not isinstance(elemty, type) or not issubclass(elemty, types.Type):
                     raise InvalidUseOfConstruct(
                                 node,
                                 'Expecting a type for element type of array.'
@@ -202,7 +205,7 @@ This error should have been caught by the Python parser.''')
                 elemty = self.visit(node.args[0])
                 elemct = self.constant_number(node.args[1])
 
-                if type(elemty) is not type or not issubclass(elemty, types.Type):
+                if not isinstance(elemty, type) or not issubclass(elemty, types.Type):
                     raise InvalidUseOfConstruct(
                                 node,
                                 'Expecting a type for element type of vector.'
@@ -241,7 +244,7 @@ This error should have been caught by the Python parser.''')
                 elemty = self.visit(node.args[0])
                 elemct = self.visit(node.args[1]) # accept constants & variables
 
-                if type(elemty) is not type or not issubclass(elemty, types.Type):
+                if not isinstance(elemty, type) or not issubclass(elemty, types.Type):
                     raise InvalidUseOfConstruct(
                                 node,
                                 'Expecting a type for element type of array.'
@@ -336,9 +339,9 @@ This error should have been caught by the Python parser.''')
         return retval
 
     def visit_Num(self, node):
-        if type(node.n) is int:
+        if isinstance(node.n, int):
             return self.generate_constant_int(node.n)
-        elif type(node.n) is float:
+        elif isinstance(node.n, float):
             return self.generate_constant_real(node.n)
 
     def generate_constant_int(self, val):

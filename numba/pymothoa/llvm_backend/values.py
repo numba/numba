@@ -45,7 +45,7 @@ class LLVMArrayVariable(LLVMVariable):
         self.pointer = builder.alloc_array(ty.elemtype.type(), elemct)
 
     def value(self, builder):
-        from types import LLVMType
+        from .types import LLVMType
         zero = LLVMConstant(LLVMType(types.Int), 0).value(builder)
         return builder.gep(self.pointer, zero)
 

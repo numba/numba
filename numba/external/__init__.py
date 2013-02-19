@@ -1,4 +1,4 @@
-from external import ExternalLibrary
+from .external import ExternalLibrary
 
 __all__ = []
 all = {}

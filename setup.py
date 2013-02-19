@@ -52,11 +52,10 @@ def run_2to3():
     from distutils.command.build_py import build_py_2to3 as build_py
     print("Installing 2to3 fixers")
     # need to convert sources to Py3 on installation
-    fixes = lib2to3.refactor.get_fixers_from_package("lib2to3.fixes")
-    bad_fixers = ('next', 'funcattrs')
-    fixes = [fix for fix in fixes
-              if fix.split('fix_')[-1] not in bad_fixers]
-
+    fixes = 'print dict imports imports2 tuple_params unicode ' \
+            'xrange itertools itertools_imports long types'.split()
+    fixes = ['lib2to3.fixes.fix_' + fix 
+             for fix in fixes]
     build_py.fixer_names = fixes
     cmdclass["build_py"] = build_py
     # cmdclass["build"] = build_py

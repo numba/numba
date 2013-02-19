@@ -5,7 +5,7 @@ write XPath unit tests, or just serialize the AST.
 
 __all__ = ['etree', 'tostring', 'XMLDumper']
 
-import miniutils
+from . import miniutils
 
 try:
     from lxml import etree
@@ -30,7 +30,7 @@ except ImportError:
                 except ImportError:
                     etree = miniutils.UnavailableImport("elementtree")
 
-import minivisitor
+from . import minivisitor
 
 class XMLDumper(minivisitor.PrintTree):
 

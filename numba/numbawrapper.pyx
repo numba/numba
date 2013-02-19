@@ -113,7 +113,7 @@ cdef tuple hash_on_value_types = (
     types.FunctionType,
     types.BuiltinFunctionType,
     types.MethodType,
-    types.UnboundMethodType,
+    getattr(types, 'UnboundMethodType', types.FunctionType),
     types.BuiltinMethodType,
 )
 

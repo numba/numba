@@ -1,12 +1,12 @@
-">>> import test_circular_type_inference" # UGH nosetests :(
+">>> from numba.tests.cfg import test_circular_type_inference" # UGH nosetests :(
 from numba.tests.cfg.test_cfg_type_infer import *
 @autojit
 def test_circular_error():
     """
     >>> try:
     ...     test_circular_error()
-    ... except error.NumbaError, e:
-    ...     print str(e).replace('var1', '<var>').replace('var2', '<var>')
+    ... except error.NumbaError as e:
+    ...     print(str(e).replace('var1', '<var>').replace('var2', '<var>'))
     Warning 16:19: local variable 'var2' might be referenced before assignment
     Warning 18:19: local variable 'var1' might be referenced before assignment
     Unable to infer type for assignment to '<var>', insert a cast or initialize the variable.
@@ -107,7 +107,7 @@ def test_simple_circular_binop_promotion():
 # Test Unary/Binary Operations and Comparisons
 #------------------------------------------------------------------------
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_circular_binop():
     """
     >>> test_circular_binop()
@@ -168,7 +168,7 @@ def test_circular_compare2():
 
     return x, y
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_circular_compare3():
     """
     >>> test_circular_compare3()
@@ -179,7 +179,7 @@ def test_circular_compare3():
     (False, 10L)
     >>> sig, syms = infer(test_circular_compare3.py_func,
     ...                   functype(None, []), warn=False)
-    >>> map(str, types(syms, 'cond', 'x'))
+    >>> [str(x) for x in types(syms, 'cond', 'x')]
     ['bool', 'Py_ssize_t']
     """
     x = 1
@@ -202,7 +202,7 @@ def test_circular_compare3():
 # Test Indexing
 #------------------------------------------------------------------------
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_delayed_array_indexing():
     """
     >>> test_delayed_array_indexing()
@@ -278,7 +278,7 @@ def test_delayed_array_slicing2():
     print array
     print row
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_delayed_string_indexing_simple():
     """
     >>> test_delayed_string_indexing_simple()
@@ -298,7 +298,7 @@ def test_delayed_string_indexing_simple():
 
     return s[1:], x
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_delayed_string_indexing():
     """
     >>> test_delayed_string_indexing()
@@ -324,7 +324,7 @@ def test_delayed_string_indexing():
 
     return s, x
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_delayed_string_indexing2():
     """
     >>> test_delayed_string_indexing2()
@@ -405,7 +405,7 @@ def simple_func(x):
     y = x * x + 4
     return y
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_simple_call():
     """
     >>> test_simple_call()

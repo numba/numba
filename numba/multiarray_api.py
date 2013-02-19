@@ -20,6 +20,36 @@ from .scrape_multiarray_api import get_include, process_source
 
 # ______________________________________________________________________
 
+try:
+    PyCObject_AsVoidPtr = ctypes.pythonapi.PyCObject_AsVoidPtr
+except AttributeError:
+    def PyCObject_AsVoidPtr(o):
+        raise TypeError("Not available")
+else:
+    PyCObject_AsVoidPtr.restype = ctypes.c_void_p
+    PyCObject_AsVoidPtr.argtypes = [ctypes.py_object]
+    PyCObject_GetDesc = ctypes.pythonapi.PyCObject_GetDesc
+    PyCObject_GetDesc.restype = ctypes.c_void_p
+    PyCObject_GetDesc.argtypes = [ctypes.py_object]
+
+try:
+    PyCapsule_IsValid = ctypes.pythonapi.PyCapsule_IsValid
+except AttributeError:
+    def PyCapsule_IsValid(capsule, name):
+        raise TypeError("Not available")
+    def PyCapsule_GetPointer(capsule, name):
+        raise TypeError("Not available")
+else:
+    PyCapsule_IsValid.restype = ctypes.c_int
+    PyCapsule_IsValid.argtypes = [ctypes.py_object, ctypes.c_char_p]
+    PyCapsule_GetPointer = ctypes.pythonapi.PyCapsule_GetPointer
+    PyCapsule_GetPointer.restype = ctypes.c_void_p
+    PyCapsule_GetPointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+    PyCapsule_GetContext = ctypes.pythonapi.PyCapsule_GetContext
+    PyCapsule_GetContext.restype = ctypes.c_void_p
+    PyCapsule_GetContext.argtypes = [ctypes.py_object]
+
+
 class MultiarrayAPI (object):
     _type_map = {
             'char' : _int8,
@@ -115,7 +145,7 @@ class MultiarrayAPI (object):
                 pyarray, pyobj = fn.args
                 const = lambda x: lc.Constant.int(_int32, x)
                 offset = _numpy_array_field_ofs['base']
-                loc = builder.gep(pyarray, map(const, [0, offset]))
+                loc = builder.gep(pyarray, [const(0), const(offset)])
                 val = builder.bitcast(pyobj, _void_star)
                 builder.store(val, loc)
                 builder.ret(const(0))
@@ -124,13 +154,16 @@ class MultiarrayAPI (object):
         self.load_PyArray_SetBaseObject = impl
 
     def calculate_api_addr (self):
-        PyCObject_AsVoidPtr = ctypes.pythonapi.PyCObject_AsVoidPtr
-        PyCObject_AsVoidPtr.argtypes = [ctypes.py_object]
-        PyCObject_AsVoidPtr.restype = ctypes.c_void_p
-        # FIXME: Add test to see if we should be using the capsule API
-        # instead of PyCObject.
-        ret_val = self.api_addr = PyCObject_AsVoidPtr(_ARRAY_API)
-        return ret_val
+        typ_name = type(_ARRAY_API).__name__
+        if typ_name == 'PyCObject':
+            vp = PyCObject_AsVoidPtr(_ARRAY_API)
+        elif typ_name == 'PyCapsule':
+            vp = PyCapsule_GetPointer(_ARRAY_API, None)
+        else:
+            raise TypeError("Cannot the the api address for %r, %s" % (_ARRAY_API, typ_name))
+
+        self.api_addr = vp
+        return vp
 
     def set_PyArray_API (self, module):
         '''Adds PyArray_API as a global variable to the input LLVM module.'''

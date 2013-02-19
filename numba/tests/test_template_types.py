@@ -11,7 +11,7 @@ from numba import typesystem
 
 T = numba.template()
 
-@autojit(T(T[:, :]), warn=False, locals=dict(scalar=T))
+@autojit_py3doc(T(T[:, :]), warn=False, locals=dict(scalar=T))
 def test_simple_template(array):
     """
     >>> test_simple_template(np.arange(10, 12, dtype=np.float32))
@@ -94,7 +94,7 @@ def test_type_attributes(array, func, struct, pointer):
     field_b = 0
     scalar = 0
 
-@autojit(T(T, double))
+@autojit_py3doc(T(T, double), locals=None)
 def test_template_with_concretes(a, b):
     """
     >>> test_template_with_concretes(1, 2)
@@ -102,7 +102,7 @@ def test_template_with_concretes(a, b):
     """
     return a + b
 
-@autojit(complex128(T, double))
+@autojit(complex128(T, double), locals=None)
 def test_template_with_concretes2(a, b):
     """
     >>> test_template_with_concretes2(1, 2)
@@ -120,7 +120,7 @@ def test_template_with_concretes2(a, b):
     return a + b
 
 
-@autojit(T2(T1, double))
+@autojit_py3doc(T2(T1, double), locals=None)
 def test_unknown_template_error(a, b):
     """
     >>> test_unknown_template_error(1, 2)
@@ -130,7 +130,7 @@ def test_unknown_template_error(a, b):
     """
     return a + b
 
-@autojit(T(T, T))
+@autojit_py3doc(T(T, T), locals=None)
 def test_template_inconsistent_types_error(a, b):
     """
     >>> test_template_inconsistent_types_error(1, 2)

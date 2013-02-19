@@ -251,7 +251,7 @@ class GlobalType(KnownValueType):
     def __init__(self, name, func_globals, position_node=None, **kwds):
         try:
             value = func_globals[name]
-        except KeyError, e:
+        except KeyError as e:
             raise error.NumbaError(position_node, "No global named %s" % (e,))
 
         super(GlobalType, self).__init__(value, **kwds)

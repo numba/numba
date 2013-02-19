@@ -1,4 +1,4 @@
-from intrinsic import Intrinsic, Signature
+from .intrinsic import Intrinsic, Signature
 from numba import naming
 from llpython.byte_translator import LLVMTranslator
 import llvm.core

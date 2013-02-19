@@ -4,7 +4,10 @@ Miscellaneous (convenience) utilities.
 
 __all__ = ['ctypes', 'np', 'llvm', 'lc', 'MiniFunction']
 
-import __builtin__
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
 
 class UnavailableImport(object):
     def __init__(self, import_name):
@@ -32,7 +35,7 @@ except ImportError:
     llvm = UnavailableImport("llvm")
     lc = UnavailableImport("llvm.core")
 
-import treepath
+from . import treepath
 
 #
 ### Convenience utilities
@@ -43,7 +46,7 @@ def specialize(context, specializer_cls, ast, print_tree=False):
     "Specialize an AST with given specializer and compile"
     context = context or getcontext()
     specializers = [specializer_cls]
-    result = iter(context.run(ast, specializers, print_tree=print_tree)).next()
+    result = next(iter(context.run(ast, specializers, print_tree=print_tree)))
     _, specialized_ast, _, code_result = result
     if not context.use_llvm:
         prototype, code_result = code_result
@@ -65,7 +68,7 @@ class MiniFunction(object):
                                         context, specializer, self.minifunc)
 
     def get_ctypes_func_and_args(self, arrays):
-        from ctypes_conversion import get_data_pointer
+        from .ctypes_conversion import get_data_pointer
 
         fist_array = arrays[0]
         shape = fist_array.shape
@@ -98,7 +101,7 @@ class MiniFunction(object):
         assert not kwargs, kwargs
 
         if out is None:
-            import minitypes
+            from . import minitypes
             dtype = minitypes.map_minitype_to_dtype(self.variables[0].type)
             broadcast = np.broadcast(*args)
             out = np.empty(broadcast.shape, dtype=dtype)
@@ -128,18 +131,6 @@ def all(it):
         if not obj:
             return False
     return True
-
-def max(it, key=None):
-    if key is not None:
-        k, value = max((key(value), value) for value in it)
-        return value
-    return __builtin__.max(it)
-
-def min(it, key=None):
-    if key is not None:
-        k, value = min((key(value), value) for value in it)
-        return value
-    return __builtin__.min(it)
 
 class ComparableObjectMixin(object):
     "Make sure subclasses implement comparison and hashing methods"

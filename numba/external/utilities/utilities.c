@@ -18,10 +18,10 @@
 #if PY_MAJOR_VERSION >= 3
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
-    NUMBA_NAMESTR("utilities"),
+    __Numba_NAMESTR("utilities"),
     0,      /* m_doc */
     -1,     /* m_size */
-    NULL,   /* m_methods */,
+    NULL,   /* m_methods */
     NULL,   /* m_reload */
     NULL,   /* m_traverse */
     NULL,   /* m_clear */
@@ -61,7 +61,7 @@ success:
 #if PY_MAJOR_VERSION < 3
     return;
 #else
-    return __pyx_m;
+    return module;
 #endif
 }
 

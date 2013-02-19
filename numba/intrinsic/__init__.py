@@ -1,5 +1,5 @@
 import llvm.core
-from intrinsic import IntrinsicLibrary
+from .intrinsic import IntrinsicLibrary
 
 __all__ = []
 all = {}

@@ -143,8 +143,10 @@ binary_ufuncs_arithmetic = (
     'multiply',
     'true_divide',
     'floor_divide',
-    'divide',
 )
+
+if not PY3:
+    binary_ufuncs_arithmetic = binary_ufuncs_arithmetic + ('divide', )
 
 #------------------------------------------------------------------------
 # Register our type functions
