@@ -283,6 +283,10 @@ def autojit(template_signature=None, backend='ast', target='cpu',
 def _jit2(restype=None, argtypes=None, nopython=False,
           _llvm_module=None, **kwargs):
     def _jit2_decorator(func):
+        if isinstance(func, (type, types.ClassType)):
+            cls = func
+            return jit_extension_class(cls, kwargs)
+
         argtys = argtypes
         if func.__code__.co_argcount == 0 and argtys is None:
             argtys = []

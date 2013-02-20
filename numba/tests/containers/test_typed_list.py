@@ -72,6 +72,9 @@ def append_many(type):
 def pop(type):
     """
     >>> pop(int_)
+    2
+    1
+    0
     (3L, 2L, 1L, 0L)
     """
     tlist = nb.typedlist(type)
@@ -79,11 +82,11 @@ def pop(type):
         tlist.append(i)
 
     l1 = len(tlist)
-    tlist.pop()
+    print tlist.pop()
     l2 = len(tlist)
-    tlist.pop()
+    print tlist.pop()
     l3 = len(tlist)
-    tlist.pop()
+    print tlist.pop()
     l4 = len(tlist)
     return l1, l2, l3, l4
 
@@ -132,6 +135,34 @@ def from_iterable(type, iterable):
     TypeError: 'object' object is not iterable
     """
     return nb.typedlist(type, iterable)
+
+@autojit
+def test_count(type):
+    """
+    >>> test_count(int_)
+    Traceback (most recent call last):
+        ...
+    NotImplementedError: 'count' method of type 'typedlist'
+    """
+    tlist = nb.typedlist(type, [1, 2, 3, 4, 5, 1, 2])
+    return tlist.count(0), tlist.count(3), tlist.count(1)
+
+@autojit
+def test_reverse(type, value):
+    """
+    >>> test_reverse(int_, range(10))
+    [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+    >>> test_reverse(int_, range(11))
+    [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+
+    >>> test_reverse(float_, range(10))
+    [9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0]
+    >>> test_reverse(float_, range(11))
+    [10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0]
+    """
+    tlist = nb.typedlist(type, value)
+    tlist.reverse()
+    return tlist
 
 def test():
     nb.testmod()
