@@ -304,7 +304,10 @@ def _apply_typemap(lfunctype):
     argtys = lfunctype.pointee.args
     def convert(ty):
         if isinstance(ty, _lc.IntegerType):
-            return 'i'
+            return { 8: 'b',
+                    16: 'h',
+                    32: 'i',
+                    64: 'l'}[ty.width]
         elif ty == _lc.Type.float():
             return 'f'
         elif ty == _lc.Type.double():
@@ -355,7 +358,10 @@ class CudaNumbaFuncDispatcher(object):
 
         _typemapper = {'f': c_float,
                        'd': c_double,
-                       'i': c_int,
+                       'b': c_int8,
+                       'h': c_int16,
+                       'i': c_int32,
+                       'l': c_int64,
                        '_': ndarray_gpu}
 
         for ty, arg in zip(self.typemap, args):
