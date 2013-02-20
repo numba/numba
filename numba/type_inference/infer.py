@@ -9,7 +9,7 @@ from functools import reduce
 
 import numba
 from numba import *
-from numba import error, transforms, control_flow, visitors, nodes
+from numba import error, transforms, control_flow, visitors, nodes, oset
 from numba.type_inference import module_type_inference, infer_call, deferred
 from numba.minivect import minierror, minitypes
 from numba import translate, utils, typesystem
@@ -434,7 +434,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
         #-------------------------------------------------------------------
         # Find all unresolved variables
         #-------------------------------------------------------------------
-        unresolved = set()
+        unresolved = oset.OrderedSet()
         for block in self.ast.flow.blocks:
             for variable in block.symtab.itervalues():
                 if variable.parent_var: # renamed variable
@@ -446,7 +446,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
         #-------------------------------------------------------------------
         # Find the strongly connected components (build a condensation graph)
         #-------------------------------------------------------------------
-        unvisited = set(unresolved)
+        unvisited = oset.OrderedSet(unresolved)
         strongly_connected = {}
         while unresolved:
             start_type = unresolved.pop()
@@ -461,8 +461,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
         #-------------------------------------------------------------------
 
         if unvisited:
-            unvisited = set(strongly_connected.itervalues())
-            visited = set()
+            unvisited = oset.OrderedSet(strongly_connected.itervalues())
+            visited = oset.OrderedSet()
 
             # sccs = dict((k, v) for k, v in strongly_connected.iteritems()
             #                        if k is not v)
