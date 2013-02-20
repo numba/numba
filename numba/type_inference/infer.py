@@ -1061,7 +1061,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
                     result_type = minitypes.object_
             elif any(slice_node.variable.type.is_unresolved for slice_node in slices):
                 for slice_node in slices:
-                    if slice_type.variable.type.is_unresolved:
+                    if slice_node.variable.type.is_unresolved:
                         deferred_type.dependences.append(slice_node)
 
                 deferred_type.update()
