@@ -271,7 +271,7 @@ class CudaBaseFunction(numbawrapper.NumbaWrapper):
         '''
         return self.configure(*args)
 
-regex_py_modulo = re.compile('__numba_specialized_\d___py_modulo')
+regex_py_modulo = re.compile('__numba_specialized_\d+___py_modulo')
 
 def _hack_to_implement_pymodulo(module):
     '''XXX: I should fix the linkage instead.
