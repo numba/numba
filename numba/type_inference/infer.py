@@ -421,6 +421,17 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
             if not u.resolve().is_unresolved:
                 unvisited.remove(u)
 
+    def update_visited(self, start_point, visited, unvisited):
+        visited.add(start_point)
+        if start_point in unvisited:
+            unvisited.remove(start_point)
+
+        if start_point.is_scc:
+            visited.update(start_point.types)
+            for type in start_point.types:
+                if type in unvisited:
+                    unvisited.remove(type)
+
     def resolve_variable_types(self):
         """
         Resolve the types for all variable assignments. We run type inference
@@ -483,10 +494,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
                 while start_points:
                     start_point = start_points.pop()
                     self.assert_resolveable(start_point)
-
-                    visited.add(start_point)
-                    if start_point in unvisited:
-                        unvisited.remove(start_point)
+                    self.update_visited(start_point, visited, unvisited)
 
                     # self._debug_type(start_point)
 
