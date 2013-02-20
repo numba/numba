@@ -64,9 +64,9 @@ class ComplexSupportMixin(object):
     def _complex_floordiv(self, arg1r, arg1i, arg2r, arg2i):
         real, imag = self._complex_div(arg1r, arg1i, arg2r, arg2i)
         long_type = long_.to_llvm(self.context)
-        real = self.caster.cast(real, long_type)
-        imag = self.caster.cast(imag, long_type)
-        real = self.caster.cast(real, arg1r.type)
-        imag = self.caster.cast(imag, arg1r.type)
+        real = self.caster.cast(real, long_type, unsigned=False)
+        imag = self.caster.cast(imag, long_type, unsigned=False)
+        real = self.caster.cast(real, arg1r.type, unsigned=False)
+        imag = self.caster.cast(imag, arg1r.type, unsigned=False)
         return real, imag
 

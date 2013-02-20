@@ -1343,11 +1343,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             ldst_base_type = dst_type.base_type.to_llvm(self.context)
             real = val
             if node_type != dst_type.base_type:
-                real = self.caster.cast(real, ldst_base_type)
+                flags = {}
+                add_cast_flag_unsigned(flags, node_type, dst_type.base_type)
+                real = self.caster.cast(real, ldst_base_type, **flags)
             imag = llvm.core.Constant.real(ldst_base_type, 0.0)
             val = self._create_complex(real, imag)
         else:
-            val = self.caster.cast(val, node.dst_type.to_llvm(self.context))
+            flags = {}
+            add_cast_flag_unsigned(flags, node_type, dst_type)
+            val = self.caster.cast(val, node.dst_type.to_llvm(self.context),
+                                   **flags)
 
         if debug_conversion:
             self.puts("Coercing %s to %s" % (node_type, dst_type))
@@ -1689,3 +1694,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
     def visit_UserNode(self, node):
         return node.codegen(self)
+
+
+#
+# Util
+#
+def add_cast_flag_unsigned(flags, lty, rty):
+    if lty.is_int:
+        flags['unsigned'] = not lty.signed
+    elif rty.is_int:
+        flags['unsigned'] = not rty.signed
+

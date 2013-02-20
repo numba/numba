@@ -83,9 +83,9 @@ class _LLVMCaster(object):
     def __init__(self, builder):
         self.builder = builder
 
-    def cast(self, lvalue, dst_ltype):
+    def cast(self, lvalue, dst_ltype, *args, **kws):
         src_ltype = lvalue.type
-        return self.build_cast(self.builder, lvalue, dst_ltype)
+        return self.build_cast(self.builder, lvalue, dst_ltype, *args, **kws)
 
     def build_pointer_cast(_, builder, lval1, lty2):
         return builder.bitcast(lval1, lty2)
@@ -152,6 +152,12 @@ class _LLVMCaster(object):
         lty1 = lval1.type
         lkind1 = lty1.kind
         lkind2 = lty2.kind
+
+        if lc.TYPE_INTEGER in (lkind1, lkind2) and 'unsigned' not in kws:
+            # Be strict about having `unsigned` define when
+            # we have integer types
+            raise ValueError("Unknown signedness for integer type",
+                             '%s -> %s' % (lty1, lty2), args, kws)
 
         if lkind1 == lkind2:
 

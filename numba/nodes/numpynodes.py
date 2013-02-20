@@ -161,8 +161,8 @@ class DataPointerNode(ExprNode):
         dptr, strides = self.data_descriptors(builder, tbaa, llvm_value)
 
         for i, (stride, index) in enumerate(zip(strides, indices)):
-            index = caster.cast(index, stride.type)
-            offset = caster.cast(offset, stride.type)
+            index = caster.cast(index, stride.type, unsigned=False)
+            offset = caster.cast(offset, stride.type, unsigned=False)
             offset = builder.add(offset, builder.mul(index, stride))
 
         data_ty = self.type.to_llvm(context)
