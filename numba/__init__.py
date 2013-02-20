@@ -122,30 +122,26 @@ def test(whitelist=None, blacklist=None):
                     continue
 
                 run += 1
-                print "running %-60s" % (modname,),
+                sys.stdout.write("running %-61s" % (modname,))
                 process = subprocess.Popen([sys.executable, '-m', modname],
                                            stdout=subprocess.PIPE,
                                            stderr=subprocess.PIPE)
                 out, err = process.communicate()
 
                 if process.returncode == 0:
-                    print "SUCCESS"
+                    print("SUCCESS")
                 else:
-                    print "FAILED: %s" % map_returncode_to_message(
-                                                process.returncode)
+                    print("FAILED: %s" % map_returncode_to_message(
+                                                process.returncode))
                     if PY3:
                         out = str(out, encoding='UTF-8')
                         err = str(err, encoding='UTF-8')
-                    print out
-                    print err
-                    print "-" * 80
-
-                run += 1
-                res = call([sys.executable, '-m', qname + modname])
-                if res != 0:
+                    print(out)
+                    print(err)
+                    print("-" * 80)
                     failed += 1
 
-    print "ran test files: failed: (%d/%d)" % (failed, run)
+    print("ran test files: failed: (%d/%d)" % (failed, run))
     return failed
 
 def nose_run(module=None):
