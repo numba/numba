@@ -1457,10 +1457,17 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
     def is_store(self, ctx):
         return isinstance(ctx, ast.Store)
 
+    def extattr_mangle(self, attr_name, type):
+        if attr_name.startswith("__") and not attr_name.endswith("__"):
+            attr_name = "_%s%s" % (type.name, attr_name)
+
+        return attr_name
+
     def _resolve_extension_attribute(self, node, type):
-        if node.attr in type.methoddict:
-            return nodes.ExtensionMethod(node.value, node.attr)
-        if node.attr not in type.symtab:
+        attr = self.extattr_mangle(node.attr, type)
+        if attr in type.methoddict:
+            return nodes.ExtensionMethod(node.value, attr)
+        if attr not in type.symtab:
             if type.is_resolved or not self.is_store(node.ctx):
                 raise error.NumbaError(
                     node, "Cannot access attribute %s of type %s" % (
@@ -1468,9 +1475,9 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
 
             # Create entry in type's symbol table, resolve the actual type
             # in the parent Assign node
-            type.symtab[node.attr] = Variable(None)
+            type.symtab[attr] = Variable(None)
 
-        return nodes.ExtTypeAttribute(node.value, node.attr, node.ctx, type)
+        return nodes.ExtTypeAttribute(node.value, attr, node.ctx, type)
 
     def _resolve_struct_attribute(self, node, type):
         type = nodes.struct_type(type)
