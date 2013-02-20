@@ -104,5 +104,8 @@ def pop_many(type):
 
     return initial_length, len(tlist)
 
-if __name__ == "__main__":
+def test():
     nb.testmod()
+
+if __name__ == "__main__":
+    test()
