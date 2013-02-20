@@ -160,7 +160,7 @@ def nose_run(module=None):
 
 __all__ = typesystem.__all__ + decorators.__all__ + special.__all__
 
-from numba.containers import typedlist
+from numba.containers.typedlist import typedlist
 from numba.typesystem import map_dtype
 from numba.type_inference.module_type_inference import (is_registered,
                                                         register,
