@@ -35,6 +35,7 @@ def container_methods(item_type, notimplemented):
     def append(self, value):
         size = self.size
         if size >= self.buf.shape[0]:
+            # NOTE: initial bufsize must be greater than zero
             self.buf.resize(int(size * GROW), refcheck=False)
 
         self.buf[size] = value

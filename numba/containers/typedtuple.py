@@ -5,7 +5,7 @@ from numba.containers import orderedcontainer
 
 import numpy as np
 
-INITIAL_BUFSIZE = 0
+INITIAL_BUFSIZE = 5
 
 def notimplemented(msg):
     raise NotImplementedError("'%s' method of type 'typedtuple'" % msg)
