@@ -1,5 +1,8 @@
-from . import utils
 import collections
+
+from numba import utils
+from numba import odict
+
 import llvm.core
 
 class Variable(object):
@@ -212,7 +215,7 @@ Variable.make_shared_property('need_arg_copy')
 
 class Symtab(object):
     def __init__(self, symtab_dict=None, parent=None):
-        self.symtab = symtab_dict or {}
+        self.symtab = odict.OrderedDict(symtab_dict or {})
         self.parent = parent
         self.local_counters = {}
 

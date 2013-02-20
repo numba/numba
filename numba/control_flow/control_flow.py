@@ -564,7 +564,7 @@ class ControlFlow(object):
                     incoming_var = parent.symtab.lookup_most_recent(variable.name)
                     phi.incoming.add(incoming_var)
 
-                    phi_node.variable.uninitialized |= incoming_var.uninitialized
+                    phi.variable.uninitialized |= incoming_var.uninitialized
 
                     # Update def-use chain
                     incoming_var.cf_references.append(phi)

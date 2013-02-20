@@ -132,7 +132,7 @@ class PromotionType(UnresolvedType):
     def __init__(self, variable, context, types, assignment=False, **kwds):
         super(PromotionType, self).__init__(variable, **kwds)
         self.context = context
-        self.types = types
+        self.types = oset.OrderedSet(types)
         self.assignment = assignment
         variable.type = self
 
@@ -174,7 +174,7 @@ class PromotionType(UnresolvedType):
                     types.add(type)
 
     def find_types(self, seen):
-        types = set([self])
+        types = oset.OrderedSet([self])
         seen.add(self)
         seen.add(self.variable.deferred_type)
         self.dfs(types, seen)
@@ -182,7 +182,7 @@ class PromotionType(UnresolvedType):
         return types
 
     def find_simple(self, seen):
-        types = set()
+        types = oset.OrderedSet()
         for type in self.types:
             if type.is_promotion:
                 types.add(type.types)
@@ -241,7 +241,7 @@ class PromotionType(UnresolvedType):
                 return True
             else:
                 old_types = self.types
-                self.types = set([result_type] + unresolved_types)
+                self.types = oset.OrderedSet([result_type] + unresolved_types)
                 return old_types != self.types
 
     def simplify(self, seen=None):
@@ -548,14 +548,16 @@ class StronglyConnectedCircularType(UnresolvedType):
         super(StronglyConnectedCircularType, self).__init__(None, **kwds)
         self.scc = scc
 
-        types = set(scc)
+        types = oset.OrderedSet(scc)
         for type in scc:
             self.add_children(type.children - types)
             self.add_parents(type.parents - types)
 
         self.types = scc
-        self.promotions = set(type for type in scc if type.is_promotion)
-        self.reanalyzeable = set(type for type in scc if type.is_reanalyze_circular)
+        self.promotions = oset.OrderedSet(
+                type for type in scc if type.is_promotion)
+        self.reanalyzeable = oset.OrderedSet(
+                type for type in scc if type.is_reanalyze_circular)
 
     def retry_infer_reanalyzable(self):
         for reanalyzeable in self.reanalyzeable:
@@ -622,7 +624,8 @@ class StronglyConnectedCircularType(UnresolvedType):
         elif self.promotions:
             self.resolve_promotion_cycles()
         else:
-            assert False
+            # All dependencies are resolved, we are done
+            pass
 
         self.is_resolved = True
 

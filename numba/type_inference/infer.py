@@ -10,6 +10,7 @@ from functools import reduce
 import numba
 from numba import *
 from numba import error, transforms, control_flow, visitors, nodes
+from numba import oset, odict
 from numba.type_inference import module_type_inference, infer_call, deferred
 from numba.minivect import minierror, minitypes
 from numba import translate, utils, typesystem
@@ -420,6 +421,17 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
             if not u.resolve().is_unresolved:
                 unvisited.remove(u)
 
+    def update_visited(self, start_point, visited, unvisited):
+        visited.add(start_point)
+        if start_point in unvisited:
+            unvisited.remove(start_point)
+
+        if start_point.is_scc:
+            visited.update(start_point.types)
+            for type in start_point.types:
+                if type in unvisited:
+                    unvisited.remove(type)
+
     def resolve_variable_types(self):
         """
         Resolve the types for all variable assignments. We run type inference
@@ -434,7 +446,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
         #-------------------------------------------------------------------
         # Find all unresolved variables
         #-------------------------------------------------------------------
-        unresolved = set()
+        unresolved = oset.OrderedSet()
         for block in self.ast.flow.blocks:
             for variable in block.symtab.itervalues():
                 if variable.parent_var: # renamed variable
@@ -446,8 +458,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
         #-------------------------------------------------------------------
         # Find the strongly connected components (build a condensation graph)
         #-------------------------------------------------------------------
-        unvisited = set(unresolved)
-        strongly_connected = {}
+        unvisited = oset.OrderedSet(unresolved)
+        strongly_connected = odict.OrderedDict()
         while unresolved:
             start_type = unresolved.pop()
             sccs = {}
@@ -461,8 +473,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
         #-------------------------------------------------------------------
 
         if unvisited:
-            unvisited = set(strongly_connected.itervalues())
-            visited = set()
+            unvisited = oset.OrderedSet(strongly_connected.itervalues())
+            visited = oset.OrderedSet()
 
             # sccs = dict((k, v) for k, v in strongly_connected.iteritems()
             #                        if k is not v)
@@ -482,10 +494,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
                 while start_points:
                     start_point = start_points.pop()
                     self.assert_resolveable(start_point)
-
-                    visited.add(start_point)
-                    if start_point in unvisited:
-                        unvisited.remove(start_point)
+                    self.update_visited(start_point, visited, unvisited)
 
                     # self._debug_type(start_point)
 
@@ -1052,7 +1061,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
                     result_type = minitypes.object_
             elif any(slice_node.variable.type.is_unresolved for slice_node in slices):
                 for slice_node in slices:
-                    if slice_type.variable.type.is_unresolved:
+                    if slice_node.variable.type.is_unresolved:
                         deferred_type.dependences.append(slice_node)
 
                 deferred_type.update()
@@ -1448,10 +1457,17 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
     def is_store(self, ctx):
         return isinstance(ctx, ast.Store)
 
+    def extattr_mangle(self, attr_name, type):
+        if attr_name.startswith("__") and not attr_name.endswith("__"):
+            attr_name = "_%s%s" % (type.name, attr_name)
+
+        return attr_name
+
     def _resolve_extension_attribute(self, node, type):
-        if node.attr in type.methoddict:
-            return nodes.ExtensionMethod(node.value, node.attr)
-        if node.attr not in type.symtab:
+        attr = self.extattr_mangle(node.attr, type)
+        if attr in type.methoddict:
+            return nodes.ExtensionMethod(node.value, attr)
+        if attr not in type.symtab:
             if type.is_resolved or not self.is_store(node.ctx):
                 raise error.NumbaError(
                     node, "Cannot access attribute %s of type %s" % (
@@ -1459,9 +1475,9 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
 
             # Create entry in type's symbol table, resolve the actual type
             # in the parent Assign node
-            type.symtab[node.attr] = Variable(None)
+            type.symtab[attr] = Variable(None)
 
-        return nodes.ExtTypeAttribute(node.value, node.attr, node.ctx, type)
+        return nodes.ExtTypeAttribute(node.value, attr, node.ctx, type)
 
     def _resolve_struct_attribute(self, node, type):
         type = nodes.struct_type(type)

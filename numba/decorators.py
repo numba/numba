@@ -182,6 +182,11 @@ def _jit(restype=None, argtypes=None, nopython=False,
     if env is None:
         env = environment.NumbaEnvironment.get_environment(env_name)
     def _jit_decorator(func):
+        if isinstance(func, (type, types.ClassType)):
+            cls = func
+            kwargs.update(env_name=env_name, env=env)
+            return jit_extension_class(cls, kwargs)
+
         argtys = argtypes
         if func.__code__.co_argcount == 0 and argtys is None:
             argtys = []

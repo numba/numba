@@ -31,6 +31,9 @@ def cast_as_numba_type_attribute():
     value = 4.4
     return numba.int32(value)
 
+def cast_in_python():
+    return int_(10) == 10
+
 def test_casts():
     assert cast_int() == 1
     assert cast_complex() == 1.2 + 0j
@@ -39,6 +42,7 @@ def test_casts():
     # print sys.getrefcount(value), value, np.arange(10, dtype=np.double)
     assert np.all(value == np.arange(10, dtype=np.double)), value
     assert cast_as_numba_type_attribute() == 4
+    assert cast_in_python()
 
 if __name__ == "__main__":
     test_casts()
