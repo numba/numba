@@ -9,7 +9,8 @@ from functools import reduce
 
 import numba
 from numba import *
-from numba import error, transforms, control_flow, visitors, nodes, oset
+from numba import error, transforms, control_flow, visitors, nodes
+from numba import oset, odict
 from numba.type_inference import module_type_inference, infer_call, deferred
 from numba.minivect import minierror, minitypes
 from numba import translate, utils, typesystem
@@ -447,7 +448,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
         # Find the strongly connected components (build a condensation graph)
         #-------------------------------------------------------------------
         unvisited = oset.OrderedSet(unresolved)
-        strongly_connected = {}
+        strongly_connected = odict.OrderedDict()
         while unresolved:
             start_type = unresolved.pop()
             sccs = {}
