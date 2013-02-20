@@ -104,6 +104,35 @@ def pop_many(type):
 
     return initial_length, len(tlist)
 
+@autojit
+def from_iterable(type, iterable):
+    """
+    >>> from_iterable(int_, [1, 2, 3])
+    [1, 2, 3]
+    >>> from_iterable(int_, (1, 2, 3))
+    [1, 2, 3]
+    >>> from_iterable(int_, (x for x in [1, 2, 3]))
+    [1, 2, 3]
+
+    >>> from_iterable(float_, [1, 2, 3])
+    [1.0, 2.0, 3.0]
+    >>> from_iterable(float_, (1, 2, 3))
+    [1.0, 2.0, 3.0]
+    >>> from_iterable(float_, (x for x in [1, 2, 3]))
+    [1.0, 2.0, 3.0]
+
+    >>> from_iterable(int_, [1, object(), 3])
+    Traceback (most recent call last):
+        ...
+    TypeError: an integer is required
+
+    >>> from_iterable(int_, object())
+    Traceback (most recent call last):
+        ...
+    TypeError: 'object' object is not iterable
+    """
+    return nb.typedlist(type, iterable)
+
 def test():
     nb.testmod()
 

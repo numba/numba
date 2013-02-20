@@ -10,22 +10,35 @@ GROW = 2
 
 _list_cache = {}
 
-def typedlist(item_type, _list_cache=_list_cache):
+def typedlist(item_type, iterable=None, _list_cache=_list_cache):
     if item_type in _list_cache:
-        return _list_cache[item_type](item_type, item_type.get_dtype())
+        return _list_cache[item_type](item_type, item_type.get_dtype(), iterable)
 
     item_type_t = typesystem.CastType(item_type)
     dtype_t = typesystem.NumpyDtypeType(item_type)
 
     @jit
     class typedlist(object):
-        @void(item_type_t, dtype_t)
-        def __init__(self, item_type, dtype):
+        @void(item_type_t, dtype_t, object_)
+        def __init__(self, item_type, dtype, iterable):
             # self.item_type = item_type
             item_type
             self.dtype = dtype
             self.size = 0
+
+            # TODO: Use length hint of iterable for initial buffer size
             self.buf = np.empty(INITIAL_BUFSIZE, dtype=dtype)
+
+            # TODO: implement 'is'/'is not'
+            if iterable != None:
+                self._from_iterable(iterable)
+
+        @void(object_)
+        def _from_iterable(self, iterable):
+            # TODO: something fast for common cases (e.g. typedlist,
+            #                                        np.ndarray, etc)
+            for obj in iterable:
+                self.append(obj)
 
         # TODO: Jit __getitem__/__setitem__ of numba extension types
 
@@ -51,7 +64,7 @@ def typedlist(item_type, _list_cache=_list_cache):
         def append(self, value):
             size = self.size
             if size >= self.buf.shape[0]:
-                self.buf.resize(int(size * 2))
+                self.buf.resize(int(size * GROW), refcheck=False)
 
             self.buf[size] = value
             self.size = size + 1
@@ -64,7 +77,7 @@ def typedlist(item_type, _list_cache=_list_cache):
             self.size = size
 
             if INITIAL_BUFSIZE < size < self.buf.shape[0] / 2:
-                self.buf.resize(int(SHRINK * size))
+                self.buf.resize(int(SHRINK * size), refcheck=False)
 
             return item
 
@@ -78,7 +91,7 @@ def typedlist(item_type, _list_cache=_list_cache):
             return "[" + buf + "]"
 
     _list_cache[item_type] = typedlist
-    return typedlist(item_type, item_type.get_dtype())
+    return typedlist(item_type, item_type.get_dtype(), iterable)
 
 
 if __name__ == "__main__":
