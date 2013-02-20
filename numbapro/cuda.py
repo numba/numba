@@ -4,6 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import contextlib
+import re
 
 from llvm import core as _lc
 from llvm import ee as _le
@@ -215,7 +216,7 @@ def _link_device_function(lfunc):
             bag = _device_functions.get(fn.name)
             if bag is not None:
                 pyfunc, linkee =bag
-                lfunc.module.link_in(linkee.module.clone())
+                lfunc.module.link_in(linkee.module, preserve=True)
                 if pyfunc._numba_inline:
                     toinline.append(instr)
 
@@ -270,11 +271,31 @@ class CudaBaseFunction(numbawrapper.NumbaWrapper):
         '''
         return self.configure(*args)
 
+regex_py_modulo = re.compile('__numba_specialized_\d___py_modulo')
+
+def _hack_to_implement_pymodulo(module):
+    '''XXX: I should fix the linkage instead.
+    '''
+    for func in module.functions:
+        if regex_py_modulo.match(func.name):
+            assert func.is_declaration
+            func.add_attribute(_lc.ATTR_ALWAYS_INLINE)
+            bb = func.append_basic_block('entry')
+            b = _lc.Builder.new(bb)
+            if func.type.pointee.return_type.kind == _lc.TYPE_INTEGER:
+                rem = b.srem
+            else:
+                raise Exception("Does not support modulo of float-point number.")
+            b.ret(rem(*func.args))
+            del b
+            del bb
 
 def _generate_ptx(module, kernels):
     from numbapro._cuda import nvvm, driver, default
     context = driver.Driver().current_context()
     cc_major = context.device.COMPUTE_CAPABILITY[0]
+
+    _hack_to_implement_pymodulo(module)
 
     for kernel in kernels:
         _link_device_function(kernel)

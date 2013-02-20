@@ -525,7 +525,7 @@ class Device(object):
         got_minor = c_int()
         error = self.driver.cuDeviceComputeCapability(byref(got_major),
                                                       byref(got_minor),
-                                                      self.id);
+                                                      self.id)
         self.driver.check_error(error, 'Failed to read compute capability from %s' % self)
 
         setattr(self, 'COMPUTE_CAPABILITY', (got_major.value, got_minor.value))
