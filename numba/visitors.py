@@ -3,10 +3,12 @@ from pprint import pprint, pformat
 import ast as ast_module
 try:
     import __builtin__ as builtins
-except:
+except ImportError:
     import builtins
+
 from numba import functions
 from numba import nodes
+from numba.nodes import metadata
 from numba.typesystem.typemapper import have_properties
 
 try:
@@ -156,6 +158,12 @@ class NumbaVisitorMixin(CooperativeBase):
     @property
     def current_env(self):
         return self.env.translation.crnt
+
+    def annotate(self, node, key, value):
+        metadata.annotate(self.env, node, key, value)
+
+    def query(self, node, key):
+        return metadata.query(self.env, node, key)
 
     def error(self, node, msg):
         "Issue a terminating error"

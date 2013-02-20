@@ -12,6 +12,7 @@ from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
 from numba.minivect.minitypes import FunctionType
 from numba import functions, symtab
 from numba.utility.cbuilder import library
+from numba.nodes import metadata
 from numba.codegen import translate
 
 from numba.intrinsic import default_intrinsic_library
@@ -196,6 +197,10 @@ class FunctionEnvironment(object):
         'Template signature for @autojit.  E.g. T(T[:, :]).  See '
         'numba.typesystem.templatetypes.')
 
+    ast_metadata = TypedProperty(
+        object,
+        'Metadata for AST nodes of the function being compiled.')
+
     # FIXME: Get rid of this.  See comment for translator property,
     # below.
     cfg_transform = TypedProperty(
@@ -243,6 +248,7 @@ class FunctionEnvironment(object):
                  error_env=None, function_globals=None, locals=None,
                  template_signature=None, cfg_transform=None,
                  is_closure=False, closures=None, closure_scope=None,
+                 ast_metadata=None,
                  **kws):
         self.parent = parent
         self.numba = parent.numba
@@ -279,6 +285,12 @@ class FunctionEnvironment(object):
         self.is_closure = is_closure
         self.closures = closures if closures is not None else {}
         self.closure_scope = closure_scope
+
+        if ast_metadata is not None:
+            self.ast_metadata = ast_metadata
+        else:
+            self.ast_metadata = metadata.create_metadata_env()
+
         self.kwargs = kws
 
     def getstate(self):
