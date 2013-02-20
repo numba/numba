@@ -2,10 +2,6 @@
 Type functions for Python builtins.
 """
 
-import functools
-import __builtin__ as builtins
-
-
 from numba import *
 from numba import nodes
 from numba import error
@@ -15,48 +11,13 @@ from numba import typesystem
 from numba.typesystem import is_obj, promote_closest, get_type
 
 from numba.type_inference.modules import mathmodule
-from numba.type_inference.module_type_inference import (register,
-                                                        register_inferer,
-                                                        register_unbound,
-                                                        register_value)
+from numba.type_inference.modules import utils
 
 #----------------------------------------------------------------------------
 # Utilities
 #----------------------------------------------------------------------------
 
-def _expect_n_args(node, name, nargs):
-    if not isinstance(nargs, tuple):
-        nargs = (nargs,)
-
-    if len(node.args) not in nargs:
-        expected = " or ".join(map(str, nargs))
-        raise error.NumbaError(
-            node, "builtin %s expects %s arguments" % (name,
-                                                       expected))
-
-def register_builtin(nargs, can_handle_deferred_types=False):
-    if not isinstance(nargs, tuple):
-        nargs = (nargs,)
-
-    def decorator(func):
-        @functools.wraps(func)
-        def infer(context, node, *args):
-            _expect_n_args(node, name, nargs)
-
-            need_nones = max(nargs) - len(args)
-            args += (None,) * need_nones
-
-            return func(context, node, *args)
-
-        name = infer.__name__.strip("_")
-        value = getattr(builtins, name)
-
-        register_value(value, infer, pass_in_types=False, pass_in_callnode=True,
-                       can_handle_deferred_types=can_handle_deferred_types)
-
-        return func # wrapper
-
-    return decorator
+register_builtin = utils.register_with_argchecking
 
 def cast(node, dst_type):
     if len(node.args) == 0:
@@ -120,27 +81,20 @@ def complex_(context, node, a, b):
     else:
         return cast(node, complex128)
 
+def abstype(argtype):
+    if argtype.is_complex:
+        result_type = double
+    elif argtype.is_float or argtype.is_int:
+        result_type = argtype
+    else:
+        result_type = object_
+
+    return result_type
+
 @register_builtin(1)
 def abs_(context, node, x):
-    # Result type of the substitution during late
-    # specialization
-    result_type = object_
-    argtype = get_type(x)
-
-    # What we actually get back regardless of implementation,
-    # e.g. abs(complex) goes throught the object layer, but we know the result
-    # will be a double
-    dst_type = argtype
-
-    is_math = mathmodule.is_math_function(node.args, abs)
-
-    if argtype.is_complex:
-        dst_type = double
-    elif is_math and (argtype.is_float or argtype.is_int):
-        result_type = argtype
-
-    node.variable = Variable(result_type)
-    return nodes.CoercionNode(node, dst_type)
+    node.variable = Variable(abstype(get_type(x)))
+    return node
 
 @register_builtin((2, 3))
 def pow_(context, node, base, exponent, mod):

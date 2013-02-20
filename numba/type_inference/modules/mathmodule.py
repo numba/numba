@@ -6,6 +6,8 @@ final specialization it produces LLVMIntrinsicNode and MathCallNode
 nodes.
 """
 
+import math
+import cmath
 import ctypes
 import __builtin__ as builtins
 
@@ -16,15 +18,83 @@ from numba import error
 from numba import function_util
 from numba.symtab import Variable
 from numba import typesystem
-from numba.typesystem import is_obj, promote_closest
+from numba.typesystem import is_obj, promote_closest, get_type
 
-from numba.type_inference.module_type_inference import (register,
-                                                        register_inferer,
-                                                        register_unbound)
+from numba.type_inference.modules import utils
 
 import llvm.core
 import numpy as np
 
+#----------------------------------------------------------------------------
+# Utilities
+#----------------------------------------------------------------------------
+
+register_math = utils.register_with_argchecking
+
+def binop_type(context, x, y):
+    "Binary result type for math operations"
+    x_type = get_type(x)
+    y_type = get_type(y)
+    dst_type = context.promote_types(x_type, y_type)
+
+    type = dst_type
+    if type.is_int:
+        type = double
+
+    signature = minitypes.FunctionType(return_type=type, args=[type, type])
+    return dst_type, type, signature
+
+#----------------------------------------------------------------------------
+# Categorize Calls as Math Calls
+#----------------------------------------------------------------------------
+
+def get_funcname(py_func):
+    if py_func is np.abs:
+        return 'fabs'
+    elif py_func is np.round:
+        return 'round'
+
+    return py_func.__name__
+
+def is_intrinsic(py_func):
+    "Whether the math function is available as an llvm intrinsic"
+    intrinsic_name = 'INTR_' + get_funcname(py_func).upper()
+    is_intrinsic = hasattr(llvm.core, intrinsic_name)
+    return is_intrinsic # and not is_win32
+
+def math_suffix(name, type):
+    if name == 'abs':
+        name = 'fabs'
+
+    if type.itemsize == 4:
+        name += 'f' # sinf(float)
+    elif type.itemsize == 16:
+        name += 'l' # sinl(long double)
+    return name
+
+def is_math_function(func_args, py_func):
+    if len(func_args) == 0 or len(func_args) > 1 or py_func is None:
+        return False
+
+    type = get_type(func_args[0])
+
+    if type.is_array:
+        type = type.dtype
+        valid_type = type.is_float or type.is_int or type.is_complex
+    else:
+        valid_type = type.is_float or type.is_int
+
+    math_name = get_funcname(py_func)
+    is_math = math_name in libc_math_funcs
+    if is_math and valid_type:
+        math_name = math_suffix(math_name, type)
+        is_math = filter_math_funcs([math_name])
+
+    return valid_type and (is_intrinsic(py_func) or is_math)
+
+#----------------------------------------------------------------------------
+# Determine math functions
+#----------------------------------------------------------------------------
 
 is_win32 = sys.platform == 'win32'
 
@@ -42,7 +112,7 @@ def filter_math_funcs(math_func_names):
     return result_func_names
 
 # sin(double), sinf(float), sinl(long double)
-libc_math_funcs = [
+all_libc_math_funcs = [
     'sin',
     'cos',
     'tan',
@@ -68,66 +138,18 @@ libc_math_funcs = [
     'round',
 ]
 
-libc_math_funcs = filter_math_funcs(libc_math_funcs)
+libc_math_funcs = filter_math_funcs(all_libc_math_funcs)
 
-def get_funcname(py_func):
-    if py_func is np.abs:
-        return 'fabs'
-    elif py_func is np.round:
-        return 'round'
+#----------------------------------------------------------------------------
+# Math Type Inferers
+#----------------------------------------------------------------------------
 
-    return py_func.__name__
+# TODO: Move any rewriting parts to lowering phases
 
-def is_intrinsic(py_func):
-    "Whether the math function is available as an llvm intrinsic"
-    intrinsic_name = 'INTR_' + get_funcname(py_func).upper()
-    is_intrinsic = hasattr(llvm.core, intrinsic_name)
-    return is_intrinsic # and not is_win32
-
-def is_math_function(func_args, py_func):
-    if len(func_args) == 0 or len(func_args) > 1 or py_func is None:
-        return False
-
-    type = func_args[0].variable.type
-
-    if type.is_array:
-        type = type.dtype
-        valid_type = type.is_float or type.is_int or type.is_complex
-    else:
-        valid_type = type.is_float or type.is_int
-
-    math_name = get_funcname(py_func)
-    is_math = math_name in libc_math_funcs
-    if is_math and valid_type:
-        math_name = math_suffix(math_name, type)
-        is_math = filter_math_funcs([math_name])
-
-    return valid_type and (is_intrinsic(py_func) or is_math)
-
-def resolve_intrinsic(args, py_func, signature):
-    func_name = get_funcname(py_func).upper()
-    return nodes.LLVMIntrinsicNode(signature, args, func_name=func_name)
-
-def math_suffix(name, type):
-    if name == 'abs':
-        name = 'fabs'
-
-    if type.itemsize == 4:
-        name += 'f' # sinf(float)
-    elif type.itemsize == 16:
-        name += 'l' # sinl(long double)
-    return name
-
-def _resolve_libc_math(self, args, py_func, signature):
-    arg_type = signature.args[0]
-    name = math_suffix(get_funcname(py_func), arg_type)
-    return nodes.MathCallNode(signature, args, llvm_func=None,
-                              py_func=py_func, name=name)
-
-def resolve_math_call(call_node, py_func):
+def infer_math_call(context, call_node, py_func):
     "Resolve calls to math functions to llvm.log.f32() etc"
     # signature is a generic signature, build a correct one
-    orig_type = type = call_node.args[0].variable.type
+    type = get_type(call_node.args[0])
 
     if type.is_int:
         type = double
@@ -138,17 +160,12 @@ def resolve_math_call(call_node, py_func):
     result = nodes.MathNode(py_func, signature, call_node.args[0])
     return result
 
-def binop_type(context, x, y):
-    "Binary result type for math operations"
-    x_type = x.variable.type
-    y_type = y.variable.type
-    dst_type = context.promote_types(x_type, y_type)
-    type = dst_type
-    if type.is_int:
-        type = double
+# ______________________________________________________________________
+# pow()
 
-    signature = minitypes.FunctionType(return_type=type, args=[type, type])
-    return dst_type, type, signature
+def resolve_intrinsic(args, py_func, signature):
+    func_name = get_funcname(py_func).upper()
+    return nodes.LLVMIntrinsicNode(signature, args, func_name=func_name)
 
 def pow_(context, node, power, mod=None):
     dst_type, pow_type, signature = binop_type(context, node, power)
@@ -161,3 +178,42 @@ def pow_(context, node, power, mod=None):
         result = nodes.call_pyfunc(pow, args)
 
     return nodes.CoercionNode(result, dst_type)
+
+# ______________________________________________________________________
+# abs()
+
+def abs_(context, node, x):
+    import builtinmodule
+
+    argtype = get_type(x)
+
+    if argtype.is_array and argtype.is_numeric:
+        # Handle np.abs() on arrays
+        dtype = builtinmodule.abstype(argtype.dtype)
+        result_type = argtype.copy(dtype=dtype)
+        node.variable = Variable(result_type)
+        return node
+
+    return builtinmodule.abs_(context, node, x)
+
+#----------------------------------------------------------------------------
+# Register Type Functions
+#----------------------------------------------------------------------------
+
+def register(nargs, value):
+    register = register_math(nargs)
+    register(infer_math_call, value)
+
+def register_typefuncs():
+    modules = [builtins, math, cmath]
+    for libc_math_func in all_libc_math_funcs:
+        for module in modules:
+            if hasattr(module, libc_math_func):
+                register(1, getattr(module, libc_math_func))
+
+    register_math((2, 3), math.pow)
+    register_math(2, np.power)
+
+    register_math(1, np.abs)
+
+register_typefuncs()
