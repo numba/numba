@@ -97,7 +97,7 @@ def regular_import():
 
 def raise_stat():
     try:
-        raise exc, msg
+        raise exc(msg)
     except:
         pass
     exc = ValueError

@@ -1,9 +1,9 @@
 # -*- encoding: UTF-8 -*-
 
-import minivisitor
-import miniutils
-import minitypes
-import specializers
+from . import minivisitor
+from . import miniutils
+from . import minitypes
+from . import specializers
 
 def admissible(broadcasting_tuple, n_loops):
     """

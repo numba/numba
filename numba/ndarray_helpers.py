@@ -58,7 +58,7 @@ class PyArrayAccessor(object):
         self.dtype = dtype
 
     def _get_element(self, idx):
-        indices = map(const_int, [0, _head_len + idx])
+        indices = [const_int(0), const_int(_head_len + idx)]
         ptr = self.builder.gep(self.pyarray_ptr, indices)
         return ptr
 

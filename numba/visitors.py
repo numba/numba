@@ -1,7 +1,10 @@
 import ast
 from pprint import pprint, pformat
 import ast as ast_module
-import __builtin__ as builtins
+try:
+    import __builtin__ as builtins
+except:
+    import builtins
 from numba import functions
 from numba import nodes
 from numba.typesystem.typemapper import have_properties
@@ -12,7 +15,7 @@ except ImportError:
     # pre-2.6
     numbers = None
 
-from numba import error
+from numba import error, PY3
 
 import logging
 logger = logging.getLogger(__name__)
@@ -62,7 +65,17 @@ class NumbaVisitorMixin(CooperativeBase):
             locals, cellvars, freevars = determine_variable_status(context, ast,
                                                                    self.locals)
             self.names = self.global_names = freevars
-            self.argnames = tuple(arg.id for arg in ast.args.args)
+
+            #TODO: Using a guard for PY3 does not work.
+            #Sometimes ast.args.args has objects of type ast.Name
+            tmp_ = []
+            for name in ast.args.args:
+                if hasattr(name, 'arg'):
+                    tmp_.append(name.arg)
+                else:
+                    tmp_.append(name.id)
+            self.argnames = tuple(tmp_)
+
             argnames = set(self.argnames)
             local_names = [local_name for local_name in locals
                                           if local_name not in argnames]
@@ -71,7 +84,7 @@ class NumbaVisitorMixin(CooperativeBase):
             self.cellvars = cellvars
             self.freevars = freevars
         else:
-            f_code = self.func.func_code
+            f_code = self.func.__code__
             self.names = self.global_names = f_code.co_names
             self.varnames = self.local_names = list(f_code.co_varnames)
 
@@ -89,7 +102,7 @@ class NumbaVisitorMixin(CooperativeBase):
             self.func_globals = kwargs.get('func_globals', {})
             self.module_name = self.func_globals.get("__name__", "")
         else:
-            self.func_globals = func.func_globals
+            self.func_globals = func.__globals__
             self.module_name = self.func.__module__
 
         # Add variables declared in locals=dict(...)
@@ -161,14 +174,14 @@ class NumbaVisitorMixin(CooperativeBase):
 
         try:
             return super(NumbaVisitorMixin, self).visit(node)
-        except error.NumbaError, e:
+        except error.NumbaError as e:
             # Try one of the overloads
             cls_name = type(node).__name__
             for i, cls_name in enumerate(self._overloads):
                 for overload_name, func in self._overloads[cls_name]:
                     try:
                         return func(self, node)
-                    except error.NumbaError, e:
+                    except error.NumbaError as e:
                         if i == len(self._overloads) - 1:
                             raise
 
@@ -192,7 +205,7 @@ class NumbaVisitorMixin(CooperativeBase):
         func = self.func
         if func is None:
             d = dict(self.func_globals)
-            exec 'def __numba_func(): pass' in d, d
+            exec('def __numba_func(): pass', d, d)
             func = d['__numba_func']
 
         templ = templating.TemplateContext(self.context, s)
@@ -394,7 +407,10 @@ def determine_variable_status(context, ast, locals_dict):
 
     locals = set(v.assigned)
     locals.update(locals_dict)
-    locals.update(arg.id for arg in ast.args.args)
+    if PY3:
+        locals.update(arg.arg for arg in ast.args.args)
+    else:
+        locals.update(arg.id for arg in ast.args.args)
     locals.update(func_def.name for func_def in v.func_defs)
 
     freevars = set(v.referenced) - locals

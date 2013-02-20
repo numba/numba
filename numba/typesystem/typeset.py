@@ -3,6 +3,7 @@ Defines the typeset class and a number of builtin type sets.
 """
 
 import collections
+from functools import reduce
 from itertools import izip, starmap
 
 from numba.typesystem import basetypes
@@ -49,7 +50,7 @@ def get_effective_argtypes(context, signature, argtypes):
             result_type = reduce(context.promote_types, types)
 
             # Update promotion table
-            type_set = signature.args[i]
+            type_set = signature.args[poslist[-1]]
             promotion_table[type_set] = result_type
 
             # Build coherent argument type list

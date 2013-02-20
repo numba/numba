@@ -71,7 +71,7 @@ def _internal_export(name=None, restype=double, argtypes=[double],
             # to reassign need to setup this variable
             # with no 'nonlocal'
             artypes = argtypes
-            if func.func_code.co_argcount == 0 and artypes is None:
+            if func.__code__.co_argcount == 0 and artypes is None:
                 artypes = []
             function_signature = minitypes.FunctionType(restype, artypes,
                                                         name=name)
@@ -175,7 +175,7 @@ def resolve_argtypes(numba_func, template_signature,
 
     return_type = None
     argnames = inspect.getargspec(numba_func.py_func).args
-    argtypes = map(context.typemapper.from_python, args)
+    argtypes = [context.typemapper.from_python(arg) for arg in args]
 
     if template_signature is not None:
         template_context, signature = typesystem.resolve_templates(
@@ -284,7 +284,7 @@ def _jit2(restype=None, argtypes=None, nopython=False,
           _llvm_module=None, **kwargs):
     def _jit2_decorator(func):
         argtys = argtypes
-        if func.func_code.co_argcount == 0 and argtys is None:
+        if func.__code__.co_argcount == 0 and argtys is None:
             argtys = []
 
         assert argtys is not None
@@ -402,7 +402,7 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
     # Called with f8(f8) syntax which returns a dictionary of argtypes and restype
     if isinstance(restype, minitypes.FunctionType):
         if argtypes is not None:
-            raise TypeError, "Cannot use both calling syntax and argtypes keyword"
+            raise TypeError("Cannot use both calling syntax and argtypes keyword")
         argtypes = restype.args
         restype = restype.return_type
     # Called with a string like 'f8(f8)'

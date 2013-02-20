@@ -63,7 +63,7 @@ def test_math_funcs():
 
             try:
                 numba_func = jit(signature)(func)
-            except error.NumbaError, e:
+            except error.NumbaError as e:
                 exceptions += 1
                 print func_name, dest_type, e
                 continue

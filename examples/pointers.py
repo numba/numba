@@ -1,12 +1,12 @@
 import numba
 from numba import *
-
+from numba.tests.test_support import autojit_py3doc
 import numpy as np
 
 int32p = int32.pointer()
 voidp = void.pointer()
 
-@autojit
+@autojit_py3doc
 def test_pointer_arithmetic():
     """
     >>> test_pointer_arithmetic()
@@ -17,7 +17,7 @@ def test_pointer_arithmetic():
     p += 2
     return Py_uintptr_t(p) # 0 + 4 * 12
 
-@autojit(locals={"pointer_value": Py_uintptr_t})
+@autojit_py3doc(locals={"pointer_value": Py_uintptr_t})
 def test_pointer_indexing(pointer_value, type_p):
     """
     >>> a = np.array([1, 2, 3, 4], dtype=np.float32)

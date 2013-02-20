@@ -88,7 +88,7 @@ class TestGetattr(unittest.TestCase):
             self.assertEqual(got[i], expect[i])
 
     def test_getattr_data_2(self):
-        expect = map(float, range(6))
+        expect = [float(x) for x in range(6)]
         test_data = numpy.array(expect).reshape((2, 3))
         got = get_ndarray_data(test_data)
         for i, v in enumerate(expect):

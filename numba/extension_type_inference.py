@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def validate_method(py_func, sig, is_static):
     assert isinstance(py_func, types.FunctionType)
-    nargs = py_func.func_code.co_argcount - 1 + is_static
+    nargs = py_func.__code__.co_argcount - 1 + is_static
     if len(sig.args) != nargs:
         raise error.NumbaError(
             "Expected %d argument types in function "
@@ -48,7 +48,7 @@ def get_classmethod_func(func):
     attribute.
     """
     if isinstance(func, classmethod):
-        return func.__get__(object()).im_func
+        return func.__get__(object()).__func__
     else:
         assert isinstance(func, staticmethod)
         return func.__get__(object())
@@ -122,7 +122,7 @@ def _process_method_signatures(class_dict, ext_type):
                     "Constructor for class '%s' has no signature, "
                     "assuming arguments have type 'object'" %
                                         ext_type.py_class.__name__)
-            argtypes = [object_] * (method.func_code.co_argcount - 1)
+            argtypes = [object_] * (method.__code__.co_argcount - 1)
             default_signature = void(*argtypes)
 
         method, restype, argtypes = _process_signature(ext_type, method,

@@ -12,6 +12,7 @@ import sys
 import logging
 from numba import typesystem
 
+PY3 = sys.version_info[0] == 3
 
 
 def get_include():
@@ -128,7 +129,7 @@ def test(whitelist=None, blacklist=None):
                 print "running %-60s" % (modname,),
                 process = subprocess.Popen([sys.executable, '-m', modname],
                                            stdout=subprocess.PIPE,
-                                           stderr=subprocess.STDOUT)
+                                           stderr=subprocess.PIPE)
                 out, err = process.communicate()
 
                 if process.returncode == 0:
@@ -136,7 +137,11 @@ def test(whitelist=None, blacklist=None):
                 else:
                     print "FAILED: %s" % map_returncode_to_message(
                                                 process.returncode)
-                    print out, err
+                    if PY3:
+                        out = str(out, encoding='UTF-8')
+                        err = str(err, encoding='UTF-8')
+                    print out
+                    print err
                     print "-" * 80
                     failed += 1
 

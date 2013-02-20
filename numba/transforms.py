@@ -336,7 +336,7 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
         self._expect_n_args(func, node, (2, 3))
         return self.pow(*node.args)
 
-    def _resolve_int(self, func, node, argtype, dst_type=int_):
+    def _resolve_int_number(self, func, node, argtype, dst_type, ext_name):
         assert len(node.args) == 2
 
         arg1, arg2 = node.args
@@ -346,12 +346,17 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
                     function_util.external_call(
                         self.context,
                         self.llvm_module,
-                        'PyInt_FromString',
+                        ext_name,
                         args=[arg1, nodes.NULL, arg2])),
                 dst_type=dst_type)
 
-    def _resolve_long(self, func, node, argtype):
-        return self._resolve_int(func, node, argtype, long_)
+    def _resolve_int(self, func, node, argtype, dst_type=int_):
+        if PY3:
+            return self._resolve_int_number(func, node, argtype, long_, 'PyLong_FromString')
+        return self._resolve_int_number(func, node, argtype, int_, 'PyInt_FromString')
+
+    def _resolve_long(self, func, node, argtype, dst_type=int_):
+        return self._resolve_int_number(func, node, argtype, long_, 'PyLong_FromString')
 
 
 class ResolveCoercions(visitors.NumbaTransformer):
@@ -407,7 +412,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     cvtobj = function_util.external_call(
                                               self.context,
                                               self.llvm_module,
-                                              'PyInt_FromString',
+                                              'PyInt_FromString' if not PY3 else 'PyLong_FromString',
                                               args=[node.node, nodes.NULL,
                                                     nodes.const(10, int_)])
                 else:
@@ -1089,7 +1094,10 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         return self._object_binop(node, 'PyNumber_Multiply')
 
     def _object_Div(self, node):
-        return self._object_binop(node, 'PyNumber_Divide')
+        if PY3:
+            return self._object_binop(node, 'PyNumber_TrueDivide')
+        else:
+            return self._object_binop(node, 'PyNumber_Divide')
 
     def _object_Mod(self, node):
         return self._object_binop(node, 'PyNumber_Remainder')

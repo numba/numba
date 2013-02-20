@@ -29,7 +29,7 @@ import tempfile
 import copy
 try:
     import dot_parser
-except Exception, e:
+except Exception as e:
     # print "Couldn't import dot_parser, loading of dot files will not be possible."
     pass
 
@@ -93,7 +93,7 @@ CLUSTER_ATTRIBUTES = set( ['K', 'URL', 'bgcolor', 'color', 'colorscheme',
 #
 class frozendict(dict):
     def _blocked_attribute(obj):
-        raise AttributeError, "A frozendict cannot be modified."
+        raise AttributeError("A frozendict cannot be modified.")
     _blocked_attribute = property(_blocked_attribute)
 
     __delitem__ = __setitem__ = clear = _blocked_attribute
@@ -507,7 +507,7 @@ def find_graphviz():
                             #print "Used Windows registry"
                             return progs
 
-                except Exception, excp:
+                except Exception as excp:
                     #raise excp
                     pass
                 else:
@@ -517,7 +517,7 @@ def find_graphviz():
 
     # Method 2 (Linux, Windows etc)
     #
-    if os.environ.has_key('PATH'):
+    if 'PATH' in os.environ:
 
         for path in os.environ['PATH'].split(os.pathsep):
             progs = __find_executables(path)
@@ -533,7 +533,7 @@ def find_graphviz():
         # machine (might be on drive D:, or in a different language)
         #
 
-        if os.environ.has_key('PROGRAMFILES'):
+        if 'PROGRAMFILES' in os.environ:
 
             # Note, we could also use the win32api to get this
             # information, but win32api may not be installed.
@@ -926,7 +926,7 @@ class Edge(Common):
         """
 
         if not isinstance(edge, Edge):
-            raise Error, "Can't compare and edge to a non-edge object."
+            raise Error("Can't compare and edge to a non-edge object.")
 
         if self.get_parent_graph().get_top_graph_type() == 'graph':
 
@@ -1076,7 +1076,7 @@ class Graph(Common):
             self.obj_dict['attributes'] = dict(attrs)
 
             if graph_type not in ['graph', 'digraph']:
-                raise Error, 'Invalid type "%s". Accepted graph types are: graph, digraph, subgraph' % graph_type
+                raise Error('Invalid type "%s". Accepted graph types are: graph, digraph, subgraph' % graph_type)
 
 
             self.obj_dict['name'] = quote_if_necessary(graph_name)
@@ -1312,7 +1312,7 @@ class Graph(Common):
         if isinstance(name, Node):
             name = name.get_name()
 
-        if self.obj_dict['nodes'].has_key(name):
+        if name in self.obj_dict['nodes']:
 
             if index is not None and index < len(self.obj_dict['nodes'][name]):
                 del self.obj_dict['nodes'][name][index]
@@ -1337,7 +1337,7 @@ class Graph(Common):
 
         match = list()
 
-        if self.obj_dict['nodes'].has_key(name):
+        if name in self.obj_dict['nodes']:
 
             match.extend( [ Node( obj_dict = obj_dict ) for obj_dict in self.obj_dict['nodes'][name] ])
 
@@ -1378,7 +1378,7 @@ class Graph(Common):
 
         edge_points = ( graph_edge.get_source(), graph_edge.get_destination() )
 
-        if self.obj_dict['edges'].has_key(edge_points):
+        if edge_points in self.obj_dict['edges']:
 
             edge_list = self.obj_dict['edges'][edge_points]
             edge_list.append(graph_edge.obj_dict)
@@ -1424,7 +1424,7 @@ class Graph(Common):
         if isinstance(dst, Node):
             dst = dst.get_name()
 
-        if self.obj_dict['edges'].has_key( (src, dst) ):
+        if (src, dst) in self.obj_dict['edges']:
 
             if index is not None and index < len(self.obj_dict['edges'][(src, dst)]):
                 del self.obj_dict['edges'][(src, dst)][index]
@@ -1456,8 +1456,8 @@ class Graph(Common):
 
         match = list()
 
-        if self.obj_dict['edges'].has_key( edge_points ) or (
-            self.get_top_graph_type() == 'graph' and self.obj_dict['edges'].has_key( edge_points_reverse )):
+        if edge_points in self.obj_dict['edges'] or (
+            self.get_top_graph_type() == 'graph' and edge_points_reverse in self.obj_dict['edges']):
 
             edges_obj_dict = self.obj_dict['edges'].get(
                 edge_points,
@@ -1499,7 +1499,7 @@ class Graph(Common):
         if not isinstance(sgraph, Subgraph) and not isinstance(sgraph, Cluster):
             raise TypeError('add_subgraph() received a non subgraph class object:' + str(sgraph))
 
-        if self.obj_dict['subgraphs'].has_key(sgraph.get_name()):
+        if sgraph.get_name() in self.obj_dict['subgraphs']:
 
             sgraph_list = self.obj_dict['subgraphs'][ sgraph.get_name() ]
             sgraph_list.append( sgraph.obj_dict )
@@ -1527,7 +1527,7 @@ class Graph(Common):
 
         match = list()
 
-        if self.obj_dict['subgraphs'].has_key( name ):
+        if name in self.obj_dict['subgraphs']:
 
             sgraphs_obj_dict = self.obj_dict['subgraphs'].get( name )
 
@@ -1635,8 +1635,7 @@ class Graph(Common):
             sgraph_obj_dicts.extend(sg)
 
 
-        obj_list = [ (obj['sequence'], obj) for obj in (edge_obj_dicts + node_obj_dicts + sgraph_obj_dicts) ]
-        obj_list.sort()
+        obj_list = sorted([ (obj['sequence'], obj) for obj in (edge_obj_dicts + node_obj_dicts + sgraph_obj_dicts) ])
 
         for idx, obj in obj_list:
 
@@ -1953,7 +1952,7 @@ class Dot(Graph):
                 raise InvocationException(
                     'GraphViz\'s executables not found' )
 
-        if not self.progs.has_key(prog):
+        if prog not in self.progs:
             raise InvocationException(
                 'GraphViz\'s executable "%s" not found' % prog )
 

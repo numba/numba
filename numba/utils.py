@@ -26,7 +26,7 @@ def itercode(code):
             extended_arg = 0
             i = i + 2
             if op == opcode.EXTENDED_ARG:
-                extended_arg = oparg * 65536L
+                extended_arg = oparg * 65536
 
         delta = yield num, op, oparg
         if delta is not None:

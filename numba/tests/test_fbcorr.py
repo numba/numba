@@ -54,7 +54,7 @@ class TestFbcorr(unittest.TestCase):
 
         try:
             fbcorr(imgs, filt, old_output)
-        except IndexError, e:
+        except IndexError as e:
             print 'This test produced the error "' + repr(e) + '"'
         else:
             raise Exception('This should have produced an error.')

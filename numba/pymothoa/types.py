@@ -5,7 +5,7 @@ class Type(object):
     __init__ = NotImplemented
 
     def __eq__(self, other):
-        return type(self) is type(other)
+        return isinstance(self, type(other))
 
     def __ne__(self, other):
         return not (self==other)
