@@ -1,4 +1,4 @@
-from numba import *
+from numba import *; from numba.error import NumbaError
 from numba.tests.test_support import rewrite_doc
 @autojit
 def error1():
@@ -120,7 +120,11 @@ NumbaError: Got multiple values for positional argument 'a'
 Test closures
 
 >>> closure1().__name__
+--------------------- Numba Encountered Errors or Warnings ---------------------
+<BLANKLINE>
 Warning 40:4: Unused variable 'a'
+<BLANKLINE>
+--------------------------------------------------------------------------------
 'inner'
 >>> closure1()()
 Traceback (most recent call last):
@@ -261,11 +265,18 @@ def wrong_signature(s):
     return inner
 
 __doc__ += """
->>> wrong_signature("foo")
-Traceback (most recent call last):
-    ...
-NumbaError: 258:5: Expected 1 arguments type(s), got 0
+>>> try_(wrong_signature, "foo")
+--------------------- Numba Encountered Errors or Warnings ---------------------
+<BLANKLINE>
+    @jit('object_(object_)')
+-----^
+Error 262:5: Expected 1 arguments type(s), got 0
+<BLANKLINE>
+--------------------------------------------------------------------------------
+NumbaError: 262:5: Expected 1 arguments type(s), got 0
 """
+
+
 
 @autojit
 def wrong_restype():
@@ -275,10 +286,15 @@ def wrong_restype():
     return inner
 
 __doc__ += """
->>> wrong_restype()
-Traceback (most recent call last):
-    ...
-NumbaError: 272:4: Function with non-void return does not return a value
+>>> try_(wrong_restype)
+--------------------- Numba Encountered Errors or Warnings ---------------------
+<BLANKLINE>
+    @jit('object_()')
+----^
+Error 283:4: Function with non-void return does not return a value
+<BLANKLINE>
+--------------------------------------------------------------------------------
+NumbaError: 283:4: Function with non-void return does not return a value
 """
 
 #
@@ -304,10 +320,15 @@ def wrong_signature2(s):
     return inner
 
 __doc__ += """
->>> wrong_signature2("foo")
-Traceback (most recent call last):
-    ...
-NumbaError: 301:5: Expected 1 arguments type(s), got 0
+>>> try_(wrong_signature2, "foo")
+--------------------- Numba Encountered Errors or Warnings ---------------------
+<BLANKLINE>
+    @object_(object_)
+-----^
+Error 317:5: Expected 1 arguments type(s), got 0
+<BLANKLINE>
+--------------------------------------------------------------------------------
+NumbaError: 317:5: Expected 1 arguments type(s), got 0
 """
 
 @autojit
@@ -386,6 +407,12 @@ def test_closure_outer_locals():
 
 __doc__ = rewrite_doc(__doc__)
 
+def try_(func, *args):
+    try:
+        func(*args)
+    except NumbaError, e:
+        print "%s: %s" % (type(e).__name__, e)
+
 if __name__ == '__main__':
     # closure1 = closure_arg(1)
     # print closure1.__name__
@@ -397,5 +424,6 @@ if __name__ == '__main__':
     # test_closure_loop()
     # test_closure_outer_locals()
     # test_call_closure_from_closure()()
+    # wrong_restype()
     import numba
     numba.testmod()
