@@ -24,7 +24,7 @@ from numba import closures
 from numba import reporting
 from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
-from numba import codegen
+from numba.codegen import translate
 from numba import utils
 from numba.type_inference import infer as type_inference
 from numba.utils import dump, TypedProperty
@@ -336,7 +336,7 @@ class Pipeline(object):
         return ast
 
     def codegen(self, ast):
-        self.translator = self.make_specializer(codegen.LLVMCodeGenerator,
+        self.translator = self.make_specializer(translate.LLVMCodeGenerator,
                                                 ast, **self.kwargs)
         self.translator.translate()
         return ast
@@ -747,7 +747,7 @@ class CodeGen(PipelineStage):
     def transform(self, ast, env):
         func_env = env.translation.crnt
         func_env.translator = self.make_specializer(
-            codegen.LLVMCodeGenerator, ast, env,
+            translate.LLVMCodeGenerator, ast, env,
             **func_env.kwargs)
         func_env.translator.translate()
         func_env.lfunc = func_env.translator.lfunc

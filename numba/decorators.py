@@ -7,7 +7,8 @@ import inspect
 
 from numba import *
 from numba import typesystem, numbawrapper
-from . import utils, functions, codegen as translate
+from numba import utils, functions
+from numba.codegen import translate
 from numba import  pipeline, extension_type_inference
 from .minivect import minitypes
 from numba.utils import debugout, process_signature

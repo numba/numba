@@ -57,12 +57,30 @@ def _config_logger():
 
 _config_logger()
 
+
 from . import  special
 from numba.typesystem import *
-from . import decorators
 from numba.minivect.minitypes import FunctionType
-from .decorators import *
 from numba.error import *
+
+from numba.containers.typedlist import typedlist
+from numba.containers.typedtuple import typedtuple
+from numba.typesystem import map_dtype
+from numba.type_inference.module_type_inference import (is_registered,
+                                                        register,
+                                                        register_inferer,
+                                                        get_inferer,
+                                                        register_unbound,
+                                                        register_callable)
+from numba.typesystem.typeset import *
+
+from numba.codegen import translate
+from numba.decorators import *
+from numba import decorators
+
+__all__ = typesystem.__all__ + decorators.__all__ + special.__all__
+__all__.extend(["numeric", "floating", "complextypes"])
+
 
 # doctest compatible for jit or autojit numba functions
 from numba.tests.test_support import testmod
@@ -153,18 +171,3 @@ def nose_run(module=None):
 
     result = nose.main()
     return len(result.errors), len(result.failures)
-
-__all__ = typesystem.__all__ + decorators.__all__ + special.__all__
-
-from numba.containers.typedlist import typedlist
-from numba.containers.typedtuple import typedtuple
-from numba.typesystem import map_dtype
-from numba.type_inference.module_type_inference import (is_registered,
-                                                        register,
-                                                        register_inferer,
-                                                        get_inferer,
-                                                        register_unbound,
-                                                        register_callable)
-
-from numba.typesystem.typeset import *
-__all__.extend(["numeric", "floating", "complextypes"])
