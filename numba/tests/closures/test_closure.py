@@ -396,6 +396,6 @@ if __name__ == '__main__':
     # test_closure_outer_locals()
     # test_closure_loop()
     # test_closure_outer_locals()
-    test_call_closure_from_closure()()
+    # test_call_closure_from_closure()()
     import numba
     numba.testmod()
