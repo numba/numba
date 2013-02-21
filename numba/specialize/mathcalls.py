@@ -20,7 +20,7 @@ def intrinsic_signature(nargs, type):
     return type(*[type] * nargs)
 
 def get_funcname(py_func):
-    if py_func is np.abs:
+    if py_func in (abs, np.abs):
         return 'fabs'
     elif py_func is np.round:
         return 'round'
