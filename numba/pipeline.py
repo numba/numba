@@ -383,8 +383,10 @@ def run_pipeline2(env, func, func_ast, func_signature,
 def run_env(env, func_env, **kwargs):
     env.translation.push_env(func_env)
     pipeline = env.get_pipeline(kwargs.get('pipeline_name', None))
-    pipeline(func_env.ast, env)
-    env.translation.pop()
+    try:
+        pipeline(func_env.ast, env)
+    finally:
+        env.translation.pop()
 
 def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
     ast = functions._get_ast(func)
@@ -533,8 +535,14 @@ class PipelineStage(object):
             try:
                 ast = self.transform(ast, env)
             except error.NumbaError, e:
-                error_env = env.translation.crnt.error_env
-                reporting.report(error_env, error_env.enable_post_mortem, exc=e)
+                func_env = env.translation.crnt
+                error_env = func_env.error_env
+                if func_env.is_closure:
+                    flags, parent_func_env = env.translation.stack[-2]
+                    error_env.merge_in(parent_func_env.error_env)
+                else:
+                    reporting.report(error_env, error_env.enable_post_mortem,
+                                     exc=e)
                 raise
 
         env.translation.crnt.ast = ast

@@ -113,6 +113,14 @@ class FunctionErrorEnvironment(object):
         self.collection = reporting.FancyMessageCollection(self.ast,
                                                            self.source)
 
+    def merge_in(self, parent_error_env):
+        """
+        Merge error messages into another error environment.
+        Useful to propagate error messages for inner functions outwards.
+        """
+        parent_error_env.collection.messages.extend(self.collection.messages)
+        del self.collection.messages[:]
+
 # ______________________________________________________________________
 
 class FunctionEnvironment(object):
@@ -311,7 +319,6 @@ class FunctionEnvironment(object):
             llvm_module=self.llvm_module,
             wrap=self.wrap,
             link=self.link,
-            error_env=self.error_env,
             symtab=self.symtab,
             function_globals=self.function_globals,
             locals=self.locals,
