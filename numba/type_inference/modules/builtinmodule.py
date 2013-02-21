@@ -98,7 +98,7 @@ def abs_(context, node, x):
 
 @register_builtin((2, 3))
 def pow_(context, node, base, exponent, mod):
-    return mathmodule.pow_(context, *node.args)
+    return mathmodule.pow_(context, node, base, exponent)
 
 @register_builtin((1, 2))
 def round_(context, node, number, ndigits):

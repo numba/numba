@@ -213,35 +213,8 @@ class MathMixin(object):
 
     def _resolve_math_call(self, call_node, py_func):
         "Resolve calls to math functions to llvm.log.f32() etc"
-        signature = minitypes.FunctionType(return_type=call_node.type,
-                                           args=[call_node.type])
-        result = nodes.MathNode(py_func, signature, call_node.args[0])
-        return result
-
-    def _binop_type(self, x, y):
-        "Binary result type for math operations"
-        x_type = x.variable.type
-        y_type = y.variable.type
-        dst_type = self.context.promote_types(x_type, y_type)
-        type = dst_type
-        if type.is_int:
-            type = double
-
-        signature = minitypes.FunctionType(return_type=type, args=[type, type])
-        return dst_type, type, signature
-
-    def pow(self, node, power, mod=None):
-        name = 'pow'
-        dst_type, pow_type, signature = self._binop_type(node, power)
-        args = [node, power]
-        if pow_type.is_float and mod is None:
-            result = self._resolve_intrinsic(args, pow, signature)
-        else:
-            if mod is not None:
-                args.append(mod)
-            result = nodes.call_pyfunc(pow, args)
-
-        return nodes.CoercionNode(result, dst_type)
+        signature = call_node.type(call_node.type)
+        return nodes.MathNode(py_func, signature, call_node.args[0])
 
 
 class BuiltinResolverMixinBase(MathMixin):
@@ -280,15 +253,15 @@ class BuiltinResolverMixinBase(MathMixin):
 
         return result
 
-    def _expect_n_args(self, func, node, n):
-        if not isinstance(n, tuple):
-            n = (n,)
+def resolve_pow(type, args):
+    have_mod = len(args) == 3
 
-        if len(node.args) not in n:
-            expected = " or ".join(map(str, n))
-            raise error.NumbaError(
-                node, "builtin %s expects %s arguments" % (func.__name__,
-                                                           expected))
+    if (type.is_int or type.is_float) and not have_mod:
+        result = mathmodule.resolve_intrinsic(args, pow, type)
+    else:
+        result = nodes.call_pyfunc(pow, args)
+
+    return nodes.CoercionNode(result, type)
 
 class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
     """
@@ -296,8 +269,6 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
     """
 
     def _resolve_abs(self, func, node, argtype):
-        self._expect_n_args(func, node, 1)
-
         is_math = self._is_math_function(node.args, abs)
 
         # TODO: generate efficient inline code
@@ -319,7 +290,6 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
         return None
 
     def _resolve_round(self, func, node, argtype):
-        self._expect_n_args(func, node, (1, 2))
         if self._is_math_function(node.args, round):
             # round() always returns a float
             return self._resolve_math_call(node, round)
@@ -327,8 +297,7 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
         return None
 
     def _resolve_pow(self, func, node, argtype):
-        self._expect_n_args(func, node, (2, 3))
-        return self.pow(*node.args)
+        return resolve_pow(node.type, node.args)
 
     def _resolve_int_number(self, func, node, argtype, dst_type, ext_name):
         assert len(node.args) == 2
@@ -1136,6 +1105,9 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         return self._object_binop(node, 'PyNumber_FloorDivide')
 
     def visit_BinOp(self, node):
+        if isinstance(node.op, ast.Pow):
+            return self.visit(resolve_pow(node.type, [node.left, node.right]))
+
         self.generic_visit(node)
         if is_obj(node.left.type) or is_obj(node.right.type):
             op_name = type(node.op).__name__

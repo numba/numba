@@ -35,14 +35,14 @@ def binop_type(context, x, y):
     "Binary result type for math operations"
     x_type = get_type(x)
     y_type = get_type(y)
-    dst_type = context.promote_types(x_type, y_type)
+    return context.promote_types(x_type, y_type)
 
-    type = dst_type
+def intrinsic_signature(type):
     if type.is_int:
         type = double
 
     signature = minitypes.FunctionType(return_type=type, args=[type, type])
-    return dst_type, type, signature
+    return signature
 
 #----------------------------------------------------------------------------
 # Categorize Calls as Math Calls
@@ -92,6 +92,12 @@ def is_math_function(func_args, py_func):
 
     return valid_type and (is_intrinsic(py_func) or is_math)
 
+def resolve_intrinsic(args, py_func, type):
+    signature = intrinsic_signature(type)
+    func_name = get_funcname(py_func).upper()
+    return nodes.LLVMIntrinsicNode(signature, args, func_name=func_name)
+
+
 #----------------------------------------------------------------------------
 # Determine math functions
 #----------------------------------------------------------------------------
@@ -112,7 +118,7 @@ def filter_math_funcs(math_func_names):
     return result_func_names
 
 # sin(double), sinf(float), sinl(long double)
-all_libc_math_funcs = [
+unary_libc_math_funcs = [
     'sin',
     'cos',
     'tan',
@@ -131,7 +137,6 @@ all_libc_math_funcs = [
     'log2',
     'log10',
     'fabs',
-    'pow',
     'erfc',
     'ceil',
     'exp',
@@ -139,9 +144,14 @@ all_libc_math_funcs = [
     'expm1',
     'rint',
     'log1p',
+]
+
+n_ary_libc_math_funcs = [
+    'pow',
     'round',
 ]
 
+all_libc_math_funcs = unary_libc_math_funcs + n_ary_libc_math_funcs
 libc_math_funcs = filter_math_funcs(all_libc_math_funcs)
 
 #----------------------------------------------------------------------------
@@ -150,7 +160,7 @@ libc_math_funcs = filter_math_funcs(all_libc_math_funcs)
 
 # TODO: Move any rewriting parts to lowering phases
 
-def infer_math_call(context, call_node, arg):
+def infer_unary_math_call(context, call_node, arg):
     "Resolve calls to math functions to llvm.log.f32() etc"
     # signature is a generic signature, build a correct one
     type = get_type(call_node.args[0])
@@ -169,21 +179,13 @@ def infer_math_call(context, call_node, arg):
 # ______________________________________________________________________
 # pow()
 
-def resolve_intrinsic(args, py_func, signature):
-    func_name = get_funcname(py_func).upper()
-    return nodes.LLVMIntrinsicNode(signature, args, func_name=func_name)
+def pow_(context, call_node, node, power, mod=None):
+    dst_type = binop_type(context, node, power)
+    call_node.variable = Variable(dst_type)
+    return call_node
 
-def pow_(context, node, power, mod=None):
-    dst_type, pow_type, signature = binop_type(context, node, power)
-    args = [node, power]
-    if pow_type.is_float and mod is None:
-        result = resolve_intrinsic(args, pow, signature)
-    else:
-        if mod is not None:
-            args.append(mod)
-        result = nodes.call_pyfunc(pow, args)
-
-    return nodes.CoercionNode(result, dst_type)
+register_math((2, 3), math.pow)
+register_math(2, np.power)
 
 # ______________________________________________________________________
 # abs()
@@ -202,25 +204,22 @@ def abs_(context, node, x):
 
     return builtinmodule.abs_(context, node, x)
 
+register_math(1, np.abs)
+
 #----------------------------------------------------------------------------
 # Register Type Functions
 #----------------------------------------------------------------------------
 
 def register(nargs, value):
     register = register_math(nargs)
-    register(infer_math_call, value)
+    register(infer_unary_math_call, value)
 
 def register_typefuncs():
     modules = [builtins, math, cmath, np]
     # print all_libc_math_funcs
-    for libc_math_func in all_libc_math_funcs:
+    for libc_math_func in unary_libc_math_funcs:
         for module in modules:
             if hasattr(module, libc_math_func):
                 register(1, getattr(module, libc_math_func))
-
-    register_math((2, 3), math.pow)
-    register_math(2, np.power)
-
-    register_math(1, np.abs)
 
 register_typefuncs()

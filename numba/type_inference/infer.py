@@ -917,11 +917,6 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
         node.left = self.visit(node.left)
         node.right = self.visit(node.right)
 
-        if isinstance(node.op, ast.Pow):
-            node = self.pow(node.left, node.right)
-            node = self.visit(node)
-            return node
-
         if nodes.is_bitwise(node.op):
             typesystem.require([node.left, node.right], ["is_int", 'is_object'])
 

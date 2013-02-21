@@ -44,8 +44,5 @@ def pow2_const():
 
 if __name__ == '__main__':
 #    import logging; logging.getLogger().setLevel(0)
-#    c1, c2 = 1.2 + 4.1j, 0.6 + 0.5j
-#    pow2(c1, c2) == pow(c1, c2)
-#    pow3(2,3,5)
     import doctest
     doctest.testmod()
