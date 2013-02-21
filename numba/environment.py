@@ -137,6 +137,11 @@ class FunctionEnvironment(object):
 
     func_name = TypedProperty(str, 'Target function name.')
 
+    mangled_name = TypedProperty(str, 'Mangled name of compiled function.')
+
+    qualified_name = TypedProperty(str, "Target qualified function name "
+                                        "('mymodule.myfunc')")
+
     llvm_module = TypedProperty(
         llvm.core.Module,
         'LLVM module for this function.  This module is first optimized and '
@@ -243,7 +248,8 @@ class FunctionEnvironment(object):
     # Methods
 
     def __init__(self, parent, func, ast, func_signature,
-                 name=None, llvm_module=None, wrap=True, link=True,
+                 name=None, qualified_name=None,
+                 llvm_module=None, wrap=True, link=True,
                  symtab=None,
                  error_env=None, function_globals=None, locals=None,
                  template_signature=None, cfg_transform=None,
@@ -262,9 +268,10 @@ class FunctionEnvironment(object):
                 name = '.'.join([module_name, func.__name__])
             else:
                 name = ast.name
-            name = naming.specialized_mangle(name, func_signature.args)
 
         self.func_name = name
+        self.mangled_name = naming.specialized_mangle(name, func_signature.args)
+        self.qualified_name = qualified_name or name
         self.llvm_module = (llvm_module if llvm_module
                                  else self.numba.llvm_context.module)
         self.wrap = wrap
@@ -300,6 +307,7 @@ class FunctionEnvironment(object):
             ast=self.ast,
             func_signature=self.func_signature,
             name=self.func_name,
+            qualified_name=self.qualified_name,
             llvm_module=self.llvm_module,
             wrap=self.wrap,
             link=self.link,

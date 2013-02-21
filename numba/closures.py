@@ -377,9 +377,7 @@ def process_closures(env, outer_func_def, outer_symtab, **kwds):
     for closure in outer_func_def.closures:
         logger.debug("process closures: %s %s", outer_func_def.name,
                      closure.func_def.name)
-        # closure.make_pyfunc()
         closure_py_func = None # closure.py_func
-        #symtab = {}
         func_env, _ = numba.pipeline.run_pipeline2(
                 env,
                 closure_py_func,
@@ -390,15 +388,6 @@ def process_closures(env, outer_func_def, outer_symtab, **kwds):
                 pipeline_name='type_infer',
                 **kwds)
 
-#        p, result = numba.pipeline.infer_types_from_ast_and_sig(
-#                    context, closure_py_func, closure.func_def,
-#                    closure.type.signature,
-#                    closure_scope=closure_scope,
-#                    locals=closure.locals,
-#                    is_closure=True,
-#                    **kwds)
-
-#        _, _, ast = result
         closure.func_env = func_env
         closure.symtab = func_env.symtab
 
@@ -479,19 +468,18 @@ class ClosureSpecializer(ClosureTransformer):
         self.ast.cur_scope = scope
         return self.visit(nodes.ExpressionNode(stmts=stats, expr=scope))
 
+    def get_qname(self, closure_node):
+        ns = '.'.join([self.module_name, self.func_name])
+        closure_name = closure_node.name
+        qname = "%s.__closure__.%s" % (ns, closure_name)
+        return qname
+
     def visit_ClosureNode(self, node):
         """
         Compile the inner function.
         """
-        # Compile inner function, skip type inference
-        order = numba.pipeline.Pipeline.order
-        order = order[order.index('type_infer') + 1:]
-
-        ns = '.'.join([self.module_name, self.func_name])
-        closure_name = node.name
-        fullname = "%s.__closure__.%s" % (ns, closure_name)
-
         # Compile closure, skip CFA and type inference
+        node.func_env.qualified_name = self.get_qname(node)
         numba.pipeline.run_env(self.env, node.func_env, pipeline_name='compile')
 
         translator = node.func_env.translator

@@ -81,11 +81,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # distiguish between is the name of the LLVM function being
         # generated and the name of the Python function being
         # translated.
-        if kwds.get('mangled_name'):
-            self.mangled_name = kwds['mangled_name']
-        else:
-            self.mangled_name = naming.specialized_mangle(
-                        self.qualified_name, func_signature.args)
+        self.mangled_name = self.env.translation.crnt.mangled_name
 
         self.func_signature = func_signature
         self.blocks = {} # stores id => basic-block
@@ -438,7 +434,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                                                      object_))
         wrapper_call.error_return = error_return
 
-        func_env = self.env.translation.crnt.inherit(llvm_module=wrapper_module)
+        func_env = self.env.translation.crnt.inherit(
+                name=func_name,
+                llvm_module=wrapper_module)
         self.env.translation.push_env(func_env)
         try:
             t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
