@@ -386,6 +386,7 @@ def process_closures(env, outer_func_def, outer_symtab, **kwds):
                 closure_scope=closure_scope,
                 function_globals=env.translation.crnt.function_globals,
                 pipeline_name='type_infer',
+                is_closure=True,
                 **kwds)
 
         closure.func_env = func_env
