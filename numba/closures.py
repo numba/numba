@@ -114,7 +114,9 @@ def parse_restype(visit_func, decorator, jit_args):
     if restype_node is not None:
         restype = assert_constant(visit_func, decorator, restype_node)
         if isinstance(restype, (str, unicode)):
-            name, restype, argtypes = utils.process_signature(restype)
+            signature = utils.process_signature(restype)
+            restype = signature.return_type
+            argtypes = signature.args
             check_valid_argtype(restype_node, restype)
             for argtype in argtypes:
                 check_valid_argtype(restype_node, argtype)
