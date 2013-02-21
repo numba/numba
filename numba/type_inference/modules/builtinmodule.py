@@ -5,12 +5,12 @@ Type functions for Python builtins.
 from numba import *
 from numba import nodes
 from numba import error
-from numba import function_util
+# from numba import function_util
+# from numba.specialize.mathcalls import is_math_function
 from numba.symtab import Variable
 from numba import typesystem
 from numba.typesystem import is_obj, promote_closest, get_type
 
-from numba.type_inference.modules import mathmodule
 from numba.type_inference.modules import utils
 
 #----------------------------------------------------------------------------
@@ -98,25 +98,26 @@ def abs_(context, node, x):
 
 @register_builtin((2, 3))
 def pow_(context, node, base, exponent, mod):
+    import mathmodule
     return mathmodule.pow_(context, node, base, exponent)
 
 @register_builtin((1, 2))
 def round_(context, node, number, ndigits):
-    is_math = mathmodule.is_math_function(node.args, round)
+    # is_math = is_math_function(node.args, round)
     argtype = get_type(number)
 
     if len(node.args) == 1 and argtype.is_int:
         # round(myint) -> float(myint)
         return nodes.CoercionNode(node.args[0], double)
 
-    if (argtype.is_float or argtype.is_int) and is_math:
-        dst_type = argtype
+    if argtype.is_float or argtype.is_int:
+        dst_type = double
     else:
         dst_type = object_
         node.args[0] = nodes.CoercionNode(node.args[0], object_)
 
     node.variable = Variable(dst_type)
-    return nodes.CoercionNode(node, double)
+    return node # nodes.CoercionNode(node, double)
 
 @register_builtin(0)
 def globals_(context, node):

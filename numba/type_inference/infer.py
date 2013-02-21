@@ -11,6 +11,7 @@ import numba
 from numba import *
 from numba import error, transforms, control_flow, visitors, nodes
 from numba import oset, odict
+from numba.specialize.mathcalls import is_math_function
 from numba.type_inference import module_type_inference, infer_call, deferred
 from numba.minivect import minierror, minitypes
 from numba import translate, utils, typesystem
@@ -18,6 +19,7 @@ from numba.control_flow import ssa
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
 from numba import closures as closures
+from numba.type_inference.modules import mathmodule
 
 from numba import stdio_util, function_util
 from numba.typesystem import is_obj, promote_closest, get_type
@@ -142,7 +144,7 @@ class NumpyMixin(object):
         return result_type, node
 
 
-class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
+class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
     """
     Type inference. Initialize with a minivect context, a Python ast,
     and a function type with a given or absent, return type.
@@ -1317,7 +1319,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
         #        a LLVM math intrinsic call.
         if not argtype.is_array:
             args = [nodes.const(1.0, float_)]
-            is_math = self._is_math_function(args, func_type.value)
+            is_math = is_math_function(args, func_type.value)
             if len(node.args) == 1 and is_math:
                 new_node = nodes.CoercionNode(new_node, complex128)
 
