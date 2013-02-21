@@ -23,9 +23,14 @@ class SourceDescr(object):
         self.ast = ast
 
     def get_lines(self):
+        source = None
         if self.func:
-            source = inspect.getsource(self.func)
-        else:
+            try:
+                source = inspect.getsource(self.func)
+            except EnvironmentError:
+                pass
+
+        if source is None:
             try:
                 from meta import asttools
                 source = asttools.dump_python_source(self.ast)
