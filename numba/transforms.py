@@ -105,21 +105,6 @@ logger = logging.getLogger(__name__)
 
 from numba.external import pyapi
 
-is_win32 = sys.platform == 'win32'
-
-def filter_math_funcs(math_func_names):
-    if is_win32:
-        dll = ctypes.cdll.msvcrt
-    else:
-        dll = ctypes.CDLL(None)
-
-    result_func_names = []
-    for name in math_func_names:
-        if getattr(dll, name, None) is not None:
-            result_func_names.append(name)
-
-    return result_func_names
-
 
 class BuiltinResolverMixinBase(object):
     """
