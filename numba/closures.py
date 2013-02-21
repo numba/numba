@@ -492,7 +492,7 @@ class ClosureSpecializer(ClosureTransformer):
         numba.pipeline.run_env(self.env, node.func_env, pipeline_name='compile')
 
         translator = node.func_env.translator
-        translator.link()
+        # translator.link()
         node.lfunc = translator.lfunc
         node.lfunc_pointer = translator.lfunc_pointer
 

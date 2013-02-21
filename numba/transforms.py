@@ -617,8 +617,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
     def visit_MathNode(self, math_node):
         "Translate a nodes.MathNode to an intrinsic or libc math call"
         from numba.type_inference.modules import mathmodule
-        lowerable = is_math_function([math_node.arg],
-                                                math_node.py_func)
+        lowerable = is_math_function([math_node.arg], math_node.py_func)
 
         if math_node.type.is_array or not lowerable:
             # Generate a Python call
