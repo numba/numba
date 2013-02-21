@@ -144,3 +144,5 @@ from numba.nodes.objectnodes import *
 from numba.nodes.llvmnodes import *
 
 from numba.nodes.bitwise import *
+
+from numba.nodes.metadata import annotate, query

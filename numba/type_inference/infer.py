@@ -20,7 +20,7 @@ from numba.symtab import Variable
 from numba import closures as closures
 
 from numba import stdio_util, function_util
-from numba.typesystem import is_obj, promote_closest
+from numba.typesystem import is_obj, promote_closest, get_type
 from numba.utils import dump
 
 import llvm.core
@@ -736,7 +736,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
             # 'return value'
             self.ast.have_return = True
             value = self.visit(node.value)
-            type = value.variable.type
+            type = get_type(value)
             assert type is not None
         else:
             # 'return'
@@ -1279,9 +1279,9 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin, transforms.MathMixin):
         elif self.function_cache.is_registered(py_func):
             fn_info = self.function_cache.compile_function(py_func, arg_types)
             signature, llvm_func, _ = fn_info
-        elif not call_node.keywords and self._is_math_function(call_node.args,
-                                                               py_func):
-            new_node = self._resolve_math_call(call_node, py_func)
+        #elif not call_node.keywords and self._is_math_function(call_node.args,
+        #                                                       py_func):
+        #    new_node = self._resolve_math_call(call_node, py_func)
         else:
             # This should not be a function-cache method
             # signature = self.function_cache.get_signature(arg_types)

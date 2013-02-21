@@ -974,7 +974,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 mapping = _compare_mapping_uint
             lop = mapping[op]
         else:
-            raise error.NumbaError(node, lhs.type)
+            # These errors should be issued by the type inferencer or a
+            # separate error checking pass
+            raise error.NumbaError(node, "Comparisons of type %s not yet "
+                                         "supported" % lhs.type)
 
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 

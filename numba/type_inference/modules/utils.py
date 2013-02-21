@@ -35,6 +35,8 @@ def register_with_argchecking(nargs, can_handle_deferred_types=False):
         if value is None:
             name = infer.__name__.strip("_")
             value = getattr(builtins, name)
+        else:
+            name = getattr(value, "__name__", "<unknown>")
 
         register_value(value, infer, pass_in_types=False, pass_in_callnode=True,
                        can_handle_deferred_types=can_handle_deferred_types)

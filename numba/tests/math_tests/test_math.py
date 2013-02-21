@@ -62,7 +62,12 @@ def test_modulo():
             int_rhs = rsign * 2
             assert modulo(int_lhs, int_rhs) == (int_lhs % int_rhs)
 
+@autojit
+def sin(a):
+    return np.sin(a)
+
 if __name__ == "__main__":
-    test_numpy_math()
-    test_power()
-    test_modulo()
+    # print sin(10)
+   test_numpy_math()
+   test_power()
+   test_modulo()

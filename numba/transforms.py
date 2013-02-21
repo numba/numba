@@ -94,6 +94,7 @@ from numba import stdio_util, function_util
 from numba.typesystem import is_obj, promote_closest, promote_to_native
 from numba.external import utility
 from numba.utils import dump
+from numba.type_inference.modules import mathmodule
 
 import llvm.core
 import numpy as np
@@ -212,15 +213,8 @@ class MathMixin(object):
 
     def _resolve_math_call(self, call_node, py_func):
         "Resolve calls to math functions to llvm.log.f32() etc"
-        # signature is a generic signature, build a correct one
-        orig_type = type = call_node.args[0].variable.type
-
-        if type.is_int:
-            type = double
-        elif type.is_array and type.dtype.is_int:
-            type = type.copy(dtype=double)
-
-        signature = minitypes.FunctionType(return_type=type, args=[type])
+        signature = minitypes.FunctionType(return_type=call_node.type,
+                                           args=[call_node.type])
         result = nodes.MathNode(py_func, signature, call_node.args[0])
         return result
 
@@ -706,7 +700,12 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
     def visit_Call(self, node):
         func_type = node.func.type
 
-        if func_type.is_builtin:
+        if self.query(node, "is_math"):
+            assert node.func.type.is_known_value
+            result = self._resolve_math_call(node, node.func.type.value)
+            return self.visit(result)
+
+        elif func_type.is_builtin:
             result = self._resolve_builtin_call_or_object(node, func_type.func)
             result =  self.visit(result)
             return result
@@ -760,16 +759,22 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
     def visit_MathNode(self, math_node):
         "Translate a nodes.MathNode to an intrinsic or libc math call"
-        if math_node.type.is_array:
+        from numba.type_inference.modules import mathmodule
+        lowerable = mathmodule.is_math_function([math_node.arg],
+                                                math_node.py_func)
+
+        if math_node.type.is_array or not lowerable:
+            # Generate a Python call
             assert math_node.py_func is not None
             result = nodes.call_pyfunc(math_node.py_func, [math_node.arg])
-            return self.visit(result.coerce(math_node.type))
-
-        args = [math_node.arg], math_node.py_func, math_node.signature
-        if self._is_intrinsic(math_node.py_func):
-            result = self._resolve_intrinsic(*args)
+            result = result.coerce(math_node.type)
         else:
-            result = self._resolve_libc_math(*args)
+            # Lower to intrinsic or libc math call
+            args = [math_node.arg], math_node.py_func, math_node.signature
+            if self._is_intrinsic(math_node.py_func):
+                result = self._resolve_intrinsic(*args)
+            else:
+                result = self._resolve_libc_math(*args)
 
         return self.visit(result)
 

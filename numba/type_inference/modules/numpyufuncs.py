@@ -1,5 +1,5 @@
 """
-Type inference for NumPy ufuncs.
+Type inference for NumPy binary ufuncs and their methods.
 """
 
 import numpy as np

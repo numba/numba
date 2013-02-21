@@ -116,6 +116,7 @@ all_libc_math_funcs = [
     'sin',
     'cos',
     'tan',
+    'sqrt',
     'acos',
     'asin',
     'atan',
@@ -126,12 +127,15 @@ all_libc_math_funcs = [
     'asinh',
     'acosh',
     'atanh',
+    'log',
     'log2',
     'log10',
     'fabs',
     'pow',
     'erfc',
     'ceil',
+    'exp',
+    'exp2',
     'expm1',
     'rint',
     'log1p',
@@ -146,7 +150,7 @@ libc_math_funcs = filter_math_funcs(all_libc_math_funcs)
 
 # TODO: Move any rewriting parts to lowering phases
 
-def infer_math_call(context, call_node, py_func):
+def infer_math_call(context, call_node, arg):
     "Resolve calls to math functions to llvm.log.f32() etc"
     # signature is a generic signature, build a correct one
     type = get_type(call_node.args[0])
@@ -156,9 +160,11 @@ def infer_math_call(context, call_node, py_func):
     elif type.is_array and type.dtype.is_int:
         type = type.copy(dtype=double)
 
-    signature = minitypes.FunctionType(return_type=type, args=[type])
-    result = nodes.MathNode(py_func, signature, call_node.args[0])
-    return result
+    # signature = minitypes.FunctionType(return_type=type, args=[type])
+    # result = nodes.MathNode(py_func, signature, call_node.args[0])
+    nodes.annotate(context.env, call_node, is_math=True)
+    call_node.variable = Variable(type)
+    return call_node
 
 # ______________________________________________________________________
 # pow()
@@ -205,7 +211,8 @@ def register(nargs, value):
     register(infer_math_call, value)
 
 def register_typefuncs():
-    modules = [builtins, math, cmath]
+    modules = [builtins, math, cmath, np]
+    # print all_libc_math_funcs
     for libc_math_func in all_libc_math_funcs:
         for module in modules:
             if hasattr(module, libc_math_func):

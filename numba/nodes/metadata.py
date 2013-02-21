@@ -3,18 +3,24 @@ Allow annotating AST nodes with some metadata, and querying for that metadata.
 """
 
 import weakref
-import collections
 
 def create_metadata_env():
-    return collections.defaultdict(weakref.WeakKeyDictionary)
+    return weakref.WeakKeyDictionary()
 
-def annotate(env, node, key, value):
+def annotate(env, node, **flags):
     func_env = env.translation.crnt
     assert func_env is not None
-    func_env.ast_metadata[node][key] = value
+    if node not in func_env.ast_metadata:
+        metadata = {}
+        func_env.ast_metadata[node] = metadata
+    else:
+        metadata = func_env.ast_metadata[node]
+
+    metadata.update(flags)
 
 def query(env, node, key):
     func_env = env.translation.crnt
     assert func_env is not None
-    node_metadata = func_env.ast_metadata[node]
-    return node_metadata[key]
+
+    node_metadata = func_env.ast_metadata.get(node, {})
+    return node_metadata.get(key)
