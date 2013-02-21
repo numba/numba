@@ -82,9 +82,7 @@ def exportmany(signatures, env_name=None, env=None, **kws):
 
 logger = logging.getLogger(__name__)
 
-def jit_extension_class(py_class, translator_kwargs):
-    env = environment.NumbaEnvironment.get_environment(
-        translator_kwargs.get('env', None))
+def jit_extension_class(py_class, translator_kwargs, env):
     llvm_module = translator_kwargs.get('llvm_module', None)
     if llvm_module is None:
         llvm_module = _lc.Module.new('tmp.extension_class.%X' % id(py_class))
@@ -185,8 +183,8 @@ def _jit(restype=None, argtypes=None, nopython=False,
     def _jit_decorator(func):
         if isinstance(func, (type, types.ClassType)):
             cls = func
-            kwargs.update(env_name=env_name, env=env)
-            return jit_extension_class(cls, kwargs)
+            kwargs.update(env_name=env_name)
+            return jit_extension_class(cls, kwargs, env)
 
         argtys = argtypes
         if func.__code__.co_argcount == 0 and argtys is None:
@@ -249,7 +247,9 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
     kws.update(nopython=nopython, backend=backend)
     if isinstance(restype, (type, types.ClassType)):
         cls = restype
-        return jit_extension_class(cls, kws)
+        env = kws.pop('env', None) or environment.NumbaEnvironment.get_environment(
+                                                         kws.get('env_name', None))
+        return jit_extension_class(cls, kws, env)
 
     # Called with f8(f8) syntax which returns a dictionary of argtypes and restype
     if isinstance(restype, minitypes.FunctionType):

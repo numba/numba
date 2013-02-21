@@ -195,7 +195,7 @@ def _process_method_signatures(class_dict, ext_type):
         ext_type.add_method(method_name, signature)
         class_dict[method_name] = method
 
-def _type_infer_method(env, ext_type, method, method_name, class_dict):
+def _type_infer_method(env, ext_type, method, method_name, class_dict, flags):
     if method_name not in ext_type.methoddict:
         return
 
@@ -204,22 +204,22 @@ def _type_infer_method(env, ext_type, method, method_name, class_dict):
 
     class_dict[method_name] = method
     func_signature, symtab, ast = pipeline.infer_types2(
-                        env, method.py_func, restype, argtypes)
+                        env, method.py_func, restype, argtypes, **flags)
     ext_type.add_method(method_name, func_signature)
 
-def _type_infer_init_method(env, class_dict, ext_type):
+def _type_infer_init_method(env, class_dict, ext_type, flags):
     initfunc = class_dict.get('__init__', None)
     if initfunc is None:
         return
 
-    _type_infer_method(env, ext_type, initfunc, '__init__', class_dict)
+    _type_infer_method(env, ext_type, initfunc, '__init__', class_dict, flags)
 
-def _type_infer_methods(env, class_dict, ext_type):
+def _type_infer_methods(env, class_dict, ext_type, flags):
     for method_name, method in class_dict.iteritems():
         if method_name in ('__new__', '__init__') or method is None:
             continue
 
-        _type_infer_method(env, ext_type, method, method_name, class_dict)
+        _type_infer_method(env, ext_type, method, method_name, class_dict, flags)
 
 def _compile_methods(class_dict, env, ext_type, lmethods, method_pointers,
                      flags):
@@ -371,9 +371,9 @@ def compile_extension_methods(env, py_class, ext_type, class_dict, flags):
     class_dict['__numba_py_class'] = py_class
 
     _process_method_signatures(class_dict, ext_type)
-    _type_infer_init_method(env, class_dict, ext_type)
+    _type_infer_init_method(env, class_dict, ext_type, flags)
     _construct_native_attribute_struct(ext_type)
-    _type_infer_methods(env, class_dict, ext_type)
+    _type_infer_methods(env, class_dict, ext_type, flags)
 
     # TODO: patch method call types
 

@@ -519,7 +519,7 @@ class PipelineStage(object):
                    func_globals=crnt.function_globals,
                    locals=crnt.locals,
                    allow_rebind_args=env.translation.allow_rebind_args,
-                   warn=env.translation.warn,
+                   warn=env.translation.crnt.warn,
                    is_closure=crnt.is_closure,
                    closures=crnt.closures,
                    closure_scope=crnt.closure_scope,

@@ -247,6 +247,11 @@ class FunctionEnvironment(object):
         'Collective symtol table containing all entries from outer '
         'functions.')
 
+    warn = TypedProperty(
+        bool,
+        'Flag that enables control flow warnings on a per-function level.',
+        True)
+
     kwargs = TypedProperty(
         dict,
         'Additional keyword arguments.  Deprecated, but kept for backward '
@@ -262,7 +267,7 @@ class FunctionEnvironment(object):
                  error_env=None, function_globals=None, locals=None,
                  template_signature=None, cfg_transform=None,
                  is_closure=False, closures=None, closure_scope=None,
-                 ast_metadata=None,
+                 ast_metadata=None, warn=True,
                  **kws):
         self.parent = parent
         self.numba = parent.numba
@@ -306,6 +311,7 @@ class FunctionEnvironment(object):
         else:
             self.ast_metadata = metadata.create_metadata_env()
 
+        self.warn = warn
         self.kwargs = kws
 
     def getstate(self):
@@ -327,6 +333,7 @@ class FunctionEnvironment(object):
             is_closure=self.is_closure,
             closures=self.closures,
             closure_scope=self.closure_scope,
+            warn=self.warn,
         )
         return state
 
@@ -378,7 +385,8 @@ class TranslationEnvironment(object):
 
     warn = TypedProperty(
         bool,
-        'Flag that enables control flow warnings.',
+        'Flag that enables control flow warnings. FunctionEnvironment inherits '
+        'this unless overridden.',
         True)
 
     is_pycc = TypedProperty(
@@ -403,6 +411,7 @@ class TranslationEnvironment(object):
         self.is_pycc = kws.get('is_pycc', False)
 
     def push(self, func, ast, func_signature, **kws):
+        kws.setdefault('warn', self.warn)
         func_env = FunctionEnvironment(self, func, ast, func_signature, **kws)
         return self.push_env(func_env, **kws)
 
