@@ -41,6 +41,7 @@ class NumbaVisitorMixin(CooperativeBase):
             context, func, ast, func_signature=func_signature,
             nopython=nopython, symtab=symtab, **kwargs)
 
+        self.env = kwargs.get('env', None)
         self.context = context
         self.ast = ast
         self.function_cache = context.function_cache
@@ -55,7 +56,6 @@ class NumbaVisitorMixin(CooperativeBase):
         self.closures = kwargs.get('closures')
         self.is_closure = kwargs.get('is_closure', False)
         self.kwargs = kwargs
-        self.env = kwargs.get('env', None)
 
         if self.have_cfg:
             self.flow_block = self.ast.flow.blocks[1]
@@ -65,7 +65,7 @@ class NumbaVisitorMixin(CooperativeBase):
         self.func = func
         if not self.valid_locals(func):
             assert isinstance(ast, ast_module.FunctionDef)
-            locals, cellvars, freevars = determine_variable_status(context, ast,
+            locals, cellvars, freevars = determine_variable_status(self.env, ast,
                                                                    self.locals)
             self.names = self.global_names = freevars
 
@@ -412,7 +412,7 @@ class VariableFindingVisitor(NumbaVisitor):
         self.generic_visit(node)
         return node
 
-def determine_variable_status(context, ast, locals_dict):
+def determine_variable_status(env, ast, locals_dict):
     """
     Determine what category referenced and assignment variables fall in:
 
@@ -441,10 +441,10 @@ def determine_variable_status(context, ast, locals_dict):
 
     # Compute cell variables
     for func_def in v.func_defs:
-        inner_locals_dict = pipeline.get_locals(func_def, None)
+        inner_locals_dict = env.translation.get_env(func_def)
 
         inner_locals, inner_cellvars, inner_freevars = \
-                            determine_variable_status(context, func_def,
+                            determine_variable_status(env, func_def,
                                                       inner_locals_dict)
         cellvars.update(locals.intersection(inner_freevars))
 
