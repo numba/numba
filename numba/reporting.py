@@ -57,6 +57,14 @@ def offset(source_lines):
 
 # ______________________________________________________________________
 
+def sort_message(collected_message):
+    node, is_error, message = collected_message
+    lineno, colno = float('inf'), float('inf')
+    if hasattr(node, 'lineno'):
+        lineno, colno = map(float, getpos(node))
+
+    return not is_error, lineno, colno, message
+
 class MessageCollection(object):
     """Collect error/warnings messages first then sort"""
 
@@ -74,7 +82,7 @@ class MessageCollection(object):
         format_msg_simple(type, node, message)
 
     def report(self, post_mortem=False):
-        self.messages.sort()
+        self.messages.sort(key=sort_message)
 
         if self.messages:
             print " Numba Encountered Errors or Warnings ".center(80, "-")
