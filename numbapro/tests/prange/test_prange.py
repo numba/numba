@@ -1,7 +1,5 @@
-import numbapro
-import numba
-from numba import utils
-from numba import *
+from numbapro import *
+import numbapro as numba
 
 import numpy as np
 

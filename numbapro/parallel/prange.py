@@ -27,6 +27,7 @@ from numba import error, visitors, nodes, templating, transforms, type_inference
 from numba.minivect import  minitypes
 from numba import typesystem, pipeline
 
+import numbapro
 from numbapro.vectorize import parallel, minivectorize
 
 import logging
@@ -448,9 +449,9 @@ class PrangeExpander(visitors.NumbaTransformer):
         return False
 
     def is_numba_prange(self, node):
-        return (self.match_global(node, numba.prange) or
+        return (self.match_global(node, prange) or
                 (isinstance(node, ast.Attribute) and node.attr == "prange" and
-                 self.match_global(node.value, numba)))
+                 self.match_global(node.value, numbapro)))
 
     def visit_Call(self, node):
         if self.is_numba_prange(node.func):
@@ -716,4 +717,4 @@ def prange(start=0, stop=None, step=1):
         start = 0
     return range(start, stop, step)
 
-numba.prange = prange
+# numba.prange = prange

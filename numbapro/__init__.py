@@ -134,7 +134,7 @@ def drop_in_gdb(addr=None, type='int'):
 import numba
 from numba import *
 from numbapro.decorators import autojit, jit
-# from numbapro.prange import prange
+from numbapro.parallel.prange import prange
 from .vectorize import vectorize, guvectorize
 
 __all__ = numba.__all__ + ['vectorize', 'guvectorize', 'prange']
