@@ -513,6 +513,8 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     # ____________________________________________________________
     # Properties
 
+    name = TypedProperty((str, unicode), "Name of the environment.")
+
     pipelines = TypedProperty(
         dict, 'Map from entry point names to PipelineStages.')
 
@@ -574,7 +576,8 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     # ____________________________________________________________
     # Methods
 
-    def __init__(self, *args, **kws):
+    def __init__(self, name, *args, **kws):
+        self.name = name
         actual_default_pipeline = pipeline.ComposedPipelineStage(
             default_pipeline_order)
         self.pipelines = {
@@ -624,7 +627,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         if environment_key in cls.environment_map:
             ret_val = cls.environment_map[environment_key]
         else:
-            ret_val = cls(*args, **kws)
+            ret_val = cls(environment_key or 'numba', *args, **kws)
             cls.environment_map[environment_key] = ret_val
         return ret_val
 
@@ -644,6 +647,9 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         else:
             pipeline_obj = self.pipelines[pipeline_name] = pipeline_ctor()
         return pipeline_obj
+
+    def __repr__(self):
+        return "NumbaEnvironment(%s)" % self.name
 
 # ______________________________________________________________________
 # Main (self-test) routine
