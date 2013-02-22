@@ -1,18 +1,16 @@
 import ast
 
-import numba
-from numba import *
 from numba import error, pipeline, nodes, ufunc_builder
 from numba.minivect import specializers, miniast
-from numba import utils, functions, transforms
-from numba import visitors, type_inference
+from numba import utils, functions
+from numba import visitors
+from numba.type_inference import infer
 
 from numbapro import array_slicing
 from numbapro.vectorize import basic, minivectorize
 
-import numpy
-
 print_ufunc = False
+
 
 def is_elementwise_assignment(context, assmnt_node):
     target_type = assmnt_node.targets[0].type
@@ -26,9 +24,7 @@ def is_elementwise_assignment(context, assmnt_node):
     return False
 
 
-class ArrayExpressionRewrite(visitors.NumbaTransformer,
-                             type_inference.infer.NumpyMixin,
-                             transforms.MathMixin):
+class ArrayExpressionRewrite(visitors.NumbaTransformer, infer.NumpyMixin):
     """
     Find element-wise expressions and run ElementalMapper to turn it into
     a minivect AST or a ufunc.
@@ -65,6 +61,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
 
         if print_ufunc:
             from meta import asttools
+
             module = ast.Module(body=[ufunc_ast])
             print asttools.python_source(module)
 
@@ -100,7 +97,8 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer,
 
         if (len(node.targets) == 1 and is_slice_assign and
                 is_elementwise_assignment(self.context, node)):
-            target_node = array_slicing.rewrite_slice(target_node, self.nopython)
+            target_node = array_slicing.rewrite_slice(target_node,
+                                                      self.nopython)
             return self.register_array_expression(node.value, lhs=target_node)
 
         return node
@@ -145,7 +143,8 @@ class ArrayExpressionRewriteUfunc(ArrayExpressionRewrite):
         self.vectorizer_cls = vectorizer_cls or basic.BasicASTVectorize
 
     def register_array_expression(self, node, lhs=None):
-        super(ArrayExpressionRewriteUfunc, self).register_array_expression(node, lhs)
+        super(ArrayExpressionRewriteUfunc, self).register_array_expression(node,
+                                                                           lhs)
         py_ufunc, signature, ufunc_builder = self.get_py_ufunc(lhs, node)
 
         # Vectorize Python function
@@ -170,6 +169,7 @@ class NumbaproStaticArgsContext(utils.NumbaContext):
     "Use a static argument list: shape, data1, strides1, data2, strides2, ..."
 
     astbuilder_cls = miniast.ASTBuilder
+
 
 class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
     """
@@ -214,7 +214,8 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         return nodes.ArrayAttributeNode(attr, array)
 
     def register_array_expression(self, node, lhs=None):
-        super(ArrayExpressionRewriteNative, self).register_array_expression(node, lhs)
+        super(ArrayExpressionRewriteNative, self).register_array_expression(
+            node, lhs)
 
         lhs_type = lhs.type if lhs else node.type
         is_expr = lhs is None
@@ -233,7 +234,7 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         # Compile ufunc scalar kernel with numba
         ast.fix_missing_locations(ufunc_ast)
         p, (_, _, _) = pipeline.run_pipeline(
-                        self.context, None, ufunc_ast, signature, codegen=True)
+            self.context, None, ufunc_ast, signature, codegen=True)
 
         # Manual linking
         lfunc_name = p.translator.lfunc.name
@@ -259,7 +260,7 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
 
         if lhs is None and self.nopython:
             raise error.NumbaError(
-                    node, "Cannot allocate new memory in nopython context")
+                node, "Cannot allocate new memory in nopython context")
         elif lhs is None:
             # TODO: determine best output order at runtime
             shape = shape.cloneable
@@ -273,13 +274,13 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         b = context.astbuilder
 
         variables = [b.variable(name_node.type, "op%d" % i)
-                         for i, name_node in enumerate([lhs] + operands)]
+                     for i, name_node in enumerate([lhs] + operands)]
         miniargs = map(b.funcarg, variables)
         body = minivectorize.build_kernel_call(lfunc, signature, miniargs, b)
 
         minikernel = minivectorize.build_minifunction(body, miniargs, b)
         lminikernel, ctypes_kernel = context.run_simple(
-                            minikernel, specializers.StridedSpecializer)
+            minikernel, specializers.StridedSpecializer)
 
         # Build call to minivect kernel
         operands.insert(0, lhs)
@@ -288,7 +289,8 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         for operand in operands:
             if operand.type.is_array:
                 data_p = self.array_attr(operand, 'data')
-                data_p = nodes.CoercionNode(data_p, operand.type.dtype.pointer())
+                data_p = nodes.CoercionNode(data_p,
+                                            operand.type.dtype.pointer())
                 if not isinstance(operand, nodes.CloneNode):
                     operand = nodes.CloneNode(operand)
                 strides_p = self.array_attr(operand, 'strides')

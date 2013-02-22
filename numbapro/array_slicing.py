@@ -521,6 +521,8 @@ class NewAxis(ConstantBase):
 #    def specialize(self):
 #        self.specialize_name()
 
+# TODO: Transliterate the below to a numba function
+
 class Broadcast(ConstantBase):
     """
     Transliteration of
