@@ -5,7 +5,6 @@ Work in progress, do not use.
 __all__ = ['MiniVectorize']
 
 import ast
-import ctypes
 import logging
 
 from numba import visitors as numba_visitors
@@ -14,18 +13,19 @@ from numba.minivect import (miniast,
                             minierror,
                             specializers as minispecializers,
                             ctypes_conversion)
-from numba import decorators, utils, functions
+from numba import decorators, functions
+from numba import environment
 
-from _numba_vectorize import _internal
 from numbapro import dispatch
-from numbapro.vectorize import _common, basic, parallel
+from numbapro.vectorize import basic, parallel
 
 import numpy as np
 
 debug_c = False
 debug_llvm = False
 
-minicontext = decorators.context
+env = environment.NumbaEnvironment.get_environment()
+minicontext = env.context
 b = minicontext.astbuilder
 
 class UntranslatableError(Exception):
