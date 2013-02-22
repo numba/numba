@@ -296,10 +296,6 @@ class NumbaVisitorMixin(CooperativeBase):
     def visit_CloneNode(self, node):
         return node
 
-    #@property
-    #def current_scope(self):
-    #    return self.local_scopes[-1]
-
     def visit_ControlBlock(self, node):
         #self.local_scopes.append(node.symtab)
         self.setblock(node)
@@ -441,7 +437,8 @@ def determine_variable_status(env, ast, locals_dict):
 
     # Compute cell variables
     for func_def in v.func_defs:
-        inner_locals_dict = env.translation.get_env(func_def)
+        func_env = env.translation.make_partial_env(func_def, locals={})
+        inner_locals_dict = func_env.locals
 
         inner_locals, inner_cellvars, inner_freevars = \
                             determine_variable_status(env, func_def,

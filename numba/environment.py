@@ -153,6 +153,11 @@ class FunctionEnvironment(object):
         FunctionType,
         'Type signature for the function being translated.')
 
+    is_partial = TypedProperty(
+        bool,
+        "Whether this environment is a partially constructed environment",
+        False)
+
     func_name = TypedProperty(str, 'Target function name.')
 
     mangled_name = TypedProperty(str, 'Mangled name of compiled function.')
@@ -270,15 +275,19 @@ class FunctionEnvironment(object):
     # ____________________________________________________________
     # Methods
 
-    def __init__(self, parent, func, ast, func_signature,
-                 name=None, qualified_name=None,
-                 llvm_module=None, wrap=True, link=True,
-                 symtab=None,
-                 error_env=None, function_globals=None, locals=None,
-                 template_signature=None, cfg_transform=None,
-                 is_closure=False, closures=None, closure_scope=None,
-                 ast_metadata=None, warn=True,
-                 **kws):
+    def __init__(self, *args, **kws):
+        self.init(*args, **kws)
+
+    def init(self, parent, func, ast, func_signature,
+             name=None, qualified_name=None,
+             llvm_module=None, wrap=True, link=True,
+             symtab=None,
+             error_env=None, function_globals=None, locals=None,
+             template_signature=None, cfg_transform=None,
+             is_closure=False, closures=None, closure_scope=None,
+             ast_metadata=None, warn=True,
+             **kws):
+
         self.parent = parent
         self.numba = parent.numba
         self.func = func
@@ -286,14 +295,15 @@ class FunctionEnvironment(object):
         self.func_signature = func_signature
 
         if name is None:
-            if func and func.__module__:
-                module_name = func.__module__
-                name = '.'.join([module_name, func.__name__])
+            if self.func and self.func.__module__:
+                module_name = self.func.__module__
+                name = '.'.join([module_name, self.func.__name__])
             else:
-                name = ast.name
+                name = self.ast.name
 
         self.func_name = name
-        self.mangled_name = naming.specialized_mangle(name, func_signature.args)
+        self.mangled_name = naming.specialized_mangle(
+                name, self.func_signature.args)
         self.qualified_name = qualified_name or name
         self.llvm_module = (llvm_module if llvm_module
                                  else self.numba.llvm_context.module)
@@ -302,12 +312,13 @@ class FunctionEnvironment(object):
         self.llvm_wrapper_func = None
         self.symtab = symtab if symtab is not None else {}
 
-        self.error_env = error_env or FunctionErrorEnvironment(func, ast)
+        self.error_env = error_env or FunctionErrorEnvironment(self.func,
+                                                               self.ast)
 
         if function_globals is not None:
             self.function_globals = function_globals
         else:
-            self.function_globals = func.func_globals
+            self.function_globals = self.func.func_globals
 
         self.locals = locals if locals is not None else {}
         self.template_signature = template_signature
@@ -431,8 +442,38 @@ class TranslationEnvironment(object):
             kwds.setdefault('warn', self.warn)
             func_env = FunctionEnvironment(self, func, ast, func_signature, **kwds)
             self.func_envs[ast] = func_env
+        else:
+            func_env = self.func_envs[ast]
+            if func_env.is_partial:
+                state = func_env.partial_state
+            else:
+                state = func_env.getstate()
 
-        return self.func_envs[ast]
+            state.update(kwds)
+            func_env.init(self, func, ast, func_signature, **state)
+
+        return func_env
+
+    def make_partial_env(self, ast, **kwds):
+        """
+        Create a partial environment for a function that only initializes
+        the given attributes.
+
+        Later attributes will override existing attributes.
+        """
+        if ast in self.func_envs:
+            func_env = self.func_envs[ast]
+        else:
+            func_env = FunctionEnvironment.__new__(FunctionEnvironment)
+            func_env.is_partial = True
+            func_env.partial_state = kwds
+
+            for key, value in kwds.iteritems():
+                setattr(func_env, key, value)
+
+            self.func_envs[ast] = func_env
+
+        return func_env
 
     def push(self, func, ast, func_signature, **kws):
         func_env = self.get_or_make_env(func, ast, func_signature, **kws)
