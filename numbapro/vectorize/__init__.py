@@ -22,8 +22,7 @@ from .gufunc import GUFuncVectorize, GUFuncASTVectorize
 from numbapro._cuda.error import CudaSupportError
 
 try:
-    from .cuda import  CudaASTVectorize
-    from .gufunc import CudaGUFuncASTVectorize
+    from .cuda import  CudaASTVectorize, CudaGUFuncASTVectorize
 except CudaSupportError, e:
     logging.warning("Cuda vectorizers not available, using fallbacks")
     CudaVectorize = BasicVectorize

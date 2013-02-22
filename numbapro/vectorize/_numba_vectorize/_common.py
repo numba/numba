@@ -1,19 +1,14 @@
 import numpy as np
 
-import llvm.core
-import llvm.ee
-
 from numba import decorators
 from numba.codegen.llvmcontext import LLVMContextManager
 from numba.minivect import minitypes
-from llvm_cbuilder import shortnames as _C
 from . import _internal
 from ._translate import Translate
-from llvm.passes import PassManager, PassManagerBuilder
 
 try:
     ptr_t = long
-except:
+except NameError:
     ptr_t = int
     assert False, "Have not check this yet" # Py3.0?
 
