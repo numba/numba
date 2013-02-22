@@ -3,7 +3,8 @@ import numpy as np
 import llvm.core
 import llvm.ee
 
-from numba import decorators, ast_translate
+from numba import decorators
+from numba.codegen.llvmcontext import LLVMContextManager
 from numba.minivect import minitypes
 from llvm_cbuilder import shortnames as _C
 from . import _internal
@@ -170,7 +171,7 @@ class ASTVectorizeMixin(object):
         super(ASTVectorizeMixin, self).__init__(*args, **kwargs)
         self.args_restypes = getattr(self, 'args_restypes', [])
         self.signatures = []
-        self.llvm_context = ast_translate.LLVMContextManager()
+        self.llvm_context = LLVMContextManager()
 
     def _get_ee(self):
         return self.llvm_context.execution_engine
@@ -206,7 +207,6 @@ def post_vectorize_optimize(func):
         
     TODO: review if this is necessary.
     '''
-    from numba.ast_translate import LLVMContextManager
     cm = LLVMContextManager()
     return cm.pass_manager
 

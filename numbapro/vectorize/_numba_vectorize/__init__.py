@@ -7,7 +7,7 @@ __all__ = [
 
 
 from .basic import BasicVectorize, BasicASTVectorize
-from numba.decorators import _process_sig
+from numba.utils import process_sig
 import warnings
 
 _bytecode_vectorizers = {
@@ -25,7 +25,7 @@ _vectorizers = {
 
 def _prepare_sig(sig):
     if isinstance(sig, str):
-        _name, restype, argtypes = _process_sig(str(sig), None)
+        _name, restype, argtypes = process_sig(str(sig), None)
     else:
         argtypes = sig.args
         restype = sig.return_type

@@ -4,16 +4,18 @@ from . import sreg, smem, barrier, macros
 import numpy as np
 # modify numba behavior
 
-from numba import utils, functions, ast_translate, llvm_types
-from numba import visitors, nodes, error
-from numba import pipeline, naming, f4
+from numba import utils, functions, llvm_types
+from numba import nodes
+from numba import pipeline
 import ast
 from numba import type_inference
 from numba.symtab import Variable
-from .nvvm import ADDRSPACE_SHARED, ADDRSPACE_GENERIC
+from .nvvm import ADDRSPACE_SHARED
 from llvm.core import *
 from numba.intrinsic import default_intrinsic_library
 from numba.external import default_external_library
+from numba.codegen.llvmcontext import LLVMContextManager
+from numba.codegen import translate
 
 import logging
 
@@ -212,7 +214,7 @@ class CudaTypeInferer(CudaAttrRewriteMixin,
                       type_inference.infer.TypeInferer):
     pass
 
-class CudaCodeGenerator(ast_translate.LLVMCodeGenerator):
+class CudaCodeGenerator(translate.LLVMCodeGenerator):
     def __init__(self, *args, **kws):
         super(CudaCodeGenerator, self).__init__(*args, **kws)
         self.__smem = {}
@@ -345,7 +347,7 @@ class NumbaproCudaPipeline(pipeline.Pipeline):
         return ast
 
 context = utils.get_minivect_context()
-context.llvm_context = ast_translate.LLVMContextManager()
+context.llvm_context = LLVMContextManager()
 context.numba_pipeline = NumbaproCudaPipeline
 function_cache = context.function_cache = functions.FunctionCache(context)
 context.intrinsic_library = default_intrinsic_library(context)

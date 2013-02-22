@@ -29,7 +29,7 @@ del get_versions
 
 EXCLUDE_TEST_PACKAGES = []
 
-from numba import whitelist_match, map_returncode_to_message, split_path
+from numba import whitelist_match, map_returncode_to_message
 
 def exclude_package_dirs(dirs, cuda=False):
     excludes = EXCLUDE_TEST_PACKAGES

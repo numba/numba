@@ -1,20 +1,13 @@
 import ast
-import copy
-import opcode
-import types
-import logging
-import __builtin__ as builtins
 
 import numba
 from numba import *
 from numba import error, pipeline, nodes, ufunc_builder
-from numba.minivect import minierror, minitypes, specializers, miniast
-from numba import translate, utils, functions, nodes, transforms
-from numba.symtab import Variable
-from numba import visitors, nodes, error, type_inference, ast_translate
-from numba.utils import dump
+from numba.minivect import specializers, miniast
+from numba import utils, functions, transforms
+from numba import visitors, type_inference
 
-from numbapro import vectorize, dispatch, array_slicing
+from numbapro import array_slicing
 from numbapro.vectorize import basic, minivectorize
 
 import numpy

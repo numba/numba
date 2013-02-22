@@ -4,14 +4,11 @@ import llvm.core
 # Temporary fix for utilty function defintions to merge during linkage.
 # TODO: make intrinsic functions out of these utilities
 from llvm.core import LINKAGE_LINKONCE_ODR
-from llvm.core import Type, inline_function
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
-from llvm_cbuilder import builder
 
 from numba import *
-from numba import (visitors, nodes, error, type_inference, ast_translate,
-                   ndarray_helpers, llvm_types)
+from numba import nodes, ndarray_helpers, llvm_types
 from numba.minivect import minitypes
 from numbapro.vectorize.gufunc import PyArray
 

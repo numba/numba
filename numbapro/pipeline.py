@@ -1,4 +1,5 @@
-from numba import decorators, pipeline, ast_translate
+from numba import decorators, pipeline
+# from numba.codegen import translate as ast_translate
 
 from numbapro import array_expressions, array_slicing, prange
 
