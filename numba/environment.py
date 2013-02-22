@@ -605,11 +605,12 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         context.utility_library = default_utility_library(context)
         self.llvm_context = translate.LLVMContextManager()
 
-        context.cbuilder_library = library.CBuilderLibrary()
-        context.cbuilder_library.declare_registered(self)
+    def link_cbuilder_utilities(self):
+        self.context.cbuilder_library = library.CBuilderLibrary()
+        self.context.cbuilder_library.declare_registered(self)
 
         # Link modules
-        context.cbuilder_library.link(self.llvm_context.module)
+        self.context.cbuilder_library.link(self.llvm_context.module)
 
     @classmethod
     def get_environment(cls, environment_key = None, *args, **kws):

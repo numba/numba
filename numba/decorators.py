@@ -19,6 +19,7 @@ from numba import double, int_
 from numba import environment
 import llvm.core as _lc
 
+environment.NumbaEnvironment.get_environment().link_cbuilder_utilities()
 
 def _internal_export(env, function_signature, backend='ast', **kws):
     def _iexport(func):
