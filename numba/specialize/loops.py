@@ -255,6 +255,7 @@ class TransformForIterable(visitors.NumbaTransformer):
         elif node.iter.type.is_array and node.iter.type.ndim == 1:
             return self.rewrite_array_iteration(node)
         else:
+            self.visitchildren(node)
             return node
 
 #------------------------------------------------------------------------
