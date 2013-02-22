@@ -169,6 +169,9 @@ def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
     if isinstance(target, ast.Name):
         target_name = target.id
         struct_type.add_field(target_name, Py_ssize_t)
+    else:
+        raise error.NumbaError(
+            prange_node, "Only name target for prange is currently supported")
 
     # Create code for reductions and (last)privates
     for name, reduction_op in prange_node.reductions.iteritems():
