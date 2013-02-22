@@ -64,6 +64,10 @@ def process_signature(sigstr, name=None):
         signature.name = name
     return signature
 
+def process_sig(sigstr, name=None):
+    signature = process_signature(sigstr, name)
+    return signature.name, signature.return_type, signature.args
+
 class NumbaContext(miniast.LLVMContext):
     # debug = True
     # debug_elements = True
