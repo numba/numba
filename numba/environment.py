@@ -366,7 +366,7 @@ class FunctionEnvironment(object):
         # TODO: link these things together
         state = self.getstate()
         state.update(kwds)
-        return FunctionEnvironment(**state)
+        return type(self)(**state)
 
 # ______________________________________________________________________
 
@@ -440,7 +440,8 @@ class TranslationEnvironment(object):
     def get_or_make_env(self, func, ast, func_signature, **kwds):
         if ast not in self.func_envs:
             kwds.setdefault('warn', self.warn)
-            func_env = FunctionEnvironment(self, func, ast, func_signature, **kwds)
+            func_env = self.numba.FunctionEnvironment(
+                    self, func, ast, func_signature, **kwds)
             self.func_envs[ast] = func_env
         else:
             func_env = self.func_envs[ast]
@@ -464,7 +465,8 @@ class TranslationEnvironment(object):
         if ast in self.func_envs:
             func_env = self.func_envs[ast]
         else:
-            func_env = FunctionEnvironment.__new__(FunctionEnvironment)
+            func_env = self.numba.FunctionEnvironment.__new__(
+                    self.numba.FunctionEnvironment)
             func_env.is_partial = True
             func_env.partial_state = kwds
 
@@ -626,6 +628,8 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     environment_map = {}
 
     TranslationContext = TranslationContext
+    TranslationEnvironment = TranslationEnvironment
+    FunctionEnvironment = FunctionEnvironment
 
     # ____________________________________________________________
     # Methods
@@ -646,7 +650,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         self.context = NumbaContext()
         self.specializations = functions.FunctionCache(env=self)
         self.exports = PyccEnvironment()
-        self.translation = TranslationEnvironment(self)
+        self.translation = self.TranslationEnvironment(self)
         self.debug = logger.getEffectiveLevel() < logging.DEBUG
 
         # FIXME: NumbaContext has up to now been used as a stand in
