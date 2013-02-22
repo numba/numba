@@ -534,7 +534,7 @@ class PipelineStage(object):
         else:
             try:
                 ast = self.transform(ast, env)
-            except error.NumbaError, e:
+            except error.NumbaError as e:
                 func_env = env.translation.crnt
                 error_env = func_env.error_env
                 if func_env.is_closure:
