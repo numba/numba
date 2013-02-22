@@ -66,6 +66,17 @@ default_dummy_type_infer_pipeline_order = [
 ]
 
 # ______________________________________________________________________
+# Convenience functions
+
+def insert_stage(pipeline_order, stage, after=None, before=None):
+    if after is not None:
+        idx = pipeline_order.index(after) + 1
+    else:
+        idx = pipeline_order.index(before)
+
+    pipeline_order.insert(idx, stage)
+
+# ______________________________________________________________________
 # Class definitions
 
 class _AbstractNumbaEnvironment(object):
