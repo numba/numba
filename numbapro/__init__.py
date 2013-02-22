@@ -131,23 +131,12 @@ def drop_in_gdb(addr=None, type='int'):
     os.kill(os.getpid(), signal.SIGINT)
 
 
-#
-# This import will modify numba ast translation pipeline and enables
-# array expression and prange on it.
-#
-import numbapro.pipeline
-
-#
-# This import will modify ast translation pipeline and
-# enables gpu target on it.
-#
-#
-try:
-    import numbapro.cuda
-except ImportError:
-    pass
-
-#
-# vectorize decorator
-#
+import numba
+from numba import *
+from numbapro.decorators import autojit, jit
+# from numbapro.prange import prange
 from .vectorize import vectorize, guvectorize
+
+__all__ = numba.__all__ + ['vectorize', 'guvectorize', 'prange']
+
+import numbapro.cuda
