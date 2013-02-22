@@ -1,6 +1,5 @@
-import copy
+import weakref
 import ast as ast_module
-import inspect
 import types
 import logging
 import pprint
@@ -106,7 +105,7 @@ class FunctionErrorEnvironment(object):
     enable_post_mortem = TypedProperty(
         bool,
         "Enable post-mortem debugging for the Numba compiler",
-        False#|1
+        False|1
     )
 
     collection = TypedProperty(
@@ -382,6 +381,11 @@ class TranslationEnvironment(object):
         'A map from target function names that are under compilation to their '
         'corresponding FunctionEnvironments')
 
+    func_envs = TypedProperty(
+        weakref.WeakKeyDictionary,
+        "Map from root AST nodes to FunctionEnvironment objects."
+        "This allows tracking environments of partially processed ASTs.")
+
     nopython = TypedProperty(
         bool,
         'Flag used to indicate if calls to the Python C API are permitted or '
@@ -413,6 +417,7 @@ class TranslationEnvironment(object):
         self.crnt = None
         self.stack = [(kws, None)]
         self.functions = {}
+        self.func_envs = weakref.WeakKeyDictionary()
         self.set_flags(**kws)
 
     def set_flags(self, **kws):
@@ -421,9 +426,16 @@ class TranslationEnvironment(object):
         self.warn = kws.get('warn', True)
         self.is_pycc = kws.get('is_pycc', False)
 
+    def get_or_make_env(self, func, ast, func_signature, **kwds):
+        if ast not in self.func_envs:
+            kwds.setdefault('warn', self.warn)
+            func_env = FunctionEnvironment(self, func, ast, func_signature, **kwds)
+            self.func_envs[ast] = func_env
+
+        return self.func_envs[ast]
+
     def push(self, func, ast, func_signature, **kws):
-        kws.setdefault('warn', self.warn)
-        func_env = FunctionEnvironment(self, func, ast, func_signature, **kws)
+        func_env = self.get_or_make_env(func, ast, func_signature, **kws)
         return self.push_env(func_env, **kws)
 
     def push_env(self, func_env, **kws):
@@ -431,6 +443,7 @@ class TranslationEnvironment(object):
         self.crnt = func_env
         self.stack.append((kws, self.crnt))
         self.functions[self.crnt.func_name] = self.crnt
+        self.func_envs[func_env.ast] = func_env
         if self.numba.debug:
             logger.debug('stack=%s\ncrnt=%r (%r)', pprint.pformat(self.stack),
                          self.crnt, self.crnt.func if self.crnt else None)
