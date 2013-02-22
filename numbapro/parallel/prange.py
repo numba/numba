@@ -440,9 +440,10 @@ class PrangeExpander(visitors.NumbaTransformer):
         if self.is_closure:
             return node
 
-        # Track locals dicts
+        # Track locals dicts of inner functions
         locals = self.locals
-        self.locals = pipeline.get_locals(node, None)
+        func_env = self.env.translation.make_partial_env(node, locals={})
+        self.locals = func_env.locals
         self.visitchildren(node)
         self.locals = locals
         return node
