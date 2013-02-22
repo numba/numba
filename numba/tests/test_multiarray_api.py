@@ -62,6 +62,8 @@ def _get_pyarray_getptr(module):
     function.add_attribute(lc.ATTR_ALWAYS_INLINE) # force inline
     function.linkage = lc.LINKAGE_INTERNAL
 
+    print function
+
     # implement the function
     bb_entry = function.append_basic_block('entry')
     bb_while_cond = function.append_basic_block('while.cond')
@@ -85,6 +87,10 @@ def _get_pyarray_getptr(module):
     builder.position_at_end(bb_while_cond)
 
     nd_phi = builder.phi(nd.type, name='nd_phi')
+    strides_phi = builder.phi(strides.type, name='strides_phi')
+    ind_phi = builder.phi(function.args[1].type, name='ind_phi')
+    dptr_phi = builder.phi(dptr.type, name='dptr_phi')
+
     nd_phi.add_incoming(nd, bb_entry)
 
     nd_minus_one = builder.sub(nd_phi, _make_const_int(1), name='nd_minus_one')
@@ -92,13 +98,10 @@ def _get_pyarray_getptr(module):
 
     pred = builder.icmp(lc.ICMP_NE, nd_phi, _make_const_int(0))
 
-    strides_phi = builder.phi(strides.type, name='strides_phi')
     strides_phi.add_incoming(strides, bb_entry)
 
-    ind_phi = builder.phi(function.args[1].type, name='ind_phi')
     ind_phi.add_incoming(function.args[1], bb_entry)
-
-    dptr_phi = builder.phi(dptr.type, name='dptr_phi')
+    
     dptr_phi.add_incoming(dptr, bb_entry)
 
     builder.cbranch(pred, bb_while_body, bb_ret)
@@ -126,7 +129,7 @@ def _get_pyarray_getptr(module):
 
     # check generated code
     function.verify()
-
+            
     return function
 
 # ______________________________________________________________________
@@ -161,10 +164,13 @@ class TestMultiarrayAPI(unittest.TestCase):
                              lc.Constant.int(_int32, _head_len + ofs)]))
             for ofs in (1, 2, 5)] # nd, dimensions, descr
         largs.append(lc.Constant.int(_int32, 0))
-        builder.ret(builder.call(pyarray_zeros, largs))
+        ret_void_ptr = builder.call(pyarray_zeros, largs)
+        builder.ret(builder.bitcast(ret_void_ptr, _numpy_array))
 
         logging.debug(module)
 
+        module.verify()
+        
         ee = le.ExecutionEngine.new(module)
         test_fn_addr = ee.get_pointer_to_function(test_fn)
         py_test_fn = _pyobj_to_pyobj(test_fn_addr)
@@ -231,6 +237,7 @@ class TestMultiarrayAPI(unittest.TestCase):
         logging.debug(module)
 
         test_fn.verify()
+        module.verify()
 
         ee = le.ExecutionEngine.new(module)
         test_fn_addr = ee.get_pointer_to_function(test_fn)
@@ -283,6 +290,7 @@ class TestMultiarrayAPI(unittest.TestCase):
         logging.debug(module)
 
         test_fn.verify()
+        module.verify()
 
         ee = le.ExecutionEngine.new(module)
         test_fn_addr = ee.get_pointer_to_function(test_fn)
@@ -306,6 +314,7 @@ class TestMultiarrayAPI(unittest.TestCase):
         test_fn = module.add_function(lc.Type.function(lc.Type.double(),
                                                        [_numpy_array, _int32]),
                                       'test_fn')
+
         bb = test_fn.append_basic_block('entry')
         builder = lc.Builder.new(bb)
         pyarray_getptr = _get_pyarray_getptr(module)
@@ -332,6 +341,8 @@ class TestMultiarrayAPI(unittest.TestCase):
         logging.debug(module)
 
         test_fn.verify()
+
+        module.verify()
 
         ee = le.ExecutionEngine.new(module)
         test_fn_addr = ee.get_pointer_to_function(test_fn)
