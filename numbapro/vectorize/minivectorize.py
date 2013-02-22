@@ -16,7 +16,6 @@ from numba.minivect import (miniast,
 from numba import decorators, functions
 from numba import environment
 
-from numbapro import pipeline
 from numbapro import dispatch
 from numbapro.vectorize import basic, parallel
 
@@ -25,8 +24,8 @@ import numpy as np
 debug_c = False
 debug_llvm = False
 
-env = pipeline.env
-minicontext = env.context
+numba_env = environment.NumbaEnvironment.get_environment()
+minicontext = numba_env.context
 b = minicontext.astbuilder
 
 class UntranslatableError(Exception):
