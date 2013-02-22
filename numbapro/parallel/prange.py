@@ -146,11 +146,12 @@ $contexts[{{num_threads}} - 1].__numba_stop = {{stop}}
 $lastprivates = $contexts[{{num_threads}} - 1]
 """
 
-def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
+def rewrite_prange(env, prange_node, target, locals_dict, closures_dict):
     func_def = prange_node.func_def
     struct_type = prange_node.privates_struct_type
 
-    templ = templating.TemplateContext(context, prange_template % func_def.name)
+    templ = templating.TemplateContext(env.context,
+                                       prange_template % func_def.name)
 
     # Allocate context for each thread
     num_threads = NUM_THREADS
@@ -214,7 +215,13 @@ def rewrite_prange(context, prange_node, target, locals_dict, closures_dict):
     )
 
     tree = templ.template(subs)
-    templ.update_locals(locals_dict)
+
+    temporaries = {}
+    templ.update_locals(temporaries)
+    locals_dict.update(temporaries)
+
+    env.translation.crnt.kill_attribute_assignments.update(temporaries)
+
     # TODO: Make this an SSA variable
     locals_dict[target_name] = Py_ssize_t
 
@@ -494,7 +501,7 @@ class PrangeExpander(visitors.NumbaTransformer):
         create_prange_closure(prange_node, node.body, node.target)
 
         # setup glue code
-        pre_loop = rewrite_prange(self.context, prange_node, node.target,
+        pre_loop = rewrite_prange(self.env, prange_node, node.target,
                                   self.locals, self.closures)
         post_loop = perform_reductions(self.context, prange_node)
 
