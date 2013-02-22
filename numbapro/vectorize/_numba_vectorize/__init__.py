@@ -64,7 +64,7 @@ def Vectorize(func, backend='ast', target='cpu'):
     if target in targets:
         return targets[target](func)
     else: # fall back
-        warning.warn("fallback to bytecode vectorizer")
+        warnings.warn("fallback to bytecode vectorizer")
         # Use the default bytecode backend
         return _bytecode_vectorizers[target](func)
 
