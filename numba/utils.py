@@ -94,6 +94,7 @@ def get_minivect_context():
 context = get_minivect_context()
 
 def ast2tree (node, include_attrs = True):
+    '''Transform a Python AST object into nested tuples and lists.'''
     def _transform(node):
         if isinstance(node, ast.AST):
             fields = ((a, _transform(b))
@@ -112,10 +113,14 @@ def ast2tree (node, include_attrs = True):
     return _transform(node)
 
 def pformat_ast (node, include_attrs = True, **kws):
+    '''Transform a Python AST object into nested tuples and lists, and
+    return as a string formatted using pprint.pformat().'''
     return pprint.pformat(ast2tree(node, include_attrs), **kws)
 
-def dump(node):
-    print pformat_ast(node)
+def dump(node, *args, **kws):
+    '''Transform a Python AST object into nested tuples and lists, and
+    pretty-print the result.'''
+    print(pformat_ast(node, *args, **kws))
 
 class TypedProperty(object):
     '''Defines a class property that does a type check in the setter.'''
