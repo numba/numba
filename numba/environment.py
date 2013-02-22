@@ -7,6 +7,7 @@ import pprint
 import llvm.core
 
 from numba import pipeline, naming, error, reporting
+from numba.control_flow.control_flow import ControlFlow
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
 from numba.minivect.minitypes import FunctionType
 from numba import functions, symtab
@@ -228,6 +229,11 @@ class FunctionEnvironment(object):
     ast_metadata = TypedProperty(
         object,
         'Metadata for AST nodes of the function being compiled.')
+
+    flow = TypedProperty(
+        (types.NoneType, ControlFlow),
+        "Control flow graph. See numba.control_flow.",
+        default=None)
 
     # FIXME: Get rid of this.  See comment for translator property,
     # below.

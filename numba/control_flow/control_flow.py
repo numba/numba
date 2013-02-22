@@ -621,7 +621,11 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         # Stack of control flow blocks
         self.stack = []
-        self.flow = ControlFlow(self.source_descr)
+
+        flow = ControlFlow(self.source_descr)
+        self.env.translation.crnt.flow = flow
+        self.flow = flow
+
         if env:
             if hasattr(env, 'translation'):
                 env.translation.crnt.cfg_transform = self
