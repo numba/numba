@@ -48,7 +48,7 @@ class NumbaproPipeline(pipeline.Pipeline):
 class RewriteArrayExpressions(pipeline.PipelineStage):
     def transform(self, ast, env):
         transformer = self.make_specializer(
-            array_expressions.ArrayExpressionRewriteNative, ast)
+            array_expressions.ArrayExpressionRewriteNative, ast, env)
         return transformer.visit(ast)
 
 #----------------------------------------------------------------------------
@@ -57,17 +57,18 @@ class RewriteArrayExpressions(pipeline.PipelineStage):
 
 class ExpandPrange(pipeline.PipelineStage):
     def transform(self, ast, env):
-        transformer = self.make_specializer(prange.PrangeExpander, ast)
+        transformer = self.make_specializer(prange.PrangeExpander, ast, env)
         return transformer.visit(ast)
 
 class RewritePrangePrivates(pipeline.PipelineStage):
     def transform(self, ast, env):
-        transformer = self.make_specializer(prange.PrangePrivatesReplacer, ast)
+        transformer = self.make_specializer(prange.PrangePrivatesReplacer,
+                                            ast, env)
         return transformer.visit(ast)
 
 class CleanupPrange(pipeline.PipelineStage):
     def transform(self, ast, env):
-        transformer = self.make_specializer(prange.PrangeCleanup, ast)
+        transformer = self.make_specializer(prange.PrangeCleanup, ast, env)
         return transformer.visit(ast)
 
 #----------------------------------------------------------------------------
@@ -97,10 +98,14 @@ insert_stage(order, CleanupPrange, after='TypeInfer')
 # Create Environment
 #----------------------------------------------------------------------------
 
+numba_env = environment.NumbaEnvironment.get_environment()
+
 create_numbapro_pipeline = partial(ComposedPipelineStage, order)
 
-numbapro_env = environment.NumbaEnvironment()
+numbapro_env = environment.NumbaEnvironment('numbapro')
 numbapro_env.get_or_add_pipeline('numbapro', create_numbapro_pipeline)
 numbapro_env.default_pipeline = 'numbapro'
+
+numbapro_env.context.cbuilder_library = numba_env.context.cbuilder_library
 
 env = numbapro_env
