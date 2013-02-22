@@ -2,10 +2,11 @@ from functools import partial
 
 from numba import pipeline
 from numba import environment
-from numba.pipeline import ComposedPipelineStage, PipelineStage
+from numba.pipeline import ComposedPipelineStage
 from numba.environment import insert_stage
 
-from numbapro import array_expressions, array_slicing, prange
+from numbapro import array_expressions, array_slicing
+from numbapro.parallel import prange
 
 
 class NumbaproPipeline(pipeline.Pipeline):
