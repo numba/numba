@@ -1,7 +1,7 @@
 import numpy as np
 import unittest
 
-from numba import void, uint32, int32, jit, uint64, int64, typeof, bool_
+from numba import void, uint32, jit, int64
 
 @jit(void(uint32[:], uint32, uint32))
 def prng(X, A, C):

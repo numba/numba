@@ -313,7 +313,7 @@ class LLVMCodeGen(codegen.CodeGen):
 
         op = node.operator
         if (node.type.is_int or node.type.is_float) and node.operator in self._binops:
-            llvm_method_name = self._binops[op][node.type.is_int + node.type.is_signed]
+            llvm_method_name = self._binops[op][node.type.is_int + node.type.signed]
             meth = getattr(self.builder, llvm_method_name)
             if not lhs.type == rhs.type:
                 node.print_tree(self.context)

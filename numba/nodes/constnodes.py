@@ -38,7 +38,10 @@ class ConstNode(ExprNode):
         elif type.is_float:
             lvalue = llvm.core.Constant.real(ltype, constant)
         elif type.is_int:
-            lvalue = llvm.core.Constant.int(ltype, constant)
+            if type.signed:
+                lvalue = llvm.core.Constant.int_signextend(ltype, constant)
+            else:
+                lvalue = llvm.core.Constant.int(ltype, constant)
         elif type.is_complex:
             real = ConstNode(constant.real, type.base_type)
             imag = ConstNode(constant.imag, type.base_type)

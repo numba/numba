@@ -155,7 +155,13 @@ class TypeMapper(object):
         elif isinstance(value, bool):
             return bool_
         elif isinstance(value, (int, long)):
-            return int_
+            bits = value.bit_length()
+            if bits < 32:
+                return int_
+            elif bits < 64:
+                return int64
+            else:
+                raise ValueError("Cannot represent %s as int32 or int64", value)
         elif isinstance(value, complex):
             return complex128
         elif isinstance(value, str):
