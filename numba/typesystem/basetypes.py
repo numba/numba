@@ -263,11 +263,11 @@ class PointerFunctionType(NumbaType, minitypes.ObjectType):
 
     is_pointer_to_function = True
 
-    def __init__(self, obj, pointer, restype, argtypes, **kwds):
+    def __init__(self, obj, pointer, signature, **kwds):
         super(PointerFunctionType, self).__init__(**kwds)
         self.obj = obj          # for debugability
         self.pointer = pointer  # function address as an integer
-        self.signature = restype(*argtypes)
+        self.signature = signature
 
     def __repr__(self):
         return "<natively callable function %s at %s>" % (self.signature,

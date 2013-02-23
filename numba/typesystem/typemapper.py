@@ -8,8 +8,9 @@ import numpy as np
 
 import numba
 from numba.minivect.ctypes_conversion import convert_from_ctypes
-import numba.minivect.minitypes
+from numba.support import cffi_support
 from numba.minivect.minitypes import map_dtype, object_
+import numba.minivect.minitypes
 
 from numba import numbawrapper
 from numba.typesystem import *
@@ -90,7 +91,11 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             restype = convert_from_ctypes(value.restype)
             argtypes = [convert_from_ctypes(v) for v in value.argtypes]
             pointer = ctypes.cast(value, ctypes.c_void_p).value
-            return PointerFunctionType(value, pointer, restype, argtypes)
+            return PointerFunctionType(value, pointer, restype(*argtypes))
+        elif cffi_support.is_cffi_func(value):
+            signature = cffi_support.get_signature(value)
+            pointer = cffi_support.get_pointer(value)
+            return PointerFunctionType(value, pointer, signature)
         elif isinstance(value, minitypes.Type):
             return CastType(dst_type=value)
         elif hasattr(type(value), '__numba_ext_type'):
