@@ -147,7 +147,8 @@ class ExpressionNode(ExprNode):
 
 class FunctionWrapperNode(Node):
     """
-    This code is a wrapper function callable from Python using PyCFunction:
+    This code is a wrapper function callable from Python using NumbaFunction
+    (see numba/numbafunction.c):
 
         PyObject *(*)(PyObject *self, PyObject *args)
 

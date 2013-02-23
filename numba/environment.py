@@ -65,6 +65,12 @@ default_dummy_type_infer_pipeline_order = [
     'TypeSet',
 ]
 
+default_numba_wrapper_pipeline_order = [
+    'LateSpecializer',
+    'SpecializeFunccalls',
+    'SpecializeExceptions',
+]
+
 # ______________________________________________________________________
 # Convenience functions
 
@@ -652,6 +658,8 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
                 default_dummy_type_infer_pipeline_order),
             'compile' : pipeline.ComposedPipelineStage(
                 default_compile_pipeline_order),
+            'wrap_func' : pipeline.ComposedPipelineStage(
+                default_numba_wrapper_pipeline_order),
             }
         self.context = NumbaContext()
         self.specializations = functions.FunctionCache(env=self)

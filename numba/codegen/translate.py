@@ -552,12 +552,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # We need to specialize the return statement, since it may be a
         # non-trivial coercion (e.g. call a ctypes pointer type for pointer
         # return types, etc)
-        pipeline_ = pipeline.Pipeline(self.context, node.fake_pyfunc,
-                                      node, self.func_signature,
-                                      order=['late_specializer',
-                                             'specialize_funccalls',
-                                             'specialize_exceptions'])
-        sig, symtab, return_stmt_ast = pipeline_.run_pipeline()
+        # So set up a FunctionEnvironment and specialize our AST
+        func_env = self.env.translation.crnt.inherit(
+            ast=node,
+            func=node.fake_pyfunc,
+            func_signature=self.func_signature
+        )
+        pipeline.run_env(self.env, func_env, pipeline_name='wrap_func')
+        return_stmt_ast = func_env.ast
+
         self.generic_visit(return_stmt_ast)
 
         debug_conversion = was_debug_conversion
