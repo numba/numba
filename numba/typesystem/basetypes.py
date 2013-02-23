@@ -255,17 +255,23 @@ class NoneType(NumbaType, minitypes.ObjectType):
 # Function Types
 #------------------------------------------------------------------------
 
-class CTypesFunctionType(NumbaType, minitypes.ObjectType):
-    is_ctypes_function = True
+class PointerFunctionType(NumbaType, minitypes.ObjectType):
+    """
+    Pointer to a function at a known address represented by some Python
+    object (e.g. a ctypes or CFFI function).
+    """
 
-    def __init__(self, ctypes_func, restype, argtypes, **kwds):
-        super(CTypesFunctionType, self).__init__(**kwds)
-        self.ctypes_func = ctypes_func
-        self.signature = minitypes.FunctionType(return_type=restype,
-                                                args=argtypes)
+    is_pointer_to_function = True
+
+    def __init__(self, obj, pointer, restype, argtypes, **kwds):
+        super(PointerFunctionType, self).__init__(**kwds)
+        self.obj = obj          # for debugability
+        self.pointer = pointer  # function address as an integer
+        self.signature = restype(*argtypes)
 
     def __repr__(self):
-        return "<ctypes function %s>" % (self.signature,)
+        return "<natively callable function %s at %s>" % (self.signature,
+                                                          hex(self.pointer))
 
 class AutojitType(NumbaType, minitypes.ObjectType):
     """

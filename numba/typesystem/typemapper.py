@@ -1,6 +1,7 @@
 from itertools import imap, izip
 import copy
 import types
+import ctypes
 
 import llvm.core
 import numpy as np
@@ -88,7 +89,8 @@ class NumbaTypeMapper(minitypes.TypeMapper):
 
             restype = convert_from_ctypes(value.restype)
             argtypes = [convert_from_ctypes(v) for v in value.argtypes]
-            return CTypesFunctionType(value, restype, argtypes)
+            pointer = ctypes.cast(value, ctypes.c_void_p).value
+            return PointerFunctionType(value, pointer, restype, argtypes)
         elif isinstance(value, minitypes.Type):
             return CastType(dst_type=value)
         elif hasattr(type(value), '__numba_ext_type'):

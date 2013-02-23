@@ -1378,12 +1378,14 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
             # Call to closure/inner function
             return nodes.ClosureCallNode(func_type, node)
 
-        elif func_type.is_ctypes_function:
+        elif func_type.is_pointer_to_function:
             # Call to ctypes function
             no_keywords(node)
-            new_node = nodes.CTypesCallNode(
-                    func_type.signature, node.args, func_type,
-                    py_func=func_type.ctypes_func)
+            new_node = nodes.PointerCallNode(
+                    func_type.signature,
+                    node.args,
+                    func_type.pointer,
+                    py_func=func_type.obj)
 
         elif func_type.is_cast:
             # Call of a numba type
