@@ -8,7 +8,7 @@ except ImportError:
 
 from numba import functions
 from numba import nodes
-from numba.nodes import metadata
+from numba.nodes.metadata import annotate, query
 from numba.typesystem.typemapper import have_properties
 
 try:
@@ -160,10 +160,10 @@ class NumbaVisitorMixin(CooperativeBase):
         return self.env.translation.crnt
 
     def annotate(self, node, key, value):
-        metadata.annotate(self.env, node, key, value)
+        annotate(self.env, node, key, value)
 
     def query(self, node, key):
-        return metadata.query(self.env, node, key)
+        return query(self.env, node, key)
 
     def error(self, node, msg):
         "Issue a terminating error"
@@ -184,15 +184,22 @@ class NumbaVisitorMixin(CooperativeBase):
         return node
 
     def valid_locals(self, func):
+        if self.ast is None or self.env is None:
+            return True
+
         return (func is not None and
-                getattr(func, "__numba_valid_code_object", True))
+                query(self.env, self.ast, "__numba_valid_code_object",
+                      default=True))
 
     def invalidate_locals(self, ast=None):
         ast = ast or self.ast
-        if hasattr(ast, "variable_status_tuple"):
-            del ast.variable_status_tuple
+        if query(self.env, ast, "variable_status_tuple"):
+            # Delete variable status of the function (local/free/cell status)
+            annotate(self.env, ast, variable_status_tuple=None)
+
         if self.func and ast is self.ast:
-            setattr(self.func, "__numba_valid_code_object", False)
+            # Invalidate validity of code object
+            annotate(self.env, ast, __numba_valid_code_object=False)
 
     def _visit_overload(self, node):
         assert self._overloads
@@ -416,10 +423,9 @@ def determine_variable_status(env, ast, locals_dict):
         - free variables
         - cell variables
     """
-    from numba import pipeline
-
-    if hasattr(ast, 'variable_status_tuple'):
-        return ast.variable_status_tuple
+    variable_status = query(env, ast, 'variable_status_tuple')
+    if variable_status:
+        return variable_status
 
     v = VariableFindingVisitor()
     v.visit(ast)
@@ -452,5 +458,5 @@ def determine_variable_status(env, ast, locals_dict):
 #    print ast.name, "locals", pformat(locals)
 
     # Cache state
-    ast.variable_status_tuple = locals, cellvars, freevars
+    annotate(env, ast, variable_status_tuple=(locals, cellvars, freevars))
     return locals, cellvars, freevars
