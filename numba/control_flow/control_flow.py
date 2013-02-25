@@ -859,8 +859,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
     def visit_Suite(self, node):
         if self.flow.block:
-            for stat in node.body:
-                self.visit(stat)
+            for i, stat in enumerate(node.body):
+                node.body[i] = self.visit(stat)
                 if not self.flow.block:
                     stat.is_terminator = True
                     break
