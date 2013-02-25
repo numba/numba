@@ -761,7 +761,10 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             name_assignment = self.flow.mark_assignment(
                     lhs, rhs, self.symtab[lhs.name], assignment,
                     warn_unused=warn_unused)
-        elif isinstance(lhs, ast.Attribute) and self.flow.block:
+
+        # TODO: Generate fake RHS for for iteration target variable
+        elif (isinstance(lhs, ast.Attribute) and self.flow.block and
+                  assignment is not None):
             self.flow.block.stats.append(AttributeAssignment(assignment))
 
         if self.flow.exceptions:
