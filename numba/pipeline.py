@@ -788,11 +788,17 @@ class WrapperStage(PipelineStage):
 
     def transform(self, ast, env):
         func_env = env.translation.crnt
-        if func_env.wrap:
+        if func_env.is_closure:
+            wrap = func_env.need_closure_wrapper
+        else:
+            wrap = func_env.wrap
+
+        if wrap:
             numbawrapper, lfuncwrapper, _ = (
                 func_env.translator.build_wrapper_function(get_lfunc=True))
             func_env.numba_wrapper_func = numbawrapper
             func_env.llvm_wrapper_func = lfuncwrapper
+
         return ast
 
 class ErrorReporting(PipelineStage):
