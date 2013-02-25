@@ -106,6 +106,15 @@ setup(
     },
     ext_modules = [
         Extension(
+            name = "numba.vectorize._internal",
+            sources = ["numba/vectorize/_internal.c",
+                       "numba/vectorize/_ufunc.c",
+                       "numba/vectorize/_gufunc.c"],
+            include_dirs = [numpy.get_include(), "numba/minivect/include/"],
+            depends = ["numba/vectorize/_internal.h",
+                       "numba/minivect/include/miniutils.h"]),
+
+        Extension(
             name = "numba.external.utilities.utilities",
             sources = ["numba/external/utilities/utilities.c"],
             include_dirs=[numba_include_dir],
