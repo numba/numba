@@ -464,22 +464,14 @@ class VariableTypeInferingNode(nodes.UserNode):
 class PrangeExpander(visitors.NumbaTransformer):
     """
     Rewrite 'for i in prange(...): ...' before the control flow pass.
-
-    Runs once for the outermost function and also rewrites in closures.
     """
 
     prange = 0
 
     def visit_FunctionDef(self, node):
-        if self.is_closure:
-            return node
+        if self.func_level == 0:
+            node = self.visit_func_children(node)
 
-        # Track locals dicts of inner functions
-        locals = self.locals
-        func_env = self.env.translation.make_partial_env(node, locals={})
-        self.locals = func_env.locals
-        self.visitchildren(node)
-        self.locals = locals
         return node
 
     def match_global(self, node, expected_value):

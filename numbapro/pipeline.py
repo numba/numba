@@ -117,7 +117,10 @@ insert_stage(order, 'FixASTLocations', before='ControlFlowAnalysis')
 insert_stage(order, UpdateAttributeStatements, before='TypeInfer')
 insert_stage(order, CleanupPrange, after='TypeInfer')
 
-type_infer_order = order[:order.index('TypeInfer') + 1]
+idx = order.index('TypeInfer') + 1
+type_infer_order = order[:idx]
+compile_order = order[idx:]
+
 
 #print order
 
@@ -142,6 +145,11 @@ class NumbaproFunctionEnvironment(environment.FunctionEnvironment):
         super(NumbaproFunctionEnvironment, self).init(*args, **kws)
         self.kill_attribute_assignments = set()
 
+    def getstate(self):
+        state = super(NumbaproFunctionEnvironment, self).getstate()
+        state.update(kill_attribute_assignments=self.kill_attribute_assignments)
+        return state
+
 
 class NumbaproEnvironment(environment.NumbaEnvironment):
     """
@@ -157,6 +165,7 @@ class NumbaproEnvironment(environment.NumbaEnvironment):
         self.pipelines.update({
             self.default_pipeline : pipeline.ComposedPipelineStage(order),
             'type_infer' : pipeline.ComposedPipelineStage(type_infer_order),
+            'compile' : pipeline.ComposedPipelineStage(compile_order),
         })
 
 

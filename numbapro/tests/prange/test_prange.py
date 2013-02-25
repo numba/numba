@@ -207,5 +207,7 @@ if __name__ == '__main__':
 #    simple_prange_private()
 #    simple_prange_lastprivate()
 #    simple_prange_reduction()
+#    a = np.arange(100).reshape(10, 10)
+#    test_sum2d(a)
 #    test_prange_in_closure(2.0)()
     test()
