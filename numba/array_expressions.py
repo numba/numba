@@ -1,7 +1,8 @@
 import ast
 
+from numba import templating
 from numba import error, pipeline, nodes, ufunc_builder
-from numba.minivect import specializers, miniast
+from numba.minivect import specializers, miniast, miniutils
 from numba import utils, functions
 from numba import visitors
 
@@ -269,9 +270,10 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         variables = [b.variable(name_node.type, "op%d" % i)
                      for i, name_node in enumerate([lhs] + operands)]
         miniargs = map(b.funcarg, variables)
-        body = minivectorize.build_kernel_call(lfunc, signature, miniargs, b)
+        body = miniutils.build_kernel_call(lfunc.name, signature, miniargs, b)
 
-        minikernel = minivectorize.build_minifunction(body, miniargs, b)
+        minikernel = context.astbuilder.function_from_numpy(
+            templating.temp_name("array_expression"), body, miniargs, b)
         lminikernel, ctypes_kernel = context.run_simple(
             minikernel, specializers.StridedSpecializer)
 
