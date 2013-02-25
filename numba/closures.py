@@ -161,10 +161,11 @@ def check_signature_decorator(visit_func, decorator):
     else:
         err_decorator(decorator)
 
-def process_decorators(visit_func, node):
+def process_decorators(env, visit_func, node):
     if not node.decorator_list:
-        if hasattr(node, 'func_signature'):
-            return node.func_signature
+        func_env = env.translation.get_env(node)
+        if func_env:
+            return func_env.func_signature
 
         raise error.NumbaError(
             node, "Closure must be decorated with 'jit' or 'autojit'")

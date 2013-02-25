@@ -467,8 +467,9 @@ class TranslationEnvironment(object):
             else:
                 state = func_env.getstate()
 
-            state.update(kwds)
-            func_env.init(self, func, ast, func_signature, **state)
+            state.update(kwds, func=func, ast=ast,
+                               func_signature=func_signature)
+            func_env.init(self, **state)
 
         return func_env
 

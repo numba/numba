@@ -556,7 +556,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
         if self.function_level == 0:
             return self.visit_func_children(node)
 
-        signature = closures.process_decorators(self.visit, node)
+        signature = closures.process_decorators(self.env, self.visit, node)
         type = typesystem.ClosureType(signature)
         self.symtab[node.name] = Variable(type, is_local=True)
 
