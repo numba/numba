@@ -3,8 +3,6 @@ import textwrap
 
 from collections import defaultdict
 from numba import *
-from . import naming
-from .minivect import minitypes
 import logging
 from numba import numbawrapper
 

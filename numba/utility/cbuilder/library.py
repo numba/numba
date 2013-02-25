@@ -1,8 +1,4 @@
-import os
-
 import llvm.core
-
-from numba.utility.cbuilder import numbacdef
 
 def declare(numba_cdef, env, global_module):
     """

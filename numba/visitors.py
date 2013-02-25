@@ -1,5 +1,4 @@
 import ast
-from pprint import pprint, pformat
 import ast as ast_module
 try:
     import __builtin__ as builtins

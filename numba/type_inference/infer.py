@@ -1,36 +1,29 @@
 import ast
-import math
 import cmath
-import copy
-import opcode
 import types
+import logging
 import __builtin__ as builtins
 from functools import reduce
 
 import numba
 from numba import *
-from numba import error, transforms, control_flow, visitors, nodes
+from numba import error, control_flow, visitors, nodes
 from numba import oset, odict
 from numba.specialize.mathcalls import is_math_function
 from numba.type_inference import module_type_inference, infer_call, deferred
-from numba.minivect import minierror, minitypes
-from numba import translate, utils, typesystem
+from numba.minivect import minitypes
+from numba import utils, typesystem
 from numba.control_flow import ssa
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
 from numba import closures as closures
 from numba.support import numpy_support
-from numba.type_inference.modules import mathmodule
 
-from numba import stdio_util, function_util
 from numba.typesystem import is_obj, promote_closest, get_type
 from numba.utils import dump
 
 import llvm.core
 import numpy
-import numpy as np
-
-import logging
 
 debug = False
 #debug = True
@@ -39,6 +32,7 @@ logger = logging.getLogger(__name__)
 #logger.setLevel(logging.INFO)
 if debug:
     logger.setLevel(logging.DEBUG)
+
 
 def no_keywords(node):
     if node.keywords or node.starargs or node.kwargs:

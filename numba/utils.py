@@ -77,6 +77,7 @@ class NumbaContext(miniast.LLVMContext):
 
     shape_type = minitypes.npy_intp.pointer()
     strides_type = shape_type
+    optimize_broadcasting = False
 
     def init(self):
         self.astbuilder = self.astbuilder_cls(self)

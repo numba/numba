@@ -1,10 +1,7 @@
 import ast
-import ctypes
 
 import llvm
 import llvm.core as lc
-import llvm.passes as lp
-import llvm.ee as le
 
 from numba.llvm_types import _int1, _int32, _LLVMCaster
 from numba.multiarray_api import MultiarrayAPI # not used
@@ -15,8 +12,7 @@ from numba import *
 
 from numba.codegen.debug import *
 from numba.codegen.codeutils import llvm_alloca
-from numba.codegen import (coerce, complexsupport, refcounting, llvmwrapper,
-                           llvmcontext)
+from numba.codegen import coerce, complexsupport, refcounting, llvmwrapper
 from numba.codegen.llvmcontext import LLVMContextManager
 
 from numba import visitors, nodes, llvm_types, utils, function_util

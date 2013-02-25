@@ -4,15 +4,12 @@ Utility module containing common (to Numba) LLVM types.
 '''
 # ______________________________________________________________________
 
-import sys
 import ctypes
 import struct as struct_
-import platform
 import llvm.core as lc
 
 from numba import utils
 from numba.typedefs import _trace_refs_, PyObject_HEAD
-from numba.minivect.minitypes import *
 
 import logging
 

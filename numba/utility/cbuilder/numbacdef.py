@@ -1,5 +1,5 @@
 import llvm.core
-from llvm_cbuilder import builder, shortnames
+from llvm_cbuilder import builder
 
 from_numba = builder.CStruct.from_numba_struct
 

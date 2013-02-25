@@ -26,7 +26,7 @@ def unellipsify(node, slices, subscript_node):
 
     if not type.is_array:
         assert type.is_object
-        return minitypes.object_, node
+        return object_, node
 
     if (len(slices) == 1 and nodes.is_constant_index(slices[0]) and
             slices[0].value.pyval is Ellipsis):
@@ -63,8 +63,7 @@ def unellipsify(node, slices, subscript_node):
             # TODO: Coerce all object operands to integer indices?
             # TODO: (This will break indexing with the Ellipsis object or
             # TODO:  with slice objects that we couldn't infer)
-            return minitypes.object_, nodes.CoercionNode(node,
-                                                         minitypes.object_)
+            return object_, nodes.CoercionNode(node, object_)
 
     # Reverse our reversed processed list of slices
     result.reverse()
@@ -86,6 +85,6 @@ def unellipsify(node, slices, subscript_node):
     elif result_ndim == 0:
         result_type = result_dtype
     else:
-        result_type = minitypes.object_
+        result_type = object_
 
     return result_type, node
