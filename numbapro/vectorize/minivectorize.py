@@ -12,7 +12,8 @@ from numba.minivect import (miniast,
                             minitypes,
                             minierror,
                             specializers as minispecializers,
-                            ctypes_conversion)
+                            ctypes_conversion,
+                            miniutils)
 from numba import decorators, functions
 from numba import environment
 
@@ -89,22 +90,11 @@ def fallback_vectorize(fallback_cls, pyfunc, signatures, dispatcher, **kw):
     ufunc = vectorizer.build_ufunc(dispatcher)
     return ufunc, vectorizer._get_lfunc_list()
 
-def build_kernel_call(lfunc, signature, miniargs, b=b):
+def build_kernel_call(lfunc, signature, miniargs, builder=b):
     """
     Call the kernel `lfunc` in a bunch of loops with scalar arguments.
     """
-    # Build the kernel function signature
-    funcname = b.funcname(signature, lfunc.name, is_external=False)
-
-    # Generate 'lhs[i, j] = kernel(A[i, j], B[i, j])'
-    lhs = miniargs[0].variable
-    kernel_args = [arg.variable for arg in miniargs[1:]]
-    funccall = b.funccall(funcname, kernel_args, inline=True)
-    assmt = b.assign(lhs, funccall)
-    if lhs.type.is_object:
-        assmt = b.stats(b.decref(lhs), assmt)
-
-    return assmt
+    return miniutils.build_kernel_call(lfunc.name, signature, miniargs, builder)
 
 def build_minifunction(ast, miniargs, b=b):
     """
@@ -336,6 +326,10 @@ class MiniVectorize(object):
 
         return dtype_args, function_pointers, result_dtype
 
+    def expr_name(self):
+        name = 'expr%d' % self.num_exprs
+        self.num_exprs += name
+
     def minivect(self, asts, parallel):
         """
         Given a bunch of specialized miniasts, return a ufunc object that
@@ -345,7 +339,8 @@ class MiniVectorize(object):
 
         ufuncs = {}
         for mapper, dimensionality, ast in asts:
-            minifunc = build_minifunction(ast, mapper.miniargs)
+            minifunc = b.function_from_numpy(self.expr_name(), ast,
+                                             mapper.miniargs)
             self._debug(minifunc)
             codes = specialize(minifunc)
             dtype_args, function_pointers, result_dtype = \
