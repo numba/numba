@@ -19,6 +19,7 @@ from numba.control_flow import ssa
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
 from numba import closures as closures
+from numba.support import numpy_support
 from numba.type_inference.modules import mathmodule
 
 from numba import stdio_util, function_util
@@ -45,106 +46,7 @@ def no_keywords(node):
             node, "Function call does not support keyword or star arguments")
 
 
-class NumpyMixin(object):
-    """
-    Mixing that deals with NumPy array slicing.
-
-        - normalize ellipses
-        - recognize newaxes
-        - track how contiguity is affected (C or Fortran)
-    """
-
-    # TODO: Replace uses of these methods with the respective functions
-
-    def _is_constant_index(self, node):
-        return nodes.is_constant_index(node)
-
-    def _is_newaxis(self, node):
-        return nodes.is_newaxis(node)
-
-    def _is_ellipsis(self, node):
-        return nodes.is_ellipsis(node)
-
-    def _unellipsify(self, node, slices, subscript_node):
-        """
-        Given an array node `node`, process all AST slices and create the
-        final type:
-
-            - process newaxes (None or numpy.newaxis)
-            - replace Ellipsis with a bunch of ast.Slice objects
-            - process integer indices
-            - append any missing slices in trailing dimensions
-        """
-        type = node.variable.type
-
-        if not type.is_array:
-            assert type.is_object
-            return minitypes.object_, node
-
-        if (len(slices) == 1 and self._is_constant_index(slices[0]) and
-                slices[0].value.pyval is Ellipsis):
-            # A[...]
-            return type, node
-
-        result = []
-        seen_ellipsis = False
-
-        # Filter out newaxes
-        newaxes = [newaxis for newaxis in slices if self._is_newaxis(newaxis)]
-        n_indices = len(slices) - len(newaxes)
-
-        full_slice = ast.Slice(lower=None, upper=None, step=None)
-        full_slice.variable = Variable(typesystem.SliceType())
-        ast.copy_location(full_slice, slices[0])
-
-        # process ellipses and count integer indices
-        indices_seen = 0
-        for slice_node in slices[::-1]:
-            slice_type = slice_node.variable.type
-            if slice_type.is_ellipsis:
-                if seen_ellipsis:
-                    result.append(full_slice)
-                else:
-                    nslices = type.ndim - n_indices + 1
-                    result.extend([full_slice] * nslices)
-                    seen_ellipsis = True
-            elif (slice_type.is_slice or slice_type.is_int or
-                  self._is_newaxis(slice_node)):
-                indices_seen += slice_type.is_int
-                result.append(slice_node)
-            else:
-                # TODO: Coerce all object operands to integer indices?
-                # TODO: (This will break indexing with the Ellipsis object or
-                # TODO:  with slice objects that we couldn't infer)
-                return minitypes.object_, nodes.CoercionNode(node,
-                                                             minitypes.object_)
-
-        # Reverse our reversed processed list of slices
-        result.reverse()
-
-        # append any missing slices (e.g. a2d[:]
-        result_length = len(result) - len(newaxes)
-        if result_length < type.ndim:
-            nslices = type.ndim - result_length
-            result.extend([full_slice] * nslices)
-
-        subscript_node.slice = ast.ExtSlice(result)
-        ast.copy_location(subscript_node.slice, slices[0])
-
-        # create the final array type and set it in value.variable
-        result_dtype = node.variable.type.dtype
-        result_ndim = node.variable.type.ndim + len(newaxes) - indices_seen
-        if result_ndim > 0:
-            result_type = result_dtype[(slice(None),) * result_ndim]
-        elif result_ndim == 0:
-            result_type = result_dtype
-        else:
-            result_type = minitypes.object_
-
-        return result_type, node
-
-
-class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
+class TypeInferer(visitors.NumbaTransformer):
     """
     Type inference. Initialize with a minivect context, a Python ast,
     and a function type with a given or absent, return type.
@@ -1064,8 +966,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
                 deferred_type.update()
                 result_type = deferred_type
             else:
-                result_type, node.value = self._unellipsify(
-                                    node.value, slices, node)
+                result = numpy_support.unellipsify(node.value, slices, node)
+                result_type, node.value = result
 
         elif value_type.is_carray:
             # Handle C array indexing
