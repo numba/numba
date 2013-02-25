@@ -117,6 +117,8 @@ insert_stage(order, 'FixASTLocations', before='ControlFlowAnalysis')
 insert_stage(order, UpdateAttributeStatements, before='TypeInfer')
 insert_stage(order, CleanupPrange, after='TypeInfer')
 
+type_infer_order = order[:order.index('TypeInfer') + 1]
+
 #print order
 
 #----------------------------------------------------------------------------
@@ -136,8 +138,8 @@ class NumbaproFunctionEnvironment(environment.FunctionEnvironment):
         "those variables. So we need type inference to be properly ordered, "
         "and not look at the attributes first.")
 
-    def __init__(self, *args, **kws):
-        super(NumbaproFunctionEnvironment, self).__init__(*args, **kws)
+    def init(self, *args, **kws):
+        super(NumbaproFunctionEnvironment, self).init(*args, **kws)
         self.kill_attribute_assignments = set()
 
 
@@ -148,15 +150,17 @@ class NumbaproEnvironment(environment.NumbaEnvironment):
 
     FunctionEnvironment = NumbaproFunctionEnvironment
 
+    def __init__(self, name, *args, **kws):
+        self.default_pipeline = 'numbapro'
+        super(NumbaproEnvironment, self).__init__(name, *args, **kws)
+
+        self.pipelines.update({
+            self.default_pipeline : pipeline.ComposedPipelineStage(order),
+            'type_infer' : pipeline.ComposedPipelineStage(type_infer_order),
+        })
+
 
 numba_env = environment.NumbaEnvironment.get_environment()
-
-create_numbapro_pipeline = partial(ComposedPipelineStage, order)
-
 numbapro_env = NumbaproEnvironment('numbapro')
-numbapro_env.get_or_add_pipeline('numbapro', create_numbapro_pipeline)
-numbapro_env.default_pipeline = 'numbapro'
-
 numbapro_env.context.cbuilder_library = numba_env.context.cbuilder_library
-
 env = numbapro_env

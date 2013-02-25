@@ -11,22 +11,29 @@ import numpy as np
 def simple_prange_shared():
     """
     >>> simple_prange_shared()
-    20
+    20L
     """
+    result = np.empty(1, dtype=np.int64)
     shared = 20
+
     for i in numba.prange(1):
-        print shared
+        result[0] = shared
+
+    return result[0]
 
 @autojit(warn=False)
 def simple_prange_private():
     """
     >>> simple_prange_private()
-    10
+    10L
     """
+    result = np.empty(1, dtype=np.int64)
     var = 20
     for i in numba.prange(1):
         var = 10
-        print var
+        result[0] = var
+
+    return result[0]
 
 @autojit(warn=False)
 def simple_prange_lastprivate():
@@ -199,5 +206,5 @@ if __name__ == '__main__':
 #    simple_prange_shared()
 #    simple_prange_private()
 #    simple_prange_lastprivate()
-    simple_prange_reduction()
-#    test()
+#    simple_prange_reduction()
+    test()
