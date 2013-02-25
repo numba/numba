@@ -24,7 +24,7 @@ def is_elementwise_assignment(context, assmnt_node):
     return False
 
 
-class ArrayExpressionRewrite(visitors.NumbaTransformer, infer.NumpyMixin):
+class ArrayExpressionRewrite(visitors.NumbaTransformer):
     """
     Find element-wise expressions and run ElementalMapper to turn it into
     a minivect AST or a ufunc.
@@ -110,7 +110,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer, infer.NumpyMixin):
         self.is_slice_assign = is_store and node.type.is_array
 
         if is_store:
-            if self._is_ellipsis(node.slice):
+            if nodes.is_ellipsis(node.slice):
                 return node.value
         elif node.value.type.is_array and node.type.is_array:
             node = array_slicing.rewrite_slice(node, self.nopython)
@@ -201,12 +201,6 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
     CAN be used in a nopython context
     """
 
-    def __init__(self, context, func, ast, llvm_module, **kwds):
-        super(ArrayExpressionRewrite, self).__init__(context, func, ast, **kwds)
-        self.array_expr_context = NumbaproStaticArgsContext()
-        self.llvm_module = llvm_module
-        self.array_expr_context.llvm_module = llvm_module
-
     def array_attr(self, node, attr):
         # Perform a low-level bitcast from object to an array type
         # array = nodes.CoercionNode(node, float_[:])
@@ -233,14 +227,13 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
 
         # Compile ufunc scalar kernel with numba
         ast.fix_missing_locations(ufunc_ast)
-        p, (_, _, _) = pipeline.run_pipeline(
-            self.context, None, ufunc_ast, signature, codegen=True)
+        func_env, (_, _, _) = pipeline.run_pipeline2(
+            self.env, None, ufunc_ast, signature,
+            function_globals={},
+        )
 
         # Manual linking
-        lfunc_name = p.translator.lfunc.name
-        lfunc_type = p.translator.lfunc.type
-        self.llvm_module.link_in(p.translator.lfunc.module)
-        lfunc = self.llvm_module.get_function_named(lfunc_name)
+        lfunc = func_env.lfunc
 
         # print lfunc
         operands = ufunc_builder.operands
@@ -268,7 +261,8 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
                                           lhs_type.is_f_contig).cloneable
 
         # Build minivect wrapper kernel
-        context = self.array_expr_context
+        context = NumbaproStaticArgsContext()
+        context.llvm_module = self.env.llvm_context.module
         # context.debug = True
         context.optimize_broadcasting = False
         b = context.astbuilder

@@ -1,7 +1,6 @@
-import numbapro
 from numbapro.vectorize import GUVectorize
-import numba
-from numba import *
+import numbapro as numba
+from numbapro import *
 
 import numpy as np
 import numpy.core.umath_tests as ut
