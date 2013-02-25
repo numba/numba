@@ -2,6 +2,7 @@ import ast
 
 import llvm
 import llvm.core as lc
+import llvm.core
 
 from numba.llvm_types import _int1, _int32, _LLVMCaster
 from numba.multiarray_api import MultiarrayAPI # not used
@@ -23,6 +24,10 @@ from numba.utils import dump
 from numba import naming, metadata
 from numba.functions import keep_alive
 from numba.control_flow import ssa
+from numba.support.numpy_support import sliceutils
+
+from llvm_cbuilder import shortnames as C
+
 
 _int32_zero = lc.Constant.int(_int32, 0)
 
@@ -1690,6 +1695,150 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_ExpressionNode(self, node):
         self.visitlist(node.stmts)
         return self.visit(node.expr)
+
+    #------------------------------------------------------------------------
+    # Array Slicing
+    #------------------------------------------------------------------------
+
+    def declare(self, cbuilder_func):
+        func_def = self.context.cbuilder_library.declare(
+            cbuilder_func,
+            self.env,
+            self.llvm_module)
+        return func_def
+
+    def visit_NativeSliceNode(self, node):
+        """
+        Slice an array. Allocate fake PyArray and allocate shape/strides
+        """
+        array_ltype = PyArray.llvm_type()
+        shape_ltype = npy_intp.pointer().to_llvm(self.context)
+
+        # Create PyArrayObject accessors
+        view = self.visit(node.value)
+        view_accessor = ndarray_helpers.PyArrayAccessor(self.builder, view)
+
+        if node.nopython:
+            view_copy = self.llvm_alloca(array_ltype)
+            self.builder.store(self.builder.load(view), view_copy)
+            view_copy_accessor = ndarray_helpers.PyArrayAccessor(self.builder,
+                                                                 view_copy)
+        else:
+            class FakePyArrayAccessor(object):
+                pass
+            view_copy_accessor = FakePyArrayAccessor()
+
+        # Stack-allocate shape/strides and update accessors
+        shape = self.alloca(node.shape_type)
+        strides = self.alloca(node.shape_type)
+
+        view_copy_accessor.data = view_accessor.data
+        view_copy_accessor.shape = self.builder.bitcast(shape, shape_ltype)
+        view_copy_accessor.strides = self.builder.bitcast(strides, shape_ltype)
+
+        # Patch and visit all children
+        for subslice in node.subslices:
+            subslice.view_accessor = view_accessor
+            subslice.view_copy_accessor = view_copy_accessor
+
+        # print ast.dump(node)
+        self.visitlist(node.subslices)
+
+        # Return fake or actual array
+        if node.nopython:
+            return view_copy
+        else:
+            # Update LLVMValueRefNode fields, build actual numpy array
+            void_p = void.pointer().to_llvm(self.context)
+            node.dst_data.llvm_value = self.builder.bitcast(
+                                    view_copy_accessor.data, void_p)
+            node.dst_shape.llvm_value = view_copy_accessor.shape
+            node.dst_strides.llvm_value = view_copy_accessor.strides
+            return self.visit(node.build_array_node)
+
+    def visit_SliceSliceNode(self, node):
+        "Handle slicing"
+        start, stop, step = node.start, node.stop, node.step
+
+        if start is not None:
+            start = self.visit(node.start)
+        if stop is not None:
+            stop = self.visit(node.stop)
+        if step is not None:
+            step = self.visit(node.step)
+
+        slice_func_def = sliceutils.SliceArray(self.context,
+                                               start is not None,
+                                               stop is not None,
+                                               step is not None)
+
+        slice_func = slice_func_def(self.llvm_module)
+        slice_func.linkage = llvm.core.LINKAGE_LINKONCE_ODR
+
+        data = node.view_copy_accessor.data
+        in_shape = node.view_accessor.shape
+        in_strides = node.view_accessor.strides
+        out_shape = node.view_copy_accessor.shape
+        out_strides = node.view_copy_accessor.strides
+        src_dim = llvm_types.constant_int(node.src_dim)
+        dst_dim = llvm_types.constant_int(node.dst_dim)
+
+        default = llvm_types.constant_int(0, C.npy_intp)
+        args = [data, in_shape, in_strides, out_shape, out_strides,
+                start or default, stop or default, step or default,
+                src_dim, dst_dim]
+        data_p = self.builder.call(slice_func, args)
+        node.view_copy_accessor.data = data_p
+
+        return None
+
+    def visit_SliceDimNode(self, node):
+        "Handle indexing and newaxes in a slice operation"
+        acc_copy = node.view_copy_accessor
+        acc = node.view_accessor
+
+        index_func = self.declare(sliceutils.IndexAxis)
+        newaxis_func = self.declare(sliceutils.NewAxis)
+
+        if node.type.is_int:
+            value = self.visit(nodes.CoercionNode(node.subslice, npy_intp))
+            args = [acc_copy.data, acc.shape, acc.strides,
+                    llvm_types.constant_int(node.src_dim, C.npy_intp), value]
+            result = self.builder.call(index_func, args)
+            acc_copy.data = result
+        else:
+            args = [acc_copy.shape, acc_copy.strides,
+                    llvm_types.constant_int(node.dst_dim)]
+            self.builder.call(newaxis_func, args)
+
+        return None
+
+    def visit_BroadcastNode(self, node):
+        shape = self.alloca(node.shape_type)
+        shape = self.builder.bitcast(shape, node.type.to_llvm(self.context))
+
+        # Initialize shape to ones
+        default_extent = llvm.core.Constant.int(C.npy_intp, 1)
+        for i in range(node.array_type.ndim):
+            dst = self.builder.gep(shape, [llvm.core.Constant.int(C.int, i)])
+            self.builder.store(default_extent, dst)
+
+        # Obtain broadcast function
+        func_def = self.declare(sliceutils.Broadcast)
+
+        for op in node.operands:
+            op_result = self.visit(op)
+            acc = ndarray_helpers.PyArrayAccessor(self.builder, op_result)
+            if op.type.is_array:
+                args = [shape, acc.shape, acc.strides,
+                        llvm_types.constant_int(node.array_type.ndim),
+                        llvm_types.constant_int(op.type.ndim)]
+                lresult = self.builder.call(func_def, args)
+                node.broadcast_retvals[op].llvm_value = lresult
+
+        self.visitlist(node.check_errors)
+
+        return shape
 
     #------------------------------------------------------------------------
     # User nodes

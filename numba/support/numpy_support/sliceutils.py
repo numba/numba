@@ -224,7 +224,7 @@ class Broadcast(NumbaCDefinition):
                     __pyx_err_extents(i, dst_shape[i], input_shape[i])
     """
 
-    _name_ = "broadcast"
+    _name_ = "__numba_util_broadcast"
     _argtys_ = [
         ('dst_shape', C.pointer(C.npy_intp)),
         ('src_shape', C.pointer(C.npy_intp)),
