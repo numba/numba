@@ -6,6 +6,9 @@ from numbapro import cuda
 import support
 #import logging; logging.getLogger('numbapro').setLevel(1)
 
+def cu_abs(A):
+    i = cuda.grid(1)
+    A[i] = abs(A[i])
 
 def cu_sqrt(A):
     i = cuda.grid(1)
@@ -80,7 +83,8 @@ class TestCudaMath(support.CudaTestCase):
         self._template_f4f4(cu_pow, np.power)
         self._template_f8f8(cu_pow, np.power)
 
-
+    def test_abs(self):
+        self._template_f4f4(cu_abs, np.abs)
 
 if __name__ == '__main__':
     unittest.main()
