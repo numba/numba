@@ -41,6 +41,22 @@ from . import treepath
 ### Convenience utilities
 #
 
+def build_kernel_call(func_name, signature, miniargs, builder):
+    """
+    Call the kernel `lfunc` in a bunch of loops with scalar arguments.
+    """
+    # Build the kernel function signature
+    funcname = builder.funcname(signature, func_name, is_external=False)
+
+    # Generate 'lhs[i, j] = kernel(A[i, j], B[i, j])'
+    lhs = miniargs[0].variable
+    kernel_args = [arg.variable for arg in miniargs[1:]]
+    funccall = builder.funccall(funcname, kernel_args, inline=True)
+    assmt = builder.assign(lhs, funccall)
+    if lhs.type.is_object:
+        assmt = builder.stats(builder.decref(lhs), assmt)
+
+    return assmt
 
 def specialize(context, specializer_cls, ast, print_tree=False):
     "Specialize an AST with given specializer and compile"
