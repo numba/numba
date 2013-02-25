@@ -117,7 +117,7 @@ insert_stage(order, 'FixASTLocations', before='ControlFlowAnalysis')
 insert_stage(order, UpdateAttributeStatements, before='TypeInfer')
 insert_stage(order, CleanupPrange, after='TypeInfer')
 
-print order
+#print order
 
 #----------------------------------------------------------------------------
 # Create Environment

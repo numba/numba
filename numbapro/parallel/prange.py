@@ -204,7 +204,7 @@ def rewrite_prange(env, prange_node, target, locals_dict, closures_dict):
 
     num_threads_node = nodes.const(num_threads, Py_ssize_t)
 
-    invoke = InvokeAndJoinThreads(contexts=contexts.node,
+    invoke = InvokeAndJoinThreads(env, contexts=contexts.node,
                                   func_def_name=func_def.name,
                                   struct_type=struct_type,
                                   target_name=target_name,
@@ -356,6 +356,10 @@ class InvokeAndJoinThreads(nodes.UserNode):
 
     _fields = ['contexts', 'num_threads']
 
+    def __init__(self, env, **kwargs):
+        super(InvokeAndJoinThreads, self).__init__(**kwargs)
+        self.env = env
+
     def infer_types(self, type_inferer):
         type_inferer.visitchildren(self)
         return self
@@ -375,8 +379,8 @@ class InvokeAndJoinThreads(nodes.UserNode):
             self.num_threads,
             codegen.llvm_module)
 
-        kernel_wrapper = nodes.LLVMCBuilderNode(KernelWrapper, None)
-        run_threadpool = nodes.LLVMCBuilderNode(RunThreadPool, None,
+        kernel_wrapper = nodes.LLVMCBuilderNode(self.env, KernelWrapper, None)
+        run_threadpool = nodes.LLVMCBuilderNode(self.env, RunThreadPool, None,
                                                 dependencies=[kernel_wrapper])
         lfunc_run = codegen.visit(run_threadpool)
         return lfunc_run
