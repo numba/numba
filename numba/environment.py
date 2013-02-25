@@ -607,7 +607,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     default_pipeline = TypedProperty(
         str,
         'Default entry point name.  Used to index into the "pipelines" map.',
-        'numba')
+        default='numba')
 
     context = TypedProperty(
         NumbaContext,
