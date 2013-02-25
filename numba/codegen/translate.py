@@ -680,6 +680,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         result = self.visit(node.value)
         value_is_reference = node.value.type.is_reference
 
+        # print "referencing", node.struct_type, node.field_idx, node.attr
+
         # TODO: TBAA for loads
         if isinstance(node.ctx, ast.Load):
             if value_is_reference:
