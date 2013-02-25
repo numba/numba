@@ -1,4 +1,5 @@
 from numba.nodes import *
+from numba import functions
 
 class LLVMValueRefNode(ExprNode):
     """
@@ -26,7 +27,9 @@ class LLVMCBuilderNode(UserNode):
 
     _fields = ["dependencies"]
 
-    def __init__(self, cbuilder_cdefinition, signature, dependencies=None):
+    def __init__(self, env, cbuilder_cdefinition, signature, dependencies=None):
+        self.env = env
+        self.llvm_context = env.llvm_context
         self.cbuilder_cdefinition = cbuilder_cdefinition
         self.type = signature
         self.dependencies = dependencies or []
@@ -36,18 +39,15 @@ class LLVMCBuilderNode(UserNode):
         return self
 
     def codegen(self, codegen):
+        func_env = self.env.translation.crnt
+
         dependencies = codegen.visitlist(self.dependencies)
         cdef = self.cbuilder_cdefinition(self.dependencies, dependencies)
-        lfunc = cdef.define(codegen.llvm_module) #, optimize=False)
 
-        from numba import codegen
-        self.llvm_context = codegen.LLVMContextManager()
+        self.lfunc = cdef.define(func_env.llvm_module) #, optimize=False)
+        functions.keep_alive(func_env.func, self.lfunc)
 
-        # lfunc = self.llvm_context.link(lfunc)
-        self.lfunc = lfunc
-        codegen.keep_alive(lfunc)
-
-        return lfunc
+        return self.lfunc
 
     @property
     def pointer(self):
