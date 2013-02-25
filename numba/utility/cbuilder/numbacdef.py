@@ -58,4 +58,3 @@ class NumbaCDefinition(builder.CDefinition):
         Set the cbuilder signature through _argtys_ and optionally the
         _retty_ attributes.
         """
-        raise NotImplementedError
