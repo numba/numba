@@ -26,7 +26,7 @@ def call_cffi_func(func, value):
 
 def test_cffi_calls():
     # Test printf for nopython and no segfault
-    ffi.cdef("int printf(char *, ...);")
+    ffi.cdef("int printf(char *, ...);", override=True)
     lib = ffi.dlopen(None)
     printf = lib.printf
     call_cffi_func(printf, "Hello world!\n")
