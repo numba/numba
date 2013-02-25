@@ -17,7 +17,7 @@
 """
 
 import numbapro as numba
-from numba import *
+from numbapro import *
 import numpy as np
 
 import nose.tools
@@ -71,6 +71,7 @@ def last_value():
     print i
 
 if __name__ == '__main__':
+#    empty_assign()
 #    empty_assign()
     import doctest
     doctest.testmod()
