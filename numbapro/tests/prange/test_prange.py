@@ -3,27 +3,58 @@ import numbapro as numba
 
 import numpy as np
 
-@autojit(warn=False)
-def prange_reduction():
-    """
-    >>> prange_reduction()
-    45.0
-    """
-    sum = 0.0
-    for i in numba.prange(10):
-        sum += i
-    return sum
+#----------------------------------------------------------------------------
+# Simple isolated tests
+#----------------------------------------------------------------------------
 
 @autojit(warn=False)
-def prange_reduction2():
+def simple_prange_shared():
     """
-    >>> prange_reduction2()
-    49999995000000.0
+    >>> simple_prange_shared()
+    20
     """
-    sum = 0.0
-    for i in numba.prange(10000000):
-        sum += i
-    return sum
+    shared = 20
+    for i in numba.prange(1):
+        print shared
+
+@autojit(warn=False)
+def simple_prange_private():
+    """
+    >>> simple_prange_private()
+    10
+    """
+    var = 20
+    for i in numba.prange(1):
+        var = 10
+        print var
+
+@autojit(warn=False)
+def simple_prange_lastprivate():
+    """
+    >>> simple_prange_lastprivate()
+    10
+    """
+    var = 20
+    for i in numba.prange(1):
+        var = 10
+
+    print var
+
+@autojit(warn=False)
+def simple_prange_reduction():
+    """
+    >>> simple_prange_reduction()
+    15
+    """
+    var = 10
+    for i in numba.prange(1):
+        var += 5
+
+    print var
+
+#----------------------------------------------------------------------------
+# Error Tests
+#----------------------------------------------------------------------------
 
 @autojit(warn=False)
 def prange_reduction_error():
@@ -39,6 +70,21 @@ def prange_reduction_error():
         sum += i
 
     sum = 0.0
+    return sum
+
+#----------------------------------------------------------------------------
+# Advanced Tests
+#----------------------------------------------------------------------------
+
+@autojit(warn=False)
+def prange_reduction2():
+    """
+    >>> prange_reduction2()
+    49999995000000.0
+    """
+    sum = 0.0
+    for i in numba.prange(10000000):
+        sum += i
     return sum
 
 @autojit(warn=False)
@@ -150,9 +196,8 @@ def test():
     numba.testmod()
 
 if __name__ == '__main__':
-    # prange_reduction_error()
-
-    a = np.arange(100).reshape(10, 10)
-    print test_sum2d(a)
-    # print test_sum2d(a.astype(np.complex128))
-    test()
+#    simple_prange_shared()
+#    simple_prange_private()
+#    simple_prange_lastprivate()
+    simple_prange_reduction()
+#    test()

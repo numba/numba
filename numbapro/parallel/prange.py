@@ -145,6 +145,9 @@ for $i in range({{num_threads}}):
     $temp_struct.__numba_step = {{step}}
     $contexts[$i] = $temp_struct
 
+    # print "temp struct", $temp_struct.__numba_start, \
+    #       $temp_struct.__numba_stop, {{step}}, $nsteps
+
 # Undo any truncation, don't use $i here, range() doesn't
 # have py semantics yet
 $contexts[{{num_threads}} - 1].__numba_stop = {{stop}}
@@ -651,17 +654,12 @@ def get_threadpool_funcs(context, context_struct_type, target_name,
             Call the closure with the closure scope and context arguments.
             We don't directly call the lfunc since there are linkage issues.
             """
-            # worker = CFunc(self, lfunc)
-
             if signature.args[0].is_closure_scope:
                 llvm_object_type = object_.to_llvm(context)
                 closure_scope = context_getfield('closure_scope')
                 closure_scope = closure_scope.cast(llvm_object_type)
-                # print context_struct_p, lfunc.type
-                # worker(closure_scope, context_struct_p)
                 args = [closure_scope, context_struct_p]
             else:
-                # worker(context_struct_p)
                 args = [context_struct_p]
 
             # Get the LLVM arguments
@@ -695,6 +693,7 @@ def get_threadpool_funcs(context, context_struct_type, target_name,
                 with ifelse.then():
                     nsteps += self.constant(C.npy_intp, 1)
 
+            # self.debug("start", start, "stop", stop, "step", step)
             with self.for_range(nsteps) as (loop, i):
                 getattr(context_struct, target_name).assign(start)
                 self.dispatch(context_struct_p, context_getfield,
