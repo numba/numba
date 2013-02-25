@@ -1,3 +1,19 @@
+Version 0.7
+-----------
+* Experimental Python 3 support
+* Support for typed containers
+    * typed lists and tuples
+* Support for iteration over objects
+* Support object comparisons
+* Preliminary CFFI support
+    * Jit calls to CFFI functions (passed into autojit functions)
+    * TODO: Recognize ffi_lib.my_func attributes
+* Allow declaring extension attribute types as through class attributes
+* Support for type casting in Python
+    * Get the same semantics with or without numba compilation
+* Friendlier error reporting
+* Internal improvements
+
 Version 0.6.1
 --------------
 * Support for bitwise operations
