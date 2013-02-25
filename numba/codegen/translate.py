@@ -1474,6 +1474,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self.llvm_module.get_global_variable_named("Py_None")
 
     def visit_NativeCallNode(self, node, largs=None):
+        # print node.py_func, node.llvm_func
         if largs is None:
             largs = self.visitlist(node.args)
 

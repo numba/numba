@@ -562,7 +562,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
 
         # Generates ClosureNodes that hold inner functions. When visited, they
         # do not recurse into the inner functions themselves!
-        closure = nodes.ClosureNode(node, type, self.func)
+        closure = nodes.ClosureNode(self.env, node, type, self.func)
         type.closure = closure
         self.ast.closures.append(closure)
         self.closures[node.name] = closure

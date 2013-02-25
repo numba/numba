@@ -274,6 +274,11 @@ class FunctionEnvironment(object):
         'Collective symtol table containing all entries from outer '
         'functions.')
 
+    need_closure_wrapper = TypedProperty(
+        bool, "Whether this closure needs a Python wrapper function",
+        default=True,
+    )
+
     warn = TypedProperty(
         bool,
         'Flag that enables control flow warnings on a per-function level.',
@@ -466,6 +471,12 @@ class TranslationEnvironment(object):
             func_env.init(self, func, ast, func_signature, **state)
 
         return func_env
+
+    def get_env(self, ast):
+        if ast in self.func_envs:
+            return self.func_envs[ast]
+        else:
+            return None
 
     def make_partial_env(self, ast, **kwds):
         """
