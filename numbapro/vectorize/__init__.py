@@ -13,8 +13,8 @@ __all__ = [
     'ParallelMiniVectorize',
 ]
 import logging
-from ._numba_vectorize import *
-from ._numba_vectorize import install_vectorizer, _prepare_sig
+from numba.vectorize import *
+from numba.vectorize import install_vectorizer, _prepare_sig
 
 from .parallel import ParallelVectorize, ParallelASTVectorize
 from .stream import StreamVectorize, StreamASTVectorize

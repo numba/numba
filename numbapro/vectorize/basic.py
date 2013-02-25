@@ -1,2 +1,1 @@
-#from numba.vectorize.basic import *
-from _numba_vectorize.basic import *
+from numba.vectorize.basic import *

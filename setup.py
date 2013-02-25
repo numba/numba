@@ -3,7 +3,7 @@ from fnmatch import fnmatchcase
 from distutils.core import setup, Extension
 from distutils.util import convert_path
 
-from numba import minivect
+from numba import minivect, vectorize
 
 import numpy
 from Cython.Distutils import build_ext
@@ -40,15 +40,6 @@ ext_modules = [
 #        depends = ["numba_vectorize/_internal.h", miniutils_header_dep],
 #    ),
 
-    Extension(
-             name = "numbapro.vectorize._numba_vectorize._internal",
-             sources = ["numbapro/vectorize/_numba_vectorize/_internal.c",
-                        "numbapro/vectorize/_numba_vectorize/_ufunc.c",
-                        "numbapro/vectorize/_numba_vectorize/_gufunc.c"],
-             include_dirs = [numpy.get_include(), minivect.get_include()],
-             depends = ["numbapro/vectorize/_numba_vectorize/_internal.h", miniutils_header_dep],
-             ),
-
 
     CythonExtension(
         name = "numbapro._minidispatch",
@@ -62,7 +53,7 @@ ext_modules = [
     CythonExtension(
         name = "numbapro.dispatch",
         sources = ["numbapro/dispatch.pyx"],
-        include_dirs = [numpy.get_include(), "numbapro/vectorize/_numba_vectorize"],
+        include_dirs = [numpy.get_include(), vectorize.get_include()],
         depends = [miniutils_dep, "numbapro/dispatch.pxd"],
         extra_compile_args = OMP_ARGS + ['-D_FORTIFY_SOURCE=0'],
         extra_link_args = OMP_LINK,

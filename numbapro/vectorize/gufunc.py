@@ -9,8 +9,8 @@ from llvm_cbuilder import shortnames as C
 from llvm_cbuilder import builder
 # from numba.vectorize._translate import Translate
 # from numba.vectorize import _internal
-from _numba_vectorize._translate import Translate
-from _numba_vectorize import _internal
+from numba.vectorize._translate import Translate
+from numba.vectorize import _internal
 
 import numpy as np
 

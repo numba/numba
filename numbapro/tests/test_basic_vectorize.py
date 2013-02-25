@@ -1,6 +1,5 @@
 import numpy as np
 from numba import *
-f, d = f4, f8
 from numbapro.vectorize import Vectorize
 from timing import time
 
