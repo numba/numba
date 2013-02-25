@@ -498,6 +498,7 @@ class TranslationEnvironment(object):
                 setattr(func_env, key, value)
 
             self.func_envs[ast] = func_env
+            func_env.ast = ast
 
         return func_env
 

@@ -482,7 +482,8 @@ class ClosureSpecializer(ClosureTransformer):
         """
         # Compile closure, skip CFA and type inference
         node.func_env.qualified_name = self.get_qname(node)
-        numba.pipeline.run_env(self.env, node.func_env, pipeline_name='compile')
+        numba.pipeline.run_env(self.env, node.func_env,
+                               pipeline_name='compile')
 
         translator = node.func_env.translator
         # translator.link()
