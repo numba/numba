@@ -158,6 +158,17 @@ $contexts[{{num_threads}} - 1].__numba_stop = {{stop}}
 $lastprivates = $contexts[{{num_threads}} - 1]
 """
 
+def kill_attribute_assignments(env, prange_node, temporaries):
+    """
+    Remove attribute assignments from the list of statements that need to
+    be resolved before type inference.
+    """
+    func_env = env.translation.crnt
+    kill_set = func_env.kill_attribute_assignments
+    kill_set.update(temporaries)
+    kill_set.update(prange_node.privates)
+    kill_set.update(prange_node.reductions)
+
 def rewrite_prange(env, prange_node, target, locals_dict, closures_dict):
     func_def = prange_node.func_def
     struct_type = prange_node.privates_struct_type
@@ -232,7 +243,7 @@ def rewrite_prange(env, prange_node, target, locals_dict, closures_dict):
     templ.update_locals(temporaries)
     locals_dict.update(temporaries)
 
-    env.translation.crnt.kill_attribute_assignments.update(temporaries)
+    kill_attribute_assignments(env, prange_node, temporaries)
 
     # TODO: Make this an SSA variable
     locals_dict[target_name] = Py_ssize_t

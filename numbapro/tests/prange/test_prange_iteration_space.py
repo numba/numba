@@ -16,8 +16,7 @@
 9
 """
 
-import numbapro
-import numba
+import numbapro as numba
 from numba import *
 import numpy as np
 
