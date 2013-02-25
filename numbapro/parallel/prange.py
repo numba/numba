@@ -83,7 +83,7 @@ class VariableFindingVisitor(visitors.VariableFindingVisitor):
                 self.assigned[target.id] = redop
 
 
-def create_prange_closure(prange_node, body, target):
+def create_prange_closure(env, prange_node, body, target):
     # Find referenced and assigned variables
     v = VariableFindingVisitor()
     v.visitlist(body)
@@ -110,12 +110,21 @@ def create_prange_closure(prange_node, body, target):
                                decorator_list=[])
 
     # Update outlined prange body closure
-    func_def.func_signature = void(privates_struct_type.ref())
-    func_def.func_signature.struct_by_reference = True
-    func_def.need_closure_wrapper = False
-    func_def.locals_dict = { '__numba_privates': privates_struct_type.ref() }
+
+    func_signature = void(privates_struct_type.ref())
+    func_signature.struct_by_reference = True
+    need_closure_wrapper = False
+    locals_dict = { '__numba_privates': privates_struct_type.ref() }
+
+    func_env = env.translation.make_partial_env(
+        func_def,
+        func_signature=func_signature,
+        need_closure_wrapper=need_closure_wrapper,
+        locals=locals_dict,
+    )
 
     # Update prange node
+    prange_node.func_env = func_env
     prange_node.privates_struct_type = privates_struct_type
     prange_node.privates = privates
     prange_node.reductions = reductions
@@ -189,7 +198,7 @@ def rewrite_prange(env, prange_node, target, locals_dict, closures_dict):
 
     # Interpolate code and variables and run type inference
     # TODO: UNDO monkeypatching
-    func_def.type = func_def.func_signature
+    func_def.type = prange_node.func_env.func_signature
     func_def.is_prange_body = True
     func_def.prange_node = prange_node
 
@@ -498,7 +507,7 @@ class PrangeExpander(visitors.NumbaTransformer):
 
         # Create prange closure
         prange_node = node.iter
-        create_prange_closure(prange_node, node.body, node.target)
+        create_prange_closure(self.env, prange_node, node.body, node.target)
 
         # setup glue code
         pre_loop = rewrite_prange(self.env, prange_node, node.target,
