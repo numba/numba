@@ -1,12 +1,14 @@
 import numba
-from numba import numbawrapper, autojit as _numba_autojit
+from numba import numbawrapper, jit as _numba_jit, autojit as _numba_autojit
+from numba.decorators import compile_function
 from .environment import CudaEnvironment
 
 def cuda_jit(restype=None, argtypes=None, nopython=False,
              _llvm_module=None, env_name=None, env=None,
              device=False,  inline=False, **kwargs):
     # error handling
-    if restype and restype != numba.void:
+    if restype and restype != numba.void and not device:
+        print restype
         raise TypeError("CUDA kernel must have void return type.")
     assert _llvm_module is None
     # real work
@@ -33,8 +35,14 @@ def cuda_jit(restype=None, argtypes=None, nopython=False,
 
     return _jit_decorator
 
+def jit(*args, **kws):
+    env = CudaEnvironment.get_environment('numbapro.cuda')
+    kws.setdefault('env', env)
+    kws['nopython'] = True
+    kws['target'] = 'gpu'
+    return _numba_jit(*args, **kws)
 
-def cuda_autojit(*args, **kws):
+def autojit(*args, **kws):
     env = CudaEnvironment.get_environment('numbapro.cuda')
     kws.setdefault('env', env)
     kws['nopython'] = True

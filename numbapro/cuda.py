@@ -4,7 +4,7 @@ from .cudapipeline import initialize as _initialize
 from .cudapipeline.special_values import *
 from .cudapipeline import driver as _driver
 
-from .cudapipeline.decorators import cuda_jit as jit, cuda_autojit as autojit
+from .cudapipeline.decorators import jit, autojit
 
 # NDarray device helper
 @_driver.require_context
