@@ -44,7 +44,7 @@ Array Expressions
 Numba implements array expressions which provide a single pass
 over the data with a fused expression. It also implements native slicing
 and stack-allocated NumPy array views, which means slicing is very fast compared
-to slicing in Python or even Numba. It also means one can now slice an array in
+to slicing in Python. It also means one can now slice an array in
 a ``nopython`` context. Lets try a diffusion in numba with loops and with
 array expressions::
 
@@ -90,22 +90,6 @@ array expressions::
             temp_u = temp
 
         return u
-
-Let's run it and see the results::
-
-    In [0]: import diffusion
-    In [1]: %timeit diffusion.diffuse_loops(1000)
-    10 loops, best of 3: 70.8 ms per loop
-    In [2]: %timeit diffusion.diffuse_array_expressions(1000)
-    1 loops, best of 3: 29.5 ms per loop
-
-Here we see that Numba with array expressions is a factor of ``2.4`` faster than
-with loops. Let's see how that compares to plain Python::
-
-    In [3]: %timeit diffusion.diffuse_loops.py_func(1000)
-    1 loops, best of 3: 50.7 s per loop
-    In [4]: %timeit diffusion.diffuse_array_expressions.py_func(1000)
-    10 loops, best of 3: 166 ms per loop
 
 .. NOTE:: Correct handling of overlapping memory between the left-hand and
           right-hand side of expressions is not supported yet.
