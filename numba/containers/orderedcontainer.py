@@ -50,25 +50,24 @@ def container_methods(item_type, notimplemented):
 
     @Py_ssize_t(item_type)
     def index(self, value):
-        notimplemented("index")
         # TODO: comparison of complex numbers (#121)
-        # buf = self.buf
-        # for i in range(self.size):
-        #     if buf[i] == value:
-        #         return i
+        buf = self.buf
+        for i in range(self.size):
+             if buf[i] == value:
+                 return i
 
-        # [].index(value) # raise ValueError
+        [].index(value) # raise ValueError
 
     @Py_ssize_t(item_type)
     def count(self, value):
-        notimplemented("count")
         # TODO: comparison of complex numbers (#121)
-        # count = 0
-        # buf = self.buf
-        # for i in range(self.size):
-        #     # TODO: promotion of (bool_, int_)
-        #     count += Py_ssize_t(buf[i] == value)
+        count = 0
+        buf = self.buf
+        for i in range(self.size):
+             # TODO: promotion of (bool_, int_)
+             if buf[i] == value:
+                 count += 1
 
-        # return count
+        return count
 
     return locals()

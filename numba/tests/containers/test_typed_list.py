@@ -137,15 +137,31 @@ def from_iterable(type, iterable):
     return nb.typedlist(type, iterable)
 
 @autojit
-def test_count(type):
+def test_count(type, L):
     """
-    >>> test_count(int_)
-    Traceback (most recent call last):
-        ...
-    NotImplementedError: 'count' method of type 'typedlist'
+    >>> test_count(int_, [1, 2, 3, 4, 5, 1, 2])
+    (0L, 1L, 2L)
     """
-    tlist = nb.typedlist(type, [1, 2, 3, 4, 5, 1, 2])
+    tlist = nb.typedlist(type, L)
     return tlist.count(0), tlist.count(3), tlist.count(1)
+
+@autojit
+def test_count_complex(type, L):
+    """
+    >>> test_count_complex(complex128, [1+1j, 1+2j, 2+1j, 2+2j, 1+1j, 2+2j, 2+2j])
+    (1L, 2L, 3L)
+    """
+    tlist = nb.typedlist(type, L)
+    return tlist.count(1+2j), tlist.count(1+1j), tlist.count(2+2j)
+
+@autojit
+def test_index(type):
+    """
+    >>> test_index(int_)
+    (0L, 2L, 4L)
+    """
+    tlist = nb.typedlist(type, [5, 4, 3, 2, 1])
+    return tlist.index(5), tlist.index(3), tlist.index(1)
 
 @autojit
 def test_reverse(type, value):
