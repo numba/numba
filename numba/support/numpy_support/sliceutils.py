@@ -237,6 +237,8 @@ class Broadcast(NumbaCDefinition):
     def body(self, dst_shape, src_shape, src_strides, max_ndim, ndim):
         dim_offset = max_ndim - ndim
 
+        # self.debug("max_ndim", max_ndim, "ndim:", ndim)
+
         def constants(type):
             return self.constant(type, 0), self.constant(type, 1)
 
@@ -251,6 +253,7 @@ class Broadcast(NumbaCDefinition):
                 with ifelse.then():
                     # p_broadcast[0] = True
                     src_strides[i] = zero
+                    # self.debug("set stride = 0")
                 with ifelse.otherwise():
                     with self.ifelse(dst_extent == one) as ifelse:
                         with ifelse.then():

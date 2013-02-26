@@ -498,32 +498,39 @@ class FinalSpecializer(BaseSpecializer):
                 return self.outer_pointers[variable][stop - 1]
         else:
             self.outer_pointers[variable] = []
-            start = offset
+            start = max(offset - 1, 0)
 
         outer_pointers = self.outer_pointers[variable]
         temp = argument_data_pointer
         for_loops = self.function.for_loops[start:stop]
 
-        # Loop over all outer loop levels
-        for i, for_node in zip(range(start, stop), for_loops):
-            if for_node.dim < offset:
-                continue
-
-            # Allocate a temp_data_pointer on each outer loop level
-            temp = b.temp(pointer_type)
-            dim = for_node.dim - offset
-
-            if not outer_pointers: #i == offset:
-                outer_node = self.function
-                outer_pointer = self.function.args[variable.name].data_pointer
-            else:
-                outer_node = self.function.for_loops[i - 1]
-                outer_pointer = outer_pointers[-1]
-
+        def generate_temp():
             # Generate: temp_data_pointer = outer_data_pointer
+            temp = b.temp(pointer_type)
             assmt = b.assign(temp, outer_pointer)
             outer_node.prepending.stats.append(assmt)
+            return temp
 
+        # Loop over all outer loop levels
+        for i, for_node in zip(range(start, stop), for_loops):
+            # Allocate a temp_data_pointer on each outer loop level
+            if not outer_pointers:
+                outer_pointer = self.function.args[variable.name].data_pointer
+            else:
+                outer_pointer = outer_pointers[-1]
+
+            if i == 0:
+                outer_node = self.function
+            else:
+                outer_node = self.function.for_loops[i - 1]
+
+            temp = generate_temp()
+
+            if for_node.dim < offset:
+                # No stride addition needed
+                continue
+
+            dim = for_node.dim - offset
             stride = original_stride = self.strides[variable][dim]
             assert stride is not None, ('strides', self.strides[variable],
                                         'dim', dim, 'start', start,

@@ -169,6 +169,8 @@ class NumbaproStaticArgsContext(utils.NumbaContext):
     "Use a static argument list: shape, data1, strides1, data2, strides2, ..."
 
     astbuilder_cls = miniast.ASTBuilder
+    # debug = True
+    # debug_elements = True
 
 
 class ArrayExpressionRewriteNative(ArrayExpressionRewrite):

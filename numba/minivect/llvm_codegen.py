@@ -124,6 +124,7 @@ class LLVMCodeGen(codegen.CodeGen):
         self.add_arguments(node)
         self.visit(node.body)
 
+        # print self.lfunc
         self.lfunc.verify()
         self.optimize()
         # print self.lfunc

@@ -1829,6 +1829,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # Obtain broadcast function
         func_def = self.declare(sliceutils.Broadcast)
 
+        # Broadcast all operands
         for op in node.operands:
             op_result = self.visit(op)
             acc = ndarray_helpers.PyArrayAccessor(self.builder, op_result)
@@ -1839,6 +1840,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 lresult = self.builder.call(func_def, args)
                 node.broadcast_retvals[op].llvm_value = lresult
 
+        # See if we had any errors broadcasting
         self.visitlist(node.check_errors)
 
         return shape
