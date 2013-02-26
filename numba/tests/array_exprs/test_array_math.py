@@ -1,5 +1,3 @@
-from numba import error
-import numba
 from numba import *
 import numpy as np
 
@@ -36,7 +34,7 @@ def get_functions():
 
     return locals()
 
-dest_types = [int_, short, float_, double] #, complex128]
+dtypes = ['i', 'l', 'f', 'd', np.complex128]
 
 def test_math_funcs():
     functions = get_functions()
@@ -44,34 +42,19 @@ def test_math_funcs():
     for func_name in functions:
         # func_name = 'sqrt'
         func = functions[func_name]
-        for dest_type in dest_types:
-            dest_type = dest_type[:, :]
-            signature = dest_type(dest_type)
+        for dtype in dtypes:
+            numba_func = autojit(func)
 
-            try:
-                numba_func = jit(signature)(func)
-            except error.NumbaError, e:
-                exceptions += 1
-                print func_name, dest_type, e
-                continue
-
-            dtype = dest_type.dtype.get_dtype()
             x = np.arange(8 * 12, dtype=dtype).reshape(8, 12)
             x = ((x + 10) / 5).astype(dtype)
 
             r1 = numba_func(x)
-            r2 = func(x)
-            assert np.allclose(r1, r2), (r1, r2, signature, func_name)
+            r2 = numba_func.py_func(x)
+            assert np.allclose(r1, r2), (r1 - r2, r1.dtype, r2.dtype,
+                                         func_name, x.dtype)
 
     if exceptions:
         raise Exception
 
 if __name__ == '__main__':
-#    x = np.arange(8 * 12, dtype=np.int64).reshape(8, 12)
-#    x = (10.0 / (x + 1)).astype(np.int64)
-#    @autojit
-#    def sqrt(a):
-#        return 2.7 + np.cos(a) + 1.6
-#    print sqrt.py_func(x) - sqrt(x)
     test_math_funcs()
-#    numba.nose_run()
