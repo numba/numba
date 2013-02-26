@@ -224,8 +224,22 @@ class CudaCodeGenerator(_translate.LLVMCodeGenerator):
             return super(CudaCodeGenerator, self).visit_Name(node)
     
     def visit_CudaSMemAssignNode(self, node):
-        self.__smem[node.target.id] = self.visit(node.value)
+        self.__smem[node.target.id] = value = self.visit(node.value)
+        # preload
+        var = node.target.variable
+        acc = self.pyarray_accessor(value, var.type.dtype)
+        if var.preload_data:
+            var.preloaded_data = acc.data
 
+        if var.preload_shape:
+            shape = nodes.get_strides(self.builder, self.tbaa,
+                                      acc.shape, var.type.ndim)
+            var.preloaded_shape = tuple(shape)
+
+        if var.preload_strides:
+            strides = nodes.get_strides(self.builder, self.tbaa,
+                                        acc.strides, var.type.ndim)
+            var.preloaded_strides = tuple(strides)
 
 #
 # Helpers

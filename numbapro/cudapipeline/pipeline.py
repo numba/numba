@@ -42,8 +42,7 @@ class CudaTypeInferStage(_pipeline.TypeInfer):
         crnt.symtab = type_inferer.symtab
         return ast
 
-
-class CudaCodeGenStage(_pipeline.PipelineStage):
+class CudaCodeGenStage(_pipeline.CodeGen):
     def transform(self, ast, env):
         func_env = env.translation.crnt
         func_env.translator = self.make_specializer(
