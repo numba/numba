@@ -15,9 +15,7 @@ branches:
 before_install:
   - wget "http://llvm.org/releases/3.2/clang+llvm-3.2-x86-linux-ubuntu-12.04.tar.gz"
   - tar -xzvf "clang+llvm-3.2-x86-linux-ubuntu-12.04.tar.gz"
-
-env:
-    - LLVM_CONFIG_PATH="clang+llvm-3.2-x86-linux-ubuntu-12.04/bin/llvm-config"
+  - export LLVM_CONFIG_PATH="`pwd`/clang+llvm-3.2-x86-linux-ubuntu-12.04/bin/llvm-config"
 
 install:
     - echo "$PATH $LLVM_CONFIG_PATH"
