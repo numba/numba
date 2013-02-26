@@ -33,6 +33,19 @@ logger = logging.getLogger(__name__)
 if debug:
     logger.setLevel(logging.DEBUG)
 
+def lookup_global(env, name, position_node):
+    func_env = env.translation.crnt
+    try:
+        value = func_env.function_globals[name]
+    except KeyError as e:
+        if func_env.func and name == func_env.func.__name__:
+            # Assume recursive function
+            value = numba.jit(func_env.func_signature)(func_env.func)
+        else:
+            raise error.NumbaError(position_node, "No global named %s" % (e,))
+
+    return value
+
 
 def no_keywords(node):
     if node.keywords or node.starargs or node.kwargs:
@@ -702,7 +715,8 @@ class TypeInferer(visitors.NumbaTransformer):
             if isinstance(globals.get(global_name), types.ModuleType):
                 type = typesystem.ModuleType(globals.get(global_name))
             else:
-                type = typesystem.GlobalType(global_name, globals, name_node)
+                value = lookup_global(self.env, global_name, name_node)
+                type = typesystem.GlobalType(global_name, value)
 
         variable = Variable(type, name=global_name, is_constant=True,
                             is_global=is_global, is_builtin=is_builtin,
@@ -1165,8 +1179,10 @@ class TypeInferer(visitors.NumbaTransformer):
                     new_node = infer_call.infer_typefunc(self.context, call_node,
                                                          func_type, new_node)
         elif self.function_cache.is_registered(py_func):
-            fn_info = self.function_cache.compile_function(py_func, arg_types)
-            signature, llvm_func, _ = fn_info
+            signature = minitypes.FunctionType(None, arg_types)
+            jitted_func = numba.jit(signature)(py_func)
+            signature = jitted_func.signature
+            llvm_func = jitted_func.lfunc
         #elif not call_node.keywords and self._is_math_function(call_node.args,
         #                                                       py_func):
         #    new_node = self._resolve_math_call(call_node, py_func)

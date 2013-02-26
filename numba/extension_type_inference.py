@@ -239,13 +239,13 @@ def _compile_methods(class_dict, env, ext_type, lmethods, method_pointers,
         # have inferred some return types
         # TODO: delayed types and circular calls/variable assignments
         logger.debug(method.py_func)
-        sig, translator, wrapper = pipeline.compile2(
+        func_env = pipeline.compile2(
             env, method.py_func, func_signature.return_type,
             func_signature.args, name=method.py_func.__name__,
             **flags)
-        lmethods.append(translator.lfunc)
-        method_pointers.append((method_name, translator.lfunc_pointer))
-        class_dict[method_name] = method.result(wrapper)
+        lmethods.append(func_env.lfunc)
+        method_pointers.append((method_name, func_env.translator.lfunc_pointer))
+        class_dict[method_name] = method.result(func_env.numba_wrapper_func)
 
 #------------------------------------------------------------------------
 # Build Attributes Struct

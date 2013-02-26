@@ -484,7 +484,7 @@ def compile2(env, func, restype=None, argtypes=None, ctypes=False,
         return func_signature, t, None
 
     # link into the JIT module
-    return func_signature, t, func_env.numba_wrapper_func
+    return func_env
 
 def compile_from_sig(context, func, signature, **kwds):
     return compile(context, func, signature.return_type, signature.args,
@@ -606,12 +606,15 @@ def create_lfunc(tree, env):
     """
     func_env = env.translation.crnt
 
-    if (func_env.lfunc is None and func_env.func_signature is not None and
-            func_env.func_signature.return_type is not None):
+    if (func_env.func and not func_env.lfunc and
+            func_env.func_signature and func_env.func_signature.return_type):
         assert func_env.llvm_module is not None
-        func_env.lfunc = func_env.llvm_module.add_function(
+        lfunc = func_env.llvm_module.add_function(
                 func_env.func_signature.to_llvm(env.context),
                 func_env.mangled_name)
+
+        func_env.lfunc = lfunc
+        env.specializations.register_specialization(func_env)
 
     return tree
 
