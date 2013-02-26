@@ -35,6 +35,7 @@ default_pipeline_order = [
     'ClosureTypeInference',
     'TransformFor',
     'Specialize',
+    'RewriteArrayExpressions',
     'SpecializeComparisons',
     'SpecializeSSA',
     'SpecializeClosures',

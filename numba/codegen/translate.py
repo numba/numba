@@ -1711,7 +1711,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         """
         Slice an array. Allocate fake PyArray and allocate shape/strides
         """
-        array_ltype = PyArray.llvm_type()
+        array_ltype = float_[:].to_llvm(self.context)
         shape_ltype = npy_intp.pointer().to_llvm(self.context)
 
         # Create PyArrayObject accessors

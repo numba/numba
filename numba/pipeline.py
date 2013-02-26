@@ -674,11 +674,21 @@ class TransformFor(PipelineStage):
                                           env)
         return transform.visit(ast)
 
+#----------------------------------------------------------------------------
+# Specializing/Lowering Transforms
+#----------------------------------------------------------------------------
 
 class Specialize(PipelineStage):
     def transform(self, ast, env):
         return ast
 
+class RewriteArrayExpressions(PipelineStage):
+    def transform(self, ast, env):
+        from numba import array_expressions
+
+        transformer = self.make_specializer(
+            array_expressions.ArrayExpressionRewriteNative, ast, env)
+        return transformer.visit(ast)
 
 class SpecializeComparisons(PipelineStage):
     def transform(self, ast, env):

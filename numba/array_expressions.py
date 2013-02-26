@@ -272,8 +272,8 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         miniargs = map(b.funcarg, variables)
         body = miniutils.build_kernel_call(lfunc.name, signature, miniargs, b)
 
-        minikernel = context.astbuilder.function_from_numpy(
-            templating.temp_name("array_expression"), body, miniargs, b)
+        minikernel = b.function_from_numpy(
+            templating.temp_name("array_expression"), body, miniargs)
         lminikernel, ctypes_kernel = context.run_simple(
             minikernel, specializers.StridedSpecializer)
 
