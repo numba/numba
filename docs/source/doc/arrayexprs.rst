@@ -1,15 +1,14 @@
 Array Expressions
 =================
 
-NumbaPro implements array expressions which provide a single pass
+Numba implements array expressions which provide a single pass
 over the data with a fused expression. It also implements native slicing
 and stack-allocated NumPy array views, which means slicing is very fast compared
 to slicing in Python or even Numba. It also means one can now slice an array in
-a ``nopython`` context. Lets try a diffusion in numba with loops, and numbapro with
+a ``nopython`` context. Lets try a diffusion in numba with loops and with
 array expressions::
 
     from numba import *
-    import numbapro
     import numpy as np
 
     mu = 0.1
@@ -17,7 +16,7 @@ array expressions::
     N = 1000
 
     @autojit
-    def diffuse_numba(iter_num):
+    def diffuse_loops(iter_num):
         u = np.zeros((Lx, Ly), dtype=np.float64)
         temp_u = np.zeros_like(u)
         temp_u[Lx / 2, Ly / 2] = 1000.0
@@ -36,7 +35,7 @@ array expressions::
         return u
 
     @autojit
-    def diffuse_numbapro(iter_num):
+    def diffuse_array_expressions(iter_num):
         u = np.zeros((Lx, Ly), dtype=np.float64)
         temp_u = np.zeros_like(u)
         temp_u[Lx / 2, Ly / 2] = 1000.0
@@ -52,31 +51,21 @@ array expressions::
 
         return u
 
-The diffusion in Numba is written with loops, since it does not support array
-expressions. The numbapro version is written with array expressions. Let's run
-it and see the results::
+Let's run it and see the results::
 
     In [0]: import diffusion
-    In [1]: %timeit diffusion.diffuse_numba(1000)
+    In [1]: %timeit diffusion.diffuse_loops(1000)
     10 loops, best of 3: 70.8 ms per loop
-    In [2]: %timeit diffusion.diffuse_numbapro(1000)
+    In [2]: %timeit diffusion.diffuse_array_expressions(1000)
     1 loops, best of 3: 29.5 ms per loop
 
-Here we see that NumbaPro is a factor of ``2.4`` faster with array expressions than
-numba with loops. Let's see how that compares to plain Python::
+Here we see that Numba with array expressions is a factor of ``2.4`` faster than
+with loops. Let's see how that compares to plain Python::
 
-    In [3]: %timeit diffusion.diffuse_numba.py_func(1000)
+    In [3]: %timeit diffusion.diffuse_loops.py_func(1000)
     1 loops, best of 3: 50.7 s per loop
-    In [4]: %timeit diffusion.diffuse_numbapro.py_func(1000)
+    In [4]: %timeit diffusion.diffuse_array_expressions.py_func(1000)
     10 loops, best of 3: 166 ms per loop
-
-Here we see how vectorized NumPy is a factor of 2.3 slower than Numba. The version
-with loops and indexes is clearly very slow. Let's verify correctness to be sure::
-
-    In [5]: assert np.allclose(diffusion.diffuse_numba(100),
-                               diffusion.diffuse_numbapro(100))
-    In [6]: assert np.allclose(diffusion.diffuse_numbapro(100),
-                               diffusion.diffuse_numbapro.py_func(100))
 
 .. NOTE:: Correct handling of overlapping memory between the left-hand and
           right-hand side of expressions is not supported yet.
@@ -134,9 +123,10 @@ Allocating new arrays is however not support yet in nopython mode::
 
 Math
 ----
-All NumPy math functions supported on scalars in Numba is also supported in NumbaPro on
+All NumPy math functions supported on scalars is also supported for
 arrays. This includes most unary ufuncs::
 
     @autojit
     def tan(a):
         return np.sin(a) / np.cos(a)
+
