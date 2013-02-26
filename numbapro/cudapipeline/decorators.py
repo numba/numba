@@ -16,9 +16,9 @@ def cuda_jit(restype=None, argtypes=None, nopython=False,
     def _jit_decorator(func):
         envsp = env.specializations
         envsp.register(func)
-        result = envsp.compile_function(func, argtypes, restype=restype,
-                                        nopython=nopython, ctypes=False,
-                                        compile_only=True, **kwargs)
+        result = compile_function(env, func, argtypes, restype=restype,
+                                  nopython=nopython, ctypes=False,
+                                  compile_only=True, **kwargs)
         sig, lfunc, pycallable = result
         assert pycallable is None
 
