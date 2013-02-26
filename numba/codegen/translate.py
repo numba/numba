@@ -251,10 +251,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 self.error(self.ast, "Function with non-void return does "
                                      "not return a value")
 
-        self.lfunc_type = self.to_llvm(self.func_signature)
-
-        self.lfunc = self.llvm_module.add_function(self.lfunc_type,
-                                                   self.mangled_name)
+        self.lfunc = self.env.translation.crnt.lfunc
+        assert self.lfunc
         if not isinstance(self.ast, nodes.FunctionWrapperNode):
             assert self.mangled_name == self.lfunc.name, \
                    "Redefinition of function %s (%s, %s)" % (self.func_name,
@@ -435,11 +433,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                                                      object_))
         wrapper_call.error_return = error_return
 
+        # TODO: Run this entire thing through a wrapper pipeline...
         func_env = self.env.translation.crnt.inherit(
                 name=func_name,
+                func_signature=signature,
                 llvm_module=wrapper_module)
         self.env.translation.push_env(func_env)
         try:
+            from numba import pipeline
+            pipeline.create_lfunc(wrapper_call, self.env)
             t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
                                   symtab, llvm_module=wrapper_module,
                                   locals={}, refcount_args=False,

@@ -27,9 +27,13 @@ logger = logging.getLogger(__name__)
 default_pipeline_order = [
     'resolve_templates',
     'validate_signature',
+    'update_signature',
+    'create_lfunc',
     'ControlFlowAnalysis',
     #'ConstFolding',
     'TypeInfer',
+    'update_signature',
+    'create_lfunc2',
     'TypeSet',
     'dump_cfg',
     'ClosureTypeInference',

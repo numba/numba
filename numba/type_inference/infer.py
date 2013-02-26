@@ -86,11 +86,6 @@ class TypeInferer(visitors.NumbaTransformer):
         restype, argtypes = self.return_type, self.func_signature.args
         self.func_signature = minitypes.FunctionType(return_type=restype,
                                                      args=argtypes)
-        if restype.is_struct or restype.is_complex:
-            # Change signatures returning complex numbers or structs to
-            # signatures taking a pointer argument to a complex number
-            # or struct
-            self.func_signature.struct_by_reference = True
 
     #------------------------------------------------------------------------
     # Symbol Table Type Population and Argument Processing

@@ -584,6 +584,41 @@ def validate_signature(tree, env):
 
     return tree
 
+def update_signature(tree, env):
+    func_env = env.translation.crnt
+    func_signature = func_env.func_signature
+
+    restype = func_signature.return_type
+    if restype and (restype.is_struct or restype.is_complex):
+        # Change signatures returning complex numbers or structs to
+        # signatures taking a pointer argument to a complex number
+        # or struct
+        func_signature = func_signature.return_type(*func_signature.args)
+        func_signature.struct_by_reference = True
+        func_env.func_signature = func_signature
+
+    return tree
+
+def create_lfunc(tree, env):
+    """
+    Update the FunctionEnvironment with an LLVM function if the signature
+    is known (try this before type inference to support recursion).
+    """
+    func_env = env.translation.crnt
+
+    if (func_env.lfunc is None and func_env.func_signature is not None and
+            func_env.func_signature.return_type is not None):
+        assert func_env.llvm_module is not None
+        func_env.lfunc = func_env.llvm_module.add_function(
+                func_env.func_signature.to_llvm(env.context),
+                func_env.mangled_name)
+
+    return tree
+
+def create_lfunc2(tree, env):
+    func_env = env.translation.crnt
+    assert func_env.func_signature and func_env.func_signature.return_type
+    return create_lfunc(tree, env)
 
 class ControlFlowAnalysis(PipelineStage):
     _pre_condition_schema = None
