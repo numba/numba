@@ -1179,7 +1179,9 @@ class TypeInferer(visitors.NumbaTransformer):
                     new_node = infer_call.infer_typefunc(self.context, call_node,
                                                          func_type, new_node)
         elif self.function_cache.is_registered(py_func):
+            py_func = py_func.py_func
             signature = minitypes.FunctionType(None, arg_types)
+
             jitted_func = numba.jit(signature)(py_func)
             signature = jitted_func.signature
             llvm_func = jitted_func.lfunc
