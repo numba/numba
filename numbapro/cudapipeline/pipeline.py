@@ -7,6 +7,9 @@ PipelineOrders = namedtuple('PipelineOrders', ['default', 'type_infer'], )
 
 def get_orders():
     order = environment.default_pipeline_order[:]
+
+    # Add typeinferer
+    order.insert(order.index('ControlFlowAnalysis'), 'ConstFolding')
     # Replace TypeInfer
     idx_typeinfer = order.index('TypeInfer')
     order[idx_typeinfer] = CudaTypeInferStage
