@@ -43,15 +43,6 @@ class NumbaproPipeline(pipeline.Pipeline):
         transformer = self.make_specializer(prange.PrangeCleanup, ast)
         return transformer.visit(ast)
 
-#----------------------------------------------------------------------------
-# Array Expressions
-#----------------------------------------------------------------------------
-
-class RewriteArrayExpressions(pipeline.PipelineStage):
-    def transform(self, ast, env):
-        transformer = self.make_specializer(
-            array_expressions.ArrayExpressionRewriteNative, ast, env)
-        return transformer.visit(ast)
 
 #----------------------------------------------------------------------------
 # Prange
@@ -110,7 +101,6 @@ NumbaproPipeline.add_mixin('codegen', NumbaProCodegen, before=True)
 
 order = environment.default_pipeline_order[:]
 
-insert_stage(order, RewriteArrayExpressions, before='Specialize')
 insert_stage(order, ExpandPrange, before='ControlFlowAnalysis')
 insert_stage(order, RewritePrangePrivates, before='ControlFlowAnalysis')
 insert_stage(order, 'FixASTLocations', before='ControlFlowAnalysis')

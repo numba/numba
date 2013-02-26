@@ -56,7 +56,6 @@ The above adds slicing, array-expression, prange and gpu target to Numba.
    CUDADevice
    CUDASupport
    prange
-   arrayexprs
 
 
 ..   BasicVectorize
