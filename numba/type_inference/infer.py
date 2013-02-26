@@ -35,14 +35,20 @@ if debug:
 
 def lookup_global(env, name, position_node):
     func_env = env.translation.crnt
-    try:
+
+    func = func_env.func
+    if (func is not None and name in func.func_code.co_freevars and
+            func.func_closure):
+        cell_idx = func.func_code.co_freevars.index(name)
+        cell = func.func_closure[cell_idx]
+        value = cell.cell_contents
+    elif name in func_env.function_globals:
         value = func_env.function_globals[name]
-    except KeyError as e:
-        if func_env.func and name == func_env.func.__name__:
-            # Assume recursive function
-            value = numba.jit(func_env.func_signature)(func_env.func)
-        else:
-            raise error.NumbaError(position_node, "No global named %s" % (e,))
+    elif func and name == func.__name__:
+        # Assume recursive function
+        value = numba.jit(func_env.func_signature)(func)
+    else:
+        raise error.NumbaError(position_node, "No global named %s" % (e,))
 
     return value
 
