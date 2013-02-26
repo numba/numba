@@ -748,7 +748,7 @@ def main(*args):
     import numba as nb
     test_ast = ast_module.parse('def test_fn(a, b):\n  return a + b\n\n',
                                    '<string>', 'exec')
-    exec compile(test_ast, '<string>', 'exec')
+    exec(compile(test_ast, '<string>', 'exec'))
     test_fn_ast = test_ast.body[-1]
     test_fn_sig = nb.double(nb.double, nb.double)
     test_fn_sig.name = test_fn.__name__
