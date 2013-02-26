@@ -44,7 +44,7 @@ def test_array_copy_autojit():
     src = np.arange(N, dtype=np.float32)
     dst = np.empty_like(src)
 
-    cudafunc = autojit(target='gpu')(array_copy)
+    cudafunc = cuda.autojit(target='gpu')(array_copy)
     cudafunc[(2,), (333,)](src, dst, N)
 
     assert (src == dst).all()

@@ -3,8 +3,8 @@
 from llvm import core as _lc
 import numpy as np
 from ctypes import *
-from numbapro._cuda import driver as _cuda
-from numbapro._cuda.devicearray import DeviceNDArray
+from numbapro.cudapipeline import driver as _cuda
+from numbapro.cudapipeline.devicearray import DeviceNDArray
 from numbapro import cuda
 from numbapro._utils.ndarray import ndarray_datasize
 import math
@@ -341,7 +341,7 @@ class CudaNumbaFuncDispatcher(object):
         return [convert(ty, val) for ty, val in zip(self.typemap, args)]
 
     def __call__(self, args, griddim, blkdim, stream=0):
-        from ._cuda.devicearray import DeviceNDArray
+        from .cudapipeline.devicearray import DeviceNDArray
         args = self._cast_args(args)
 
         kernel_args = []
@@ -365,9 +365,11 @@ class CudaNumbaFuncDispatcher(object):
                        '_': ndarray_gpu}
 
         for ty, arg in zip(self.typemap, args):
-            kernel_args.append(_typemapper[ty](arg))
+            arg = _typemapper[ty](arg)
+            kernel_args.append(arg)
 
         cu_func = self.cu_function.configure(griddim, blkdim, stream=stream)
+
         cu_func(*kernel_args)
 
         for r in retrievers:
