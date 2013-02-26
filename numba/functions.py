@@ -63,10 +63,13 @@ def _get_ast(func):
     except IOError:
         return decompile_func(func)
     else:
-        source = textwrap.dedent(source)
         # Split off decorators
+        # TODO: This is not quite correct, we can have comments or strings
+        # starting at column 0 and an indented function !
+        source = textwrap.dedent(source)
         decorators = 0
-        while not source.startswith('def'): # decorator can have multiple lines
+        while not source.lstrip().startswith('def'): # decorator can have multiple lines
+            assert source
             decorator, sep, source = source.partition('\n')
             decorators += 1
         module_ast = ast.parse(source)
