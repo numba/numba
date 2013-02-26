@@ -18,6 +18,8 @@ before_install:
   - sudo apt-get install clang-3.2
 
 install:
+    - echo "$PATH"
+    - which llvm-config
     - pip install -r requirements.txt --use-mirrors
     - python setup.py build_ext --inplace
 
