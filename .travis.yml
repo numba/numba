@@ -13,13 +13,14 @@ branches:
     - devel
 
 before_install:
-  - yes | sudo add-apt-repository ppa:h-rayflood/llvm
-  - sudo apt-get update -qq
-  - sudo apt-get install clang-3.2
+  - wget "http://llvm.org/releases/3.2/clang+llvm-3.2-x86-linux-ubuntu-12.04.tar.gz"
+  - tar -xzvf "clang+llvm-3.2-x86-linux-ubuntu-12.04.tar.gz"
+
+env:
+    - LLVM_CONFIG_PATH="clang+llvm-3.2-x86-linux-ubuntu-12.04/bin/llvm-config"
 
 install:
-    - echo "$PATH"
-    - which llvm-config
+    - echo "$PATH $LLVM_CONFIG_PATH"
     - pip install -r requirements.txt --use-mirrors
     - python setup.py build_ext --inplace
 
