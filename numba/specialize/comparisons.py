@@ -24,6 +24,18 @@ def build_boolop(right, left):
     node = ast.BoolOp(ast.And(), [left, right])
     return nodes.typednode(node, bool_)
 
+def extract(complex_node):
+    complex_node = nodes.CloneableNode(complex_node)
+
+    real = nodes.ComplexAttributeNode(complex_node, 'real')
+    imag = nodes.ComplexAttributeNode(complex_node.clone, 'imag')
+
+    return real, imag
+
+def compare(lhs, rhs):
+    result = ast.Compare(lhs, [ast.Eq()], [rhs])
+    return nodes.typednode(result, bool_)
+
 class SpecializeComparisons(visitors.NumbaTransformer):
     """
     Rewrite cascaded ast.Compare nodes to a sequence of boolean operations
@@ -37,14 +49,23 @@ class SpecializeComparisons(visitors.NumbaTransformer):
     """
 
     def single_compare(self, node):
-        if node.left.type.is_object:
-            return self.single_compare_objects(node)
+        rhs = node.comparators[0]
 
-        if node.left.type.is_pointer and node.comparators[0].type.is_pointer:
+        if node.left.type.is_object:
+            node = self.single_compare_objects(node)
+
+        elif node.left.type.is_pointer and rhs.type.is_pointer:
             # Coerce pointers to integer values before comparing
             node.left = nodes.CoercionNode(node.left, Py_uintptr_t)
-            node.comparators = [nodes.CoercionNode(node.comparators[0],
-                                                   Py_uintptr_t)]
+            node.comparators = [nodes.CoercionNode(rhs, Py_uintptr_t)]
+
+        elif node.left.type.is_complex and rhs.type.is_complex:
+            real1, imag1 = extract(node.left)
+            real2, imag2 = extract(rhs)
+            lhs = compare(real1, real2)
+            rhs = compare(imag1, imag2)
+            result = ast.BoolOp(ast.And(), [lhs, rhs])
+            node = nodes.typednode(result, bool_)
 
         return node
 
