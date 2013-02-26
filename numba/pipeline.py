@@ -606,15 +606,16 @@ def create_lfunc(tree, env):
     """
     func_env = env.translation.crnt
 
-    if (func_env.func and not func_env.lfunc and
-            func_env.func_signature and func_env.func_signature.return_type):
+    if (not func_env.lfunc and func_env.func_signature and
+            func_env.func_signature.return_type):
         assert func_env.llvm_module is not None
         lfunc = func_env.llvm_module.add_function(
                 func_env.func_signature.to_llvm(env.context),
                 func_env.mangled_name)
 
         func_env.lfunc = lfunc
-        env.specializations.register_specialization(func_env)
+        if func_env.func:
+            env.specializations.register_specialization(func_env)
 
     return tree
 
