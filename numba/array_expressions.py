@@ -6,7 +6,7 @@ from numba.minivect import specializers, miniast, miniutils
 from numba import utils, functions
 from numba import visitors
 
-from numbapro import array_slicing
+from numba.support.numpy_support import slicenodes
 from numba.vectorize import basic
 
 print_ufunc = False
@@ -97,7 +97,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer):
 
         if (len(node.targets) == 1 and is_slice_assign and
                 is_elementwise_assignment(self.context, node)):
-            target_node = array_slicing.rewrite_slice(target_node,
+            target_node = slicenodes.rewrite_slice(target_node,
                                                       self.nopython)
             return self.register_array_expression(node.value, lhs=target_node)
 
@@ -113,7 +113,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer):
             if nodes.is_ellipsis(node.slice):
                 return node.value
         elif node.value.type.is_array and node.type.is_array:
-            node = array_slicing.rewrite_slice(node, self.nopython)
+            node = slicenodes.rewrite_slice(node, self.nopython)
 
         return node
 
@@ -250,7 +250,7 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         else:
             broadcast_operands = operands[:]
 
-        shape = array_slicing.BroadcastNode(lhs_type, broadcast_operands)
+        shape = slicenodes.BroadcastNode(lhs_type, broadcast_operands)
         operands = [op.clone for op in operands]
 
         if lhs is None and self.nopython:
@@ -299,7 +299,7 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         result = nodes.NativeCallNode(minikernel.type, args, lminikernel)
 
         # Use native slicing in array expressions
-        array_slicing.mark_nopython(ast.Suite(body=result.args))
+        slicenodes.mark_nopython(ast.Suite(body=result.args))
 
         if not is_expr:
             # a[:] = b[:] * c[:]
