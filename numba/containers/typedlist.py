@@ -74,12 +74,10 @@ def typedlist(item_type, iterable=None, _list_cache=_list_cache):
 
         @void(Py_ssize_t, item_type)
         def insert(self, index, value):
-            self, index, value # TODO: implemented specifying warn=False
             notimplemented("insert")
 
         @void(item_type)
         def remove(self, value):
-            self, value
             notimplemented("remove")
 
         @void()
@@ -94,7 +92,6 @@ def typedlist(item_type, iterable=None, _list_cache=_list_cache):
         @void()
         def sort(self):
             # TODO: optional arguments cmp, key, reverse
-            self
             notimplemented("sort")
 
         @Py_ssize_t()

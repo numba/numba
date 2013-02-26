@@ -50,7 +50,6 @@ def container_methods(item_type, notimplemented):
 
     @Py_ssize_t(item_type)
     def index(self, value):
-        self, value
         notimplemented("index")
         # TODO: comparison of complex numbers (#121)
         # buf = self.buf
@@ -62,7 +61,6 @@ def container_methods(item_type, notimplemented):
 
     @Py_ssize_t(item_type)
     def count(self, value):
-        self, value
         notimplemented("count")
         # TODO: comparison of complex numbers (#121)
         # count = 0
