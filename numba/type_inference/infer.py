@@ -330,7 +330,7 @@ class TypeInferer(visitors.NumbaTransformer):
         """
         for u in list(unvisited):
             u.simplify()
-            if not u.resolve().is_unresolved:
+            if u.is_resolved or not u.resolve().is_unresolved:
                 unvisited.remove(u)
 
     def update_visited(self, start_point, visited, unvisited):
