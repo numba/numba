@@ -188,10 +188,12 @@ def _autojit(template_signature, target, nopython, env_name=None, env=None,
             "Compile the function given its positional and keyword arguments"
             signature = resolve_argtypes(numba_func, template_signature,
                                          args, kwargs, translator_kwargs)
-            dec = _jit(restype=signature.return_type,
-                       argtypes=signature.args,
-                       target=target, nopython=nopython, env=env,
-                       **translator_kwargs)
+
+            jitter = jit_targets[(target, 'ast')]
+            dec = jitter(restype=signature.return_type,
+                         argtypes=signature.args,
+                         target=target, nopython=nopython, env=env,
+                         **translator_kwargs)
 
             compiled_function = dec(f)
             return compiled_function
@@ -317,3 +319,4 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
         kws['argtypes'] = argtypes
 
     return jit_targets[target, backend](**kws)
+
