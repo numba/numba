@@ -12,15 +12,13 @@ branches:
     - master
     - devel
 
-before_install:
+install:
   - wget "http://llvm.org/releases/3.2/clang+llvm-3.2-x86-linux-ubuntu-12.04.tar.gz"
   - tar -xzvf "clang+llvm-3.2-x86-linux-ubuntu-12.04.tar.gz"
   - export LLVM_CONFIG_PATH="`pwd`/clang+llvm-3.2-x86-linux-ubuntu-12.04/bin/llvm-config"
-
-install:
-    - echo "$PATH $LLVM_CONFIG_PATH"
-    - pip install -r requirements.txt --use-mirrors
-    - python setup.py build_ext --inplace
+  - echo "$PATH $LLVM_CONFIG_PATH"
+  - pip install -r requirements.txt --use-mirrors
+  - python setup.py build_ext --inplace
 
 script: nosetests
 
