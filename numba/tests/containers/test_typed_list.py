@@ -142,7 +142,7 @@ def test_count(type):
     >>> test_count(int_)
     Traceback (most recent call last):
         ...
-    NotImplementedError: 'count' method
+    NotImplementedError: 'count' method of type 'typedlist'
     """
     tlist = nb.typedlist(type, [1, 2, 3, 4, 5, 1, 2])
     return tlist.count(0), tlist.count(3), tlist.count(1)

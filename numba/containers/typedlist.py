@@ -35,7 +35,7 @@ def typedlist(item_type, iterable=None, _list_cache=_list_cache):
 
     methods = orderedcontainer.container_methods(item_type, notimplemented)
 
-    @jit(warn=False)
+    @nb.jit(warn=False)
     class typedlist(object):
         @void(item_type_t, dtype_t, object_)
         def __init__(self, item_type, dtype, iterable):
