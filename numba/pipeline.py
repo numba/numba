@@ -479,11 +479,6 @@ def compile2(env, func, restype=None, argtypes=None, ctypes=False,
         func_signature = func_env.func_signature
         symtab = func_env.symtab
         t = func_env.translator
-
-    if compile_only:
-        return func_signature, t, None
-
-    # link into the JIT module
     return func_env
 
 def compile_from_sig(context, func, signature, **kwds):
