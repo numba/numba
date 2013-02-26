@@ -1,7 +1,7 @@
 import unittest
 import gc
 import numpy as np
-from numbapro._cuda import driver as cudriver
+from numbapro.cudapipeline import driver as cudriver
 from numbapro import cuda
 import support
 cudriver.debug_memory = True

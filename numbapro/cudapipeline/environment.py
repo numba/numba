@@ -90,6 +90,9 @@ class CudaEnvironment(_env.NumbaEnvironment):
         self.ptxutils = PTXUtils(self)
         self.device_functions = {}
 
+    def add_device_function(self, pyfunc, lfunc):
+        self.device_functions[pyfunc] = lfunc
+        
 
 
 #

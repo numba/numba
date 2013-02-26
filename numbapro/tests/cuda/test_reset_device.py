@@ -1,5 +1,5 @@
 from numbapro import cuda
-from numbapro._cuda import driver
+from numbapro.cudapipeline import driver
 import unittest, threading
 import numpy as np
 

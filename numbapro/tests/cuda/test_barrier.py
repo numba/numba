@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from numba import *
 from numbapro import cuda
-from numbapro._cuda import nvvm
+from numbapro.cudapipeline import nvvm
 import support
 llvm = '''
 

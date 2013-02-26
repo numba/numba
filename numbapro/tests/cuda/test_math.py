@@ -84,7 +84,7 @@ class TestCudaMath(support.CudaTestCase):
         self._template_f8f8(cu_pow, np.power)
 
     def test_abs(self):
-        self._template_f4f4(cu_abs, np.abs)
+        self._template_f4(cu_abs, np.abs)
 
 if __name__ == '__main__':
     unittest.main()

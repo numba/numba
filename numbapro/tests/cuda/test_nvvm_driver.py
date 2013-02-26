@@ -1,6 +1,6 @@
 import unittest, os
 
-from numbapro._cuda.nvvm import *
+from numbapro.cudapipeline.nvvm import *
 from ctypes import c_size_t, c_uint64, sizeof
 from llvm.core import *
 import support

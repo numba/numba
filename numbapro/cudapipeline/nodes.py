@@ -1,3 +1,5 @@
+import numpy
+
 from numba import nodes
 from numba.symtab import Variable
 from numba.minivect import minitypes
@@ -20,13 +22,14 @@ class CudaSMemArrayNode(nodes.Node):
 class CudaSMemArrayCallNode(nodes.Node):
     _attributes = ('shape', 'variable')
     def __init__(self, context, shape, dtype):
+
         self.shape = shape
         tmp_strides = [dtype.itemsize]
         for s in reversed(self.shape[1:]):
             tmp_strides.append(tmp_strides[-1] * s)
         self.strides = tuple(reversed(tmp_strides))
 
-        self.elemcount = np.prod(self.shape)
+        self.elemcount = numpy.prod(self.shape)
         self.dtype = dtype
         type = minitypes.ArrayType(dtype=dtype,
                                    ndim=len(self.shape),

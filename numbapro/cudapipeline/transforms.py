@@ -1,11 +1,14 @@
 import ast
 
+from llvm.core import Constant, Type
+
 from numba.codegen import translate as _translate
 from numba.type_inference import infer as _infer
-from numba import nodes
+from numba import nodes, llvm_types
 from numba.minivect import minitypes
 
 from .special_values import sreg, smem, barrier, macros
+from .nvvm import ADDRSPACE_SHARED
 
 from .nodes import (CudaAttributeNode,
                     CudaSMemArrayNode,
@@ -51,7 +54,7 @@ class CudaTypeInferer(_infer.TypeInferer):
         elif retval.value == macros.grid:  # expand into sreg attributes
             retval = CudaMacroGridNode()
         if retval is node:
-            retval = super(CudaAttrRewriteMixin, self).visit_Attribute(node)
+            retval = super(CudaTypeInferer, self).visit_Attribute(node)
 
         return retval
 
@@ -109,7 +112,7 @@ class CudaTypeInferer(_infer.TypeInferer):
                 raise ValueError("Dimension is only valid for 1 or 2, " \
                                  "but got %d" % ndim)
         else:
-            return super(CudaAttrRewriteMixin, self).visit_Call(node)
+            return super(CudaTypeInferer, self).visit_Call(node)
 
     def visit_Assign(self, node):
         node.inplace_op = getattr(node, 'inplace_op', None)
