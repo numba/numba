@@ -12,6 +12,11 @@ branches:
     - master
     - devel
 
+before_install:
+  - sudo add-apt-repository ppa:h-rayflood/llvm
+  - sudo apt-get update -qq
+  - sudo apt-get install clang-3.2
+
 install:
     - pip install -r requirements.txt --use-mirrors
     - python setup.py build_ext --inplace
@@ -22,3 +27,6 @@ matrix:
   allow_failures:
     - python: pypy
 
+notifications:
+  email: false
+  flowdock: "cb7bc57e58b3d42f77685f93211c03ab"
