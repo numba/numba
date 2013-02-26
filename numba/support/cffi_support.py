@@ -41,6 +41,11 @@ def map_type(cffi_type):
         else:
             result = struct([(name, map_type(field_type))
                                for name, field_type in cffi_type.fields])
+    elif cffi_type.kind == 'function':
+        restype = map_type(cffi_type.result)
+        argtypes = map(map_type, cffi_type.args)
+        result = minitypes.FunctionType(restype, argtypes,
+                                        is_vararg=cffi_type.ellipsis).pointer()
     else:
         result = type_map.get(cffi_type)
 
@@ -51,11 +56,7 @@ def map_type(cffi_type):
 
 def get_signature(cffi_func):
     "Get the numba signature for a CFFI function"
-    csignature = ffi.typeof(cffi_func)
-    restype = map_type(csignature.result)
-    argtypes = map(map_type, csignature.args)
-    return minitypes.FunctionType(restype, argtypes,
-                                  is_vararg=csignature.ellipsis)
+    return map_type(ffi.typeof(cffi_func)).base_type
 
 if ffi is None:
     # Disable cffi support

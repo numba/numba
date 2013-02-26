@@ -886,16 +886,18 @@ class FunctionType(Type):
     def __init__(self, return_type, args, name=None, is_vararg=False, **kwds):
         super(FunctionType, self).__init__(**kwds)
         self.return_type = return_type
-        self.args = args
+        self.args = tuple(args)
         self.name = name
         self.is_vararg = is_vararg
 
     def to_llvm(self, context):
         assert self.return_type is not None
         self = self.actual_signature
+        arg_types = [arg_type.pointer() if arg_type.is_function else arg_type
+                         for arg_type in self.args]
         return lc.Type.function(self.return_type.to_llvm(context),
                                 [arg_type.to_llvm(context)
-                                    for arg_type in self.args],
+                                     for arg_type in arg_types],
                                 self.is_vararg)
 
     def __repr__(self):

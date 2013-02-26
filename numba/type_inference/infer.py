@@ -756,8 +756,8 @@ class TypeInferer(visitors.NumbaTransformer):
             if variable.type.is_global: # or variable.type.is_module:
                 # TODO: look up globals in dict at call time if not
                 obj = variable.type.value
-                if not self.function_cache.is_registered(obj):
-                    variable.type = self.type_from_pyval(obj)
+                # if not self.function_cache.is_registered(obj):
+                variable.type = self.type_from_pyval(obj)
             elif variable.type.is_builtin:
                 # Rewrite builtin-ins later on, give other code the chance
                 # to handle them first
