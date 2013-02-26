@@ -17,7 +17,6 @@ Contents:
    doc/releases.rst
    doc/userguide.rst
    doc/arrays.rst
-   doc/arrayexprs.rst
    doc/types.rst
    doc/interface_c.rst
    doc/extension_types.rst
