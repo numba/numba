@@ -48,7 +48,7 @@ def lookup_global(env, name, position_node):
         # Assume recursive function
         value = numba.jit(func_env.func_signature)(func)
     else:
-        raise error.NumbaError(position_node, "No global named %s" % (e,))
+        raise error.NumbaError(position_node, "No global named %s" % (name,))
 
     return value
 
