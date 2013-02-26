@@ -5,7 +5,7 @@ from .environment import CudaEnvironment
 
 def cuda_jit(restype=None, argtypes=None, nopython=False,
              _llvm_module=None, env_name=None, env=None,
-             device=False,  inline=False, **kwargs):
+             device=False, inline=False, **kwargs):
     # error handling
     if restype and restype != numba.void and not device:
         print restype

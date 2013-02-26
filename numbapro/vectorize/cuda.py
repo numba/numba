@@ -7,6 +7,7 @@ from . import _common
 from numba.minivect import minitypes
 
 from numbapro.cudapipeline.error import CudaSupportError, CudaDriverError
+from numbapro.cudapipeline.decorators import CudaNumbaFunction
 from numbapro import cuda
 from numbapro.vectorize.gufunc import PyArray
 
@@ -121,16 +122,19 @@ class CudaASTVectorize(_common.GenericASTVectorize):
 
     def add(self, restype, argtypes, **kwargs):
         self.signatures.append((restype, argtypes, kwargs))
-        translate = cuda._ast_jit(self.pyfunc, restype, argtypes, inline=False,
-                                  **kwargs)
+        translate = cuda.jit(restype, argtypes, device=True, inline=False,
+                              **kwargs)(self.pyfunc)
         self.translates.append(translate)
         self.args_restypes.append(list(argtypes) + [restype])
 
     def _get_lfunc_list(self):
-        return [lfunc for sig, lfunc in self.translates]
+        return [t.lfunc for t in self.translates]
 
     def _get_sig_list(self):
-        return [sig for sig, lfunc in self.translates]
+        return [t.signature for t in self.translates]
+
+    def _get_env(self):
+        return self.translates[0].env
 
     def _get_ee(self):
         raise NotImplementedError
@@ -141,6 +145,7 @@ class CudaASTVectorize(_common.GenericASTVectorize):
     def build_ufunc(self):
         lfunclist = self._get_lfunc_list()
         signatures = self._get_sig_list()
+        env = self._get_env()
         types_to_retty_kernel = {}
         
         for (restype, argtypes, _), lfunc, sig in zip(self.signatures,
@@ -156,9 +161,8 @@ class CudaASTVectorize(_common.GenericASTVectorize):
             if isinstance(fname, unicode):
                 fname = fname.encode('utf-8')
 
-            cuf = cuda.CudaNumbaFunction(self.pyfunc,
-                                         signature=sig,
-                                         lfunc=cukernel)
+            cuf = CudaNumbaFunction(env, self.pyfunc, signature=sig,
+                                    lfunc=cukernel)
 
             types_to_retty_kernel[arg_dtypes] = ret_dtype, cuf
 
