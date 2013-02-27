@@ -614,10 +614,22 @@ def create_lfunc(tree, env):
 
     return tree
 
+def create_lfunc1(tree, env):
+    func_env = env.translation.crnt
+    if not func_env.is_closure:
+        create_lfunc(tree, env)
+
+    return tree
+
 def create_lfunc2(tree, env):
     func_env = env.translation.crnt
     assert func_env.func_signature and func_env.func_signature.return_type
-    return create_lfunc(tree, env)
+    return create_lfunc1(tree, env)
+
+def create_lfunc3(tree, env):
+    func_env = env.translation.crnt
+    create_lfunc(tree, env)
+    return tree
 
 class ControlFlowAnalysis(PipelineStage):
     _pre_condition_schema = None
