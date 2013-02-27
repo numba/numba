@@ -13,14 +13,14 @@ branches:
     - devel
 
 install:
-  - wget "http://llvm.org/releases/3.2/clang+llvm-3.2-x86-linux-ubuntu-12.04.tar.gz"
-  - tar -xzvf "clang+llvm-3.2-x86-linux-ubuntu-12.04.tar.gz" -C $HOME
-  - mv "$HOME/clang+llvm-3.2-x86-linux-ubuntu-12.04" "$HOME/clang"
-  - PATH+=":$HOME/clang/bin"
-  - export LLVM_CONFIG_PATH="$HOME/clang/bin/llvm-config"
-  - ls "$HOME/clang/bin"
-  - echo "$PATH $LLVM_CONFIG_PATH"
+  - wget "http://repo.continuum.io/pkgs/free/linux-64/llvm-3.2-0.tar.bz2"
+  - # wget "http://repo.continuum.io/pkgs/free/linux-64/llvmpy-0.10.0-py27_0.tar.bz2"
+  - tar -xjvf llvm-3.2-0.tar.bz2
+  - PATH+=":`pwd`/bin"
+  - export LD_LIBRARY_PATH="`pwd`/lib"
+  - export LLVM_CONFIG_PATH="`pwd`/bin/llvm-config"
   - $LLVM_CONFIG_PATH --cflags # test llvm-config
+  - export LLVMPY_DYNLINK=1
   - pip install llvmpy
   - pip install -r requirements.txt --use-mirrors
   - python setup.py build_ext --inplace
