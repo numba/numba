@@ -198,9 +198,6 @@ def test_prange_in_closure2(x):
 
     return inner
 
-def test():
-    import numba
-    numba.testmod()
 
 if __name__ == '__main__':
 #    simple_prange_shared()
@@ -210,4 +207,10 @@ if __name__ == '__main__':
 #    a = np.arange(100).reshape(10, 10)
 #    test_sum2d(a)
 #    test_prange_in_closure(2.0)()
-    test()
+    import __main__ as module
+else:
+    import test_prange as module
+
+import numba as nb
+nb.testmod(module, runit=True)
+__test__ = {}
