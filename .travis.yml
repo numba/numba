@@ -24,7 +24,7 @@ install:
   - # pip install llvmpy
   - git clone git://github.com/llvmpy/llvmpy.git
   - cd llvmpy ; python setup.py install ; cd ..
-  - pip install cython --install-option="--no-cython-compile") # This takes long
+  - pip install cython --install-option="--no-cython-compile" # This takes long
   - pip -q install -r requirements.txt --use-mirrors
   - python setup.py build_ext --inplace
 
