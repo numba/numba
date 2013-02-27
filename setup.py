@@ -28,7 +28,7 @@ cmdclass = versioneer.get_cmdclass()
 cmdclass['build_ext'] = build_ext
 
 setup_args = {
-    'long_description': open('README').read(),
+    'long_description': open('README.md').read(),
 }
 
 def find_packages(where='.', exclude=()):
