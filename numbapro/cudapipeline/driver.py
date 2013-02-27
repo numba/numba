@@ -377,8 +377,15 @@ class Driver(object):
                     setattr(inst, func, ct_func)
 
             # initialize the API
-            error = inst.cuInit(0)
-            inst.check_error(error, "Failed to initialize CUDA driver")
+            try:
+                error = inst.cuInit(0)
+                inst.check_error(error, "Failed to initialize CUDA driver")
+            except AttributeError:
+                # Not a real driver?
+                cls._raise_driver_not_found()
+            except CudaDriverError:
+                # it doesn't work?
+                cls._raise_driver_not_found()
 
         return cls.__INSTANCE
 
