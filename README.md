@@ -76,18 +76,18 @@ Mailing Lists
 
 Join the numba mailing list numba-users@continuum.io :
 
-    * https://groups.google.com/a/continuum.io/d/forum/numba-users
+    https://groups.google.com/a/continuum.io/d/forum/numba-users
 
-Some old archives are at http://librelist.com/browser/numba/
-
-    * See if our sponsor can help you (which can help this project) http://www.continuum.io
+Some old archives are at: http://librelist.com/browser/numba/
 
 Website
 =======
 
-    *http://numba.pydata.org
+See if our sponsor can help you (which can help this project): http://www.continuum.io
+
+    http://numba.pydata.org
 
 Continuous Integration
 ======================
 
-    * https://travis-ci.org/numba/numba
+    https://travis-ci.org/numba/numba
