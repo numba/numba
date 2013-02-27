@@ -60,7 +60,7 @@ def _get_pyarray_getptr(module):
 
     # set linkage and attributes
     function.add_attribute(lc.ATTR_ALWAYS_INLINE) # force inline
-    function.linkage = lc.LINKAGE_INTERNAL
+    # function.linkage = lc.LINKAGE_INTERNAL
 
     print function
 
