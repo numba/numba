@@ -1,3 +1,6 @@
+Numba
+=====
+
 Numba is an Open Source NumPy-aware optimizing compiler for Python 
 sponsored by Continuum Analytics, Inc.  It uses the
 remarkable LLVM compiler infrastructure to compile Python syntax to
@@ -15,6 +18,9 @@ in the decorator.
 Numba is a mechanism for producing machine code from Python syntax and typed
 data structures such as those that exist in NumPy. 
 
+Dependencies
+============
+
 Dependencies:
 
   * LLVM 3.1 or 3.2
@@ -23,50 +29,47 @@ Dependencies:
   * Meta (from numba/Meta fork (optional))
   * Cython (build dependency only)
   * nose (for unit tests)
+  * argparse (for pycc)
+
+Installing
+=================
 
 The easiest way to install numba and get updates is by using the Anaconda
 Distribution: http://continuum.io/anacondace.html
 
+Custom Python Environments
+==========================
+
+If you're not using anaconda, you will need LLVM with RTTI enabled:
+
 * Compile LLVM 3.2
 
-wget http://llvm.org/releases/3.2/llvm-3.2.src.tar.gz 
-tar zxvf llvm-3.2.src.tar.gz
-./configure --enable-optimized
-# Be sure your compiler architecture is same as version of Python you will use
-#  e.g. -arch i386 or -arch x86_64.  It might be best to be explicit about this.
-make install
+```bash
+    $ wget http://llvm.org/releases/3.2/llvm-3.2.src.tar.gz 
+    $ tar zxvf llvm-3.2.src.tar.gz
+    $ ./configure --enable-optimized
+    $ # Be sure your compiler architecture is same as version of Python you will use
+    $ #  e.g. -arch i386 or -arch x86_64.  It might be best to be explicit about this.
+    $ make install
+```
 
-* Clone llvmpy from github
+* Installing Numba
 
-git clone https://github.com/llvmpy/llvmpy.git
-python setup.py install
+```bash
+    $ git clone https://github.com/numba/numba.git
+    $ cd numba
+    $ pip install -r requirements.txt
+    $ python setup.py install
+```
 
-* Clone Meta from github
+or simply
 
-git clone https://github.com/numba/Meta.git
-python setup.py install
+```bash
+    $ pip install numba
+```
 
-* Install Cython (http://cython.org)
-
-easy_install cython
--OR-
-pip install cython
--OR-
-...
-
-* Install nose 
-
-easy_install nose
--OR-
-pip install nose
--OR-
-...
-
-* Build Numba
-
-git clone https://github.com/numba/numba.git
-python setup.py install
-
+Documentation
+=============
 
 * Follow Numba
 Join the numba mailinglist numba-users@continuum.io
@@ -74,7 +77,7 @@ https://groups.google.com/a/continuum.io/d/forum/numba-users
 
 Some old archives are at http://librelist.com/browser/numba/
 
-* See if our sponsor can help you (which can help this project) 
+* See if our sponsor can help you (which can help this project)
 http://www.continuum.io
 
 For some documentation, see
