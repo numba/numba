@@ -59,6 +59,7 @@ class CudaTypeInferer(_infer.TypeInferer):
         return retval
 
     def visit_Call(self, node):
+        from .decorators import CudaDeviceFunction
         func = self.visit(node.func)
         if isinstance(func, CudaSMemArrayNode):
             assert len(node.args) <= 2
@@ -111,6 +112,15 @@ class CudaTypeInferer(_infer.TypeInferer):
             else:
                 raise ValueError("Dimension is only valid for 1 or 2, " \
                                  "but got %d" % ndim)
+        elif (func.variable.is_constant and
+              isinstance(func.variable.constant_value, CudaDeviceFunction)):
+            devicefunc = func.variable.constant_value
+            self.visitlist(node.args)
+            func = nodes.LLVMExternalFunctionNode(devicefunc.signature,
+                                                  devicefunc.lfunc.name)
+            callnode = nodes.NativeFunctionCallNode(devicefunc.signature,
+                                                    func, node.args)
+            return callnode
         else:
             return super(CudaTypeInferer, self).visit_Call(node)
 

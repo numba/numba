@@ -25,11 +25,12 @@ def cuda_jit(restype=None, argtypes=None, nopython=False,
         assert pycallable is None
 
         if device:
-            env.add_device_function(func, lfunc)
+            env.add_device_function(func, lfunc, inline)
             wrappercls = CudaDeviceFunction
         else:
             assert not inline
             wrappercls = CudaNumbaFunction
+            env.ptxutils.link_device_function(lfunc)
 
         return wrappercls(env, func, signature=sig, lfunc=lfunc)
 
@@ -61,6 +62,10 @@ class CudaDeviceFunction(numbawrapper.NumbaWrapper):
         # print 'translating...'
         self.module = lfunc.module
         self.env = env
+
+        # Set internal linkage for device function
+        from llvm.core import LINKAGE_LINKONCE_ODR
+        lfunc.linkage = LINKAGE_LINKONCE_ODR
 
     def __call__(self, *args, **kws):
         raise TypeError("")

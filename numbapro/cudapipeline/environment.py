@@ -27,7 +27,6 @@ class PTXUtils(object):
         _hack_to_implement_pymodulo(module)
 
         for kernel in kernels:
-            self.link_device_function(kernel)
             nvvm.set_cuda_kernel(kernel)
         _link_llvm_math_intrinsics(module, cc_major)
 
@@ -48,20 +47,20 @@ class PTXUtils(object):
 
     def link_device_function(self, lfunc):
         toinline = []
-        for instr in  _list_callinstr(lfunc):
-            fn = instr.called_function
-            if fn is not None and fn.is_declaration: # can be None for inline asm
-                bag = self.device_functions.get(fn.name)
-                if bag is not None:
-                    pyfunc, linkee =bag
-                    lfunc.module.link_in(linkee.module, preserve=True)
-                    if pyfunc._numba_inline:
-                        toinline.append(instr)
 
+        for func in lfunc.module.functions:
+            if func.uses:
+                uselist = list(func.uses)
+                if func.is_declaration: # declared and is used
+                    bag = self.device_functions.get(func.name)
+                    if bag is not None:
+                        pyfunc, linkee, inline =bag
+                        lfunc.module.link_in(linkee.module, preserve=True)
+                        if inline:
+                            toinline.extend(uselist)
         for call in toinline:
             callee = call.called_function
             _lc.inline_function(call)
-
 
 
 class CudaEnvironment(_env.NumbaEnvironment):
@@ -90,9 +89,9 @@ class CudaEnvironment(_env.NumbaEnvironment):
         self.ptxutils = PTXUtils(self)
         self.device_functions = {}
 
-    def add_device_function(self, pyfunc, lfunc):
-        self.device_functions[pyfunc] = lfunc
-        
+    def add_device_function(self, pyfunc, lfunc, inline):
+        self.device_functions[lfunc.name] = pyfunc, lfunc, inline
+
 
 
 #
@@ -151,33 +150,6 @@ def _generate_ptx(module, kernels):
     return ptx
 
 
-
-
-def _link_device_function(lfunc):
-    toinline = []
-    for instr in  _list_callinstr(lfunc):
-        fn = instr.called_function
-        if fn is not None and fn.is_declaration: # can be None for inline asm
-            bag = _device_functions.get(fn.name)
-            if bag is not None:
-                pyfunc, linkee =bag
-                lfunc.module.link_in(linkee.module, preserve=True)
-                if pyfunc._numba_inline:
-                    toinline.append(instr)
-
-    for call in toinline:
-        callee = call.called_function
-        _lc.inline_function(call)
-
-
-
-def _list_callinstr(lfunc):
-    for bb in lfunc.basic_blocks:
-        for instr in bb.instructions:
-            if isinstance(instr, _lc.CallOrInvokeInstruction):
-                yield instr
-
-
 from . import ptx
 
 CUDA_MATH_INTRINSICS_2 = {
@@ -214,7 +186,7 @@ def _link_llvm_math_intrinsics(module, cc):
 
     # find all known math intrinsics and implement them.
     for lfunc in module.functions:
-        for instr in _list_callinstr(lfunc):
+        for instr in lfunc.uses:
             fn = instr.called_function
             if fn is not None: # maybe a inline asm
                 fname = fn.name
