@@ -161,9 +161,9 @@ class TypeMapper(object):
                 bits = math.log(abs(value), 2)
 
             if bits < 32:
-                return int64 # int_
+                return int_
             elif bits < 64:
-                return int64 # int64
+                return int64
             else:
                 raise ValueError("Cannot represent %s as int32 or int64", value)
         elif isinstance(value, complex):
