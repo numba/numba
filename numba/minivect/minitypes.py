@@ -158,7 +158,7 @@ class TypeMapper(object):
             if abs(value) < 1:
                 bits = 0
             else:
-                bits = math.log(abs(value), 2)
+                bits = math.ceil(math.log(abs(value), 2))
 
             if bits < 32:
                 return int_

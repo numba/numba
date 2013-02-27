@@ -1,7 +1,7 @@
 import numpy as np
 import unittest
 
-from numba import void, uint32, jit, int64
+from numba import void, int32, uint32, jit, int64
 
 @jit(void(uint32[:], uint32, uint32))
 def prng(X, A, C):
@@ -17,6 +17,10 @@ def unsigned_literal():
 @jit(int64())
 def unsigned_literal_64():
     return 0x100000000
+
+@jit(int64(int32))
+def constant_int_add(a):
+    return 0xffffffff + a
 
 class Test(unittest.TestCase):
     def test_prng(self):
@@ -40,6 +44,10 @@ class Test(unittest.TestCase):
         expect = 0x100000000
         self.assertEqual(expect, got)
 
+    def test_constant_int_add(self):
+        got = constant_int_add(1)
+        expect = 0xffffffff + 1
+        self.assertEqual(expect, got)
 
 if __name__ == '__main__':
     unittest.main()
