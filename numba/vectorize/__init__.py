@@ -10,16 +10,16 @@ from .basic import BasicVectorize, BasicASTVectorize
 from numba.utils import process_sig
 import warnings
 
-_bytecode_vectorizers = {
-    'cpu': BasicVectorize,
-}
+#_bytecode_vectorizers = {
+#    'cpu': BasicVectorize,
+#}
 
 _ast_vectorizers = {
     'cpu': BasicASTVectorize,
 }
 
 _vectorizers = {
-    'bytecode': _bytecode_vectorizers,
+#    'bytecode': _bytecode_vectorizers,
     'ast'     : _ast_vectorizers,
 }
 
@@ -53,9 +53,9 @@ def Vectorize(func, backend='ast', target='cpu'):
         Instantiate a vectorizer given the backend and target.
 
         func: the function to vectorize
-        backend: 'bytecode', 'ast' or 'mini'.
-        Default: 'bytecode'
-        target: 'basic', 'parallel', 'stream' or 'gpu'
+        backend: 'ast'
+        Default: 'ast'
+        target: 'basic'
         Default: 'basic'
         """
     assert backend in _vectorizers, tuple(backends)

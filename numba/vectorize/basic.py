@@ -59,15 +59,11 @@ class _BasicVectorizeFromFunc(_common.CommonVectorizeFromFunc):
 
 basic_vectorize_from_func = _BasicVectorizeFromFunc()
 
-class BasicVectorize(_common.GenericVectorize):
+class BasicASTVectorize(_common.GenericASTVectorize):
 
     _from_func_factory = basic_vectorize_from_func
 
     def build_ufunc(self, dispatcher=None):
         return self._from_func(dispatcher=dispatcher)
 
-
-
-class BasicASTVectorize(_common.GenericASTVectorize, BasicVectorize):
-    "Use the AST backend to compile the ufunc"
-
+BasicVectorize = BasicASTVectorize

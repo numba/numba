@@ -4,7 +4,6 @@ from numba import decorators
 from numba.codegen.llvmcontext import LLVMContextManager
 from numba.minivect import minitypes
 from . import _internal
-from ._translate import Translate
 
 try:
     ptr_t = long
@@ -108,79 +107,14 @@ class CommonVectorizeFromFunc(object):
                    for spuf in spuflist]
         return zip(spuflist, ptrlist)
 
-class GenericVectorize(object):
+class GenericASTVectorize(object):
+
     def __init__(self, func):
         self.pyfunc = func
         self.translates = []
-        self.args_restypes = []
-
-    def add(self, *args, **kwargs):
-        t = Translate(self.pyfunc, *args, **kwargs)
-        t.translate()
-        self.translates.append(t)
-
-        argtys = kwargs['argtypes']
-        retty = kwargs['restype']
-        self.args_restypes.append(argtys + [retty])
-
-    def _get_tys_list(self):
-        tyslist = []
-        for args_ret in self.args_restypes:
-            tys = []
-            for ty in args_ret:
-                tys.append(np.dtype(_numbatypes_to_numpy(ty)))
-            tyslist.append(tys)
-        return tyslist
-
-    def _get_lfunc_list(self):
-        return [t.lfunc for t in self.translates]
-
-    def _get_ee(self):
-        return self.translates[0]._get_ee()
-
-    def build_ufunc(self):
-        raise NotImplementedError
-
-    def _from_func(self, **kws):
-        assert self.translates, "No translation"
-        lfunclist = self._get_lfunc_list()
-        tyslist = self._get_tys_list()
-        engine = self._get_ee()
-        return self._from_func_factory(lfunclist, tyslist, engine=engine, **kws)
-
-
-    def build_ufunc_core(self, **kws):
-        '''Build the ufunc core functions and returns the prototype and pointer.
-        The return value is a list of tuples (prototype, pointer).
-        '''
-        assert self.translates, "No translation"
-        lfunclist = self._get_lfunc_list()
-        tyslist = self._get_tys_list()
-        engine = self._get_ee()
-        get_proto_ptr = self._from_func_factory._prepare_prototypes_and_pointers
-        return get_proto_ptr(lfunclist, tyslist, engine, **kws)
-
-class ASTVectorizeMixin(object):
-
-    def __init__(self, *args, **kwargs):
-        super(ASTVectorizeMixin, self).__init__(*args, **kwargs)
         self.args_restypes = getattr(self, 'args_restypes', [])
         self.signatures = []
         self.llvm_context = LLVMContextManager()
-
-    def _get_ee(self):
-        return self.llvm_context.execution_engine
-
-    def add(self, restype=None, argtypes=None):
-        dec = decorators.jit(restype, argtypes, backend='ast')
-        numba_func = dec(self.pyfunc)
-        self.args_restypes.append(list(numba_func.signature.args) +
-                                  [numba_func.signature.return_type])
-        self.signatures.append((restype, argtypes, {}))
-        self.translates.append(numba_func)
-
-    def get_argtypes(self, numba_func):
-        return list(numba_func.signature.args) + [numba_func.signature.return_type]
 
     def _get_tys_list(self):
         types_lists = []
@@ -193,8 +127,43 @@ class ASTVectorizeMixin(object):
 
         return types_lists
 
-class GenericASTVectorize(ASTVectorizeMixin, GenericVectorize):
-    "Use the AST backend to compile the ufunc"
+    def _get_lfunc_list(self):
+        return [t.lfunc for t in self.translates]
+
+    def _get_ee(self):
+        return self.llvm_context.execution_engine
+
+    def build_ufunc(self):
+        raise NotImplementedError
+
+    def _from_func(self, **kws):
+        assert self.translates, "No translation"
+        lfunclist = self._get_lfunc_list()
+        tyslist = self._get_tys_list()
+        engine = self._get_ee()
+        return self._from_func_factory(lfunclist, tyslist, engine=engine, **kws)
+
+    def build_ufunc_core(self, **kws):
+        '''Build the ufunc core functions and returns the prototype and pointer.
+        The return value is a list of tuples (prototype, pointer).
+        '''
+        assert self.translates, "No translation"
+        lfunclist = self._get_lfunc_list()
+        tyslist = self._get_tys_list()
+        engine = self._get_ee()
+        get_proto_ptr = self._from_func_factory._prepare_prototypes_and_pointers
+        return get_proto_ptr(lfunclist, tyslist, engine, **kws)
+
+    def add(self, restype=None, argtypes=None):
+        dec = decorators.jit(restype, argtypes)
+        numba_func = dec(self.pyfunc)
+        self.args_restypes.append(list(numba_func.signature.args) +
+                                  [numba_func.signature.return_type])
+        self.signatures.append((restype, argtypes, {}))
+        self.translates.append(numba_func)
+
+    def get_argtypes(self, numba_func):
+        return list(numba_func.signature.args) + [numba_func.signature.return_type]
 
 
 def post_vectorize_optimize(func):
