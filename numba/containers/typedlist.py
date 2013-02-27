@@ -106,7 +106,7 @@ def compile_typedlist(item_type, _list_cache=_list_cache):
         @void()
         def sort(self):
             # TODO: optional arguments cmp, key, reverse
-            notimplemented("sort")
+            self.buf[:self.size].sort()
 
         @Py_ssize_t()
         def __len__(self):
