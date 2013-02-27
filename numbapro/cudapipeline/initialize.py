@@ -3,15 +3,18 @@
 #
 def initialize():
     "Safe to run multiple times"
-    _init_driver()
-    _init_nvvm()
-    _init_numba_jit_registry()
+    from .error import CudaSupportError
+    try:
+        _init_driver()
+        _init_nvvm()
+        _init_numba_jit_registry()
 
-    # replace this function with a stub after the first run
-    initialize = lambda: True
-#    globals()['initialize'] = lambda: True
-    return True
-
+        # replace this function with a stub after the first run
+        initialize = lambda: True
+    #    globals()['initialize'] = lambda: True
+        return True
+    except CudaSupportError:
+        return False
 #
 # Privates
 #

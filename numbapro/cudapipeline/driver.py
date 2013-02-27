@@ -348,7 +348,6 @@ class Driver(object):
                     break # got it; break out
             else:
                 # not found, barf
-                cls.__INSTANCE = None
                 cls._raise_driver_not_found()
 
             # Obtain function pointers
@@ -385,6 +384,7 @@ class Driver(object):
 
     @classmethod
     def _raise_driver_not_found(cls):
+        cls.__INSTANCE = None # posion
         raise CudaSupportError(
                    "CUDA is not supported or the library cannot be found. "
                    "Try setting environment variable NUMBAPRO_CUDA_DRIVER "

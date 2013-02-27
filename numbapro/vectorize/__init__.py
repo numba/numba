@@ -28,6 +28,7 @@ except CudaSupportError, e:
     CudaVectorize = BasicVectorize
     CUDAGUFuncVectorize = GUFuncVectorize
     CudaGUFuncASTVectorize = GUFuncASTVectorize
+    CudaASTVectorize = BasicVectorize
 
 from .minivectorize import MiniVectorize, ParallelMiniVectorize
 

@@ -114,11 +114,12 @@ class NVVM(object):
 
     def __new__(cls, override_path=None):
         if not cls.__INSTANCE:
-            inst = cls.__INSTANCE = object.__new__(cls)
             # Load the driver
             for path in find_libnvvm(override_path):
                 try:
-                    inst.driver = CDLL(path)
+                    driver = CDLL(path)
+                    inst = cls.__INSTANCE = object.__new__(cls)
+                    inst.driver = driver
                     inst.path = path
                 except OSError:
                     pass # continue
@@ -146,7 +147,7 @@ class NVVM(object):
 
     def __del__(self):
         err = self.driver.nvvmFini()
-        self.check_error(err, 'Failde to finalize NVVM.', exit=True)
+        self.check_error(err, 'Failed to finalize NVVM.', exit=True)
 
     def get_version(self):
         major = c_int()
