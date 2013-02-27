@@ -180,7 +180,7 @@ class CudaCodeGenerator(_translate.LLVMCodeGenerator):
         # store data
         mod = self.builder.basic_block.function.module
         smem_elemtype = node.dtype.to_llvm(self.context)
-        smem_type = Type.array(smem_elemtype, node.elemcount)
+        smem_type = Type.array(smem_elemtype, int(node.elemcount))
         smem = mod.add_global_variable(smem_type, 'smem', ADDRSPACE_SHARED)
         smem.initializer = Constant.undef(smem_type)
 
