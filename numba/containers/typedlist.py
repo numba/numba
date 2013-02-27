@@ -1,7 +1,11 @@
 import numba as nb
 from numba import *
+from numba import nodes
 from numba import typesystem
+from numba.typesystem import get_type
 from numba.containers import orderedcontainer
+from numba.type_inference.module_type_inference import register_inferer
+import typedlist as typedlist_module
 
 import numpy as np
 
@@ -14,7 +18,11 @@ def notimplemented(msg):
 
 _list_cache = {}
 
-def typedlist(item_type, iterable=None, _list_cache=_list_cache):
+#-----------------------------------------------------------------------
+# Runtime Constructor
+#-----------------------------------------------------------------------
+
+def typedlist(item_type, iterable=None):
     """
     >>> typedlist(int_)
     []
@@ -27,21 +35,27 @@ def typedlist(item_type, iterable=None, _list_cache=_list_cache):
     >>> typedlist(float_, range(10))
     [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
     """
+    typedlist_ctor = compile_typedlist(item_type)
+    return typedlist_ctor(iterable)
+
+#-----------------------------------------------------------------------
+# Typedlist implementation
+#-----------------------------------------------------------------------
+
+def compile_typedlist(item_type, _list_cache=_list_cache):
+    # item_type_t = typesystem.CastType(item_type)
+    # dtype_t = typesystem.NumpyDtypeType(item_type)
+
     if item_type in _list_cache:
-        return _list_cache[item_type](item_type, item_type.get_dtype(), iterable)
+        return _list_cache[item_type]
 
-    item_type_t = typesystem.CastType(item_type)
-    dtype_t = typesystem.NumpyDtypeType(item_type)
-
+    dtype = item_type.get_dtype()
     methods = orderedcontainer.container_methods(item_type, notimplemented)
 
     @nb.jit(warn=False)
     class typedlist(object):
-        @void(item_type_t, dtype_t, object_)
-        def __init__(self, item_type, dtype, iterable):
-            # self.item_type = item_type
-            item_type
-            self.dtype = dtype
+        @void(object_)
+        def __init__(self, iterable):
             self.size = 0
 
             # TODO: Use length hint of iterable for initial buffer size
@@ -104,7 +118,31 @@ def typedlist(item_type, iterable=None, _list_cache=_list_cache):
             return "[" + buf + "]"
 
     _list_cache[item_type] = typedlist
-    return typedlist(item_type, item_type.get_dtype(), iterable)
+    return typedlist
+
+#-----------------------------------------------------------------------
+# Infer types for typedlist construction
+#-----------------------------------------------------------------------
+
+def typedlist_infer(type_node, iterable_node):
+    assert type_node is not None
+
+    type = get_type(type_node)
+    if type.is_cast:
+        elem_type = type.dst_type
+
+        # Pre-compile typed list implementation
+        typedlist_ctor = compile_typedlist(elem_type)
+
+        # Inject the typedlist directly to avoid runtime implementation lookup
+        iterable_node = iterable_node or nodes.const(None, object_)
+        result = nodes.call_pyfunc(typedlist_ctor, (iterable_node,))
+        return nodes.CoercionNode(result, typedlist_ctor.exttype)
+
+    return object_
+
+register_inferer(typedlist_module, 'typedlist', typedlist_infer,
+                 pass_in_types=False)
 
 
 if __name__ == "__main__":

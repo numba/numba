@@ -184,4 +184,5 @@ def test():
     nb.testmod()
 
 if __name__ == "__main__":
+#    print test_reverse(int_, range(10))
     test()

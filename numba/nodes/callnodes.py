@@ -141,7 +141,7 @@ class ObjectCallNode(FunctionCallNode):
         self.function = func
         self.py_func = py_func
 
-        self.args_tuple = ast.Tuple(elts=args, ctx=ast.Load())
+        self.args_tuple = ast.Tuple(elts=list(args), ctx=ast.Load())
         self.args_tuple.variable = Variable(
                 typesystem.TupleType(object_, size=len(args)))
 
