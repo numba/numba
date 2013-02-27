@@ -153,7 +153,7 @@ static PyMethodDef ext_methods[] = {
 /* Don't remove this marker, it is used for inserting licensing code */
 /*MARK1*/
 
-#if IS_PY3K
+#ifdef IS_PY3K
 
 struct PyModuleDef module_def = {
     PyModuleDef_HEAD_INIT,
