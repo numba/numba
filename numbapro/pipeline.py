@@ -7,41 +7,7 @@ from numba.pipeline import ComposedPipelineStage
 from numba.environment import insert_stage, TypedProperty
 from numba.control_flow import cfstats
 
-from numbapro import array_expressions, array_slicing
 from numbapro.parallel import prange
-
-
-class NumbaproPipeline(pipeline.Pipeline):
-    """
-    Pipeline that supports NumbaPro specific functionality
-    """
-
-    def __init__(self, context, func, ast, func_signature, **kwargs):
-        super(NumbaproPipeline, self).__init__(context, func, ast,
-                                               func_signature, **kwargs)
-        self.try_insert_specializer('rewrite_array_expressions',
-                                    before='specialize')
-
-        self.try_insert_specializer('expand_prange',
-                                    before='cfg')
-        self.try_insert_specializer('rewrite_prange_privates',
-                                    before='cfg')
-        self.try_insert_specializer('fix_ast_locations',
-                                    before='cfg')
-        self.try_insert_specializer('cleanup_prange',
-                                    after='type_infer')
-
-    def expand_prange(self, ast):
-        transformer = self.make_specializer(prange.PrangeExpander, ast)
-        return transformer.visit(ast)
-
-    def rewrite_prange_privates(self, ast):
-        transformer = self.make_specializer(prange.PrangePrivatesReplacer, ast)
-        return transformer.visit(ast)
-
-    def cleanup_prange(self, ast):
-        transformer = self.make_specializer(prange.PrangeCleanup, ast)
-        return transformer.visit(ast)
 
 
 #----------------------------------------------------------------------------
@@ -83,17 +49,6 @@ class CleanupPrange(pipeline.PipelineStage):
     def transform(self, ast, env):
         transformer = self.make_specializer(prange.PrangeCleanup, ast, env)
         return transformer.visit(ast)
-
-#----------------------------------------------------------------------------
-# Code Generation
-#----------------------------------------------------------------------------
-
-class NumbaProCodegen(array_slicing.NativeSliceCodegenMixin):
-    """
-    Support native slicing code generation and prange.
-    """
-
-NumbaproPipeline.add_mixin('codegen', NumbaProCodegen, before=True)
 
 #----------------------------------------------------------------------------
 # Create Pipeline
