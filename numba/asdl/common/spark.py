@@ -343,7 +343,8 @@ class GenericParser:
         #
         return self._NULLABLE == sym[0:len(self._NULLABLE)]
 
-    def skip(self, (lhs, rhs), pos=0):
+    def skip(self, xxx_todo_changeme, pos=0):
+        (lhs, rhs) = xxx_todo_changeme
         n = len(rhs)
         while pos < n:
             if not self.isnullable(rhs[pos]):
@@ -661,7 +662,7 @@ class GenericParser:
             sortlist.append((len(rhs), name))
             name2index[name] = i
         sortlist.sort()
-        list_ = map(lambda (a,b): b, sortlist)
+        list_ = map(lambda a_b: a_b[1], sortlist)
         if PY3:
             list_ = list(list_)
         return rules[name2index[self.resolve(list_)]]
