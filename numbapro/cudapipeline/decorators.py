@@ -30,7 +30,6 @@ def cuda_jit(restype=None, argtypes=None, nopython=False,
         else:
             assert not inline
             wrappercls = CudaNumbaFunction
-            env.ptxutils.link_device_function(lfunc)
 
         return wrappercls(env, func, signature=sig, lfunc=lfunc)
 
@@ -118,6 +117,8 @@ class CudaNumbaFunction(CudaBaseFunction):
         # self.extra = extra # unused
         self.env = env
         func_name = lfunc.name
+        # Link device
+        self.env.ptxutils.link_device_function(self.lfunc)
 
         # FIXME: this function is called multiple times on the same lfunc.
         #        As a result, it has a long list of nvvm.annotation of the
