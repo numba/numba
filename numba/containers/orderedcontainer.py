@@ -1,6 +1,8 @@
 import numba as nb
 from numba import *
+from numba import nodes
 from numba import typesystem
+from numba.typesystem import get_type
 
 import numpy as np
 
@@ -71,3 +73,31 @@ def container_methods(item_type, notimplemented):
         return count
 
     return locals()
+
+#-----------------------------------------------------------------------
+# Infer types for typed containers (typedlist, typedtuple)
+#-----------------------------------------------------------------------
+
+def typedcontainer_infer(compile_typedcontainer, type_node, iterable_node):
+    """
+    Type inferer for typed containers, register with numba.register_inferer().
+
+    :param compile_typedcontainer: item_type -> typed container extension class
+    :param type_node: type parameter to typed container constructor
+    :param iterable_node: value parameter to typed container constructor (optional)
+    """
+    assert type_node is not None
+
+    type = get_type(type_node)
+    if type.is_cast:
+        elem_type = type.dst_type
+
+        # Pre-compile typed list implementation
+        typedcontainer_ctor = compile_typedcontainer(elem_type)
+
+        # Inject the typedlist directly to avoid runtime implementation lookup
+        iterable_node = iterable_node or nodes.const(None, object_)
+        result = nodes.call_pyfunc(typedcontainer_ctor, (iterable_node,))
+        return nodes.CoercionNode(result, typedcontainer_ctor.exttype)
+
+    return object_

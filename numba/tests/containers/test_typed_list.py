@@ -180,18 +180,23 @@ def test_reverse(type, value):
     tlist.reverse()
     return tlist
 
-@autojit
-def test_sort(type, value):
-    """
-    >>> test_sort(int_, range(5, 10) + range(5) + range(10, 15))
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-    """
-    tlist = nb.typedlist(type, value)
-    tlist.sort()
-    return tlist
+#@autojit
+#def test_sort(type, value):
+#    """
+#    >>> test_sort(int_, range(5, 10) + range(5) + range(10, 15))
+#    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+#    """
+#    tlist = nb.typedlist(type, value)
+#    tlist.sort()
+#    return tlist
 
-def test():
-    nb.testmod()
+def test(module):
+    nb.testmod(module, runit=True)
 
 if __name__ == "__main__":
-    test()
+    import __main__ as module
+else:
+    import test_typed_list as module
+
+test(module)
+__test__ = {}

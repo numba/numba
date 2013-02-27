@@ -2,9 +2,7 @@ import numba as nb
 from numba import *
 from numba import nodes
 from numba import typesystem
-from numba.typesystem import get_type
 from numba.containers import orderedcontainer
-from numba.type_inference.module_type_inference import register_inferer
 import typedlist as typedlist_module
 
 import numpy as np
@@ -119,30 +117,6 @@ def compile_typedlist(item_type, _list_cache=_list_cache):
 
     _list_cache[item_type] = typedlist
     return typedlist
-
-#-----------------------------------------------------------------------
-# Infer types for typedlist construction
-#-----------------------------------------------------------------------
-
-def typedlist_infer(type_node, iterable_node):
-    assert type_node is not None
-
-    type = get_type(type_node)
-    if type.is_cast:
-        elem_type = type.dst_type
-
-        # Pre-compile typed list implementation
-        typedlist_ctor = compile_typedlist(elem_type)
-
-        # Inject the typedlist directly to avoid runtime implementation lookup
-        iterable_node = iterable_node or nodes.const(None, object_)
-        result = nodes.call_pyfunc(typedlist_ctor, (iterable_node,))
-        return nodes.CoercionNode(result, typedlist_ctor.exttype)
-
-    return object_
-
-register_inferer(typedlist_module, 'typedlist', typedlist_infer,
-                 pass_in_types=False)
 
 
 if __name__ == "__main__":
