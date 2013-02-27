@@ -154,6 +154,16 @@ def resolve_argtypes(numba_func, template_signature,
 
     locals_dict = translator_kwargs.get("locals", None)
 
+    argcount = numba_func.py_func.func_code.co_argcount
+    if argcount != len(args):
+        if argcount == 1:
+            arguments = 'argument'
+        else:
+            arguments = 'arguments'
+        raise TypeError("%s() takes exactly %d %s (%d given)" % (
+                                numba_func.py_func.__name__, argcount,
+                                arguments, len(args)))
+
     return_type = None
     argnames = inspect.getargspec(numba_func.py_func).args
     env = environment.NumbaEnvironment.get_environment(
