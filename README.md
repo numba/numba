@@ -71,6 +71,11 @@ or simply
 Documentation
 =============
 
+http://numba.pydata.org/numba-doc/dev/index.html
+
+Mailing Lists
+=============
+
 * Follow Numba
 Join the numba mailinglist numba-users@continuum.io
 https://groups.google.com/a/continuum.io/d/forum/numba-users
@@ -80,6 +85,7 @@ Some old archives are at http://librelist.com/browser/numba/
 * See if our sponsor can help you (which can help this project)
 http://www.continuum.io
 
-For some documentation, see
-https://github.com/numba/numba/blob/master/docs/source/doc/userguide.rst
+Website
+=======
 
+http://numba.pydata.org
