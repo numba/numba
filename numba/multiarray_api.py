@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 '''multiarray_api
 
 Defines a utility class for generating LLVM code that retrieves values
 out of the Numpy array C API PyCObject/capsule.
 '''
+from __future__ import print_function, division, absolute_import
 # ______________________________________________________________________
 
 import ctypes

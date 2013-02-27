@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Struct and complex nodes.
 
@@ -6,6 +7,7 @@ because mutations are attribute or index assignments, which are not
 recognized as variable assignments. Hence mutation cannot propagate new
 values. So we mutate what we have on the stack.
 """
+from __future__ import print_function, division, absolute_import
 
 from numba.nodes import *
 

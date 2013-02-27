@@ -7,19 +7,19 @@ def func(x):
     i = 0
     #y = 12
     h = 30
-    print i
+    print(i)
     while i < 10:
         if x > i:
-            print x
+            print(x)
             y = 14
         else:
-            print y
+            print(y)
 
         i = i + 1
-        print y
+        print(y)
 
-    print i
-    print y
+    print(i)
+    print(y)
 
 #@jit(void())
 def _for_loop_fn_0():
@@ -40,7 +40,7 @@ def func(a, b):
     #while a < 4:
     #    for i in range(10):
     #        b = 9
-    print b
+    print(b)
 
 if __name__ == '__main__':
     pass

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 This module provides support for closures and inner functions.
 
@@ -48,6 +49,7 @@ outer, so all variables can be resolved.
 
 These scopes are instances of a numba extension class.
 """
+from __future__ import print_function, division, absolute_import
 
 import ast
 import ctypes

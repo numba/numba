@@ -18,7 +18,7 @@ def test():
     #        File "/Users/sklam/dev/numba/numba/minivect/minitypes.py", line 492, in __getattr__
     #            return getattr(type(self), attr)
     #AttributeError: type object 'TupleType' has no attribute 'variable'
-    print get_jenks_breaks(data, lower_class_limits, n_classes)
+    print((get_jenks_breaks(data, lower_class_limits, n_classes)))
 
 if __name__ == '__main__':
     test()

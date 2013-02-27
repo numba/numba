@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Special compiler-recognized numba functions and attributes.
 """
+from __future__ import print_function, division, absolute_import
 
 __all__ = ['NULL', 'typeof']
 

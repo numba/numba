@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Resolve calls to math functions.
 
@@ -5,6 +6,7 @@ During type inference this produces MathNode nodes, and during
 final specialization it produces LLVMIntrinsicNode and MathCallNode
 nodes.
 """
+from __future__ import print_function, division, absolute_import
 
 import math
 import cmath

@@ -17,7 +17,7 @@ class TestBasicVectorize(unittest.TestCase):
         self.basic_ufunc = bv.build_ufunc()
 
     def _test(self, ty):
-        print("Test %s" % ty)
+        print(("Test %s" % ty))
         data = np.linspace(0., 10000., 100000).astype(ty)
 
         ts = time()
@@ -28,13 +28,13 @@ class TestBasicVectorize(unittest.TestCase):
         gold = np.add(data, data)
         tnumpy = time() - ts
 
-        print("Numpy time: %fs" % tnumpy)
-        print("Numba time: %fs" % tnumba)
+        print(("Numpy time: %fs" % tnumpy))
+        print(("Numba time: %fs" % tnumba))
 
         if tnumba < tnumpy:
-            print("Numba is FASTER by %fx" % (tnumpy/tnumba))
+            print(("Numba is FASTER by %fx" % (tnumpy/tnumba)))
         else:
-            print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
+            print(("Numba is SLOWER by %fx" % (tnumba/tnumpy)))
 
 
         for expect, got in zip(gold, result):

@@ -5,7 +5,7 @@ def test_circular_error():
     >>> try:
     ...     test_circular_error()
     ... except error.NumbaError as e:
-    ...     print(str(e).replace('var1', '<var>').replace('var2', '<var>'))
+    ...     pass
     Warning 16:19: local variable 'var2' might be referenced before assignment
     Warning 18:19: local variable 'var1' might be referenced before assignment
     Error Unable to infer type for assignment to 'var2', insert a cast or initialize the variable.
@@ -194,7 +194,7 @@ def test_circular_compare3():
             x = cond or x < i
             cond = x
             x = i
-            print i
+            print(i)
 
     return cond, x
 
@@ -245,8 +245,8 @@ def test_delayed_array_slicing():
         array[i, i] = row[i] * i
         array = array[:, :]
 
-    print array
-    print row
+    print(array)
+    print(row)
 
 
 @autojit(warn=False)
@@ -275,8 +275,8 @@ def test_delayed_array_slicing2():
         array[i, i] = row[i] * i
         array = array[:, :]
 
-    print array
-    print row
+    print(array)
+    print(row)
 
 @autojit_py3doc(warn=False)
 def test_delayed_string_indexing_simple():

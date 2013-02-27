@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import opcode
 import sys
 import types
@@ -1048,7 +1050,7 @@ class Translate(object):
             if not is_dead_code:
                 getattr(self, 'op_'+name)(i, op, arg)
 
-        print self.lfunc
+        print((self.lfunc))
         # Perform code optimization
         if self.optimize:
             fpm = lp.FunctionPassManager.new(self.mod)

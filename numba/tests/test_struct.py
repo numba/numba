@@ -105,10 +105,10 @@ def coerce_to_obj():
     return object_(value)
 
 def test_coerce_to_obj():
-    print coerce_to_obj()
+    print((coerce_to_obj()))
 
 if __name__ == "__main__":
-    print struct_local_copy()
+    print((struct_local_copy()))
     # print call_struct_as_arg()
     test_struct_locals()
     test_record_array()

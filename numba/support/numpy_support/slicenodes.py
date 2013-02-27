@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 AST nodes for native slicing.
 """
+from __future__ import print_function, division, absolute_import
 
 import ast
 

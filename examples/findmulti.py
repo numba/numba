@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 from numba import jit
 
 @jit('i4(i4,f8,i4,f8[:])')

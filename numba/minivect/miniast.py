@@ -1,9 +1,11 @@
+# -*- coding: utf-8 -*-
 """
 This module provides the AST. Subclass :py:class:`Context` and override the
 various methods to allow minivect visitors over the AST, to promote and map types,
 etc. Subclass and override :py:class:`ASTBuilder`'s methods to provide alternative
 AST nodes or different implementations.
 """
+from __future__ import print_function, division, absolute_import
 
 import copy
 import string

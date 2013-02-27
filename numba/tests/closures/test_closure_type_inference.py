@@ -21,7 +21,7 @@ def test_cellvar_promotion(a):
 
     @jit(void())
     def inner():
-        print a * b
+        print((a * b))
 
     inner()
     a = float(a)
@@ -42,7 +42,7 @@ def test_cellvar_promotion_error(a):
 
     @jit(void())
     def inner():
-        print a * b
+        print((a * b))
 
     inner()
     a = np.empty(10, dtype=np.double)

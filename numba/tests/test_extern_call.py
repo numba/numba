@@ -40,10 +40,10 @@ class TestASTExternCall(test_support.ASTTestCase):
         testarr = numpy.array([1., 2, 3, 4, 5], dtype=numpy.double)
         testfn = self.jit(argtypes = [double[:]], restype = double[:])(
             call_zeros_like)
-        print sys.getrefcount(testarr)
+        print((sys.getrefcount(testarr)))
         result = testfn(testarr)
-        print sys.getrefcount(testarr)
-        print sys.getrefcount(result)
+        print((sys.getrefcount(testarr)))
+        print((sys.getrefcount(result)))
         self.assertTrue((result == numpy.zeros_like(testarr)).all())
 
     def test_call_len(self):

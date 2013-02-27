@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Types for closures and inner functions.
 """
+from __future__ import print_function, division, absolute_import
 
 from numba.typesystem import *
 

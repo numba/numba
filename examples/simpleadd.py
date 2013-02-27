@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 from numba import jit, autojit
 
 @jit('f8(f8,f8)')

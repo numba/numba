@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 #  Copyright (c) 1998-2002 John Aycock
 #
 #  Permission is hereby granted, free of charge, to any person obtaining
@@ -59,7 +61,7 @@ class GenericScanner:
         return string.join(rv, '|')
 
     def error(self, s, pos):
-        print "Lexical error at position %s" % pos
+        print("Lexical error at position %s" % pos)
         raise SystemExit
 
     def tokenize(self, s):
@@ -78,7 +80,7 @@ class GenericScanner:
 
     def t_default(self, s):
         r'( . | \n )+'
-        print "Specification error: unmatched input"
+        print("Specification error: unmatched input")
         raise SystemExit
 
 #
@@ -295,7 +297,7 @@ class GenericParser:
         return None
 
     def error(self, token):
-        print "Syntax error at or near '%s' token" % token
+        print("Syntax error at or near '%s' token" % token)
         raise SystemExit
 
     def parse(self, tokens):
@@ -826,15 +828,15 @@ class GenericASTMatcher(GenericParser):
 
 def _dump(tokens, sets, states):
     for i in range(len(sets)):
-        print 'set', i
+        print('set', i)
         for item in sets[i]:
-            print '\t', item
+            print('\t', item)
             for (lhs, rhs), pos in states[item[0]].items:
-                print '\t\t', lhs, '::=',
-                print string.join(rhs[:pos]),
-                print '.',
-                print string.join(rhs[pos:])
+                print('\t\t', lhs, '::=', end=' ')
+                print(string.join(rhs[:pos]), end=' ')
+                print('.', end=' ')
+                print(string.join(rhs[pos:]))
         if i < len(tokens):
-            print
-            print 'token', str(tokens[i])
-            print
+            print()
+            print('token', str(tokens[i]))
+            print()

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 from numba.nodes import *
 
 basic_block_fields = ['cond_block', 'if_block', 'else_block', 'exit_block']

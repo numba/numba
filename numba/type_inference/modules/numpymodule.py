@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Infer types for NumPy functionality. This includes:
 
@@ -8,6 +9,7 @@ Infer types for NumPy functionality. This includes:
 
     2) Function calls such as np.empty/np.empty_like/np.arange/etc
 """
+from __future__ import print_function, division, absolute_import
 
 from functools import reduce
 

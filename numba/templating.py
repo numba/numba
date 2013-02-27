@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 String templating support. The following syntax is supported:
 
@@ -17,6 +18,7 @@ String templating support. The following syntax is supported:
             - Untyped variables are renameable/ssa variables
             - Code variables simply expand to arbitrary code
 """
+from __future__ import print_function, division, absolute_import
 
 
 import re

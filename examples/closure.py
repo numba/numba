@@ -1,9 +1,11 @@
+# -*- coding: utf-8 -*-
 """
 Example for closures. Closures may be of arbitrary dept, and they keep
 the scope alive as long as the closure is alive. Only variables that are
 closed over (cell variables in the defining function, free variables in the
 closure), are kept alive. See also numba/tests/closures/test_closure.py
 """
+from __future__ import print_function, division, absolute_import
 
 from numba import autojit, jit, float_
 from numpy import linspace

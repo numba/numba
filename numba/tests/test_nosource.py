@@ -7,7 +7,7 @@ def test_nosource():
 def foo (): return 99
 
 '''
-    exec source
+    exec(source)
     assert foo() == 99
 
 if sys.version_info[:2] < (2, 7):

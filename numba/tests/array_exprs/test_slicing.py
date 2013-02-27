@@ -59,4 +59,4 @@ if __name__ == "__main__":
     a = np.arange(10)
     t = time.time()
     time_slicing(a, 1, 7, 2)
-    print time.time() - t
+    print((time.time() - t))

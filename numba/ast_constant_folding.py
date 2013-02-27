@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 '''
 This module implements constant folding on the AST.  It handles simple cases
 such as 
@@ -6,6 +7,7 @@ such as
 * 2 ** 10 -> 1024
 * N=1; N + 1 -> 2  (for N is assigned as global variable or a variable 
                     that's only assigned once)
+from __future__ import print_function, division, absolute_import
 '''
 import operator, ast
 from functools import reduce

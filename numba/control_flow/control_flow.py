@@ -5,6 +5,7 @@ Control flow for the AST backend.
 
 Adapted from Cython/Compiler/FlowControl.py
 """
+from __future__ import print_function, division, absolute_import
 
 import re
 import ast
@@ -433,9 +434,9 @@ class ControlFlow(object):
         variable definitions can reach there.
         """
         if debug:
-            print "Dominator sets:"
+            print("Dominator sets:")
             for block in self.blocks:
-                print block.id, sorted(block.dominators, key=lambda b: b.id)
+                print((block.id, sorted(block.dominators, key=lambda b: b.id)))
 
         blocks = []
         for block in self.blocks:
@@ -499,9 +500,9 @@ class ControlFlow(object):
         """
         # Print dominance frontier
         if debug:
-            print "Dominance frontier:"
+            print("Dominance frontier:")
             for block in self.blocks:
-                print 'DF(%d) = %s' % (block.id, block.dominance_frontier)
+                print(('DF(%d) = %s' % (block.id, block.dominance_frontier)))
 
         if PY3:
             argnames = [name.arg for name in ast.args.args]

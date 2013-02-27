@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 '''
 NumbaPro CUDA implementation
 '''
+from __future__ import print_function, division, absolute_import
 from numbapro import cuda
 from numba import autojit, jit, f8, int32, void
 import numpy as np

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import llvm
 
 def llvm_alloca(lfunc, builder, ltype, name='', change_bb=True):

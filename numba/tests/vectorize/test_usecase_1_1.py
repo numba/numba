@@ -80,7 +80,7 @@ class TestBasicVectorize(unittest.TestCase):
 
         print(module)
         module.verify()
-        print(module.to_native_assembly())
+        print((module.to_native_assembly()))
 
         self.check(ufunc, np.double)
 

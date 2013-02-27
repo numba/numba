@@ -82,11 +82,11 @@ def pop(type):
         tlist.append(i)
 
     l1 = len(tlist)
-    print tlist.pop()
+    print((tlist.pop()))
     l2 = len(tlist)
-    print tlist.pop()
+    print((tlist.pop()))
     l3 = len(tlist)
-    print tlist.pop()
+    print((tlist.pop()))
     l4 = len(tlist)
     return l1, l2, l3, l4
 

@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# -*- coding: utf-8 -*-
 # ______________________________________________________________________
 '''cfg
 
@@ -10,6 +11,7 @@ arguments of the form <module.module_fn>.  Example:
 
 % python -m numba.cfg test_while.while_loop_fn_0
 '''
+from __future__ import print_function, division, absolute_import
 # ______________________________________________________________________
 
 import opcode
@@ -359,11 +361,11 @@ def main (*args, **kws):
     for arg in args:
         func = get_module_member(arg)
         if func is None:
-            print("Don't know how to handle %r, expecting <module.member> "
-                  "arguments.  Skipping..." % (arg,))
+            print(("Don't know how to handle %r, expecting <module.member> "
+                  "arguments.  Skipping..." % (arg,)))
         elif not hasattr(func, '__code__'):
-            print("Don't know how to handle %r, module member does not "
-                  "have a code object.  Skipping..." % (arg,))
+            print(("Don't know how to handle %r, module member does not "
+                  "have a code object.  Skipping..." % (arg,)))
         else:
             cfg = cls.build_cfg(func.__code__)
             cfg.compute_dataflow()

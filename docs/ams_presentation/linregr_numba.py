@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 '''
 Numba does not support array expressions.
 Expand the array-expression into loops.
 '''
+from __future__ import print_function, division, absolute_import
 from numba import autojit, jit, f8, int32, void
 
 @jit(void(f8[:], f8[:], f8[:], f8, int32))

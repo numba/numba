@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 __all__ = ['autojit', 'jit', 'export', 'exportmany']
 
 import types
@@ -154,7 +156,7 @@ def resolve_argtypes(numba_func, template_signature,
 
     locals_dict = translator_kwargs.get("locals", None)
 
-    argcount = numba_func.py_func.func_code.co_argcount
+    argcount = numba_func.py_func.__code__.co_argcount
     if argcount != len(args):
         if argcount == 1:
             arguments = 'argument'
@@ -168,7 +170,7 @@ def resolve_argtypes(numba_func, template_signature,
     argnames = inspect.getargspec(numba_func.py_func).args
     env = environment.NumbaEnvironment.get_environment(
         translator_kwargs.get('env', None))
-    argtypes = map(env.context.typemapper.from_python, args)
+    argtypes = [env.context.typemapper.from_python(x) for x in args]
 
     if template_signature is not None:
         template_context, signature = typesystem.resolve_templates(

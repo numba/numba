@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 This module provides a minimal type system, and ways to promote types, as
 well as ways to convert to an LLVM type system. A set of predefined types are
@@ -26,6 +27,7 @@ Traceback (most recent call last):
    ...
 InvalidTypeSpecification: Step may only be provided once, and only in the first or last dimension.
 """
+from __future__ import print_function, division, absolute_import
 
 __all__ = ['Py_ssize_t', 'void', 'char', 'uchar', 'short', 'ushort',
            'int_', 'uint', 'long_', 'ulong', 'longlong', 'ulonglong',

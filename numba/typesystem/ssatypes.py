@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 This module provides deferred types used for type dependences that
 haven't been processed yet, or circular dependences.
@@ -35,6 +36,7 @@ haven't been processed yet, or circular dependences.
                     \
                       i_0 (Py_ssize_t)
 """
+from __future__ import print_function, division, absolute_import
 
 from numba import oset
 from numba.minivect import minierror

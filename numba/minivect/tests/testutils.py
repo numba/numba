@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Module providing some test utilities.
 """
+from __future__ import print_function, division, absolute_import
 
 import os
 import sys

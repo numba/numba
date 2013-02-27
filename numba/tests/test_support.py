@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
+
 import os
 import sys
 import types
@@ -58,7 +61,7 @@ def skip_test(reason):
     if have_unit_skip:
         raise SkipTest(reason)
     else:
-        print >>sys.stderr, "Skipping: " + reason
+        print("Skipping: " + reason, file=sys.stderr)
 
 def skip_if(should_skip, message):
     def decorator(func):

@@ -22,22 +22,22 @@ def get_string(i=0):
 @autojit(backend='ast', locals=dict(s=c_string_type))
 def temp_string_var():
     s = get_string()
-    print s
+    print(s)
 
 @autojit(backend='ast', locals=dict(s=c_string_type))
 def temp_string():
     s = c_string_type(get_string())
-    print s
+    print(s)
 
 @autojit(backend='ast')
 def temp_string2():
-    print c_string_type(get_string())
+    print((c_string_type(get_string())))
 
 @autojit(backend='ast', locals=dict(s=c_string_type))
 def temp_string3():
     for i in range(3):
         s = c_string_type(get_string(i))
-        print s
+        print(s)
 
 @autojit(backend='ast')
 def test():

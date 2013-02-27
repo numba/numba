@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """Script to commit the doc build outputs into the github-pages repo.
 
 Use:
@@ -10,6 +11,7 @@ that is how the resulting directory will be named.
 
 In practice, you should use either actual clean tags from a current build or
 something like 'current' as a stable URL for the most current version of the """
+from __future__ import print_function, division, absolute_import
 
 #-----------------------------------------------------------------------------
 # Imports

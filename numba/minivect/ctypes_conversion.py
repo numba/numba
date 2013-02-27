@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Convert a minivect type to a ctypes type and an llvm function to a
 ctypes function.
 """
+from __future__ import print_function, division, absolute_import
 
 import math
 import warnings

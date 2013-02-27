@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 This module provides a variety of transforms that transform the AST
 into a final form ready for code generation.
@@ -74,6 +75,7 @@ bytecode using meta. We run the following transformations:
         in the face of type coercions, which LLVM does not provide any
         leniency for.
 """
+from __future__ import print_function, division, absolute_import
 
 
 import sys

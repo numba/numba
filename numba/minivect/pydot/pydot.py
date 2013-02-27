@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # -*- coding: Latin-1 -*-
 """Graphviz's dot language Python interface.
 
@@ -16,6 +17,7 @@ Copyright (c) 2005-2011 Ero Carrera <ero.carrera@gmail.com>
 
 Distributed under MIT license [http://opensource.org/licenses/mit-license.html].
 """
+from __future__ import print_function, division, absolute_import
 
 __revision__ = "$LastChangedRevision: 27 $"
 __author__ = 'Ero Carrera'
@@ -2022,7 +2024,7 @@ class Dot(Graph):
                 'Program terminated with status: %d. stderr follows: %s' % (
                     status, stderr_output) )
         elif stderr_output:
-            print stderr_output
+            print(stderr_output)
 
         # For each of the image files...
         #

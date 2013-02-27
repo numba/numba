@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 # Import all special functions before registering the Numba module
 # type inferer
 
@@ -58,7 +60,7 @@ def _config_logger():
 _config_logger()
 
 
-from . import  special
+from . import special
 from numba.typesystem import *
 from numba.minivect.minitypes import FunctionType
 from numba.error import *
@@ -149,17 +151,17 @@ def test(whitelist=None, blacklist=None):
                 if process.returncode == 0:
                     print("SUCCESS")
                 else:
-                    print("FAILED: %s" % map_returncode_to_message(
-                                                process.returncode))
+                    print(("FAILED: %s" % map_returncode_to_message(
+                                                process.returncode)))
                     if PY3:
                         out = str(out, encoding='UTF-8')
                         err = str(err, encoding='UTF-8')
                     print(out)
                     print(err)
-                    print("-" * 80)
+                    print(("-" * 80))
                     failed += 1
 
-    print("ran test files: failed: (%d/%d)" % (failed, run))
+    print(("ran test files: failed: (%d/%d)" % (failed, run)))
     return failed
 
 def nose_run(module=None):

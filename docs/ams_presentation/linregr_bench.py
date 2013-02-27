@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import linregr_python, linregr_numba, linregr_numbapro
 import numpy as np
 import pylab

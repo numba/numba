@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Module that deals with NumPy array slicing.
 
@@ -5,6 +6,7 @@ Module that deals with NumPy array slicing.
     - recognize newaxes
     - track how contiguity is affected (C or Fortran)
 """
+from __future__ import print_function, division, absolute_import
 
 import ast
 
