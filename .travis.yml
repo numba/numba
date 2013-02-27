@@ -15,14 +15,17 @@ branches:
 install:
   - wget "http://repo.continuum.io/pkgs/free/linux-64/llvm-3.2-0.tar.bz2"
   - # wget "http://repo.continuum.io/pkgs/free/linux-64/llvmpy-0.10.0-py27_0.tar.bz2"
-  - tar -xjvf llvm-3.2-0.tar.bz2
+  - tar -xjf llvm-3.2-0.tar.bz2
   - PATH+=":`pwd`/bin"
   - export LD_LIBRARY_PATH="`pwd`/lib"
   - export LLVM_CONFIG_PATH="`pwd`/bin/llvm-config"
   - $LLVM_CONFIG_PATH --cflags # test llvm-config
   - export LLVMPY_DYNLINK=1
-  - pip install llvmpy
-  - pip install -r requirements.txt --use-mirrors
+  - # pip install llvmpy
+  - git clone git://github.com/llvmpy/llvmpy.git
+  - cd llvmpy ; python setup.py install ; cd ..
+  - pip install cython --install-option="--no-cython-compile") # This takes long
+  - pip -q install -r requirements.txt --use-mirrors
   - python setup.py build_ext --inplace
 
 script: nosetests
