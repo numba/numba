@@ -1,3 +1,5 @@
+# Example from Travis Oliphant
+
 import ctypes as ct
 import numpy.random as nr
 import os.path
@@ -50,3 +52,9 @@ rk_gamma.argtypes = [ct.POINTER(rk_state), ct.c_double, ct.c_double]
 rk_normal = mtrand.rk_normal
 rk_normal.restype = ct.c_double
 rk_normal.argtypes = [ct.POINTER(rk_state), ct.c_double, ct.c_double]
+
+def init():
+    if rk_randomseed(state_p) != 0:
+        raise ValueError("Cannot initialize the random number generator.")
+
+init()

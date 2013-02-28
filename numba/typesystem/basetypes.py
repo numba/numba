@@ -311,13 +311,12 @@ class NULLType(NumbaType):
     def __repr__(self):
         return "<type(NULL)>"
 
-class KnownPointerType(NumbaType):
+class KnownPointerType(minitypes.PointerType):
 
     is_known_pointer = True
 
-    def __init__(self, pointer_type, address, **kwds):
-        super(KnownPointerType, self).__init__(**kwds)
-        self.pointer_type = pointer_type
+    def __init__(self, base_type, address, **kwds):
+        super(KnownPointerType, self).__init__(base_type, **kwds)
         self.address = address
 
 class SizedPointerType(NumbaType, minitypes.PointerType):

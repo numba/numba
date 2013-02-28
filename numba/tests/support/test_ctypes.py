@@ -2,6 +2,8 @@
 Test support for ctypes. See also numba.tests.foreign_call.test_ctypes_call.
 """
 
+import ctypes
+
 from numba import *
 from numba import environment
 from numba.support import ctypes_support
@@ -47,6 +49,11 @@ def test_ctypes_data_values():
     assert from_python(ctypes_values.state) == rk_state_t
     assert from_python(ctypes_values.state_p) == rk_state_t.pointer()
     assert from_python(ctypes_values.state_vp) == void.pointer()
+    assert from_python(ctypes.c_void_p(10)) == void.pointer()
+
+    ctypes_double_p = ctypes.POINTER(ctypes.c_double)(ctypes.c_double(10))
+    assert from_python(ctypes_double_p) == double.pointer()
+
 
 if __name__ == '__main__':
     test_ctypes_func_values()

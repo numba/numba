@@ -103,9 +103,10 @@ def from_ctypes_value(value):
     """
     Convert a ctypes value to a numba type
     """
+    from numba import typesystem
+
     if is_ctypes_type(value):
         # Value is a ctypes type, e.g. c_int
-        from numba import typesystem
         return typesystem.CastType(from_ctypes_type(value))
 
     elif is_ctypes_function(value):
@@ -122,7 +123,20 @@ def from_ctypes_value(value):
 
     elif is_ctypes_type(type(value)) or hasattr(value, '_type_'):
         # Value is a ctypes value, e.g. c_int(10)
-        return from_ctypes_type(type(value))
+        result_type = from_ctypes_type(type(value))
+
+        if result_type.is_pointer:
+            # Handle ctypes pointers
+            try:
+                ctypes.cast(value, ctypes.c_void_p)
+            except ctypes.ArgumentError:
+                pass
+            else:
+                addr_int = ctypes.cast(value, ctypes.c_void_p).value
+                result_type = typesystem.KnownPointerType(
+                    result_type.base_type, addr_int)
+
+        return result_type
 
     else:
         raise NotImplementedError(value)
