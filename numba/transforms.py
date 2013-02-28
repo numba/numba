@@ -105,6 +105,7 @@ logger = logging.getLogger(__name__)
 
 from numba.external import pyapi
 
+is_win32 = sys.platform == 'win32'
 
 class BuiltinResolverMixinBase(object):
     """
@@ -145,7 +146,7 @@ class BuiltinResolverMixinBase(object):
 def resolve_pow(type, args):
     have_mod = len(args) == 3
 
-    if (type.is_int or type.is_float) and not have_mod:
+    if (type.is_int or type.is_float) and not have_mod and not is_win32:
         result = resolve_intrinsic(args, pow, type)
     else:
         result = nodes.call_pyfunc(pow, args)

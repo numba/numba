@@ -9,6 +9,8 @@ from numba import nodes
 from numba.type_inference.modules import mathmodule
 from numba.typesystem import is_obj, promote_closest, get_type
 
+is_win32 = sys.platform == 'win32'
+
 #----------------------------------------------------------------------------
 # Categorize Calls as Math Calls
 #----------------------------------------------------------------------------
@@ -32,7 +34,7 @@ def is_intrinsic(py_func):
     "Whether the math function is available as an llvm intrinsic"
     intrinsic_name = 'INTR_' + get_funcname(py_func).upper()
     is_intrinsic = hasattr(llvm.core, intrinsic_name)
-    return is_intrinsic # and not is_win32
+    return is_intrinsic and not is_win32
 
 
 def math_suffix(name, type):
@@ -84,8 +86,6 @@ def resolve_math_call(call_node, py_func):
     "Resolve calls to math functions to llvm.log.f32() etc"
     signature = call_node.type(call_node.type)
     return nodes.MathNode(py_func, signature, call_node.args[0])
-
-is_win32 = sys.platform == 'win32'
 
 def filter_math_funcs(math_func_names):
     if is_win32:

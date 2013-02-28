@@ -49,7 +49,14 @@ def get_functions():
 
     return locals()
 
-dest_types = [int_, short, Py_ssize_t, float_, double, complex128]
+dest_types = [
+   int_,
+   short,
+   Py_ssize_t,
+    float_,
+    double,
+    complex128
+]
 
 def test_math_funcs():
     functions = get_functions()
@@ -100,13 +107,14 @@ def test_array_math():
             r2 = func(a, b)
             assert np.allclose(r1, r2)
 
+@autojit
 def expm1(a, b):
     print numba.typeof(a)
     print numba.typeof(np.expm1(a))
 #    result = a**2 + b**2
 #    print "... :)"
 #    print np.expm1(result), "..."
-    return np.expm1(a)
+    return np.expm1(a**2) + b
 
 @autojit
 def log2(a, b):
@@ -114,10 +122,11 @@ def log2(a, b):
     return np.log2(result) + 1.6
 
 if __name__ == "__main__":
-#    dtype = np.complex128
-#    a = np.arange(1, 11, dtype=dtype)
-#    b = np.arange(5, 15, dtype=dtype)
-#    print autojit(expm1)(a, b)
-#    log2(10, 10)
+    # dtype = np.complex128
+    # a = np.arange(1, 11, dtype=dtype)
+    # b = np.arange(5, 15, dtype=dtype)
+    # print expm1(a, b)
+    # print "run log"
+    # log2(10, 10)
     test_math_funcs()
     test_array_math()
