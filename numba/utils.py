@@ -6,7 +6,6 @@ import pprint
 import numba
 from .minivect.complex_support import Complex64, Complex128, Complex256
 from .minivect import miniast, minitypes
-from numba import typesystem
 from numba.typesystem.typemapper import NumbaTypeMapper
 
 def itercode(code):
@@ -159,7 +158,7 @@ class WriteOnceTypedProperty(TypedProperty):
         return super(WriteOnceTypedProperty, self).setter(obj, *args, **kws)
 
 #------------------------------------------------------------------------
-# File Opening Utilities
+# File Utilities
 #------------------------------------------------------------------------
 
 # file name encodings (function copied from Cython)
@@ -175,3 +174,15 @@ def decode_filename(filename):
     except UnicodeDecodeError:
         pass
     return filename
+
+#------------------------------------------------------------------------
+# General Purpose
+#------------------------------------------------------------------------
+
+def hashable(x):
+    try:
+        hash(x)
+    except TypeError:
+        return False
+    else:
+        return True

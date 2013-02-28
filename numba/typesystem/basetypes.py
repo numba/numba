@@ -311,9 +311,12 @@ class NULLType(NumbaType):
     def __repr__(self):
         return "<type(NULL)>"
 
-class CTypesPointerType(NumbaType):
+class KnownPointerType(NumbaType):
+
+    is_known_pointer = True
+
     def __init__(self, pointer_type, address, **kwds):
-        super(CTypesPointerType, self).__init__(**kwds)
+        super(KnownPointerType, self).__init__(**kwds)
         self.pointer_type = pointer_type
         self.address = address
 

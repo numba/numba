@@ -10,7 +10,7 @@ from numba.special import *
 import os
 import sys
 import logging
-from numba import typesystem
+from numba import utils, typesystem
 
 PY3 = sys.version_info[0] == 3
 

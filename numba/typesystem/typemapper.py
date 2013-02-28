@@ -7,7 +7,7 @@ import llvm.core
 import numpy as np
 
 import numba
-from numba.minivect.ctypes_conversion import convert_from_ctypes
+from numba.support.ctypes_support import is_ctypes, from_ctypes_value
 from numba.support import cffi_support
 from numba.minivect.minitypes import map_dtype, object_
 import numba.minivect.minitypes
@@ -83,15 +83,13 @@ class NumbaTypeMapper(minitypes.TypeMapper):
         elif isinstance(value, types.ModuleType):
             return ModuleType(value)
         # elif isinstance(value, (self.ctypes_func_type, self.ctypes_func_type2)):
-        elif hasattr(value, 'errcheck'):
-            # ugh, ctypes
-            if value.argtypes is None:
-                return object_
-
-            restype = convert_from_ctypes(value.restype)
-            argtypes = [convert_from_ctypes(v) for v in value.argtypes]
-            pointer = ctypes.cast(value, ctypes.c_void_p).value
-            return PointerFunctionType(value, pointer, restype(*argtypes))
+        elif is_ctypes(value):
+            result = from_ctypes_value(value)
+            if result.is_function:
+                pointer = ctypes.cast(value, ctypes.c_void_p).value
+                return PointerFunctionType(value, pointer, result)
+            else:
+                return result
         elif cffi_support.is_cffi_func(value):
             signature = cffi_support.get_signature(value)
             pointer = cffi_support.get_pointer(value)

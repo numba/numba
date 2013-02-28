@@ -4,15 +4,13 @@ ctypes function.
 """
 
 import math
+import warnings
 
 from .miniutils import ctypes
 from .minitypes import *
 
 try:
     from ctypes import *
-    _ctypes_func_type = type(ctypes.CFUNCTYPE(ctypes.c_int))
-    _ctypes_pointer_type = type(ctypes.POINTER(ctypes.c_int))
-    _ctypes_array_type = type(ctypes.c_int * 2)
 except ImportError:
     pass
 
@@ -97,52 +95,6 @@ def convert_to_ctypes(type):
     else:
         raise NotImplementedError(type)
 
-def convert_from_ctypes(type):
-    """
-    Convert a ctypes type to a minitype
-    """
-    import ctypes
-
-    ctypes_map = {
-        c_char : char,
-        c_byte : char,
-        c_ubyte : uchar,
-        c_short : short,
-        c_ushort : ushort,
-        c_int : int_,
-        c_uint : uint,
-        c_long : c_ulong,
-        c_long : long_,
-        c_ulong : ulong,
-        c_longlong : longlong,
-        c_ulonglong : ulonglong,
-
-        c_float : float_,
-        c_double : double,
-
-        c_char_p : c_string_type,
-        c_void_p : void.pointer(),
-        None : void,
-
-        py_object : object_,
-    }
-    # On MSVC Windows, these are equal
-    if c_longdouble != c_double:
-        ctypes_map[c_longdouble] = longdouble
-
-    if type in ctypes_map:
-        return ctypes_map[type]
-    elif isinstance(type, _ctypes_pointer_type):
-        return convert_from_ctypes(type._type_).pointer()
-    elif isinstance(type, _ctypes_array_type):
-        base_type = convert_from_ctypes(type._type_)
-        return CArrayType(base_type, type._length_)
-    elif isinstance(type, _ctypes_func_type):
-        restype = convert_from_ctypes(type.restype)
-        argtypes = [convert_from_ctypes(at) for at in type.argtypes]
-        return FunctionType(return_type=restype, args=argtypes)
-    else:
-        raise NotImplementedError(type)
 
 def get_ctypes_func(func, llvm_func, llvm_execution_engine, context):
     "Get a ctypes function from an llvm function"
