@@ -206,9 +206,7 @@ class TestASTComplex(test_support.ASTTestCase):
 
 if __name__ == "__main__":
 #    autojit(add)(m, n)
-    TestASTComplex('test_get_conj_fn').debug()
-#    unittest.main()
-#    autojit(sin)(m, n)
+    unittest.main()
 
 # ______________________________________________________________________
 # End of test_complex.py

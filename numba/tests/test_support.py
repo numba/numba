@@ -123,7 +123,4 @@ def testmod(module=None, runit=False):
     else:
         modname = module.__name__
 
-    os.write(1, "Module: %s\n" % module)
     doctest_support.testmod(module, run_doctests=runit or modname == '__main__')
-    #if modname == '__main__':
-    #numba.nose_run(mod)

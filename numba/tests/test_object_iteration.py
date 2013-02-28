@@ -13,5 +13,5 @@ def test_object_iteration(obj):
         print x
 
 if __name__ == '__main__':
-    test_object_iteration([1, 2, 3])
-    # numba.testmod()
+#    test_object_iteration([1, 2, 3])
+    numba.testmod()

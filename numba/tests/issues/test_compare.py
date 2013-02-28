@@ -68,11 +68,7 @@ def test_compare_error():
         raise Exception("Expected exception!")
 
 if __name__ == "__main__":
-    # autojit(test_compare_span_basic_blocks)(5)
-#    autojit(test_compare_while)(10)
     for test in tests:
         test()
 
     test_compare_error()
-#    import numba
-#    numba.nose_run()

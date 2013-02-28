@@ -28,7 +28,7 @@ install:
   - pip -q install -r requirements.txt --use-mirrors
   - python setup.py build_ext --inplace
 
-script: nosetests
+script: python runtests.py # nosetests
 
 matrix:
   allow_failures:
