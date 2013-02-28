@@ -1,6 +1,6 @@
 import numpy as np
-from numba import *
-from numbapro import cuda
+import numba as nb
+from numbapro import jit, autojit, cuda
 
 def array_copy(src, dst, n):
     tid = cuda.threadIdx.x
@@ -32,7 +32,8 @@ def test_array_copy():
     src = np.arange(N, dtype=np.float32)
     dst = np.empty_like(src)
 
-    prototype = jit(argtypes=[f4[:], f4[:], i4], target='gpu')
+    prototype = jit(argtypes=[nb.float32[:], nb.float32[:], nb.int32],
+                    target='gpu')
 
     cudafunc = prototype(array_copy)
     cudafunc[(2,), (333,)](src, dst, N)
@@ -44,7 +45,7 @@ def test_array_copy_autojit():
     src = np.arange(N, dtype=np.float32)
     dst = np.empty_like(src)
 
-    cudafunc = cuda.autojit(target='gpu')(array_copy)
+    cudafunc = autojit(target='gpu')(array_copy)
     cudafunc[(2,), (333,)](src, dst, N)
 
     assert (src == dst).all()
@@ -55,7 +56,8 @@ def test_array_scale():
     src = np.arange(N, dtype=np.float32)
     dst = np.empty_like(src)
 
-    prototype = jit(argtypes=[f4[:], f4[:], f4, i4], target='gpu')
+    prototype = jit(argtypes=[nb.float32[:], nb.float32[:], nb.float32, nb.int32],
+                    target='gpu')
     cudafunc = prototype(array_scale)
     cudafunc_configured = cudafunc.configure((3,), (333,))
     cudafunc_configured(src, dst, scale, N)
