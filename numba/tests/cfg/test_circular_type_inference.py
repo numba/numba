@@ -1,6 +1,5 @@
-">>> from numba.tests.cfg import test_circular_type_inference" # UGH nosetests :(
 from numba.tests.cfg.test_cfg_type_infer import *
-@autojit
+@autojit(warnstyle='simple')
 def test_circular_error():
     """
     >>> try:
@@ -9,6 +8,7 @@ def test_circular_error():
     ...     print(str(e).replace('var1', '<var>').replace('var2', '<var>'))
     Warning 16:19: local variable 'var2' might be referenced before assignment
     Warning 18:19: local variable 'var1' might be referenced before assignment
+    Error Unable to infer type for assignment to 'var2', insert a cast or initialize the variable.
     Unable to infer type for assignment to '<var>', insert a cast or initialize the variable.
     """
     for i in range(10):
@@ -17,7 +17,7 @@ def test_circular_error():
         else:
             var2 = var1
 
-@autojit
+@autojit(warnstyle='simple')
 def test_simple_circular():
     """
     >>> test_simple_circular()
@@ -30,7 +30,7 @@ def test_simple_circular():
         else:
             y = x
 
-@autojit
+@autojit(warnstyle='simple')
 def test_simple_circular2():
     """
     >>> test_simple_circular2()
@@ -358,7 +358,7 @@ def test_string_indexing_error():
     >>> test_string_indexing_error()
     Traceback (most recent call last):
         ...
-    TypeError: Cannot promote types (char, const char *) for variable s
+    NumbaError: Cannot promote types (char, const char *) for variable s
     """
     for i in range(4):
         if i == 0:
@@ -375,7 +375,7 @@ def test_string_indexing_error2():
     >>> chr(test_string_indexing_error2())
     Traceback (most recent call last):
         ...
-    TypeError: Cannot promote types (char, const char *) for variable s
+    NumbaError: Cannot promote types (char, const char *) for variable s
     """
     for i in range(4):
         if i == 0:
@@ -478,4 +478,6 @@ def infer_simple(numba_func, *varnames):
 #print vars(func)
 #test_delayed_string_indexing_simple()
 #test_delayed_array_slicing2()
+#test_simple_circular()
+#test_circular_error()
 testmod()

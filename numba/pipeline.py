@@ -536,7 +536,8 @@ class PipelineStage(object):
                     flags, parent_func_env = env.translation.stack[-2]
                     error_env.merge_in(parent_func_env.error_env)
                 else:
-                    reporting.report(error_env, error_env.enable_post_mortem,
+                    reporting.report(error_env,
+                                     error_env.enable_post_mortem,
                                      exc=e)
                 raise
 
@@ -860,9 +861,11 @@ class WrapperStage(PipelineStage):
 class ErrorReporting(PipelineStage):
     "Sort and issue warnings and errors"
     def transform(self, ast, env):
-        error_env = env.translation.crnt.error_env
+        func_env = env.translation.crnt
+        error_env = func_env.error_env
         post_mortem = error_env.enable_post_mortem
-        reporting.report(error_env, post_mortem=post_mortem)
+        reporting.report(error_env,
+                         post_mortem=post_mortem)
         return ast
 
 class ComposedPipelineStage(PipelineStage):

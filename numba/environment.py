@@ -125,7 +125,12 @@ class FunctionErrorEnvironment(object):
         reporting.MessageCollection,
         "Collection of error and warning messages")
 
-    def __init__(self, func, ast):
+    warning_styles = {
+        'simple' : reporting.MessageCollection,
+        'fancy': reporting.FancyMessageCollection,
+    }
+
+    def __init__(self, func, ast, warnstyle):
         self.func = func
         self.ast = ast # copy.deepcopy(ast)
 
@@ -133,8 +138,8 @@ class FunctionErrorEnvironment(object):
         source_descr = reporting.SourceDescr(func, ast)
         self.source = source_descr.get_lines()
 
-        self.collection = reporting.FancyMessageCollection(self.ast,
-                                                           self.source)
+        collection_cls = self.warning_styles[warnstyle]
+        self.collection = collection_cls(self.ast, self.source)
 
     def merge_in(self, parent_error_env):
         """
@@ -290,6 +295,12 @@ class FunctionEnvironment(object):
         'Flag that enables control flow warnings on a per-function level.',
         True)
 
+    warnstyle = TypedProperty(
+        basestring,
+        'Warning style, currently available: simple, fancy',
+        default='fancy'
+    )
+
     kwargs = TypedProperty(
         dict,
         'Additional keyword arguments.  Deprecated, but kept for backward '
@@ -308,7 +319,7 @@ class FunctionEnvironment(object):
              error_env=None, function_globals=None, locals=None,
              template_signature=None, cfg_transform=None,
              is_closure=False, closures=None, closure_scope=None,
-             ast_metadata=None, warn=True,
+             ast_metadata=None, warn=True, warnstyle='fancy',
              **kws):
 
         self.parent = parent
@@ -336,7 +347,8 @@ class FunctionEnvironment(object):
         self.symtab = symtab if symtab is not None else {}
 
         self.error_env = error_env or FunctionErrorEnvironment(self.func,
-                                                               self.ast)
+                                                               self.ast,
+                                                               warnstyle)
 
         if function_globals is not None:
             self.function_globals = function_globals
@@ -356,6 +368,7 @@ class FunctionEnvironment(object):
             self.ast_metadata = metadata.create_metadata_env()
 
         self.warn = warn
+        self.warnstyle = warnstyle
         self.kwargs = kws
 
     def getstate(self):
@@ -378,6 +391,7 @@ class FunctionEnvironment(object):
             closures=self.closures,
             closure_scope=self.closure_scope,
             warn=self.warn,
+            warnstyle=self.warnstyle,
         )
         return state
 
