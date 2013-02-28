@@ -1345,6 +1345,8 @@ class TypeInferer(visitors.NumbaTransformer):
         "Resolve attributes of the numpy module or a submodule"
         attribute = getattr(type.module, node.attr)
 
+        # TODO: Do this better
+
         result_type = None
         if attribute is numpy.newaxis:
             result_type = typesystem.NewAxisType()
@@ -1359,6 +1361,12 @@ class TypeInferer(visitors.NumbaTransformer):
                 result_type = None
 
         if result_type is None:
+            if hasattr(type.module, node.attr):
+                result_type = self.type_from_pyval(getattr(type.module,
+                                                           node.attr))
+                if result_type != object_:
+                    return result_type
+
             result_type = typesystem.ModuleAttributeType(module=type.module,
                                                          attr=node.attr)
 
