@@ -84,56 +84,24 @@ def jitfunc(func):
 
 __doc__ = """
 >>> jitfunc(simple_for)
---------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
 Warning 8:11: local variable 'a' might be referenced before assignment
-<BLANKLINE>
---------------------------------------------------------------------------------
 >>> jitfunc(simple_for_break)
---------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
 Warning 14:11: local variable 'a' might be referenced before assignment
-<BLANKLINE>
---------------------------------------------------------------------------------
 >>> jitfunc(simple_for_pos)
 >>> jitfunc(simple_target)
---------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
 Warning 26:11: local variable 'i' might be referenced before assignment
-<BLANKLINE>
---------------------------------------------------------------------------------
 >>> jitfunc(simple_target_f)
---------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
 Warning 31:11: local variable 'i' might be referenced before assignment
-<BLANKLINE>
---------------------------------------------------------------------------------
 >>> jitfunc(for_continue)
---------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
 Warning 44:10: local variable 'x' might be referenced before assignment
-<BLANKLINE>
---------------------------------------------------------------------------------
 >>> jitfunc(for_break)
---------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
 Warning 51:10: local variable 'x' might be referenced before assignment
-<BLANKLINE>
---------------------------------------------------------------------------------
 
 Finally tests
 >> jitfunc(for_finally_break)
---------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
 Warning 58:19: local variable 'x' might be referenced before assignment
-<BLANKLINE>
---------------------------------------------------------------------------------
 >> jitfunc(for_finally_outer)
---------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
 Warning 66:19: local variable 'x' might be referenced before assignment
-<BLANKLINE>
---------------------------------------------------------------------------------
 """
 
 if __name__ == "__main__":

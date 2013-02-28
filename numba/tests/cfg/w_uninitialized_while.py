@@ -58,17 +58,9 @@ def jitfunc(func):
 
 __doc__ = """
 >>> jitfunc(simple_while)
---------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
 Warning 9:11: local variable 'a' might be referenced before assignment
-<BLANKLINE>
---------------------------------------------------------------------------------
 >>> jitfunc(simple_while_break)
---------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
 Warning 17:11: local variable 'a' might be referenced before assignment
-<BLANKLINE>
---------------------------------------------------------------------------------
 >>> jitfunc(simple_while_pos)
 """
 

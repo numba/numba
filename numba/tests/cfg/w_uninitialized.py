@@ -20,11 +20,7 @@ def simple():
 def simple2(arg):
     """
     >>> result = jitii(simple2)
-    --------------------- Numba Encountered Errors or Warnings ---------------------
-    <BLANKLINE>
-    Warning 31:11: local variable 'a' might be referenced before assignment
-    <BLANKLINE>
-    --------------------------------------------------------------------------------
+    Warning 27:11: local variable 'a' might be referenced before assignment
     """
     if arg > 0:
         a = 1
@@ -43,11 +39,7 @@ def simple_pos(arg):
 def ifelif(c1, c2):
     """
     >>> result = jitiii(ifelif)
-    --------------------- Numba Encountered Errors or Warnings ---------------------
-    <BLANKLINE>
-    Warning 59:11: local variable 'a' might be referenced before assignment
-    <BLANKLINE>
-    --------------------------------------------------------------------------------
+    Warning 51:11: local variable 'a' might be referenced before assignment
     """
     if c1 == 1:
         if c2:
@@ -61,11 +53,7 @@ def ifelif(c1, c2):
 def nowimpossible(a):
     """
     >>> result = jitvi(nowimpossible)
-    --------------------- Numba Encountered Errors or Warnings ---------------------
-    <BLANKLINE>
-    Warning 73:14: local variable 'b' might be referenced before assignment
-    <BLANKLINE>
-    --------------------------------------------------------------------------------
+    Warning 61:14: local variable 'b' might be referenced before assignment
     """
     if a:
         b = 1
@@ -146,7 +134,7 @@ def uninitialized_augmented_assignment():
     >>> func = jitv(uninitialized_augmented_assignment)
     Traceback (most recent call last):
         ...
-    NumbaError: 151:4: local variable 'x' referenced before assignment
+    NumbaError: 139:4: local variable 'x' referenced before assignment
     """
     x += 1
 
@@ -154,11 +142,7 @@ def uninitialized_augmented_assignment():
 def uninitialized_augmented_assignment_loop():
     """
     >>> func = jitv(uninitialized_augmented_assignment_loop)
-    --------------------- Numba Encountered Errors or Warnings ---------------------
-    <BLANKLINE>
-    Warning 164:8: local variable 'x' might be referenced before assignment
-    <BLANKLINE>
-    --------------------------------------------------------------------------------
+    Warning 148:8: local variable 'x' might be referenced before assignment
     """
     for i in range(10):
         x += 1
