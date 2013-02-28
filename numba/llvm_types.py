@@ -150,11 +150,13 @@ class _LLVMCaster(object):
         lkind1 = lty1.kind
         lkind2 = lty2.kind
 
-        if lc.TYPE_INTEGER in (lkind1, lkind2) and 'unsigned' not in kws:
-            # Be strict about having `unsigned` define when
-            # we have integer types
-            raise ValueError("Unknown signedness for integer type",
-                             '%s -> %s' % (lty1, lty2), args, kws)
+        # This looks like the wrong place to enforce this
+        # TODO: We need to pass in the numba types instead
+        # if lc.TYPE_INTEGER in (lkind1, lkind2) and 'unsigned' not in kws:
+        #     # Be strict about having `unsigned` define when
+        #     # we have integer types
+        #     raise ValueError("Unknown signedness for integer type",
+        #                      '%s -> %s' % (lty1, lty2), args, kws)
 
         if lkind1 == lkind2:
 

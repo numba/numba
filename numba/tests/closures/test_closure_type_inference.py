@@ -49,6 +49,6 @@ def test_cellvar_promotion_error(a):
     b = "hello"
     return inner
 
-#test_cellvar_promotion(10)
+test_cellvar_promotion(10)
 #test_cellvar_promotion_error(10)
 testmod()
