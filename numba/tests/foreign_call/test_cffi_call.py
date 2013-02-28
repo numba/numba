@@ -13,9 +13,9 @@ except ImportError:
 
 # ______________________________________________________________________
 
-def test():
+def test_cffi_calls():
     if ffi is not None:
-        test_cffi_calls()
+        make_cffi_calls()
 
 # ______________________________________________________________________
 # Tests
@@ -24,7 +24,7 @@ def test():
 def call_cffi_func(func, value):
     return func(value)
 
-def test_cffi_calls():
+def make_cffi_calls():
     # Test printf for nopython and no segfault
     ffi.cdef("int printf(char *, ...);", override=True)
     lib = ffi.dlopen(None)
@@ -34,4 +34,4 @@ def test_cffi_calls():
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-    test()
+    test_cffi_calls()
