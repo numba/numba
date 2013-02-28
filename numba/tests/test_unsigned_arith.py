@@ -8,7 +8,7 @@ def prng(X, A, C):
     for i in range(X.shape[0]):
         for j in range(100):
             v = (A * X[i] + C)
-            X[i] = v
+            X[i] = v & 0xffffffff
 
 @jit(uint32())
 def unsigned_literal():
