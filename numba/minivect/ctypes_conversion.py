@@ -132,7 +132,7 @@ def convert_from_ctypes(type):
 
     if type in ctypes_map:
         return ctypes_map[type]
-    elif isinstance(type, _ctypes_ptr_type):
+    elif isinstance(type, _ctypes_pointer_type):
         return convert_from_ctypes(type._type_).pointer()
     elif isinstance(type, _ctypes_array_type):
         base_type = convert_from_ctypes(type._type_)
