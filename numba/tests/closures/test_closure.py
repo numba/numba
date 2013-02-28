@@ -120,11 +120,7 @@ NumbaError: Got multiple values for positional argument 'a'
 Test closures
 
 >>> closure1().__name__
---------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
 Warning 40:4: Unused variable 'a'
-<BLANKLINE>
---------------------------------------------------------------------------------
 'inner'
 >>> closure1()()
 Traceback (most recent call last):
@@ -164,6 +160,10 @@ inner
 >>> c3()
 21
 """
+
+
+
+
 
 @autojit
 def closure_arg(a):
