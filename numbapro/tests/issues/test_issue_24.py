@@ -1,6 +1,6 @@
 import numpy as np
-import numbapro 
-from numba import autojit, jit, double, void, uint32, prange
+from numbapro import autojit, jit, prange
+from numba import double, void, uint32
 
 @autojit
 def test_prange_redux():
