@@ -291,16 +291,14 @@ class ResolveCoercions(visitors.NumbaTransformer):
         return result
 
     def _get_int_conversion_func(self, type, funcs_dict):
-        type = self.context.promote_types(type, long_)
-        if type in funcs_dict:
-            return funcs_dict[type]
-
-        if type.itemsize == long_.itemsize:
+        type = promote_to_native(type)
+        if type.itemsize <= long_.itemsize:
             types = [ulong, long_]
         else:
+            assert type.itemsize > long_.itemsize
             types = [ulonglong, longlong]
 
-        return self._get_int_conversion_func(types[type.signed], funcs_dict)
+        return funcs_dict[types[type.signed]]
 
     def visit_CoerceToObject(self, node):
         new_node = node
