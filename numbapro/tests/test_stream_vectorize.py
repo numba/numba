@@ -53,6 +53,5 @@ def main(backend):
     print('All good')
 
 if __name__ == '__main__':
-    main('bytecode')
     main('ast')
 

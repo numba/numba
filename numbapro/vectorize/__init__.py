@@ -32,8 +32,8 @@ except CudaSupportError, e:
 
 from .minivectorize import MiniVectorize, ParallelMiniVectorize
 
-install_vectorizer('bytecode', 'parallel', ParallelVectorize)
-install_vectorizer('bytecode', 'stream', StreamVectorize)
+#install_vectorizer('bytecode', 'parallel', ParallelVectorize)
+#install_vectorizer('bytecode', 'stream', StreamVectorize)
 
 install_vectorizer('ast', 'parallel', ParallelASTVectorize)
 install_vectorizer('ast', 'stream', StreamASTVectorize)
@@ -42,9 +42,9 @@ install_vectorizer('ast', 'gpu', CudaASTVectorize)
 install_vectorizer('mini', 'cpu', MiniVectorize)
 install_vectorizer('mini', 'parallel', ParallelMiniVectorize)
 
-_bytecode_guvectorizers = {
-    'cpu': GUFuncVectorize,
-}
+#_bytecode_guvectorizers = {
+#    'cpu': GUFuncVectorize,
+#}
 
 _ast_guvectorizers = {
     'cpu': GUFuncASTVectorize,
@@ -52,7 +52,7 @@ _ast_guvectorizers = {
 }
 
 _guvectorizers = {
-    'bytecode': _bytecode_guvectorizers,
+#    'bytecode': _bytecode_guvectorizers,
     'ast':      _ast_guvectorizers,
 }
 

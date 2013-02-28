@@ -104,7 +104,7 @@ class _StreamVectorizeFromFunc(_common.CommonVectorizeFromFunc):
 
 stream_vectorize_from_func = _StreamVectorizeFromFunc()
 
-class StreamVectorize(_common.GenericVectorize):
+class StreamASTVectorize(_common.GenericASTVectorize):
 
     _from_func_factory = stream_vectorize_from_func
 
@@ -114,5 +114,4 @@ class StreamVectorize(_common.GenericVectorize):
     def build_ufunc_core(self, granularity=8):
         return super(StreamVectorize, self).build_ufunc_core(granularity=granularity)
 
-class StreamASTVectorize(_common.GenericASTVectorize, StreamVectorize):
-    pass
+StreamVectorize = StreamASTVectorize

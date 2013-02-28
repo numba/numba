@@ -7,10 +7,11 @@ from llvm.core import Type, inline_function, ATTR_NO_ALIAS, ATTR_NO_CAPTURE
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
 from llvm_cbuilder import builder
-# from numba.vectorize._translate import Translate
-# from numba.vectorize import _internal
-from numba.vectorize._translate import Translate
+
+from numba.codegen.llvmcontext import LLVMContextManager
 from numba.vectorize import _internal
+from numba import decorators
+from numba.minivect import minitypes
 
 import numpy as np
 
@@ -65,7 +66,7 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
         return guf
 
 
-class GUFuncVectorize(object):
+class GUFuncASTVectorize(object):
     """
     Vectorizer for generalized ufuncs.
     """
@@ -75,31 +76,12 @@ class GUFuncVectorize(object):
         self.translates = []
         self.signature = sig
         self.gufunc_from_func = _GeneralizedUFuncFromFunc()
-
-    def add(self, argtypes, restype=void):
-        assert restype == void or restype is None
-        t = Translate(self.pyfunc, argtypes=argtypes)
-        t.translate()
-        self.translates.append(t)
-
-    def _get_tys_list(self):
-        from numba.translate import convert_to_llvmtype
-        tyslist = []
-        for t in self.translates:
-            tys = []
-            for ty in t.argtypes:
-                while isinstance(ty, list):
-                    ty = ty[0]
-                lty = convert_to_llvmtype(ty)
-                tys.append(np.dtype(_common._llvm_ty_to_numpy(lty)))
-            tyslist.append(tys)
-        return tyslist
+        self.args_restypes = getattr(self, 'args_restypes', [])
+        self.signatures = []
+        self.llvm_context = LLVMContextManager()
 
     def _get_lfunc_list(self):
         return [t.lfunc for t in self.translates]
-
-    def _get_ee(self):
-        return self.translates[0]._get_ee()
 
     def build_ufunc(self):
         assert self.translates, "No translation"
@@ -110,11 +92,32 @@ class GUFuncVectorize(object):
             lfunclist, tyslist, self.signature, engine,
             vectorizer=self)
 
-class GUFuncASTVectorize(_common.ASTVectorizeMixin, GUFuncVectorize):
-    "Use the AST numba backend to compile the gufunc"
-
     def get_argtypes(self, numba_func):
         return numba_func.signature.args
+
+    def _get_ee(self):
+        return self.llvm_context.execution_engine
+
+    def add(self, restype=None, argtypes=None):
+        dec = decorators.jit(restype, argtypes, backend='ast')
+        numba_func = dec(self.pyfunc)
+        self.args_restypes.append(list(numba_func.signature.args) +
+                                  [numba_func.signature.return_type])
+        self.signatures.append((restype, argtypes, {}))
+        self.translates.append(numba_func)
+
+    def _get_tys_list(self):
+        types_lists = []
+        for numba_func in self.translates:
+            dtype_nums = []
+            types_lists.append(dtype_nums)
+            for arg_type in self.get_argtypes(numba_func):
+                dtype = minitypes.map_minitype_to_dtype(arg_type)
+                dtype_nums.append(dtype)
+
+        return types_lists
+
+GUFuncVectorize = GUFuncASTVectorize
 
 _intp_ptr = C.pointer(C.intp)
 

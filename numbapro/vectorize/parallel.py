@@ -519,12 +519,12 @@ class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFunc):
 
 parallel_vectorize_from_func = _ParallelVectorizeFromFunc()
 
-class ParallelVectorize(_common.GenericVectorize):
+class ParallelASTVectorize(_common.GenericASTVectorize):
 
     _from_func_factory = parallel_vectorize_from_func
 
     def build_ufunc(self, dispatcher=None):
         return self._from_func(dispatcher=dispatcher)
 
-class ParallelASTVectorize(_common.GenericASTVectorize, ParallelVectorize):
-    pass
+ParallelVectorize = ParallelASTVectorize
+
