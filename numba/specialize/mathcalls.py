@@ -16,7 +16,7 @@ is_win32 = sys.platform == 'win32'
 #----------------------------------------------------------------------------
 
 def intrinsic_signature(nargs, type):
-    if type.is_int:
+    if type.is_int or type.is_complex:
         type = double
 
     return type(*[type] * nargs)
@@ -41,10 +41,11 @@ def math_suffix(name, type):
     if name == 'abs':
         name = 'fabs'
 
-    if type.itemsize == 4:
+    if type.is_float and type.itemsize == 4:
         name += 'f' # sinf(float)
-    elif type.itemsize == 16:
+    elif type.is_int and type.itemsize == 16:
         name += 'l' # sinl(long double)
+
     return name
 
 def have_impl(math_name):

@@ -94,8 +94,10 @@ def infer_unary_math_call(context, call_node, arg, default_result_type=double):
     return call_node
 
 def infer_unary_cmath_call(context, call_node, arg):
-    return infer_unary_math_call(context, call_node, arg,
-                                 default_result_type=complex128)
+    result = infer_unary_math_call(context, call_node, arg,
+                                   default_result_type=complex128)
+    nodes.annotate(context.env, call_node, is_cmath=True)
+    return result
 
 # ______________________________________________________________________
 # pow()
