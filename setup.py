@@ -103,6 +103,7 @@ setup(
         'numba.asdl.py2_7': ['*.asdl'],
         'numba.external.utilities': ['*.c', '*.h'],
         'numba' : ['*.c', '*.h', 'include/*'],
+        'numba.vectorize' : ['*.h'],
     },
     ext_modules = [
         Extension(
