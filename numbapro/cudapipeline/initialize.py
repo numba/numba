@@ -1,9 +1,12 @@
 #
 # Public
 #
+last_error = None
+
 def initialize():
     "Safe to run multiple times"
-    from .error import CudaSupportError
+    from .error import CudaSupportError, NvvmSupportError
+    global last_error
     try:
         _init_driver()
         _init_nvvm()
@@ -13,7 +16,11 @@ def initialize():
         initialize = lambda: True
     #    globals()['initialize'] = lambda: True
         return True
-    except CudaSupportError:
+    except CudaSupportError, e:
+        last_error = e
+        return False
+    except NvvmSupportError, e:
+        last_error = e
         return False
 #
 # Privates
