@@ -6,7 +6,6 @@ import pprint
 import numba
 from .minivect.complex_support import Complex64, Complex128, Complex256
 from .minivect import miniast, minitypes
-from numba import typesystem
 from numba.typesystem.typemapper import NumbaTypeMapper
 
 def itercode(code):
@@ -77,6 +76,7 @@ class NumbaContext(miniast.LLVMContext):
 
     shape_type = minitypes.npy_intp.pointer()
     strides_type = shape_type
+    optimize_broadcasting = False
 
     def init(self):
         self.astbuilder = self.astbuilder_cls(self)
@@ -94,6 +94,7 @@ def get_minivect_context():
 context = get_minivect_context()
 
 def ast2tree (node, include_attrs = True):
+    '''Transform a Python AST object into nested tuples and lists.'''
     def _transform(node):
         if isinstance(node, ast.AST):
             fields = ((a, _transform(b))
@@ -112,10 +113,14 @@ def ast2tree (node, include_attrs = True):
     return _transform(node)
 
 def pformat_ast (node, include_attrs = True, **kws):
+    '''Transform a Python AST object into nested tuples and lists, and
+    return as a string formatted using pprint.pformat().'''
     return pprint.pformat(ast2tree(node, include_attrs), **kws)
 
-def dump(node):
-    print pformat_ast(node)
+def dump(node, *args, **kws):
+    '''Transform a Python AST object into nested tuples and lists, and
+    pretty-print the result.'''
+    print(pformat_ast(node, *args, **kws))
 
 class TypedProperty(object):
     '''Defines a class property that does a type check in the setter.'''
@@ -153,7 +158,7 @@ class WriteOnceTypedProperty(TypedProperty):
         return super(WriteOnceTypedProperty, self).setter(obj, *args, **kws)
 
 #------------------------------------------------------------------------
-# File Opening Utilities
+# File Utilities
 #------------------------------------------------------------------------
 
 # file name encodings (function copied from Cython)
@@ -169,3 +174,15 @@ def decode_filename(filename):
     except UnicodeDecodeError:
         pass
     return filename
+
+#------------------------------------------------------------------------
+# General Purpose
+#------------------------------------------------------------------------
+
+def hashable(x):
+    try:
+        hash(x)
+    except TypeError:
+        return False
+    else:
+        return True

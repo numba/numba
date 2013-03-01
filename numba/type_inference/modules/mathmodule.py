@@ -23,7 +23,7 @@ from numba.type_inference.modules import utils
 # Utilities
 #----------------------------------------------------------------------------
 
-register_math = utils.register_with_argchecking
+register_math_typefunc = utils.register_with_argchecking
 
 def binop_type(context, x, y):
     "Binary result type for math operations"
@@ -77,13 +77,13 @@ all_libc_math_funcs = unary_libc_math_funcs + n_ary_libc_math_funcs
 
 # TODO: Move any rewriting parts to lowering phases
 
-def infer_unary_math_call(context, call_node, arg):
+def infer_unary_math_call(context, call_node, arg, default_result_type=double):
     "Resolve calls to math functions to llvm.log.f32() etc"
     # signature is a generic signature, build a correct one
     type = get_type(call_node.args[0])
 
-    if type.is_int:
-        type = double
+    if type.is_numeric and type.kind < default_result_type.kind:
+        type = default_result_type
     elif type.is_array and type.dtype.is_int:
         type = type.copy(dtype=double)
 
@@ -93,6 +93,12 @@ def infer_unary_math_call(context, call_node, arg):
     call_node.variable = Variable(type)
     return call_node
 
+def infer_unary_cmath_call(context, call_node, arg):
+    result = infer_unary_math_call(context, call_node, arg,
+                                   default_result_type=complex128)
+    nodes.annotate(context.env, call_node, is_cmath=True)
+    return result
+
 # ______________________________________________________________________
 # pow()
 
@@ -101,8 +107,8 @@ def pow_(context, call_node, node, power, mod=None):
     call_node.variable = Variable(dst_type)
     return call_node
 
-register_math((2, 3), math.pow)
-register_math(2, np.power)
+register_math_typefunc((2, 3), math.pow)
+register_math_typefunc(2, np.power)
 
 # ______________________________________________________________________
 # abs()
@@ -121,15 +127,19 @@ def abs_(context, node, x):
 
     return builtinmodule.abs_(context, node, x)
 
-register_math(1, np.abs)
+register_math_typefunc(1, np.abs)
 
 #----------------------------------------------------------------------------
 # Register Type Functions
 #----------------------------------------------------------------------------
 
-def register(nargs, value):
-    register = register_math(nargs)
+def register_math(nargs, value):
+    register = register_math_typefunc(nargs)
     register(infer_unary_math_call, value)
+
+def register_cmath(nargs, value):
+    register = register_math_typefunc(nargs)
+    register(infer_unary_cmath_call, value)
 
 def register_typefuncs():
     modules = [builtins, math, cmath, np]
@@ -137,6 +147,11 @@ def register_typefuncs():
     for libc_math_func in unary_libc_math_funcs:
         for module in modules:
             if hasattr(module, libc_math_func):
+                if module is cmath:
+                    register = register_cmath
+                else:
+                    register = register_math
+
                 register(1, getattr(module, libc_math_func))
 
 register_typefuncs()

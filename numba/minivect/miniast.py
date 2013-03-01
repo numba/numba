@@ -433,6 +433,15 @@ class ASTBuilder(object):
         name = name or 'function'
         return self.function(name, body, args, shapevar=shapevar)
 
+    def function_from_numpy(self, name, ast, miniargs):
+        """
+        Build a minivect function from the given ast and arguments. The
+        function takes a pointer to a numpy shape (npy_intp *).
+        """
+        type = minitypes.npy_intp.pointer()
+        shape_variable = self.variable(type, 'shape')
+        return self.function(name, ast, miniargs, shapevar=shape_variable)
+
     def funcarg(self, variable, *variables):
         """
         Create a (compound) function argument consisting of one or multiple

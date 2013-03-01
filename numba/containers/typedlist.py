@@ -1,7 +1,9 @@
 import numba as nb
 from numba import *
+from numba import nodes
 from numba import typesystem
 from numba.containers import orderedcontainer
+import typedlist as typedlist_module
 
 import numpy as np
 
@@ -14,7 +16,11 @@ def notimplemented(msg):
 
 _list_cache = {}
 
-def typedlist(item_type, iterable=None, _list_cache=_list_cache):
+#-----------------------------------------------------------------------
+# Runtime Constructor
+#-----------------------------------------------------------------------
+
+def typedlist(item_type, iterable=None):
     """
     >>> typedlist(int_)
     []
@@ -27,21 +33,27 @@ def typedlist(item_type, iterable=None, _list_cache=_list_cache):
     >>> typedlist(float_, range(10))
     [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
     """
+    typedlist_ctor = compile_typedlist(item_type)
+    return typedlist_ctor(iterable)
+
+#-----------------------------------------------------------------------
+# Typedlist implementation
+#-----------------------------------------------------------------------
+
+def compile_typedlist(item_type, _list_cache=_list_cache):
+    # item_type_t = typesystem.CastType(item_type)
+    # dtype_t = typesystem.NumpyDtypeType(item_type)
+
     if item_type in _list_cache:
-        return _list_cache[item_type](item_type, item_type.get_dtype(), iterable)
+        return _list_cache[item_type]
 
-    item_type_t = typesystem.CastType(item_type)
-    dtype_t = typesystem.NumpyDtypeType(item_type)
-
+    dtype = item_type.get_dtype()
     methods = orderedcontainer.container_methods(item_type, notimplemented)
 
-    @jit(warn=False)
+    @nb.jit(warn=False)
     class typedlist(object):
-        @void(item_type_t, dtype_t, object_)
-        def __init__(self, item_type, dtype, iterable):
-            # self.item_type = item_type
-            item_type
-            self.dtype = dtype
+        @void(object_)
+        def __init__(self, iterable):
             self.size = 0
 
             # TODO: Use length hint of iterable for initial buffer size
@@ -74,12 +86,10 @@ def typedlist(item_type, iterable=None, _list_cache=_list_cache):
 
         @void(Py_ssize_t, item_type)
         def insert(self, index, value):
-            self, index, value # TODO: implemented specifying warn=False
             notimplemented("insert")
 
         @void(item_type)
         def remove(self, value):
-            self, value
             notimplemented("remove")
 
         @void()
@@ -94,8 +104,7 @@ def typedlist(item_type, iterable=None, _list_cache=_list_cache):
         @void()
         def sort(self):
             # TODO: optional arguments cmp, key, reverse
-            self
-            notimplemented("sort")
+            self.buf[:self.size].sort()
 
         @Py_ssize_t()
         def __len__(self):
@@ -107,7 +116,7 @@ def typedlist(item_type, iterable=None, _list_cache=_list_cache):
             return "[" + buf + "]"
 
     _list_cache[item_type] = typedlist
-    return typedlist(item_type, item_type.get_dtype(), iterable)
+    return typedlist
 
 
 if __name__ == "__main__":

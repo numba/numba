@@ -1,5 +1,4 @@
 import ast
-from pprint import pprint, pformat
 import ast as ast_module
 try:
     import __builtin__ as builtins
@@ -8,7 +7,7 @@ except ImportError:
 
 from numba import functions
 from numba import nodes
-from numba.nodes import metadata
+from numba.nodes.metadata import annotate, query
 from numba.typesystem.typemapper import have_properties
 
 try:
@@ -41,6 +40,7 @@ class NumbaVisitorMixin(CooperativeBase):
             context, func, ast, func_signature=func_signature,
             nopython=nopython, symtab=symtab, **kwargs)
 
+        self.env = kwargs.get('env', None)
         self.context = context
         self.ast = ast
         self.function_cache = context.function_cache
@@ -55,7 +55,6 @@ class NumbaVisitorMixin(CooperativeBase):
         self.closures = kwargs.get('closures')
         self.is_closure = kwargs.get('is_closure', False)
         self.kwargs = kwargs
-        self.env = kwargs.get('env', None)
 
         if self.have_cfg:
             self.flow_block = self.ast.flow.blocks[1]
@@ -65,7 +64,7 @@ class NumbaVisitorMixin(CooperativeBase):
         self.func = func
         if not self.valid_locals(func):
             assert isinstance(ast, ast_module.FunctionDef)
-            locals, cellvars, freevars = determine_variable_status(context, ast,
+            locals, cellvars, freevars = determine_variable_status(self.env, ast,
                                                                    self.locals)
             self.names = self.global_names = freevars
 
@@ -160,10 +159,10 @@ class NumbaVisitorMixin(CooperativeBase):
         return self.env.translation.crnt
 
     def annotate(self, node, key, value):
-        metadata.annotate(self.env, node, key, value)
+        annotate(self.env, node, key, value)
 
     def query(self, node, key):
-        return metadata.query(self.env, node, key)
+        return query(self.env, node, key)
 
     def error(self, node, msg):
         "Issue a terminating error"
@@ -184,15 +183,22 @@ class NumbaVisitorMixin(CooperativeBase):
         return node
 
     def valid_locals(self, func):
+        if self.ast is None or self.env is None:
+            return True
+
         return (func is not None and
-                getattr(func, "__numba_valid_code_object", True))
+                query(self.env, self.ast, "__numba_valid_code_object",
+                      default=True))
 
     def invalidate_locals(self, ast=None):
         ast = ast or self.ast
-        if hasattr(ast, "variable_status_tuple"):
-            del ast.variable_status_tuple
+        if query(self.env, ast, "variable_status_tuple"):
+            # Delete variable status of the function (local/free/cell status)
+            annotate(self.env, ast, variable_status_tuple=None)
+
         if self.func and ast is self.ast:
-            setattr(self.func, "__numba_valid_code_object", False)
+            # Invalidate validity of code object
+            annotate(self.env, ast, __numba_valid_code_object=False)
 
     def _visit_overload(self, node):
         assert self._overloads
@@ -295,10 +301,6 @@ class NumbaVisitorMixin(CooperativeBase):
 
     def visit_CloneNode(self, node):
         return node
-
-    #@property
-    #def current_scope(self):
-    #    return self.local_scopes[-1]
 
     def visit_ControlBlock(self, node):
         #self.local_scopes.append(node.symtab)
@@ -412,7 +414,7 @@ class VariableFindingVisitor(NumbaVisitor):
         self.generic_visit(node)
         return node
 
-def determine_variable_status(context, ast, locals_dict):
+def determine_variable_status(env, ast, locals_dict):
     """
     Determine what category referenced and assignment variables fall in:
 
@@ -420,10 +422,9 @@ def determine_variable_status(context, ast, locals_dict):
         - free variables
         - cell variables
     """
-    from numba import pipeline
-
-    if hasattr(ast, 'variable_status_tuple'):
-        return ast.variable_status_tuple
+    variable_status = query(env, ast, 'variable_status_tuple')
+    if variable_status:
+        return variable_status
 
     v = VariableFindingVisitor()
     v.visit(ast)
@@ -441,10 +442,11 @@ def determine_variable_status(context, ast, locals_dict):
 
     # Compute cell variables
     for func_def in v.func_defs:
-        inner_locals_dict = pipeline.get_locals(func_def, None)
+        func_env = env.translation.make_partial_env(func_def, locals={})
+        inner_locals_dict = func_env.locals
 
         inner_locals, inner_cellvars, inner_freevars = \
-                            determine_variable_status(context, func_def,
+                            determine_variable_status(env, func_def,
                                                       inner_locals_dict)
         cellvars.update(locals.intersection(inner_freevars))
 
@@ -455,5 +457,5 @@ def determine_variable_status(context, ast, locals_dict):
 #    print ast.name, "locals", pformat(locals)
 
     # Cache state
-    ast.variable_status_tuple = locals, cellvars, freevars
+    annotate(env, ast, variable_status_tuple=(locals, cellvars, freevars))
     return locals, cellvars, freevars

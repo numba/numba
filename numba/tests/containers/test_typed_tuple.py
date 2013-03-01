@@ -68,15 +68,18 @@ def from_iterable(type, iterable):
 def test_count(type):
     """
     >>> test_count(int_)
-    Traceback (most recent call last):
-        ...
-    NotImplementedError: 'count' method
+    (0L, 1L, 2L)
     """
     ttuple = nb.typedtuple(type, [1, 2, 3, 4, 5, 1, 2])
     return ttuple.count(0), ttuple.count(3), ttuple.count(1)
 
-def test():
-    nb.testmod()
+def test(module):
+    nb.testmod(module, runit=True)
 
 if __name__ == "__main__":
-    test()
+    import __main__ as module
+else:
+    import test_typed_tuple as module
+
+test(module)
+__test__ = {}

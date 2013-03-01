@@ -2,11 +2,10 @@
 
 from numba.tests.test_support import *
 
-@autojit_py3doc
+@autojit_py3doc(warn=False)
 def test_modify():
     """
     >>> test_modify()
-    Warning 23:11: local variable 'i' might be referenced before assignment
     0
     1
     2
@@ -22,11 +21,10 @@ def test_modify():
     print
     return i,n
 
-@autojit_py3doc
+@autojit_py3doc(warn=False)
 def test_negindex():
     """
     >>> test_negindex()
-    Warning 41:11: local variable 'i' might be referenced before assignment
     6
     5
     4
@@ -40,11 +38,10 @@ def test_negindex():
         n = 0
     return i,n
 
-@autojit_py3doc
+@autojit_py3doc(warn=False)
 def test_negindex_inferred():
     """
     >>> test_negindex_inferred()
-    Warning 58:11: local variable 'i' might be referenced before assignment
     5
     4
     3
@@ -57,11 +54,10 @@ def test_negindex_inferred():
         n = 0
     return i,n
 
-@autojit_py3doc
+@autojit_py3doc(warn=False)
 def test_fix():
     """
     >>> test_fix()
-    Warning 76:11: local variable 'i' might be referenced before assignment
     0
     1
     2
@@ -75,11 +71,10 @@ def test_fix():
     print
     return i
 
-@autojit_py3doc
+@autojit_py3doc(warn=False)
 def test_break():
     """
     >>> test_break()
-    Warning 98:11: local variable 'i' might be referenced before assignment
     0
     1
     2
@@ -144,12 +139,10 @@ def test_else_clause3():
     else:
         print "else clause"
 
-@autojit_py3doc
+@autojit_py3doc(warn=False)
 def test_else_clause4():
     """
     >>> test_else_clause4()
-    Warning 184:43: local variable 'k' might be referenced before assignment
-    Warning 187:36: local variable 'j' might be referenced before assignment
     inner 0
     i 0
     else clause 1 0 9

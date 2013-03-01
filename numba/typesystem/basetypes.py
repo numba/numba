@@ -213,12 +213,7 @@ class GlobalType(KnownValueType):
     is_global = True
     name = None
 
-    def __init__(self, name, func_globals, position_node=None, **kwds):
-        try:
-            value = func_globals[name]
-        except KeyError as e:
-            raise error.NumbaError(position_node, "No global named %s" % (e,))
-
+    def __init__(self, name, value, **kwds):
         super(GlobalType, self).__init__(value, **kwds)
         self.name = name
 
@@ -255,17 +250,23 @@ class NoneType(NumbaType, minitypes.ObjectType):
 # Function Types
 #------------------------------------------------------------------------
 
-class CTypesFunctionType(NumbaType, minitypes.ObjectType):
-    is_ctypes_function = True
+class PointerFunctionType(NumbaType, minitypes.ObjectType):
+    """
+    Pointer to a function at a known address represented by some Python
+    object (e.g. a ctypes or CFFI function).
+    """
 
-    def __init__(self, ctypes_func, restype, argtypes, **kwds):
-        super(CTypesFunctionType, self).__init__(**kwds)
-        self.ctypes_func = ctypes_func
-        self.signature = minitypes.FunctionType(return_type=restype,
-                                                args=argtypes)
+    is_pointer_to_function = True
+
+    def __init__(self, obj, pointer, signature, **kwds):
+        super(PointerFunctionType, self).__init__(**kwds)
+        self.obj = obj          # for debugability
+        self.pointer = pointer  # function address as an integer
+        self.signature = signature
 
     def __repr__(self):
-        return "<ctypes function %s>" % (self.signature,)
+        return "<natively callable function %s at %s>" % (self.signature,
+                                                          hex(self.pointer))
 
 class AutojitType(NumbaType, minitypes.ObjectType):
     """
@@ -310,10 +311,12 @@ class NULLType(NumbaType):
     def __repr__(self):
         return "<type(NULL)>"
 
-class CTypesPointerType(NumbaType):
-    def __init__(self, pointer_type, address, **kwds):
-        super(CTypesPointerType, self).__init__(**kwds)
-        self.pointer_type = pointer_type
+class KnownPointerType(minitypes.PointerType):
+
+    is_known_pointer = True
+
+    def __init__(self, base_type, address, **kwds):
+        super(KnownPointerType, self).__init__(base_type, **kwds)
         self.address = address
 
 class SizedPointerType(NumbaType, minitypes.PointerType):

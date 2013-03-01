@@ -1,3 +1,5 @@
+import sys
+
 import math
 import numpy as np
 import unittest
@@ -30,6 +32,14 @@ class TestNoPythonMath(unittest.TestCase):
         B = np.vectorize(func_jitted)(A)
         self.assertTrue(np.allclose(B, npfunc(A)))
 
+if sys.platform == 'win32':
+    # NOTE: we're using the double implementation (e.g. 'log' instead of 'logf')
+    # class TestNoPythonMath(unittest.TestCase):
+    #     """
+    #     LLVM intrinsics don't work properly on Windows, and libc doesn't
+    #     have all these functions.
+    #     """
+    pass
 
 if __name__ == '__main__':
     unittest.main()

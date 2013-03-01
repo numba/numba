@@ -1,3 +1,5 @@
+# -*- coding: UTF-8 -*-
+
 """
 numba --annotate
 
@@ -27,8 +29,6 @@ class AnnotationVisitor(visitors.NumbaVisitor):
     def __init__(self, *args, **kwargs):
         super(AnnotationVisitor, self).__init__(*args, **kwargs)
         self.annotations = []
-
-    def produce(self, node, ):
 
     def visit_Name(self, node):
         return AnnotationItem(node, "py_code", size=len(node.id))

@@ -170,6 +170,7 @@ def process_incoming(phi_node):
             incoming_var = promotion.variable
 
         assert incoming_var.lvalue, incoming_var
+        assert parent_block.exit_block, parent_block
 
         phi.add_incoming(incoming_var.lvalue,
                          parent_block.exit_block)

@@ -479,12 +479,7 @@ def compile2(env, func, restype=None, argtypes=None, ctypes=False,
         func_signature = func_env.func_signature
         symtab = func_env.symtab
         t = func_env.translator
-
-    if compile_only:
-        return func_signature, t, None
-
-    # link into the JIT module
-    return func_signature, t, func_env.numba_wrapper_func
+    return func_env
 
 def compile_from_sig(context, func, signature, **kwds):
     return compile(context, func, signature.return_type, signature.args,
@@ -534,14 +529,15 @@ class PipelineStage(object):
         else:
             try:
                 ast = self.transform(ast, env)
-            except error.NumbaError, e:
+            except error.NumbaError as e:
                 func_env = env.translation.crnt
                 error_env = func_env.error_env
                 if func_env.is_closure:
                     flags, parent_func_env = env.translation.stack[-2]
                     error_env.merge_in(parent_func_env.error_env)
                 else:
-                    reporting.report(error_env, error_env.enable_post_mortem,
+                    reporting.report(error_env,
+                                     error_env.enable_post_mortem,
                                      exc=e)
                 raise
 
@@ -584,6 +580,57 @@ def validate_signature(tree, env):
 
     return tree
 
+def update_signature(tree, env):
+    func_env = env.translation.crnt
+    func_signature = func_env.func_signature
+
+    restype = func_signature.return_type
+    if restype and (restype.is_struct or restype.is_complex):
+        # Change signatures returning complex numbers or structs to
+        # signatures taking a pointer argument to a complex number
+        # or struct
+        func_signature = func_signature.return_type(*func_signature.args)
+        func_signature.struct_by_reference = True
+        func_env.func_signature = func_signature
+
+    return tree
+
+def create_lfunc(tree, env):
+    """
+    Update the FunctionEnvironment with an LLVM function if the signature
+    is known (try this before type inference to support recursion).
+    """
+    func_env = env.translation.crnt
+
+    if (not func_env.lfunc and func_env.func_signature and
+            func_env.func_signature.return_type):
+        assert func_env.llvm_module is not None
+        lfunc = func_env.llvm_module.add_function(
+                func_env.func_signature.to_llvm(env.context),
+                func_env.mangled_name)
+
+        func_env.lfunc = lfunc
+        if func_env.func:
+            env.specializations.register_specialization(func_env)
+
+    return tree
+
+def create_lfunc1(tree, env):
+    func_env = env.translation.crnt
+    if not func_env.is_closure:
+        create_lfunc(tree, env)
+
+    return tree
+
+def create_lfunc2(tree, env):
+    func_env = env.translation.crnt
+    assert func_env.func_signature and func_env.func_signature.return_type
+    return create_lfunc1(tree, env)
+
+def create_lfunc3(tree, env):
+    func_env = env.translation.crnt
+    create_lfunc(tree, env)
+    return tree
 
 class ControlFlowAnalysis(PipelineStage):
     _pre_condition_schema = None
@@ -674,11 +721,21 @@ class TransformFor(PipelineStage):
                                           env)
         return transform.visit(ast)
 
+#----------------------------------------------------------------------------
+# Specializing/Lowering Transforms
+#----------------------------------------------------------------------------
 
 class Specialize(PipelineStage):
     def transform(self, ast, env):
         return ast
 
+class RewriteArrayExpressions(PipelineStage):
+    def transform(self, ast, env):
+        from numba import array_expressions
+
+        transformer = self.make_specializer(
+            array_expressions.ArrayExpressionRewriteNative, ast, env)
+        return transformer.visit(ast)
 
 class SpecializeComparisons(PipelineStage):
     def transform(self, ast, env):
@@ -788,19 +845,27 @@ class WrapperStage(PipelineStage):
 
     def transform(self, ast, env):
         func_env = env.translation.crnt
-        if func_env.wrap:
+        if func_env.is_closure:
+            wrap = func_env.need_closure_wrapper
+        else:
+            wrap = func_env.wrap
+
+        if wrap:
             numbawrapper, lfuncwrapper, _ = (
                 func_env.translator.build_wrapper_function(get_lfunc=True))
             func_env.numba_wrapper_func = numbawrapper
             func_env.llvm_wrapper_func = lfuncwrapper
+
         return ast
 
 class ErrorReporting(PipelineStage):
     "Sort and issue warnings and errors"
     def transform(self, ast, env):
-        error_env = env.translation.crnt.error_env
+        func_env = env.translation.crnt
+        error_env = func_env.error_env
         post_mortem = error_env.enable_post_mortem
-        reporting.report(error_env, post_mortem=post_mortem)
+        reporting.report(error_env,
+                         post_mortem=post_mortem)
         return ast
 
 class ComposedPipelineStage(PipelineStage):

@@ -1,10 +1,8 @@
 import ast
-import ctypes
 
 import llvm
 import llvm.core as lc
-import llvm.passes as lp
-import llvm.ee as le
+import llvm.core
 
 from numba.llvm_types import _int1, _int32, _LLVMCaster
 from numba.multiarray_api import MultiarrayAPI # not used
@@ -15,8 +13,7 @@ from numba import *
 
 from numba.codegen.debug import *
 from numba.codegen.codeutils import llvm_alloca
-from numba.codegen import (coerce, complexsupport, refcounting, llvmwrapper,
-                           llvmcontext)
+from numba.codegen import coerce, complexsupport, refcounting, llvmwrapper
 from numba.codegen.llvmcontext import LLVMContextManager
 
 from numba import visitors, nodes, llvm_types, utils, function_util
@@ -27,6 +24,10 @@ from numba.utils import dump
 from numba import naming, metadata
 from numba.functions import keep_alive
 from numba.control_flow import ssa
+from numba.support.numpy_support import sliceutils
+
+from llvm_cbuilder import shortnames as C
+
 
 _int32_zero = lc.Constant.int(_int32, 0)
 
@@ -250,10 +251,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 self.error(self.ast, "Function with non-void return does "
                                      "not return a value")
 
-        self.lfunc_type = self.to_llvm(self.func_signature)
-
-        self.lfunc = self.llvm_module.add_function(self.lfunc_type,
-                                                   self.mangled_name)
+        self.lfunc = self.env.translation.crnt.lfunc
+        assert self.lfunc
         if not isinstance(self.ast, nodes.FunctionWrapperNode):
             assert self.mangled_name == self.lfunc.name, \
                    "Redefinition of function %s (%s, %s)" % (self.func_name,
@@ -434,11 +433,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                                                      object_))
         wrapper_call.error_return = error_return
 
+        # TODO: Run this entire thing through a wrapper pipeline...
         func_env = self.env.translation.crnt.inherit(
                 name=func_name,
+                func_signature=signature,
                 llvm_module=wrapper_module)
         self.env.translation.push_env(func_env)
         try:
+            from numba import pipeline
+            pipeline.create_lfunc(wrapper_call, self.env)
             t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
                                   symtab, llvm_module=wrapper_module,
                                   locals={}, refcount_args=False,
@@ -552,12 +555,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # We need to specialize the return statement, since it may be a
         # non-trivial coercion (e.g. call a ctypes pointer type for pointer
         # return types, etc)
-        pipeline_ = pipeline.Pipeline(self.context, node.fake_pyfunc,
-                                      node, self.func_signature,
-                                      order=['late_specializer',
-                                             'specialize_funccalls',
-                                             'specialize_exceptions'])
-        sig, symtab, return_stmt_ast = pipeline_.run_pipeline()
+        # So set up a FunctionEnvironment and specialize our AST
+        func_env = self.env.translation.crnt.inherit(
+            ast=node,
+            func=node.fake_pyfunc,
+            func_signature=self.func_signature
+        )
+        pipeline.run_env(self.env, func_env, pipeline_name='wrap_func')
+        return_stmt_ast = func_env.ast
+
         self.generic_visit(return_stmt_ast)
 
         debug_conversion = was_debug_conversion
@@ -676,6 +682,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_StructAttribute(self, node):
         result = self.visit(node.value)
         value_is_reference = node.value.type.is_reference
+
+        # print "referencing", node.struct_type, node.field_idx, node.attr
 
         # TODO: TBAA for loads
         if isinstance(node.ctx, ast.Load):
@@ -1471,6 +1479,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self.llvm_module.get_global_variable_named("Py_None")
 
     def visit_NativeCallNode(self, node, largs=None):
+        # print node.py_func, node.llvm_func
         if largs is None:
             largs = self.visitlist(node.args)
 
@@ -1530,7 +1539,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)
 
-    def visit_CTypesCallNode(self, node):
+    def visit_PointerCallNode(self, node):
         node.llvm_func = self.visit(node.function)
         return self.visit_NativeCallNode(node)
 
@@ -1688,6 +1697,155 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_ExpressionNode(self, node):
         self.visitlist(node.stmts)
         return self.visit(node.expr)
+
+    #------------------------------------------------------------------------
+    # Array Slicing
+    #------------------------------------------------------------------------
+
+    def declare(self, cbuilder_func):
+        func_def = self.context.cbuilder_library.declare(
+            cbuilder_func,
+            self.env,
+            self.llvm_module)
+        return func_def
+
+    def visit_NativeSliceNode(self, node):
+        """
+        Slice an array. Allocate fake PyArray and allocate shape/strides
+        """
+        shape_ltype = npy_intp.pointer().to_llvm(self.context)
+
+        # Create PyArrayObject accessors
+        view = self.visit(node.value)
+        view_accessor = ndarray_helpers.PyArrayAccessor(self.builder, view)
+
+        # TODO: change this attribute name to stack_allocate or something
+        if node.nopython:
+            # Stack-allocate array object
+            array_struct_ltype = float_[:].to_llvm(self.context).pointee
+            view_copy = self.llvm_alloca(array_struct_ltype)
+            array_struct = self.builder.load(view)
+            self.builder.store(array_struct, view_copy)
+            view_copy_accessor = ndarray_helpers.PyArrayAccessor(self.builder,
+                                                                 view_copy)
+        else:
+            class FakePyArrayAccessor(object):
+                pass
+            view_copy_accessor = FakePyArrayAccessor()
+
+        # Stack-allocate shape/strides and update accessors
+        shape = self.alloca(node.shape_type)
+        strides = self.alloca(node.shape_type)
+
+        view_copy_accessor.data = view_accessor.data
+        view_copy_accessor.shape = self.builder.bitcast(shape, shape_ltype)
+        view_copy_accessor.strides = self.builder.bitcast(strides, shape_ltype)
+
+        # Patch and visit all children
+        for subslice in node.subslices:
+            subslice.view_accessor = view_accessor
+            subslice.view_copy_accessor = view_copy_accessor
+
+        # print ast.dump(node)
+        self.visitlist(node.subslices)
+
+        # Return fake or actual array
+        if node.nopython:
+            return view_copy
+        else:
+            # Update LLVMValueRefNode fields, build actual numpy array
+            void_p = void.pointer().to_llvm(self.context)
+            node.dst_data.llvm_value = self.builder.bitcast(
+                                    view_copy_accessor.data, void_p)
+            node.dst_shape.llvm_value = view_copy_accessor.shape
+            node.dst_strides.llvm_value = view_copy_accessor.strides
+            return self.visit(node.build_array_node)
+
+    def visit_SliceSliceNode(self, node):
+        "Handle slicing"
+        start, stop, step = node.start, node.stop, node.step
+
+        if start is not None:
+            start = self.visit(node.start)
+        if stop is not None:
+            stop = self.visit(node.stop)
+        if step is not None:
+            step = self.visit(node.step)
+
+        slice_func_def = sliceutils.SliceArray(self.context,
+                                               start is not None,
+                                               stop is not None,
+                                               step is not None)
+
+        slice_func = slice_func_def(self.llvm_module)
+        slice_func.linkage = llvm.core.LINKAGE_LINKONCE_ODR
+
+        data = node.view_copy_accessor.data
+        in_shape = node.view_accessor.shape
+        in_strides = node.view_accessor.strides
+        out_shape = node.view_copy_accessor.shape
+        out_strides = node.view_copy_accessor.strides
+        src_dim = llvm_types.constant_int(node.src_dim)
+        dst_dim = llvm_types.constant_int(node.dst_dim)
+
+        default = llvm_types.constant_int(0, C.npy_intp)
+        args = [data, in_shape, in_strides, out_shape, out_strides,
+                start or default, stop or default, step or default,
+                src_dim, dst_dim]
+        data_p = self.builder.call(slice_func, args)
+        node.view_copy_accessor.data = data_p
+
+        return None
+
+    def visit_SliceDimNode(self, node):
+        "Handle indexing and newaxes in a slice operation"
+        acc_copy = node.view_copy_accessor
+        acc = node.view_accessor
+
+        index_func = self.declare(sliceutils.IndexAxis)
+        newaxis_func = self.declare(sliceutils.NewAxis)
+
+        if node.type.is_int:
+            value = self.visit(nodes.CoercionNode(node.subslice, npy_intp))
+            args = [acc_copy.data, acc.shape, acc.strides,
+                    llvm_types.constant_int(node.src_dim, C.npy_intp), value]
+            result = self.builder.call(index_func, args)
+            acc_copy.data = result
+        else:
+            args = [acc_copy.shape, acc_copy.strides,
+                    llvm_types.constant_int(node.dst_dim)]
+            self.builder.call(newaxis_func, args)
+
+        return None
+
+    def visit_BroadcastNode(self, node):
+        shape = self.alloca(node.shape_type)
+        shape = self.builder.bitcast(shape, node.type.to_llvm(self.context))
+
+        # Initialize shape to ones
+        default_extent = llvm.core.Constant.int(C.npy_intp, 1)
+        for i in range(node.array_type.ndim):
+            dst = self.builder.gep(shape, [llvm.core.Constant.int(C.int, i)])
+            self.builder.store(default_extent, dst)
+
+        # Obtain broadcast function
+        func_def = self.declare(sliceutils.Broadcast)
+
+        # Broadcast all operands
+        for op in node.operands:
+            op_result = self.visit(op)
+            acc = ndarray_helpers.PyArrayAccessor(self.builder, op_result)
+            if op.type.is_array:
+                args = [shape, acc.shape, acc.strides,
+                        llvm_types.constant_int(node.array_type.ndim),
+                        llvm_types.constant_int(op.type.ndim)]
+                lresult = self.builder.call(func_def, args)
+                node.broadcast_retvals[op].llvm_value = lresult
+
+        # See if we had any errors broadcasting
+        self.visitlist(node.check_errors)
+
+        return shape
 
     #------------------------------------------------------------------------
     # User nodes

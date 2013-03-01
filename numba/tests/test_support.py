@@ -1,4 +1,6 @@
+import os
 import sys
+import types
 import StringIO
 import unittest
 import functools
@@ -113,11 +115,12 @@ def testmod(module=None, runit=False):
     populates module.__test__, when run as main, runs the doctests.
     """
     if module is None:
-        modname = sys._getframe(1).f_globals['__name__']
+        mod_globals = sys._getframe(1).f_globals
+        modname = mod_globals['__name__']
         module = __import__(modname)
+        # module = types.ModuleType(modname)
+        # vars(module).update(mod_globals)
     else:
         modname = module.__name__
 
     doctest_support.testmod(module, run_doctests=runit or modname == '__main__')
-    #if modname == '__main__':
-    #numba.nose_run(mod)

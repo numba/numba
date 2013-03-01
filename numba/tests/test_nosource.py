@@ -1,3 +1,4 @@
+import sys
 import numba
 
 def test_nosource():
@@ -9,5 +10,7 @@ def foo (): return 99
     exec source
     assert foo() == 99
 
-if __name__ == "__main__":
+if sys.version_info[:2] < (2, 7):
+    del test_nosource
+elif __name__ == "__main__":
     test_nosource()

@@ -19,6 +19,13 @@ from numba import double, int_
 from numba import environment
 import llvm.core as _lc
 
+logger = logging.getLogger(__name__)
+
+environment.NumbaEnvironment.get_environment().link_cbuilder_utilities()
+
+#------------------------------------------------------------------------
+# PyCC decorators
+#------------------------------------------------------------------------
 
 def _internal_export(env, function_signature, backend='ast', **kws):
     def _iexport(func):
@@ -80,7 +87,9 @@ def exportmany(signatures, env_name=None, env=None, **kws):
         return func
     return _export
 
-logger = logging.getLogger(__name__)
+#------------------------------------------------------------------------
+# Extension Classes
+#------------------------------------------------------------------------
 
 def jit_extension_class(py_class, translator_kwargs, env):
     llvm_module = translator_kwargs.get('llvm_module', None)
@@ -89,6 +98,49 @@ def jit_extension_class(py_class, translator_kwargs, env):
         translator_kwargs['llvm_module'] = llvm_module
     return extension_type_inference.create_extension(
         env, py_class, translator_kwargs)
+
+#------------------------------------------------------------------------
+# Compilation Entry Points
+#------------------------------------------------------------------------
+
+def compile_function(env, func, argtypes, restype=None, **kwds):
+    """
+    Compile a python function given the argument types. Compile only
+    if not compiled already, and only if it is registered to the function
+    cache.
+
+    Returns a triplet of (signature, llvm_func, python_callable)
+    `python_callable` may be the original function, or a ctypes callable
+    if the function was compiled.
+    """
+    function_cache = env.specializations
+
+    # For NumbaFunction, we get the original python function.
+    func = getattr(func, 'py_func', func)
+
+    # get the compile flags
+    flags = None # stub
+
+    # Search in cache
+    result = function_cache.get_function(func, argtypes, flags)
+    if result is not None:
+        sig, lfunc, pycall = result
+        return sig, lfunc, pycall
+
+    # Compile the function
+    from numba import pipeline
+
+    compile_only = getattr(func, '_numba_compile_only', False)
+    kwds['compile_only'] = kwds.get('compile_only', compile_only)
+
+    assert kwds.get('llvm_module') is None, kwds.get('llvm_module')
+
+    func_env = pipeline.compile2(env, func, restype, argtypes, **kwds)
+
+    function_cache.register_specialization(func_env)
+    return (func_env.func_signature,
+            func_env.lfunc,
+            func_env.numba_wrapper_func)
 
 def resolve_argtypes(numba_func, template_signature,
                      args, kwargs, translator_kwargs):
@@ -101,6 +153,16 @@ def resolve_argtypes(numba_func, template_signature,
     assert not kwargs, "Keyword arguments are not supported yet"
 
     locals_dict = translator_kwargs.get("locals", None)
+
+    argcount = numba_func.py_func.func_code.co_argcount
+    if argcount != len(args):
+        if argcount == 1:
+            arguments = 'argument'
+        else:
+            arguments = 'arguments'
+        raise TypeError("%s() takes exactly %d %s (%d given)" % (
+                                numba_func.py_func.__name__, argcount,
+                                arguments, len(args)))
 
     return_type = None
     argnames = inspect.getargspec(numba_func.py_func).args
@@ -136,10 +198,12 @@ def _autojit(template_signature, target, nopython, env_name=None, env=None,
             "Compile the function given its positional and keyword arguments"
             signature = resolve_argtypes(numba_func, template_signature,
                                          args, kwargs, translator_kwargs)
-            dec = _jit(restype=signature.return_type,
-                       argtypes=signature.args,
-                       target=target, nopython=nopython, env=env,
-                       **translator_kwargs)
+
+            jitter = jit_targets[(target, 'ast')]
+            dec = jitter(restype=signature.return_type,
+                         argtypes=signature.args,
+                         target=target, nopython=nopython, env=env,
+                         **translator_kwargs)
 
             compiled_function = dec(f)
             return compiled_function
@@ -195,14 +259,9 @@ def _jit(restype=None, argtypes=None, nopython=False,
 
         assert kwargs.get('llvm_module') is None # TODO link to user module
         assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
-        result = env.specializations.compile_function(func, argtys,
-                                                      restype=restype,
-                                                      nopython=nopython,
-                                                      ctypes=False,
-                                                      **kwargs)
-        signature, lfunc, wrapper_func = result
-        return numbawrapper.NumbaCompiledWrapper(func, wrapper_func,
-                                                 signature, lfunc)
+        sig, lfunc, wrapper = compile_function(env, func, argtys, restype=restype,
+                                    nopython=nopython, **kwargs)
+        return numbawrapper.NumbaCompiledWrapper(func, wrapper, sig, lfunc)
 
     return _jit_decorator
 
@@ -270,3 +329,4 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
         kws['argtypes'] = argtypes
 
     return jit_targets[target, backend](**kws)
+

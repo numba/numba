@@ -112,16 +112,15 @@ class LLVMIntrinsicNode(NativeCallNode):
 class MathCallNode(NativeCallNode):
     "Low level call a libc math function"
 
-class CTypesCallNode(NativeCallNode):
+class PointerCallNode(NativeCallNode):
     "Call a ctypes function"
 
     _fields = NativeCallNode._fields + ['function']
 
-    def __init__(self, signature, args, ctypes_func_type, py_func=None, **kw):
-        super(CTypesCallNode, self).__init__(signature, args, None,
+    def __init__(self, signature, args, pointer, py_func=None, **kw):
+        super(PointerCallNode, self).__init__(signature, args, None,
                                              py_func, **kw)
-        self.pointer = ctypes.cast(py_func, ctypes.c_void_p).value
-        # self.pointer = ctypes.addressof(ctypes_func_type)
+        self.pointer = pointer
         self.function = ConstNode(self.pointer, signature.pointer())
 
 
@@ -142,7 +141,7 @@ class ObjectCallNode(FunctionCallNode):
         self.function = func
         self.py_func = py_func
 
-        self.args_tuple = ast.Tuple(elts=args, ctx=ast.Load())
+        self.args_tuple = ast.Tuple(elts=list(args), ctx=ast.Load())
         self.args_tuple.variable = Variable(
                 typesystem.TupleType(object_, size=len(args)))
 

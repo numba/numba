@@ -29,11 +29,14 @@ class StructAttribute(ExtTypeAttribute):
 
         type = struct_type(type)
         self.attr_type = type.fielddict[attr]
-        self.field_idx = type.fields.index((attr, self.attr_type))
 
         self.type = self.attr_type
         self.variable = Variable(self.type, promotable_type=False)
 
+    @property
+    def field_idx(self):
+        fields = struct_type(self.struct_type).fields
+        return fields.index((self.attr, self.attr_type))
 
 class StructVariable(ExprNode):
     """

@@ -1,12 +1,13 @@
 import ast, inspect, os
-import textwrap
-
-from collections import defaultdict
-from numba import *
-from . import naming
-from .minivect import minitypes
 import logging
+import textwrap
+from collections import defaultdict
+
+from numba import *
+from numba.minivect import minitypes
 from numba import numbawrapper
+
+import llvm.core
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +63,13 @@ def _get_ast(func):
     except IOError:
         return decompile_func(func)
     else:
-        source = textwrap.dedent(source)
         # Split off decorators
+        # TODO: This is not quite correct, we can have comments or strings
+        # starting at column 0 and an indented function !
+        source = textwrap.dedent(source)
         decorators = 0
-        while not source.startswith('def'): # decorator can have multiple lines
+        while not source.lstrip().startswith('def'): # decorator can have multiple lines
+            assert source
             decorator, sep, source = source.partition('\n')
             decorators += 1
         module_ast = ast.parse(source)
@@ -144,53 +148,18 @@ class FunctionCache(object):
         '''
         return self.__compiled_funcs[func]
 
-    def register_specialization(self, func, compiled, argtypes, flags):
-        argtypes_flags = tuple(argtypes), flags
+    def register_specialization(self, func_env):
+        func = func_env.func
+        argtypes = func_env.func_signature.args
+        compiled = (
+            func_env.func_signature,
+            func_env.lfunc,
+            func_env.numba_wrapper_func,
+        )
+
+        # Sanity check
+        assert isinstance(func_env.func_signature, minitypes.FunctionType)
+        assert isinstance(func_env.lfunc, llvm.core.Function)
+
+        argtypes_flags = tuple(argtypes), None
         self.__compiled_funcs[func][argtypes_flags] = compiled
-
-    # FIXME: Kill this entry point into the translator, or move it to
-    # a function on the environment, and defined in decorators, or an
-    # intermediary module.
-    def compile_function(self, func, argtypes, restype=None,
-                         ctypes=False, **kwds):
-        """
-        Compile a python function given the argument types. Compile only
-        if not compiled already, and only if it is registered to the function
-        cache.
-
-        Returns a triplet of (signature, llvm_func, python_callable)
-        `python_callable` may be the original function, or a ctypes callable
-        if the function was compiled.
-        """
-        # For NumbaFunction, we get the original python function.
-        func = getattr(func, 'py_func', func)
-        assert func in self.__compiled_funcs, func
-
-        # get the compile flags
-        flags = None # stub
-
-        # Search in cache
-        result = self.get_function(func, argtypes, flags)
-        if result is not None:
-            sig, trans, pycall = result
-            return sig, trans.lfunc, pycall
-
-        # Compile the function
-        from numba import pipeline
-
-        compile_only = getattr(func, '_numba_compile_only', False)
-        kwds['compile_only'] = kwds.get('compile_only', compile_only)
-
-        assert kwds.get('llvm_module') is None, kwds.get('llvm_module')
-
-        if self.env:
-            assert self.context is None
-            compiled = pipeline.compile2(self.env, func, restype, argtypes,
-                                        ctypes=ctypes, **kwds)
-        else:
-            compiled = pipeline.compile(self.context, func, restype, argtypes,
-                                        ctypes=ctypes, **kwds)
-        func_signature, translator, ctypes_func = compiled
-    
-        self.register_specialization(func, compiled, func_signature.args, flags)
-        return func_signature, translator.lfunc, ctypes_func

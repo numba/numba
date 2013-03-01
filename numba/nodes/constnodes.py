@@ -1,6 +1,12 @@
 from numba.nodes import *
 import numba.nodes
 
+def get_pointer_address(value, type):
+    if type.is_known_pointer:
+        return type.address
+    else:
+        return value
+
 class ConstNode(ExprNode):
     """
     Wrap a constant.
@@ -48,7 +54,8 @@ class ConstNode(ExprNode):
             lvalue = llvm.core.Constant.struct([real.value(translator),
                                                 imag.value(translator)])
         elif type.is_pointer:
-            addr_int = translator.visit(ConstNode(self.pyval, type=Py_uintptr_t))
+            addr_int = get_pointer_address(self.pyval, type)
+            addr_int = ConstNode(addr_int, type=Py_uintptr_t).value(translator)
             lvalue = translator.builder.inttoptr(addr_int, ltype)
         elif type.is_object:
             raise NotImplementedError("Use ObjectInjectNode")

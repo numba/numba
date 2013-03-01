@@ -120,6 +120,8 @@ class TestIf(unittest.TestCase):
 
     def test_if_fn_4(self):
         try:
+            if sys.version_info[:2] < (2, 7):
+                raise ImportError
             from meta.decompiler import decompile_func
         except ImportError:
             print >>sys.stderr, "Skipping if test, meta not available"

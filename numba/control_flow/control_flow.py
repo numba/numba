@@ -621,7 +621,11 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         # Stack of control flow blocks
         self.stack = []
-        self.flow = ControlFlow(self.source_descr)
+
+        flow = ControlFlow(self.source_descr)
+        self.env.translation.crnt.flow = flow
+        self.flow = flow
+
         if env:
             if hasattr(env, 'translation'):
                 env.translation.crnt.cfg_transform = self
@@ -757,7 +761,10 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             name_assignment = self.flow.mark_assignment(
                     lhs, rhs, self.symtab[lhs.name], assignment,
                     warn_unused=warn_unused)
-        elif isinstance(lhs, ast.Attribute) and self.flow.block:
+
+        # TODO: Generate fake RHS for for iteration target variable
+        elif (isinstance(lhs, ast.Attribute) and self.flow.block and
+                  assignment is not None):
             self.flow.block.stats.append(AttributeAssignment(assignment))
 
         if self.flow.exceptions:
@@ -855,8 +862,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
     def visit_Suite(self, node):
         if self.flow.block:
-            for stat in node.body:
-                self.visit(stat)
+            for i, stat in enumerate(node.body):
+                node.body[i] = self.visit(stat)
                 if not self.flow.block:
                     stat.is_terminator = True
                     break

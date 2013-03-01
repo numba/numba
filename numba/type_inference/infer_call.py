@@ -1,30 +1,10 @@
-import ast
-import math
-import cmath
-import copy
-import opcode
-import types
 import __builtin__ as builtins
-from itertools import imap, izip
 
 import numba
 from numba import *
-from numba import error, transforms, closures, control_flow, visitors, nodes
-from numba.type_inference import module_type_inference, deferred
-from numba.minivect import minierror, minitypes
-from numba import translate, utils, typesystem
-from numba.control_flow import ssa
-from numba.typesystem.ssatypes import kosaraju_strongly_connected
-from numba.symtab import Variable
-from numba import stdio_util, function_util
-from numba.typesystem import is_obj, promote_closest
-from numba.utils import dump
-
-import llvm.core
-import numpy
-import numpy as np
-
-import logging
+from numba import error, nodes
+from numba.type_inference import module_type_inference
+from numba import typesystem
 
 debug = False
 #debug = True

@@ -1,35 +1,29 @@
 import ast
-import math
 import cmath
-import copy
-import opcode
 import types
+import logging
 import __builtin__ as builtins
 from functools import reduce
 
 import numba
 from numba import *
-from numba import error, transforms, control_flow, visitors, nodes
+from numba import error, control_flow, visitors, nodes
 from numba import oset, odict
 from numba.specialize.mathcalls import is_math_function
 from numba.type_inference import module_type_inference, infer_call, deferred
-from numba.minivect import minierror, minitypes
-from numba import translate, utils, typesystem
+from numba.minivect import minitypes
+from numba import utils, typesystem
 from numba.control_flow import ssa
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
 from numba import closures as closures
-from numba.type_inference.modules import mathmodule
+from numba.support import numpy_support
 
-from numba import stdio_util, function_util
 from numba.typesystem import is_obj, promote_closest, get_type
 from numba.utils import dump
 
 import llvm.core
 import numpy
-import numpy as np
-
-import logging
 
 debug = False
 #debug = True
@@ -39,112 +33,33 @@ logger = logging.getLogger(__name__)
 if debug:
     logger.setLevel(logging.DEBUG)
 
+def lookup_global(env, name, position_node):
+    func_env = env.translation.crnt
+
+    func = func_env.func
+    if (func is not None and name in func.func_code.co_freevars and
+            func.func_closure):
+        cell_idx = func.func_code.co_freevars.index(name)
+        cell = func.func_closure[cell_idx]
+        value = cell.cell_contents
+    elif name in func_env.function_globals:
+        value = func_env.function_globals[name]
+    elif func and name == func.__name__:
+        # Assume recursive function
+        value = numba.jit(func_env.func_signature)(func)
+    else:
+        raise error.NumbaError(position_node, "No global named '%s'" % (name,))
+
+    return value
+
+
 def no_keywords(node):
     if node.keywords or node.starargs or node.kwargs:
         raise error.NumbaError(
             node, "Function call does not support keyword or star arguments")
 
 
-class NumpyMixin(object):
-    """
-    Mixing that deals with NumPy array slicing.
-
-        - normalize ellipses
-        - recognize newaxes
-        - track how contiguity is affected (C or Fortran)
-    """
-
-    # TODO: Replace uses of these methods with the respective functions
-
-    def _is_constant_index(self, node):
-        return nodes.is_constant_index(node)
-
-    def _is_newaxis(self, node):
-        return nodes.is_newaxis(node)
-
-    def _is_ellipsis(self, node):
-        return nodes.is_ellipsis(node)
-
-    def _unellipsify(self, node, slices, subscript_node):
-        """
-        Given an array node `node`, process all AST slices and create the
-        final type:
-
-            - process newaxes (None or numpy.newaxis)
-            - replace Ellipsis with a bunch of ast.Slice objects
-            - process integer indices
-            - append any missing slices in trailing dimensions
-        """
-        type = node.variable.type
-
-        if not type.is_array:
-            assert type.is_object
-            return minitypes.object_, node
-
-        if (len(slices) == 1 and self._is_constant_index(slices[0]) and
-                slices[0].value.pyval is Ellipsis):
-            # A[...]
-            return type, node
-
-        result = []
-        seen_ellipsis = False
-
-        # Filter out newaxes
-        newaxes = [newaxis for newaxis in slices if self._is_newaxis(newaxis)]
-        n_indices = len(slices) - len(newaxes)
-
-        full_slice = ast.Slice(lower=None, upper=None, step=None)
-        full_slice.variable = Variable(typesystem.SliceType())
-        ast.copy_location(full_slice, slices[0])
-
-        # process ellipses and count integer indices
-        indices_seen = 0
-        for slice_node in slices[::-1]:
-            slice_type = slice_node.variable.type
-            if slice_type.is_ellipsis:
-                if seen_ellipsis:
-                    result.append(full_slice)
-                else:
-                    nslices = type.ndim - n_indices + 1
-                    result.extend([full_slice] * nslices)
-                    seen_ellipsis = True
-            elif (slice_type.is_slice or slice_type.is_int or
-                  self._is_newaxis(slice_node)):
-                indices_seen += slice_type.is_int
-                result.append(slice_node)
-            else:
-                # TODO: Coerce all object operands to integer indices?
-                # TODO: (This will break indexing with the Ellipsis object or
-                # TODO:  with slice objects that we couldn't infer)
-                return minitypes.object_, nodes.CoercionNode(node,
-                                                             minitypes.object_)
-
-        # Reverse our reversed processed list of slices
-        result.reverse()
-
-        # append any missing slices (e.g. a2d[:]
-        result_length = len(result) - len(newaxes)
-        if result_length < type.ndim:
-            nslices = type.ndim - result_length
-            result.extend([full_slice] * nslices)
-
-        subscript_node.slice = ast.ExtSlice(result)
-        ast.copy_location(subscript_node.slice, slices[0])
-
-        # create the final array type and set it in value.variable
-        result_dtype = node.variable.type.dtype
-        result_ndim = node.variable.type.ndim + len(newaxes) - indices_seen
-        if result_ndim > 0:
-            result_type = result_dtype[(slice(None),) * result_ndim]
-        elif result_ndim == 0:
-            result_type = result_dtype
-        else:
-            result_type = minitypes.object_
-
-        return result_type, node
-
-
-class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
+class TypeInferer(visitors.NumbaTransformer):
     """
     Type inference. Initialize with a minivect context, a Python ast,
     and a function type with a given or absent, return type.
@@ -190,11 +105,6 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
         restype, argtypes = self.return_type, self.func_signature.args
         self.func_signature = minitypes.FunctionType(return_type=restype,
                                                      args=argtypes)
-        if restype.is_struct or restype.is_complex:
-            # Change signatures returning complex numbers or structs to
-            # signatures taking a pointer argument to a complex number
-            # or struct
-            self.func_signature.struct_by_reference = True
 
     #------------------------------------------------------------------------
     # Symbol Table Type Population and Argument Processing
@@ -420,7 +330,7 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
         """
         for u in list(unvisited):
             u.simplify()
-            if not u.resolve().is_unresolved:
+            if u.is_resolved or not u.resolve().is_unresolved:
                 unvisited.remove(u)
 
     def update_visited(self, start_point, visited, unvisited):
@@ -556,13 +466,13 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
         if self.function_level == 0:
             return self.visit_func_children(node)
 
-        signature = closures.process_decorators(self.visit, node)
+        signature = closures.process_decorators(self.env, self.visit, node)
         type = typesystem.ClosureType(signature)
         self.symtab[node.name] = Variable(type, is_local=True)
 
         # Generates ClosureNodes that hold inner functions. When visited, they
         # do not recurse into the inner functions themselves!
-        closure = nodes.ClosureNode(node, type, self.func)
+        closure = nodes.ClosureNode(self.env, node, type, self.func)
         type.closure = closure
         self.ast.closures.append(closure)
         self.closures[node.name] = closure
@@ -811,7 +721,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
             if isinstance(globals.get(global_name), types.ModuleType):
                 type = typesystem.ModuleType(globals.get(global_name))
             else:
-                type = typesystem.GlobalType(global_name, globals, name_node)
+                value = lookup_global(self.env, global_name, name_node)
+                type = typesystem.GlobalType(global_name, value)
 
         variable = Variable(type, name=global_name, is_constant=True,
                             is_global=is_global, is_builtin=is_builtin,
@@ -860,8 +771,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
             if variable.type.is_global: # or variable.type.is_module:
                 # TODO: look up globals in dict at call time if not
                 obj = variable.type.value
-                if not self.function_cache.is_registered(obj):
-                    variable.type = self.type_from_pyval(obj)
+                # if not self.function_cache.is_registered(obj):
+                variable.type = self.type_from_pyval(obj)
             elif variable.type.is_builtin:
                 # Rewrite builtin-ins later on, give other code the chance
                 # to handle them first
@@ -1064,8 +975,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
                 deferred_type.update()
                 result_type = deferred_type
             else:
-                result_type, node.value = self._unellipsify(
-                                    node.value, slices, node)
+                result = numpy_support.unellipsify(node.value, slices, node)
+                result_type, node.value = result
 
         elif value_type.is_carray:
             # Handle C array indexing
@@ -1274,8 +1185,12 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
                     new_node = infer_call.infer_typefunc(self.context, call_node,
                                                          func_type, new_node)
         elif self.function_cache.is_registered(py_func):
-            fn_info = self.function_cache.compile_function(py_func, arg_types)
-            signature, llvm_func, _ = fn_info
+            py_func = py_func.py_func
+            signature = minitypes.FunctionType(None, arg_types)
+
+            jitted_func = numba.jit(signature)(py_func)
+            signature = jitted_func.signature
+            llvm_func = jitted_func.lfunc
         #elif not call_node.keywords and self._is_math_function(call_node.args,
         #                                                       py_func):
         #    new_node = self._resolve_math_call(call_node, py_func)
@@ -1378,12 +1293,14 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
             # Call to closure/inner function
             return nodes.ClosureCallNode(func_type, node)
 
-        elif func_type.is_ctypes_function:
+        elif func_type.is_pointer_to_function:
             # Call to ctypes function
             no_keywords(node)
-            new_node = nodes.CTypesCallNode(
-                    func_type.signature, node.args, func_type,
-                    py_func=func_type.ctypes_func)
+            new_node = nodes.PointerCallNode(
+                    func_type.signature,
+                    node.args,
+                    func_type.pointer,
+                    py_func=func_type.obj)
 
         elif func_type.is_cast:
             # Call of a numba type
@@ -1428,6 +1345,8 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
         "Resolve attributes of the numpy module or a submodule"
         attribute = getattr(type.module, node.attr)
 
+        # TODO: Do this better
+
         result_type = None
         if attribute is numpy.newaxis:
             result_type = typesystem.NewAxisType()
@@ -1442,6 +1361,12 @@ class TypeInferer(visitors.NumbaTransformer, NumpyMixin):
                 result_type = None
 
         if result_type is None:
+            if hasattr(type.module, node.attr):
+                result_type = self.type_from_pyval(getattr(type.module,
+                                                           node.attr))
+                if result_type != object_:
+                    return result_type
+
             result_type = typesystem.ModuleAttributeType(module=type.module,
                                                          attr=node.attr)
 

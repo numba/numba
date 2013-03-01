@@ -1,6 +1,5 @@
-import copy
+import weakref
 import ast as ast_module
-import inspect
 import types
 import logging
 import pprint
@@ -8,6 +7,7 @@ import pprint
 import llvm.core
 
 from numba import pipeline, naming, error, reporting
+from numba.control_flow.control_flow import ControlFlow
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
 from numba.minivect.minitypes import FunctionType
 from numba import functions, symtab
@@ -27,14 +27,20 @@ logger = logging.getLogger(__name__)
 default_pipeline_order = [
     'resolve_templates',
     'validate_signature',
+    'update_signature',
+    'create_lfunc1',
     'ControlFlowAnalysis',
     #'ConstFolding',
     'TypeInfer',
+    'update_signature',
+    'create_lfunc2',
     'TypeSet',
     'dump_cfg',
     'ClosureTypeInference',
+    'create_lfunc3',
     'TransformFor',
     'Specialize',
+    'RewriteArrayExpressions',
     'SpecializeComparisons',
     'SpecializeSSA',
     'SpecializeClosures',
@@ -64,6 +70,23 @@ default_dummy_type_infer_pipeline_order = [
     'TypeInfer',
     'TypeSet',
 ]
+
+default_numba_wrapper_pipeline_order = [
+    'LateSpecializer',
+    'SpecializeFunccalls',
+    'SpecializeExceptions',
+]
+
+# ______________________________________________________________________
+# Convenience functions
+
+def insert_stage(pipeline_order, stage, after=None, before=None):
+    if after is not None:
+        idx = pipeline_order.index(after) + 1
+    else:
+        idx = pipeline_order.index(before)
+
+    pipeline_order.insert(idx, stage)
 
 # ______________________________________________________________________
 # Class definitions
@@ -95,14 +118,19 @@ class FunctionErrorEnvironment(object):
     enable_post_mortem = TypedProperty(
         bool,
         "Enable post-mortem debugging for the Numba compiler",
-        False#|1
+        False|1
     )
 
     collection = TypedProperty(
         reporting.MessageCollection,
         "Collection of error and warning messages")
 
-    def __init__(self, func, ast):
+    warning_styles = {
+        'simple' : reporting.MessageCollection,
+        'fancy': reporting.FancyMessageCollection,
+    }
+
+    def __init__(self, func, ast, warnstyle):
         self.func = func
         self.ast = ast # copy.deepcopy(ast)
 
@@ -110,8 +138,8 @@ class FunctionErrorEnvironment(object):
         source_descr = reporting.SourceDescr(func, ast)
         self.source = source_descr.get_lines()
 
-        self.collection = reporting.FancyMessageCollection(self.ast,
-                                                           self.source)
+        collection_cls = self.warning_styles[warnstyle]
+        self.collection = collection_cls(self.ast, self.source)
 
     def merge_in(self, parent_error_env):
         """
@@ -142,6 +170,11 @@ class FunctionEnvironment(object):
     func_signature = TypedProperty(
         FunctionType,
         'Type signature for the function being translated.')
+
+    is_partial = TypedProperty(
+        bool,
+        "Whether this environment is a partially constructed environment",
+        False)
 
     func_name = TypedProperty(str, 'Target function name.')
 
@@ -214,6 +247,11 @@ class FunctionEnvironment(object):
         object,
         'Metadata for AST nodes of the function being compiled.')
 
+    flow = TypedProperty(
+        (types.NoneType, ControlFlow),
+        "Control flow graph. See numba.control_flow.",
+        default=None)
+
     # FIXME: Get rid of this.  See comment for translator property,
     # below.
     cfg_transform = TypedProperty(
@@ -247,10 +285,21 @@ class FunctionEnvironment(object):
         'Collective symtol table containing all entries from outer '
         'functions.')
 
+    need_closure_wrapper = TypedProperty(
+        bool, "Whether this closure needs a Python wrapper function",
+        default=True,
+    )
+
     warn = TypedProperty(
         bool,
         'Flag that enables control flow warnings on a per-function level.',
         True)
+
+    warnstyle = TypedProperty(
+        basestring,
+        'Warning style, currently available: simple, fancy',
+        default='fancy'
+    )
 
     kwargs = TypedProperty(
         dict,
@@ -260,15 +309,19 @@ class FunctionEnvironment(object):
     # ____________________________________________________________
     # Methods
 
-    def __init__(self, parent, func, ast, func_signature,
-                 name=None, qualified_name=None,
-                 llvm_module=None, wrap=True, link=True,
-                 symtab=None,
-                 error_env=None, function_globals=None, locals=None,
-                 template_signature=None, cfg_transform=None,
-                 is_closure=False, closures=None, closure_scope=None,
-                 ast_metadata=None, warn=True,
-                 **kws):
+    def __init__(self, *args, **kws):
+        self.init(*args, **kws)
+
+    def init(self, parent, func, ast, func_signature,
+             name=None, qualified_name=None,
+             llvm_module=None, wrap=True, link=True,
+             symtab=None,
+             error_env=None, function_globals=None, locals=None,
+             template_signature=None, cfg_transform=None,
+             is_closure=False, closures=None, closure_scope=None,
+             ast_metadata=None, warn=True, warnstyle='fancy',
+             **kws):
+
         self.parent = parent
         self.numba = parent.numba
         self.func = func
@@ -276,14 +329,15 @@ class FunctionEnvironment(object):
         self.func_signature = func_signature
 
         if name is None:
-            if func and func.__module__:
-                module_name = func.__module__
-                name = '.'.join([module_name, func.__name__])
+            if self.func and self.func.__module__:
+                module_name = self.func.__module__
+                name = '.'.join([module_name, self.func.__name__])
             else:
-                name = ast.name
+                name = self.ast.name
 
         self.func_name = name
-        self.mangled_name = naming.specialized_mangle(name, func_signature.args)
+        self.mangled_name = naming.specialized_mangle(
+                name, self.func_signature.args)
         self.qualified_name = qualified_name or name
         self.llvm_module = (llvm_module if llvm_module
                                  else self.numba.llvm_context.module)
@@ -292,12 +346,14 @@ class FunctionEnvironment(object):
         self.llvm_wrapper_func = None
         self.symtab = symtab if symtab is not None else {}
 
-        self.error_env = error_env or FunctionErrorEnvironment(func, ast)
+        self.error_env = error_env or FunctionErrorEnvironment(self.func,
+                                                               self.ast,
+                                                               warnstyle)
 
         if function_globals is not None:
             self.function_globals = function_globals
         else:
-            self.function_globals = func.func_globals
+            self.function_globals = self.func.func_globals
 
         self.locals = locals if locals is not None else {}
         self.template_signature = template_signature
@@ -312,6 +368,7 @@ class FunctionEnvironment(object):
             self.ast_metadata = metadata.create_metadata_env()
 
         self.warn = warn
+        self.warnstyle = warnstyle
         self.kwargs = kws
 
     def getstate(self):
@@ -334,6 +391,7 @@ class FunctionEnvironment(object):
             closures=self.closures,
             closure_scope=self.closure_scope,
             warn=self.warn,
+            warnstyle=self.warnstyle,
         )
         return state
 
@@ -345,7 +403,7 @@ class FunctionEnvironment(object):
         # TODO: link these things together
         state = self.getstate()
         state.update(kwds)
-        return FunctionEnvironment(**state)
+        return type(self)(**state)
 
 # ______________________________________________________________________
 
@@ -370,6 +428,11 @@ class TranslationEnvironment(object):
         dict,
         'A map from target function names that are under compilation to their '
         'corresponding FunctionEnvironments')
+
+    func_envs = TypedProperty(
+        weakref.WeakKeyDictionary,
+        "Map from root AST nodes to FunctionEnvironment objects."
+        "This allows tracking environments of partially processed ASTs.")
 
     nopython = TypedProperty(
         bool,
@@ -402,6 +465,7 @@ class TranslationEnvironment(object):
         self.crnt = None
         self.stack = [(kws, None)]
         self.functions = {}
+        self.func_envs = weakref.WeakKeyDictionary()
         self.set_flags(**kws)
 
     def set_flags(self, **kws):
@@ -410,9 +474,56 @@ class TranslationEnvironment(object):
         self.warn = kws.get('warn', True)
         self.is_pycc = kws.get('is_pycc', False)
 
+    def get_or_make_env(self, func, ast, func_signature, **kwds):
+        if ast not in self.func_envs:
+            kwds.setdefault('warn', self.warn)
+            func_env = self.numba.FunctionEnvironment(
+                    self, func, ast, func_signature, **kwds)
+            self.func_envs[ast] = func_env
+        else:
+            func_env = self.func_envs[ast]
+            if func_env.is_partial:
+                state = func_env.partial_state
+            else:
+                state = func_env.getstate()
+
+            state.update(kwds, func=func, ast=ast,
+                               func_signature=func_signature)
+            func_env.init(self, **state)
+
+        return func_env
+
+    def get_env(self, ast):
+        if ast in self.func_envs:
+            return self.func_envs[ast]
+        else:
+            return None
+
+    def make_partial_env(self, ast, **kwds):
+        """
+        Create a partial environment for a function that only initializes
+        the given attributes.
+
+        Later attributes will override existing attributes.
+        """
+        if ast in self.func_envs:
+            func_env = self.func_envs[ast]
+        else:
+            func_env = self.numba.FunctionEnvironment.__new__(
+                    self.numba.FunctionEnvironment)
+            func_env.is_partial = True
+            func_env.partial_state = kwds
+
+            for key, value in kwds.iteritems():
+                setattr(func_env, key, value)
+
+            self.func_envs[ast] = func_env
+            func_env.ast = ast
+
+        return func_env
+
     def push(self, func, ast, func_signature, **kws):
-        kws.setdefault('warn', self.warn)
-        func_env = FunctionEnvironment(self, func, ast, func_signature, **kws)
+        func_env = self.get_or_make_env(func, ast, func_signature, **kws)
         return self.push_env(func_env, **kws)
 
     def push_env(self, func_env, **kws):
@@ -420,6 +531,7 @@ class TranslationEnvironment(object):
         self.crnt = func_env
         self.stack.append((kws, self.crnt))
         self.functions[self.crnt.func_name] = self.crnt
+        self.func_envs[func_env.ast] = func_env
         if self.numba.debug:
             logger.debug('stack=%s\ncrnt=%r (%r)', pprint.pformat(self.stack),
                          self.crnt, self.crnt.func if self.crnt else None)
@@ -502,6 +614,8 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     # ____________________________________________________________
     # Properties
 
+    name = TypedProperty((str, unicode), "Name of the environment.")
+
     pipelines = TypedProperty(
         dict, 'Map from entry point names to PipelineStages.')
 
@@ -514,7 +628,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     default_pipeline = TypedProperty(
         str,
         'Default entry point name.  Used to index into the "pipelines" map.',
-        'numba')
+        default='numba')
 
     context = TypedProperty(
         NumbaContext,
@@ -559,11 +673,14 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     environment_map = {}
 
     TranslationContext = TranslationContext
+    TranslationEnvironment = TranslationEnvironment
+    FunctionEnvironment = FunctionEnvironment
 
     # ____________________________________________________________
     # Methods
 
-    def __init__(self, *args, **kws):
+    def __init__(self, name, *args, **kws):
+        self.name = name
         actual_default_pipeline = pipeline.ComposedPipelineStage(
             default_pipeline_order)
         self.pipelines = {
@@ -574,11 +691,13 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
                 default_dummy_type_infer_pipeline_order),
             'compile' : pipeline.ComposedPipelineStage(
                 default_compile_pipeline_order),
+            'wrap_func' : pipeline.ComposedPipelineStage(
+                default_numba_wrapper_pipeline_order),
             }
         self.context = NumbaContext()
         self.specializations = functions.FunctionCache(env=self)
         self.exports = PyccEnvironment()
-        self.translation = TranslationEnvironment(self)
+        self.translation = self.TranslationEnvironment(self)
         self.debug = logger.getEffectiveLevel() < logging.DEBUG
 
         # FIXME: NumbaContext has up to now been used as a stand in
@@ -594,11 +713,12 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         context.utility_library = default_utility_library(context)
         self.llvm_context = translate.LLVMContextManager()
 
-        context.cbuilder_library = library.CBuilderLibrary()
-        context.cbuilder_library.declare_registered(self)
+    def link_cbuilder_utilities(self):
+        self.context.cbuilder_library = library.CBuilderLibrary()
+        self.context.cbuilder_library.declare_registered(self)
 
         # Link modules
-        context.cbuilder_library.link(self.llvm_context.module)
+        self.context.cbuilder_library.link(self.llvm_context.module)
 
     @classmethod
     def get_environment(cls, environment_key = None, *args, **kws):
@@ -612,7 +732,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         if environment_key in cls.environment_map:
             ret_val = cls.environment_map[environment_key]
         else:
-            ret_val = cls(*args, **kws)
+            ret_val = cls(environment_key or 'numba', *args, **kws)
             cls.environment_map[environment_key] = ret_val
         return ret_val
 
@@ -633,6 +753,9 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
             pipeline_obj = self.pipelines[pipeline_name] = pipeline_ctor()
         return pipeline_obj
 
+    def __repr__(self):
+        return "NumbaEnvironment(%s)" % self.name
+
 # ______________________________________________________________________
 # Main (self-test) routine
 
@@ -640,7 +763,7 @@ def main(*args):
     import numba as nb
     test_ast = ast_module.parse('def test_fn(a, b):\n  return a + b\n\n',
                                    '<string>', 'exec')
-    exec compile(test_ast, '<string>', 'exec')
+    exec(compile(test_ast, '<string>', 'exec'))
     test_fn_ast = test_ast.body[-1]
     test_fn_sig = nb.double(nb.double, nb.double)
     test_fn_sig.name = test_fn.__name__

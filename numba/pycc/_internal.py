@@ -127,7 +127,7 @@ class Compiler(object):
                 method_name = ret_val.add_global_variable(
                     method_name_init.type, '.method_name')
                 method_name.initializer = method_name_init
-                method_name.linkage = lc.LINKAGE_INTERNAL
+                method_name.linkage = lc.LINKAGE_EXTERNAL
                 method_def_const = lc.Constant.struct([
                         lc.Constant.gep(method_name, [zero, zero]),
                         lc.Constant.bitcast(lfunc, llvm_types._void_star),

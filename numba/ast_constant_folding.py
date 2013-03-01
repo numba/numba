@@ -260,11 +260,17 @@ class ConstantFolder(visitors.NumbaTransformer):
         return node
 
     def visit_Name(self, node):
-        if isinstance(node.ctx, ast.Load):
+        if isinstance(node.ctx, ast.Load) and self.is_constant(node):
             try:
                 return self.constvalues[node.id]
             except KeyError:
-                pass
+                val = self.func_globals.get(node.id)
+                if val and is_simple_value(val):
+                    if isinstance(val, (int, long, float)):
+                        return ast.Num(n=val)
+                    elif isinstance(val, bool):
+                        name = 'True' if val else 'False'
+                        return ast.Name(id=name, ctx=ast.Load())
         return node
 
     def eval_binary_operation(self, op, left, right):

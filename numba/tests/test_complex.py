@@ -206,9 +206,9 @@ class TestASTComplex(test_support.ASTTestCase):
 
 if __name__ == "__main__":
 #    autojit(add)(m, n)
-    TestASTComplex('test_mandel').debug()
+#    m, n = .12, .32
+#    print autojit(cosh)(m, n), cosh(m, n)
     unittest.main()
-#    autojit(sin)(m, n)
 
 # ______________________________________________________________________
 # End of test_complex.py

@@ -4,6 +4,7 @@ which can collect errors and warnings and issue them after failed or
 successful compilation.
 """
 
+import sys
 import inspect
 
 from numba import error
@@ -57,10 +58,18 @@ def offset(source_lines):
 
 # ______________________________________________________________________
 
+def sort_message(collected_message):
+    node, is_error, message = collected_message
+    lineno, colno = float('inf'), float('inf')
+    if hasattr(node, 'lineno'):
+        lineno, colno = map(float, getpos(node))
+
+    return not is_error, lineno, colno, message
+
 class MessageCollection(object):
     """Collect error/warnings messages first then sort"""
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         # (node, is_error, message)
         self.messages = []
 
@@ -70,15 +79,20 @@ class MessageCollection(object):
     def warning(self, node, message):
         self.messages.append((node, False, message))
 
+    def header(self, out):
+        pass
+
+    def footer(self, out):
+        pass
+
     def report_message(self, message, node, type):
         format_msg_simple(type, node, message)
 
     def report(self, post_mortem=False):
-        self.messages.sort()
+        self.messages.sort(key=sort_message)
 
         if self.messages:
-            print " Numba Encountered Errors or Warnings ".center(80, "-")
-            print
+            self.header(sys.stdout)
 
         errors = []
         for node, is_error, message in self.messages:
@@ -91,7 +105,7 @@ class MessageCollection(object):
             self.report_message(message, node, type)
 
         if self.messages:
-            print "-" * 80
+            self.footer(sys.stdout)
 
         if errors and not post_mortem:
             raise error.NumbaError(*errors[0])
@@ -102,6 +116,13 @@ class FancyMessageCollection(MessageCollection):
         super(FancyMessageCollection, self).__init__()
         self.ast = ast
         self.source_lines = source_lines
+
+    def header(self, out):
+        print >>out, " Numba Encountered Errors or Warnings ".center(80, "-")
+        print >>out
+
+    def footer(self, out):
+        print >>out, "-" * 80
 
     def report_message(self, message, node, type):
         format_msg(type, self.source_lines, node, message)
@@ -117,12 +138,12 @@ def format_msg(type, source_lines, node, msg):
         print "%s^" % ("-" * colno)
 
     format_msg_simple(type, node, msg)
+    print
 
 def format_msg_simple(type, node, message):
     "Issue a warning"
     # printing allows us to test the code
     print "%s %s%s" % (type, error.format_pos(node), message)
-    print
     # logger.warning("Warning %s: %s", error.format_postup(getpos(node)), message)
 
 def warn_unreachable(node):

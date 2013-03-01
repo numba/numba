@@ -18,9 +18,9 @@ def annotate(env, node, **flags):
 
     metadata.update(flags)
 
-def query(env, node, key):
+def query(env, node, key, default=None):
     func_env = env.translation.crnt
     assert func_env is not None
 
     node_metadata = func_env.ast_metadata.get(node, {})
-    return node_metadata.get(key)
+    return node_metadata.get(key, default)

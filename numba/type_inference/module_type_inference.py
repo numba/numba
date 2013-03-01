@@ -6,17 +6,12 @@ See modules/numpy*.py for type inference for NumPy.
 
 import ast
 import inspect
-from itertools import imap
-import types
 
 import numba
 from numba import *
 from numba.minivect import minitypes
-from numba import typesystem, symtab, error, nodes
+from numba import typesystem, error, nodes
 from numba.typesystem import get_type, typeset
-
-import numpy.random
-import numpy as np
 
 import logging
 

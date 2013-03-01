@@ -28,7 +28,7 @@ cmdclass = versioneer.get_cmdclass()
 cmdclass['build_ext'] = build_ext
 
 setup_args = {
-    'long_description': open('README').read(),
+    'long_description': open('README.md').read(),
 }
 
 def find_packages(where='.', exclude=()):
@@ -105,6 +105,15 @@ setup(
         'numba' : ['*.c', '*.h', 'include/*'],
     },
     ext_modules = [
+        Extension(
+            name = "numba.vectorize._internal",
+            sources = ["numba/vectorize/_internal.c",
+                       "numba/vectorize/_ufunc.c",
+                       "numba/vectorize/_gufunc.c"],
+            include_dirs = [numpy.get_include(), "numba/minivect/include/"],
+            depends = ["numba/vectorize/_internal.h",
+                       "numba/minivect/include/miniutils.h"]),
+
         Extension(
             name = "numba.external.utilities.utilities",
             sources = ["numba/external/utilities/utilities.c"],

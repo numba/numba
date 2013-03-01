@@ -18,14 +18,15 @@ class ClosureNode(ExprNode):
 
     _fields = []
 
-    def __init__(self, func_def, closure_type, outer_py_func, **kwargs):
+    def __init__(self, env, func_def, closure_type, outer_py_func, **kwargs):
         super(ClosureNode, self).__init__(**kwargs)
         self.func_def = func_def
         self.type = closure_type
         self.outer_py_func = outer_py_func
         self.name = self.func_def.name
 
-        self.need_numba_func = getattr(func_def, 'need_closure_wrapper', True)
+        func_env = env.translation.get_env(func_def)
+        self.need_numba_func = not func_env or func_env.need_closure_wrapper
         self.lfunc = None
         self.wrapper_func = None
         self.wrapper_lfunc = None

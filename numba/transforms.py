@@ -105,6 +105,7 @@ logger = logging.getLogger(__name__)
 
 from numba.external import pyapi
 
+is_win32 = sys.platform == 'win32'
 
 class BuiltinResolverMixinBase(object):
     """
@@ -145,7 +146,7 @@ class BuiltinResolverMixinBase(object):
 def resolve_pow(type, args):
     have_mod = len(args) == 3
 
-    if (type.is_int or type.is_float) and not have_mod:
+    if (type.is_int or type.is_float) and not have_mod and not is_win32:
         result = resolve_intrinsic(args, pow, type)
     else:
         result = nodes.call_pyfunc(pow, args)
@@ -291,16 +292,14 @@ class ResolveCoercions(visitors.NumbaTransformer):
         return result
 
     def _get_int_conversion_func(self, type, funcs_dict):
-        type = self.context.promote_types(type, long_)
-        if type in funcs_dict:
-            return funcs_dict[type]
-
-        if type.itemsize == long_.itemsize:
+        type = promote_to_native(type)
+        if type.itemsize <= long_.itemsize:
             types = [ulong, long_]
         else:
+            assert type.itemsize > long_.itemsize
             types = [ulonglong, longlong]
 
-        return self._get_int_conversion_func(types[type.signed], funcs_dict)
+        return funcs_dict[types[type.signed]]
 
     def visit_CoerceToObject(self, node):
         new_node = node
@@ -365,6 +364,16 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                   args=[node])
         return result
 
+    def coerce_to_function_pointer(self, node, jit_func_type, func_pointer_type):
+        jit_func = jit_func_type.jit_func
+        if jit_func.signature != func_pointer_type.base_type:
+            raise error.NumbaError(node,
+                                   "Cannot coerce jit funcion %s to function of type %s" % (
+                                       jit_func, func_pointer_type))
+        pointer = self.env.llvm_context.get_pointer_to_function(jit_func.lfunc)
+        new_node = nodes.const(pointer, func_pointer_type)
+        return new_node
+
     def visit_CoerceToNative(self, node):
         """
         Try to perform fast coercion using e.g. PyLong_AsLong(), with a
@@ -408,8 +417,12 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                        cls.__name__,
                                                        args=[node.node])
         elif node_type.is_pointer:
-            raise error.NumbaError(node, "Obtaining pointers from objects "
-                                         "is not yet supported")
+            if from_type.is_jit_function and node_type.base_type.is_function:
+                new_node = self.coerce_to_function_pointer(
+                    node, from_type, node_type)
+            else:
+                raise error.NumbaError(node, "Obtaining pointers from objects "
+                                             "is not yet supported")
         elif node_type.is_void:
             raise error.NumbaError(node, "Cannot coerce %s to void" %
                                    (from_type,))
@@ -784,9 +797,9 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         # return nodes.ObjectTempNode(new_slice)
 
     def visit_Attribute(self, node):
-        if self.nopython:
+        if self.nopython and not node.value.type.is_module:
             raise error.NumbaError(
-                    node, "Cannot access Python attribute in nopython context")
+                    node, "Cannot access Python attribute in nopython context (%s)" % node.attr)
 
         if node.value.type.is_complex:
             value = self.visit(node.value)

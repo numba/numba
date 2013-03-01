@@ -40,3 +40,6 @@ def test_type_promotion():
     assert isinstance(_f1(1, 1), long)
     assert isinstance(_f1(1.0, 1), float)
     assert isinstance(_f1(1, 1.0), float)
+
+if __name__ == '__main__':
+    test_type_promotion()
