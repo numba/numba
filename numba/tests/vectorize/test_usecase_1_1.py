@@ -53,6 +53,7 @@ class TestBasicVectorize(unittest.TestCase):
         from llvm.workaround.avx_support import detect_avx_support
         if not detect_avx_support() and 'vmovsd' in asm:
             print('SKIP! LLVM incorrectly uses AVX on machine without AVX')
+            return
 
         self.check(ufunc, np.double)
         self.check(ufunc, np.float32)
@@ -91,6 +92,7 @@ class TestBasicVectorize(unittest.TestCase):
         from llvm.workaround.avx_support import detect_avx_support
         if not detect_avx_support() and 'vmovsd' in asm:
             print('SKIP! LLVM incorrectly uses AVX on machine without AVX')
+            return
 
         self.check(ufunc, np.double)
 
