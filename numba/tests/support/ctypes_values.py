@@ -34,10 +34,16 @@ class rk_state(ct.Structure):
                ("p3", ct.c_double),
                ("p4", ct.c_double)]
 
-rk_randomseed = mtrand.rk_randomseed
+try:
+    rk_randomseed = mtrand.rk_randomseed
+    rk_seed = mtrand.rk_seed
+    rk_gamma = mtrand.rk_gamma
+    rk_normal = mtrand.rk_normal
+except AttributeError, e:
+    raise ImportError(str(e))
+
 rk_randomseed.argtypes = [ct.POINTER(rk_state)]
 
-rk_seed = mtrand.rk_seed
 rk_seed.restype = None
 rk_seed.argtypes = [ct.c_long, ct.POINTER(rk_state)]
 
@@ -45,11 +51,10 @@ state = rk_state()
 state_p = ct.pointer(state)
 state_vp = ct.cast(state_p, ct.c_void_p)
 
-rk_gamma = mtrand.rk_gamma
+
 rk_gamma.restype = ct.c_double
 rk_gamma.argtypes = [ct.POINTER(rk_state), ct.c_double, ct.c_double]
 
-rk_normal = mtrand.rk_normal
 rk_normal.restype = ct.c_double
 rk_normal.argtypes = [ct.POINTER(rk_state), ct.c_double, ct.c_double]
 

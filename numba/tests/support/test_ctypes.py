@@ -8,7 +8,10 @@ from numba import *
 from numba import environment
 from numba.support import ctypes_support
 
-from numba.tests.support import ctypes_values
+try:
+    from numba.tests.support import ctypes_values
+except ImportError:
+    ctypes_values = None
 
 #-------------------------------------------------------------------
 # Utilities
@@ -32,9 +35,10 @@ def assert_signature(ctypes_func, expected=None):
 # Tests
 #-------------------------------------------------------------------
 
-rk_state_t = get_cast_type(from_python(ctypes_values.rk_state))
+if ctypes_values:
+    rk_state_t = get_cast_type(from_python(ctypes_values.rk_state))
 
-def test_ctypes_func_values():
+def ctypes_func_values():
     signature = int_(rk_state_t.pointer())
     assert_signature(ctypes_values.rk_randomseed, signature)
 
@@ -45,7 +49,7 @@ def test_ctypes_func_values():
     signature = double(rk_state_t.pointer(), double, double)
     assert_signature(ctypes_values.rk_gamma, signature)
 
-def test_ctypes_data_values():
+def ctypes_data_values():
     assert from_python(ctypes_values.state) == rk_state_t
     assert from_python(ctypes_values.state_p) == rk_state_t.pointer()
     assert from_python(ctypes_values.state_vp) == void.pointer()
@@ -54,7 +58,11 @@ def test_ctypes_data_values():
     ctypes_double_p = ctypes.POINTER(ctypes.c_double)(ctypes.c_double(10))
     assert from_python(ctypes_double_p) == double.pointer()
 
+def test():
+    if ctypes_values is not None:
+        ctypes_func_values()
+        ctypes_data_values()
+
 
 if __name__ == '__main__':
-    test_ctypes_func_values()
-    test_ctypes_data_values()
+    test()

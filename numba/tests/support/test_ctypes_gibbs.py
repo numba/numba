@@ -3,7 +3,10 @@
 import math
 import numpy as np
 from numba import jit, autojit
-from numba.tests.support import ctypes_values as rng
+try:
+    from numba.tests.support import ctypes_values as rng
+except ImportError:
+    rng = None
 
 #@jit('double[:,:](int64, int64)')
 @autojit
@@ -26,7 +29,9 @@ def gibbs(rk_seed, N, thin):
     return samples
 
 def test():
-    assert np.allclose(gibbs(rng.rk_seed, 10, 10), gibbs.py_func(rng.rk_seed, 10, 10))
+    if rng is not None:
+        assert np.allclose(gibbs(rng.rk_seed, 10, 10),
+                           gibbs.py_func(rng.rk_seed, 10, 10))
 
 if __name__ == '__main__':
     test()
