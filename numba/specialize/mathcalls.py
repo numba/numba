@@ -47,6 +47,15 @@ def math_suffix(name, type):
         name += 'l' # sinl(long double)
     return name
 
+def have_impl(math_name):
+    return filter_math_funcs([math_name])
+
+def have_double_impl(math_name):
+    """
+    Check whether we have an implementation of the math function in libc
+    for type double (e.g. logf or logl may not be available, but log may be).
+    """
+    return math_suffix(math_name, double) in libc_math_funcs
 
 def is_math_function(func_args, py_func):
     if len(func_args) == 0 or len(func_args) > 1 or py_func is None:
@@ -63,8 +72,8 @@ def is_math_function(func_args, py_func):
     math_name = get_funcname(py_func)
     is_math = math_name in libc_math_funcs
     if is_math and valid_type:
-        math_name = math_suffix(math_name, type)
-        is_math = filter_math_funcs([math_name])
+        actual_math_name = math_suffix(math_name, type)
+        is_math = have_impl(actual_math_name) or have_double_impl(math_name)
 
     return valid_type and (is_intrinsic(py_func) or is_math)
 
@@ -77,10 +86,18 @@ def resolve_intrinsic(args, py_func, type):
 
 def resolve_libc_math(args, py_func, type):
     signature = intrinsic_signature(len(args), type)
-    name = math_suffix(get_funcname(py_func), type)
-    return nodes.MathCallNode(signature, args, llvm_func=None,
-                              py_func=py_func, name=name)
+    math_name = get_funcname(py_func)
+    name = math_suffix(math_name, type)
 
+    use_double_impl = not have_impl(name)
+    if use_double_impl:
+        assert have_double_impl(math_name)
+        signature = double(*[double] * len(args))
+        name = math_suffix(math_name, double)
+
+    result = nodes.MathCallNode(signature, args, llvm_func=None,
+                                py_func=py_func, name=name)
+    return nodes.CoercionNode(result, type)
 
 def resolve_math_call(call_node, py_func):
     "Resolve calls to math functions to llvm.log.f32() etc"
@@ -101,3 +118,5 @@ def filter_math_funcs(math_func_names):
     return result_func_names
 
 libc_math_funcs = filter_math_funcs(mathmodule.all_libc_math_funcs)
+print libc_math_funcs
+print filter_math_funcs(['log', 'logf', 'logl'])
