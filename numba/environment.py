@@ -314,6 +314,7 @@ class FunctionEnvironment(object):
 
     def init(self, parent, func, ast, func_signature,
              name=None, qualified_name=None,
+             mangled_name=None,
              llvm_module=None, wrap=True, link=True,
              symtab=None,
              error_env=None, function_globals=None, locals=None,
@@ -335,9 +336,12 @@ class FunctionEnvironment(object):
             else:
                 name = self.ast.name
 
+        if mangled_name is None:
+            mangled_name = naming.specialized_mangle(name,
+                                                     self.func_signature.args)
+
         self.func_name = name
-        self.mangled_name = naming.specialized_mangle(
-                name, self.func_signature.args)
+        self.mangled_name = mangled_name
         self.qualified_name = qualified_name or name
         self.llvm_module = (llvm_module if llvm_module
                                  else self.numba.llvm_context.module)
@@ -378,6 +382,7 @@ class FunctionEnvironment(object):
             ast=self.ast,
             func_signature=self.func_signature,
             name=self.func_name,
+            mangled_name=self.mangled_name,
             qualified_name=self.qualified_name,
             llvm_module=self.llvm_module,
             wrap=self.wrap,

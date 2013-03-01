@@ -436,6 +436,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # TODO: Run this entire thing through a wrapper pipeline...
         func_env = self.env.translation.crnt.inherit(
                 name=func_name,
+                mangled_name=None, # Force FunctionEnvironment.init()
+                                   # to generate a new mangled name.
                 func_signature=signature,
                 llvm_module=wrapper_module)
         self.env.translation.push_env(func_env)
