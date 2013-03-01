@@ -5,11 +5,11 @@ def test_circular_error():
     >>> try:
     ...     test_circular_error()
     ... except error.NumbaError as e:
-    ...     print(str(e).replace('var1', '<var>').replace('var2', '<var>'))
+    ...     print(str(e))
     Warning 16:19: local variable 'var2' might be referenced before assignment
     Warning 18:19: local variable 'var1' might be referenced before assignment
-    Error Unable to infer type for assignment to 'var2', insert a cast or initialize the variable.
-    Unable to infer type for assignment to '<var>', insert a cast or initialize the variable.
+    Error Unable to infer type for assignment to 'var1', insert a cast or initialize the variable.
+    Unable to infer type for assignment to 'var1', insert a cast or initialize the variable.
     """
     for i in range(10):
         if i > 5:
