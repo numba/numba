@@ -58,3 +58,56 @@ around the closure will still result in a native call in other places.
 Like Python closures, closures can be arbitrarily nested, and follow the same
 scoping rules.
 
+Typed Containers
+================
+Numba ships implementations of various typed containers, which allow fast
+execution and memory-efficient storage.
+
+We hope to support the following container types:
+
+    * list, tuple
+    * dict, ordereddict
+    * set, orderedset
+    * <your idea here>
+
+There are many more data structure that can be implemented, but future releases
+of numba will make it easier (nearly trivial) for people to implement those
+data structure themselves while supporting full data polymorphism.
+
+Currently implemented:
+
+    * typedlist
+    * typedtuple
+
+These data structures work exactly like their python equivalents, but take a
+first parameter which specifies the element type::
+
+    >>> numba.typedlist(int32, range(10))
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    >>> numba.typedlist(float32, range(10))
+    [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+
+    >>> tlist = numba.typedlist(int32)
+    >>> tlist
+    []
+    >>> tlist.extend([3, 2, 1, 3])
+    >>> tlist
+    [3, 1, 2, 3]
+    >>> tlist.count(3)
+    2L
+    >>> tlist[0]
+    3L
+    >>> tlist.pop()
+    3L
+    >>> tlist.reverse()
+    >>> tlist
+    [1, 2, 3]
+
+Things that are not yet implemented:
+
+    * Methods ``remove``, ``insert``
+    * Slicing
+
+Typed containers can be used from Python or from numba code. Using them from numba code
+will result in fast calls without boxing and unboxing.
+
