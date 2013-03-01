@@ -1,5 +1,5 @@
-Static Compilation of Numba Functions
-=====================================
+Static Compilation (pycc)
+=========================
 ``pycc`` allows users to compile Numba functions into a shared library.
 The user writes the functions, exports them and the compiler will import
 the module, collect the exported functions and compile them to a shared

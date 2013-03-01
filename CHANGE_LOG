@@ -1,6 +1,6 @@
 Version 0.7
 -----------
-* Open sourced ufunc vectorizers
+* Open sourced single-threaded ufunc vectorizer
 * Open sourced NumPy array expression compilation
 * Open sourced fast NumPy array slicing
 * Experimental Python 3 support

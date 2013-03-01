@@ -17,7 +17,7 @@ on the fly::
 To make the above example work for any compatible input types automatically,
 we can create a function that specializes automatically::
 
-    @autojit()
+    @autojit
     def sum1d(my_array):
         ...
 
@@ -82,14 +82,6 @@ Arrays may be specified strided or C or Fortran contiguous. For instance,
 ``float[:, :]`` specifies a strided 2D array of floats. ``float[:, ::1]``
 specifies that the array is C contiguous (row-major), and ``float[::1, :]``
 specifies that the array is Fortran contiguous (column-major).
-
-Translator Backends
-===================
-Then ``autojit`` decorator takes ``backend`` as an optional argument, which
-may be set to **bytecode** or **ast**. Both backends currently have different
-capabilities, but the next release plans for the ast backend to supersede
-the bytecode backend. The default is **ast** and the bytecode backend
-has been deprecated and will be removed in the next release. 
 
 Examples
 ========

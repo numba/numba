@@ -8,24 +8,55 @@ Numba
 Documentation for numba
 ------------------------
 
-Contents:
+**Contents:**
+
+.. toctree::
+   :titlesonly:
+   :maxdepth: 2
+
+   doc/userguide.rst
+   doc/types.rst
+   doc/pythonstuff.rst
+
+**Arrays:**
+
+.. toctree::
+   :maxdepth: 2
+
+   doc/arrays.rst
+
+**Interfacing with native code:**
+
+.. toctree::
+   :maxdepth: 2
+
+   doc/interface_c.rst
+
+**Misc:**
+
+.. toctree::
+   :titlesonly:
+   :maxdepth: 2
+
+   doc/pycc.rst
+   doc/type_inference.rst
+
+**Examples:**
+
+.. toctree::
+   :titlesonly:
+   :maxdepth: 2
+
+   doc/doctest.rst
+   doc/examples.rst
+
+**Releases:**
 
 .. toctree::
    :titlesonly:
    :maxdepth: 2
 
    doc/releases.rst
-   doc/userguide.rst
-   doc/arrays.rst
-   doc/types.rst
-   doc/interface_c.rst
-   doc/extension_types.rst
-   doc/closures.rst
-   doc/pycc.rst
-   doc/type_inference.rst
-
-   doc/doctest.rst
-   doc/examples.rst
 
 Developer Documentation
 ------------------------
