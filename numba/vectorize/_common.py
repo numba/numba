@@ -136,6 +136,12 @@ class GenericASTVectorize(object):
     def build_ufunc(self):
         raise NotImplementedError
 
+    def _from_func_factory(self, lfunclist, tyslist, **kws):
+        """
+        Set this attribute to some subclass of CommonVectorizeFromFunc
+        """
+        raise NotImplementedError
+
     def _from_func(self, **kws):
         assert self.translates, "No translation"
         lfunclist = self._get_lfunc_list()
@@ -154,8 +160,12 @@ class GenericASTVectorize(object):
         get_proto_ptr = self._from_func_factory._prepare_prototypes_and_pointers
         return get_proto_ptr(lfunclist, tyslist, engine, **kws)
 
-    def add(self, restype=None, argtypes=None):
-        dec = decorators.jit(restype, argtypes)
+    def add(self, restype=None, argtypes=None, **kwds):
+        """
+        Add a specialization to the vectorizer. Pass any keyword arguments
+        to numba.jit().
+        """
+        dec = decorators.jit(restype, argtypes, **kwds)
         numba_func = dec(self.pyfunc)
         self.args_restypes.append(list(numba_func.signature.args) +
                                   [numba_func.signature.return_type])
