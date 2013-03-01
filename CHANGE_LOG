@@ -1,5 +1,8 @@
 Version 0.7
 -----------
+* Open sourced ufunc vectorizers
+* Open sourced NumPy array expression compilation
+* Open sourced fast NumPy array slicing
 * Experimental Python 3 support
 * Support for typed containers
     * typed lists and tuples
@@ -8,11 +11,16 @@ Version 0.7
 * Preliminary CFFI support
     * Jit calls to CFFI functions (passed into autojit functions)
     * TODO: Recognize ffi_lib.my_func attributes
+* Improved support for ctypes
 * Allow declaring extension attribute types as through class attributes
 * Support for type casting in Python
     * Get the same semantics with or without numba compilation
+* Support for recursion
+    * For jit methods and extension classes
+* Allow jit functions as C callbacks
 * Friendlier error reporting
 * Internal improvements
+* A variety of bug fixes
 
 Version 0.6.1
 --------------
