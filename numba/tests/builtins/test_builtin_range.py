@@ -93,5 +93,5 @@ def last_value():
 
 if __name__ == '__main__':
     # backward3()
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()
