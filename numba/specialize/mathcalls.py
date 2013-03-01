@@ -118,5 +118,5 @@ def filter_math_funcs(math_func_names):
     return result_func_names
 
 libc_math_funcs = filter_math_funcs(mathmodule.all_libc_math_funcs)
-print libc_math_funcs
-print filter_math_funcs(['log', 'logf', 'logl'])
+#print libc_math_funcs
+#print filter_math_funcs(['log', 'logf', 'logl'])
