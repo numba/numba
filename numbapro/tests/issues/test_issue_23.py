@@ -10,5 +10,5 @@ def test_prange_modulo(a, b):
     return c
 
 if __name__ == '__main__':
-    print test_prange_modulo(100, 50)
+    assert np.all(test_prange_modulo(100, 48) == 4)
 
