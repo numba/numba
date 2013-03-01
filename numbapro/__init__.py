@@ -137,6 +137,16 @@ from numbapro.decorators import autojit, jit
 from numbapro.parallel.prange import prange
 from .vectorize import vectorize, guvectorize
 
+from numba.special import *
+from numba.error import *
+from numba import typedlist, typedtuple
+from numba import (is_registered,
+                   register,
+                   register_inferer,
+                   get_inferer,
+                   register_unbound,
+                   register_callable)
+
 __all__ = numba.__all__ + ['vectorize', 'guvectorize', 'prange']
 
 import numbapro.cuda
