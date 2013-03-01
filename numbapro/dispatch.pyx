@@ -26,7 +26,7 @@ cdef extern from "_internal.h":
         PyObject* dispatcher
         
 def set_dispatchers(ufunc, dispatcher):
-    assert isinstance(ufunc, _internal.dyn_ufunc)
+    assert isinstance(ufunc, _internal.dyn_ufunc), ufunc
 
     if dispatcher is not None:
         (<PyDynUFuncObject *> ufunc).dispatcher = <PyObject *> dispatcher

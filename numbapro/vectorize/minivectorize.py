@@ -14,7 +14,7 @@ from numba.minivect import (miniast,
                             specializers as minispecializers,
                             ctypes_conversion,
                             miniutils)
-from numba import decorators, functions
+from numba import functions, templating
 from numba import environment
 
 from numbapro import dispatch
@@ -265,7 +265,7 @@ class MiniVectorize(object):
                 array_types = [minitypes.ArrayType(arg_type, dimensionality)
                                    for arg_type in argtypes]
                 rtype = minitypes.ArrayType(restype, dimensionality)
-                mapper = PythonUfunc2Minivect(decorators.context, self.pyfunc,
+                mapper = PythonUfunc2Minivect(minicontext, self.pyfunc,
                                               self.ast, rtype, array_types)
 
                 if any(array_type.is_object or array_type.is_complex
@@ -327,8 +327,7 @@ class MiniVectorize(object):
         return dtype_args, function_pointers, result_dtype
 
     def expr_name(self):
-        name = 'expr%d' % self.num_exprs
-        self.num_exprs += name
+        return templating.temp_name("miniexpr")
 
     def minivect(self, asts, parallel):
         """
