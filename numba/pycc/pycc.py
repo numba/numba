@@ -7,7 +7,7 @@ import functools
 
 import numba.pycc as pyc
 
-logging.basicConfig(level=logging.DEBUG)
+#logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 def get_ending(args):  
