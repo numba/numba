@@ -3,19 +3,19 @@ from numba.tests.cfg.test_cfg_type_infer import *
 
 
 
-#@autojit(warnstyle='simple')
-#def test_circular_error(): # doctest ignores ellipses ???
-#    """
-#    >>> test_circular_error()
-#    Traceback (most recent call last):
-#        ...
-#    NumbaError: ...
-#    """
-#    for i in range(10):
-#        if i > 5:
-#            var1 = var2
-#        else:
-#            var2 = var1
+@autojit(warnstyle='simple')
+def test_circular_error(): # doctest ignores ellipses ???
+    """
+    >>> test_circular_error()
+    Traceback (most recent call last):
+        ...
+    NumbaError: Unable to infer type for assignment to ..., insert a cast or initialize the variable.
+    """
+    for i in range(10):
+        if i > 5:
+            var1 = var2
+        else:
+            var2 = var1
 
 @autojit(warnstyle='simple')
 def test_simple_circular():
