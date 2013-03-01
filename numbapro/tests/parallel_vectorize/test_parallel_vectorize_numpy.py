@@ -2,7 +2,7 @@
 Test parallel-vectorize with numpy.fromfunc.
 Uses the work load from test_parallel_vectorize.
 '''
-
+from llvm.ee import EngineBuilder
 from numbapro.vectorize.parallel import *
 from numba.vectorize._internal import fromfunc
 import numpy as np
@@ -30,7 +30,8 @@ class TestInner_Numpy(unittest.TestCase):
 
         # run
 
-        exe = CExecutor(module)
+        eb = EngineBuilder.new(module).mattrs('-avx').create()
+        exe = CExecutor(eb)
         funcptr = exe.engine.get_pointer_to_function(sppufunc)
         #   print("Function pointer: %x" % funcptr)
 

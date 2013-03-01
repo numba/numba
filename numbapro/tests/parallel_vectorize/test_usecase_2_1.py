@@ -2,6 +2,7 @@ from numbapro.vectorize.parallel import *
 from numbapro.vectorize._common import _llvm_ty_to_dtype
 from llvm_cbuilder import shortnames as C
 from llvm.core import *
+from llvm.ee import EngineBuilder
 import numpy as np
 import unittest
 from random import random
@@ -30,7 +31,9 @@ class TestParallelVectorize(unittest.TestCase):
 
     def test_parallelvectorize_generic(self):
         module = Module.new(__name__)
-        exe = CExecutor(module)
+
+        eb = EngineBuilder.new(module).mattrs('-avx').create()
+        exe = CExecutor(eb)
 
         tyslist = [
             (C.double, C.double, C.double),
@@ -72,7 +75,9 @@ class TestParallelVectorize(unittest.TestCase):
 
     def template(self, itype1, itype2, otype):
         module = Module.new(__name__)
-        exe = CExecutor(module)
+
+        eb = EngineBuilder.new(module).mattrs('-avx').create()
+        exe = CExecutor(eb)
 
         def_twoone = TwoOne(itype1, itype2, otype)
         twoone = def_twoone(module)

@@ -1,5 +1,6 @@
 from numbapro.vectorize.parallel import *
 import unittest
+from llvm.ee import EngineBuilder
 
 class Work_D_D(CDefinition):
     _name_ = 'work_d_d'
@@ -94,7 +95,9 @@ class TestInner_RaceCondition(unittest.TestCase):
 
         # run
         #   print('run')
-        exe = CExecutor(module)
+
+        eb = EngineBuilder.new(module).mattrs('-avx').create()
+        exe = CExecutor(eb)
         func = exe.get_ctype_function(fntester, 'void')
 
         func()
