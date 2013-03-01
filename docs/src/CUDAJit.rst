@@ -6,7 +6,7 @@ CUDA JIT
 
 **Warning: CUDA devices with compute capability less than 1.3 do not support double precision arithmetic.**
 
-CUDA JIT translates Python function into a CUDA kernel.  It uses translated code from Numba and converts it to `PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_.  NumbaPro interacts with the CUDA Driver Libraries to load the PTX onto the CUDA device and execute.  
+CUDA JIT translates Python function into a CUDA kernel.  It uses translated code from Numba and converts it to `PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_.  NumbaPro interacts with the CUDA Driver Libraries to load the PTX onto the CUDA device and execute.
 
 Imports
 -------
@@ -14,9 +14,8 @@ Imports
 ::
 
 	import numpy as np
-	from numba import *
+	from numbapro import *
 	from numbapro import cuda
-
 
 
 CUDA Kernel Definition
@@ -70,11 +69,11 @@ Transferring Numpy Arrays to Device
 ------------------------------------
 
 Numpy arrays can be transferred to the device by::
-	
+
 	device_array = cuda.to_device(array)
- 
+
 To retrieve the data, do::
-	
+
 	device_array.to_host()
 
 This call copies the device memory back to the data buffer of `array`.
@@ -88,22 +87,22 @@ A CUDA stream is a command queue for the CUDA device.  By specifying a stream, t
 
 	stream = cuda.stream()
 	devary = cuda.to_device(an_array, stream=stream)
-	a_cuda_kernel[griddim, blockdim, stream](devary) 
+	a_cuda_kernel[griddim, blockdim, stream](devary)
 	cuda.to_host(devary, stream=stream)
 	stream.synchronize()
 	# data available in an_array
 
 Use `stream.synchronize()` to ensure all commands in the stream has been completed.
-  
+
 An alternative syntax is available for use with a python context::
-	
+
 	stream = cuda.stream()
 	with stream.auto_synchronize():
 	    devary = cuda.to_device(an_array, stream=stream)
-	    a_cuda_kernel[griddim, blockdim, stream](devary) 
+	    a_cuda_kernel[griddim, blockdim, stream](devary)
 	    cuda.to_host(devary)
 	# data available in an_array
-	
+
 When the python "with" context exits, the stream is automatically synchronized.
 
 Shared Memory
@@ -122,7 +121,7 @@ For example:::
     def cu_square_matrix_mul(A, B, C):
         sA = cuda.shared.array(shape=(tpb, tpb), dtype=f4)
         sB = cuda.shared.array(shape=(tpb, tpb), dtype=f4)
-        
+
         tx = cuda.threadIdx.x
         ty = cuda.threadIdx.y
         bx = cuda.blockIdx.x
@@ -174,7 +173,7 @@ The same code in CUDA-C will be:::
         unsigned int y = ty + by * bh;
 
         float acc = 0.0;
-        
+
         for (int i = 0; i < BPG; ++i) {
             if (x < N and y < N) {
                 sA[pos2d(ty, tx, TPB)] = A[pos2d(y, tx + i * TPB, N)];

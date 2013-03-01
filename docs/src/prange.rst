@@ -7,12 +7,12 @@ and they execute in a ``nopython`` numba context. ``prange`` automatically takes
 and reductions::
 
     import numbapro
-    from numba import *
+    from numbapro import *
 
     @autojit
     def parallel_sum(A):
         sum = 0.0
-        for i in numba.prange(A.shape[0]):
+        for i in numbapro.prange(A.shape[0]):
             sum += A[i]
 
         return sum
@@ -20,7 +20,9 @@ and reductions::
 Here the variable ``sum`` is a reduction variable that is automatically summed at the end
 of the parallel loop.
 
-.. NOTE:: Users must import numbapro in order for numba.prange to be available.
+.. NOTE:: Previously prange was accessible under the numba namespace when numbapro
+          was imported. This is no longer true, and users need to access prange under
+          the numbapro namespace.
 
 Privatization rules are simple, in order of importance:
 
@@ -38,7 +40,7 @@ variables::
         reduction = 1.0
         private = 2.0
         shared = 3.0
-        for i in numba.prange(100):
+        for i in numbapro.prange(100):
             reduction += i      # The inplace operator specifies a sum reduction
             reduction -= 1
             reduction *= 4      # ERROR: inconsistent reduction operator!

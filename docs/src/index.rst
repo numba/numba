@@ -5,7 +5,7 @@
 
 
 NumbaPro*
-========= 
+=========
 
 NumbaPro is an enhanced version of Numba which adds premium features and
 functionality that allow developers to rapidly create optimized code that integrates well with NumPy.
@@ -13,7 +13,7 @@ functionality that allow developers to rapidly create optimized code that integr
 With NumbaPro Python developers can define NumPy ufuncs and generalized ufuncs
 in Python, which are compiled to machine code dynamically and loaded on the fly.
 Additionally, NumbaPro offers developers the ability to target mutlicore and
-GPU architectures with Python code for both ufuncs and general-purpose code. 
+GPU architectures with Python code for both ufuncs and general-purpose code.
 
 Finally, with NumbaPro, high-level array-expressions (slicing, vectorized
 math, reductions, linear-algebra operations, etc.) can be compiled directy to
@@ -34,17 +34,16 @@ See `release notes <releases.html>`_ for a summary of changes in each release.
 Current Features
 ----------------
 
-There are several versions of vectorize for building native ufunc kernels from Python functions.
-Users can also build generalized ufuncs, in which user-defined kernels can operate on sub-arrays
-and not just scalars, using `GUFuncVectorize`.
+Current features of NumbaPro include support for (parallel) numpy ufuncs and gufuncs,
+CUDA support and a multi-threaded parallel range.
 
+Functionality of numbapro is made available through the numbapro namespace, as is
+supposed to act as a drop-in replacement for numba::
 
-**Note:** NumbaPro adds features to Numba at import::
+    import numbapro as numba
 
-    import numbapro    # adds numbapro features to numba.jit and numba.autojit
-    
-The above adds slicing, array-expression, prange and gpu target to Numba.
-
+.. NOTE:: Although we do not recommend using import star, we will often do so
+          in our examples for brevity (``from numbapro import *``)
 
 .. toctree::
    :maxdepth: 1
@@ -56,15 +55,6 @@ The above adds slicing, array-expression, prange and gpu target to Numba.
    CUDADevice
    CUDASupport
    prange
-
-
-..   BasicVectorize
-   ParallelVectorize
-   CUDAVectorize
-   StreamVectorize
-   MiniVectorize
-   GUFuncVectorize
-
 
 
 Indices and tables

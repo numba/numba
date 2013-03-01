@@ -15,13 +15,13 @@ Partitioning your data into chunks allows computation and memory transfer to be 
     # the ufunc kernel
     def discriminant(a, b, c):
         return math.sqrt(b ** 2 - 4 * a * c)
-        
+
     # create the ufunc
     cu_discriminant = vectorize([f4(f4, f4, f4), f8(f8, f8, f8)],
                                 target='gpu')(discriminant)
 
     N = 1e+8
-    
+
     # prepare the input
     A = np.array(np.random.sample(n), dtype=dtype)
     B = np.array(np.random.sample(n) + 10, dtype=dtype)
@@ -63,21 +63,21 @@ Partitioning your data into chunks allows computation and memory transfer to be 
             device_ptrs.extend([dA, dB, dC, dD])
 
     # data is ready at this point inside D
-    
+
 
 Example: Calling Device Functions
 ----------------------------------
 
 All CUDA ufunc kernels can call other CUDA device functions::
-    
+
     from numbapro import vectorize
-    from numba import *
+    from numbapro import *
 
     # define a device function
     @jit(f4(f4, f4, f4), device=True, inline=True, target='gpu')
     def cu_device_fn(x, y, z):
         return x ** y / z
-        
+
     # define a ufunc that calls our device function
     @vectorize([f4(f4, f4, f4)], target='gpu')
     def cu_ufunc(x, y, z):
