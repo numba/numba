@@ -22,6 +22,9 @@ import inspect
 import numba.decorators
 from numba import numbawrapper
 
+doctest_options = doctest.ELLIPSIS|doctest.NORMALIZE_WHITESPACE
+
+
 def from_module(module, object):
     """
     Return true if the given object is defined in the given module.
@@ -70,7 +73,8 @@ def testmod(m=None, run_doctests=True):
     fix_module_doctest(m)
     if run_doctests:
         finder = MyDocTestFinder(exclude_empty=False)
-        suite = doctest.DocTestSuite(m, test_finder=finder)
+        suite = doctest.DocTestSuite(m, test_finder=finder,
+                                     optionflags=doctest_options)
         result =  unittest.TextTestRunner(verbosity=2).run(suite)
         if not result.wasSuccessful():
             raise Exception("Doctests failed: %s" % result)
