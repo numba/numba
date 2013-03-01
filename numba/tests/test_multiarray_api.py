@@ -171,7 +171,7 @@ class TestMultiarrayAPI(unittest.TestCase):
 
         module.verify()
         
-        ee = le.ExecutionEngine.new(module)
+        ee = le.EngineBuilder.new(module).mattrs('-avx').create()
         test_fn_addr = ee.get_pointer_to_function(test_fn)
         py_test_fn = _pyobj_to_pyobj(test_fn_addr)
         test_arr = np.array([1.,2.,3.])
@@ -239,7 +239,7 @@ class TestMultiarrayAPI(unittest.TestCase):
         test_fn.verify()
         module.verify()
 
-        ee = le.ExecutionEngine.new(module)
+        ee = le.EngineBuilder.new(module).mattrs('-avx').create()
         test_fn_addr = ee.get_pointer_to_function(test_fn)
 
         c_func_type = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.py_object)
@@ -292,7 +292,7 @@ class TestMultiarrayAPI(unittest.TestCase):
         test_fn.verify()
         module.verify()
 
-        ee = le.ExecutionEngine.new(module)
+        ee = le.EngineBuilder.new(module).mattrs('-avx').create()
         test_fn_addr = ee.get_pointer_to_function(test_fn)
 
         c_func_type = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.py_object, ctypes.c_int)
@@ -344,7 +344,7 @@ class TestMultiarrayAPI(unittest.TestCase):
 
         module.verify()
 
-        ee = le.ExecutionEngine.new(module)
+        ee = le.EngineBuilder.new(module).mattrs('-avx').create()
         test_fn_addr = ee.get_pointer_to_function(test_fn)
 
         c_func_type = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.py_object, ctypes.c_int)

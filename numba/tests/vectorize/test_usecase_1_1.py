@@ -80,7 +80,12 @@ class TestBasicVectorize(unittest.TestCase):
 
         print(module)
         module.verify()
-        print(module.to_native_assembly())
+        asm = module.to_native_assembly()
+        print(asm)
+
+        from llvm.workaround.avx_support import detect_avx_support
+        if not detect_avx_support() and 'vmovsd' in asm:
+            print('SKIP! LLVM incorrectly uses AVX on machine without AVX')
 
         self.check(ufunc, np.double)
 
