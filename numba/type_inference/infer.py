@@ -249,6 +249,7 @@ class TypeInferer(visitors.NumbaTransformer):
         self.function_level += 1
 
         for block in cfg.blocks:
+            # print block
             phis = []
             for phi in block.phi_nodes:
                 phi = self.handle_phi(phi)
@@ -261,6 +262,7 @@ class TypeInferer(visitors.NumbaTransformer):
                 if isinstance(stat, control_flow.AttributeAssignment):
                     stat.assignment_node = self.visit(stat.assignment_node)
                 elif isinstance(stat, control_flow.NameAssignment):
+                    # print "analysing", stat.lhs
                     assmnt = self.handle_NameAssignment(stat.assignment_node)
                     stat.assignment_node = assmnt
 

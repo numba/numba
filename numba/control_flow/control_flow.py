@@ -181,7 +181,8 @@ class ControlFlow(object):
 
     """
 
-    def __init__(self, source_descr):
+    def __init__(self, env, source_descr):
+        self.env = env
         self.source_descr = source_descr
 
         self.blocks = []
@@ -231,8 +232,13 @@ class ControlFlow(object):
         exit_block.id = len(self.blocks)
         self.blocks.append(exit_block)
 
+    def is_listcomp_var(self, name):
+        return re.match(r"_\[\d+\]", name)
+
     def is_tracked(self, entry):
-        return entry.renameable and not re.match(r"_\[\d+\]", entry.name)
+        return (# entry.renameable and not
+                entry.name not in self.env.translation.crnt.locals and not
+                self.is_listcomp_var(entry.name))
 
     def mark_position(self, node):
         """Mark position, will be used to draw graph nodes."""
@@ -572,11 +578,13 @@ class ControlFlow(object):
     def rename_assignments(self, block):
         lastvars = dict(block.symtab)
         for stat in block.stats:
-            if isinstance(stat, NameAssignment) and stat.assignment_node:
+            if (isinstance(stat, NameAssignment) and
+                    stat.assignment_node and
+                    stat.entry.renameable):
                 # print "setting", stat.lhs, hex(id(stat.lhs))
                 stat.lhs.variable = block.symtab.rename(stat.entry, block)
                 stat.lhs.variable.name_assignment = stat
-            elif isinstance(stat, NameReference):
+            elif isinstance(stat, NameReference) and stat.entry.renameable:
                 current_var = block.symtab.lookup_most_recent(stat.entry.name)
                 stat.node.variable = current_var
                 current_var.cf_references.append(stat.node)
@@ -622,7 +630,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         # Stack of control flow blocks
         self.stack = []
 
-        flow = ControlFlow(self.source_descr)
+        flow = ControlFlow(self.env, self.source_descr)
         self.env.translation.crnt.flow = flow
         self.flow = flow
 
@@ -796,6 +804,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                                                         assignment=node,
                                                         warn_unused=not maybe_unused_node)
             node.targets[i] = lhs
+            # print "mark assignment", self.flow.block, lhs
 
         return node
 
