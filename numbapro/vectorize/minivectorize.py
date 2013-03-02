@@ -16,6 +16,7 @@ from numba.minivect import (miniast,
                             miniutils)
 from numba import functions, templating
 from numba import environment
+from numba.codegen.llvmcontext import LLVMContextManager
 
 from numbapro import dispatch
 from numbapro.vectorize import basic, parallel
@@ -244,7 +245,7 @@ class MiniVectorize(object):
         dyn_ufunc, lfuncs = self.fallback_vectorize(
                 minivect_dispatcher=None,
                 module=minicontext.llvm_module,
-                engine=minicontext.llvm_ee)
+                engine=LLVMContextManager().execution_engine)
 
         # Try to directly map and inline the kernels by mapping to a minivect
         # AST. If this fails, we reuse the compiled kernels ('lfuncs'), and
