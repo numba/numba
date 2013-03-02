@@ -8,6 +8,8 @@ Mark Florisson added minivect, a type system
 
 Siu Kwan Lam merged ideas from pymothoa into Numba
 
+Hernan Grecco added Python 3 compatibility
+
 If you have contributed to Numba add your name to this file:
 
 
