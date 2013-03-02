@@ -109,7 +109,8 @@ def get_data_pointer(numpy_array, array_type):
 
 def get_pointer(context, llvm_func):
     "Get a pointer to the LLVM function (int)"
-    return context.llvm_ee.get_pointer_to_function(llvm_func)
+    from numba.codegen.llvmcontext import LLVMContextManager
+    return LLVMContextManager().execution_engine.get_pointer_to_function(llvm_func)
 
 if __name__ == '__main__':
     import doctest

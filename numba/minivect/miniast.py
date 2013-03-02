@@ -136,7 +136,7 @@ class Context(object):
 
             self.llvm_module = llvm.core.Module.new('default_module')
             # self.llvm_ee = llvm.ee.ExecutionEngine.new(self.llvm_module)
-            self.llvm_ee = llvm.ee.EngineBuilder.new(self.llvm_module).force_jit().opt(3).create()
+            #self.llvm_ee = llvm.ee.EngineBuilder.new(self.llvm_module).force_jit().opt(3).create()
             self.llvm_fpm = llvm.passes.FunctionPassManager.new(self.llvm_module)
             self.llvm_fpm.initialize()
             if not self.debug:

@@ -99,7 +99,7 @@ class LLVMCodeGen(codegen.CodeGen):
 
         llvm_fpm = llvm.passes.FunctionPassManager.new(self.llvm_module)
         # target_data = llvm.ee.TargetData(self.context.llvm_ee)
-        llvm_fpm.add(self.context.llvm_ee.target_data.clone())
+        #llvm_fpm.add(self.context.llvm_ee.target_data.clone())
         pmb = llvm.passes.PassManagerBuilder.new()
         pmb.opt_level = 3
         pmb.vectorize = True
@@ -130,8 +130,11 @@ class LLVMCodeGen(codegen.CodeGen):
         # print self.lfunc
 
         self.code.write(self.lfunc)
+
+        from numba.codegen.llvmcontext import LLVMContextManager
         ctypes_func = ctypes_conversion.get_ctypes_func(
-                    node, self.lfunc, self.context.llvm_ee, self.context)
+                    node, self.lfunc, LLVMContextManager().execution_engine,
+                                                        self.context)
         self.code.write(ctypes_func)
 
     def add_arguments(self, function):
