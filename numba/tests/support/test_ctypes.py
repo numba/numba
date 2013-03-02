@@ -39,12 +39,15 @@ if ctypes_values:
     rk_state_t = get_cast_type(from_python(ctypes_values.rk_state))
 
 def ctypes_func_values():
-    signature = int_(rk_state_t.pointer())
+    int_or_long = long_ if ctypes.c_int == ctypes.c_long else int_
+    long_or_longlong = (longlong if ctypes.c_long == ctypes.c_longlong
+                        else long_)
+
+    signature = int_or_long(rk_state_t.pointer())
     assert_signature(ctypes_values.rk_randomseed, signature)
 
-    # Signature for long_ cannot be reliable with ctypes typedefs (yaay!)
-    # signature = void(long_, rk_state_t.pointer())
-    assert_signature(ctypes_values.rk_seed) #, signature)
+    signature = void(long_or_longlong, rk_state_t.pointer())
+    assert_signature(ctypes_values.rk_seed, signature)
 
     signature = double(rk_state_t.pointer(), double, double)
     assert_signature(ctypes_values.rk_gamma, signature)
