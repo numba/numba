@@ -245,7 +245,7 @@ class MiniVectorize(object):
         dyn_ufunc, lfuncs = self.fallback_vectorize(
                 minivect_dispatcher=None,
                 module=minicontext.llvm_module,
-                engine=LLVMContextManager().execution_engine)
+                engine=numba_env.llvm_context.execution_engine)
 
         # Try to directly map and inline the kernels by mapping to a minivect
         # AST. If this fails, we reuse the compiled kernels ('lfuncs'), and
