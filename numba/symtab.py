@@ -6,7 +6,7 @@ from numba import utils
 try:
     from collections import OrderedDict
 except ImportError:
-    from odict import odict as OrderedDict
+    from .odict import OrderedDict
 
 import llvm.core
 
