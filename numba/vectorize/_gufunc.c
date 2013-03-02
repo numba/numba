@@ -7,10 +7,11 @@
 #include "numpy/arrayscalars.h"
 #include "numpy/ndarraytypes.h"
 
-INIT(init_gufunc) {
+MOD_INIT(gufunc) {
     import_array();
     import_umath();
 }
+
 
 #define NPY_UF_DBG_PRINT(string) puts(string)
 #define NPY_UF_DBG_PRINT1(string, arg) printf(string, arg)

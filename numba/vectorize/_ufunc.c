@@ -2,7 +2,7 @@
 
 #include "_internal.h"
 
-INIT(init_ufunc) {
+MOD_INIT(ufunc) {
     import_array();
     import_umath();
 }
