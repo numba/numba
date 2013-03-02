@@ -169,17 +169,17 @@ def test_else_clause4():
         for j in range(10):
             for k in range(10):
                 if i == j and j == k:
-                    print(("inner", i))
+                    print("inner " + str(i))
                     break
                 else:
                     continue
             else:
-                print(("else clause", i, j, k))
+                print("else clause " + str(i) + ' ' + str(j) + ' ' + str(k))
             break
         else:
-            print(("else clause", i, j))
+            print("else clause " + str(i) + ' ' + str(j))
 
-        print(("i", i))
+        print("i " + str(i))
     else:
         print("else clause")
 
