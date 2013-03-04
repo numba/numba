@@ -10,6 +10,11 @@ cimport numpy as cnp
 from numba._numba cimport *
 from numba import error
 from numba.minivect import minitypes
+from numba.support import ctypes_support, cffi_support
+
+support_classes = (ctypes_support.CData,)
+if cffi_support.ffi is not None:
+    support_classes += (cffi_support.cffi_func_type,)
 
 cdef class NumbaWrapper(object):
     """
@@ -115,7 +120,7 @@ cdef tuple hash_on_value_types = (
     types.MethodType,
     getattr(types, 'UnboundMethodType', types.FunctionType),
     types.BuiltinMethodType,
-)
+) # + support_classes
 
 cpdef inline getkey(tuple args): # 3.0x
     """
