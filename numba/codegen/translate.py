@@ -647,6 +647,24 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             ret_type = self.func_signature.return_type
             self.builder.ret(self.builder.load(self.return_value))
 
+    def alloca(self, type, name='', change_bb=True):
+        return self.llvm_alloca(self.to_llvm(type), name, change_bb)
+
+    def llvm_alloca(self, ltype, name='', change_bb=True):
+        return llvm_alloca(self.lfunc, self.builder, ltype, name, change_bb)
+
+    def _handle_ctx(self, node, lptr, tbaa_type, name=''):
+        if isinstance(node.ctx, ast.Load):
+            return self.load_tbaa(lptr, tbaa_type,
+                                  name=name and 'load_' + name)
+        else:
+            return lptr
+
+    def generate_constant_int(self, val, ty=typesystem.int_):
+        lconstant = lc.Constant.int(ty.to_llvm(self.context), val)
+        return lconstant
+
+
     # __________________________________________________________________________
 
     def visit_Expr(self, node):
@@ -655,106 +673,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_Pass(self, node):
         pass
 
-    def visit_ConstNode(self, node):
-        type = node.type
-        ltype = type.to_llvm(self.context)
-
-        constant = node.pyval
-
-        if constnodes.is_null_constant(constant):
-            lvalue = llvm.core.Constant.null(ltype)
-        elif type.is_float:
-            lvalue = llvm.core.Constant.real(ltype, constant)
-        elif type.is_int:
-            if type.signed:
-                lvalue = llvm.core.Constant.int_signextend(ltype, constant)
-            else:
-                lvalue = llvm.core.Constant.int(ltype, constant)
-        elif type.is_c_string:
-            lvalue = self.env.llvm_context.get_string_constant(constant)
-            type_char_p = typesystem.c_string_type.to_llvm(self.context)
-            lvalue = self.builder.bitcast(lvalue, type_char_p)
-        elif type.is_bool:
-            return self._bool_constants[constant]
-        elif type.is_function:
-            # lvalue = map_to_function(constant, type, self.mod)
-            raise NotImplementedError
-        elif type.is_object and not constnodes.is_null_constant(pyval):
-            raise NotImplementedError("Use ObjectInjectNode")
-        else:
-            raise NotImplementedError("Constant %s of type %s" %
-                                                    (constant, type))
-
-        return lvalue
-
     def visit_Attribute(self, node):
         raise error.NumbaError("This node should have been replaced")
 
-    def visit_ComplexAttributeNode(self, node):
-        result = self.visit(node.value)
-        if node.value.type.is_complex:
-            if node.attr == 'real':
-                return self.builder.extract_value(result, 0)
-            elif node.attr == 'imag':
-                return self.builder.extract_value(result, 1)
-
-    def struct_field(self, node, value):
-        value = self.builder.gep(
-            value, [llvm_types.constant_int(0),
-                    llvm_types.constant_int(node.field_idx)])
-        return value
-
-    def visit_StructAttribute(self, node):
-        result = self.visit(node.value)
-        value_is_reference = node.value.type.is_reference
-
-        # print "referencing", node.struct_type, node.field_idx, node.attr
-
-        # TODO: TBAA for loads
-        if isinstance(node.ctx, ast.Load):
-            if value_is_reference:
-                # Struct reference, load result
-                result = self.struct_field(node, result)
-                result = self.builder.load(result)
-            else:
-                result = self.builder.extract_value(result, node.field_idx)
-        else:
-            if value_is_reference:
-                # Load alloca-ed struct pointer
-                result = self.builder.load(result)
-            result = self.struct_field(node, result)
-            #result = self.builder.insert_value(result, self.rhs_lvalue,
-            #                                   node.field_idx)
-
-        return result
-
-    def visit_StructVariable(self, node):
-        return self.visit(node.node)
-
-    def generate_assign_stack(self, lvalue, ltarget,
-                              tbaa_node=None, tbaa_type=None,
-                              decref=False, incref=False):
-        """
-        Generate assignment operation and automatically cast value to
-        match the target type.
-        """
-        if lvalue.type != ltarget.type.pointee:
-            lvalue = self.caster.cast(lvalue, ltarget.type.pointee)
-
-        if incref:
-            self.incref(lvalue)
-        if decref:
-            # Py_XDECREF any previous object
-            self.xdecref_temp(ltarget)
-
-        instr = self.builder.store(lvalue, ltarget)
-
-        # Set TBAA on store instruction
-        if tbaa_node is None:
-            assert tbaa_type is not None
-            tbaa_node = self.tbaa.get_metadata(tbaa_type)
-
-        self.tbaa.set_metadata(instr, tbaa_node)
+    #------------------------------------------------------------------------
+    # Assignment
+    #------------------------------------------------------------------------
 
     def visit_Assign(self, node):
         target_node = node.targets[0]
@@ -808,6 +732,31 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         self.preload_attributes(target_node.variable, value)
 
+    def generate_assign_stack(self, lvalue, ltarget,
+                              tbaa_node=None, tbaa_type=None,
+                              decref=False, incref=False):
+        """
+        Generate assignment operation and automatically cast value to
+        match the target type.
+        """
+        if lvalue.type != ltarget.type.pointee:
+            lvalue = self.caster.cast(lvalue, ltarget.type.pointee)
+
+        if incref:
+            self.incref(lvalue)
+        if decref:
+            # Py_XDECREF any previous object
+            self.xdecref_temp(ltarget)
+
+        instr = self.builder.store(lvalue, ltarget)
+
+        # Set TBAA on store instruction
+        if tbaa_node is None:
+            assert tbaa_type is not None
+            tbaa_node = self.tbaa.get_metadata(tbaa_type)
+
+        self.tbaa.set_metadata(instr, tbaa_node)
+
     def preload_attributes(self, var, value):
         """
         Pre-load ndarray attributes data/shape/strides.
@@ -834,14 +783,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                                         acc.strides, var.type.ndim)
             var.preloaded_strides = tuple(strides)
 
-    def visit_Num(self, node):
-        if node.type.is_int:
-            return self.generate_constant_int(node.n)
-        elif node.type.is_float:
-            return self.generate_constant_real(node.n)
-        else:
-            assert node.type.is_complex
-            return self.generate_constant_complex(node.n)
+    #------------------------------------------------------------------------
+    # Variables
+    #------------------------------------------------------------------------
 
     def check_unbound_local(self, node, var):
         if getattr(node, 'check_unbound', None):
@@ -870,147 +814,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         else:
             return var.lvalue
 
-    def _handle_ctx(self, node, lptr, tbaa_type, name=''):
-        if isinstance(node.ctx, ast.Load):
-            return self.load_tbaa(lptr, tbaa_type,
-                                  name=name and 'load_' + name)
-        else:
-            return lptr
-
-    def _generate_test(self, llval):
-        return self.builder.icmp(lc.ICMP_NE, llval,
-                                 lc.Constant.null(llval.type))
-
-    def visit_BoolOp(self, node):
-        # NOTE: Can have >2 values
-        assert len(node.values) >= 2
-        assert isinstance(node.op, ast.And) or isinstance(node.op, ast.Or)
-
-        count = len(node.values)
-
-        if isinstance(node.op, ast.And):
-            bb_true = self.append_basic_block('and.true')
-            bb_false = self.append_basic_block('and.false')
-            bb_next = [self.append_basic_block('and.rhs')
-                       for i in range(count - 1)] + [bb_true]
-            bb_done = self.append_basic_block('and.done')
-
-            for i in range(count):
-                value = self.visit(node.values[i])
-                if value.type != _int1:
-                    value = self._generate_test(value)
-                self.builder.cbranch(value, bb_next[i], bb_false)
-                self.builder.position_at_end(bb_next[i])
-
-            assert self.builder.basic_block is bb_true
-            self.builder.branch(bb_done)
-
-            self.builder.position_at_end(bb_false)
-            self.builder.branch(bb_done)
-
-            self.builder.position_at_end(bb_done)
-        elif isinstance(node.op, ast.Or):
-            bb_true = self.append_basic_block('or.true')
-            bb_false = self.append_basic_block('or.false')
-            bb_next = [self.append_basic_block('or.rhs')
-                       for i in range(count - 1)] + [bb_false]
-            bb_done = self.append_basic_block('or.done')
-
-            for i in range(count):
-                value = self.visit(node.values[i])
-                if value.type != _int1:
-                    value = self._generate_test(value)
-                self.builder.cbranch(value, bb_true, bb_next[i])
-                self.builder.position_at_end(bb_next[i])
-
-            assert self.builder.basic_block is bb_false
-            self.builder.branch(bb_done)
-
-            self.builder.position_at_end(bb_true)
-            self.builder.branch(bb_done)
-
-            self.builder.position_at_end(bb_done)
-        else:
-            raise Exception("internal erorr")
-
-        booltype = _int1
-        phi = self.builder.phi(booltype)
-        phi.add_incoming(lc.Constant.int(booltype, 1), bb_true)
-        phi.add_incoming(lc.Constant.int(booltype, 0), bb_false)
-
-        return phi
-
-    def visit_UnaryOp(self, node):
-        operand_type = node.operand.type
-        operand = self.visit(node.operand)
-        operand_ltype = operand.type
-        op = node.op
-        if isinstance(op, ast.Not) and (operand_type.is_bool or
-                                        operand_type.is_int_like):
-            bb_false = self.builder.basic_block
-            bb_true = self.append_basic_block('not.true')
-            bb_done = self.append_basic_block('not.done')
-            self.builder.cbranch(
-                self.builder.icmp(lc.ICMP_NE, operand,
-                                  lc.Constant.null(operand_ltype)),
-                bb_true, bb_done)
-            self.builder.position_at_end(bb_true)
-            self.builder.branch(bb_done)
-            self.builder.position_at_end(bb_done)
-            phi = self.builder.phi(operand_ltype)
-            phi.add_incoming(lc.Constant.int(operand_ltype, 1), bb_false)
-            phi.add_incoming(lc.Constant.int(operand_ltype, 0), bb_true)
-            return phi
-        elif isinstance(op, ast.USub) and operand_type.is_numeric:
-            if operand_type.is_float:
-                return self.builder.fsub(lc.Constant.null(operand_ltype),
-                                         operand)
-            elif operand_type.is_int_like and operand_type.signed:
-                return self.builder.sub(lc.Constant.null(operand_ltype),
-                                        operand)
-        elif isinstance(op, ast.UAdd) and operand_type.is_numeric:
-            return operand
-        elif isinstance(op, ast.Invert) and operand_type.is_int_like:
-            return self.builder.xor(lc.Constant.int(operand_ltype, -1), operand)
-        raise error.NumbaError(node, "Unary operator %s" % node.op)
-
-    def visit_Compare(self, node):
-        op = node.ops[0]
-
-        lhs = node.left
-        rhs = node.comparators[0]
-
-        lhs_lvalue = self.visit(lhs)
-        rhs_lvalue = self.visit(rhs)
-
-        op_map = {
-            ast.Gt    : '>',
-            ast.Lt    : '<',
-            ast.GtE   : '>=',
-            ast.LtE   : '<=',
-            ast.Eq    : '==',
-            ast.NotEq : '!=',
-        }
-
-        op = op_map[type(op)]
-
-        if lhs.type.is_float and rhs.type.is_float:
-            lfunc = self.builder.fcmp
-            lop = _compare_mapping_float[op]
-        elif lhs.type.is_int_like and rhs.type.is_int_like:
-            lfunc = self.builder.icmp
-            if lhs.type.signed:
-                mapping = _compare_mapping_sint
-            else:
-                mapping = _compare_mapping_uint
-            lop = mapping[op]
-        else:
-            # These errors should be issued by the type inferencer or a
-            # separate error checking pass
-            raise error.NumbaError(node, "Comparisons of type %s not yet "
-                                         "supported" % lhs.type)
-
-        return lfunc(lop, lhs_lvalue, rhs_lvalue)
+    #------------------------------------------------------------------------
+    # Control Flow
+    #------------------------------------------------------------------------
 
     def _init_phis(self, node):
         "Set basic block and initialize LLVM phis"
@@ -1036,6 +842,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             old.exit_block = self.builder.basic_block
 
         self.flow_block = cfg_basic_block
+
+    def append_basic_block(self, name='unamed'):
+        idx = len(self.blocks)
+        #bb = self.lfunc.append_basic_block('%s_%d'%(name, idx))
+        bb = self.lfunc.append_basic_block(name)
+        self.blocks[idx] = bb
+        return bb
 
     def visit_PromotionNode(self, node):
         lvalue = self.visit(node.node)
@@ -1077,19 +890,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         return lbody
 
-    def append_basic_block(self, name='unamed'):
-        idx = len(self.blocks)
-        #bb = self.lfunc.append_basic_block('%s_%d'%(name, idx))
-        bb = self.lfunc.append_basic_block(name)
-        self.blocks[idx] = bb
-        return bb
-
     def visit_LowLevelBasicBlockNode(self, node):
         llvm_block = node.create_block(self)
         if not self.is_block_terminated():
             self.builder.branch(llvm_block)
         self.builder.position_at_end(llvm_block)
         return self.visit(node.body)
+
+    #------------------------------------------------------------------------
+    # Control Flow: If, For, While
+    #------------------------------------------------------------------------
 
     def visit_If(self, node, is_while=False):
         if not hasattr(node, 'cond_block'):
@@ -1173,14 +983,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_While(self, node):
         self.visit_If(node, is_while=True)
 
-    def visit_Continue(self, node):
-        assert self.loop_beginnings # Python syntax should ensure this
-        self.builder.branch(self.loop_beginnings[-1])
-
-    def visit_Break(self, node):
-        assert self.loop_exits # Python syntax should ensure this
-        self.builder.branch(self.loop_exits[-1])
-
     def term_block(self, end_block):
         if not self.is_block_terminated():
             self.terminate_block(self.builder.basic_block, end_block)
@@ -1230,6 +1032,22 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_For(self, node):
         raise error.NumbaError(node, "This node should have been replaced")
 
+    #------------------------------------------------------------------------
+    # Control Flow: Break, Continue
+    #------------------------------------------------------------------------
+
+    def visit_Continue(self, node):
+        assert self.loop_beginnings # Python syntax should ensure this
+        self.builder.branch(self.loop_beginnings[-1])
+
+    def visit_Break(self, node):
+        assert self.loop_exits # Python syntax should ensure this
+        self.builder.branch(self.loop_exits[-1])
+
+    #------------------------------------------------------------------------
+    # Control Flow: Return
+    #------------------------------------------------------------------------
+
     def visit_Return(self, node):
         if node.value is not None:
             value_type = node.value.type
@@ -1267,9 +1085,176 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         self.visitlist(node.body)
         return None
 
-    def generate_constant_int(self, val, ty=typesystem.int_):
-        lconstant = lc.Constant.int(ty.to_llvm(self.context), val)
-        return lconstant
+    #------------------------------------------------------------------------
+    # Indexing
+    #------------------------------------------------------------------------
+
+    def visit_Subscript(self, node):
+        value_type = node.value.type
+        if not (value_type.is_carray or value_type.is_c_string or
+                    value_type.is_pointer):
+            raise error.InternalError(node, "Unsupported type:", node.value.type)
+
+        value = self.visit(node.value)
+        index = self.visit(node.slice)
+        indices = [index]
+
+        lptr = self.builder.gep(value, indices)
+        if node.slice.type.is_int:
+            lptr = self._handle_ctx(node, lptr, node.value.type)
+
+        return lptr
+
+    #------------------------------------------------------------------------
+    # Binary Operations
+    #------------------------------------------------------------------------
+
+    # ____________________________________________________________
+    # BoolOp
+
+    def _generate_test(self, llval):
+        return self.builder.icmp(lc.ICMP_NE, llval,
+                                 lc.Constant.null(llval.type))
+
+    def visit_BoolOp(self, node):
+        # NOTE: Can have >2 values
+        assert len(node.values) >= 2
+        assert isinstance(node.op, ast.And) or isinstance(node.op, ast.Or)
+
+        count = len(node.values)
+
+        if isinstance(node.op, ast.And):
+            bb_true = self.append_basic_block('and.true')
+            bb_false = self.append_basic_block('and.false')
+            bb_next = [self.append_basic_block('and.rhs')
+                       for i in range(count - 1)] + [bb_true]
+            bb_done = self.append_basic_block('and.done')
+
+            for i in range(count):
+                value = self.visit(node.values[i])
+                if value.type != _int1:
+                    value = self._generate_test(value)
+                self.builder.cbranch(value, bb_next[i], bb_false)
+                self.builder.position_at_end(bb_next[i])
+
+            assert self.builder.basic_block is bb_true
+            self.builder.branch(bb_done)
+
+            self.builder.position_at_end(bb_false)
+            self.builder.branch(bb_done)
+
+            self.builder.position_at_end(bb_done)
+        elif isinstance(node.op, ast.Or):
+            bb_true = self.append_basic_block('or.true')
+            bb_false = self.append_basic_block('or.false')
+            bb_next = [self.append_basic_block('or.rhs')
+                       for i in range(count - 1)] + [bb_false]
+            bb_done = self.append_basic_block('or.done')
+
+            for i in range(count):
+                value = self.visit(node.values[i])
+                if value.type != _int1:
+                    value = self._generate_test(value)
+                self.builder.cbranch(value, bb_true, bb_next[i])
+                self.builder.position_at_end(bb_next[i])
+
+            assert self.builder.basic_block is bb_false
+            self.builder.branch(bb_done)
+
+            self.builder.position_at_end(bb_true)
+            self.builder.branch(bb_done)
+
+            self.builder.position_at_end(bb_done)
+        else:
+            raise Exception("internal erorr")
+
+        booltype = _int1
+        phi = self.builder.phi(booltype)
+        phi.add_incoming(lc.Constant.int(booltype, 1), bb_true)
+        phi.add_incoming(lc.Constant.int(booltype, 0), bb_false)
+
+        return phi
+
+    # ____________________________________________________________
+    # UnaryOp
+
+    def visit_UnaryOp(self, node):
+        operand_type = node.operand.type
+        operand = self.visit(node.operand)
+        operand_ltype = operand.type
+        op = node.op
+        if isinstance(op, ast.Not) and (operand_type.is_bool or
+                                        operand_type.is_int_like):
+            bb_false = self.builder.basic_block
+            bb_true = self.append_basic_block('not.true')
+            bb_done = self.append_basic_block('not.done')
+            self.builder.cbranch(
+                self.builder.icmp(lc.ICMP_NE, operand,
+                                  lc.Constant.null(operand_ltype)),
+                bb_true, bb_done)
+            self.builder.position_at_end(bb_true)
+            self.builder.branch(bb_done)
+            self.builder.position_at_end(bb_done)
+            phi = self.builder.phi(operand_ltype)
+            phi.add_incoming(lc.Constant.int(operand_ltype, 1), bb_false)
+            phi.add_incoming(lc.Constant.int(operand_ltype, 0), bb_true)
+            return phi
+        elif isinstance(op, ast.USub) and operand_type.is_numeric:
+            if operand_type.is_float:
+                return self.builder.fsub(lc.Constant.null(operand_ltype),
+                                         operand)
+            elif operand_type.is_int_like and operand_type.signed:
+                return self.builder.sub(lc.Constant.null(operand_ltype),
+                                        operand)
+        elif isinstance(op, ast.UAdd) and operand_type.is_numeric:
+            return operand
+        elif isinstance(op, ast.Invert) and operand_type.is_int_like:
+            return self.builder.xor(lc.Constant.int(operand_ltype, -1), operand)
+        raise error.NumbaError(node, "Unary operator %s" % node.op)
+
+    # ____________________________________________________________
+    # Compare
+
+    def visit_Compare(self, node):
+        op = node.ops[0]
+
+        lhs = node.left
+        rhs = node.comparators[0]
+
+        lhs_lvalue = self.visit(lhs)
+        rhs_lvalue = self.visit(rhs)
+
+        op_map = {
+            ast.Gt    : '>',
+            ast.Lt    : '<',
+            ast.GtE   : '>=',
+            ast.LtE   : '<=',
+            ast.Eq    : '==',
+            ast.NotEq : '!=',
+        }
+
+        op = op_map[type(op)]
+
+        if lhs.type.is_float and rhs.type.is_float:
+            lfunc = self.builder.fcmp
+            lop = _compare_mapping_float[op]
+        elif lhs.type.is_int_like and rhs.type.is_int_like:
+            lfunc = self.builder.icmp
+            if lhs.type.signed:
+                mapping = _compare_mapping_sint
+            else:
+                mapping = _compare_mapping_uint
+            lop = mapping[op]
+        else:
+            # These errors should be issued by the type inferencer or a
+            # separate error checking pass
+            raise error.NumbaError(node, "Comparisons of type %s not yet "
+                                         "supported" % lhs.type)
+
+        return lfunc(lop, lhs_lvalue, rhs_lvalue)
+
+    # ____________________________________________________________
+    # BinOp
 
     _binops = {
         ast.Add:    ('fadd', ('add', 'add')),
@@ -1353,6 +1338,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         return result
 
+    #------------------------------------------------------------------------
+    # Coercions
+    #------------------------------------------------------------------------
+
     def visit_CoercionNode(self, node, val=None):
         if val is None:
             val = self.visit(node.node)
@@ -1407,76 +1396,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self.object_coercer.to_native(node.dst_type, val,
                                              name=node.name)
 
-    def visit_DereferenceNode(self, node):
-        result = self.visit(node.pointer)
-        return self.load_tbaa(result, node.type.pointer())
-
-    def visit_PointerFromObject(self, node):
-        return self.visit(node.node)
-
-    def visit_ComplexNode(self, node):
-        real = self.visit(node.real)
-        imag = self.visit(node.imag)
-        return self._create_complex(real, imag)
-
-    def visit_Subscript(self, node):
-        value_type = node.value.type
-        if not (value_type.is_carray or value_type.is_c_string or
-                    value_type.is_pointer):
-            raise error.InternalError(node, "Unsupported type:", node.value.type)
-
-        value = self.visit(node.value)
-        index = self.visit(node.slice)
-        indices = [index]
-
-        lptr = self.builder.gep(value, indices)
-        if node.slice.type.is_int:
-            lptr = self._handle_ctx(node, lptr, node.value.type)
-
-        return lptr
-
-    def visit_DataPointerNode(self, node):
-        assert node.node.type.is_array
-        lvalue = self.visit(node.node)
-        lindices = self.visit(node.slice)
-        lptr = node.subscript(self, self.tbaa, lvalue, lindices)
-        return self._handle_ctx(node, lptr, node.type.pointer())
-
-    #def visit_Index(self, node):
-    #    return self.visit(node.value)
-
-    def visit_ExtSlice(self, node):
-        return self.visitlist(node.dims)
+    #------------------------------------------------------------------------
+    # Call Nodes
+    #------------------------------------------------------------------------
 
     def visit_Call(self, node):
         raise error.InternalError(node, "This node should have been replaced")
-
-    def visit_List(self, node):
-        types = [n.type for n in node.elts]
-        largs = self.visitlist(node.elts)
-        return self.object_coercer.build_list(types, largs)
-
-    def visit_Tuple(self, node):
-        raise error.InternalError(node, "This node should have been replaced")
-
-    def visit_Dict(self, node):
-        key_types = [k.type for k in node.keys]
-        value_types = [v.type for v in node.values]
-        llvm_keys = self.visitlist(node.keys)
-        llvm_values = self.visitlist(node.values)
-        result = self.object_coercer.build_dict(key_types, value_types,
-                                                llvm_keys, llvm_values)
-        return result
-
-    def visit_ObjectInjectNode(self, node):
-        # FIXME: Currently uses the runtime address of the python function.
-        #        Sounds like a hack.
-        self.keep_alive(node.object)
-        addr = id(node.object)
-        obj_addr_int = self.generate_constant_int(addr, typesystem.Py_ssize_t)
-        obj = self.builder.inttoptr(obj_addr_int,
-                                    typesystem.object_.to_llvm(self.context))
-        return obj
 
     def visit_ObjectCallNode(self, node):
         args_tuple = self.visit(node.args_tuple)
@@ -1493,15 +1418,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         res = self.builder.call(pyobject_call, largs, name=node.name)
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
-
-    def visit_NoneNode(self, node):
-        try:
-            self.llvm_module.add_global_variable(object_.to_llvm(self.context),
-                                         "Py_None")
-        except llvm.LLVMException:
-            pass
-
-        return self.llvm_module.get_global_variable_named("Py_None")
 
     def visit_NativeCallNode(self, node, largs=None):
         # print node.py_func, node.llvm_func
@@ -1576,6 +1492,55 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)
 
+    #------------------------------------------------------------------------
+    # Objects
+    #------------------------------------------------------------------------
+
+    def visit_List(self, node):
+        types = [n.type for n in node.elts]
+        largs = self.visitlist(node.elts)
+        return self.object_coercer.build_list(types, largs)
+
+    def visit_Tuple(self, node):
+        raise error.InternalError(node, "This node should have been replaced")
+
+    def visit_Dict(self, node):
+        key_types = [k.type for k in node.keys]
+        value_types = [v.type for v in node.values]
+        llvm_keys = self.visitlist(node.keys)
+        llvm_values = self.visitlist(node.values)
+        result = self.object_coercer.build_dict(key_types, value_types,
+                                                llvm_keys, llvm_values)
+        return result
+
+    def visit_ObjectInjectNode(self, node):
+        # FIXME: Currently uses the runtime address of the python function.
+        #        Sounds like a hack.
+        self.keep_alive(node.object)
+        addr = id(node.object)
+        obj_addr_int = self.generate_constant_int(addr, typesystem.Py_ssize_t)
+        obj = self.builder.inttoptr(obj_addr_int,
+                                    typesystem.object_.to_llvm(self.context))
+        return obj
+
+    def visit_NoneNode(self, node):
+        try:
+            self.llvm_module.add_global_variable(object_.to_llvm(self.context),
+                                         "Py_None")
+        except llvm.LLVMException:
+            pass
+
+        return self.llvm_module.get_global_variable_named("Py_None")
+
+    #------------------------------------------------------------------------
+    # Complex Numbers
+    #------------------------------------------------------------------------
+
+    def visit_ComplexNode(self, node):
+        real = self.visit(node.real)
+        imag = self.visit(node.imag)
+        return self._create_complex(real, imag)
+
     def visit_ComplexConjugateNode(self, node):
         lcomplex = self.visit(node.complex_node)
 
@@ -1590,19 +1555,68 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         return self.builder.insert_value(lcomplex, new_imag_lval, 1)
 
-    def visit_MultiArrayAPINode(self, node):
-        meth = getattr(self.multiarray_api, 'load_' + node.func_name)
-        lfunc = meth(self.llvm_module, self.builder)
-        lsignature = node.signature.pointer().to_llvm(self.context)
-        node.llvm_func = self.builder.bitcast(lfunc, lsignature)
-        result = self.visit_NativeCallNode(node)
+    def visit_ComplexAttributeNode(self, node):
+        result = self.visit(node.value)
+        if node.value.type.is_complex:
+            if node.attr == 'real':
+                return self.builder.extract_value(result, 0)
+            elif node.attr == 'imag':
+                return self.builder.extract_value(result, 1)
+
+    #------------------------------------------------------------------------
+    # Structs
+    #------------------------------------------------------------------------
+
+    def struct_field(self, node, value):
+        value = self.builder.gep(
+            value, [llvm_types.constant_int(0),
+                    llvm_types.constant_int(node.field_idx)])
+        return value
+
+    def visit_StructAttribute(self, node):
+        result = self.visit(node.value)
+        value_is_reference = node.value.type.is_reference
+
+        # print "referencing", node.struct_type, node.field_idx, node.attr
+
+        # TODO: TBAA for loads
+        if isinstance(node.ctx, ast.Load):
+            if value_is_reference:
+                # Struct reference, load result
+                result = self.struct_field(node, result)
+                result = self.builder.load(result)
+            else:
+                result = self.builder.extract_value(result, node.field_idx)
+        else:
+            if value_is_reference:
+                # Load alloca-ed struct pointer
+                result = self.builder.load(result)
+            result = self.struct_field(node, result)
+            #result = self.builder.insert_value(result, self.rhs_lvalue,
+            #                                   node.field_idx)
+
         return result
 
-    def alloca(self, type, name='', change_bb=True):
-        return self.llvm_alloca(self.to_llvm(type), name, change_bb)
+    def visit_StructVariable(self, node):
+        return self.visit(node.node)
 
-    def llvm_alloca(self, ltype, name='', change_bb=True):
-        return llvm_alloca(self.lfunc, self.builder, ltype, name, change_bb)
+    #------------------------------------------------------------------------
+    # Reference Counting
+    #------------------------------------------------------------------------
+
+    def visit_IncrefNode(self, node):
+        obj = self.visit(node.value)
+        self.incref(obj)
+        return obj
+
+    def visit_DecrefNode(self, node):
+        obj = self.visit(node.value)
+        self.decref(obj)
+        return obj
+
+    #------------------------------------------------------------------------
+    # Temporaries
+    #------------------------------------------------------------------------
 
     def visit_TempNode(self, node):
         if node.llvm_temp is None:
@@ -1666,24 +1680,30 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_ObjectTempRefNode(self, node):
         return node.obj_temp_node.llvm_temp
 
-    def visit_LLVMValueRefNode(self, node):
-        assert node.llvm_value
-        return node.llvm_value
+    #------------------------------------------------------------------------
+    # Arrays
+    #------------------------------------------------------------------------
 
-    def visit_BadValue(self, node):
-        ltype = node.type.to_llvm(self.context)
-        node.llvm_value = llvm.core.Constant.undef(ltype)
-        return node.llvm_value
+    def visit_DataPointerNode(self, node):
+        assert node.node.type.is_array
+        lvalue = self.visit(node.node)
+        lindices = self.visit(node.slice)
+        lptr = node.subscript(self, self.tbaa, lvalue, lindices)
+        return self._handle_ctx(node, lptr, node.type.pointer())
 
-    def visit_CloneNode(self, node):
-        return node.llvm_value
+    #def visit_Index(self, node):
+    #    return self.visit(node.value)
 
-    def visit_CloneableNode(self, node):
-        llvm_value = self.visit(node.node)
-        for clone_node in node.clone_nodes:
-            clone_node.llvm_value = llvm_value
+    def visit_ExtSlice(self, node):
+        return self.visitlist(node.dims)
 
-        return llvm_value
+    def visit_MultiArrayAPINode(self, node):
+        meth = getattr(self.multiarray_api, 'load_' + node.func_name)
+        lfunc = meth(self.llvm_module, self.builder)
+        lsignature = node.signature.pointer().to_llvm(self.context)
+        node.llvm_func = self.builder.bitcast(lfunc, lsignature)
+        result = self.visit_NativeCallNode(node)
+        return result
 
     def pyarray_accessor(self, llvm_array_ptr, dtype):
         acc = ndarray_helpers.PyArrayAccessor(self.builder, llvm_array_ptr,
@@ -1708,20 +1728,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_ShapeAttributeNode(self, node):
         # hurgh, no dispatch on superclasses?
         return self.visit_ArrayAttributeNode(node)
-
-    def visit_IncrefNode(self, node):
-        obj = self.visit(node.value)
-        self.incref(obj)
-        return obj
-
-    def visit_DecrefNode(self, node):
-        obj = self.visit(node.value)
-        self.decref(obj)
-        return obj
-
-    def visit_ExpressionNode(self, node):
-        self.visitlist(node.stmts)
-        return self.visit(node.expr)
 
     #------------------------------------------------------------------------
     # Array Slicing
@@ -1871,6 +1877,80 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         self.visitlist(node.check_errors)
 
         return shape
+
+    #------------------------------------------------------------------------
+    # Pointer Nodes
+    #------------------------------------------------------------------------
+
+    def visit_DereferenceNode(self, node):
+        result = self.visit(node.pointer)
+        return self.load_tbaa(result, node.type.pointer())
+
+    def visit_PointerFromObject(self, node):
+        return self.visit(node.node)
+
+    #------------------------------------------------------------------------
+    # Constant Nodes
+    #------------------------------------------------------------------------
+
+    def visit_ConstNode(self, node):
+        type = node.type
+        ltype = type.to_llvm(self.context)
+
+        constant = node.pyval
+
+        if constnodes.is_null_constant(constant):
+            lvalue = llvm.core.Constant.null(ltype)
+        elif type.is_float:
+            lvalue = llvm.core.Constant.real(ltype, constant)
+        elif type.is_int:
+            if type.signed:
+                lvalue = llvm.core.Constant.int_signextend(ltype, constant)
+            else:
+                lvalue = llvm.core.Constant.int(ltype, constant)
+        elif type.is_c_string:
+            lvalue = self.env.llvm_context.get_string_constant(constant)
+            type_char_p = typesystem.c_string_type.to_llvm(self.context)
+            lvalue = self.builder.bitcast(lvalue, type_char_p)
+        elif type.is_bool:
+            return self._bool_constants[constant]
+        elif type.is_function:
+            # lvalue = map_to_function(constant, type, self.mod)
+            raise NotImplementedError
+        elif type.is_object and not constnodes.is_null_constant(pyval):
+            raise NotImplementedError("Use ObjectInjectNode")
+        else:
+            raise NotImplementedError("Constant %s of type %s" %
+                                                    (constant, type))
+
+        return lvalue
+
+    #------------------------------------------------------------------------
+    # General Purpose Nodes
+    #------------------------------------------------------------------------
+
+    def visit_ExpressionNode(self, node):
+        self.visitlist(node.stmts)
+        return self.visit(node.expr)
+
+    def visit_LLVMValueRefNode(self, node):
+        assert node.llvm_value
+        return node.llvm_value
+
+    def visit_BadValue(self, node):
+        ltype = node.type.to_llvm(self.context)
+        node.llvm_value = llvm.core.Constant.undef(ltype)
+        return node.llvm_value
+
+    def visit_CloneNode(self, node):
+        return node.llvm_value
+
+    def visit_CloneableNode(self, node):
+        llvm_value = self.visit(node.node)
+        for clone_node in node.clone_nodes:
+            clone_node.llvm_value = llvm_value
+
+        return llvm_value
 
     #------------------------------------------------------------------------
     # User nodes
