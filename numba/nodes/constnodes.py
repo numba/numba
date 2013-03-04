@@ -32,6 +32,8 @@ class ConstNode(ExprNode):
         self.pyval = pyval
 
     def value(self, translator):
+        # TODO: Redo this entire method !
+        env = translator.env
         builder = translator.builder
 
         type = self.type
@@ -60,8 +62,7 @@ class ConstNode(ExprNode):
         elif type.is_object:
             raise NotImplementedError("Use ObjectInjectNode")
         elif type.is_c_string:
-            lvalue = translate._LLVMModuleUtils.get_string_constant(
-                                            translator.llvm_module, constant)
+            lvalue = env.llvm_context.get_string_constant(constant)
             type_char_p = typesystem.c_string_type.to_llvm(translator.context)
             lvalue = translator.builder.bitcast(lvalue, type_char_p)
         elif type.is_bool:

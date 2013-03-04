@@ -107,8 +107,6 @@ class StdoutReplacer(object):
     def __exit__(self, *args):
         sys.stdout = self.out
 
-from .bytecode.test_support import ByteCodeTestCase
-
 def testmod(module=None, runit=False):
     """
     Tests a doctest modules with numba functions. When run in nosetests, only

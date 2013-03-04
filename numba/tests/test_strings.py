@@ -43,6 +43,11 @@ def temp_string3():
 def test():
     return object()
 
+@jit(void())
+def string_constant():
+    print "hello world"
+
 if __name__ == '__main__':
+    string_constant()
     import doctest
     doctest.testmod()

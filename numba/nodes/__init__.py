@@ -7,7 +7,7 @@ from numba import function_util
 from numba import *
 from numba.symtab import Variable
 from numba import typesystem
-from numba import utils, translate, error
+from numba import utils, error
 from numba import typesystem
 from numba.minivect import minitypes, minierror
 

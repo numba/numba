@@ -5,7 +5,7 @@
 Duplicated test for test_ast_getattr.py
 '''
 
-from numba.translate import _plat_bits
+from numba.llvm_types import _plat_bits
 from numba.decorators import jit
 
 import numpy

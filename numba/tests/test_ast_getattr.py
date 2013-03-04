@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 # ______________________________________________________________________
 
-from numba.translate import _plat_bits
 from numba.decorators import autojit
 
 import numpy as np
