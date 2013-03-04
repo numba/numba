@@ -12,10 +12,7 @@ from numba.codegen import translate
 from numba import  pipeline, extension_type_inference
 from .minivect import minitypes
 from numba.utils import debugout, process_signature
-from numba.intrinsic import default_intrinsic_library
-from numba.external import default_external_library
-from numba.external.utility import default_utility_library
-from numba import double, int_
+from numba.codegen import llvmwrapper
 from numba import environment
 import llvm.core as _lc
 
@@ -57,7 +54,7 @@ def _internal_export(env, function_signature, backend='ast', **kws):
                 if not exports_env.wrap_exports:
                     exports_env.function_wrapper_map[name] = None
                 else:
-                    wrapper_tup = func_env.translator.build_wrapper_module()
+                    wrapper_tup = llvmwrapper.build_wrapper_module(env)
                     exports_env.function_wrapper_map[name] = wrapper_tup
         return func
     return _iexport

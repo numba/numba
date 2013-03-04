@@ -60,6 +60,7 @@ from numba import nodes
 from numba import typesystem
 from numba import typedefs
 from numba import extension_types
+from numba.codegen import llvmwrapper
 from numba import utils
 from numba.type_inference import module_type_inference
 from numba.minivect import  minitypes
@@ -491,7 +492,7 @@ class ClosureSpecializer(ClosureTransformer):
         node.lfunc_pointer = translator.lfunc_pointer
 
         if node.need_numba_func:
-            return self.create_numba_function(node, translator)
+            return self.create_numba_function(node, node.func_env)
         else:
             func_name = node.func_def.name
             self.symtab[func_name] = Variable(name=func_name, type=node.type,
@@ -501,7 +502,7 @@ class ClosureSpecializer(ClosureTransformer):
             # return nodes.NoneNode()
             return nodes.ObjectInjectNode(None, type=object_)
 
-    def create_numba_function(self, node, translator):
+    def create_numba_function(self, node, func_env):
         closure_scope = self.ast.cur_scope
 
         if closure_scope is None:
@@ -511,8 +512,12 @@ class ClosureSpecializer(ClosureTransformer):
             assert node.func_def.args.args[0].variable.type
             scope_type = closure_scope.type
 
-        node.wrapper_func, node.wrapper_lfunc, methoddef = (
-                    translator.build_wrapper_function(get_lfunc=True))
+        self.env.translation.push_env(func_env)
+        try:
+            node.wrapper_func, node.wrapper_lfunc, methoddef = (
+                        llvmwrapper.build_wrapper_function(self.env))
+        finally:
+            self.env.translation.pop()
 
         # Keep methoddef alive
         # assert methoddef in node.py_func.live_objects

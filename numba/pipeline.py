@@ -18,6 +18,7 @@ from numba import control_flow
 from numba import optimize
 from numba import closures
 from numba import reporting
+from numba.codegen import llvmwrapper
 from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
 from numba.codegen import translate
@@ -494,7 +495,7 @@ class WrapperStage(PipelineStage):
 
         if wrap:
             numbawrapper, lfuncwrapper, _ = (
-                func_env.translator.build_wrapper_function(get_lfunc=True))
+                llvmwrapper.build_wrapper_function(env))
             func_env.numba_wrapper_func = numbawrapper
             func_env.llvm_wrapper_func = lfuncwrapper
 

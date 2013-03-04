@@ -141,13 +141,6 @@ class NumbaVisitorMixin(CooperativeBase):
         return self.ast.name
 
     @property
-    def func_doc(self):
-        if self.func is not None:
-            return self.func.__doc__
-        else:
-            return ast.get_docstring(self.ast)
-
-    @property
     def qualified_name(self):
         qname = self.kwargs.get("qualified_name", None)
         if qname is None:

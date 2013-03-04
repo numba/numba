@@ -410,6 +410,13 @@ class FunctionEnvironment(object):
         state.update(kwds)
         return type(self)(**state)
 
+    @property
+    def func_doc(self):
+        if self.func is None:
+            return self.func.__doc__
+        else:
+            return ast_module.get_docstring(self.ast)
+
 # ______________________________________________________________________
 
 class TranslationEnvironment(object):
@@ -740,6 +747,10 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
             ret_val = cls(environment_key or 'numba', *args, **kws)
             cls.environment_map[environment_key] = ret_val
         return ret_val
+
+    @property
+    def crnt(self):
+        return self.translation.crnt
 
     def get_pipeline(self, pipeline_name=None):
         '''Convenience function for getting a pipeline object (which

@@ -13,7 +13,7 @@ from numba import *
 
 from numba.codegen.debug import *
 from numba.codegen.codeutils import llvm_alloca
-from numba.codegen import coerce, complexsupport, refcounting, llvmwrapper
+from numba.codegen import coerce, complexsupport, refcounting
 from numba.codegen.llvmcontext import LLVMContextManager
 
 from numba import visitors, nodes, llvm_types, utils, function_util
@@ -360,129 +360,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         # Add all incoming values to all our phi values
         ssa.handle_phis(self.ast.flow)
-
-    def get_ctypes_func(self, llvm=True):
-        import ctypes
-        sig = self.func_signature
-        restype = typesystem.convert_to_ctypes(sig.return_type)
-
-        # FIXME: Switch to PYFUNCTYPE so it does not release the GIL.
-        #
-        #    prototype = ctypes.CFUNCTYPE(restype,
-        #                                 *[_types.convert_to_ctypes(x)
-        #                                       for x in sig.args])
-        prototype = ctypes.PYFUNCTYPE(restype,
-                                     *[typesystem.convert_to_ctypes(x)
-                                           for x in sig.args])
-
-
-        if hasattr(restype, 'make_ctypes_prototype_wrapper'):
-            # See numba.utils.ComplexMixin for an example of
-            # make_ctypes_prototype_wrapper().
-            prototype = restype.make_ctypes_prototype_wrapper(prototype)
-
-        if llvm:
-            # July 10, 2012: PY_CALL_TO_LLVM_CALL_MAP is removed recent commit.
-            #
-            #    PY_CALL_TO_LLVM_CALL_MAP[self.func] = \
-            #        self.build_call_to_translated_function
-            return prototype(self.lfunc_pointer)
-        else:
-            return prototype(self.func)
-
-    def _build_wrapper_function_ast(self, fake_pyfunc, llvm_module):
-        if llvm_module is None:
-            lfunc = self.lfunc
-        else:
-            lfunc = llvm_module.get_or_insert_function(
-                self.func_signature.to_llvm(self.context), self.lfunc.name)
-        # lfunc = self.env.translation.crnt.lfunc
-        wrapper = nodes.FunctionWrapperNode(lfunc,
-                                            self.func_signature,
-                                            self.func,
-                                            fake_pyfunc,
-                                            self.func_name)
-        wrapper.cellvars = []
-        return wrapper
-
-    def _build_wrapper_translation(self, llvm_module=None):
-        # PyObject *(*)(PyObject *self, PyObject *args)
-        def func(self, args):
-            pass
-
-        if llvm_module:
-            wrapper_module = llvm_module
-        else:
-            wrapper_module = LLVMContextManager().module
-
-        # Create wrapper code generator and wrapper AST
-        func_name = '__numba_wrapper_%s' % self.func_name
-        signature = minitypes.FunctionType(return_type=object_,
-                                           args=[void.pointer(), object_])
-        symtab = dict(self=Variable(object_, is_local=True),
-                      args=Variable(object_, is_local=True))
-        wrapper_call = self._build_wrapper_function_ast(
-            func, llvm_module=wrapper_module)
-        error_return = ast.Return(nodes.CoercionNode(nodes.NULL_obj,
-                                                     object_))
-        wrapper_call.error_return = error_return
-
-        # TODO: Run this entire thing through a wrapper pipeline...
-        func_env = self.env.translation.crnt.inherit(
-                name=func_name,
-                mangled_name=None, # Force FunctionEnvironment.init()
-                                   # to generate a new mangled name.
-                func_signature=signature,
-                llvm_module=wrapper_module)
-        self.env.translation.push_env(func_env)
-        try:
-            from numba import pipeline
-            pipeline.create_lfunc(wrapper_call, self.env)
-            t = LLVMCodeGenerator(self.context, func, wrapper_call, signature,
-                                  symtab, llvm_module=wrapper_module,
-                                  locals={}, refcount_args=False,
-                                  func_name=func_name, env=self.env)
-            t.translate()
-        finally:
-            self.env.translation.pop()
-
-        keep_alive(func, t.lfunc)
-        return t
-
-    def build_wrapper_function(self, get_lfunc=False):
-        '''
-        Build a wrapper function for the currently translated function.
-
-        By default, or if get_lfunc is false, return the
-        interpreter-level wrapper function.
-
-        If the optional get_lfunc argument is true, return the
-        interpreter-level wrapper function, the LLVM wrapper function,
-        and the method definition record.
-        '''
-        t = self._build_wrapper_translation()
-
-        # Return a PyCFunctionObject holding the wrapper
-        func_pointer = t.lfunc_pointer
-        methoddef, wrapper = llvmwrapper.numbafunction_new(
-                self.func, self.func_name, self.func_doc, self.module_name,
-                func_pointer, self.lfunc_pointer, self.func_signature)
-
-        if get_lfunc:
-            return wrapper, t.lfunc, methoddef
-
-        return wrapper
-
-    def build_wrapper_module(self):
-        '''
-        Build a wrapper function for the currently translated
-        function, and return a tuple containing the separate LLVM
-        module, and the LLVM wrapper function.
-        '''
-        llvm_module = lc.Module.new('%s_wrapper_module' % self.mangled_name)
-        t = self._build_wrapper_translation(llvm_module=llvm_module)
-        logger.debug('Wrapper module: %s' % llvm_module)
-        return llvm_module, t.lfunc
 
     def insert_closure_scope_arg(self, args, node):
         """
