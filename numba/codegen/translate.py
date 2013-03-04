@@ -1731,9 +1731,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             view_copy_accessor = ndarray_helpers.PyArrayAccessor(self.builder,
                                                                  view_copy)
         else:
-            class FakePyArrayAccessor(object):
+            class NonMutatingPyArrayAccessor(object):
                 pass
-            view_copy_accessor = FakePyArrayAccessor()
+            view_copy_accessor = NonMutatingPyArrayAccessor()
 
         # Stack-allocate shape/strides and update accessors
         shape = self.alloca(node.shape_type)

@@ -137,11 +137,6 @@ class SliceArray(CDefinition):
             with ifelse.then():
                 new_extent.assign(zero)
 
-        # if extent == 1, set stride to 0 for broadcasting
-        with self.ifelse(new_extent == one) as ifelse:
-            with ifelse.then():
-                stride.assign(zero)
-
         result = self.var(data.type, name='result')
         result.assign(data[start * stride:])
         out_shape[dst_dim] = new_extent
