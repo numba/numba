@@ -492,6 +492,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         if self.nopython and is_obj(self.func_signature.return_type):
             error_return = nodes.WithPythonNode(body=[error_return])
 
+        error_return = self.visit(error_return)
         node.error_return = error_return
 
     def visit_ControlBlock(self, node):
@@ -1070,7 +1071,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
         elif node.type.is_pointer:
             addr_int = constnodes.get_pointer_address(constant, node.type)
-            node = nodes.ptrfromint(addr_int)
+            node = nodes.ptrfromint(addr_int, node.type)
 
         return node
 

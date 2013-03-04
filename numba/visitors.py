@@ -347,22 +347,22 @@ class NumbaTransformer(NumbaVisitorMixin, ast.NodeTransformer):
 
 class NoPythonContextMixin(object):
 
-    def visit_WithPythonNode(self, node):
-        if not self.nopython:
+    def visit_WithPythonNode(self, node, errorcheck=True):
+        if not self.nopython and errorcheck:
             raise error.NumbaError(node, "Not in 'with nopython' context")
 
         self.nopython -= 1
-        result = self.visitlist(node.body)
+        self.visitlist(node.body)
         self.nopython += 1
 
         return node
 
-    def visit_WithNoPythonNode(self, node):
-        if self.nopython:
+    def visit_WithNoPythonNode(self, node, errorcheck=True):
+        if self.nopython and errorcheck:
             raise error.NumbaError(node, "Not in 'with python' context")
 
         self.nopython += 1
-        result = self.visitlist(node.body)
+        self.visitlist(node.body)
         self.nopython -= 1
 
         return node

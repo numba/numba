@@ -2,14 +2,6 @@ from numba.nodes import *
 import numba.nodes
 
 #------------------------------------------------------------------------
-# NULL Constants
-#------------------------------------------------------------------------
-
-_NULL = object()
-NULL_obj = ConstNode(_NULL, object_)
-NULL = ConstNode(_NULL, void.pointer())
-
-#------------------------------------------------------------------------
 # Utilities
 #------------------------------------------------------------------------
 
@@ -23,7 +15,7 @@ def is_null_constant(constant):
     return constant is _NULL
 
 #------------------------------------------------------------------------
-# Utilities
+# Constant Nodes
 #------------------------------------------------------------------------
 
 class ConstNode(ExprNode):
@@ -43,9 +35,6 @@ class ConstNode(ExprNode):
         self.variable = Variable(type, is_constant=True, constant_value=pyval)
         self.type = type
         self.pyval = pyval
-
-        if type.is_object and not is_null_constant(pyval):
-            raise NotImplementedError("Use ObjectInjectNode")
 
     def cast(self, dst_type):
         # This should probably happen in a transform !
@@ -70,3 +59,11 @@ class ConstNode(ExprNode):
 
     def __repr__(self):
         return "const(%s, %s)" % (self.pyval, self.type)
+
+#------------------------------------------------------------------------
+# NULL Constants
+#------------------------------------------------------------------------
+
+_NULL = object()
+NULL_obj = ConstNode(_NULL, object_)
+NULL = ConstNode(_NULL, void.pointer())
