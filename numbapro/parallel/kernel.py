@@ -38,6 +38,9 @@ class ComputeUnit(object):
     def output(self, ary):
         return self._output(ary)
 
+    def inout(self, ary):
+        return self._inout(ary)
+
     def scratch(self, shape, strides, dtype, order='C'):
         return self._scratch(shape, strides, dtype, order)
 
@@ -138,6 +141,11 @@ class CUDAComputeUnit(ComputeUnit):
 
     def _output(self, ary):
         devary = cuda.to_device(ary, copy=False, stream=self.__stream)
+        self.__writeback.add(devary)
+        return devary
+
+    def _inout(self, ary):
+        devary = self._input(ary)
         self.__writeback.add(devary)
         return devary
 
