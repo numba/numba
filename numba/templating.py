@@ -166,30 +166,21 @@ class TemplateContext(object):
             vars = self.get_vars_symtab()
             symtab = dict(symtab or {}, **vars)
             kwargs['symtab'] = symtab_module.Symtab(symtab)
-        kwargs.update(env=self.env)
 
-        return dummy_type_infer(self.context, tree, **kwargs)
+        return dummy_type_infer(self.context, tree, env=self.env, **kwargs)
 
 def dummy_type_infer(context, tree, order=['type_infer', 'type_set'], env=None,
                      **kwargs):
+    assert env is not None
     func_obj = kwargs.pop('func')
-    # FIXME: Remove this check, using only the newer run_pipeline2(),
-    # and make env required.
-    if env is None:
-         result = numba.pipeline.run_pipeline(
-                        context, func_obj, tree, void(), order=order,
-                        # Allow closures to be recognized
-                        function_level=1, **kwargs)
-         _, (_, symtab, ast) = result
-    else:
-        func_env = env.translation.crnt.inherit(func=func_obj, ast=tree,
-                                                func_signature=void(),
-                                                **kwargs)
-        numba.pipeline.run_env(
-            env, func_env, pipeline_name='dummy_type_infer',
-            function_level=1, locals=func_env.locals, **kwargs)
-        symtab = func_env.symtab
-        ast = func_env.ast
+    func_env = env.translation.crnt.inherit(func=func_obj, ast=tree,
+                                            func_signature=void(),
+                                            **kwargs)
+    numba.pipeline.run_env(
+        env, func_env, pipeline_name='dummy_type_infer',
+        function_level=1, locals=func_env.locals, **kwargs)
+    symtab = func_env.symtab
+    ast = func_env.ast
     return symtab, ast
 
 def template(s, substitutions, template_variables=None):

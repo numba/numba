@@ -241,15 +241,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 elif var.type.is_carray:
                     lvalue = self.c_array_to_pointer(name, lvalue, var)
 
-#                if is_obj(var.type):
-#                    lvalue = llvm.core.Constant.null(var.ltype)
-#                elif var.type.is_struct:
-#                    lvalue = self.builder.alloca(var.ltype, name=name)
-#                elif var.type.is_carray:
-#                    lvalue = self.c_array_to_pointer(name, stackspace, var)
-#                else:
-#                    lvalue = llvm.core.Constant.undef(var.ltype)
-
                 var.lvalue = lvalue
 
     def setup_func(self):
@@ -347,11 +338,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             if self.lfunc is not None:
                 self.lfunc.delete()
             raise
-
-#    def link(self):
-#        '''Link the lfunc into the execution context
-#        '''
-#        self.lfunc = LLVMContextManager().link(self.lfunc)
 
     def handle_phis(self):
         """

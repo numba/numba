@@ -3,20 +3,16 @@ This module contains the Pipeline class which provides a pluggable way to
 define the transformations and the order in which they run on the AST.
 """
 
-import inspect
 import ast as ast_module
 import logging
 import pprint
 import random
-from timeit import default_timer as _timer
 
 import llvm.core as lc
 
 # import numba.closures
-from numba import PY3
 from numba import error
 from numba import functions
-from numba import naming
 from numba import transforms
 from numba import control_flow
 from numba import optimize
@@ -26,8 +22,8 @@ from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
 from numba.codegen import translate
 from numba import utils
+from numba.missing import FixMissingLocations
 from numba.type_inference import infer as type_inference
-from numba.utils import dump, TypedProperty
 from numba.asdl import schema
 from numba.minivect import minitypes
 import numba.visitors
@@ -35,7 +31,12 @@ from numba.specialize import comparisons, loops, exceptions, funccalls
 
 logger = logging.getLogger(__name__)
 
+#------------------------------------------------------------------------
+# Utilities
+#------------------------------------------------------------------------
+
 def get_locals(ast, locals_dict):
+    # TODO: Remove this
     if locals_dict is None:
         locals_dict = getattr(ast, "locals_dict", {})
     elif hasattr(ast, "locals_dict"):
@@ -43,7 +44,6 @@ def get_locals(ast, locals_dict):
 
     ast.locals_dict = locals_dict
     return locals_dict
-
 
 def module_name(func):
     if func is None:
@@ -55,317 +55,9 @@ def module_name(func):
 
     return 'tmp.module.%s.%x' % (name, func_id)
 
-
-class Pipeline(object):
-    """
-    Runs a pipeline of transforms.
-    """
-
-    order = [
-        'resolve_templates',
-        'validate_signature',
-        'cfg',
-        #'dump_cfg',
-        #'const_folding',
-        'type_infer',
-        'type_set',
-        'dump_cfg',
-        'closure_type_inference',
-        'transform_for',
-        'specialize',
-        'specialize_comparisons',
-        'specialize_ssa',
-        'specialize_closures',
-        'optimize',
-        'preloader',
-        'specialize_loops',
-        'late_specializer',
-        'specialize_funccalls',
-        'specialize_exceptions',
-        'fix_ast_locations',
-        'cleanup_symtab',
-        'codegen',
-    ]
-
-    mixins = {}
-    _current_pipeline_stage = None
-
-    def __init__(self, context, func, ast, func_signature,
-                 nopython=False, locals=None, order=None, codegen=False,
-                 symtab=None, allow_rebind_args=True, template_signature=None,
-                 is_closure=False, **kwargs):
-        self.context = context
-        self.func = func
-        self.ast = ast
-        self.func_signature = func_signature
-        self.template_signature = template_signature
-
-        # Whether argument variables may be rebound to different types.
-        # e.g. def f(a): a = "hello" ;; f(0.0)
-        self.allow_rebind_args = allow_rebind_args
-
-        ast.pipeline = self
-
-        assert "name" not in kwargs
-        self.mangled_name = kwargs.get('mangled_name')
-
-        self.symtab = symtab
-        if symtab is None:
-            self.symtab = {}
-
-        # Let the pipeline create a module for the function it is compiling
-        # and the user will link that in.
-        assert 'llvm_module' not in kwargs
-        self.llvm_module = lc.Module.new(module_name(func))
-
-        self.nopython = nopython
-        self.locals = get_locals(ast, locals)
-        self.is_closure = is_closure
-
-        self.closures = kwargs.pop("closures", {})
-        self.kwargs = kwargs
-
-        if order is None:
-            self.order = list(Pipeline.order)
-            if not codegen:
-                self.order.remove('codegen')
-        else:
-            self.order = order
-
-    def make_specializer(self, cls, ast, **kwds):
-        "Create a visitor or transform and add any mixins"
-        if self._current_pipeline_stage in self.mixins:
-            before, after = self.mixins[self._current_pipeline_stage]
-            classes = tuple(before + [cls] + after)
-            name = '__'.join(cls.__name__ for cls in classes)
-            cls = type(name, classes, {})
-
-        kwds.setdefault("mangled_name", self.mangled_name)
-
-        assert 'llvm_module' not in kwds
-        return cls(self.context, self.func, ast,
-                   func_signature=self.func_signature, nopython=self.nopython,
-                   symtab=self.symtab,
-                   llvm_module=self.llvm_module,
-                   locals=self.locals,
-                   allow_rebind_args=self.allow_rebind_args,
-                   closures=self.closures,
-                   is_closure=self.is_closure,
-                   **kwds)
-
-    def insert_specializer(self, name, after=None, before=None):
-        "Insert a new transform or visitor into the pipeline"
-        if after:
-            index = self.order.index(after) + 1
-        else:
-            index = self.order.index(before)
-
-        self.order.insert(index, name)
-
-    def try_insert_specializer(self, name, after=None, before=None):
-        if after and after in self.order:
-            self.insert_specializer(name, after=after)
-        if before and before in self.order:
-            self.insert_specializer(name, before=before)
-
-    @classmethod
-    def add_mixin(cls, pipeline_stage, transform, before=False):
-        before_mixins, after_mixins = cls.mixins.get(pipeline_stage, ([], []))
-        if before:
-            before_mixins.append(transform)
-        else:
-            after_mixins.append(transform)
-
-        cls.mixins[pipeline_stage] = before_mixins, after_mixins
-
-    def run_pipeline(self):
-        # Uses a special logger for logging profiling information.
-        logger = logging.getLogger("numba.pipeline.profiler")
-        ast = self.ast
-        talpha = _timer() # for profiling complete pipeline
-        for method_name in self.order:
-            ts = _timer() # for profiling individual stage
-            if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
-                stage_tuple = (method_name, utils.ast2tree(ast))
-                logger.debug(pprint.pformat(stage_tuple))
-
-            self._current_pipeline_stage = method_name
-            ast = getattr(self, method_name)(ast)
-
-            if __debug__ and logger.getEffectiveLevel() < logging.DEBUG:
-                te = _timer() #  for profiling individual stage
-                logger.debug("%X pipeline stage %30s:\t%.3fms",
-                            id(self), method_name, (te - ts) * 1000)
-
-        tomega = _timer() # for profiling complete pipeline
-        logger.debug("%X pipeline entire:\t\t\t\t\t%.3fms",
-                    id(self), (tomega - talpha) * 1000)
-
-        return self.func_signature, self.symtab, ast
-
-    #
-    ### Pipeline stages
-    #
-
-    def resolve_templates(self, ast):
-        # TODO: Unify with decorators module
-        if self.template_signature is not None:
-            from numba import typesystem
-
-            if PY3:
-                argnames = [name.arg for name in ast.args.args]
-            else:
-                argnames = [name.id for name in ast.args.args]
-
-            argtypes = list(self.func_signature.args)
-
-            typesystem.resolve_templates(self.locals, self.template_signature,
-                                         argnames, argtypes)
-            self.func_signature = minitypes.FunctionType(
-                    return_type=self.func_signature.return_type,
-                    args=tuple(argtypes))
-
-        return ast
-
-    def validate_signature(self, tree):
-        arg_types = self.func_signature.args
-        if (isinstance(tree, ast_module.FunctionDef) and
-                len(arg_types) != len(tree.args.args)):
-            raise error.NumbaError(
-                "Incorrect number of types specified in @jit()")
-
-        return tree
-
-    def cfg(self, ast):
-        transform = self.make_specializer(
-                control_flow.ControlFlowAnalysis, ast, **self.kwargs)
-        ast = transform.visit(ast)
-        self.symtab = transform.symtab
-        ast.flow = transform.flow
-        self.ast.cfg_transform = transform
-        return ast
-
-    def dump_cfg(self, ast):
-        if self.ast.cfg_transform.graphviz:
-            self.ast.cfg_transform.render_gv(ast)
-        return ast
-
-    def const_folding(self, ast):
-        const_marker = self.make_specializer(constant_folding.ConstantMarker,
-                                             ast)
-        const_marker.visit(ast)
-        constvars = const_marker.get_constants()
-        const_folder = self.make_specializer(constant_folding.ConstantFolder,
-                                             ast, constvars=constvars)
-        return const_folder.visit(ast)
-
-    def type_infer(self, ast):
-        type_inferer = self.make_specializer(
-                type_inference.TypeInferer, ast, **self.kwargs)
-        type_inferer.infer_types()
-
-        self.func_signature = type_inferer.func_signature
-        logger.debug("signature for %s: %s", self.mangled_name,
-                     self.func_signature)
-        self.symtab = type_inferer.symtab
-        return ast
-
-    def type_set(self, ast):
-        visitor = self.make_specializer(type_inference.TypeSettingVisitor, ast)
-        visitor.visit(ast)
-        return ast
-
-    def closure_type_inference(self, ast):
-        type_inferer = self.make_specializer(
-                            closures.ClosureTypeInferer, ast,
-                            warn=self.kwargs.get("warn", True))
-        return type_inferer.visit(ast)
-
-    def transform_for(self, ast):
-        transform = self.make_specializer(loops.TransformForIterable, ast)
-        return transform.visit(ast)
-
-    def specialize(self, ast):
-        return ast
-
-    def specialize_comparisons(self, ast):
-        transform = self.make_specializer(comparisons.SpecializeComparisons, ast)
-        return transform.visit(ast)
-
-    def specialize_ssa(self, ast):
-        ssa.specialize_ssa(ast)
-        return ast
-
-    def specialize_closures(self, ast):
-        transform = self.make_specializer(closures.ClosureSpecializer, ast)
-        return transform.visit(ast)
-
-    def specialize_loops(self, ast):
-        transform = self.make_specializer(loops.SpecializeObjectIteration, ast)
-        return transform.visit(ast)
-
-    def specialize_funccalls(self, ast):
-        transform = self.make_specializer(funccalls.FunctionCallSpecializer, ast)
-        return transform.visit(ast)
-
-    def specialize_exceptions(self, ast):
-        transform = self.make_specializer(exceptions.ExceptionSpecializer, ast)
-        return transform.visit(ast)
-
-    def optimize(self, ast):
-        return ast
-
-    def preloader(self, ast):
-        return self.make_specializer(optimize.Preloader, ast).visit(ast)
-
-    def late_specializer(self, ast):
-        specializer = self.make_specializer(transforms.LateSpecializer, ast)
-        return specializer.visit(ast)
-
-    def fix_ast_locations(self, ast):
-        fixer = self.make_specializer(FixMissingLocations, ast)
-        fixer.visit(ast)
-        return ast
-
-    def cleanup_symtab(self, ast):
-        "Pop original variables from the symtab"
-        for var in ast.symtab.values():
-            if not var.parent_var and var.renameable:
-                ast.symtab.pop(var.name, None)
-
-        return ast
-
-    def codegen(self, ast):
-        self.translator = self.make_specializer(translate.LLVMCodeGenerator,
-                                                ast, **self.kwargs)
-        self.translator.translate()
-        return ast
-
-
-class FixMissingLocations(numba.visitors.NumbaVisitor):
-
-    def __init__(self, context, func, ast, *args, **kwargs):
-        super(FixMissingLocations, self).__init__(context, func, ast,
-                                                  *args, **kwargs)
-        self.lineno = getattr(ast, 'lineno', 1)
-        self.col_offset = getattr(ast, 'col_offset', 0)
-
-    def visit(self, node):
-        if not hasattr(node, 'lineno'):
-            node.lineno = self.lineno
-            node.col_offset = self.col_offset
-
-        super(FixMissingLocations, self).visit(node)
-
-def run_pipeline(context, func, ast, func_signature,
-                 pipeline=None, **kwargs):
-    """
-    Run a bunch of AST transformers and visitors on the AST.
-    """
-    # print __import__('ast').dump(ast)
-    pipeline = pipeline or context.numba_pipeline(context, func, ast,
-                                                  func_signature, **kwargs)
-    return pipeline, pipeline.run_pipeline()
+#------------------------------------------------------------------------
+# Entry points
+#------------------------------------------------------------------------
 
 def run_pipeline2(env, func, func_ast, func_signature,
                   pipeline=None, **kwargs):
@@ -378,6 +70,7 @@ def run_pipeline2(env, func, func_ast, func_signature,
         post_ast = pipeline(func_ast, env)
         func_signature = func_env.func_signature
         symtab = func_env.symtab
+
     return func_env, (func_signature, symtab, post_ast)
 
 def run_env(env, func_env, **kwargs):
@@ -388,26 +81,11 @@ def run_env(env, func_env, **kwargs):
     finally:
         env.translation.pop()
 
-def _infer_types(context, func, restype=None, argtypes=None, **kwargs):
-    ast = functions._get_ast(func)
-    func_signature = minitypes.FunctionType(return_type=restype,
-                                            args=argtypes)
-    return run_pipeline(context, func, ast, func_signature, **kwargs)
-
 def _infer_types2(env, func, restype=None, argtypes=None, **kwargs):
     ast = functions._get_ast(func)
     func_signature = minitypes.FunctionType(return_type=restype,
                                             args=argtypes)
     return run_pipeline2(env, func, ast, func_signature, **kwargs)
-
-def infer_types(context, func, restype=None, argtypes=None, **kwargs):
-    """
-    Like run_pipeline, but takes restype and argtypes instead of a FunctionType
-    """
-    pipeline, (sig, symtab, ast) = _infer_types(context, func, restype,
-                                                argtypes, order=['cfg', 'type_infer'],
-                                                **kwargs)
-    return sig, symtab, ast
 
 def infer_types2(env, func, restype=None, argtypes=None, **kwargs):
     """
@@ -417,39 +95,6 @@ def infer_types2(env, func, restype=None, argtypes=None, **kwargs):
         env, func, restype, argtypes, pipeline_name='type_infer', **kwargs)
     return sig, symtab, ast
 
-def infer_types_from_ast_and_sig(context, dummy_func, ast, signature, **kwargs):
-    return run_pipeline(context, dummy_func, ast, signature,
-                        order=['cfg', 'type_infer'], **kwargs)
-
-def get_wrapper(translator, ctypes=False):
-    if ctypes:
-        return translator.get_ctypes_func()
-    else:
-        return translator.build_wrapper_function()
-
-def compile(context, func, restype=None, argtypes=None, ctypes=False,
-            compile_only=False, **kwds):
-    """
-    Compile a numba annotated function.
-
-        - decompile function into a Python ast
-        - run type inference using the given input types
-        - compile the function to LLVM
-    """
-    assert 'llvm_module' not in kwds
-    pipeline, (func_signature, symtab, ast) = _infer_types(
-                context, func, restype, argtypes, codegen=True, **kwds)
-    t = pipeline.translator
-
-    if compile_only:
-        return func_signature, t, None
-
-    # link intrinsic library
-    context.intrinsic_library.link(t.lfunc.module)
-
-    # link into the JIT module
-    t.link()
-    return func_signature, t, get_wrapper(t, ctypes)
 
 def compile2(env, func, restype=None, argtypes=None, ctypes=False,
              compile_only=False, **kwds):
@@ -481,9 +126,6 @@ def compile2(env, func, restype=None, argtypes=None, ctypes=False,
         t = func_env.translator
     return func_env
 
-def compile_from_sig(context, func, signature, **kwds):
-    return compile(context, func, signature.return_type, signature.args,
-                   **kwds)
 
 #------------------------------------------------------------------------
 # Pipeline refactored code
