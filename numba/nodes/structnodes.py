@@ -62,6 +62,10 @@ class ComplexNode(ExprNode):
     type = complex128
     variable = Variable(type)
 
+    def __init__(self, real, imag):
+        self.real = real
+        self.imag = imag
+
 class ComplexAttributeNode(ExprNode):
 
     _fields = ["value"]

@@ -25,6 +25,7 @@ from numba import naming, metadata
 from numba.functions import keep_alive
 from numba.control_flow import ssa
 from numba.support.numpy_support import sliceutils
+from numba.nodes import constnodes
 
 from llvm_cbuilder import shortnames as C
 
@@ -66,6 +67,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     """
 
     multiarray_api = MultiarrayAPI()
+
+    # Values for True/False
+    bool_ltype = llvm.core.Type.int(1)
+    _bool_constants = {
+        False: llvm.core.Constant.int(bool_ltype, 0),
+        True: llvm.core.Constant.int(bool_ltype, 1),
+    }
 
     def __init__(self, context, func, ast, func_signature, symtab,
                  optimize=True, nopython=False,
@@ -662,7 +670,34 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         pass
 
     def visit_ConstNode(self, node):
-        return node.value(self)
+        type = node.type
+        ltype = type.to_llvm(self.context)
+
+        constant = node.pyval
+
+        if constnodes.is_null_constant(constant):
+            lvalue = llvm.core.Constant.null(ltype)
+        elif type.is_float:
+            lvalue = llvm.core.Constant.real(ltype, constant)
+        elif type.is_int:
+            if type.signed:
+                lvalue = llvm.core.Constant.int_signextend(ltype, constant)
+            else:
+                lvalue = llvm.core.Constant.int(ltype, constant)
+        elif type.is_c_string:
+            lvalue = self.env.llvm_context.get_string_constant(constant)
+            type_char_p = typesystem.c_string_type.to_llvm(self.context)
+            lvalue = self.builder.bitcast(lvalue, type_char_p)
+        elif type.is_bool:
+            return self._bool_constants[constant]
+        elif type.is_function:
+            # lvalue = map_to_function(constant, type, self.mod)
+            raise NotImplementedError
+        else:
+            raise NotImplementedError("Constant %s of type %s" %
+                                                    (constant, type))
+
+        return lvalue
 
     def visit_Attribute(self, node):
         raise error.NumbaError("This node should have been replaced")

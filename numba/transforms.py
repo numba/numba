@@ -95,6 +95,7 @@ from numba.symtab import Variable
 from numba import visitors, nodes, error, functions
 from numba import stdio_util, function_util
 from numba.typesystem import is_obj, promote_closest, promote_to_native
+from numba.nodes import constnodes
 from numba.external import utility
 from numba.utils import dump
 
@@ -1057,6 +1058,20 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
                 raise error.NumbaError(
                     node, 'Unsupported unary operation for objects: %s' %
                     op_name)
+        return node
+
+    def visit_ConstNode(self, node):
+        constant = node.pyval
+
+        if node.type.is_complex:
+            real = nodes.ConstNode(constant.real, node.type.base_type)
+            imag = nodes.ConstNode(constant.imag, node.type.base_type)
+            node = nodes.ComplexNode(real, imag)
+
+        elif node.type.is_pointer:
+            addr_int = constnodes.get_pointer_address(constant, node.type)
+            node = nodes.ptrfromint(addr_int)
+
         return node
 
     #------------------------------------------------------------------------
