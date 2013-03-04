@@ -12,7 +12,7 @@ functionality that allow developers to rapidly create optimized code that integr
 
 With NumbaPro Python developers can define NumPy ufuncs and generalized ufuncs
 in Python, which are compiled to machine code dynamically and loaded on the fly.
-Additionally, NumbaPro offers developers the ability to target mutlicore and
+Additionally, NumbaPro offers developers the ability to target multicore and
 GPU architectures with Python code for both ufuncs and general-purpose code.
 
 Finally, with NumbaPro, high-level array-expressions (slicing, vectorized
@@ -21,7 +21,7 @@ machine code providing the fastest code using all the information available
 about the calculation
 
 For targeting the GPU, NumbaPro can either do the work automatically, doing
-it's best to optimize the code for the GPU architecture.  Alternatively,
+its best to optimize the code for the GPU architecture.  Alternatively,
 CUDA-based API is provided for writing CUDA code specifically in Python for
 ultimate control of the hardware (with thread and block identities).
 
