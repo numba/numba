@@ -1,6 +1,7 @@
 import numpy as np
 from .ndarray import *
 from . import driver as _driver
+from numbapro._utils.ndarray import ndarray_datasize_raw
 
 assert not hasattr(np.ndarray, 'device_allocate')
 assert not hasattr(np.ndarray, 'to_device')
@@ -11,8 +12,42 @@ assert not hasattr(np.ndarray, 'device_partition')
 assert not hasattr(np.ndarray, 'copy_to_host')
 assert not hasattr(np.ndarray, 'device_mapped')
 
+class DeviceArrayBase(object):
+    @property
+    def device_memory(self):
+        raise NotImplementedError("Should be overriden in subclass")
 
-class DeviceNDArray(np.ndarray):
+class DeviceArray(DeviceArrayBase):
+    '''
+    A memory object that only lives on the device-side.
+    '''
+    def __init__(self, shape, strides, dtype, order, stream=0):
+        ndim = len(shape)
+        self.__shape = shape
+        self.__dtype = dtype
+        self.__device_memory = ndarray_device_allocate_struct(ndim)
+        size = ndarray_datasize_raw(shape, strides, dtype, order)
+        self.__device_data = _driver.AllocatedDeviceMemory(size)
+        ndarray_populate_struct(self.__device_memory, self.__device_data,
+                                shape, strides, stream=stream)
+
+    @property
+    def device_memory(self):
+        return self.__device_memory
+
+    @property
+    def shape(self):
+        return self.__shape
+
+    @property
+    def size(self):
+        return self.shape[0]
+
+    @property
+    def dtype(self):
+        return self.__dtype
+
+class DeviceNDArray(DeviceArrayBase, np.ndarray):
     @_driver.require_context
     def device_mapped(self, mappedptr, stream=0):
         # transfer structure

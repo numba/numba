@@ -10,11 +10,17 @@ from .cudapipeline.decorators import jit, autojit
 @_driver.require_context
 def to_device(ary, stream=0, copy=True):
     from numbapro.cudapipeline import devicearray
-    devarray =  ary.view(type=devicearray.DeviceNDArray)
+    devarray = ary.view(type=devicearray.DeviceNDArray)
     devarray.device_allocate(stream=stream)
     if copy:
         devarray.to_device(stream=stream)
     return devarray
+
+@_driver.require_context
+def device_array(shape, strides, dtype, order='C', stream=0):
+    from numbapro.cudapipeline import devicearray
+    return devicearray.DeviceArray(shape, strides, dtype, order, stream)
+    
 
 # Stream helper
 @_driver.require_context

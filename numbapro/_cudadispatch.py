@@ -4,7 +4,7 @@ from llvm import core as _lc
 import numpy as np
 from ctypes import *
 from numbapro.cudapipeline import driver as _cuda
-from numbapro.cudapipeline.devicearray import DeviceNDArray
+from numbapro.cudapipeline.devicearray import DeviceArrayBase
 from numbapro import cuda
 from numbapro._utils.ndarray import ndarray_datasize
 import math
@@ -57,12 +57,12 @@ class CudaUFuncDispatcher(object):
 
     def __call__(self, *args, **kws):
         '''
-        *args: numpy arrays or DeviceNDArray (created by cuda.to_device).
+        *args: numpy arrays or DeviceArrayBase (created by cuda.to_device).
                Cannot mix the two types in one call.
 
         **kws:
             stream -- cuda stream; when defined, asynchronous mode is used.
-            out    -- output array. Can be a numpy array or DeviceNDArray
+            out    -- output array. Can be a numpy array or DeviceArrayBase
                       depending on the input arguments.  Type must match
                       the input arguments.
         '''
@@ -86,10 +86,10 @@ class CudaUFuncDispatcher(object):
         MAX_THREAD = min(cuda_func.device.MAX_THREADS_PER_BLOCK,
                          self.max_blocksize)
 
-        is_device_ndarray = [isinstance(x, DeviceNDArray) for x in args]
+        is_device_ndarray = [isinstance(x, DeviceArrayBase) for x in args]
 
         if all(is_device_ndarray):
-            # NOTE: When using DeviceNDArray,
+            # NOTE: When using DeviceArrayBase,
             #       it is assumed to be properly broadcasted.
             self._arguments_requirement(args)
     
@@ -104,7 +104,7 @@ class CudaUFuncDispatcher(object):
                 device_out = cuda.to_device(out, stream, copy=False)
             else:
                 device_out = kws['out']
-                assert isinstance(device_out, DeviceNDArray)
+                assert isinstance(device_out, DeviceArrayBase)
             kernel_args = list(args) + [device_out, element_count]
 
             cuda_func[griddim, blockdim, stream](*kernel_args)
@@ -119,7 +119,7 @@ class CudaUFuncDispatcher(object):
                 out = self._allocate_output(broadcast_arrays, result_dtype)
             else:
                 out = kws['out']
-                assert not isinstance(device_out, DeviceNDArray)
+                assert not isinstance(device_out, DeviceArrayBase)
                 assert out.shape[0] >= broadcast_arrays[0].shape[0]
 
             # Reshape the arrays if necessary.
@@ -147,7 +147,7 @@ class CudaUFuncDispatcher(object):
             # Revert the shape of the array if it has been modified earlier
             return out.reshape(reshape)
         else:
-            raise ValueError("Cannot mix DeviceNDArray and ndarray as args")
+            raise ValueError("Cannot mix DeviceArrayBase and ndarray as args")
 
     def _get_function_by_dtype(self, dtypes):
         try:
@@ -186,7 +186,7 @@ class CudaUFuncDispatcher(object):
         stream = stream or cuda.stream()
         with stream.auto_synchronize():
             # transfer memory to device if necessary
-            if isinstance(arg, DeviceNDArray):
+            if isinstance(arg, DeviceArrayBase):
                 mem = arg
             else:
                 mem = cuda.to_device(arg, stream)
@@ -341,15 +341,14 @@ class CudaNumbaFuncDispatcher(object):
         return [convert(ty, val) for ty, val in zip(self.typemap, args)]
 
     def __call__(self, args, griddim, blkdim, stream=0):
-        from .cudapipeline.devicearray import DeviceNDArray
         args = self._cast_args(args)
 
         kernel_args = []
 
         retrievers = []
         def ndarray_gpu(x):
-            if not isinstance(x, DeviceNDArray):
-                # convert to DeviceNDArray
+            if not isinstance(x, DeviceArrayBase):
+                # convert to DeviceArrayBase
                 x = cuda.to_device(x, stream=stream)
                 def retriever():
                     x.to_host(stream=stream)
