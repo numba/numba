@@ -98,11 +98,12 @@ setup(
     packages = find_packages(),
     scripts = ['numba/pycc/pycc'],
     package_data = {
+        '' : ['*.md'],
         'numba.minivect' : ['include/*'],
         'numba.asdl.common': ['*.asdl'],
         'numba.asdl.py2_7': ['*.asdl'],
         'numba.external.utilities': ['*.c', '*.h'],
-        'numba' : ['*.c', '*.h', 'include/*'],
+        'numba' : ['*.c', '*.h', 'include/*', '*.pxd'],
         'numba.vectorize' : ['*.h'],
     },
     ext_modules = [

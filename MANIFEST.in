@@ -1,0 +1,4 @@
+include *.md *.py *.txt CHANGE_LOG AUTHORS
+recursive-include docs *.ipynb *.txt *.py Makefile *.rst
+prune docs/_build
+prune docs/gh-pages
