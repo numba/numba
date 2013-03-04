@@ -82,10 +82,6 @@ array expressions::
 .. NOTE:: Correct handling of overlapping memory between the left-hand and
           right-hand side of expressions is not supported yet.
 
-.. NOTE:: The next release may support parallel array expressions and
-          tiled array expressions for mixed C- and Fortran-like data layouts.
-          The next release will also support array expressions on the GPU.
-
 Broadcasting
 ------------
 Array expressions also support broadcasting, raising an error if shapes do not match::
@@ -112,8 +108,8 @@ Calling the function with incompatible shapes gives the following::
         ...
     ValueError: Shape mismatch while broadcasting
 
-.. NOTE:: Error raised in a nopython context print an error message and abort the
-   program.
+.. NOTE:: Errors raised in a nopython context print an error message and abort the
+          program.
 
 New Arrays
 ----------

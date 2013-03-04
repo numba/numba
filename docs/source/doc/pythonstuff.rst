@@ -68,6 +68,7 @@ We hope to support the following container types:
     * list, tuple
     * dict, ordereddict
     * set, orderedset
+    * queues, channels
     * <your idea here>
 
 There are many more data structure that can be implemented, but future releases
