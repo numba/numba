@@ -1,14 +1,25 @@
-Numba proof of concept was originally written by 
+Numba proof of concept was originally written by
 Travis Oliphant <travis@continuum.io>
-
-Jon Riehl of Resilient Science added a control-flow graph,
-   NumPy multiarray API access and moved Numba forward significantly
-
-Mark Florisson added minivect, a type system
-
-Siu Kwan Lam merged ideas from pymothoa into Numba
 
 If you have contributed to Numba add your name to this file:
 
-
-
+Alberto Valverde                         <alberto@meteogrid.com>
+Dan Christensen                          <jdc@uwo.ca>
+Dan Yamins                               <dyamins@gmail.com>
+Hernan Grecco                            <hernan.grecco@gmail.com>
+Ilan Schnell                             <ilanschnell@gmail.com>
+James Bergstra                           <james.bergstra@gmail.com>
+Jon Riehl                                <jon.riehl@gmail.com>          (Resilient Science)
+Juan Luis Cano Rodríguez                 <juanlu001@gmail.com>
+Lars Buitinck                            <larsmans@gmail.com>
+Maggie Mari                              <maggie.mari@continuum.io>
+Mark Florisson                           <markflorisson88@gmail.com>
+Mark Wiebe                               <mwwiebe@gmail.com>
+Martin Spacek                            <git@mspacek.mm.st>
+Ondřej Čertík                            <ondrej.certik@gmail.com>
+Phillip Cloud                            <cpcloud@gmail.com>
+Siu Kwan Lam                             <michael.lam.sk@gmail.com>
+Thomas Kluyver                           <takowl@gmail.com>
+Travis E. Oliphant                       <teoliphant@gmail.com>
+Yaroslav Halchenko                       <debian@onerussian.com>
+timo                                     <timonator@perpetuum-immobile.de>
