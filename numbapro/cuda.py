@@ -20,7 +20,14 @@ def to_device(ary, stream=0, copy=True):
 def device_array(shape, strides, dtype, order='C', stream=0):
     from numbapro.cudapipeline import devicearray
     return devicearray.DeviceArray(shape, strides, dtype, order, stream)
-    
+
+def device_array_like(ary, stream=0):
+    order = ''
+    if ary.flags['C_CONTIGUOUS']:
+        order = 'C'
+    elif ary.flags['F_CONTIGUOUS']:
+        order = 'F'
+    return device_array(ary.shape, ary.strides, ary.dtype, stream=stream)
 
 # Stream helper
 @_driver.require_context

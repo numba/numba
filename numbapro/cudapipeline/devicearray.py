@@ -17,6 +17,15 @@ class DeviceArrayBase(object):
     def device_memory(self):
         raise NotImplementedError("Should be overriden in subclass")
 
+    @property
+    def device_raw(self):
+        raise NotImplementedError("Should be overriden in subclass")
+
+    @property
+    def device_raw_ptr(self):
+        return self.device_data._handle
+
+
 class DeviceArray(DeviceArrayBase):
     '''
     A memory object that only lives on the device-side.
@@ -36,6 +45,10 @@ class DeviceArray(DeviceArrayBase):
         return self.__device_memory
 
     @property
+    def device_raw(self):
+        return self.__device_data
+
+    @property
     def shape(self):
         return self.__shape
 
@@ -46,6 +59,13 @@ class DeviceArray(DeviceArrayBase):
     @property
     def dtype(self):
         return self.__dtype
+
+    def copy_to_host(self, array, size=-1, stream=0):
+        if size < 0:
+            size = self.device_raw.bytesize
+        self.__device_data.from_device_raw(array.ctypes.data, size,
+                                           stream=stream)
+
 
 class DeviceNDArray(DeviceArrayBase, np.ndarray):
     @_driver.require_context
@@ -83,7 +103,10 @@ class DeviceNDArray(DeviceArrayBase, np.ndarray):
         dataptr, datasize = self.__gpu_readback
         self.__device_data.from_device_raw(dataptr, datasize, stream=stream)
 
-    def copy_to_host(self, array, size, stream=0):
+    def copy_to_host(self, array, size=-1, stream=0):
+        dataptr, datasize = self.__gpu_readback
+        if size < 0:
+            size = datasize
         self.__device_data.from_device_raw(array.ctypes.data, size,
                                            stream=stream)
 
@@ -144,3 +167,11 @@ class DeviceNDArray(DeviceArrayBase, np.ndarray):
             return self.__device_memory
         except AttributeError:
             raise RuntimeError("No GPU device memory for this array")
+
+    @property
+    def device_raw(self):
+        try:
+            return self.__device_data
+        except AttributeError:
+            raise RuntimeError("No GPU device memory for this array")
+

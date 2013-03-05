@@ -15,14 +15,9 @@ class TestNvvmDriver(support.CudaTestCase):
         print nvvm.get_version()
 
         if is64bit:
-            filename = os.path.join(directory, 'simple-gpu64.ll')
-            with open(filename) as fin:
-                return fin.read()
+            return gpu64
         else:
-            filename = os.path.join(directory, 'simple-gpu.ll')
-            with open(filename) as fin:
-                return fin.read()
-
+            return gpu32
 
     def test_nvvm_compile(self):
         nvvmir = self.get_ptx()
@@ -60,6 +55,75 @@ class TestNvvmDriver(support.CudaTestCase):
         else:
             self.assertTrue('.address_size 32' in ptx)
 
+
+gpu64='''
+target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
+
+define i32 @ave(i32 %a, i32 %b) {
+entry:
+%add = add nsw i32 %a, %b
+%div = sdiv i32 %add, 2
+ret i32 %div
+}
+
+define void @simple(i32* %data) {
+entry:
+%0 = call i32 @llvm.nvvm.read.ptx.sreg.ctaid.x()
+%1 = call i32 @llvm.nvvm.read.ptx.sreg.ntid.x()
+%mul = mul i32 %0, %1
+%2 = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+%add = add i32 %mul, %2
+%call = call i32 @ave(i32 %add, i32 %add)
+%idxprom = sext i32 %add to i64
+%arrayidx = getelementptr inbounds i32* %data, i64 %idxprom
+store i32 %call, i32* %arrayidx, align 4
+ret void
+}
+
+declare i32 @llvm.nvvm.read.ptx.sreg.ctaid.x() nounwind readnone
+
+declare i32 @llvm.nvvm.read.ptx.sreg.ntid.x() nounwind readnone
+
+declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
+
+!nvvm.annotations = !{!1}
+!1 = metadata !{void (i32*)* @simple, metadata !"kernel", i32 1}
+'''
+
+gpu32='''
+target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
+
+define i32 @ave(i32 %a, i32 %b) {
+entry:
+%add = add nsw i32 %a, %b
+%div = sdiv i32 %add, 2
+ret i32 %div
+}
+
+define void @simple(i32* %data) {
+entry:
+%0 = call i32 @llvm.nvvm.read.ptx.sreg.ctaid.x()
+%1 = call i32 @llvm.nvvm.read.ptx.sreg.ntid.x()
+%mul = mul i32 %0, %1
+%2 = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+%add = add i32 %mul, %2
+%call = call i32 @ave(i32 %add, i32 %add)
+%idxprom = sext i32 %add to i64
+%arrayidx = getelementptr inbounds i32* %data, i64 %idxprom
+store i32 %call, i32* %arrayidx, align 4
+ret void
+}
+
+declare i32 @llvm.nvvm.read.ptx.sreg.ctaid.x() nounwind readnone
+
+declare i32 @llvm.nvvm.read.ptx.sreg.ntid.x() nounwind readnone
+
+declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
+
+!nvvm.annotations = !{!1}
+!1 = metadata !{void (i32*)* @simple, metadata !"kernel", i32 1}
+
+'''
+
 if __name__ == '__main__':
     unittest.main()
-

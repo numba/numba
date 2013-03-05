@@ -681,6 +681,7 @@ class AllocatedDeviceMemory(DevicePointer, finalizer.OwnerMixin):
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
         self.driver.check_error(error, 'Failed to allocate memory')
         self._finalizer_track(self._handle)
+        self._bytesize = bytesize
         
         if debug_memory:
             global debug_memory_alloc
@@ -693,6 +694,10 @@ class AllocatedDeviceMemory(DevicePointer, finalizer.OwnerMixin):
         devmem._handle = handle
         devmem.add_dependencies(self) # avoid free the parent pointer
         return devmem
+
+    @property
+    def bytesize(self):
+        return self._bytesize
 
 
 class PinnedMemory(finalizer.OwnerMixin):
