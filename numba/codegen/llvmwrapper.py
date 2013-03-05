@@ -142,7 +142,7 @@ def get_closure_scope(func_signature, func_obj):
     closure_scope = nodes.DereferenceNode(closure_field)
     return closure_scope
 
-def build_wrapper_function_ast(env, llvm_module):
+def build_wrapper_function_ast(env, wrapper_lfunc, llvm_module):
     """
     Build AST for LLVM function wrapper.
 
@@ -176,13 +176,14 @@ def build_wrapper_function_ast(env, llvm_module):
     is_closure = bool(closures.is_closure_signature(func_signature))
     nargs = len(func_signature.args) - is_closure
 
-    # Call wrapped function with unpacked object arguments (delay actual arguments)
+    # Call wrapped function with unpacked object arguments
+    # (delay actual arguments)
     args = [nodes.LLVMValueRefNode(object_, None)
                 for i in range(nargs)]
 
     if is_closure:
         # Insert m_self as scope argument type
-        closure_scope = get_closure_scope(func_signature, lfunc.args[0])
+        closure_scope = get_closure_scope(func_signature, wrapper_lfunc.args[0])
         args.insert(0, closure_scope)
 
     func_call = nodes.NativeCallNode(func_signature, args, lfunc)
@@ -226,10 +227,7 @@ def build_wrapper_translation(env, llvm_module=None):
     symtab = dict(self=Variable(object_, is_local=True),
                   args=Variable(object_, is_local=True))
 
-    wrapper_node = build_wrapper_function_ast(env, llvm_module=wrapper_module)
-
     func_env = env.crnt.inherit(
-            ast=wrapper_node,
             func=fake_pyfunc,
             name=func_name,
             mangled_name=None, # Force FunctionEnvironment.init()
@@ -243,6 +241,13 @@ def build_wrapper_translation(env, llvm_module=None):
     # Create wrapper LLVM function
     func_env.lfunc = pipeline.get_lfunc(env, func_env)
 
+    # Build wrapper ast
+    wrapper_node = build_wrapper_function_ast(env,
+                                              wrapper_lfunc=func_env.lfunc,
+                                              llvm_module=wrapper_module)
+    func_env.ast = wrapper_node
+
+    # Specialize and compile wrapper
     pipeline.run_env(env, func_env, pipeline_name='late_translate')
     keep_alive(fake_pyfunc, func_env.lfunc)
 

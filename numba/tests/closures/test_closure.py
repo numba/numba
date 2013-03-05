@@ -414,7 +414,7 @@ def try_(func, *args):
         print "%s: %s" % (type(e).__name__, e)
 
 if __name__ == '__main__':
-    # closure1 = closure_arg(1)
+#    closure1 = closure_arg(1)
     # print closure1.__name__
     # closure1(10)
     # test_call_closure()
@@ -423,7 +423,7 @@ if __name__ == '__main__':
     # test_closure_outer_locals()
     # test_closure_loop()
     # test_closure_outer_locals()
-    # test_call_closure_from_closure()()
+#    test_call_closure_from_closure()()
     # wrong_restype()
     import numba
     numba.testmod()
