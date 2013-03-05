@@ -11,41 +11,10 @@ from numba.support import ctypes_support, cffi_support
 
 import numpy as np
 
-#------------------------------------------------------------------------
-# Numba Function Wrappers
-#------------------------------------------------------------------------
-
-cdef class NumbaWrapper(object):
-    """
-    Numba wrapper function.
-
-        py_func: original Python function
-    """
-    cdef public object py_func
-    cdef public object func_name, func_doc, module
-
-    def __init__(self, py_func):
-        self.py_func = py_func
-
-        self.func_name = py_func.__name__
-        self.func_doc = py_func.__doc__
-        self.module = py_func.__module__
-
-    property __name__:
-        def __get__(self):
-            return self.func_name
-
-    property __doc__:
-        def __get__(self):
-            return self.func_doc
-
-#------------------------------------------------------------------------
-# Create Numba Functions (numbafunction.c)
-#------------------------------------------------------------------------
 
 cdef extern from *:
     ctypedef struct PyTypeObject:
-        pass
+        PyObject *tp_dict
 
     ctypedef struct PyMethodDef:
         pass
@@ -57,6 +26,31 @@ cdef extern from "numbafunction.h":
     cdef object NumbaFunction_NewEx(
             PyMethodDef *ml, module, code, PyObject *closure,
             void *native_func, native_signature, keep_alive)
+
+#------------------------------------------------------------------------
+# Numba Function Wrappers
+#------------------------------------------------------------------------
+
+cdef class NumbaWrapper(object):
+    """
+    Numba wrapper function.
+
+        py_func: original Python function
+    """
+
+    cdef public object py_func
+    cdef public object func_name, func_doc, module
+
+    def __init__(self, py_func):
+        self.py_func = py_func
+
+        self.func_name = py_func.__name__
+        self.func_doc = py_func.__doc__
+        self.module = py_func.__module__
+
+#------------------------------------------------------------------------
+# Create Numba Functions (numbafunction.c)
+#------------------------------------------------------------------------
 
 NumbaFunction_init()
 NumbaFunction_NewEx_pointer = <Py_uintptr_t> &NumbaFunction_NewEx
@@ -141,10 +135,10 @@ def is_numba_wrapper(numbafunction):
     return isinstance(numbafunction, (NumbaCompiledWrapper, numbafunction_type))
 
 #------------------------------------------------------------------------
-# Numba Autojit Function Wrappers
+# Numba Autojit Function Wrapper
 #------------------------------------------------------------------------
 
-cdef class NumbaSpecializingWrapper(NumbaWrapper):
+cdef class _NumbaSpecializingWrapper(NumbaWrapper):
     """
     Numba wrapper function for @autojit.
 
@@ -160,7 +154,7 @@ cdef class NumbaSpecializingWrapper(NumbaWrapper):
     cdef public object compiling_decorator
 
     def __init__(self, py_func, compiling_decorator, funccache):
-        super(NumbaSpecializingWrapper, self).__init__(py_func)
+        super(_NumbaSpecializingWrapper, self).__init__(py_func)
         self.compiling_decorator = compiling_decorator
         self.funccache = funccache
 
@@ -180,6 +174,24 @@ cdef class NumbaSpecializingWrapper(NumbaWrapper):
         return PyObject_Call(<PyObject *> numba_wrapper,
                              <PyObject *> args, NULL)
 
+class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
+
+    @property
+    def __name__(self):
+        return self.func_name
+
+    @property
+    def __doc__(self):
+        return self.func_doc
+
+    @property
+    def __module__(self):
+        return self.module
+
+
+#------------------------------------------------------------------------
+# Autojit Fast Function Cache
+#------------------------------------------------------------------------
 
 cdef inline _id(obj):
     return <Py_uintptr_t> <PyObject *> obj
