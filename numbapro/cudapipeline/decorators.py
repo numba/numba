@@ -1,7 +1,9 @@
+import numpy
 import numba
 from numba import numbawrapper, jit as _numba_jit, autojit as _numba_autojit
 from numba.decorators import compile_function
 from .environment import CudaEnvironment
+from .devicearray import DeviceArray
 
 def cuda_jit(restype=None, argtypes=None, nopython=False,
              _llvm_module=None, env_name=None, env=None,
@@ -173,7 +175,15 @@ class CudaAutoJitNumbaFunction(CudaBaseFunction):
     def __call__(self, *args, **kwargs):
         if len(kwargs):
              raise error.NumbaError("Cannot handle keyword arguments yet")
-        numba_wrapper = self.compiling_decorator(args, kwargs)
+        fakeargs = tuple(self.__trick_autojit(args))
+        numba_wrapper = self.compiling_decorator(fakeargs, kwargs)
         return numba_wrapper[self._griddim, self._blockdim](*args)
 
+    def __trick_autojit(self, args):
+        for val in args:
+            if isinstance(val, DeviceArray):
+                shape = tuple(1 for _ in val.shape)
+                yield numpy.empty(shape, dtype=val.dtype)
+            else:
+                yield val
 
