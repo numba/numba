@@ -238,6 +238,14 @@ def update_signature(tree, env):
 
     return tree
 
+
+def get_lfunc(env, func_env):
+    lfunc = func_env.llvm_module.add_function(
+        func_env.func_signature.to_llvm(env.context),
+        func_env.mangled_name)
+    return lfunc
+
+
 def create_lfunc(tree, env):
     """
     Update the FunctionEnvironment with an LLVM function if the signature
@@ -248,9 +256,7 @@ def create_lfunc(tree, env):
     if (not func_env.lfunc and func_env.func_signature and
             func_env.func_signature.return_type):
         assert func_env.llvm_module is not None
-        lfunc = func_env.llvm_module.add_function(
-                func_env.func_signature.to_llvm(env.context),
-                func_env.mangled_name)
+        lfunc = get_lfunc(env, func_env)
 
         func_env.lfunc = lfunc
         if func_env.func:

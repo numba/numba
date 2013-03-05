@@ -297,6 +297,9 @@ class FunctionEnvironment(object):
         default=True,
     )
 
+    refcount_args = TypedProperty(
+        bool, "Whether to use refcounting for the function arguments", True)
+
     warn = TypedProperty(
         bool,
         'Flag that enables control flow warnings on a per-function level.',
@@ -327,6 +330,7 @@ class FunctionEnvironment(object):
              error_env=None, function_globals=None, locals=None,
              template_signature=None, cfg_transform=None,
              is_closure=False, closures=None, closure_scope=None,
+             refcount_args=True,
              ast_metadata=None, warn=True, warnstyle='fancy',
              **kws):
 
@@ -372,6 +376,8 @@ class FunctionEnvironment(object):
         self.is_closure = is_closure
         self.closures = closures if closures is not None else {}
         self.closure_scope = closure_scope
+
+        self.refcount_args = refcount_args
 
         if ast_metadata is not None:
             self.ast_metadata = ast_metadata

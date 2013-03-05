@@ -148,6 +148,11 @@ def build_wrapper_function_ast(env, llvm_module):
 
         lfunc: LLVM function to wrap
         llvm_module: module the wrapper is being defined in
+
+    The resulting AST has a NativeCallNode to the wrapped function. The
+    arguments are  LLVMValueRefNode nodes which still need their llvm_value
+    set to the object from the tuple. This happens in visit_FunctionWrapperNode
+    during codegen.
     """
     func = env.crnt.func
     func_signature = env.crnt.func_signature
@@ -197,7 +202,6 @@ def build_wrapper_function_ast(env, llvm_module):
     wrapper.return_result = ast.Return(value=nodes.CoercionNode(result_node,
                                                                 object_))
 
-
     # Update wrapper
     wrapper.error_return = error_return
     wrapper.cellvars = []
@@ -206,6 +210,11 @@ def build_wrapper_function_ast(env, llvm_module):
     return wrapper
 
 def build_wrapper_translation(env, llvm_module=None):
+    """
+    Generate a wrapper function in the given llvm module.
+    """
+    from numba import pipeline
+
     if llvm_module:
         wrapper_module = llvm_module
     else:
@@ -217,32 +226,27 @@ def build_wrapper_translation(env, llvm_module=None):
     symtab = dict(self=Variable(object_, is_local=True),
                   args=Variable(object_, is_local=True))
 
-    wrapper_call = build_wrapper_function_ast(env, llvm_module=wrapper_module)
+    wrapper_node = build_wrapper_function_ast(env, llvm_module=wrapper_module)
 
     func_env = env.crnt.inherit(
+            ast=wrapper_node,
+            func=fake_pyfunc,
             name=func_name,
             mangled_name=None, # Force FunctionEnvironment.init()
                                # to generate a new mangled name.
             func_signature=signature,
+            locals={},
+            symtab=symtab,
+            refcount_args=False,
             llvm_module=wrapper_module)
-    env.translation.push_env(func_env)
 
-    # TODO: Redo this
-    try:
-        from numba import pipeline
-        pipeline.create_lfunc(wrapper_call, env)
+    # Create wrapper LLVM function
+    func_env.lfunc = pipeline.get_lfunc(env, func_env)
 
-        t = translate.LLVMCodeGenerator(
-            env.context, fake_pyfunc, wrapper_call, signature,
-            symtab, llvm_module=wrapper_module,
-            locals={}, refcount_args=False,
-            func_name=func_name, env=env)
-        t.translate()
-    finally:
-        env.translation.pop()
-
+    pipeline.run_env(env, func_env, pipeline_name='late_translate')
     keep_alive(fake_pyfunc, func_env.lfunc)
-    return t
+
+    return func_env.translator # TODO: Amend callers to eat func_env
 
 def build_wrapper_function(env):
     '''

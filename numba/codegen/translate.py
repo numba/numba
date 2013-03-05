@@ -78,7 +78,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
     def __init__(self, context, func, ast, func_signature, symtab,
                  optimize=True, nopython=False,
-                 llvm_module=None, refcount_args=True, **kwds):
+                 llvm_module=None, **kwds):
 
         super(LLVMCodeGenerator, self).__init__(
                     context, func, ast, func_signature=func_signature,
@@ -96,7 +96,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         self.func_signature = func_signature
         self.blocks = {} # stores id => basic-block
 
-        self.refcount_args = refcount_args
+        self.refcount_args = self.env.crnt.refcount_args
 
         # self.ma_obj = None # What is this?
         self.optimize = optimize
@@ -363,16 +363,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         ssa.handle_phis(self.ast.flow)
 
     def visit_FunctionWrapperNode(self, node):
-        from numba import  pipeline
-
+        # Disable debug coercion
         was_debug_conversion = debug.debug_conversion
         debug.debug_conversion = False
 
-        args_tuple = self.lfunc.args[1]
-        arg_types = [object_] * len(node.wrapped_args)
-
         # Unpack tuple into arguments
+        arg_types = [object_] * len(node.wrapped_args)
         types, lstr = self.object_coercer.lstr(arg_types)
+        args_tuple = self.lfunc.args[1]
         largs = self.object_coercer.parse_tuple(lstr, args_tuple, arg_types)
 
         # Patch argument values in LLVMValueRefNode nodes
@@ -380,19 +378,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         for larg, arg_node in zip(largs, node.wrapped_args):
             arg_node.llvm_value = larg
 
-        # We need to specialize the return statement, since it may be a
-        # non-trivial coercion (e.g. call a ctypes pointer type for pointer
-        # return types, etc)
-        # So set up a FunctionEnvironment and specialize our AST
-        func_env = self.env.translation.crnt.inherit(
-            ast=node,
-            func=node.fake_pyfunc,
-            func_signature=self.func_signature
-        )
-        pipeline.run_env(self.env, func_env, pipeline_name='wrap_func')
-        return_stmt_ast = func_env.ast
-
-        self.generic_visit(return_stmt_ast)
+        # Generate call to wrapped function
+        self.generic_visit(node)
 
         debug.debug_conversion = was_debug_conversion
 
