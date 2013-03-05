@@ -368,13 +368,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         debug.debug_conversion = False
 
         # Unpack tuple into arguments
-        arg_types = [object_] * len(node.wrapped_args)
+        arg_types = [object_] * node.wrapped_nargs
         types, lstr = self.object_coercer.lstr(arg_types)
         args_tuple = self.lfunc.args[1]
         largs = self.object_coercer.parse_tuple(lstr, args_tuple, arg_types)
 
         # Patch argument values in LLVMValueRefNode nodes
-        assert len(largs) == len(node.wrapped_args)
+        assert len(largs) == node.wrapped_nargs
         for larg, arg_node in zip(largs, node.wrapped_args):
             arg_node.llvm_value = larg
 

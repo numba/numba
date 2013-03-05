@@ -206,7 +206,9 @@ def build_wrapper_function_ast(env, wrapper_lfunc, llvm_module):
     # Update wrapper
     wrapper.error_return = error_return
     wrapper.cellvars = []
-    wrapper.wrapped_args = args
+
+    wrapper.wrapped_nargs = nargs
+    wrapper.wrapped_args = args[is_closure:]
 
     return wrapper
 

@@ -595,6 +595,7 @@ class ClosureSpecializer(ClosureTransformer):
         Retrieve the closure scope from ((NumbaFunctionObject *)
                                              numba_func).func_closure
         """
+        # TODO: use llvmwrapper.get_closure_scope()
         pointer = nodes.ptrfromobj(node.func)
         type = typedefs.NumbaFunctionObject.ref()
         closure_obj_struct = nodes.CoercionNode(pointer, type)
