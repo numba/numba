@@ -227,7 +227,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
             logger.debug('coercion: %s --> %s\n%s',
                          node_type, dst_type, utils.pformat_ast(node))
 
-        if self.nopython and is_obj(node_type):
+        if self.nopython and (is_obj(node_type) ^ is_obj(dst_type)):
             raise error.NumbaError(node, "Cannot coerce to or from object in "
                                          "nopython context")
 

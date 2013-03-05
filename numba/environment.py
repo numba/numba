@@ -47,6 +47,7 @@ default_pipeline_order = [
     'Optimize',
     'Preloader',
     'SpecializeLoops',
+    'FixASTLocations',
     'LateSpecializer',
     'SpecializeFunccalls',
     'SpecializeExceptions',
