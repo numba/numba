@@ -62,7 +62,7 @@ def test_vectorized_math():
     assert np.allclose(a, b)
 
 @autojit
-def diffuse_numbapro(iter_num):
+def diffuse(iter_num):
     u = np.zeros((Lx, Ly), dtype=np.float64)
     temp_u = np.zeros_like(u)
     temp_u[Lx / 2, Ly / 2] = 1000.0
@@ -82,13 +82,18 @@ mu = 0.1
 Lx, Ly = 101, 101
 
 def test_diffusion():
-    assert np.allclose(diffuse_numbapro(100), diffuse_numbapro.py_func(100))
+    assert np.allclose(diffuse(100), diffuse.py_func(100))
 
+@autojit
+def array_assign_scalar(A, scalar):
+    A[...] = scalar
+
+def test_assign_scalar():
+    A = np.empty(10, dtype=np.float32)
+    array_assign_scalar(A, 10.0)
+    assert np.all(A == 10.0)
 
 if __name__ == '__main__':
-#    a = np.arange(120).reshape(10, 12).astype(np.float32)
-#    assert np.all(array_expr(a, a, a) == array_expr.py_func(a, a, a))
-#    test_array_expressions()
     tests = [name for name in globals().keys() if name.startswith('test_')]
     for t in tests:
         globals()[t]()
