@@ -310,6 +310,7 @@ def create_dtypes():
         complex128: np.complex128,
         complex256: getattr(np, 'complex256', None),
 
+        bool_    : np.bool,
         object_  : np.object,
     }
 
