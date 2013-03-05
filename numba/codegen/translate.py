@@ -11,7 +11,8 @@ from numba import typesystem
 
 from numba import *
 
-from numba.codegen.debug import *
+from numba.codegen import debug
+from numba.codegen.debug import logger
 from numba.codegen.codeutils import llvm_alloca
 from numba.codegen import coerce, complexsupport, refcounting
 from numba.codegen.llvmcontext import LLVMContextManager
@@ -375,12 +376,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         args.insert(0, closure)
 
     def visit_FunctionWrapperNode(self, node):
-        global debug_conversion
         from numba import  pipeline
 
-        was_debug_conversion = debug_conversion
-        if debug_conversion:
-            debug_conversion = False
+        was_debug_conversion = debug.debug_conversion
+        debug.debug_conversion = False
 
         args_tuple = self.lfunc.args[1]
         arg_types = [object_] * len(node.signature.args)
@@ -439,7 +438,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         self.generic_visit(return_stmt_ast)
 
-        debug_conversion = was_debug_conversion
+        debug.debug_conversion = was_debug_conversion
 
     @property
     def lfunc_pointer(self):
@@ -1254,7 +1253,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             val = self.caster.cast(val, node.dst_type.to_llvm(self.context),
                                    **flags)
 
-        if debug_conversion:
+        if debug.debug_conversion:
             self.puts("Coercing %s to %s" % (node_type, dst_type))
 
         return val

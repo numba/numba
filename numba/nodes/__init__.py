@@ -67,21 +67,25 @@ def inject_print(context, module, node):
                                        args=[node])
     return node
 
-def print_(translator, node):
+def print_(env, node):
+    from numba import pipeline
+
     global printing
+
     if printing:
         return
 
     printing = True
 
-    node = inject_print(translator.context, translator.llvm_module, node)
-    node = translator.ast.pipeline.late_specializer(node)
-    translator.visit(node)
+    node = inject_print(env.context, env.crnt.llvm_module, node)
+    func_env = env.crnt.inherit(ast=node)
+    pipeline.run_env(env, func_env, pipeline_name='lower')
+    env.crnt.translator.visit(func_env.ast)
 
     printing = False
 
-def print_llvm(translator, type, llvm_value):
-    return print_(translator, LLVMValueRefNode(type, llvm_value))
+def print_llvm(env, type, llvm_value):
+    return print_(env, LLVMValueRefNode(type, llvm_value))
 
 def is_name(node):
     """

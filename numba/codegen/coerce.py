@@ -4,7 +4,7 @@ from numba import *
 from numba import nodes
 from numba.typesystem import is_obj, promote_to_native
 from numba.codegen.codeutils import llvm_alloca, if_badval
-from numba.codegen.debug import *
+from numba.codegen import debug
 
 
 class ObjectCoercer(object):
@@ -104,7 +104,7 @@ class ObjectCoercer(object):
         if fmt is not None:
             str = fmt % str
 
-        if debug_conversion:
+        if debug.debug_conversion:
             self.translator.puts("fmt: %s" % str)
 
         result = self._create_llvm_string(str)
@@ -118,7 +118,7 @@ class ObjectCoercer(object):
         types, lstr = self.lstr(types, fmt)
         largs = (lstr,) + largs
 
-        if debug_conversion:
+        if debug.debug_conversion:
             self.translator.puts("building... %s" % name)
             # func_type = object_(*types).pointer()
         # py_buildvalue = self.builder.bitcast(
@@ -126,9 +126,9 @@ class ObjectCoercer(object):
         py_buildvalue = self.py_buildvalue
         result = self.builder.call(py_buildvalue, largs, name=name)
 
-        if debug_conversion:
+        if debug.debug_conversion:
             self.translator.puts("done building... %s" % name)
-            nodes.print_llvm(self.translator, object_, result)
+            nodes.print_llvm(self.translator.env, object_, result)
             self.translator.puts("--------------------------")
 
         return result
@@ -208,9 +208,9 @@ class ObjectCoercer(object):
 
         largs = [llvm_tuple, lstr] + lresults
 
-        if debug_conversion:
+        if debug.debug_conversion:
             self.translator.puts("parsing tuple... %s" % (types,))
-            nodes.print_llvm(self.translator, object_, llvm_tuple)
+            nodes.print_llvm(self.translator.env, object_, llvm_tuple)
 
         parse_result = self.builder.call(self.pyarg_parsetuple, largs)
         self.check_err_int(parse_result, 0)
@@ -218,7 +218,7 @@ class ObjectCoercer(object):
         # Some conversion functions don't reset the exception state...
         # self.builder.call(self.pyerr_clear, [])
 
-        if debug_conversion:
+        if debug.debug_conversion:
             self.translator.puts("successfully parsed tuple...")
 
         return [self.builder.load(result) for result in lresults]
