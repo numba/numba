@@ -12,12 +12,11 @@ from numba import *
 from numba import nodes
 from numba import closures
 from numba import typesystem
-from numba import extension_types
-from numba.codegen import translate
+from numba import numbawrapper
 
 from numba.functions import keep_alive
 from numba.symtab import Variable
-from numba.typesystem import is_obj, promote_closest, get_type
+from numba.typesystem import is_obj
 
 #------------------------------------------------------------------------
 # Create a NumbaFunction (numbafunction.c)
@@ -74,9 +73,9 @@ def numbafunction_new(py_func, func_name, func_doc, module_name, func_pointer,
     keep_alive(py_func, methoddef)
     keep_alive(py_func, module_name)
 
-    wrapper = extension_types.create_function(methoddef, py_func,
-                                              wrapped_lfunc_pointer,
-                                              wrapped_signature, module_name)
+    wrapper = numbawrapper.create_function(methoddef, py_func,
+                                           wrapped_lfunc_pointer,
+                                           wrapped_signature, module_name)
     return methoddef, wrapper
 
 
@@ -133,7 +132,7 @@ def get_closure_scope(func_signature, func_obj):
             LLVM Value referencing the closure function as a Python object
     """
     closure_scope_type = func_signature.args[0]
-    offset = extension_types.numbafunc_closure_field_offset
+    offset = numbawrapper.numbafunc_closure_field_offset
     closure = nodes.LLVMValueRefNode(void.pointer(), func_obj)
     closure = nodes.CoercionNode(closure, char.pointer())
     closure_field = nodes.pointer_add(closure, nodes.const(offset, size_t))

@@ -130,14 +130,13 @@ setup(
             include_dirs=[numba_include_dir]),
         CythonExtension(
             name = "numba.extension_types",
-            sources = ["numba/extension_types.pyx", "numba/numbafunction.c"],
-            depends = ["numba/numbafunction.h"],
-            include_dirs=[numba_include_dir],
+            sources = ["numba/extension_types.pyx"],
             cython_gdb=True),
         CythonExtension(
             name = "numba.numbawrapper",
-            sources = ["numba/numbawrapper.pyx"],
-            include_dirs=[numpy.get_include()],
+            sources = ["numba/numbawrapper.pyx", "numba/numbafunction.c"],
+            depends = ["numba/numbafunction.h"],
+            include_dirs=[numba_include_dir, numpy.get_include()],
             cython_gdb=True),
     ],
     cmdclass = cmdclass,

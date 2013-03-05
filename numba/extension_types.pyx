@@ -28,20 +28,6 @@ cdef extern from *:
         Py_ssize_t tp_basicsize
         PyTypeObject *tp_base
 
-    ctypedef struct PyMethodDef:
-        pass
-
-cdef extern from "numbafunction.h":
-    cdef size_t closure_field_offset
-    cdef int NumbaFunction_init() except -1
-    cdef object NumbaFunction_NewEx(
-                    PyMethodDef *ml, module, code, PyObject *closure,
-                    void *native_func, native_signature, keep_alive)
-
-NumbaFunction_init()
-NumbaFunction_NewEx_pointer = <Py_uintptr_t> &NumbaFunction_NewEx
-
-numbafunc_closure_field_offset = closure_field_offset
 
 cdef Py_uintptr_t align(Py_uintptr_t p, size_t alignment) nogil:
     "Align on a boundary"
@@ -288,16 +274,3 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
 
     return ext_type
 
-#------------------------------------------------------------------------
-# Create Numba Functions (numbafunction.c)
-#------------------------------------------------------------------------
-
-def create_function(methoddef, py_func, lfunc_pointer, signature, modname):
-    cdef Py_uintptr_t methoddef_p = ctypes.cast(ctypes.byref(methoddef),
-                                                ctypes.c_void_p).value
-    cdef PyMethodDef *ml = <PyMethodDef *> methoddef_p
-    cdef Py_uintptr_t lfunc_p = lfunc_pointer
-
-    result = NumbaFunction_NewEx(ml, modname, getattr(py_func, "func_code", None),
-                                 NULL, <void *> lfunc_p, signature, py_func)
-    return result

@@ -59,6 +59,7 @@ from numba import visitors
 from numba import nodes
 from numba import typesystem
 from numba import typedefs
+from numba import numbawrapper
 from numba import extension_types
 from numba import utils
 from numba.type_inference import module_type_inference
@@ -547,7 +548,7 @@ class ClosureSpecializer(ClosureTransformer):
 
         # Create function with closure scope at runtime
         create_numbafunc = nodes.ptrfromint(
-                        extension_types.NumbaFunction_NewEx_pointer,
+                        numbawrapper.NumbaFunction_NewEx_pointer,
                         create_numbafunc_signature.pointer())
 
         methoddef_p = ctypes.cast(ctypes.byref(methoddef),

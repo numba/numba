@@ -1,20 +1,72 @@
-
-
-# # cython: profile=True
-
-import types
-
-import numpy as np
+cimport cython
+from numba._numba cimport *
 cimport numpy as cnp
 
-from numba._numba cimport *
+import types
+import ctypes
+
 from numba import error
 from numba.minivect import minitypes
 from numba.support import ctypes_support, cffi_support
 
+import numpy as np
+
+#------------------------------------------------------------------------
+# Create Numba Functions (numbafunction.c)
+#------------------------------------------------------------------------
+
+cdef extern from *:
+    ctypedef struct PyMethodDef:
+        pass
+
+cdef extern from "numbafunction.h":
+    cdef size_t closure_field_offset
+    cdef int NumbaFunction_init() except -1
+    cdef object NumbaFunction_NewEx(
+            PyMethodDef *ml, module, code, PyObject *closure,
+            void *native_func, native_signature, keep_alive)
+
+NumbaFunction_init()
+NumbaFunction_NewEx_pointer = <Py_uintptr_t> &NumbaFunction_NewEx
+
+numbafunc_closure_field_offset = closure_field_offset
+
+def create_function(methoddef, py_func, lfunc_pointer, signature, modname):
+    cdef Py_uintptr_t methoddef_p = ctypes.cast(ctypes.byref(methoddef),
+                                                ctypes.c_void_p).value
+    cdef PyMethodDef *ml = <PyMethodDef *> methoddef_p
+    cdef Py_uintptr_t lfunc_p = lfunc_pointer
+
+    result = NumbaFunction_NewEx(ml, modname, getattr(py_func, "func_code", None),
+                                 NULL, <void *> lfunc_p, signature, py_func)
+    return result
+
+
+#------------------------------------------------------------------------
+# Classes to exclude from type hashing
+#------------------------------------------------------------------------
+
 support_classes = (ctypes_support.CData,)
 if cffi_support.ffi is not None:
     support_classes += (cffi_support.cffi_func_type,)
+
+cdef tuple hash_on_value_types = (
+    minitypes.Type,
+    np.ufunc,
+    np.dtype,
+    np.generic,
+    NumbaWrapper,
+    types.FunctionType,
+    types.BuiltinFunctionType,
+    types.MethodType,
+    getattr(types, 'UnboundMethodType', types.FunctionType),
+    types.BuiltinMethodType,
+) # + support_classes
+
+#------------------------------------------------------------------------
+# Create Numba Functions (numbafunction.c)
+#------------------------------------------------------------------------
+
 
 cdef class NumbaWrapper(object):
     """
@@ -108,19 +160,6 @@ cdef inline _id(obj):
 cdef inline void setkey(t, int i, k):
     Py_INCREF(<PyObject *> k)
     PyTuple_SET_ITEM(t, i, k)
-
-cdef tuple hash_on_value_types = (
-    minitypes.Type,
-    np.ufunc,
-    np.dtype,
-    np.generic,
-    NumbaWrapper,
-    types.FunctionType,
-    types.BuiltinFunctionType,
-    types.MethodType,
-    getattr(types, 'UnboundMethodType', types.FunctionType),
-    types.BuiltinMethodType,
-) # + support_classes
 
 cpdef inline getkey(tuple args): # 3.0x
     """
