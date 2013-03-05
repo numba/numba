@@ -1073,6 +1073,9 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             addr_int = constnodes.get_pointer_address(constant, node.type)
             node = nodes.ptrfromint(addr_int, node.type)
 
+        elif node.type.is_object:
+            node = nodes.ObjectInjectNode(constant, node.type)
+
         return node
 
     #------------------------------------------------------------------------
