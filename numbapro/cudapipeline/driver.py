@@ -313,20 +313,20 @@ class Driver(object):
             # Determine DLL type
             if sys.platform == 'win32':
                 dlloader = WinDLL
-                dldir = '\\windows\\system32'
+                dldir = ['\\windows\\system32']
                 dlname = 'nvcuda.dll'
             elif sys.platform == 'darwin':
                 dlloader = CDLL
-                dldir = '/usr/local/cuda/lib'
+                dldir = ['/usr/local/cuda/lib']
                 dlname = 'libcuda.dylib'
             else:
                 dlloader = CDLL
-                dldir = '/usr/lib'
+                dldir = ['/usr/lib', '/usr/lib64']
                 dlname = 'libcuda.so'
 
             # First search for the name in the default library path.
             # If that is not found, try the specific path.
-            candidates = [dlname, os.path.join(dldir, dlname)]
+            candidates = [dlname] + [os.path.join(x, dlname) for x in dldir]
 
             if override_path:
                 # If override_path is provided, use it and ignore the others
