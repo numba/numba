@@ -4,6 +4,7 @@ from numba import templating
 from numba import error, pipeline, nodes, ufunc_builder
 from numba.minivect import specializers, miniast, miniutils
 from numba import utils, functions
+from numba import typesystem
 from numba import visitors
 
 from numba.support.numpy_support import slicenodes
@@ -216,7 +217,7 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         lhs_type = lhs.type if lhs else node.type
         is_expr = lhs is None
 
-        if lhs_type.ndim < node.type.ndim:
+        if node.type.is_array and lhs_type.ndim < node.type.ndim:
             # TODO: this is valid in NumPy if the leading dimensions of the
             # TODO: RHS have extent 1
             raise error.NumbaError(
