@@ -362,19 +362,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # Add all incoming values to all our phi values
         ssa.handle_phis(self.ast.flow)
 
-    def insert_closure_scope_arg(self, args, node):
-        """
-        Retrieve the closure from the NumbaFunction passed in as m_self
-        """
-        closure_scope_type = node.signature.args[0]
-        offset = extension_types.numbafunc_closure_field_offset
-        closure = nodes.LLVMValueRefNode(void.pointer(), self.lfunc.args[0])
-        closure = nodes.CoercionNode(closure, char.pointer())
-        closure = nodes.pointer_add(closure, nodes.const(offset, size_t))
-        closure = nodes.CoercionNode(closure, closure_scope_type.pointer())
-        closure = nodes.DereferenceNode(closure)
-        args.insert(0, closure)
-
     def visit_FunctionWrapperNode(self, node):
         from numba import  pipeline
 
@@ -382,47 +369,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         debug.debug_conversion = False
 
         args_tuple = self.lfunc.args[1]
-        arg_types = [object_] * len(node.signature.args)
-
-        if self.is_closure_signature(node.signature):
-            # Wrapper expects closure scope as first argument, which we
-            # have as the m_self attribute
-            arg_types.pop()
+        arg_types = [object_] * len(node.wrapped_args)
 
         # Unpack tuple into arguments
         types, lstr = self.object_coercer.lstr(arg_types)
-        #if debug_conversion:
-        #    self.puts("args tuple:")
-        #    nodes.print_llvm(self, object_, args_tuple)
-
         largs = self.object_coercer.parse_tuple(lstr, args_tuple, arg_types)
 
-        # Call wrapped function
-        args = [nodes.LLVMValueRefNode(arg_type, larg)
-                    for arg_type, larg in zip(arg_types, largs)]
-
-        if self.is_closure_signature(node.signature):
-            # Insert m_self as scope argument type
-            self.insert_closure_scope_arg(args, node)
-
-        func_call = nodes.NativeCallNode(node.signature, args,
-                                         node.wrapped_function)
-
-        if not is_obj(node.signature.return_type):
-            # Check for error using PyErr_Occurred()
-            func_call = nodes.PyErr_OccurredNode(func_call)
-
-        # Coerce and return result
-        if node.signature.return_type.is_void:
-            node.body = func_call
-            result_node = nodes.ObjectInjectNode(None)
-        else:
-            node.body = None
-            result_node = func_call
-
-        # self.puts("calling wrapped function %r" % node.orig_py_func.__name__)
-        node.return_result = ast.Return(
-                    value=nodes.CoercionNode(result_node, object_))
+        # Patch argument values in LLVMValueRefNode nodes
+        assert len(largs) == len(node.wrapped_args)
+        for larg, arg_node in zip(largs, node.wrapped_args):
+            arg_node.llvm_value = larg
 
         # We need to specialize the return statement, since it may be a
         # non-trivial coercion (e.g. call a ctypes pointer type for pointer

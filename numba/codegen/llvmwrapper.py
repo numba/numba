@@ -10,12 +10,14 @@ import llvm.core
 
 from numba import *
 from numba import nodes
+from numba import closures
 from numba import typesystem
 from numba import extension_types
 from numba.codegen import translate
 
 from numba.functions import keep_alive
 from numba.symtab import Variable
+from numba.typesystem import is_obj, promote_closest, get_type
 
 #------------------------------------------------------------------------
 # Create a NumbaFunction (numbafunction.c)
@@ -119,6 +121,27 @@ def fake_pyfunc(self, args):
     "PyObject *(*)(PyObject *self, PyObject *args)"
     pass
 
+def get_closure_scope(func_signature, func_obj):
+    """
+    Retrieve the closure from the NumbaFunction from the func_closure
+    attribute.
+
+        func_signature:
+            signature of closure function
+
+        func_obj:
+            LLVM Value referencing the closure function as a Python object
+    """
+    closure_scope_type = func_signature.args[0]
+    offset = extension_types.numbafunc_closure_field_offset
+    closure = nodes.LLVMValueRefNode(void.pointer(), func_obj)
+    closure = nodes.CoercionNode(closure, char.pointer())
+    closure_field = nodes.pointer_add(closure, nodes.const(offset, size_t))
+    closure_field = nodes.CoercionNode(closure_field,
+                                       closure_scope_type.pointer())
+    closure_scope = nodes.DereferenceNode(closure_field)
+    return closure_scope
+
 def build_wrapper_function_ast(env, llvm_module):
     """
     Build AST for LLVM function wrapper.
@@ -145,9 +168,40 @@ def build_wrapper_function_ast(env, llvm_module):
     error_return = ast.Return(nodes.CoercionNode(nodes.NULL_obj,
                                                  object_))
 
+    is_closure = bool(closures.is_closure_signature(func_signature))
+    nargs = len(func_signature.args) - is_closure
+
+    # Call wrapped function with unpacked object arguments (delay actual arguments)
+    args = [nodes.LLVMValueRefNode(object_, None)
+                for i in range(nargs)]
+
+    if is_closure:
+        # Insert m_self as scope argument type
+        closure_scope = get_closure_scope(func_signature, lfunc.args[0])
+        args.insert(0, closure_scope)
+
+    func_call = nodes.NativeCallNode(func_signature, args, lfunc)
+
+    if not is_obj(func_signature.return_type):
+        # Check for error using PyErr_Occurred()
+        func_call = nodes.PyErr_OccurredNode(func_call)
+
+    # Coerce and return result
+    if func_signature.return_type.is_void:
+        wrapper.body = func_call
+        result_node = nodes.ObjectInjectNode(None)
+    else:
+        wrapper.body = None
+        result_node = func_call
+
+    wrapper.return_result = ast.Return(value=nodes.CoercionNode(result_node,
+                                                                object_))
+
+
     # Update wrapper
     wrapper.error_return = error_return
     wrapper.cellvars = []
+    wrapper.wrapped_args = args
 
     return wrapper
 

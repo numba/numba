@@ -219,9 +219,8 @@ class NumbaVisitorMixin(CooperativeBase):
         self._overloads.setdefault(visit_name, []).append(func)
 
     def is_closure_signature(self, func_signature):
-        return (func_signature is not None and
-                func_signature.args and
-                func_signature.args[0].is_closure_scope)
+        from numba import closures
+        return closures.is_closure_signature(func_signature)
 
     def run_template(self, s, vars=None, **substitutions):
         from numba import templating

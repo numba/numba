@@ -205,8 +205,8 @@ class TestASTComplex(test_support.ASTTestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    autojit(add)(m, n)
 #    m, n = .12, .32
+#    print autojit(add)(m, n)
 #    print autojit(cosh)(m, n), cosh(m, n)
     unittest.main()
 

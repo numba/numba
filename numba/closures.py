@@ -60,7 +60,6 @@ from numba import nodes
 from numba import typesystem
 from numba import typedefs
 from numba import extension_types
-from numba.codegen import llvmwrapper
 from numba import utils
 from numba.type_inference import module_type_inference
 from numba.minivect import  minitypes
@@ -69,6 +68,15 @@ from numba.symtab import Variable
 import logging
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
+
+#------------------------------------------------------------------------
+# Utilities
+#------------------------------------------------------------------------
+
+def is_closure_signature(func_signature):
+    return (func_signature is not None and
+            func_signature.args and
+            func_signature.args[0].is_closure_scope)
 
 #------------------------------------------------------------------------
 # Closure Signature Validation (type inference of outer function)
@@ -503,6 +511,8 @@ class ClosureSpecializer(ClosureTransformer):
             return nodes.ObjectInjectNode(None, type=object_)
 
     def create_numba_function(self, node, func_env):
+        from numba.codegen import llvmwrapper
+
         closure_scope = self.ast.cur_scope
 
         if closure_scope is None:
