@@ -425,7 +425,7 @@ class FunctionEnvironment(object):
 
     @property
     def func_doc(self):
-        if self.func is None:
+        if self.func is not None:
             return self.func.__doc__
         else:
             return ast_module.get_docstring(self.ast)

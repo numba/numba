@@ -258,7 +258,7 @@ def _jit(restype=None, argtypes=None, nopython=False,
         assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
         sig, lfunc, wrapper = compile_function(env, func, argtys, restype=restype,
                                     nopython=nopython, **kwargs)
-        return numbawrapper.NumbaCompiledWrapper(func, wrapper, sig, lfunc)
+        return numbawrapper.create_numba_wrapper(func, wrapper, sig, lfunc)
 
     return _jit_decorator
 

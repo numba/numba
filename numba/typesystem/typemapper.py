@@ -100,7 +100,7 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return getattr(type(value), '__numba_ext_type')
         elif value is numba.NULL:
             return null_type
-        elif isinstance(value, numbawrapper.NumbaCompiledWrapper):
+        elif numbawrapper.is_numba_wrapper(value):
             return JitType(value)
         elif isinstance(value, numbawrapper.NumbaSpecializingWrapper):
             return AutojitType(value)

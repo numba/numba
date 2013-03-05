@@ -12,15 +12,47 @@ from numba.support import ctypes_support, cffi_support
 import numpy as np
 
 #------------------------------------------------------------------------
+# Numba Function Wrappers
+#------------------------------------------------------------------------
+
+cdef class NumbaWrapper(object):
+    """
+    Numba wrapper function.
+
+        py_func: original Python function
+    """
+    cdef public object py_func
+    cdef public object func_name, func_doc, module
+
+    def __init__(self, py_func):
+        self.py_func = py_func
+
+        self.func_name = py_func.__name__
+        self.func_doc = py_func.__doc__
+        self.module = py_func.__module__
+
+    property __name__:
+        def __get__(self):
+            return self.func_name
+
+    property __doc__:
+        def __get__(self):
+            return self.func_doc
+
+#------------------------------------------------------------------------
 # Create Numba Functions (numbafunction.c)
 #------------------------------------------------------------------------
 
 cdef extern from *:
+    ctypedef struct PyTypeObject:
+        pass
+
     ctypedef struct PyMethodDef:
         pass
 
 cdef extern from "numbafunction.h":
     cdef size_t closure_field_offset
+    cdef PyTypeObject *NumbaFunctionType
     cdef int NumbaFunction_init() except -1
     cdef object NumbaFunction_NewEx(
             PyMethodDef *ml, module, code, PyObject *closure,
@@ -29,6 +61,7 @@ cdef extern from "numbafunction.h":
 NumbaFunction_init()
 NumbaFunction_NewEx_pointer = <Py_uintptr_t> &NumbaFunction_NewEx
 
+numbafunction_type = <object> NumbaFunctionType
 numbafunc_closure_field_offset = closure_field_offset
 
 def create_function(methoddef, py_func, lfunc_pointer, signature, modname):
@@ -40,7 +73,6 @@ def create_function(methoddef, py_func, lfunc_pointer, signature, modname):
     result = NumbaFunction_NewEx(ml, modname, getattr(py_func, "func_code", None),
                                  NULL, <void *> lfunc_p, signature, py_func)
     return result
-
 
 #------------------------------------------------------------------------
 # Classes to exclude from type hashing
@@ -64,43 +96,22 @@ cdef tuple hash_on_value_types = (
 ) # + support_classes
 
 #------------------------------------------------------------------------
-# Create Numba Functions (numbafunction.c)
+# @jit function creation
 #------------------------------------------------------------------------
-
-
-cdef class NumbaWrapper(object):
-    """
-    Numba wrapper function.
-
-        py_func: original Python function
-    """
-    cdef public object py_func
-    cdef public object func_name, func_doc
-    cdef public object __name__, __doc__, __module__
-
-    def __init__(self, py_func):
-        self.py_func = py_func
-
-        self.func_name = self.__name__ = py_func.__name__
-        self.func_doc = self.__doc__ = py_func.__doc__
-        self.__module__ = py_func.__module__
-
 
 cdef class NumbaCompiledWrapper(NumbaWrapper):
     """
-    Numba wrapper function for @jit.
+    Temporary numba wrapper function for @jit, only used for recursion.
 
-        wrapper: LLVM function wrapper, callable from Python
         signature: minitype FunctionType signature
         lfunc: LLVM function
     """
 
     cdef public object lfunc, signature, wrapper
 
-    def __init__(self, py_func, wrapper, signature, lfunc):
+    def __init__(self, py_func, signature, lfunc):
         super(NumbaCompiledWrapper, self).__init__(py_func)
 
-        self.wrapper = wrapper
         self.signature = signature
         self.lfunc = lfunc
 
@@ -108,12 +119,30 @@ cdef class NumbaCompiledWrapper(NumbaWrapper):
         return '<compiled numba function (%s) :: %s>' % (self.py_func,
                                                          self.signature)
 
-    def __call__(self, *args, **kwargs):
-        if len(kwargs):
-            raise error.NumbaError("Cannot handle keyword arguments yet")
+def create_numba_wrapper(py_func, numbafunction, signature, lfunc):
+    """
+    Use the NumbaFunction to set attributes for numba, and return the
+    NumbaFunction.
+    """
+    if numbafunction is None:
+        # Function is called recursively, use a placeholder
+        return NumbaCompiledWrapper(py_func, signature, lfunc)
 
-        return PyObject_Call(<PyObject *> self.wrapper,
-                             <PyObject *> args, NULL)
+    numbafunction.py_func = py_func
+    numbafunction.signature = signature
+    numbafunction.lfunc = lfunc
+    return numbafunction
+
+def is_numba_wrapper(numbafunction):
+    """
+    Check whether the given object is a numba function wrapper around a
+    compiled function.
+    """
+    return isinstance(numbafunction, (NumbaCompiledWrapper, numbafunction_type))
+
+#------------------------------------------------------------------------
+# Numba Autojit Function Wrappers
+#------------------------------------------------------------------------
 
 cdef class NumbaSpecializingWrapper(NumbaWrapper):
     """
@@ -139,18 +168,16 @@ cdef class NumbaSpecializingWrapper(NumbaWrapper):
         return '<specializing numba function(%s)>' % self.py_func
 
     def __call__(self, *args, **kwargs):
-        cdef NumbaCompiledWrapper numba_wrapper
-
         if len(kwargs):
             raise error.NumbaError("Cannot handle keyword arguments yet")
 
-        numba_wrapper = <NumbaCompiledWrapper> self.funccache.lookup(args)
+        numba_wrapper = self.funccache.lookup(args)
         if numba_wrapper is None:
             # print "Cache miss for function:", self.py_func.__name__
             numba_wrapper = self.compiling_decorator(args, kwargs)
             self.funccache.add(args, numba_wrapper)
 
-        return PyObject_Call(<PyObject *> numba_wrapper.wrapper,
+        return PyObject_Call(<PyObject *> numba_wrapper,
                              <PyObject *> args, NULL)
 
 

@@ -61,7 +61,7 @@ typedef struct {
 
 size_t closure_field_offset = offsetof(NumbaFunctionObject, func_closure);
 
-static PyTypeObject *NumbaFunctionType = 0;
+PyTypeObject *NumbaFunctionType = 0;
 
 static NumbaFunctionObject *NumbaFunction_New(PyTypeObject *type,
                                               PyMethodDef *ml, int flags,
