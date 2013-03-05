@@ -18,7 +18,7 @@ except ImportError:
     # pre-2.6
     numbers = None
 
-from numba import error, PY3
+from numba import error, PY3, ast_extract_arg_id
 
 import logging
 logger = logging.getLogger(__name__)
@@ -433,10 +433,9 @@ def determine_variable_status(env, ast, locals_dict):
 
     locals = set(v.assigned)
     locals.update(locals_dict)
-    if PY3:
-        locals.update(arg.arg for arg in ast.args.args)
-    else:
-        locals.update(arg.id for arg in ast.args.args)
+
+    locals.update(ast_extract_arg_id(ast.args.args))
+
     locals.update(func_def.name for func_def in v.func_defs)
 
     freevars = set(v.referenced) - locals
