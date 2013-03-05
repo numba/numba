@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 # -*- coding: UTF-8 -*-
 
 """
 Optimizations module.
 """
+from __future__ import print_function, division, absolute_import
 
 import ast
 from itertools import imap

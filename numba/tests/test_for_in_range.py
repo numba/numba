@@ -16,9 +16,9 @@ def test_modify():
     """
     n = 5
     for i in range(n):
-        print i
+        print(i)
         n = 0
-    print
+    print('')
     return i,n
 
 @autojit_py3doc(warn=False)
@@ -34,7 +34,7 @@ def test_negindex():
     """
     n = 5
     for i in range(n+1, 1, -1):
-        print i
+        print(i)
         n = 0
     return i,n
 
@@ -50,7 +50,7 @@ def test_negindex_inferred():
     """
     n = 5
     for i in range(n, 1, -1):
-        print i
+        print(i)
         n = 0
     return i,n
 
@@ -67,8 +67,8 @@ def test_fix():
     4L
     """
     for i in range(5):
-        print i
-    print
+        print(i)
+    print('')
     return i
 
 @autojit_py3doc(warn=False)
@@ -83,13 +83,13 @@ def test_break():
     """
     n = 5
     for i in range(n):
-        print i
+        print(i)
         n = 0
         if i == 2:
             break
     else:
-        print "FAILED!"
-    print
+        print("FAILED!")
+    print('')
     return i, n
 
 @autojit_py3doc
@@ -103,9 +103,9 @@ def test_else_clause1():
     for i in range(10):
         if i > 2:
             break
-        print i
+        print(i)
     else:
-        print "else clause"
+        print("else clause")
 
 @autojit_py3doc
 def test_else_clause2():
@@ -119,9 +119,9 @@ def test_else_clause2():
     for i in range(10):
         if i > 2:
             continue
-        print i
+        print(i)
     else:
-        print "else clause"
+        print("else clause")
 
 @autojit_py3doc
 def test_else_clause3():
@@ -135,9 +135,9 @@ def test_else_clause3():
     for i in range(3):
         if i > 2 and i < 2:
             continue
-        print i
+        print(i)
     else:
-        print "else clause"
+        print("else clause")
 
 @autojit_py3doc(warn=False)
 def test_else_clause4():
@@ -169,19 +169,19 @@ def test_else_clause4():
         for j in range(10):
             for k in range(10):
                 if i == j and j == k:
-                    print "inner", i
+                    print("inner " + str(i))
                     break
                 else:
                     continue
             else:
-                print "else clause", i, j, k
+                print("else clause " + str(i) + ' ' + str(j) + ' ' + str(k))
             break
         else:
-            print "else clause", i, j
+            print("else clause " + str(i) + ' ' + str(j))
 
-        print "i", i
+        print("i " + str(i))
     else:
-        print "else clause"
+        print("else clause")
 
 @autojit_py3doc
 def test_return():
@@ -194,11 +194,11 @@ def test_return():
     """
     n = 5
     for i in range(n):
-        print i
+        print(i)
         n = 0
         if i == 2:
             return i,n
-    print
+    print('')
     return "FAILED!"
 
 @autojit_py3doc
@@ -212,7 +212,7 @@ def test_return2():
     """
     n = 5
     for i in range(n):
-        print i
+        print(i)
         n = 0
         for j in range(n):
             return 0
@@ -222,9 +222,9 @@ def test_return2():
             elif i == 2:
                 for j in range(i):
                     return i
-                print "FAILED!"
-            print "FAILED!"
-        print "FAILED!"
+                print("FAILED!")
+            print("FAILED!")
+        print("FAILED!")
     return -1
 
 #print test_negindex()

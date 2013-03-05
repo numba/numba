@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import sys
 import unittest
 import StringIO
@@ -15,11 +17,11 @@ def print_nopython(value):
 
 @autojit(backend='ast')
 def print_to_stream(stream, value):
-    print >>stream, value
+    print(value, file=stream)
 
 @autojit(backend='ast')
 def print_no_newline(stream, value):
-    print >>stream, value,
+    print(value, end=' ', file=stream)
 
 class TestPrint(unittest.TestCase):
     def test_print(self):

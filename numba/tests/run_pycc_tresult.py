@@ -20,14 +20,12 @@ def test_pycc():
         lib.multf.argtypes = [c_float, c_float]
         lib.multf.restype = c_float
 
-
         res = lib.mult(123, 321)
-        print 'lib.mult(123, 321) =', res
+        print(('lib.mult(123, 321) =', res))
         assert res == 123 * 321
 
-
         res = lib.multf(987, 321)
-        print 'lib.multf(987, 321) =', res
+        print(('lib.multf(987, 321) =', res))
         assert res == 987 * 321
     finally:
         del lib

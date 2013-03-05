@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 '''
 Implements basic vectorize
 '''
+from __future__ import print_function, division, absolute_import
 from llvm.core import *
 from llvm_cbuilder import *
 import llvm_cbuilder.shortnames as C

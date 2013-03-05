@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Example of how to use byte-code execution technique to trace accesses to numpy arrays.
 
@@ -6,6 +7,7 @@ This file demonstrates two applications of this technique:
 * provide automatic differentiation of procedural code
 
 """
+from __future__ import print_function, division, absolute_import
 
 import __builtin__
 import os
@@ -31,7 +33,7 @@ class FrameVM(object):
 
     """
     def __init__(self, watcher, func):
-        print 'FrameVM', func
+        print('FrameVM', func)
         self.watcher = watcher
         self.func = func
         self.fco = func.__code__
@@ -155,14 +157,14 @@ class FrameVM(object):
         tos = self.stack[-1]
         try:
             next = next(tos)
-            print 'next', next
+            print('next', next)
             self.stack.append(next)
         except StopIteration:
             self.stack.pop(-1)
             return ('rel', arg)
 
     def op_JUMP_ABSOLUTE(self, i, op, arg):
-        print 'sending', arg
+        print('sending', arg)
         return ('abs', arg)
 
     def op_JUMP_IF_TRUE(self, i, op, arg):
@@ -195,19 +197,19 @@ class FrameVM(object):
         self.stack.append(self._locals[arg])
 
     def op_POP_BLOCK(self, i, op, arg):
-        print 'pop block, what to do?'
+        print('pop block, what to do?')
 
     def op_POP_TOP(self, i, op, arg):
         self.stack.pop(-1)
 
     def op_PRINT_ITEM(self, i, op, arg):
-        print self.stack.pop(-1),
+        print(self.stack.pop(-1), end=' ')
 
     def op_PRINT_NEWLINE(self, i, op, arg):
-        print ''
+        print('')
 
     def op_SETUP_LOOP(self, i, op, arg):
-        print 'SETUP_LOOP, what to do?'
+        print('SETUP_LOOP, what to do?')
 
     def op_STORE_FAST(self, i, op, arg):
         #print 'STORE_FAST', self.varnames[arg]

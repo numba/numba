@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import re
 
 _ptx_invalid_char = re.compile('[^a-zA-Z0-9_]')

@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Visitor to generate a Graphviz .dot file with an AST representation.
 """
+from __future__ import print_function, division, absolute_import
 
 from .pydot import pydot
 

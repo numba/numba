@@ -1,11 +1,10 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
+
 from functools import partial
 
 import numba as nb
-from numba import *
-from numba import typesystem
 from numba.containers import orderedcontainer
-from numba.type_inference.module_type_inference import register_inferer
-import typedtuple as typedtuple_module
 
 import numpy as np
 
@@ -22,15 +21,15 @@ _tuple_cache = {}
 
 def typedtuple(item_type, iterable=None, _tuple_cache=_tuple_cache):
     """
-    >>> typedtuple(int_)
+    >>> typedtuple(nb.int_)
     ()
-    >>> ttuple = typedtuple(int_, range(10))
+    >>> ttuple = typedtuple(nb.int_, range(10))
     >>> ttuple
     (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
     >>> ttuple[5]
     5L
 
-    >>> typedtuple(float_, range(10))
+    >>> typedtuple(nb.float_, range(10))
     (0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0)
     """
     typedtuple_ctor = compile_typedtuple(item_type)
@@ -39,7 +38,6 @@ def typedtuple(item_type, iterable=None, _tuple_cache=_tuple_cache):
 #-----------------------------------------------------------------------
 # Typedlist implementation
 #-----------------------------------------------------------------------
-
 
 def compile_typedtuple(item_type, _tuple_cache=_tuple_cache):
     if item_type in _tuple_cache:
@@ -50,8 +48,10 @@ def compile_typedtuple(item_type, _tuple_cache=_tuple_cache):
 
     @nb.jit(warn=False)
     class typedtuple(object):
-        @void(object_)
+
+        @nb.void(nb.object_)
         def __init__(self, iterable):
+
             self.size = 0
 
             # TODO: Use length hint of iterable for initial buffer size
@@ -65,12 +65,12 @@ def compile_typedtuple(item_type, _tuple_cache=_tuple_cache):
         index = methods['index']
         count = methods['count']
 
-        @void(object_)
+        @nb.void(nb.object_)
         def __extend(self, iterable):
             for obj in iterable:
                 self.__append(obj)
 
-        @Py_ssize_t()
+        @nb.Py_ssize_t()
         def __len__(self):
             return self.size
 

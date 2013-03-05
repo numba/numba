@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import weakref
 import ast as ast_module
 import types
@@ -6,7 +8,7 @@ import pprint
 
 import llvm.core
 
-from numba import pipeline, naming, error, reporting
+from numba import pipeline, naming, error, reporting, PY3
 from numba.control_flow.control_flow import ControlFlow
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
 from numba.minivect.minitypes import FunctionType
@@ -306,7 +308,7 @@ class FunctionEnvironment(object):
         True)
 
     warnstyle = TypedProperty(
-        basestring,
+        str if PY3 else basestring,
         'Warning style, currently available: simple, fancy',
         default='fancy'
     )
@@ -368,7 +370,7 @@ class FunctionEnvironment(object):
         if function_globals is not None:
             self.function_globals = function_globals
         else:
-            self.function_globals = self.func.func_globals
+            self.function_globals = self.func.__globals__
 
         self.locals = locals if locals is not None else {}
         self.template_signature = template_signature

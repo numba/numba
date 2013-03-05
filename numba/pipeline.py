@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 This module contains the Pipeline class which provides a pluggable way to
 define the transformations and the order in which they run on the AST.
 """
+from __future__ import print_function, division, absolute_import
 
 import ast as ast_module
 import logging

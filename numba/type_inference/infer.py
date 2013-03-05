@@ -1,8 +1,13 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import ast
 import cmath
 import types
 import logging
-import __builtin__ as builtins
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
 from functools import reduce
 
 import numba
@@ -37,10 +42,10 @@ def lookup_global(env, name, position_node):
     func_env = env.translation.crnt
 
     func = func_env.func
-    if (func is not None and name in func.func_code.co_freevars and
-            func.func_closure):
-        cell_idx = func.func_code.co_freevars.index(name)
-        cell = func.func_closure[cell_idx]
+    if (func is not None and name in func.__code__.co_freevars and
+            func.__closure__):
+        cell_idx = func.__code__.co_freevars.index(name)
+        cell = func.__closure__[cell_idx]
         value = cell.cell_contents
     elif name in func_env.function_globals:
         value = func_env.function_globals[name]
@@ -166,7 +171,7 @@ class TypeInferer(visitors.NumbaTransformer):
                 for var in block.symtab.values():
                     if var.type and var.cf_references:
                         assert not var.type.is_unresolved
-                        print "Variable after analysis: %s" % var
+                        print(("Variable after analysis: %s" % var))
 
     #------------------------------------------------------------------------
     # Utilities
@@ -291,9 +296,9 @@ class TypeInferer(visitors.NumbaTransformer):
 
     def _debug_type(self, start_point):
         if start_point.is_scc:
-            print "scc", start_point, start_point.types
+            print(("scc", start_point, start_point.types))
         else:
-            print start_point
+            print(start_point)
 
     def remove_resolved_type(self, start_point):
         "Remove a resolved type from the type graph"

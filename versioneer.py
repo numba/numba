@@ -1,4 +1,5 @@
 #! /usr/bin/python
+# -*- coding: utf-8 -*-
 
 """versioneer.py
 
@@ -79,6 +80,7 @@ To use it:
  5: modify your MANIFEST.in to include versioneer.py
  6: add both versioneer.py and the generated _version.py to your VCS
 """
+from __future__ import print_function, division, absolute_import
 
 import os
 import sys

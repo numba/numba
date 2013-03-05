@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Compiling extension classes works as follows:
 
@@ -43,6 +44,7 @@ Compiling extension classes works as follows:
 
 See also extension_types.pyx
 """
+from __future__ import print_function, division, absolute_import
 
 
 import types
@@ -55,7 +57,7 @@ import numba
 from numba import pipeline, error, symtab
 from numba import typesystem
 from numba.minivect import minitypes
-import extension_types
+from . import extension_types
 
 logger = logging.getLogger(__name__)
 

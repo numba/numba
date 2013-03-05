@@ -30,7 +30,7 @@ dtypes = np.float32, np.float64 #, np.float128
 
 def test_numpy_math():
     for dtype in dtypes:
-        print dtype
+        print(dtype)
 
         array = a(dtype)
         result = numpy_math(array)

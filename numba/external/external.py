@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 """
 This module adds a way to declare external functions.
 
 See numba.function_util on how to call them.
 """
+from __future__ import print_function, division, absolute_import
 
 from numba.minivect import minitypes
 

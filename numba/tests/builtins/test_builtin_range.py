@@ -26,7 +26,7 @@ done
 Warning 92:10: local variable 'i' might be referenced before assignment
 9
 """
-
+from __future__ import print_function
 from numba import *
 
 @autojit
@@ -44,52 +44,52 @@ def range_ret3():
 @autojit
 def forward1():
     for i in range(10):
-        print i,
-    print "done"
+        print(i, end=' ')
+    print("done")
 
 @autojit
 def forward2():
     for i in range(1, 5):
-        print i,
-    print "done"
+        print(i, end=' ')
+    print("done")
 
 @autojit
 def forward3():
     for i in range(5, 15, 3):
-        print i,
-    print "done"
+        print(i, end=' ')
+    print("done")
 
 @autojit
 def backward1():
     for i in range(10, 2, -3):
-        print i,
-    print "done"
+        print(i, end=' ')
+    print("done")
 
 @autojit
 def backward2():
     for i in range(1, 5, -1):
-        print i,
-    print "done"
+        print(i, end=' ')
+    print("done")
 
 @autojit
 def backward3():
     for i in range(-5, -15, -3):
-        print i,
-    print "done"
+        print(i, end=' ')
+    print("done")
 
 @autojit
 def empty_assign():
     i = 14
     for i in range(10, 4):
         pass
-    print i
+    print(i)
 
 @autojit
 def last_value():
     for i in range(10):
         pass
 
-    print i
+    print(i)
 
 if __name__ == '__main__':
     # backward3()

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """An implementation of the Zephyr Abstract Syntax Definition Language.
 
 See http://asdl.sourceforge.net/ and
@@ -9,6 +10,7 @@ browser.
 
 Changes for Python: Add support for module versions
 """
+from __future__ import print_function, division, absolute_import
 
 import os
 import traceback
@@ -108,49 +110,58 @@ class ASDLParser(spark.GenericParser, object):
     def error(self, tok):
         raise ASDLSyntaxError(tok.lineno, tok)
 
-    def p_module_0(self, (module, name, version, _0, _1)):
+    def p_module_0(self, xxx_todo_changeme):
         " module ::= Id Id version { } "
+        (module, name, version, _0, _1) = xxx_todo_changeme
         if module.value != "module":
             raise ASDLSyntaxError(module.lineno,
                                   msg="expected 'module', found %s" % module)
         return Module(name, None, version)
 
-    def p_module(self, (module, name, version, _0, definitions, _1)):
+    def p_module(self, xxx_todo_changeme1):
         " module ::= Id Id version { definitions } "
+        (module, name, version, _0, definitions, _1) = xxx_todo_changeme1
         if module.value != "module":
             raise ASDLSyntaxError(module.lineno,
                                   msg="expected 'module', found %s" % module)
         return Module(name, definitions, version)
 
-    def p_version(self, (version, V)):
+    def p_version(self, xxx_todo_changeme2):
         "version ::= Id String"
+        (version, V) = xxx_todo_changeme2
         if version.value != "version":
             raise ASDLSyntaxError(version.lineno,
                                 msg="expected 'version', found %" % version)
         return V
 
-    def p_definition_0(self, (definition,)):
+    def p_definition_0(self, xxx_todo_changeme3):
         " definitions ::= definition "
+        (definition,) = xxx_todo_changeme3
         return definition
 
-    def p_definition_1(self, (definitions, definition)):
+    def p_definition_1(self, xxx_todo_changeme4):
         " definitions ::= definition definitions "
+        (definitions, definition) = xxx_todo_changeme4
         return definitions + definition
 
-    def p_definition(self, (id, _, type)):
+    def p_definition(self, xxx_todo_changeme5):
         " definition ::= Id = type "
+        (id, _, type) = xxx_todo_changeme5
         return [Type(id, type)]
 
-    def p_type_0(self, (product,)):
+    def p_type_0(self, xxx_todo_changeme6):
         " type ::= product "
+        (product,) = xxx_todo_changeme6
         return product
 
-    def p_type_1(self, (sum,)):
+    def p_type_1(self, xxx_todo_changeme7):
         " type ::= sum "
+        (sum,) = xxx_todo_changeme7
         return Sum(sum)
 
-    def p_type_2(self, (sum, id, _0, attributes, _1)):
+    def p_type_2(self, xxx_todo_changeme8):
         " type ::= sum Id ( fields ) "
+        (sum, id, _0, attributes, _1) = xxx_todo_changeme8
         if id.value != "attributes":
             raise ASDLSyntaxError(id.lineno,
                                   msg="expected attributes, found %s" % id)
@@ -158,64 +169,76 @@ class ASDLParser(spark.GenericParser, object):
             attributes.reverse()
         return Sum(sum, attributes)
 
-    def p_product(self, (_0, fields, _1)):
+    def p_product(self, xxx_todo_changeme9):
         " product ::= ( fields ) "
-        # XXX can't I just construct things in the right order?
+        (_0, fields, _1) = xxx_todo_changeme9
         fields.reverse()
         return Product(fields)
 
-    def p_sum_0(self, (constructor,)):
+    def p_sum_0(self, xxx_todo_changeme10):
         " sum ::= constructor "
+        (constructor,) = xxx_todo_changeme10
         return [constructor]
 
-    def p_sum_1(self, (constructor, _, sum)):
+    def p_sum_1(self, xxx_todo_changeme11):
         " sum ::= constructor | sum "
+        (constructor, _, sum) = xxx_todo_changeme11
         return [constructor] + sum
 
-    def p_sum_2(self, (constructor, _, sum)):
+    def p_sum_2(self, xxx_todo_changeme12):
         " sum ::= constructor | sum "
+        (constructor, _, sum) = xxx_todo_changeme12
         return [constructor] + sum
 
-    def p_constructor_0(self, (id,)):
+    def p_constructor_0(self, xxx_todo_changeme13):
         " constructor ::= Id "
+        (id,) = xxx_todo_changeme13
         return Constructor(id)
 
-    def p_constructor_1(self, (id, _0, fields, _1)):
+    def p_constructor_1(self, xxx_todo_changeme14):
         " constructor ::= Id ( fields ) "
-        # XXX can't I just construct things in the right order?
+        (id, _0, fields, _1) = xxx_todo_changeme14
         fields.reverse()
         return Constructor(id, fields)
 
-    def p_fields_0(self, (field,)):
+    def p_fields_0(self, xxx_todo_changeme15):
         " fields ::= field "
+        (field,) = xxx_todo_changeme15
         return [field]
 
-    def p_fields_1(self, (field, _, fields)):
+    def p_fields_1(self, xxx_todo_changeme16):
         " fields ::= field , fields "
+        (field, _, fields) = xxx_todo_changeme16
         return fields + [field]
 
-    def p_field_0(self, (type,)):
+    def p_field_0(self, xxx_todo_changeme17):
         " field ::= Id "
+        (type,) = xxx_todo_changeme17
         return Field(type)
 
-    def p_field_1(self, (type, name)):
+    def p_field_1(self, xxx_todo_changeme18):
         " field ::= Id Id "
+        (type, name) = xxx_todo_changeme18
         return Field(type, name)
 
-    def p_field_2(self, (type, _, name)):
+    def p_field_2(self, xxx_todo_changeme19):
         " field ::= Id * Id "
+        (type, _, name) = xxx_todo_changeme19
         return Field(type, name, seq=True)
 
-    def p_field_3(self, (type, _, name)):
+    def p_field_3(self, xxx_todo_changeme20):
         " field ::= Id ? Id "
+        (type, _, name) = xxx_todo_changeme20
         return Field(type, name, opt=True)
 
-    def p_field_4(self, (type, _)):
+    def p_field_4(self, xxx_todo_changeme21):
         " field ::= Id * "
+        (type, _) = xxx_todo_changeme21
         return Field(type, seq=True)
 
-    def p_field_5(self, (type, _)):
+    def p_field_5(self, xxx_todo_changeme22):
         " field ::= Id ? "
+        (type, _) = xxx_todo_changeme22
         return Field(type, opt=True)
 
 builtin_types = ("identifier", "string", "int", "bool", "object")
@@ -305,8 +328,8 @@ class VisitorBase(object):
         try:
             meth(object, *args)
         except Exception as err:
-            print "Error visiting", repr(object)
-            print err
+            print(("Error visiting", repr(object)))
+            print(err)
             traceback.print_exc()
             # XXX hack
             if hasattr(self, 'file'):
@@ -351,8 +374,8 @@ class Check(VisitorBase):
         if conflict is None:
             self.cons[key] = name
         else:
-            print "Redefinition of constructor %s" % key
-            print "Defined in %s and %s" % (conflict, name)
+            print(("Redefinition of constructor %s" % key))
+            print(("Defined in %s and %s" % (conflict, name)))
             self.errors += 1
         for f in cons.fields:
             self.visit(f, key)
@@ -374,7 +397,7 @@ def check(mod):
         if t not in mod.types and not t in builtin_types:
             v.errors += 1
             uses = ", ".join(v.types[t])
-            print "Undefined type %s, used in %s" % (t, uses)
+            print(("Undefined type %s, used in %s" % (t, uses)))
 
     return not v.errors
 
@@ -387,9 +410,9 @@ def parse(file):
     try:
         return parser.parse(tokens)
     except ASDLSyntaxError as err:
-        print err
+        print(err)
         lines = buf.split("\n")
-        print lines[err.lineno - 1] # lines starts at 0, files at 1
+        print((lines[err.lineno - 1])) # lines starts at 0, files at 1
 
 if __name__ == "__main__":
     import glob
@@ -402,12 +425,12 @@ if __name__ == "__main__":
         files = glob.glob(testdir + "/*.asdl")
 
     for file in files:
-        print file
+        print(file)
         mod = parse(file)
-        print "module", mod.name
-        print len(mod.dfns), "definitions"
+        print(("module", mod.name))
+        print((len(mod.dfns), "definitions"))
         if not check(mod):
-            print "Check failed"
+            print("Check failed")
         else:
             for dfn in mod.dfns:
-                print dfn.type
+                print((dfn.type))

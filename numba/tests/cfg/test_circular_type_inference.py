@@ -4,7 +4,7 @@ from numba.tests.cfg.test_cfg_type_infer import *
 
 
 @autojit(warnstyle='simple')
-def test_circular_error(): # doctest ignores ellipses ???
+def test_circular_error():
     """
     >>> test_circular_error()
     Traceback (most recent call last):
@@ -194,7 +194,7 @@ def test_circular_compare3():
             x = cond or x < i
             cond = x
             x = i
-            print i
+            print(i)
 
     return cond, x
 

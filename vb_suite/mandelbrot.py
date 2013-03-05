@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from vbench.benchmark import Benchmark
 import datetime
 
@@ -6,6 +7,7 @@ from numba import *
 """
 
 setup = common_setup + """
+from __future__ import print_function, division, absolute_import
 @autojit
 def mandel(x, y, max_iters):
     i = 0

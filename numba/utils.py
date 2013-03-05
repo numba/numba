@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import sys
 import opcode
 import ast
@@ -38,8 +40,8 @@ def debugout(*args):
     '''This is a magic function.  If you use it in compiled functions,
     Numba should generate code for displaying the received value.'''
     if __debug__:
-        print("debugout (non-translated): %s" % (''.join((str(arg)
-                                                          for arg in args)),))
+        print(("debugout (non-translated): %s" % (''.join((str(arg)
+                                                          for arg in args)),)))
 
 def process_signature(sigstr, name=None):
     '''
@@ -120,7 +122,7 @@ def pformat_ast (node, include_attrs = True, **kws):
 def dump(node, *args, **kws):
     '''Transform a Python AST object into nested tuples and lists, and
     pretty-print the result.'''
-    print(pformat_ast(node, *args, **kws))
+    print((pformat_ast(node, *args, **kws)))
 
 class TypedProperty(object):
     '''Defines a class property that does a type check in the setter.'''

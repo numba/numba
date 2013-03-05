@@ -11,7 +11,7 @@ def simple_return():
     Warning, unreachable code at 14:4
     """
     return
-    print 'Where am I?'
+    print('Where am I?')
 
 def simple_loops():
     """
@@ -25,29 +25,29 @@ def simple_loops():
     """
     for i in range(10):
         continue
-        print 'Never be here'
+        print('Never be here')
 
     while True:
         break
-        print 'Never be here'
+        print('Never be here')
 
     while True:
         break
-        print 'Never be here'
+        print('Never be here')
 
     for i in range(10):
         for j in range(10):
             return
-            print "unreachable"
+            print("unreachable")
         else:
-            print "unreachable"
-        print "unreachable"
+            print("unreachable")
+        print("unreachable")
         return
-        print "unreachable"
+        print("unreachable")
 
-    print "unreachable"
+    print("unreachable")
     return
-    print "unreachable"
+    print("unreachable")
 
 def conditional(a, b):
     if a:
@@ -56,7 +56,7 @@ def conditional(a, b):
         return 2
     else:
         return 37
-    print 'oops'
+    print('oops')
 
 if __name__ == "__main__":
 #    jitv(simple_loops)

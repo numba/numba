@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Ordered Set. See http://code.activestate.com/recipes/576694/
 """
+from __future__ import print_function, division, absolute_import
 
 import collections
 
@@ -70,5 +72,5 @@ class OrderedSet(collections.MutableSet):
 if __name__ == '__main__':
     s = OrderedSet('abracadaba')
     t = OrderedSet('simsalabim')
-    print(s | t)
-    print(s & t)
+    print((s | t))
+    print((s & t))

@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Hold metadata for instructions.
 """
+from __future__ import print_function, division, absolute_import
 
 import llvm.core
 

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Taken from Cython/Compiler/TreePath.py
 
@@ -7,6 +8,7 @@ This works by creating a filter chain of generator functions.  Each
 function selects a part of the expression, e.g. a child node, a
 specific descendant or a node that holds an attribute.
 """
+from __future__ import print_function, division, absolute_import
 
 import re
 import sys

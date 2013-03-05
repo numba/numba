@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import time
 
 from scipy.misc import lena
@@ -8,6 +9,7 @@ from numba import *
 """
 
 setup = common_setup + """
+from __future__ import print_function, division, absolute_import
 @jit(restype=void, argtypes=[double[:,:], double[:,:], double[:,:]],
      backend='ast')
 def filter(image, filt, output):

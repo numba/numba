@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 This file demonstrates a filterbank correlation loop.
 """
+from __future__ import print_function, division, absolute_import
 import numpy as np
 import numba
 from numba.decorators import jit

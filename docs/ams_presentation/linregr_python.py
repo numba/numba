@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 '''
 The following implementation references: 
 
 http://aimotion.blogspot.com/2011/10/machine-learning-with-python-linear.html
 '''
+from __future__ import print_function, division, absolute_import
 
 def gradient_descent(X, Y, theta, alpha, num_iters):
     m = Y.shape[0]

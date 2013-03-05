@@ -57,7 +57,7 @@ class TestGetattr(unittest.TestCase):
             expect = _get_ndarray_shape(arg)
             got = get_ndarray_shape(arg)
             for i, _ in enumerate(expect):
-                print i
+                print(i)
                 self.assertEqual(got[i], expect[i])
 
     def test_getattr_shape_unpack(self):

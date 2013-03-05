@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Generate LLVM code for a minivect AST.
 """
+from __future__ import print_function, division, absolute_import
 
 import sys
 
