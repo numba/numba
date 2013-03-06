@@ -103,43 +103,45 @@ def get_classmethod_func(func):
         assert isinstance(func, staticmethod)
         return func.__get__(object())
 
-def _process_signature(ext_type, method, default_signature,
-                       is_static=False, is_class=False):
+def process_signature(ext_type, method, default_signature,
+                      is_static=False, is_class=False):
     """
     Verify a method signature.
 
     Returns a Method object and the resolved signature.
     """
-    if isinstance(method, types.FunctionType):
-        # Process function
-        if default_signature is None:
-            # TODO: support deferred type inference and autojit methods
-            raise error.NumbaError(
-                "Method '%s' does not have signature" % (method.__name__,))
-        validate_method(method, default_signature or numba.object_(),
-                        is_static)
-        if default_signature is None:
-            default_signature = minitypes.FunctionType(return_type=None,
-                                                       args=[])
-        sig = get_signature(ext_type, is_class, is_static, default_signature)
-        return Method(method, is_class, is_static), sig.return_type, sig.args
-    elif isinstance(method, minitypes.Function):
-        # @double(...)
-        # def func(self, ...): ...
-        return _process_signature(ext_type, method.py_func,
-                                  method.signature, is_static, is_class)
-    else:
-        # Process staticmethod and classmethod
-        if isinstance(method, staticmethod):
-            is_static = True
-        elif isinstance(method, classmethod):
-            is_class = True
-        else:
-            return None, None, None
+    while True:
+        if isinstance(method, types.FunctionType):
+            # Process function
+            if default_signature is None:
+                # TODO: support deferred type inference and autojit methods
+                raise error.NumbaError(
+                    "Method '%s' does not have signature" % (method.__name__,))
+            validate_method(method, default_signature or numba.object_(),
+                            is_static)
+            if default_signature is None:
+                default_signature = minitypes.FunctionType(return_type=None,
+                                                           args=[])
+            sig = get_signature(ext_type, is_class, is_static, default_signature)
+            method = Method(method, is_class, is_static)
+            return method, sig.return_type, sig.args
 
-        return _process_signature(
-                    ext_type, get_classmethod_func(method),
-                    default_signature, is_static=is_static, is_class=is_class)
+        elif isinstance(method, minitypes.Function):
+            # @double(...)
+            # def func(self, ...): ...
+            default_signature = method.signature
+            method = method.py_func
+
+        else:
+            # Process staticmethod and classmethod
+            if isinstance(method, staticmethod):
+                is_static = True
+            elif isinstance(method, classmethod):
+                is_class = True
+            else:
+                return None, None, None
+
+            method = get_classmethod_func(method)
 
 class Method(object):
     """
@@ -165,7 +167,7 @@ class Method(object):
 # Populate Extension Type with Methods
 #------------------------------------------------------------------------
 
-def _process_method_signatures(class_dict, ext_type):
+def process_method_signatures(class_dict, ext_type):
     """
     Process all method signatures:
 
@@ -184,8 +186,8 @@ def _process_method_signatures(class_dict, ext_type):
             argtypes = [numba.object_] * (method.__code__.co_argcount - 1)
             default_signature = numba.void(*argtypes)
 
-        method, restype, argtypes = _process_signature(ext_type, method,
-                                                       default_signature)
+        method, restype, argtypes = process_signature(ext_type, method,
+                                                      default_signature)
         if method is None:
             continue
 
@@ -370,7 +372,7 @@ def compile_extension_methods(env, py_class, ext_type, class_dict, flags):
 
     class_dict['__numba_py_class'] = py_class
 
-    _process_method_signatures(class_dict, ext_type)
+    process_method_signatures(class_dict, ext_type)
     _type_infer_init_method(env, class_dict, ext_type, flags)
     _construct_native_attribute_struct(ext_type)
     _type_infer_methods(env, class_dict, ext_type, flags)
