@@ -2,7 +2,7 @@ import numpy as np
 import unittest
 
 from numbapro import cuda
-import api
+from numbapro.cudalib.curand import binding as api
 
 class TestCURand(unittest.TestCase):
     def test_lib(self):
