@@ -2,6 +2,7 @@ import sys
 import numpy as np
 from ctypes import *
 
+from numbapro.cudapipeline.driver import cu_stream
 from numbapro._utils import finalizer
 
 # enum curandStatus
@@ -181,11 +182,31 @@ class libcurand(object):
     curandDestroyGenerator = ctype_function(
                                     curandStatus_t,
                                     curandGenerator_t)
-    
+
+    curandSetStream = ctype_function(curandStatus_t,
+                                     cu_stream)
+
+    curandSetGeneratorOffset = ctype_function(curandStatus_t,
+                                              curandGenerator_t,
+                                              c_ulonglong)
+
     curandSetPseudoRandomGeneratorSeed = ctype_function(
                                             curandStatus_t,
                                             curandGenerator_t,
                                             c_ulonglong)
+
+    curandSetQuasiRandomGeneratorDimensions = ctype_function(
+                                                     curandStatus_t,
+                                                     curandGenerator_t,
+                                                     c_uint)
+
+    curandGenerate = ctype_function(curandStatus_t,
+                                    curandGenerator_t,
+                                    POINTER(c_uint))
+
+    curandGenerateLongLong = ctype_function(curandStatus_t,
+                                            curandGenerator_t,
+                                            POINTER(c_ulonglong))
 
     curandGenerateUniform = ctype_function(curandStatus_t,
                                            curandGenerator_t,
@@ -226,6 +247,12 @@ class libcurand(object):
                                                    c_double)
 
 
+    curandGeneratePoisson = ctype_function(curandStatus_t,
+                                           curandGenerator_t,
+                                           POINTER(c_uint),
+                                           c_size_t,
+                                           c_double)
+
 class Generator(finalizer.OwnerMixin):
     def __init__(self, rng_type=CURAND_RNG_TEST):
         self._api = libcurand()
@@ -237,8 +264,24 @@ class Generator(finalizer.OwnerMixin):
     def _finalize(cls, handle):
         libcurand().curandDestroyGenerator(handle)
 
+    def set_stream(self, stream):
+        return self._api.curandSetStream(self._handle, stream._handle)
+
+    def set_offset(self, offset):
+        return self._api.curandSetGeneratorOffset(self._handle, offset)
+
     def set_pseudo_random_generator_seed(self, seed):
         return self._api.curandSetPseudoRandomGeneratorSeed(self._handle, seed)
+
+    def set_quasi_random_generator_dimensions(self, num_dim):
+        return self._api.curandSetQuasiRandomGeneratorDimensions(self._handle,
+                                                                 num_dim)
+
+    def generate(self, devout, num):
+        fn, ptr = self.__uint32_or_uint64(devout,
+                                          self._api.curandGenerate,
+                                          self._api.curandGenerateLongLong)
+        return fn(self._handle, ptr, num)
 
     def generate_uniform(self, devout, num):
         '''
@@ -254,24 +297,42 @@ class Generator(finalizer.OwnerMixin):
         fn, ptr = self.__float_or_double(devout,
                                          self._api.curandGenerateNormal,
                                          self._api.curandGenerateNormalDouble)
-        return fn(self._handle, ptr, num)
+        return fn(self._handle, ptr, num, mean, stddev)
 
     def generate_log_normal(self, devout, num, mean, stddev):
         fn, ptr = self.__float_or_double(
                                      devout,
                                      self._api.curandGenerateLogNormal,
                                      self._api.curandGenerateLogNormalDouble)
-        return fn(self._handle, ptr, num)
+        return fn(self._handle, ptr, num, mean, stddev)
+
+    def generate_poisson(self, devout, num, lmbd):
+            dptr = devout.device_raw_ptr.value
+            ptr = cast(c_void_p(dptr), POINTER(c_uint))
+            return self._api.curandGeneratePoisson(self._handle, ptr, num, lmbd)
 
     def __float_or_double(self, devary, floatfn, doublefn):
         if devary.dtype == np.float32:
-            fn = self._api.curandGenerateUniform
+            fn = floatfn
             fty = c_float
         elif devary.dtype == np.float64:
-            fn = self._api.curandGenerateUniformDouble
+            fn = doublefn
             fty = c_double
         else:
             raise ValueError("Only accept float or double arrays.")
         dptr = devary.device_raw_ptr.value
         ptr = cast(c_void_p(dptr), POINTER(fty))
+        return fn, ptr
+
+    def __uint32_or_uint64(self, devary, fn32, fn64):
+        if devary.dtype in {np.dtype(np.uint32), np.dtype(np.int32)}:
+            fn = self._api.curandGenerate
+            ity = c_uint
+        elif devary.dtype in {np.dtype(np.uint64), np.dtype(np.int64)}:
+            fn = self._api.curandGenerateLongLong
+            ity = c_ulonglong
+        else:
+            raise ValueError("Only accept uint32 or uint64 arrays")
+        dptr = devary.device_raw_ptr.value
+        ptr = cast(c_void_p(dptr), POINTER(ity))
         return fn, ptr
