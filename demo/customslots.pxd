@@ -5,9 +5,9 @@ cdef extern from "customslots.h":
         void *pointer
         Py_ssize_t objoffset
         uintptr_t flags
-    
+
     ctypedef struct PyCustomSlot:
-        uintrptr_t id
+        uintptr_t id
         pyx_data data
 
     int PyCustomSlots_Check(obj)

@@ -66,33 +66,33 @@ def perfect_hash(cnp.ndarray[uint64_t] hashes, int repeat=1):
 
     return p, table.base.r, table.base.m_f, table.base.m_g, d
 
-cdef extern from "md5sum.h":
-    ctypedef struct MD5_CTX:
-        uint32_t i[2]
-        uint32_t buf[4]
-        unsigned char in_ "in"[64]
-        unsigned char digest[16]
-
-    void MD5Init(MD5_CTX *mdContext)
-    void MD5Update(MD5_CTX *mdContext, unsigned char *inBuf,
-                   unsigned int inLen)
-    void MD5Final(MD5_CTX *mdContext)
-    
-cdef extern from "hash.h":
-    uint64_t hash_crapwow64(unsigned char *buf, uint64_t len, uint64_t seed)
-
-def crapwowbench(int repeat=1):
-    cdef int r
-    cdef MD5_CTX ctx
-    for r in range(repeat):
-        hash_crapwow64("asdf", 4, 0xf123456781234567)
-
-
-def md5bench(int repeat=1):
-    cdef int r
-    cdef MD5_CTX ctx
-    for r in range(repeat):
-        MD5Init(&ctx)
-        MD5Update(&ctx, "asdf", 4)
-        MD5Final(&ctx)
+#cdef extern from "md5sum.h":
+#    ctypedef struct MD5_CTX:
+#        uint32_t i[2]
+#        uint32_t buf[4]
+#        unsigned char in_ "in"[64]
+#        unsigned char digest[16]
+#
+#    void MD5Init(MD5_CTX *mdContext)
+#    void MD5Update(MD5_CTX *mdContext, unsigned char *inBuf,
+#                   unsigned int inLen)
+#    void MD5Final(MD5_CTX *mdContext)
+#
+#cdef extern from "hash.h":
+#    uint64_t hash_crapwow64(unsigned char *buf, uint64_t len, uint64_t seed)
+#
+#def crapwowbench(int repeat=1):
+#    cdef int r
+#    cdef MD5_CTX ctx
+#    for r in range(repeat):
+#        hash_crapwow64("asdf", 4, 0xf123456781234567)
+#
+#
+#def md5bench(int repeat=1):
+#    cdef int r
+#    cdef MD5_CTX ctx
+#    for r in range(repeat):
+#        MD5Init(&ctx)
+#        MD5Update(&ctx, "asdf", 4)
+#        MD5Final(&ctx)
 
