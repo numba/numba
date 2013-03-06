@@ -144,6 +144,10 @@ class NumbaTypeMapper(minitypes.TypeMapper):
 
             type = copy.copy(array_type)
             type.dtype = self.promote_types(array_type.dtype, other_type)
+
+            if type.dtype.is_object and not array_type.dtype.is_object:
+                # Make sure that (double[:], object_) -> object_
+                type = object_
             return type
         elif type1.is_unresolved or type2.is_unresolved:
             if type1.is_unresolved:

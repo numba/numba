@@ -138,6 +138,10 @@ class GenericASTVectorize(object):
     def build_ufunc(self):
         raise NotImplementedError
 
+    def register_ufunc(self, ufunc):
+        from numba.type_inference.modules import numpyufuncs
+        numpyufuncs.register_arbitrary_ufunc(ufunc)
+
     def _from_func_factory(self, lfunclist, tyslist, **kws):
         """
         Set this attribute to some subclass of CommonVectorizeFromFunc
@@ -149,7 +153,9 @@ class GenericASTVectorize(object):
         lfunclist = self._get_lfunc_list()
         tyslist = self._get_tys_list()
         engine = self._get_ee()
-        return self._from_func_factory(lfunclist, tyslist, engine=engine, **kws)
+        ufunc = self._from_func_factory(lfunclist, tyslist, engine=engine, **kws)
+        self.register_ufunc(ufunc)
+        return ufunc
 
     def build_ufunc_core(self, **kws):
         '''Build the ufunc core functions and returns the prototype and pointer.

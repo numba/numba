@@ -7,10 +7,11 @@ python:
   - "3.3"
   # - "pypy"
 
-branches:
-  only:
-    - master
-    - devel
+# branches:
+#   only:
+#     - master
+#     - devel
+#     - release
 
 install:
   - wget "http://repo.continuum.io/pkgs/free/linux-64/llvm-3.2-0.tar.bz2"

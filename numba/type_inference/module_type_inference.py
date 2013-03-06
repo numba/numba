@@ -121,6 +121,10 @@ class ModuleTypeInfererRegistry(object):
                 inferrer=my_inferer
         """
         value = getattr(module, attr)
+        self.register_unbound_dotted_value(value, dotted_path, inferer, **kwds)
+
+    def register_unbound_dotted_value(self, value, dotted_path,
+                                      inferer, **kwds):
         if self.is_registered((value, dotted_path)):
             raise ValueAlreadyRegistered((value, inferer))
 
@@ -217,14 +221,19 @@ def dispatch_on_value(context, call_node, func_type):
         if node is not None:
             method_kwargs[argname] = _build_arg(flags['pass_in_types'], node)
 
-    # In the case of *args, clear keyword arguments and build positional list
     if argspec.varargs and len(argnames) < len(call_node.args):
+        # In the case of *args, build positional list and pass any additional
+        # arguments as keywords
         extra_args = call_node.args[len(argnames):]
 
-        args.extend(method_kwargs[argname] for argname in argnames)
+        args.extend(method_kwargs.pop(argname) for argname in argnames)
         args.extend(_build_arg(flags['pass_in_types'], arg) for arg in extra_args)
 
-        method_kwargs.clear()
+    if argspec.keywords:
+        # Handle **kwargs
+        for keyword in call_node.keywords:
+            if keyword.arg not in argnames:
+                method_kwargs[keyword.arg] = keyword.value
 
     return inferer(*args, **method_kwargs)
 
