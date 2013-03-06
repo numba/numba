@@ -310,9 +310,11 @@ class Generator(finalizer.OwnerMixin):
         return fn(self._handle, ptr, num, mean, stddev)
 
     def generate_poisson(self, devout, num, lmbd):
-            dptr = devout.device_raw_ptr.value
-            ptr = cast(c_void_p(dptr), POINTER(c_uint))
-            return self._api.curandGeneratePoisson(self._handle, ptr, num, lmbd)
+        if devout.dtype not in {np.dtype(np.uint32), np.dtype(np.int32)}:
+            raise ValueError("Only accept int32 or uint32 arrays")
+        dptr = devout.device_raw_ptr.value
+        ptr = cast(c_void_p(dptr), POINTER(c_uint))
+        return self._api.curandGeneratePoisson(self._handle, ptr, num, lmbd)
 
     def __float_or_double(self, devary, floatfn, doublefn):
         if devary.dtype == np.float32:
@@ -335,7 +337,8 @@ class Generator(finalizer.OwnerMixin):
             fn = self._api.curandGenerateLongLong
             ity = c_ulonglong
         else:
-            raise ValueError("Only accept uint32 or uint64 arrays")
+            raise ValueError("Only accept int32, int64, "
+                             "uint32 or uint64 arrays")
         dptr = devary.device_raw_ptr.value
         ptr = cast(c_void_p(dptr), POINTER(ity))
         return fn, ptr

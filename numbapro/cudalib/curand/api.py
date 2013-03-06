@@ -35,7 +35,7 @@ class RNG(object):
 
 
 class PRNG(RNG):
-
+    "cuRAND pseudo random number generator"
     TEST     = binding.CURAND_RNG_TEST
     DEFAULT  = binding.CURAND_RNG_PSEUDO_DEFAULT
     XORWOW   = binding.CURAND_RNG_PSEUDO_XORWOW
@@ -43,6 +43,7 @@ class PRNG(RNG):
     MTGP32   = binding.CURAND_RNG_PSEUDO_MTGP32
 
     def __init__(self, rndtype=DEFAULT, seed=None, offset=None, stream=None):
+        '''cuRAND pseudo random number generator'''
         super(PRNG, self).__init__(binding.Generator(rndtype))
         self.rndtype = rndtype
         if seed is not None:
@@ -54,6 +55,7 @@ class PRNG(RNG):
 
     @property
     def seed(self):
+        "The seed for the RNG"
         return self.__seed
 
     @seed.setter
@@ -62,6 +64,12 @@ class PRNG(RNG):
         self._gen.set_pseudo_random_generator_seed(seed)
 
     def uniform(self, ary, size=None):
+        '''Generate floating point random number sampled
+           from a uniform distribution
+
+        ary --- numpy array or cuda device array.
+        size --- number of samples; optional, default to array size
+        '''
         self._require_array(ary)
         size = size or ary.size
         dary, conv = _auto_device(ary, stream=self.stream)
@@ -70,6 +78,12 @@ class PRNG(RNG):
             dary.to_host(stream=self.stream)
 
     def normal(self, ary, mean, sigma, size=None):
+        '''Generate floating point random number sampled
+           from a normal distribution
+
+            ary --- numpy array or cuda device array.
+            size --- number of samples; optional, default to array size
+        '''
         self._require_array(ary)
         size = size or ary.size
         dary, conv = _auto_device(ary, stream=self.stream)
@@ -79,10 +93,31 @@ class PRNG(RNG):
 
 
     def lognormal(self, ary, mean, sigma, size=None):
+        '''Generate floating point random number sampled
+           from a log-normal distribution
+
+        ary --- numpy array or cuda device array.
+        size --- number of samples; optional, default to array size
+        '''
         self._require_array(ary)
         size = size or ary.size
         dary, conv = _auto_device(ary, stream=self.stream)
         self._gen.generate_log_normal(dary, size, mean, sigma)
+        if conv:
+            dary.to_host(stream=self.stream)
+
+    def poisson(self, ary, lmbd, size=None):
+        '''Generate floating point random number sampled
+        from a poisson distribution
+
+        ary --- numpy array or cuda device array.
+        lmbda --- lambda
+        size --- number of samples; optional, default to array size
+        '''
+        self._require_array(ary)
+        size = size or ary.size
+        dary, conv = _auto_device(ary, stream=self.stream)
+        self._gen.generate_poisson(dary, lmbd, size)
         if conv:
             dary.to_host(stream=self.stream)
 
@@ -97,6 +132,13 @@ class QRNG(RNG):
     SCRAMBLED_SOBOL64   = binding.CURAND_RNG_QUASI_SCRAMBLED_SOBOL64
 
     def __init__(self, rndtype=DEFAULT, ndim=None, offset=None, stream=None):
+        '''cuRAND quasi random number generator
+            
+        Use rndtype to control generation for 32-bit or 64-bit integers.
+
+        All arguments are optional
+        rndtype --- default to generate 32-bit integer.
+        '''
         super(QRNG, self).__init__(binding.Generator(rndtype))
         self.rndtype = rndtype
         if ndim is not None:
@@ -116,6 +158,14 @@ class QRNG(RNG):
         self._gen.set_quasi_random_generator_dimensions(ndim)
 
     def generate(self, ary, size=None):
+        """Generate write quasi random number in ary.
+            
+        ary --- numpy array or cuda device array.
+
+        size --- number of samples;
+                 optional, default to array size;
+                 must be multiple of ndim.
+        """
         self._require_array(ary)
         size = size or ary.size
         dary, conv = _auto_device(ary, stream=self.stream)

@@ -59,9 +59,38 @@ class TestCURandPseudo(unittest.TestCase):
         self.rndgen.generate_log_normal(self.devary32, self.N, 0, 1)
         self.rndgen.generate_log_normal(self.devary64, self.N, 0, 1)
 
+
+class TestCURandPoisson(unittest.TestCase):
+    def setUp(self):
+        from numbapro.cudalib.curand.binding import (Generator,
+                                                     CURAND_RNG_PSEUDO_DEFAULT)
+
+        self.N = 10
+        self.ary32 = np.zeros(self.N, dtype=np.uint32)
+
+        self.stream = cuda.stream()
+        self.devary32 = cuda.to_device(self.ary32, stream=self.stream)
+
+        self.rndgen = Generator(CURAND_RNG_PSEUDO_DEFAULT)
+        self.rndgen.set_stream(self.stream)
+        self.rndgen.set_offset(123)
+        self.rndgen.set_pseudo_random_generator_seed(1234)
+
+    def tearDown(self):
+        self.devary32.to_host(stream=self.stream)
+
+        self.stream.synchronize()
+
+        self.assertTrue(any(self.ary32 != 0))
+
+        del self.N
+        del self.ary32
+        del self.stream
+        del self.devary32
+
     def test_poisson(self):
         self.rndgen.generate_poisson(self.devary32, self.N, 1)
-        self.rndgen.generate_poisson(self.devary64, self.N, 1)
+
 
 
 class TestCURandQuasi(unittest.TestCase):
@@ -111,6 +140,10 @@ class TestCURandAPI(unittest.TestCase):
         ary = np.zeros(N, dtype=np.float32)
         prng.uniform(ary, N)
         self.assertTrue(any(ary != 0))
+
+        iary = np.zeros(N, dtype=np.uint32)
+        prng.poisson(iary, N)
+        self.assertTrue(any(iary != 0))
 
     def test_quasi(self):
         from numbapro.cudalib import curand
