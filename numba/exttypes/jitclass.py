@@ -102,29 +102,14 @@ class JitExtensionCompiler(compileclass.ExtensionCompiler):
 
         return method_pointers, lmethods
 
-
 #------------------------------------------------------------------------
 # Attribute Inheritance
 #------------------------------------------------------------------------
 
-class AttributesInheriter(object):
+class JitAttributesInheriter(compileclass.AttributesInheriter):
     """
     Inherit attributes and methods from parent classes.
     """
-
-    def inherit(self, ext_type, class_dict):
-        "Inherit attributes and methods from superclasses"
-        py_class = ext_type.py_class
-        if not is_numba_class(py_class):
-            # superclass is not a numba class
-            return
-
-        struct_type = utils.get_struct_type(py_class)
-        vtab_type = utils.get_vtab_type(py_class)
-        self.verify_base_class_compatibility(py_class, struct_type, vtab_type)
-
-        self.inherit_attributes(ext_type, struct_type)
-        self.inherit_methods(ext_type, vtab_type)
 
     def inherit_attributes(self, ext_type, parent_struct_type):
         ext_type.parent_attr_struct = parent_struct_type
@@ -145,20 +130,6 @@ class AttributesInheriter(object):
             func_signature = func_signature.return_type(*args)
             ext_type.add_method(method_name, func_signature)
 
-    def process_class_attribute_types(self, ext_type, class_dict):
-        """
-        Process class attribute types:
-
-            @jit
-            class Foo(object):
-
-                attr = double
-        """
-        for name, value in class_dict.iteritems():
-            if isinstance(value, minitypes.Type):
-                ext_type.symtab[name] = symtab.Variable(value,
-                                                        promotable_type=False)
-
     def verify_base_class_compatibility(self, py_class, struct_type, vtab_type):
         "Verify that we can build a compatible class layout"
         bases = [py_class]
@@ -177,7 +148,7 @@ class AttributesInheriter(object):
 # Build Attributes Struct
 #------------------------------------------------------------------------
 
-class AttributeBuilder(compileclass.AttributeBuilder):
+class JitAttributeBuilder(compileclass.AttributeBuilder):
 
     def create_descr(self, attr_name):
         """
@@ -203,8 +174,8 @@ def create_extension(env, py_class, flags):
     ext_type = typesystem.ExtensionType(py_class)
 
     extension_compiler = JitExtensionCompiler(env, py_class, ext_type, flags,
-                                              AttributesInheriter(),
-                                              AttributeBuilder(),
+                                              JitAttributesInheriter(),
+                                              JitAttributeBuilder(),
                                               virtual.StaticVTabBuilder())
     extension_compiler.infer()
     extension_type = extension_compiler.compile()
