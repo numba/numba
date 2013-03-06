@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 from numba.nodes import *
 
 # not really an expression, but used in an assignment

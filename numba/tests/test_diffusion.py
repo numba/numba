@@ -37,8 +37,8 @@ def test_diffusion():
     tempU_numpy, u_numpy = get_arrays()
     diffusionObstacleStep.py_func(u_numpy, tempU_numpy, iterNum)
 
-    print u
-    print u_numpy
+    print(u)
+    print(u_numpy)
     assert np.allclose(u, u_numpy)
 
 if __name__ == "__main__":

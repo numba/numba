@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 # Use Python.asdl to test bad ast.
 
 import unittest, support, ast

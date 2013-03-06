@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Example for extension classes.
 
@@ -17,6 +18,7 @@ Things that do NOT (yet) work:
         (multiple inheritance with Python classes should work)
     - subclassing variable sized objects like 'str' or 'tuple'
 """
+from __future__ import print_function, division, absolute_import
 
 from numba import jit, void, int_, double
 

@@ -1,4 +1,4 @@
-# -*- coding: Latin-1 -*-
+# -*- coding: utf-8 -*-
 """Graphviz's dot language Python interface.
 
 This module provides with a full interface to create handle modify
@@ -16,6 +16,7 @@ Copyright (c) 2005-2011 Ero Carrera <ero.carrera@gmail.com>
 
 Distributed under MIT license [http://opensource.org/licenses/mit-license.html].
 """
+from __future__ import print_function, division, absolute_import
 
 __revision__ = "$LastChangedRevision: 27 $"
 __author__ = 'Ero Carrera'
@@ -32,7 +33,6 @@ try:
 except Exception as e:
     # print "Couldn't import dot_parser, loading of dot files will not be possible."
     pass
-
 
 
 GRAPH_ATTRIBUTES = set( ['Damping', 'K', 'URL', 'aspect', 'bb', 'bgcolor',
@@ -237,7 +237,7 @@ def graph_from_dot_file(path):
 
 
 
-def graph_from_edges(edge_list, node_prefix='', directed=False):
+def graph_from_edges(edge_list, node_prefix=None, directed=False):
     """Creates a basic graph out of an edge list.
 
     The edge list has to be a list of tuples representing
@@ -247,6 +247,8 @@ def graph_from_edges(edge_list, node_prefix='', directed=False):
     If the graph is undirected by default, it is only
     calculated from one of the symmetric halves of the matrix.
     """
+    if node_prefix is None:
+        node_prefix = unicode('')
 
     if directed:
         graph = Dot(graph_type='digraph')
@@ -272,7 +274,7 @@ def graph_from_edges(edge_list, node_prefix='', directed=False):
     return graph
 
 
-def graph_from_adjacency_matrix(matrix, node_prefix= u'', directed=False):
+def graph_from_adjacency_matrix(matrix, node_prefix= '', directed=False):
     """Creates a basic graph out of an adjacency matrix.
 
     The matrix has to be a list of rows of values
@@ -2022,7 +2024,7 @@ class Dot(Graph):
                 'Program terminated with status: %d. stderr follows: %s' % (
                     status, stderr_output) )
         elif stderr_output:
-            print stderr_output
+            print(stderr_output)
 
         # For each of the image files...
         #

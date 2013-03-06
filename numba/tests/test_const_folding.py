@@ -73,42 +73,42 @@ class TestConstFolding(unittest.TestCase):
 
     def test_cf_1(self):
         astree = self.run_pipeline(cf_1)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         nums = list(self.iter_all(astree, ast.Num))
         self.assertEqual(len(nums), 1)
         self.assertEqual(nums[0].n, (1 + 2))
 
     def test_cf_2(self):
         astree = self.run_pipeline(cf_2)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         nums = list(self.iter_all(astree, ast.Num))
         self.assertEqual(len(nums), 1)
         self.assertEqual(nums[0].n, (1 + 2 - 3 * 4 / 5 // 6 ** 7))
 
     def test_cf_3(self):
         astree = self.run_pipeline(cf_3)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         nums = list(self.iter_all(astree, ast.Num))
         self.assertEqual(len(nums), 1)
         self.assertEqual(nums[0].n, (0xbad & 0xbeef | 0xcafe))
 
     def test_cf_4(self):
         astree = self.run_pipeline(cf_4)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         names = list(self.iter_all(astree, ast.Name))
         self.assertEqual(len(names), 1)
         self.assertEqual(names[0].id, 'True')
 
     def test_cf_5(self):
         astree = self.run_pipeline(cf_5)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         names = list(self.iter_all(astree, ast.Name))
         self.assertEqual(len(names), 1)
         self.assertEqual(names[0].id, str(1 != 2 and 3 < 4 and 5 > 8 / 9))
 
     def test_cf_6(self):
         astree = self.run_pipeline(cf_6)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         names = list(self.iter_all(astree, ast.Name))
         nums = list(self.iter_all(astree, ast.Num))
         self.assertEqual(len(names), 0)
@@ -117,7 +117,7 @@ class TestConstFolding(unittest.TestCase):
 
     def test_cf_7(self):
         astree = self.run_pipeline(cf_7)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         names = list(self.iter_all(astree, ast.Name))
         nums = list(self.iter_all(astree, ast.Num))
         # No removal of constant assignment
@@ -127,7 +127,7 @@ class TestConstFolding(unittest.TestCase):
 
     def test_cf_8(self):
         astree = self.run_pipeline(cf_8)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         names = list(self.iter_all(astree, ast.Name))
         nums = list(self.iter_all(astree, ast.Num))
         self.assertEqual(len(names), 3)
@@ -139,7 +139,7 @@ class TestConstFolding(unittest.TestCase):
 
     def test_cf_9(self):
         astree = self.run_pipeline(cf_9)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         names = list(self.iter_all(astree, ast.Name))
         nums = list(self.iter_all(astree, ast.Num))
         self.assertEqual(len(names), 8)
@@ -147,7 +147,7 @@ class TestConstFolding(unittest.TestCase):
 
     def test_cf_10(self):
         astree = self.run_pipeline(cf_10)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         names = list(self.iter_all(astree, ast.Name))
         nums = list(self.iter_all(astree, ast.Num))
         self.assertEqual(len(names), 2)
@@ -155,7 +155,7 @@ class TestConstFolding(unittest.TestCase):
 
     def test_cf_11(self):
         astree = self.run_pipeline(cf_11)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         names = list(self.iter_all(astree, ast.Name))
         nums = list(self.iter_all(astree, ast.Num))
         self.assertEqual(len(names), 2)
@@ -164,7 +164,7 @@ class TestConstFolding(unittest.TestCase):
     
     def test_cf_12(self):
         astree = self.run_pipeline(cf_12)
-        print utils.pformat_ast(astree)
+        print((utils.pformat_ast(astree)))
         names = list(self.iter_all(astree, ast.Name))
         nums = list(self.iter_all(astree, ast.Num))
         self.assertEqual(len(names), 4)

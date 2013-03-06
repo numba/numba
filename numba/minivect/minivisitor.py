@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Adapted from Cython/Compiler/Visitor.py, see this module for detailed
 explanations.
 """
+from __future__ import print_function, division, absolute_import
 
 import inspect
 
@@ -196,7 +198,7 @@ class PrintTree(TreeVisitor):
         if idx is not None:
             prefix = "%s[%d]" % (prefix, idx)
 
-        print "%s: %s" % (prefix, self.format_node(node))
+        print(("%s: %s" % (prefix, self.format_node(node))))
 
         self.indent += 1
         self.visitchildren(node)

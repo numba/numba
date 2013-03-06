@@ -3,7 +3,6 @@
  * All Rights reserved.
  */
 
-
 #include "miniutils.h"
 #include "_internal.h"
 
@@ -70,7 +69,7 @@ dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
 }
 
 /* NPY_NO_EXPORT */ PyTypeObject PyDynUFunc_Type = {
-#if defined(NPY_PY3K)
+#if PY_MAJOR_VERSION >= 3
     PyVarObject_HEAD_INIT(NULL, 0)
 #else
     PyObject_HEAD_INIT(NULL)
@@ -153,18 +152,6 @@ static PyMethodDef ext_methods[] = {
 /* Don't remove this marker, it is used for inserting licensing code */
 /*MARK1*/
 
-#ifdef IS_PY3K
-
-struct PyModuleDef module_def = {
-    PyModuleDef_HEAD_INIT,
-    "_internal",
-    NULL,
-    -1,
-    ext_methods,
-    NULL, NULL, NULL, NULL
-};
-#endif
-
 static int
 add_ndarray_flags_constants(PyObject *module)
 {
@@ -178,52 +165,42 @@ add_ndarray_flags_constants(PyObject *module)
     return 0;
 }
 
-#ifdef IS_PY3K
-#define RETVAL m
-#define ERR_RETVAL NULL
-PyObject *
-PyInit__internal(void)
-#else
-#define RETVAL
-#define ERR_RETVAL
-PyMODINIT_FUNC
-init_internal(void)
-#endif
+MOD_INIT(_internal)
 {
-    PyObject *m;    //, *d; // unused
+    PyObject *m;
 
     /* Don't remove this marker, it is used for inserting licensing code */
     /*MARK2*/
 
     import_array();
     import_umath();
-    init_ufunc();
-    init_gufunc();
 
-    if (PyErr_Occurred())
-        return ERR_RETVAL;
+    MOD_INIT_EXEC(ufunc)
+    MOD_INIT_EXEC(gufunc)
 
-#ifdef IS_PY3K
-    m = PyModule_Create( &module_def );
-#else
-    m = Py_InitModule("_internal", ext_methods);
-#endif
+    MOD_DEF(m, "_internal", "No docs",
+            ext_methods)
+
+    if (m == NULL)
+        return MOD_ERROR_VAL;
 
     if (add_array_order_constants(m) < 0)
-        return ERR_RETVAL;
+        return MOD_ERROR_VAL;
 
     if (add_ndarray_flags_constants(m) < 0)
-        return ERR_RETVAL;
+        return MOD_ERROR_VAL;
 
     /* Inherit the dynamic UFunc from UFunc */
     PyUFunc_Type.tp_flags |= Py_TPFLAGS_BASETYPE; /* Hack... */
     PyDynUFunc_Type.tp_base = &PyUFunc_Type;
     if (PyType_Ready(&PyDynUFunc_Type) < 0)
-        return ERR_RETVAL;
+        return MOD_ERROR_VAL;
 
     Py_INCREF(&PyDynUFunc_Type);
     if (PyModule_AddObject(m, "dyn_ufunc", (PyObject *) &PyDynUFunc_Type) < 0)
-        return ERR_RETVAL;
+        return MOD_ERROR_VAL;
 
-    return RETVAL;
+
+    return MOD_SUCCESS_VAL(m);
+
 }

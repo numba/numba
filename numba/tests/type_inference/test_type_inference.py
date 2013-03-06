@@ -34,7 +34,7 @@ def _for_loop(start, stop, inc):
     for value in range(start, stop, inc):
         acc += value
 
-    print value
+    print(value)
     return acc
 
 for_loop = decorators.autojit(backend='ast')(_for_loop)

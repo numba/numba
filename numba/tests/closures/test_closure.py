@@ -17,13 +17,13 @@ def error3():
 
     @jit(restype=void, argtypes=[int_, int_, int_])
     def inner(a, b, c):
-        print a, b, c
+        print(str(a) + ' ' + str(b) + ' ' + str(c))
 
 @autojit
 def error4():
     @jit(restype=void, argtypes=[int_, int_, int_])
     def inner(a, b, c):
-        print a, b, c
+        print(str(a) + ' ' + str(b) + ' ' + str(c))
 
     inner(10, a=20, b=30, c=40)
 
@@ -31,7 +31,7 @@ def error4():
 def error5():
     @jit(restype=void, argtypes=[int_, int_, int_])
     def inner(a, b, c):
-        print a, b, c
+        print(str(a) + ' ' + str(b) + ' ' + str(c))
 
     inner(10, a=20, b=30)
 
@@ -40,7 +40,7 @@ def closure1():
     a = 10
     @jit(restype=void, argtypes=[int_])
     def inner(arg):
-        print arg
+        print(str(arg))
 
     return inner
 
@@ -49,7 +49,7 @@ def closure2():
     a = 10
     @jit(restype=void, argtypes=[int_])
     def inner(arg):
-        print arg
+        print(str(arg))
 
     inner(arg=a)
 
@@ -59,7 +59,7 @@ def closure3():
 
     @jit('void()')
     def inner():
-        print a
+        print(a)
 
     a = 12
     inner()
@@ -70,7 +70,7 @@ def closure4():
 
     @jit('void()')
     def inner():
-        print a
+        print(a)
 
     a = 12
     return inner
@@ -85,13 +85,13 @@ def nested_closure():
         b = 10
         @jit('void()')
         def c2():
-            print a, b
+            print(str(a) + ' ' + str(b))
 
         return c2
 
     @jit('void()')
     def c3():
-        print b
+        print(b)
 
     return c1, c3
 
@@ -169,15 +169,15 @@ inner
 def closure_arg(a):
     @jit('object_(object_)')
     def closure1(b):
-        print a, b
+        print(str(a) + ' ' + str(b))
         x = 10 + int_(b)
         @jit('object_(object_)')
         def closure2(c):
-            print a, b, c, x
+            print(str(a) + ' ' + str(b) + ' ' + str(c) + ' ' + str(x))
             y = double(x) + double(c)
             @jit('void(object_)')
             def closure3(d):
-                print a, b, c, d, x, y
+                print(str(a) + ' ' + str(b) + ' ' + str(c) + ' ' + str(d) + ' ' + str(x) + ' ' + str(y))
             return closure3
         return closure2
     return closure1
@@ -217,10 +217,10 @@ __doc__ += \
 def closure_arg_simple(a):
     @jit('object_(object_)')
     def inner(b):
-        print a, b
+        print(str(a) + ' ' + str(b))
         @jit('void(object_)')
         def inner_inner(c):
-            print a, b, c
+            print(str(a) + ' ' + str(b) + ' ' + str(c))
         return inner_inner
     return inner
 
@@ -236,7 +236,7 @@ def closure_skip_level(a):
     def inner():
         @jit('void()')
         def inner_inner():
-            print a
+            print(str(a))
         return inner_inner
     return inner
 
@@ -267,11 +267,9 @@ def wrong_signature(s):
 __doc__ += """
 >>> try_(wrong_signature, "foo")
 --------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
     @jit('object_(object_)')
 -----^
 Error 262:5: Expected 1 arguments type(s), got 0
-<BLANKLINE>
 --------------------------------------------------------------------------------
 NumbaError: 262:5: Expected 1 arguments type(s), got 0
 """
@@ -288,13 +286,11 @@ def wrong_restype():
 __doc__ += """
 >>> try_(wrong_restype)
 --------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
     @jit('object_()')
 ----^
-Error 283:4: Function with non-void return does not return a value
-<BLANKLINE>
+Error 281:4: Function with non-void return does not return a value
 --------------------------------------------------------------------------------
-NumbaError: 283:4: Function with non-void return does not return a value
+NumbaError: 281:4: Function with non-void return does not return a value
 """
 
 #
@@ -322,20 +318,18 @@ def wrong_signature2(s):
 __doc__ += """
 >>> try_(wrong_signature2, "foo")
 --------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
     @object_(object_)
 -----^
-Error 317:5: Expected 1 arguments type(s), got 0
-<BLANKLINE>
+Error 313:5: Expected 1 arguments type(s), got 0
 --------------------------------------------------------------------------------
-NumbaError: 317:5: Expected 1 arguments type(s), got 0
+NumbaError: 313:5: Expected 1 arguments type(s), got 0
 """
 
 @autojit
 def get_closure(arg):
     @void()
     def closure():
-        print arg
+        print(arg)
 
     closure()
     return closure
@@ -382,14 +376,14 @@ def test_closure_loop():
     @jit(void())
     def inner():
         for i in range(cellvar):
-            print i, cellvar
+            print(str(i) + ' ' + str(cellvar))
 
-        print
+        print('')
 
         for i in range(cellvar):
             for j in range(cellvar):
                 if i == j:
-                    print i, cellvar
+                    print(str(i) + ' ' + str(cellvar))
 
     inner()
 
@@ -410,8 +404,8 @@ __doc__ = rewrite_doc(__doc__)
 def try_(func, *args):
     try:
         func(*args)
-    except NumbaError, e:
-        print "%s: %s" % (type(e).__name__, e)
+    except NumbaError as e:
+        print("%s: %s" % (type(e).__name__, e))
 
 if __name__ == '__main__':
 #    closure1 = closure_arg(1)

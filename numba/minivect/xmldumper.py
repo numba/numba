@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Convert a miniast to an XML document using ElementTree. This allows us to
 write XPath unit tests, or just serialize the AST.
 """
+from __future__ import print_function, division, absolute_import
 
 __all__ = ['etree', 'tostring', 'XMLDumper']
 

@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Module that creates wrapper around llvm functions. The wrapper is callable
 from Python.
 """
+from __future__ import print_function, division, absolute_import
 
 import ast
 import ctypes

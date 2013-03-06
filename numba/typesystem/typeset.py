@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Defines the typeset class and a number of builtin type sets.
 """
+from __future__ import print_function, division, absolute_import
 
 import collections
 from functools import reduce

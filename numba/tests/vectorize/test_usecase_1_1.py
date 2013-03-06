@@ -86,6 +86,7 @@ class TestBasicVectorize(unittest.TestCase):
 
         print(module)
         module.verify()
+
         asm = module.to_native_assembly()
         print(asm)
 

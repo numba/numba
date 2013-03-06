@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Support for CFFI. Allows checking whether objects are CFFI functions and
 obtaining the pointer and numba signature.
 """
+from __future__ import print_function, division, absolute_import
 
 from itertools import imap
 

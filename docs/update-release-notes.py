@@ -1,9 +1,11 @@
+# -*- coding: utf-8 -*-
 '''
 Run me to update the release notes in the documentation.
 
 I will pull the content from ../CHANGE_LOG and insert that into
 ./source/doc/releases.rst
 '''
+from __future__ import print_function, division, absolute_import
 
 
 title_template = '''

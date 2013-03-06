@@ -62,7 +62,7 @@ def _get_pyarray_getptr(module):
     function.add_attribute(lc.ATTR_ALWAYS_INLINE) # force inline
     # function.linkage = lc.LINKAGE_INTERNAL
 
-    print function
+    print(function)
 
     # implement the function
     bb_entry = function.append_basic_block('entry')

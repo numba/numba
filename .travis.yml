@@ -26,9 +26,9 @@ install:
   - cd llvmpy ; python setup.py install -q ; cd ..
   - pip -q install cython --install-option="--no-cython-compile" # This takes long
   - pip -q install -r requirements.txt --use-mirrors
-  - python setup.py build_ext --inplace
+  - python setup.py install
 
-script: python runtests.py # nosetests
+script: cd ~; python -c "import sys;import numba;sys.exit(0 if numba.test([]) == 0 else 1)"
 
 matrix:
   allow_failures:

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import pytest
 
 from .llvm_testutils import *
@@ -44,9 +46,9 @@ def test_specializations(arrays, specialization_name, ndim):
     func = build_kernel(specialization_name, ndim)
     x, y, z = arrays[ndim - 1]
 
-    print x.strides, y.strides, z.strides
+    print((x.strides, y.strides, z.strides))
     assert np.all(func(x, y, z) == x + y * z)
 
 specializations = [s for s in sps.keys()
                        if not s.endswith(('_sse', '_avx'))]
-print specializations
+print(specializations)

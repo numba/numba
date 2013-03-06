@@ -104,7 +104,7 @@ class Unique(object):
 def use_objects(obj_array):
     for i in range(10):
         var = obj_array[i]
-        print var
+        print(var)
 
 def test_refcounting():
     L = np.array([Unique(i) for i in range(10)], dtype=np.object)
@@ -116,7 +116,7 @@ def test_refcounting():
     # This fails in nose
     #expected = "\n".join("Unique(%d)" % i for i in range(10)) + '\n'
     #print out.getvalue() == expected
-    print [sys.getrefcount(obj) for obj in L]
+    print([sys.getrefcount(obj) for obj in L])
 
 @autojit(backend='ast', warn=False)
 def fresh_obj():

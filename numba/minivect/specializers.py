@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Specializers for various sorts of data layouts and memory alignments.
 
@@ -8,6 +9,7 @@ with one or several ForNode nodes in a specialized order.
 For auto-tuning code for tile size and OpenMP size, see
 https://github.com/markflorisson88/cython/blob/_array_expressions/Cython/Utility/Vector.pyx
 """
+from __future__ import print_function, division, absolute_import
 
 import sys
 import copy

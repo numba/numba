@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Code writers and formatters. Subclass CodeWriter to suit the needs of
 a certain code generator backend.
 """
+from __future__ import print_function, division, absolute_import
 
 try:
     from Cython.Compiler import Tempita as tempita

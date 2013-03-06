@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Modified from https://github.com/wesm/pandas/blob/master/vb_suite/suite.py
 and https://github.com/wesm/pandas/blob/master/vb_suite/run_suite.py
 """
+from __future__ import print_function, division, absolute_import
 
 import os
 import getpass

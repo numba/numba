@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 """
 Error reporting. Used by the CFA and by each FunctionEnvironment,
 which can collect errors and warnings and issue them after failed or
 successful compilation.
 """
+from __future__ import print_function, division, absolute_import
 
 import sys
 import inspect
@@ -118,11 +120,10 @@ class FancyMessageCollection(MessageCollection):
         self.source_lines = source_lines
 
     def header(self, out):
-        print >>out, " Numba Encountered Errors or Warnings ".center(80, "-")
-        print >>out
+        print(" Numba Encountered Errors or Warnings ".center(80, "-"), file=out)
 
     def footer(self, out):
-        print >>out, "-" * 80
+        print("-" * 80, file=out)
 
     def report_message(self, message, node, type):
         format_msg(type, self.source_lines, node, message)
@@ -134,8 +135,8 @@ def format_msg(type, source_lines, node, msg):
         lineno, colno = getpos(node)
         line = source_lines[lineno]
 
-        print line
-        print "%s^" % ("-" * colno)
+        print(line)
+        print("%s^" % ("-" * colno))
 
     format_msg_simple(type, node, msg)
     print
@@ -143,13 +144,13 @@ def format_msg(type, source_lines, node, msg):
 def format_msg_simple(type, node, message):
     "Issue a warning"
     # printing allows us to test the code
-    print "%s %s%s" % (type, error.format_pos(node), message)
+    print("%s %s%s" % (type, error.format_pos(node), message))
     # logger.warning("Warning %s: %s", error.format_postup(getpos(node)), message)
 
 def warn_unreachable(node):
     "Generate a warning for unreachable code"
     if hasattr(node, 'lineno'):
-        print "Warning, unreachable code at %s" % error.format_pos(node).rstrip(': ')
+        print("Warning, unreachable code at %s" % error.format_pos(node).rstrip(': '))
 
 # ______________________________________________________________________
 

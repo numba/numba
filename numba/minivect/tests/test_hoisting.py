@@ -1,9 +1,11 @@
+# -*- coding: utf-8 -*-
 """
 Test loop-invariant code motion. Write more tests with different associations.
 
 NOTE: most of the tests are part of Cython:
     https://github.com/markflorisson88/cython/tree/_array_expressions/tests/array_expressions
 """
+from __future__ import print_function, division, absolute_import
 
 from .testutils import *
 

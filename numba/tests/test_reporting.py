@@ -4,15 +4,15 @@ from numba import error
 #@autojit
 def func():
     if x:
-        print "hello"
+        print("hello")
     else:
-        print "world"
+        print("world")
 
 def compile_func1():
     try:
         jit(void())(func)
-    except error.NumbaError, e:
-        print "exception:", e
+    except error.NumbaError as e:
+        print("exception: %s" % e)
 
 __doc__ = """
 >>> compile_func1()
@@ -28,13 +28,13 @@ exception: 6:7: No global named 'x'
 
 #@autojit
 def func2():
-    print 10[20]
+    print((10[20]))
 
 def compile_func2():
     try:
         jit(void())(func2)
-    except error.NumbaError, e:
-        print "exception:", e
+    except error.NumbaError as e:
+        print(("exception:", e))
 
 __doc__ += """>>> compile_func2()
 --------------------- Numba Encountered Errors or Warnings ---------------------
@@ -49,13 +49,13 @@ exception: 31:10: object of type int cannot be indexed
 
 @autojit # this often messes up line numbers
 def func_decorated():
-    print 10[20]
+    print((10[20]))
 
 def compile_func3():
     try:
         func_decorated()
-    except error.NumbaError, e:
-        print "exception:", e
+    except error.NumbaError as e:
+        print(("exception:", e))
 
 __doc__ += """
 >>> compile_func3()

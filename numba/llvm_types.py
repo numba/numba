@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 '''llvm_types
 
 Utility module containing common (to Numba) LLVM types.
 '''
+from __future__ import print_function, division, absolute_import
 # ______________________________________________________________________
 
 import ctypes

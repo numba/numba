@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 from numba import *
 
 _trace_refs_ = hasattr(sys, 'getobjects')

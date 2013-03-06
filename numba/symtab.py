@@ -1,7 +1,12 @@
-import collections
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 
 from numba import utils
-from numba import odict
+
+try:
+    from collections import OrderedDict
+except ImportError:
+    from .odict import OrderedDict
 
 import llvm.core
 
@@ -128,9 +133,9 @@ class Variable(object):
         assert not (self.type and type is None)
         from numba.minivect import minitypes
         if type is None:
-            print 'Setting None type!'
+            print('Setting None type!')
         elif not isinstance(type, minitypes.Type):
-            print type
+            print(type)
         self._type = type
 
     # type = property(_type_get, _type_set)
@@ -215,7 +220,7 @@ Variable.make_shared_property('need_arg_copy')
 
 class Symtab(object):
     def __init__(self, symtab_dict=None, parent=None):
-        self.symtab = odict.OrderedDict(symtab_dict or {})
+        self.symtab = OrderedDict(symtab_dict or {})
         self.parent = parent
         self.local_counters = {}
 

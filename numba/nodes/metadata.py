@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Allow annotating AST nodes with some metadata, and querying for that metadata.
 """
+from __future__ import print_function, division, absolute_import
 
 import weakref
 

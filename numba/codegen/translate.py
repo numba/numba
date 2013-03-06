@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import ast
 
 import llvm
@@ -1122,7 +1124,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         meth = getattr(self.builder, llvm_method_name)
         if not lhs.type == rhs.type:
-            print lhs.type, rhs.type
+            print((lhs.type, rhs.type))
             assert False, ast.dump(node)
 
         result = meth(lhs, rhs)

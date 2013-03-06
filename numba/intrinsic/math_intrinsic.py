@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 from .intrinsic import Intrinsic, Signature
 from numba import naming
 from llpython.byte_translator import LLVMTranslator

@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 """
 Support for type functions for external code.
 
 See modules/numpy*.py for type inference for NumPy.
 """
+from __future__ import print_function, division, absolute_import
 
 import ast
 import inspect
@@ -310,8 +312,8 @@ def register_callable(signature):
         return sig
 
     if isinstance(signature, typeset.typeset):
-        signature = typeset.typeset(map(convert_void_to_object,
-                                         signature.types),
+        signature = typeset.typeset([convert_void_to_object(x)
+                                     for x in signature.types],
                                     name=signature.name)
     else:
         assert isinstance(signature, minitypes.Type)

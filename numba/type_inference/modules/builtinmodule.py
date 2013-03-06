@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Type functions for Python builtins.
 """
+from __future__ import print_function, division, absolute_import
 
 from numba import *
 from numba import nodes
