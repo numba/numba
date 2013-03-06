@@ -54,7 +54,11 @@ from numba import typesystem
 from numba import pipeline
 from numba import symtab
 from numba.minivect import minitypes
-from numba.exttypes import signatures, logger
+
+from numba.exttypes import logger
+from numba.exttypes import virtual
+from numba.exttypes import signatures
+from numba.exttypes import extension_types
 
 #------------------------------------------------------------------------
 # Populate Extension Type with Methods
@@ -266,35 +270,33 @@ def compile_extension_methods(env, py_class, ext_type, class_dict, flags):
     return method_pointers, lmethods
 
 #------------------------------------------------------------------------
-# Virtual Methods
+# Build Extension Type
 #------------------------------------------------------------------------
 
-def vtab_name(field_name):
-    "Mangle method names for the vtab (ctypes doesn't handle this)"
-    if field_name.startswith("__") and field_name.endswith("__"):
-        field_name = '__numba_' + field_name.strip("_")
-    return field_name
-
-def build_vtab(vtab_type, method_pointers):
+def create_extension(env, py_class, flags):
     """
-    Create ctypes virtual method table.
-
-    vtab_type: the vtab struct type (typesystem.struct)
-    method_pointers: a list of method pointers ([int])
+    Compile an extension class given the NumbaEnvironment and the Python
+    class that contains the functions that are to be compiled.
     """
-    assert len(method_pointers) == len(vtab_type.fields)
+    flags.pop('llvm_module', None)
 
-    vtab_ctype = numba.struct(
-        [(vtab_name(field_name), field_type)
-            for field_name, field_type in vtab_type.fields]).to_ctypes()
+    ext_type = typesystem.ExtensionType(py_class)
+    class_dict = dict(vars(py_class))
 
-    methods = []
-    for (method_name, method_pointer), (field_name, field_type) in zip(
-                                        method_pointers, vtab_type.fields):
-        assert method_name == field_name
-        method_type_p = field_type.to_ctypes()
-        cmethod = ctypes.cast(ctypes.c_void_p(method_pointer), method_type_p)
-        methods.append(cmethod)
+    inherit_attributes(ext_type, class_dict)
+    process_class_attribute_types(ext_type, class_dict)
 
-    vtab = vtab_ctype(*methods)
-    return vtab, vtab_type
+    method_pointers, lmethods = compile_extension_methods(
+            env, py_class, ext_type, class_dict, flags)
+    inject_descriptors(env, py_class, ext_type, class_dict)
+
+    vtab, vtab_type = virtual.build_vtab(ext_type.vtab_type, method_pointers)
+
+    logger.debug("struct: %s" % ext_type.attribute_struct)
+    logger.debug("ctypes struct: %s" % ext_type.attribute_struct.to_ctypes())
+
+    extension_type = extension_types.create_new_extension_type(
+            py_class.__name__, py_class.__bases__, class_dict,
+            ext_type, vtab, vtab_type,
+            lmethods, method_pointers)
+    return extension_type
