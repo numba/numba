@@ -1,5 +1,7 @@
+import numpy as np
+import time
 from . import binding
-from numbapro.cuda import _auto_device
+from numbapro import cuda
 
 class RNG(object):
     "cuRAND pseudo random number generator"
@@ -72,21 +74,21 @@ class PRNG(RNG):
         '''
         self._require_array(ary)
         size = size or ary.size
-        dary, conv = _auto_device(ary, stream=self.stream)
+        dary, conv = cuda._auto_device(ary, stream=self.stream)
         self._gen.generate_uniform(dary, size)
         if conv:
             dary.to_host(stream=self.stream)
 
     def normal(self, ary, mean, sigma, size=None):
         '''Generate floating point random number sampled
-           from a normal distribution
+        from a normal distribution
 
-            ary --- numpy array or cuda device array.
-            size --- number of samples; optional, default to array size
+        ary --- numpy array or cuda device array.
+        size --- number of samples; optional, default to array size
         '''
         self._require_array(ary)
         size = size or ary.size
-        dary, conv = _auto_device(ary, stream=self.stream)
+        dary, conv = cuda._auto_device(ary, stream=self.stream)
         self._gen.generate_normal(dary, size, mean, sigma)
         if conv:
             dary.to_host(stream=self.stream)
@@ -101,7 +103,7 @@ class PRNG(RNG):
         '''
         self._require_array(ary)
         size = size or ary.size
-        dary, conv = _auto_device(ary, stream=self.stream)
+        dary, conv = cuda._auto_device(ary, stream=self.stream)
         self._gen.generate_log_normal(dary, size, mean, sigma)
         if conv:
             dary.to_host(stream=self.stream)
@@ -116,7 +118,7 @@ class PRNG(RNG):
         '''
         self._require_array(ary)
         size = size or ary.size
-        dary, conv = _auto_device(ary, stream=self.stream)
+        dary, conv = cuda._auto_device(ary, stream=self.stream)
         self._gen.generate_poisson(dary, lmbd, size)
         if conv:
             dary.to_host(stream=self.stream)
@@ -168,9 +170,129 @@ class QRNG(RNG):
         """
         self._require_array(ary)
         size = size or ary.size
-        dary, conv = _auto_device(ary, stream=self.stream)
+        dary, conv = cuda._auto_device(ary, stream=self.stream)
         self._gen.generate(dary, size)
         if conv:
             dary.to_host(stream=self.stream)
 
 
+#
+# Top level function entry points.
+#
+
+_global_rng = {}
+
+def _get_prng():
+    key = 'prng'
+    prng = _global_rng.get(key)
+    if not prng:
+        prng = PRNG()
+        prng.seed = int(time.time())
+        _global_rng[key] = prng
+    return prng
+
+
+def _get_qrng(bits):
+    assert bits in {32, 64}
+    key = 'qrng%d' % bits
+    qrng = _global_rng.get(key)
+    if not qrng:
+        qrng = QRNG(rndtype=getattr(QRNG, 'SOBOL%d' % bits))
+        _global_rng[key] = qrng
+    return qrng
+
+def uniform(size, dtype=np.float, device=False):
+    '''Generate floating point random number sampled
+    from a uniform distribution
+
+    size --- number of samples; optional, default to array size
+    dtype --- np.float32 or np.float64
+    device --- set to True to return a device array instead or ndarray
+    '''
+    ary = np.empty(size, dtype=dtype)
+    devary = cuda.to_device(ary, copy=False)
+    prng = _get_prng()
+    prng.uniform(devary, size)
+    if device:
+        return devary
+    else:
+        devary.to_host()
+        return ary
+
+def normal(mean, sigma, size, dtype=np.float, device=False):
+    '''Generate floating point random number sampled
+    from a normal distribution
+
+    size --- number of samples; optional, default to array size
+    dtype --- np.float32 or np.float64
+    device --- set to True to return a device array instead or ndarray
+    '''
+    ary = np.empty(size, dtype=dtype)
+    devary = cuda.to_device(ary, copy=False)
+    prng = _get_prng()
+    prng.normal(devary, mean, sigma, size)
+    if device:
+        return devary
+    else:
+        devary.to_host()
+        return ary
+
+def lognormal(mean, sigma, size, dtype=np.float, device=False):
+    '''Generate floating point random number sampled
+    from a log-normal distribution
+
+    size --- number of samples; optional, default to array size
+    dtype --- np.float32 or np.float64
+    device --- set to True to return a device array instead or ndarray
+    '''
+    ary = np.empty(size, dtype=dtype)
+    devary = cuda.to_device(ary, copy=False)
+    prng = _get_prng()
+    prng.lognormal(devary, mean, sigma, size)
+    if device:
+        return devary
+    else:
+        devary.to_host()
+        return ary
+
+def poisson(lmbd, size, device=False):
+    '''Generate floating point random number sampled
+    from a poisson distribution
+
+    lmbda --- lambda
+    size --- number of samples; optional, default to array size
+    device --- set to True to return a device array instead or ndarray
+    '''
+    ary = np.empty(size, dtype=np.uint32)
+    devary = cuda.to_device(ary, copy=False)
+    prng = _get_prng()
+    prng.poisson(devary, lmbd, size)
+    if device:
+        return devary
+    else:
+        devary.to_host()
+        return ary
+
+def quasi(size, bits=32, nd=1, device=False):
+    '''
+    Generate quasi random number using SOBOL{bits} RNG type.
+        
+    bits --- bit length of output element; e.g. 32 or 64.
+    device --- set to True to return a device array instead or ndarray
+    '''
+    if bits == 64:
+        dtype = np.uint64
+    elif bits == 32:
+        dtype = np.uint32
+    else:
+        raise ValueError("Only accept bits = 32 or 64")
+    ary = np.empty(size, dtype=dtype)
+    devary = cuda.to_device(ary, copy=False)
+    qrng = _get_qrng(bits)
+    qrng.ndim = nd
+    qrng.generate(devary, size)
+    if device:
+        return devary
+    else:
+        devary.to_host()
+        return ary

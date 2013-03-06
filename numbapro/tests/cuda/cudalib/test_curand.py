@@ -155,6 +155,52 @@ class TestCURandAPI(unittest.TestCase):
         self.assertTrue(any(ary != 0))
 
 
+class TestTopLevel(unittest.TestCase):
+    def test_uniform(self):
+        from numbapro.cudalib import curand
+        A = curand.uniform(10)
+        B = curand.uniform(10)
+        self.assertTrue(np.mean(abs((A - B) / B)) > .10)
+
+    def test_normal(self):
+        from numbapro.cudalib import curand
+        A = curand.normal(0, 1, 10)
+        B = curand.normal(0, 1, 10)
+        self.assertTrue(np.mean(abs((A - B) / B)) > .10)
+
+    def test_lognormal(self):
+        from numbapro.cudalib import curand
+        A = curand.lognormal(0, 1, 10)
+        B = curand.lognormal(0, 1, 10)
+        self.assertTrue(np.mean(abs((A - B) / B)) > .10)
+
+    def test_poisson(self):
+        from numbapro.cudalib import curand
+        A = curand.poisson(10, 10)
+        B = curand.poisson(10, 10)
+        self.assertTrue(np.mean(abs((A - B) / B)) > .10)
+
+    def test_quasi(self):
+        from numbapro.cudalib import curand
+        A = curand.quasi(10, nd=1, bits=32)
+        B = curand.quasi(10, nd=1, bits=32)
+        self.assertTrue(np.mean(abs((A - B) / B)) > .10)
+
+        A = curand.quasi(10, nd=1, bits=64)
+        B = curand.quasi(10, nd=1, bits=64)
+        self.assertTrue(np.mean(abs((A - B) / B)) > .10)
+
+        A = curand.quasi(10, nd=5, bits=32)
+        B = curand.quasi(10, nd=5, bits=32)
+        self.assertTrue(np.mean(abs((A - B) / B)) > .10)
+
+        A = curand.quasi(10, nd=5, bits=64)
+        B = curand.quasi(10, nd=5, bits=64)
+        self.assertTrue(np.mean(abs((A - B) / B)) > .10)
+
 
 if __name__ == '__main__':
     unittest.main()
+
+
+cuda.curand.lognormal()
