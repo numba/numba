@@ -66,6 +66,15 @@ def init2(n=200):
 rk_address = ct.POINTER(rk_state)
 rk_error = ct.c_int
 
-execfile('_rng_generated.py')
+_thisname = os.path.abspath(__file__)
+_filename = os.path.dirname(_thisname) + os.path.sep + '_rng_generated.py'
+with open(_filename) as f:
+    _code = compile(f.read(), _filename, 'exec')
+    exec(_code)
+
+del _thisname
+del _filename
+del f
+del _code
 
 init()
