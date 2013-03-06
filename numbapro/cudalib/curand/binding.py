@@ -261,11 +261,12 @@ class Generator(finalizer.OwnerMixin):
         self._api = libcurand()
         self._handle = curandGenerator_t(0)
         status = self._api.curandCreateGenerator(byref(self._handle), rng_type)
-        self._finalizer_track(self._handle)
+        self._finalizer_track((self._handle, self._api))
 
     @classmethod
-    def _finalize(cls, handle):
-        libcurand().curandDestroyGenerator(handle)
+    def _finalize(cls, res):
+        handle, api = res
+        api.curandDestroyGenerator(handle)
 
     def set_stream(self, stream):
         return self._api.curandSetStream(self._handle, stream._handle)
