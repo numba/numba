@@ -4,8 +4,6 @@
 >>> compile_class(True).__name__
 Warning 19:11: Unused argument 'self'
 Warning 19:17: Unused argument 'argument'
-Warning 19:11: Unused argument 'self'
-Warning 19:17: Unused argument 'argument'
 'Base'
 """
 
@@ -21,10 +19,7 @@ def compile_class(warn):
 
     return Base
 
-def test():
-    import doctest
-    doctest.testmod()
-
 if __name__ == '__main__':
     # compile_class()
-    test()
+    import doctest
+    doctest.testmod()

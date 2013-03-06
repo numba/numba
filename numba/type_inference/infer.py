@@ -45,7 +45,7 @@ def lookup_global(env, name, position_node):
     elif name in func_env.function_globals:
         value = func_env.function_globals[name]
     elif func and name == func.__name__:
-        # Assume recursive function
+        # Assume recursive function, grab function from cache
         value = numba.jit(func_env.func_signature)(func)
     else:
         raise error.NumbaError(position_node, "No global named '%s'" % (name,))

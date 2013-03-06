@@ -45,16 +45,17 @@ See also extension_types.pyx
 """
 
 import numba
-from numba import *
 from numba import error
 from numba import typesystem
 from numba import pipeline
 from numba import symtab
+from numba.exttypes.utils import is_numba_class
 from numba.minivect import minitypes
 
 from numba.exttypes import logger
 from numba.exttypes import virtual
 from numba.exttypes import signatures
+from numba.exttypes import utils
 from numba.exttypes import extension_types
 
 #------------------------------------------------------------------------
@@ -74,6 +75,9 @@ class ExtensionCompiler(object):
         self.inheriter = inheriter
         self.attrbuilder = attrbuilder
         self.vtabbuilder = vtabbuilder
+
+        # Partial function environments held after type inference has run
+        self.func_envs = {}
 
     #------------------------------------------------------------------------
     # Type Inference
@@ -116,9 +120,13 @@ class ExtensionCompiler(object):
         signature = self.ext_type.get_signature(method_name)
         restype, argtypes = signature.return_type, signature.args
 
-        func_signature, symtab, ast = pipeline.infer_types2(
-                self.env, method.py_func, restype, argtypes, **self.flags)
-        self.ext_type.add_method(method_name, func_signature)
+        func_env = pipeline.compile2(self.env, method.py_func,
+                                     restype, argtypes,
+                                     pipeline_name='type_infer',
+                                     **self.flags)
+        self.func_envs[method] = func_env
+
+        self.ext_type.add_method(method_name, func_env.func_signature)
 
     def type_infer_init_method(self):
         initfunc = self.class_dict.get('__init__', None)
@@ -150,15 +158,30 @@ class ExtensionCompiler(object):
             6) Compile all methods
         """
         self.class_dict['__numba_py_class'] = self.py_class
-
         method_pointers, lmethods = self.compile_methods()
-
         vtab = self.vtabbuilder.build_vtab(self.ext_type, method_pointers)
+        return self.build_extension_type(lmethods, method_pointers, vtab)
 
-        logger.debug("struct: %s" % self.ext_type.attribute_struct)
-        logger.debug("ctypes struct: %s" %
-                            self.ext_type.attribute_struct.to_ctypes())
+    def inherit_method(self, method_name, *args, **kwargs):
+        """
+        Inherit a method from a superclass in the vtable.
 
+        :return: a pointer to the function.
+        """
+
+    def compile_methods(self):
+        """
+        Compile all methods, reuse function environments from type inference
+        stage.
+
+        :return: ([method_pointers], [llvm_funcs])
+        """
+
+    def build_extension_type(self, lmethods, method_pointers, vtab):
+        """
+        Build extension type from llvm methods and pointers and a populated
+        virtual method table.
+        """
         extension_type = extension_types.create_new_extension_type(
             self.py_class.__name__, self.py_class.__bases__, self.class_dict,
             self.ext_type, vtab, self.ext_type.vtab_type,
@@ -166,18 +189,27 @@ class ExtensionCompiler(object):
 
         return extension_type
 
+
+class JitExtensionCompiler(ExtensionCompiler):
+
+    def inherit_method(self, method_name, slot_idx):
+        "Inherit a method from a superclass in the vtable"
+        parent_method_pointers = utils.get_method_pointers(self.py_class)
+
+        assert parent_method_pointers is not None
+        name, pointer = parent_method_pointers[slot_idx]
+        assert name == method_name
+
+        return pointer
+
     def compile_methods(self):
         method_pointers = []
         lmethods = []
-        parent_method_pointers = getattr(
-                        self.ext_type.py_class, '__numba_method_pointers', None)
+
         for i, (method_name, func_signature) in enumerate(self.ext_type.methods):
             if method_name not in self.class_dict:
-                # Inherited method
-                assert parent_method_pointers is not None
-                name, p = parent_method_pointers[i]
-                assert name == method_name
-                method_pointers.append((method_name, p))
+                pointer = self.inherit_method(method_name, i)
+                method_pointers.append((method_name, pointer))
                 continue
 
             method = self.class_dict[method_name]
@@ -186,10 +218,8 @@ class ExtensionCompiler(object):
             # TODO: delayed types and circular calls/variable assignments
             logger.debug(method.py_func)
 
-            func_env = pipeline.compile2(
-                self.env, method.py_func, func_signature.return_type,
-                func_signature.args, name=method.py_func.__name__,
-                **self.flags)
+            func_env = self.func_envs[method]
+            pipeline.run_env(self.env, func_env, pipeline_name='compile')
 
             lmethods.append(func_env.lfunc)
             method_pointers.append((method_name, func_env.translator.lfunc_pointer))
@@ -198,15 +228,10 @@ class ExtensionCompiler(object):
 
         return method_pointers, lmethods
 
+
 #------------------------------------------------------------------------
 # Attribute Inheritance
 #------------------------------------------------------------------------
-
-def get_struct_type(py_class):
-    return py_class.__numba_struct_type
-
-def get_vtab_type(py_class):
-    return py_class.__numba_vtab_type
 
 class AttributesInheriter(object):
 
@@ -221,8 +246,8 @@ class AttributesInheriter(object):
             # superclass is not a numba class
             return
 
-        struct_type = get_struct_type(cls)
-        vtab_type = get_vtab_type(cls)
+        struct_type = utils.get_struct_type(cls)
+        vtab_type = utils.get_vtab_type(cls)
         self._verify_base_class_compatibility(cls, struct_type, vtab_type)
 
         # Inherit attributes
@@ -262,8 +287,8 @@ class AttributesInheriter(object):
         bases = [py_class]
         for base in py_class.__bases__:
             if is_numba_class(base):
-                attr_prefix = get_struct_type(base).is_prefix(struct_type)
-                method_prefix = get_vtab_type(base).is_prefix(vtab_type)
+                attr_prefix = utils.get_struct_type(base).is_prefix(struct_type)
+                method_prefix = utils.get_vtab_type(base).is_prefix(vtab_type)
                 if not attr_prefix or not method_prefix:
                     raise error.NumbaError(
                                 "Multiple incompatible base classes found: "
@@ -313,20 +338,6 @@ class AttributeBuilder(object):
             descriptor = self._create_descr(attr_name)
             class_dict[attr_name] = descriptor
 
-#------------------------------------------------------------------------
-# Build Virtual Method Table
-#------------------------------------------------------------------------
-
-class VTabBuilder(object):
-
-    def build_vtab_type(self, ext_type):
-        "Build vtab type before compiling"
-        ext_type.vtab_type = numba.struct(
-            [(field_name, field_type.pointer())
-                for field_name, field_type in ext_type.methods])
-
-    def build_vtab(self, ext_type, method_pointers):
-        return virtual.build_vtab(ext_type.vtab_type, method_pointers)
 
 #------------------------------------------------------------------------
 # Build Extension Type
@@ -341,17 +352,10 @@ def create_extension(env, py_class, flags):
 
     ext_type = typesystem.ExtensionType(py_class)
 
-    extension_compiler = ExtensionCompiler(env, py_class, ext_type, flags,
-                                           AttributesInheriter(),
-                                           AttributeBuilder(),
-                                           VTabBuilder())
+    extension_compiler = JitExtensionCompiler(env, py_class, ext_type, flags,
+                                              AttributesInheriter(),
+                                              AttributeBuilder(),
+                                              virtual.StaticVTabBuilder())
     extension_compiler.infer()
     extension_type = extension_compiler.compile()
     return extension_type
-
-#------------------------------------------------------------------------
-# Type checking
-#------------------------------------------------------------------------
-
-def is_numba_class(cls):
-    return hasattr(cls, '__numba_struct_type')

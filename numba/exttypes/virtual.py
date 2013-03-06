@@ -38,3 +38,18 @@ def build_vtab(vtab_type, method_pointers):
 
     vtab = vtab_ctype(*methods)
     return vtab
+
+#------------------------------------------------------------------------
+# Build Virtual Method Table
+#------------------------------------------------------------------------
+
+class StaticVTabBuilder(object):
+
+    def build_vtab_type(self, ext_type):
+        "Build vtab type before compiling"
+        ext_type.vtab_type = numba.struct(
+            [(field_name, field_type.pointer())
+                for field_name, field_type in ext_type.methods])
+
+    def build_vtab(self, ext_type, method_pointers):
+        return build_vtab(ext_type.vtab_type, method_pointers)
