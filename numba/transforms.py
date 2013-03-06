@@ -938,7 +938,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
     def visit_Name(self, node):
         if node.variable.is_constant:
             obj = node.variable.constant_value
-            return nodes.const(obj, node.type)
+            return self.visit(nodes.const(obj, node.type))
 
         return node
 
