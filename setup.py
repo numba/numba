@@ -13,7 +13,13 @@ extensions = [
                #'../ulib/src/base/md5sum.c',
                #'../ulib/src/base/hash.c'
               ],
-              include_dirs=include_dirs)]
+              include_dirs=include_dirs),
+    Extension("extensibletype.intern",
+              ["extensibletype/intern.pyx"],
+              include_dirs=include_dirs,
+              depends=["include/globalinterning.h",
+                       "include/interning.h"]),
+]
 
 setup(cmdclass={'build_ext': build_ext},
       ext_modules=extensions)
