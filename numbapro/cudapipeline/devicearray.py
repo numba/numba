@@ -23,7 +23,7 @@ class DeviceArrayBase(object):
 
     @property
     def device_raw_ptr(self):
-        return self.device_data._handle
+        return self.device_raw._handle
 
 
 class DeviceArray(DeviceArrayBase):

@@ -3,14 +3,13 @@ import contextlib
 from .cudapipeline import initialize as _initialize
 from .cudapipeline.special_values import *
 from .cudapipeline import driver as _driver
-
+from .cudapipeline.devicearray import DeviceArrayBase, DeviceNDArray, DeviceArray
 from .cudapipeline.decorators import jit, autojit
 
 # NDarray device helper
 @_driver.require_context
 def to_device(ary, stream=0, copy=True):
-    from numbapro.cudapipeline import devicearray
-    devarray = ary.view(type=devicearray.DeviceNDArray)
+    devarray = ary.view(type=DeviceNDArray)
     devarray.device_allocate(stream=stream)
     if copy:
         devarray.to_device(stream=stream)
@@ -18,8 +17,7 @@ def to_device(ary, stream=0, copy=True):
 
 @_driver.require_context
 def device_array(shape, strides, dtype, order='C', stream=0):
-    from numbapro.cudapipeline import devicearray
-    return devicearray.DeviceArray(shape, strides, dtype, order, stream)
+    return DeviceArray(shape, strides, dtype, order, stream)
 
 def device_array_like(ary, stream=0):
     order = ''
@@ -55,7 +53,6 @@ def mapped(*arylist, **kws):
     assert not kws or 'stream' in kws, "Only accept 'stream' as keyword."
     from numbapro._utils.ndarray import ndarray_datasize
     from numbapro.cudapipeline.driver import PinnedMemory
-    from numbapro.cudapipeline import devicearray
     pmlist = []
     stream = kws.get('stream', 0)
     for ary in arylist:
@@ -65,7 +62,7 @@ def mapped(*arylist, **kws):
     devarylist = []
     for pm in pmlist:
         dptr = pm.get_device_pointer()
-        devary = ary.view(type=devicearray.DeviceNDArray)
+        devary = ary.view(type=DeviceNDArray)
         devary.device_mapped(dptr, stream=stream)
         devarylist.append(devary)
     if len(devarylist) == 1:
@@ -97,6 +94,14 @@ def close():
     from numbapro.cudapipeline import driver as cu
     driver = cu.Driver()
     driver.release_context(driver.current_context())
+
+
+
+def _auto_device(ary, stream=0):
+    if isinstance(ary, DeviceArrayBase):
+        return ary, False
+    else:
+        return to_device(ary, stream=stream), True
 
 
 #
