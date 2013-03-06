@@ -1,12 +1,25 @@
 """
 Virtual methods using virtual method tables.
+
+Note that for @jit classes, we do not support multiple inheritance with
+incompatible base objects. We could use a dynamic offset to base classes,
+and adjust object pointers for method calls, like in C++:
+
+    http://www.phpcompiler.org/articles/virtualinheritance.html
+
+However, this is quite complicated, and still doesn't allow dynamic extension
+for autojit classes. Instead we will use Dag Sverre Seljebotn's hash-based
+virtual method tables:
+
+    https://github.com/numfocus/sep/blob/master/sep200.rst
+    https://github.com/numfocus/sep/blob/master/sep201.rst
 """
 
 import numba
 import ctypes
 
 #------------------------------------------------------------------------
-# Virtual Methods
+# Static Virtual Method Tables
 #------------------------------------------------------------------------
 
 def vtab_name(field_name):
@@ -15,7 +28,7 @@ def vtab_name(field_name):
         field_name = '__numba_' + field_name.strip("_")
     return field_name
 
-def build_vtab(vtab_type, method_pointers):
+def build_static_vtab(vtab_type, method_pointers):
     """
     Create ctypes virtual method table.
 
@@ -39,9 +52,8 @@ def build_vtab(vtab_type, method_pointers):
     vtab = vtab_ctype(*methods)
     return vtab
 
-#------------------------------------------------------------------------
+# ______________________________________________________________________
 # Build Virtual Method Table
-#------------------------------------------------------------------------
 
 class StaticVTabBuilder(object):
 
@@ -52,4 +64,4 @@ class StaticVTabBuilder(object):
                 for field_name, field_type in ext_type.methods])
 
     def build_vtab(self, ext_type, method_pointers):
-        return build_vtab(ext_type.vtab_type, method_pointers)
+        return build_static_vtab(ext_type.vtab_type, method_pointers)
