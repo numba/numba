@@ -37,4 +37,4 @@ def build_vtab(vtab_type, method_pointers):
         methods.append(cmethod)
 
     vtab = vtab_ctype(*methods)
-    return vtab, vtab_type
+    return vtab
