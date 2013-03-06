@@ -7,7 +7,8 @@ import numpy as np
 from numba import *
 from numba.minivect import minitypes
 from numba import typesystem
-from numba.type_inference.module_type_inference import (register,
+from numba.type_inference.module_type_inference import (module_registry,
+                                                        register,
                                                         register_inferer,
                                                         register_unbound)
 from numba.typesystem import get_type
@@ -42,6 +43,84 @@ def _dtype(a, dtype, static_dtype):
         return a
     else:
         return None
+
+#------------------------------------------------------------------------
+# Ufunc Type Strings
+#------------------------------------------------------------------------
+
+def numba_type_from_sig(ufunc_signature):
+    """
+    Convert ufunc type signature string (e.g. 'dd->d') to a FunctionType
+    """
+    args, ret = ufunc_signature.split('->')
+    to_numba = lambda c: minitypes.map_dtype(np.dtype(c))
+
+    signature = to_numba(ret)(*map(to_numba, args))
+    return signature
+
+def find_signature(args, signatures):
+    for signature in signatures:
+        if signature.args == args:
+            return signature
+
+def find_ufunc_signature(context, argtypes, signatures):
+    """
+    Map (float_, double) and [double(double, double),
+                              int_(int_, int_),
+                              ...]
+    to double(double, double)
+    """
+    signature = find_signature(tuple(argtypes), signatures)
+
+    if signature is not None:
+        return signature
+
+    argtype = reduce(context.promote_types, argtypes)
+    if not argtype.is_object:
+        args = (argtype,) * len(argtypes)
+        return find_signature(args, signatures)
+
+    return None
+
+class UfuncTypeInferer(object):
+    "Infer types for arbitrary ufunc"
+
+    def __init__(self, ufunc):
+        self.ufunc = ufunc
+        self.signatures = set(map(numba_type_from_sig, ufunc.types))
+
+    def infer(self, context, argtypes):
+        signature = find_ufunc_signature(context, argtypes, self.signatures)
+        if signature is None:
+            return None
+        else:
+            return signature.return_type
+
+def register_arbitrary_ufunc(ufunc):
+    "Type inference for arbitrary ufuncs"
+    ufunc_infer = UfuncTypeInferer(ufunc)
+
+    def infer(context, *args, **kwargs):
+        if len(args) != ufunc.nin:
+            return object_
+
+        # Find the right ufunc signature
+        argtypes = [type.dtype if type.is_array else type for type in args]
+        result_type = ufunc_infer.infer(context, argtypes)
+
+        if result_type is None:
+            return object_
+
+        # Determine output ndim
+        ndim = 0
+        for argtype in args:
+            if argtype.is_array:
+                ndim = max(argtype.ndim, ndim)
+
+        return typesystem.array(result_type, ndim)
+
+    module_registry.register_value(ufunc, infer)
+    # module_registry.register_unbound_dotted_value
 
 #----------------------------------------------------------------------------
 # Ufunc type inference
@@ -155,16 +234,22 @@ if not PY3:
 register_inferer(np, 'sum', reduce_)
 register_inferer(np, 'prod', reduce_)
 
-for binary_ufunc in binary_ufuncs_bitwise + binary_ufuncs_arithmetic:
+def register_arithmetic_ufunc(register_inferer, register_unbound, binary_ufunc):
     register_inferer(np, binary_ufunc, binary_map)
     register_unbound(np, binary_ufunc, "reduce", reduce_)
     register_unbound(np, binary_ufunc, "accumulate", accumulate)
     register_unbound(np, binary_ufunc, "reduceat", reduceat)
     register_unbound(np, binary_ufunc, "outer", outer)
 
-for binary_ufunc in binary_ufuncs_compare + binary_ufuncs_logical:
+def register_bool_ufunc(register_inferer, register_unbound, binary_ufunc):
     register_inferer(np, binary_ufunc, binary_map_bool)
     register_unbound(np, binary_ufunc, "reduce", reduce_bool)
     register_unbound(np, binary_ufunc, "accumulate", accumulate_bool)
     register_unbound(np, binary_ufunc, "reduceat", reduceat_bool)
     register_unbound(np, binary_ufunc, "outer", outer_bool)
+
+for binary_ufunc in binary_ufuncs_bitwise + binary_ufuncs_arithmetic:
+    register_arithmetic_ufunc(register_inferer, register_unbound, binary_ufunc)
+
+for binary_ufunc in binary_ufuncs_compare + binary_ufuncs_logical:
+    register_bool_ufunc(register_inferer, register_unbound, binary_ufunc)
