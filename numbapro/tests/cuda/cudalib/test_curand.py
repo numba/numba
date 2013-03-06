@@ -2,17 +2,20 @@ import numpy as np
 import unittest
 
 from numbapro import cuda
-from numbapro.cudalib.curand import binding as api
 
 class TestCURand(unittest.TestCase):
     def test_lib(self):
-        curand = api.libcurand()
-        print('curand version %d' % api.libcurand().version)
-        self.assertNotEqual(api.libcurand().version, 0)
+        from numbapro.cudalib.curand.binding import libcurand
+        curand = libcurand()
+        print('curand version %d' % libcurand().version)
+        self.assertNotEqual(libcurand().version, 0)
 
 
 class TestCURandPseudo(unittest.TestCase):
     def setUp(self):
+        from numbapro.cudalib.curand.binding import (Generator,
+                                                     CURAND_RNG_PSEUDO_DEFAULT)
+
         self.N = 10
         self.ary32 = np.zeros(self.N, dtype=np.float32)
         self.ary64 = np.zeros(self.N, dtype=np.float64)
@@ -21,7 +24,7 @@ class TestCURandPseudo(unittest.TestCase):
         self.devary32 = cuda.to_device(self.ary32, stream=self.stream)
         self.devary64 = cuda.to_device(self.ary64, stream=self.stream)
 
-        self.rndgen = api.Generator(api.CURAND_RNG_PSEUDO_DEFAULT)
+        self.rndgen = Generator(CURAND_RNG_PSEUDO_DEFAULT)
         self.rndgen.set_stream(self.stream)
         self.rndgen.set_offset(123)
         self.rndgen.set_pseudo_random_generator_seed(1234)
@@ -63,13 +66,16 @@ class TestCURandPseudo(unittest.TestCase):
 
 class TestCURandQuasi(unittest.TestCase):
     def test_generate(self):
+        from numbapro.cudalib.curand.binding import (Generator,
+                                                     CURAND_RNG_QUASI_SOBOL64,
+                                                     CURAND_RNG_QUASI_DEFAULT)
         N = 10
         stream = cuda.stream()
 
         ary32 = np.zeros(N, dtype=np.uint32)
         devary32 = cuda.to_device(ary32, stream=stream)
 
-        rndgen = api.Generator(api.CURAND_RNG_QUASI_DEFAULT)
+        rndgen = Generator(CURAND_RNG_QUASI_DEFAULT)
         rndgen.set_stream(stream)
         rndgen.set_offset(123)
         rndgen.set_quasi_random_generator_dimensions(1)
@@ -84,7 +90,7 @@ class TestCURandQuasi(unittest.TestCase):
         ary64 = np.zeros(N, dtype=np.uint64)
         devary64 = cuda.to_device(ary64, stream=stream)
 
-        rndgen = api.Generator(api.CURAND_RNG_QUASI_SOBOL64)
+        rndgen = Generator(CURAND_RNG_QUASI_SOBOL64)
         rndgen.set_stream(stream)
         rndgen.set_offset(123)
         rndgen.set_quasi_random_generator_dimensions(1)
@@ -95,6 +101,25 @@ class TestCURandQuasi(unittest.TestCase):
 
         self.assertTrue(any(ary64 != 0))
 
+
+class TestCURandAPI(unittest.TestCase):
+    def test_pseudo(self):
+        from numbapro.cudalib import curand
+        prng = curand.PRNG()
+        prng.seed = 0xbeef
+        N = 10
+        ary = np.zeros(N, dtype=np.float32)
+        prng.uniform(ary, N)
+        self.assertTrue(any(ary != 0))
+
+    def test_quasi(self):
+        from numbapro.cudalib import curand
+        qrng = curand.QRNG()
+        qrng.ndim = 2
+        N = 10
+        ary = np.zeros(N, dtype=np.uint32)
+        qrng.generate(ary, N)
+        self.assertTrue(any(ary != 0))
 
 
 
