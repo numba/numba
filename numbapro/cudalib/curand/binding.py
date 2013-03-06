@@ -6,32 +6,34 @@ from numbapro.cudapipeline.driver import cu_stream
 from numbapro._utils import finalizer
 
 # enum curandStatus
-## No errors
-CURAND_STATUS_SUCCESS = 0
-## Header file and linked library version do not match
-CURAND_STATUS_VERSION_MISMATCH = 100
-## Generator not initialized
-CURAND_STATUS_NOT_INITIALIZED = 101
-## Memory allocation failed
-CURAND_STATUS_ALLOCATION_FAILED = 102
-## Generator is wrong type
-CURAND_STATUS_TYPE_ERROR = 103
-## Argument out of range
-CURAND_STATUS_OUT_OF_RANGE = 104
-## Length requested is not a multple of dimension
-CURAND_STATUS_LENGTH_NOT_MULTIPLE = 105
-## GPU does not have double precision required by MRG32k3a
-CURAND_STATUS_DOUBLE_PRECISION_REQUIRED = 106
-## Kernel launch failure
-CURAND_STATUS_LAUNCH_FAILURE = 201
-## Preexisting failure on library entry
-CURAND_STATUS_PREEXISTING_FAILURE = 202
-## Initialization of CUDA failed
-CURAND_STATUS_INITIALIZATION_FAILED = 203
-## Architecture mismatch, GPU does not support requested feature
-CURAND_STATUS_ARCH_MISMATCH = 204
-## Internal library error
-CURAND_STATUS_INTERNAL_ERROR = 999
+STATUS = {
+    0   : ('CURAND_STATUS_SUCCESS',
+           'No errors'),
+    100 : ('CURAND_STATUS_VERSION_MISMATCH',
+           'Header file and linked library version do not match'),
+    101 : ('CURAND_STATUS_NOT_INITIALIZED',
+           'Generator not initialized'),
+    102 : ('CURAND_STATUS_ALLOCATION_FAILED',
+           'Memory allocation failed'),
+    103 : ('CURAND_STATUS_TYPE_ERROR',
+           'Generator is wrong type'),
+    104 : ('CURAND_STATUS_OUT_OF_RANGE',
+           'Argument out of range'),
+    105 : ('CURAND_STATUS_LENGTH_NOT_MULTIPLE',
+           'Length requested is not a multple of dimension'),
+    106 : ('CURAND_STATUS_DOUBLE_PRECISION_REQUIRED',
+           'GPU does not have double precision required by MRG32k3a'),
+    201 : ('CURAND_STATUS_LAUNCH_FAILURE',
+           'Kernel launch failure'),
+    202 : ('CURAND_STATUS_PREEXISTING_FAILURE',
+           'Preexisting failure on library entry'),
+    203 : ('CURAND_STATUS_INITIALIZATION_FAILED',
+           'Initialization of CUDA failed'),
+    204 : ('CURAND_STATUS_ARCH_MISMATCH',
+           'Architecture mismatch, GPU does not support requested feature'),
+    999 : ('CURAND_STATUS_INTERNAL_ERROR',
+           'Internal library error'),
+}
 curandStatus_t = c_int
 
 
@@ -113,7 +115,8 @@ class ctype_function(object):
         self.argtypes = argtypes
 
 class CuRandError(Exception):
-    pass
+    def __init__(self, code):
+        super(CuRandError, self).__init__(STATUS[code])
 
 class libcurand(object):
     __singleton = None
@@ -163,7 +166,7 @@ class libcurand(object):
         return wrapped
 
     def check_error(self, status):
-        if status != CURAND_STATUS_SUCCESS:
+        if status != 0:
             raise CuRandError(status)
 
     @property
