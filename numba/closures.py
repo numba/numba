@@ -60,7 +60,7 @@ from numba import nodes
 from numba import typesystem
 from numba import typedefs
 from numba import numbawrapper
-from numba import extension_types
+from numba.exttypes import extension_types
 from numba import utils
 from numba.type_inference import module_type_inference
 from numba.minivect import  minitypes

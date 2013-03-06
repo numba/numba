@@ -1,6 +1,5 @@
 import sys
 
-from numba import extension_types
 from numba import *
 
 def format_str(msg, *values):

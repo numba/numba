@@ -54,8 +54,8 @@ import inspect
 import numba
 from numba import pipeline, error, symtab
 from numba import typesystem
+from numba.exttypes import extension_types
 from numba.minivect import minitypes
-import extension_types
 
 logger = logging.getLogger(__name__)
 
@@ -418,34 +418,3 @@ def build_vtab(vtab_type, method_pointers):
 
     vtab = vtab_ctype(*methods)
     return vtab, vtab_type
-
-#------------------------------------------------------------------------
-# Build Extension Type
-#------------------------------------------------------------------------
-
-def create_extension(env, py_class, flags):
-    """
-    Compile an extension class given the NumbaEnvironment and the Python
-    class that contains the functions that are to be compiled.
-    """
-    flags.pop('llvm_module', None)
-
-    ext_type = typesystem.ExtensionType(py_class)
-    class_dict = dict(vars(py_class))
-
-    inherit_attributes(ext_type, class_dict)
-    process_class_attribute_types(ext_type, class_dict)
-
-    method_pointers, lmethods = compile_extension_methods(
-            env, py_class, ext_type, class_dict, flags)
-    inject_descriptors(env, py_class, ext_type, class_dict)
-
-    vtab, vtab_type = build_vtab(ext_type.vtab_type, method_pointers)
-
-    logger.debug("struct: %s" % ext_type.attribute_struct)
-    logger.debug("ctypes struct: %s" % ext_type.attribute_struct.to_ctypes())
-    extension_type = extension_types.create_new_extension_type(
-            py_class.__name__, py_class.__bases__, class_dict,
-            ext_type, vtab, vtab_type,
-            lmethods, method_pointers)
-    return extension_type

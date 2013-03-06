@@ -19,8 +19,8 @@ from numba.codegen.llvmcontext import LLVMContextManager
 
 from numba import visitors, nodes, llvm_types, utils, function_util
 from numba.minivect import minitypes, llvm_codegen
-from numba import ndarray_helpers, error, extension_types
-from numba.typesystem import is_obj, promote_to_native
+from numba import ndarray_helpers, error
+from numba.typesystem import is_obj
 from numba.utils import dump
 from numba import naming, metadata
 from numba.functions import keep_alive

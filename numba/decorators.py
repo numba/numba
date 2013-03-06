@@ -1,17 +1,16 @@
+from numba.exttypes.entrypoints import  jit_extension_class
+
 __all__ = ['autojit', 'jit', 'export', 'exportmany']
 
 import types
-import functools
 import logging
 import inspect
 
 from numba import *
 from numba import typesystem, numbawrapper
-from numba import utils, functions
-from numba.codegen import translate
-from numba import  pipeline, extension_type_inference
+from numba import  functions
 from .minivect import minitypes
-from numba.utils import debugout, process_signature
+from numba.utils import  process_signature
 from numba.codegen import llvmwrapper
 from numba import environment
 import llvm.core as _lc
@@ -85,18 +84,6 @@ def exportmany(signatures, env_name=None, env=None, **kws):
     return _export
 
 #------------------------------------------------------------------------
-# Extension Classes
-#------------------------------------------------------------------------
-
-def jit_extension_class(py_class, translator_kwargs, env):
-    llvm_module = translator_kwargs.get('llvm_module', None)
-    if llvm_module is None:
-        llvm_module = _lc.Module.new('tmp.extension_class.%X' % id(py_class))
-        translator_kwargs['llvm_module'] = llvm_module
-    return extension_type_inference.create_extension(
-        env, py_class, translator_kwargs)
-
-#------------------------------------------------------------------------
 # Compilation Entry Points
 #------------------------------------------------------------------------
 
@@ -107,8 +94,7 @@ def compile_function(env, func, argtypes, restype=None, **kwds):
     cache.
 
     Returns a triplet of (signature, llvm_func, python_callable)
-    `python_callable` may be the original function, or a ctypes callable
-    if the function was compiled.
+    `python_callable` is the wrapper function (NumbaFunction).
     """
     function_cache = env.specializations
 
@@ -145,7 +131,7 @@ def resolve_argtypes(numba_func, template_signature,
     Given an autojitting numba function, return the argument types.
     These need to be resolved in order for the function cache to work.
 
-    TODO: have a single entry point that resolved the argument types!
+    TODO: have a single entry point that resolves the argument types!
     """
     assert not kwargs, "Keyword arguments are not supported yet"
 
@@ -229,7 +215,7 @@ def autojit(template_signature=None, backend='ast', target='cpu',
                            nopython=nopython, locals=locals, **kwargs)(func)
         else:
             raise Exception("The autojit decorator should be called: "
-                            "@autojit(backend='ast')")
+                            "@autojit()")
 
     if backend == 'bytecode':
         return _not_implemented

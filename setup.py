@@ -129,8 +129,8 @@ setup(
             depends = ["numba/_pyconsts.pxd"],
             include_dirs=[numba_include_dir]),
         CythonExtension(
-            name = "numba.extension_types",
-            sources = ["numba/extension_types.pyx"],
+            name = "numba.exttypes.extension_types",
+            sources = ["numba/exttypes/extension_types.pyx"],
             cython_gdb=True),
         CythonExtension(
             name = "numba.numbawrapper",

@@ -30,7 +30,7 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
         self.parent_type = getattr(py_class, "__numba_ext_type", None)
 
     def compute_offsets(self, py_class):
-        from numba import extension_types
+        from numba.exttypes import extension_types
 
         self.vtab_offset = extension_types.compute_vtab_offset(py_class)
         self.attr_offset = extension_types.compute_attrs_offset(py_class)
