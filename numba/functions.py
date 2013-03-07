@@ -55,13 +55,14 @@ def _fix_ast(myast):
     else:
         myast.decorator_list = []
 
-def _get_ast(func):
+def _get_ast(func, flags=0):
     if int(os.environ.get('NUMBA_FORCE_META_AST', 0)):
         func_def = decompile_func(func)
         assert isinstance(func_def, ast.FunctionDef)
         return func_def
     try:
         source = inspect.getsource(func)
+        source_module = inspect.getmodule(func)
     except IOError:
         return decompile_func(func)
     else:
@@ -74,7 +75,11 @@ def _get_ast(func):
             assert source
             decorator, sep, source = source.partition('\n')
             decorators += 1
-        module_ast = ast.parse(source)
+        if (hasattr(source_module, "print_function") and
+                hasattr(source_module.print_function, "compiler_flag")):
+            flags |= source_module.print_function.compiler_flag
+        module_ast = compile(source, source_module.__file__, "exec",
+                             ast.PyCF_ONLY_AST | flags, True)
 
         # fix line numbering
         lineoffset = func.__code__.co_firstlineno + decorators

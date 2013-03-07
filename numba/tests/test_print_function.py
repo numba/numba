@@ -13,7 +13,8 @@ def print_(value):
 
 @autojit(backend='ast', nopython=True)
 def print_nopython(value):
-    print("value", value)
+    print("value", end="")
+    print(value)
 
 @autojit(backend='ast')
 def print_to_stream(stream, value):

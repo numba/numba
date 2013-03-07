@@ -2,16 +2,15 @@ import sys
 import unittest
 import StringIO
 
-from numba.minivect import minitypes
-from numba import *
+from numba import autojit
 
 @autojit(backend='ast')
 def print_(value):
-    print(value)
+    print value
 
 @autojit(backend='ast', nopython=True)
 def print_nopython(value):
-    print("value", value)
+    print "value", value
 
 @autojit(backend='ast')
 def print_to_stream(stream, value):
