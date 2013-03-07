@@ -33,6 +33,7 @@ class DeviceArray(DeviceArrayBase):
     def __init__(self, shape, strides, dtype, order, stream=0):
         ndim = len(shape)
         self.__shape = shape
+        self.__strides = strides
         self.__dtype = dtype
         self.__device_memory = ndarray_device_allocate_struct(ndim)
         size = ndarray_datasize_raw(shape, strides, dtype, order)
@@ -51,6 +52,10 @@ class DeviceArray(DeviceArrayBase):
     @property
     def shape(self):
         return self.__shape
+
+    @property
+    def strides(self):
+        return self.__strides
 
     @property
     def size(self):

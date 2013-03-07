@@ -1,4 +1,5 @@
 import contextlib
+import numpy as np
 
 from .cudapipeline import initialize as _initialize
 from .cudapipeline.special_values import *
@@ -16,8 +17,22 @@ def to_device(ary, stream=0, copy=True):
     return devarray
 
 @_driver.require_context
-def device_array(shape, strides, dtype, order='C', stream=0):
-    return DeviceArray(shape, strides, dtype, order, stream)
+def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
+    dtype = np.dtype(dtype)
+    if isinstance(shape, (int, long)):
+        shape = (shape,)
+    if not strides:
+        nd = len(shape)
+        strides = [0] * nd
+        if order == 'C':
+            strides[-1] = dtype.itemsize
+            for d in reversed(range(nd - 1)):
+                strides[d] = strides[d + 1] * shape[d + 1]
+        elif order == 'F':
+            strides[0] = dtype.itemsize
+            for d in range(1, nd):
+                strides[d] = strides[d - 1] * shape[d - 1]
+    return DeviceArray(shape, tuple(strides), dtype, order, stream)
 
 def device_array_like(ary, stream=0):
     order = ''
@@ -25,7 +40,8 @@ def device_array_like(ary, stream=0):
         order = 'C'
     elif ary.flags['F_CONTIGUOUS']:
         order = 'F'
-    return device_array(ary.shape, ary.strides, ary.dtype, stream=stream)
+    return device_array(shape=ary.shape, dtype=ary.dtype,
+                        strides=ary.strides, stream=stream)
 
 # Stream helper
 @_driver.require_context
