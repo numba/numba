@@ -100,7 +100,7 @@ def abs_(context, node, x):
 
 @register_builtin((2, 3))
 def pow_(context, node, base, exponent, mod):
-    import mathmodule
+    from . import mathmodule
     return mathmodule.pow_(context, node, base, exponent)
 
 @register_builtin((1, 2))
