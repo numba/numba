@@ -13,7 +13,7 @@ def print_(value):
 
 @autojit(backend='ast', nopython=True)
 def print_nopython(value):
-    print("value", end="")
+    print("value", end=" ")
     print(value)
 
 @autojit(backend='ast')
@@ -51,5 +51,9 @@ class TestPrint(unittest.TestCase):
         assert data == "14.1 ", repr(data)
 
 if __name__ == "__main__":
-    print_nopython(10)
+    # The following isn't currently supported.  See issue #147
+    #(https://github.com/numba/numba/issues/147).
+
+    #print_nopython(10)
+
     unittest.main()
