@@ -8,7 +8,7 @@ from numba.decorators import resolve_argtypes
 from numbapro.cudapipeline.environment import CudaEnvironment
 from numbapro.cudapipeline.devicearray import DeviceArray
 
-from .builtins import Declaration
+from .builtins._declaration import Declaration
 
 Task = namedtuple('Task', ['func', 'ntid', 'args'])
 
@@ -22,7 +22,12 @@ class ComputeUnit(object):
 
     def __init__(self, target):
         self.__target = target
+        self.__state = State()
         self._init()
+
+    @property
+    def _state(self):
+        return self.__state
 
     @property
     def target(self):
@@ -77,7 +82,7 @@ class ComputeUnit(object):
     def _wait(self):
         pass
 
-class Storage(object):
+class State(object):
     __slots__ = '_store'
     def __init__(self):
         self._store = {}
@@ -94,7 +99,7 @@ class Storage(object):
 
     def __setattr__(self, name, value):
         if name.startswith('_'):
-            super(Storage, self).__setattr__(name, value)
+            super(State, self).__setattr__(name, value)
         else:
             self._store[name] = value
 
@@ -107,8 +112,7 @@ class CUDAComputeUnit(ComputeUnit):
         self.__devmem_cache = {}
         self.__kernel_cache = {}
         self.__writeback = set()
-        self.__storage = Storage()
-
+    
     @property
     def _stream(self):
         return self.__stream
@@ -124,7 +128,7 @@ class CUDAComputeUnit(ComputeUnit):
                 yield typemapper(val)
 
     def _execute_builtin(self, name, impl, ntid, args):
-        impl(self, self.__storage, ntid, args)
+        impl(self, ntid, args)
 
     def _execute_kernel(self, func, ntid, args):
         # Compile device function

@@ -21,8 +21,11 @@ def test():
     dvals = cu.input(vals)
     dout = cu.output(out)
 
-    cu.enqueue(builtins.rand, ntid=drng.size, args=(drng,))
-    cu.enqueue(randgather,    ntid=dout.size, args=(drng, dvals, dout))
+    cu.enqueue(builtins.random.uniform,
+               ntid=drng.size, args=(drng,))
+    
+    cu.enqueue(randgather,
+               ntid=dout.size, args=(drng, dvals, dout))
 
     cu.wait()
 
