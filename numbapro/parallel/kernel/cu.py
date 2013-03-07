@@ -147,20 +147,24 @@ class CPUComputeUnit(ComputeUnit):
         entryptr = self.__engine.get_pointer_to_function(entry)
 
         # ctypes
-        from ctypes import CFUNCTYPE, c_void_p, CDLL, Structure, c_int, py_object, byref
+        from ctypes import CFUNCTYPE, c_void_p, CDLL, Structure, c_int, py_object, byref, sizeof
         from os.path import dirname, join
 
         dll = CDLL(join(dirname(__file__), 'cpuscheduler.so'))
-        launch = dll.launch
-        launch.argtypes = [c_int, c_void_p, c_void_p]
+        start_workers = dll.start_workers
+        start_workers.argtypes = [c_int, c_void_p, c_int, c_void_p, c_int]
+        start_workers.restype = c_void_p
+
+        join_workers = dll.join_workers
+        join_workers.argtypes = [c_void_p]
 
         class Args(Structure):
-            _fields_ = [("tid", c_int),
-                        ("arg0", py_object),
+            _fields_ = [("arg0", py_object),
                         ("arg1", py_object),
                         ("arg2", py_object)]
-        cargs = Args(arg0=args[0], arg1=args[1], arg2=args[2])
-        launch(ntid, entryptr, byref(cargs))
+        cargs = Args(*args)
+        gang = start_workers(3, entryptr, ntid, byref(cargs), sizeof(cargs))
+        join_workers(gang)
 
     def _wait(self):
         pass
@@ -179,24 +183,54 @@ class CPUComputeUnit(ComputeUnit):
 
 
 def make_cpu_kernel_wrapper(kernel):
-    from llvm.core import Type, Builder, Constant
+    from llvm.core import Type, Builder, Constant, ICMP_ULT
+    # prepare
     module = kernel.module
+
+    ity = Type.int()
     oargtys = kernel.type.pointee.args
     ptrtys = [ty for ty in oargtys]
-    argty = Type.pointer(Type.struct(ptrtys))
+    # {begin, end, args...}
+    argty = Type.pointer(Type.struct([ity] + ptrtys))
+    # void (*)(void* args)
     fnty = Type.function(Type.void(), [argty])
     func = module.add_function(fnty, name='wrapper_' + kernel.name)
     bbentry = func.append_basic_block('entry')
     builder = Builder.new(bbentry)
     arg = func.args[0]
 
-    const_int = lambda x: Constant.int(Type.int(), x)
+    # function body
+    const_int = lambda x: Constant.int(ity, x)
     realargptrs = [builder.gep(arg, map(const_int, [0, i]))
-                   for i in range(len(ptrtys))]
+                   for i in range(1 + len(ptrtys))]
     realargs = [builder.load(x) for x in realargptrs]
-    builder.call(kernel, realargs)
+    begin, end = realargs[:2]
+    kernelargs = realargs[2:]
+    # for begin to end
+    bbloop = func.append_basic_block('loop.body')
+    bbexit = func.append_basic_block('loop.exit')
+
+    pred = builder.icmp(ICMP_ULT, begin, end)
+    builder.cbranch(pred, bbloop, bbexit)
+
+    builder.position_at_end(bbloop)
+
+    tid = builder.phi(ity)
+    tid.add_incoming(begin, bbentry)
+    pred = builder.icmp(ICMP_ULT, tid, end)
+    tid_next = builder.add(tid, const_int(1))
+    tid.add_incoming(tid_next, bbloop)
+
+    builder.call(kernel, [tid] + kernelargs)
+    
+    builder.cbranch(pred, bbloop, bbexit)
+
+    # loop exit
+    builder.position_at_end(bbexit)
+
     builder.ret_void()
 
+    # check and cleanup
     failed = func.verify()
     assert not failed
 
