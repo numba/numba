@@ -24,14 +24,10 @@ def gpu_rand(cu, storage, ntid, args):
     import time
     # check arguments
     (ary,) = args
-    if ary.dtype in np.float32:
-        bits = 32
-    elif ary.dtype in np.float64:
-        bits = 64
-    else:
+    if ary.dtype != np.float32 and ary.dtype != np.float64:
         raise ValueError("Must be an array of integers of 32 or 64 bit length")
     # setup QRNG
-    skey = 'prng' % bits
+    skey = 'prng'
     qrng = storage.get(skey)
     if qrng is None:
         qrng = curand.PRNG(seed=int(time.time()), stream=cu._stream)

@@ -47,8 +47,9 @@ class ComputeUnit(object):
     def inout(self, ary):
         return self._inout(ary)
 
-    def scratch(self, shape, strides, dtype, order='C'):
-        return self._scratch(shape, strides, dtype, order)
+    def scratch(self, shape, dtype=numpy.float, strides=None, order='C'):
+        return self._scratch(shape=shape, dtype=dtype, strides=strides,
+                             order=order)
 
     def scratch_like(self, ary):
         order = ''
@@ -56,7 +57,8 @@ class ComputeUnit(object):
             order = 'C'
         elif ary.flags['F_CONTIGUOUS']:
             order = 'F'
-        return self.scratch(ary.shape, ary.strides, ary.dtype, order)
+        return self.scratch(shape=ary.shape, strides=ary.strides,
+                            dtype=ary.dtype, order=order)
 
     #
     # Methods to be overrided in subclass
@@ -185,8 +187,7 @@ class CUDAComputeUnit(ComputeUnit):
         self.__writeback.add(devary)
         return devary
 
-    def _scratch(self, shape, strides, dtype, order):
-        ary = numpy.empty(shape=shape, dtype=dtype)
+    def _scratch(self, shape, dtype, strides, order):
         return cuda.device_array(shape = shape,
                                  strides = strides,
                                  dtype = dtype,
