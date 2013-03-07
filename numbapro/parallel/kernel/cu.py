@@ -52,9 +52,8 @@ class ComputeUnit(object):
     def inout(self, ary):
         return self._inout(ary)
 
-    def scratch(self, shape, dtype=numpy.float, strides=None, order='C'):
-        return self._scratch(shape=shape, dtype=dtype, strides=strides,
-                             order=order)
+    def scratch(self, shape, dtype=numpy.float, order='C'):
+        return self._scratch(shape=shape, dtype=dtype, order=order)
 
     def scratch_like(self, ary):
         order = ''
@@ -62,8 +61,7 @@ class ComputeUnit(object):
             order = 'C'
         elif ary.flags['F_CONTIGUOUS']:
             order = 'F'
-        return self.scratch(shape=ary.shape, strides=ary.strides,
-                            dtype=ary.dtype, order=order)
+        return self.scratch(shape=ary.shape, dtype=ary.dtype, order=order)
 
     #
     # Methods to be overrided in subclass
@@ -81,6 +79,7 @@ class ComputeUnit(object):
     
     def _wait(self):
         pass
+
 
 class State(object):
     __slots__ = '_store'
@@ -103,6 +102,114 @@ class State(object):
         else:
             self._store[name] = value
 
+#
+# CPU CU
+#
+
+class CPUComputeUnit(ComputeUnit):
+    def _init(self):
+        from llvm.ee import EngineBuilder, TargetMachine, CM_JITDEFAULT
+        from llvm.passes import build_pass_managers
+        from llvm.core import Module
+        from llvm.workaround.avx_support import detect_avx_support
+
+        self.__env = CudaEnvironment.get_environment('numbapro.cuda')
+
+        self.__module = Module.new('cu%x' % id(self))
+        if not detect_avx_support():
+            features = '-avx'
+        else:
+            features = ''
+        tm = TargetMachine.new(opt=2, cm=CM_JITDEFAULT, features=features)
+        passmanagers = build_pass_managers(tm, opt=3,
+                                           inline_threshold=2000,
+                                           loop_vectorize=True,
+                                           fpm=False)
+        self.__pm = passmanagers.pm
+        self.__engine = EngineBuilder.new(self.__module).create(tm)
+        #self.__compiled_count = 0
+        #self.__kernel_cache = {}
+
+    def _execute_kernel(self, func, ntid, args):
+        typemapper = self.__env.context.typemapper.from_python
+        argtypes = [numba.int32] + list(map(typemapper, args))
+        # compile with CUDA pipeline here to bypass linkage
+        compiler = cuda.jit(argtypes=argtypes)
+        corefn = compiler(func)
+        # wrap
+        wrapper = make_cpu_kernel_wrapper(corefn.lfunc)
+        # optimize
+        self.__pm.run(wrapper.module)
+        # link
+        wrapper_name = wrapper.name
+        self.__module.link_in(wrapper.module, preserve=True)
+        entry = self.__module.get_function_named(wrapper_name)
+        entryptr = self.__engine.get_pointer_to_function(entry)
+
+        # ctypes
+        from ctypes import CFUNCTYPE, c_void_p, CDLL, Structure, c_int, py_object, byref
+        from os.path import dirname, join
+
+        dll = CDLL(join(dirname(__file__), 'cpuscheduler.so'))
+        launch = dll.launch
+        launch.argtypes = [c_int, c_void_p, c_void_p]
+
+        class Args(Structure):
+            _fields_ = [("tid", c_int),
+                        ("arg0", py_object),
+                        ("arg1", py_object),
+                        ("arg2", py_object)]
+        cargs = Args(arg0=args[0], arg1=args[1], arg2=args[2])
+        launch(ntid, entryptr, byref(cargs))
+
+    def _wait(self):
+        pass
+
+    def _input(self, ary):
+        return ary
+
+    def _output(self, ary):
+        return ary
+
+    def _inout(self, ary):
+        return ary
+
+    def _scratch(self, shape, dtype, order):
+        return numpy.empty(shape, dtype=dtype, order=order)
+
+
+def make_cpu_kernel_wrapper(kernel):
+    from llvm.core import Type, Builder, Constant
+    module = kernel.module
+    oargtys = kernel.type.pointee.args
+    ptrtys = [ty for ty in oargtys]
+    argty = Type.pointer(Type.struct(ptrtys))
+    fnty = Type.function(Type.void(), [argty])
+    func = module.add_function(fnty, name='wrapper_' + kernel.name)
+    bbentry = func.append_basic_block('entry')
+    builder = Builder.new(bbentry)
+    arg = func.args[0]
+
+    const_int = lambda x: Constant.int(Type.int(), x)
+    realargptrs = [builder.gep(arg, map(const_int, [0, i]))
+                   for i in range(len(ptrtys))]
+    realargs = [builder.load(x) for x in realargptrs]
+    builder.call(kernel, realargs)
+    builder.ret_void()
+
+    failed = func.verify()
+    assert not failed
+
+    return func
+
+
+
+ComputeUnit.registered_targets['cpu'] = CPUComputeUnit
+
+
+#
+# CUDA CU
+#
 
 class CUDAComputeUnit(ComputeUnit):
     def _init(self):
@@ -151,7 +258,7 @@ class CUDAComputeUnit(ComputeUnit):
             # compile it
             cxt = dict(corefn=corefn, cuda=cuda)
             exec kernelsource in cxt
-            kernelname = "cu_kernel_%d" % uid
+            kernelname = "cu_kernel_cuda_%d" % uid
             kernel = cxt[kernelname]
 
             jittedkern = cuda.jit(argtypes=argtypes, env=self.__env)(kernel)
@@ -191,16 +298,15 @@ class CUDAComputeUnit(ComputeUnit):
         self.__writeback.add(devary)
         return devary
 
-    def _scratch(self, shape, dtype, strides, order):
+    def _scratch(self, shape, dtype, order):
         return cuda.device_array(shape = shape,
-                                 strides = strides,
                                  dtype = dtype,
                                  order = order,
                                  stream = self.__stream)
 
 
 cuda_driver_kernel_template = '''
-def cu_kernel_{uid}(ntid, {args}):
+def cu_kernel_cuda_{uid}(ntid, {args}):
     tid = cuda.grid(1)
     if tid >= ntid:
         return
