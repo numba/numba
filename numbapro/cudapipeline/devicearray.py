@@ -54,6 +54,10 @@ class DeviceArray(DeviceArrayBase):
         return self.__shape
 
     @property
+    def ndim(self):
+        return len(self.shape)
+
+    @property
     def strides(self):
         return self.__strides
 
