@@ -17,56 +17,50 @@ def compile_func1():
 __doc__ = """
 >>> compile_func1()
 --------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
     if x:
 -------^
 Error 6:7: No global named 'x'
-<BLANKLINE>
 --------------------------------------------------------------------------------
 exception: 6:7: No global named 'x'
 """
 
 #@autojit
 def func2():
-    print((10[20]))
+    print(10[20])
 
 def compile_func2():
     try:
         jit(void())(func2)
     except error.NumbaError as e:
-        print(("exception:", e))
+        print("exception: %s" % e)
 
 __doc__ += """>>> compile_func2()
 --------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
-    print 10[20]
+    print(10[20])
 ----------^
-Error 31:10: object of type int cannot be indexed
-<BLANKLINE>
+Error 29:10: object of type int cannot be indexed
 --------------------------------------------------------------------------------
-exception: 31:10: object of type int cannot be indexed
+exception: 29:10: object of type int cannot be indexed
 """
 
 @autojit # this often messes up line numbers
 def func_decorated():
-    print((10[20]))
+    print(10[20])
 
 def compile_func3():
     try:
         func_decorated()
     except error.NumbaError as e:
-        print(("exception:", e))
+        print("exception: %s" % e)
 
 __doc__ += """
 >>> compile_func3()
 --------------------- Numba Encountered Errors or Warnings ---------------------
-<BLANKLINE>
-    print 10[20]
+    print(10[20])
 ----------^
-Error 52:10: object of type int cannot be indexed
-<BLANKLINE>
+Error 48:10: object of type int cannot be indexed
 --------------------------------------------------------------------------------
-exception: 52:10: object of type int cannot be indexed
+exception: 48:10: object of type int cannot be indexed
 """
 
 if __name__ == '__main__':
