@@ -8,17 +8,6 @@ def draw_hashes(rng, nitems):
     hashes |= rng.randint(2**32, size=nitems).astype(np.uint64)
     return hashes
 
-def roundup(x):
-    x -= 1
-    x |= x >> 1
-    x |= x >> 2
-    x |= x >> 4
-    x |= x >> 8
-    x |= x >> 16
-    x |= x >> 32
-    x += 1
-    return x
-
 def test_binsort():
     nbins = 64
     p = np.zeros(nbins, dtype=np.uint16)
@@ -32,11 +21,26 @@ def test_binsort():
 def test_basic():
     n=64
     prehashes = draw_hashes(np.random, n)
-    p, r, m_f, m_g, d = extensibletype.perfect_hash(prehashes, repeat=10**6)
+    assert len(prehashes) == len(set(prehashes))
+    p, r, m_f, m_g, d = extensibletype.perfect_hash(prehashes, repeat=10**5)
     hashes = ((prehashes >> r) & m_f) ^ d[prehashes & m_g]
     print p
     print d
     hashes.sort()
     print hashes
     assert len(hashes) == len(np.unique(hashes))
-    
+
+def test_methodtable():
+    ids = ["ff->f", "dd->d", "ii->i", "ll->l", "OO->O"]
+    flags = range(1, len(ids) + 1)
+    funcs = range(len(ids))
+
+    methodtable = extensibletype.PerfectHashMethodTable(
+        len(ids), ids, flags, funcs)
+
+    for (signature, flag, func) in zip(ids, flags, funcs):
+        result = methodtable.find_method(signature)
+        assert result is not None
+        got_func, got_flag = result
+        assert func == got_func, (func, got_func)
+        assert flag == got_flag, (flag, got_flag)
