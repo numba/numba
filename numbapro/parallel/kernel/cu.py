@@ -8,6 +8,8 @@ from numba.decorators import resolve_argtypes
 from numbapro.cudapipeline.environment import CudaEnvironment
 from numbapro.cudapipeline.devicearray import DeviceArray
 
+from .builtins import Declaration
+
 Task = namedtuple('Task', ['func', 'ntid', 'args'])
 
 class ComputeUnit(object):
@@ -27,7 +29,11 @@ class ComputeUnit(object):
         return self.__target
 
     def enqueue(self, fn, ntid, args=()):
-        self._execute_kernel(fn, ntid, args)
+        if isinstance(fn, Declaration):
+            name, impl = fn.get_implementation(self.target)
+            self._execute_builtin(name, impl, ntid, args)
+        else:
+            self._execute_kernel(fn, ntid, args)
 
     def wait(self):
         self._wait()
@@ -69,6 +75,28 @@ class ComputeUnit(object):
     def _wait(self):
         pass
 
+class Storage(object):
+    __slots__ = '_store'
+    def __init__(self):
+        self._store = {}
+
+    def get(self, name, default=None):
+        return self._store.get(name, default)
+
+    def set(self, name, value):
+        setattr(self, name, value)
+
+    def __getattr__(self, name):
+        assert not name.startswith('_')
+        return self._store_[name]
+
+    def __setattr__(self, name, value):
+        if name.startswith('_'):
+            super(Storage, self).__setattr__(name, value)
+        else:
+            self._store[name] = value
+
+
 class CUDAComputeUnit(ComputeUnit):
     def _init(self):
         self.__compiled_count = 0
@@ -77,6 +105,11 @@ class CUDAComputeUnit(ComputeUnit):
         self.__devmem_cache = {}
         self.__kernel_cache = {}
         self.__writeback = set()
+        self.__storage = Storage()
+
+    @property
+    def _stream(self):
+        return self.__stream
 
     def __typemap(self, values):
         typemapper = self.__env.context.typemapper.from_python
@@ -87,6 +120,9 @@ class CUDAComputeUnit(ComputeUnit):
                 yield typemapper(fakearray)
             else:
                 yield typemapper(val)
+
+    def _execute_builtin(self, name, impl, ntid, args):
+        impl(self, self.__storage, ntid, args)
 
     def _execute_kernel(self, func, ntid, args):
         # Compile device function
