@@ -1,7 +1,6 @@
 import numpy as np
 from numbapro.parallel.kernel import CU
 from numbapro.parallel.kernel import builtins
-from numbapro.cudalib import curand
 from numbapro import npy_intp
 
 def randgather(tid, rnd, vals, out):
@@ -23,13 +22,13 @@ def test():
 
     cu.enqueue(builtins.random.uniform,
                ntid=drng.size, args=(drng,))
-    
+
     cu.enqueue(randgather,
                ntid=dout.size, args=(drng, dvals, dout))
 
     cu.wait()
 
-    print dout.size, dout
+    print out.size, out
 
 
 
