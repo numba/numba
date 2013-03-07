@@ -65,3 +65,26 @@ class StaticVTabBuilder(object):
 
     def build_vtab(self, ext_type, method_pointers):
         return build_static_vtab(ext_type.vtab_type, method_pointers)
+
+#------------------------------------------------------------------------
+# Hash-based virtual method tables
+#------------------------------------------------------------------------
+
+def sep201_signature_string(functype):
+    return str(functype)
+
+def build_hashing_vtab(vtab_type, method_pointers):
+    """
+    Build hash-based vtable.
+    """
+    from extensibletype import extensibletype
+
+    n = len(method_pointers)
+
+    ids = [sep201_signature_string(method_type)
+               for method_name, method_type in vtab_type.fields]
+    flags = [0] * n
+
+    vtab = extensibletype.PerfectHashMethodTable(n, ids, flags,
+                                                 method_pointers)
+    return vtab
