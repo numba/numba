@@ -7,6 +7,8 @@ from numbapro import cuda
 from numba.decorators import resolve_argtypes
 from numbapro.cudapipeline.environment import CudaEnvironment
 from numbapro.cudapipeline.devicearray import DeviceArray
+from .environment import CUEnvironment
+from .decorators import cu_jit
 
 from .builtins._declaration import Declaration
 
@@ -112,62 +114,123 @@ class CPUComputeUnit(ComputeUnit):
         from llvm.passes import build_pass_managers
         from llvm.core import Module
         from llvm.workaround.avx_support import detect_avx_support
+        from os.path import join, dirname
+        from ctypes import c_void_p, CDLL, c_int
+        from multiprocessing import cpu_count
+        import threading
+        from Queue import Queue
 
-        self.__env = CudaEnvironment.get_environment('numbapro.cuda')
+        self.__env = CUEnvironment.get_environment('numbapro.cu')
 
-        self.__module = Module.new('cu%x' % id(self))
+        # setup llvm engine
+        with open(join(dirname(__file__), 'atomic.ll')) as fin:
+            self.__module = Module.from_assembly(fin)
+        self.__module.id = str(self)
+
         if not detect_avx_support():
             features = '-avx'
         else:
             features = ''
         tm = TargetMachine.new(opt=2, cm=CM_JITDEFAULT, features=features)
-        passmanagers = build_pass_managers(tm, opt=3,
+        passmanagers = build_pass_managers(tm, opt=2,
                                            inline_threshold=2000,
                                            loop_vectorize=True,
                                            fpm=False)
         self.__pm = passmanagers.pm
         self.__engine = EngineBuilder.new(self.__module).create(tm)
-        #self.__compiled_count = 0
-        #self.__kernel_cache = {}
+        self.__engine.disable_lazy_compilation(True)
+
+        # ctypes
+        self.__dll = dll = CDLL(join(dirname(__file__), 'cpuscheduler.so'))
+
+        self.__start_workers = start_workers = dll.start_workers
+        start_workers.argtypes = [c_int, c_void_p, c_int, c_void_p, c_int,
+                                  c_void_p]
+        start_workers.restype = c_void_p
+        
+        self.__join_workers = join_workers = dll.join_workers
+        join_workers.argtypes = [c_void_p]
+        
+        # prepare dispatcher
+        atomics = 'atomic_add_i32'
+        atomic_add_fn = self.__module.get_function_named( 'atomic_add_i32')
+        atomic_add_ptr = self.__engine.get_pointer_to_function(atomic_add_fn)
+        self.__atomic_add_ptr = atomic_add_ptr
+
+        # manager thread
+        self.__queue = Queue()
+        self.__manager = threading.Thread(target=(self.__manager_logic),
+                                          args=(self.__queue,))
+        self.__manager.daemon = True
+        self.__manager.start()
+
+        # others
+        self.__kernel_cache = {}
+        self.__cpu_count = cpu_count() - 1
+
+    def __del__(self):
+        self.__queue.put(StopIteration)
+
+    def __manager_logic(self, queue):
+        from ctypes import byref, sizeof
+        while True:
+            item = queue.get()
+            if item is StopIteration:
+                return
+            entryptr, ntid, cargs = item
+            gang = self.__start_workers(self.__cpu_count, entryptr, ntid,
+                                        byref(cargs), sizeof(cargs),
+                                        self.__atomic_add_ptr)
+            self.__join_workers(gang)
+            queue.task_done()
 
     def _execute_kernel(self, func, ntid, args):
         typemapper = self.__env.context.typemapper.from_python
         argtypes = [numba.int32] + list(map(typemapper, args))
         # compile with CUDA pipeline here to bypass linkage
-        compiler = cuda.jit(argtypes=argtypes)
-        corefn = compiler(func)
-        # wrap
-        wrapper = make_cpu_kernel_wrapper(corefn.lfunc)
+        compiler = cu_jit(argtypes=argtypes)
+        lfunc = compiler(func)
+        entryptr = self.__kernel_cache.get(lfunc)
+        if not entryptr:
+            # kernel not already defined, generate it
+            entryptr = self.__generate_kernel(lfunc)
+        # start workers
+        cargs = self.__get_carg(argtypes, args)
+        self.__queue.put((entryptr, ntid, cargs))
+
+    def __generate_kernel(self, lfunc):
+        # make
+        module, wrapper = make_cpu_kernel_wrapper(lfunc)
+        # verify
+        wrapper.module.verify()
         # optimize
         self.__pm.run(wrapper.module)
         # link
         wrapper_name = wrapper.name
-        self.__module.link_in(wrapper.module, preserve=True)
+        self.__module.link_in(module, preserve=True)
         entry = self.__module.get_function_named(wrapper_name)
         entryptr = self.__engine.get_pointer_to_function(entry)
+        # cache
+        self.__kernel_cache[lfunc] = entryptr
+        return entryptr
 
-        # ctypes
-        from ctypes import CFUNCTYPE, c_void_p, CDLL, Structure, c_int, py_object, byref, sizeof
-        from os.path import dirname, join
-
-        dll = CDLL(join(dirname(__file__), 'cpuscheduler.so'))
-        start_workers = dll.start_workers
-        start_workers.argtypes = [c_int, c_void_p, c_int, c_void_p, c_int]
-        start_workers.restype = c_void_p
-
-        join_workers = dll.join_workers
-        join_workers.argtypes = [c_void_p]
-
+    def __get_carg(self, argtypes, args):
+        from ctypes import Structure, py_object, c_int
+        fields = []
+        for ty in argtypes:
+            if ty.is_array:
+                fields.append(py_object)
+            else:
+                fields.append(ty.to_ctypes())
+        structfields = [("arg%d" % i, fd) for i, fd in enumerate(fields)]
         class Args(Structure):
-            _fields_ = [("arg0", py_object),
-                        ("arg1", py_object),
-                        ("arg2", py_object)]
-        cargs = Args(*args)
-        gang = start_workers(3, entryptr, ntid, byref(cargs), sizeof(cargs))
-        join_workers(gang)
+            _fields_ = structfields
+        cargs = Args(0, *args)
+        return cargs
+
 
     def _wait(self):
-        pass
+        self.__queue.join()
 
     def _input(self, ary):
         return ary
@@ -185,56 +248,58 @@ class CPUComputeUnit(ComputeUnit):
 def make_cpu_kernel_wrapper(kernel):
     from llvm.core import Type, Builder, Constant, ICMP_ULT
     # prepare
-    module = kernel.module
+    module = kernel.module.clone()
+    kernel = module.get_function_named(kernel.name)
 
     ity = Type.int()
     oargtys = kernel.type.pointee.args
-    ptrtys = [ty for ty in oargtys]
-    # {begin, end, args...}
-    argty = Type.pointer(Type.struct([ity] + ptrtys))
-    # void (*)(void* args)
-    fnty = Type.function(Type.void(), [argty])
-    func = module.add_function(fnty, name='wrapper_' + kernel.name)
-    bbentry = func.append_basic_block('entry')
-    builder = Builder.new(bbentry)
-    arg = func.args[0]
+    packedargs = Type.pointer(Type.struct(oargtys))
+    argtys = [ity] * 2 + [packedargs]
 
-    # function body
+    fnty = Type.function(Type.void(), argtys)
+    func = module.add_function(fnty, 'wrapper.%s' % kernel.name)
+
+    bbentry, bbloop, bbexit = (func.append_basic_block(x)
+                               for x in ('entry', 'loop', 'exit'))
+
     const_int = lambda x: Constant.int(ity, x)
-    realargptrs = [builder.gep(arg, map(const_int, [0, i]))
-                   for i in range(1 + len(ptrtys))]
-    realargs = [builder.load(x) for x in realargptrs]
-    begin, end = realargs[:2]
-    kernelargs = realargs[2:]
-    # for begin to end
-    bbloop = func.append_basic_block('loop.body')
-    bbexit = func.append_basic_block('loop.exit')
 
-    pred = builder.icmp(ICMP_ULT, begin, end)
-    builder.cbranch(pred, bbloop, bbexit)
-
-    builder.position_at_end(bbloop)
-
-    tid = builder.phi(ity)
-    tid.add_incoming(begin, bbentry)
-    pred = builder.icmp(ICMP_ULT, tid, end)
-    tid_next = builder.add(tid, const_int(1))
-    tid.add_incoming(tid_next, bbloop)
-
-    builder.call(kernel, [tid] + kernelargs)
+    # entry
+    bldr = Builder.new(bbentry)
+    begin, end, args = func.args
     
-    builder.cbranch(pred, bbloop, bbexit)
+    innerargs = []
+    for i in range(1, len(oargtys)):
+        gep = bldr.gep(args, [const_int(0), const_int(i)])
+        val = bldr.load(gep)
+        innerargs.append(val)
 
-    # loop exit
-    builder.position_at_end(bbexit)
+    pred = bldr.icmp(ICMP_ULT, begin, end)
+    bldr.cbranch(pred, bbloop, bbexit)
 
-    builder.ret_void()
+    # loop body
+    bldr.position_at_end(bbloop)
+    tid = bldr.phi(ity)
+    tidnxt = bldr.add(tid, const_int(1))
 
-    # check and cleanup
+    tid.add_incoming(begin, bbentry)
+    tid.add_incoming(tidnxt, bbloop)
+
+    # call
+    bldr.call(kernel, [tid] + innerargs)
+
+    pred = bldr.icmp(ICMP_ULT, tidnxt, end)
+    bldr.cbranch(pred, bbloop, bbexit)
+
+    # exit
+    bldr.position_at_end(bbexit)
+    bldr.ret_void()
+
+    # verify
     failed = func.verify()
     assert not failed
 
-    return func
+    return module, func
 
 
 

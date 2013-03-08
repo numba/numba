@@ -10,7 +10,6 @@ def cuda_jit(restype=None, argtypes=None, nopython=False,
              device=False, inline=False, **kwargs):
     # error handling
     if restype and restype != numba.void and not device:
-        print restype
         raise TypeError("CUDA kernel must have void return type.")
     assert _llvm_module is None
     # real work
