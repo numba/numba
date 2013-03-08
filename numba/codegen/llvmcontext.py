@@ -47,8 +47,7 @@ class LLVMContextManager(object):
             # Old llvm, disable AVX for all
             features = '-avx'
         tm = self.__machine = le.TargetMachine.new(opt=cg, cm=le.CM_JITDEFAULT,
-                                                   features=features,
-                                                   reloc=le.RELOC_PIC)
+                                                   features=features)
         # Create the ExceutionEngine
         self.__engine = le.EngineBuilder.new(m).create(tm)
         # Build a PassManager which will be used for every module/
