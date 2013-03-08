@@ -4,8 +4,10 @@ from ctypes import *
 from numba.pycc import find_shared_ending
 from numba.pycc import pycc
 
+base_path = os.path.dirname(os.path.abspath(__file__))
+
 def test_pycc():
-    modulename = os.path.join(os.path.dirname(__file__), 'compile_with_pycc')
+    modulename = os.path.join(base_path, 'compile_with_pycc')
     cdll_modulename = modulename + find_shared_ending()
     if os.path.exists(cdll_modulename):
         os.unlink(cdll_modulename)
@@ -32,8 +34,7 @@ def test_pycc():
         if os.path.exists(cdll_modulename):
             os.unlink(cdll_modulename)
 
-    out_modulename = (os.path.join(os.path.dirname(__file__),
-                                   'compiled_with_pycc')
+    out_modulename = (os.path.join(base_path, 'compiled_with_pycc')
                       + find_shared_ending())
     pycc.main(args=['--python', '-o', out_modulename, modulename + '.py'])
     try:
