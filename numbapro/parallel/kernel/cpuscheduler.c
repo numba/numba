@@ -1,22 +1,17 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-
+#include "cpuscheduler.h"
 #define MAX_BURST 64
 
 #define MIN(a, b) ((a) > (b) ? (b) : (a))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 
-typedef void (*kernel_t)     (int, int, void* args);
-typedef int  (*atomic_add_t) (volatile int *ptr, int val);
-
 typedef struct queue {
     volatile int begin, end;
     volatile int lock;
 } queue_t;
-
-struct gang; // forward declaration
 
 typedef struct worker {
     queue_t         queue;

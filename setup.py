@@ -59,6 +59,15 @@ ext_modules = [
         extra_link_args = OMP_LINK,
         cython_gdb=True,
     ),
+             
+    CythonExtension(
+        name = "numbapro.parallel.kernel._cpuscheduler",
+        sources = ["numbapro/parallel/kernel/_cpuscheduler.pyx",
+                   "numbapro/parallel/kernel/cpuscheduler.c"],
+        depends = ["numbapro/parallel/kernel/cpuscheduler.pxd"],
+        extra_compile_args = ['-D_FORTIFY_SOURCE=0'],
+#        cython_gdb=True,
+    ),
 
 #    CythonExtension(
 #        name = "numbapro._cudadispatchlib",

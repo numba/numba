@@ -121,7 +121,7 @@ class CPUComputeUnit(ComputeUnit):
         from llvm.core import Module
         from llvm.workaround.avx_support import detect_avx_support
         from os.path import join, dirname
-        from ctypes import c_void_p, CDLL, c_int
+#        from ctypes import c_void_p, CDLL, c_int
         from multiprocessing import cpu_count
         import threading
         from Queue import Queue
@@ -146,17 +146,17 @@ class CPUComputeUnit(ComputeUnit):
         self.__engine = EngineBuilder.new(self.__module).create(tm)
         self.__engine.disable_lazy_compilation(True)
 
-        # ctypes
-        self.__dll = dll = CDLL(join(dirname(__file__), 'cpuscheduler.so'))
+#        # ctypes
+#        self.__dll = dll = CDLL(join(dirname(__file__), 'cpuscheduler.so'))
+#
+#        self.__start_workers = start_workers = dll.start_workers
+#        start_workers.argtypes = [c_int, c_void_p, c_int, c_void_p, c_int,
+#                                  c_void_p]
+#        start_workers.restype = c_void_p
+#        
+#        self.__join_workers = join_workers = dll.join_workers
+#        join_workers.argtypes = [c_void_p]
 
-        self.__start_workers = start_workers = dll.start_workers
-        start_workers.argtypes = [c_int, c_void_p, c_int, c_void_p, c_int,
-                                  c_void_p]
-        start_workers.restype = c_void_p
-        
-        self.__join_workers = join_workers = dll.join_workers
-        join_workers.argtypes = [c_void_p]
-        
         # prepare dispatcher
         atomics = 'atomic_add_i32'
         atomic_add_fn = self.__module.get_function_named( 'atomic_add_i32')
@@ -178,16 +178,18 @@ class CPUComputeUnit(ComputeUnit):
         self.__queue.put(StopIteration)
 
     def __manager_logic(self, queue):
-        from ctypes import byref, sizeof
+        from ctypes import addressof, sizeof
+        from _cpuscheduler import WorkGang
         while True:
             item = queue.get()
             if item is StopIteration:
                 return
             entryptr, ntid, cargs = item
-            gang = self.__start_workers(self.__cpu_count, entryptr, ntid,
-                                        byref(cargs), sizeof(cargs),
-                                        self.__atomic_add_ptr)
-            self.__join_workers(gang)
+
+            gang = WorkGang(self.__cpu_count, entryptr, ntid,
+                            addressof(cargs), sizeof(cargs),
+                            self.__atomic_add_ptr)
+            gang.join()
             queue.task_done()
 
     def _execute_kernel(self, func, ntid, args):
