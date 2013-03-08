@@ -84,6 +84,8 @@ class _LLVMCaster(object):
 
     def cast(self, lvalue, dst_ltype, *args, **kws):
         src_ltype = lvalue.type
+        if src_ltype == dst_ltype:
+            return lvalue
         return self.build_cast(self.builder, lvalue, dst_ltype, *args, **kws)
 
     def build_pointer_cast(_, builder, lval1, lty2):
