@@ -45,6 +45,9 @@ class ComputeUnit(object):
     def wait(self):
         self._wait()
 
+    def close(self):
+        self._close()
+
     def input(self, ary):
         return self._input(ary)
 
@@ -80,6 +83,9 @@ class ComputeUnit(object):
         raise NotImplementedError
     
     def _wait(self):
+        pass
+
+    def _close(self):
         pass
 
 
@@ -168,7 +174,7 @@ class CPUComputeUnit(ComputeUnit):
         self.__kernel_cache = {}
         self.__cpu_count = cpu_count() - 1
 
-    def __del__(self):
+    def _close(self):
         self.__queue.put(StopIteration)
 
     def __manager_logic(self, queue):

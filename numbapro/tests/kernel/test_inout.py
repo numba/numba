@@ -14,7 +14,9 @@ def test():
 
     print ' A', A
     print 'A0', A0 
-    assert all(A == A0 + 1)    
+    assert all(A == A0 + 1)
+
+    cu.close()
 
 if __name__ == '__main__':
     test()

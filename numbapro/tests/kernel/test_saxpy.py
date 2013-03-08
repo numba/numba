@@ -34,7 +34,7 @@ def test():
     cu.wait()
     print D.size, D
 
-
+    cu.close()
 
 if __name__ == '__main__':
     test()

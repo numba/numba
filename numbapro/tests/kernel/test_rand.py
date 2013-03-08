@@ -30,7 +30,7 @@ def test():
 
     print out.size, out
 
-
+    cu.close()
 
 if __name__ == '__main__':
     test()

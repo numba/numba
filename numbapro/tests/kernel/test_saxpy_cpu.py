@@ -10,7 +10,7 @@ def sum(tid, A, B, Sum):
     Sum[tid] = A[tid] + B[tid]
 
 def test():
-    n = 5000000
+    n = 10000000
     A = np.arange(n)
     B = A #np.arange(n)
     C = A #np.arange(n)
@@ -57,6 +57,7 @@ def test():
 
     assert np.allclose(A * B + C, D)
 
+    cu.close()
 
 if __name__ == '__main__':
     test()
