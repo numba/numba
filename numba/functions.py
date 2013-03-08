@@ -78,7 +78,8 @@ def _get_ast(func, flags=0):
         if (hasattr(source_module, "print_function") and
                 hasattr(source_module.print_function, "compiler_flag")):
             flags |= source_module.print_function.compiler_flag
-        module_ast = compile(source, source_module.__file__, "exec",
+        source_file = getattr(source_module, '__file__', '<unknown file>')
+        module_ast = compile(source, source_file, "exec",
                              ast.PyCF_ONLY_AST | flags, True)
 
         # fix line numbering
