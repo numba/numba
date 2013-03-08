@@ -801,7 +801,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         # return nodes.ObjectTempNode(new_slice)
 
     def visit_Attribute(self, node):
-        if self.nopython and not node.value.type.is_module:
+        if (self.nopython and not node.value.type.is_module and
+            not node.value.type.is_complex):
             raise error.NumbaError(
                     node, "Cannot access Python attribute in nopython context (%s)" % node.attr)
 
