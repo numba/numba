@@ -1,9 +1,8 @@
-#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
-#define MAX_BURST 32
+#define MAX_BURST 64
 
 #define MIN(a, b) ((a) > (b) ? (b) : (a))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -24,10 +23,19 @@ typedef struct worker {
     struct gang    *parent;
 } worker_t;
 
+#if defined(__WIN32__)
+#include <windows.h>
+typedef struct winthread_worker {
+    worker_t base;
+    HANDLE   thread;
+} pthread_worker_t;
+#else
+#include <pthread.h>
 typedef struct pthread_worker {
     worker_t    base;
     pthread_t   thread;
 } pthread_worker_t;
+#endif
 
 typedef struct gang{
     worker_t    **members;
@@ -44,14 +52,14 @@ typedef struct gang{
 // globals
 
 
-static
+static inline
 void* malloc_zero(unsigned sz){
     void* p = malloc(sz);
     memset(p, 0, sz);
     return p;
 }
 
-static
+static inline
 void lock(gang_t* gang, volatile int *ptr){
     int old;
     while (1){
@@ -61,12 +69,12 @@ void lock(gang_t* gang, volatile int *ptr){
     }
 }
 
-static
+static inline
 void unlock(gang_t* gang, volatile int *ptr){
     gang->atomic_add(ptr, -1);
 }
 
-static
+static inline
 gang_t* init_gang(int ncpu, kernel_t kernel, int ntid,
                   void *args, int arglen,
                   atomic_add_t atomic_add,
@@ -89,7 +97,7 @@ gang_t* init_gang(int ncpu, kernel_t kernel, int ntid,
     return gang;
 }
 
-static
+static inline
 void init_workers(gang_t *gang, int sizeof_worker, int taskperqueue)
 {
     int i;
@@ -109,7 +117,7 @@ void init_workers(gang_t *gang, int sizeof_worker, int taskperqueue)
     }
 }
 
-static
+static inline
 gang_t* init_gang_workers(int ncpu, kernel_t kernel, int ntid,
                           void *args, int arglen, atomic_add_t atomic_add,
                           int sizeof_worker)
@@ -119,6 +127,19 @@ gang_t* init_gang_workers(int ncpu, kernel_t kernel, int ntid,
                              &taskperqueue);
     init_workers(gang, sizeof_worker, taskperqueue);
     return gang;
+}
+
+static inline
+void fini_gang(gang_t *gang)
+{
+    if (gang->ntid != gang->runct) {
+        printf("race condition detected: ntid=%d runct=%d\n",
+               gang->ntid, gang->runct);
+        exit(1);
+    }
+    free(gang->args);
+    free(gang->members);
+    free(gang);
 }
 
 static
@@ -186,7 +207,35 @@ void join_workers(gang_t *gang){ }
 
 #else
 
+#if defined(__WIN32__)
+gang_t* start_workers(int ncpu, kernel_t kernel, int ntid, void *args,
+                      int arglen, atomic_add_t atomic_add)
+{
+    int i;
+    gang_t *gang = init_gang_workers(ncpu, kernel, ntid, args, arglen,
+                                     atomic_add, sizeof(winthread_worker_t));
 
+    for (i = 0; i < gang->len; ++i) {
+        winthread_worker_t* worker = (winthread_worker_t*)gang->members[i];
+        worker->thread = CreateThread(NULL, 0, (void*)run_worker,
+                                      (void*)&worker->base, 0, NULL);
+    }
+    return gang;
+}
+
+
+void join_workers(gang_t *gang)
+{
+    int i;
+    for (i = 0; i < gang->len; ++i){
+        winthread_worker_t* worker = (winthread_worker_t*)gang->members[i];
+        WaitForSingleObject(worker->thread, INFINITE);
+        CloseHandle(worker->thread);
+        free(worker);
+    }
+    fini_gang(gang);
+}
+#else
 gang_t* start_workers(int ncpu, kernel_t kernel, int ntid, void *args,
                       int arglen, atomic_add_t atomic_add)
 {
@@ -211,15 +260,9 @@ void join_workers(gang_t *gang)
         pthread_join(worker->thread, NULL);
         free(worker);
     }
-    if (gang->ntid != gang->runct) {
-        printf("race condition detected: ntid=%d runct=%d\n",
-               gang->ntid, gang->runct);
-        exit(1);
-    }
-    free(gang->args);
-    free(gang->members);
-    free(gang);
+    fini_gang(gang);
 }
+#endif
 
 #endif // NOTHREAD
 
