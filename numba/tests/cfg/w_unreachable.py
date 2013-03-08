@@ -61,5 +61,5 @@ def conditional(a, b):
 if __name__ == "__main__":
 #    jitv(simple_loops)
 #    jitv(simple_return)
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

@@ -126,8 +126,5 @@ def test_shape_mismatch():
     """
 
 if __name__ == "__main__":
-#    a = np.arange(5)
-#    b = np.arange(25).reshape(5, 5)
-#    print broadcast_expr1(a, b) - (a + b)
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

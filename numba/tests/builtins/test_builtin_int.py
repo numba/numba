@@ -25,5 +25,5 @@ def convert_to_int(s, base):
     return int(s, base)
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

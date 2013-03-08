@@ -107,5 +107,5 @@ Warning 66:19: local variable 'x' might be referenced before assignment
 if __name__ == "__main__":
     #    jitfunc(simple_for_break)
     #    jitfunc(simple_for_pos)
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

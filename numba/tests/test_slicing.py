@@ -29,7 +29,3 @@ def test_slicing():
 if __name__ == "__main__":
     test_slicing()
 
-#    a = np.arange(10)
-#    t = time.time()
-#    time_slicing(a, 1, 7, 2)
-#    print time.time() - t

@@ -49,5 +49,6 @@ def string_constant():
 
 if __name__ == '__main__':
     string_constant()
-    import doctest
-    doctest.testmod()
+
+    import numba
+    numba.testmod()

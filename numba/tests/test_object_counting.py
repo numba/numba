@@ -198,5 +198,5 @@ def count_arguments3(obj):
 if __name__ == "__main__":
 #    print sys.getrefcount(fresh_obj())
 #    exc(object())
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

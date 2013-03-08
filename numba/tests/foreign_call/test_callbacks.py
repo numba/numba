@@ -1,6 +1,5 @@
 import os
 import ctypes
-import doctest
 
 from numba import *
 import numba

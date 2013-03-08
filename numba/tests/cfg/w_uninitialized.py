@@ -150,5 +150,5 @@ def uninitialized_augmented_assignment_loop():
     x = 0
 
 if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

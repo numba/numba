@@ -25,5 +25,5 @@ def get_dict(x):
     return {"hello": 1, 2.0: x}
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

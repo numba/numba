@@ -48,5 +48,5 @@ def object_convert(dst_type, obj):
     return dst_type(obj)
 
 if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

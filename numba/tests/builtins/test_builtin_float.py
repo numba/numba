@@ -25,5 +25,5 @@ def float_conjugate():
     return 1.5.conjugate()
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

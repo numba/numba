@@ -64,6 +64,5 @@ exception: 48:10: object of type int cannot be indexed
 """
 
 if __name__ == '__main__':
-#    compile_func3()
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

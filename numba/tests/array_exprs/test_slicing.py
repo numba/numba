@@ -53,10 +53,10 @@ def test_slicing_result():
     return slice_array_start(a, 2)
 
 if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()
 
-    a = np.arange(10)
-    t = time.time()
-    time_slicing(a, 1, 7, 2)
-    print((time.time() - t))
+#    a = np.arange(10)
+#    t = time.time()
+#    time_slicing(a, 1, 7, 2)
+#    print((time.time() - t))

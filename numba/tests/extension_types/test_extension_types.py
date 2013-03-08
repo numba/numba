@@ -119,5 +119,5 @@ class ExtensionTypeAsAttribute(object):
 
 if __name__ == '__main__':
 #    print ExtensionTypeAsAttribute.exttype
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

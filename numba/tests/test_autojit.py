@@ -6,8 +6,6 @@
 10.0
 """
 
-import doctest
-
 from numba import *
 
 @autojit(nopython=True)
@@ -34,5 +32,5 @@ def jit_as_arg(jit_arg, value):
 
 
 if __name__ == "__main__":
-#    jit_as_arg(jit_arg, 0.0)
-    doctest.testmod()
+    import numba
+    numba.testmod()

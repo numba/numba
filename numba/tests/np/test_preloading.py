@@ -13,8 +13,6 @@
 45.0
 """
 
-import doctest
-
 import numpy as np
 from numba import *
 
@@ -68,4 +66,5 @@ if __name__ == "__main__":
 #    a = np.arange(10, dtype=np.double)
 #    preload_arg(a)
 #    preload_phi(a)
-    doctest.testmod()
+    import numba
+    numba.testmod()
