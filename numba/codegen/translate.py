@@ -1730,7 +1730,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             else:
                 lvalue = llvm.core.Constant.int(ltype, constant)
         elif type.is_c_string:
-            lvalue = self.env.llvm_context.get_string_constant(constant)
+            lvalue = self.env.constants_manager.get_string_constant(constant)
             type_char_p = typesystem.c_string_type.to_llvm(self.context)
             lvalue = self.builder.bitcast(lvalue, type_char_p)
         elif type.is_bool:

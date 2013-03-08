@@ -118,8 +118,9 @@ class Compiler(object):
         for submod in exports_env.function_module_map.values():
             ret_val.link_in(submod)
 
-        # Link in cbuilder utilities
+        # Link in cbuilder utilities and string constants
         self.env.context.cbuilder_library.link(ret_val)
+        self.env.constants_manager.link(ret_val)
 
         if exports_env.wrap_exports:
             method_defs = []

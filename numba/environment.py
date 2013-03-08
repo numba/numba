@@ -16,6 +16,7 @@ from numba import functions, symtab
 from numba.utility.cbuilder import library
 from numba.nodes import metadata
 from numba.codegen import translate
+from numba.codegen import globalconstants
 
 from numba.intrinsic import default_intrinsic_library
 from numba.external import default_external_library
@@ -693,6 +694,12 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     llvm_context = TypedProperty(
         translate.LLVMContextManager,
         "Manages the global LLVM module and linkages of new translations."
+    )
+
+    constants_manager = TypedProperty(
+        globalconstants.LLVMConstantsManager,
+        "Holds constant values in an LLVM module.",
+        default=globalconstants.LLVMConstantsManager(),
     )
 
     # ____________________________________________________________

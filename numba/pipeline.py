@@ -480,6 +480,7 @@ class LinkingStage(PipelineStage):
         # Link libraries into module
         env.context.intrinsic_library.link(func_env.lfunc.module)
         # env.context.cbuilder_library.link(func_env.lfunc.module)
+        env.constants_manager.link(func_env.lfunc.module)
 
         if func_env.link:
             # Link function into fat LLVM module
