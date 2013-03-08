@@ -5,6 +5,9 @@ from Python.
 """
 from __future__ import print_function, division, absolute_import
 
+import logging
+logger = logging.getLogger(__name__)
+
 import ast
 import ctypes
 
@@ -284,7 +287,7 @@ def build_wrapper_module(env):
     function, and return a tuple containing the separate LLVM
     module, and the LLVM wrapper function.
     '''
-    llvm_module = lc.Module.new('%s_wrapper_module' % env.crnt.mangled_name)
+    llvm_module = llvm.core.Module.new('%s_wrapper_module' % env.crnt.mangled_name)
     t = build_wrapper_translation(env, llvm_module=llvm_module)
     logger.debug('Wrapper module: %s' % llvm_module)
     return llvm_module, t.lfunc
