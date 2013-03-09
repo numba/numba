@@ -28,7 +28,25 @@ def saxpy(target='cpu'):
 
     D = np.empty(n)
 
-    with closing(CU('cpu')) as cu:
+    with closing(CU(target)) as cu:
+        from timeit import default_timer as timer
+
+        # warm up
+        
+        dA = cu.input(A)
+        dB = cu.input(B)
+        dC = cu.input(C)
+        dProd = cu.scratch_like(D)
+        dSum  = cu.output(D)
+
+        cu.enqueue(product, ntid=dProd.size, args=(dA, dB, dProd))
+        cu.enqueue(sum, 	ntid=dSum.size,  args=(dProd, dC, dSum))
+        cu.wait()
+
+        del dA, dB, dC, dProd, dSum
+        # real deal
+
+        ts = timer()
 
         dA = cu.input(A)
         dB = cu.input(B)
@@ -36,15 +54,6 @@ def saxpy(target='cpu'):
         dProd = cu.scratch_like(D)
         dSum  = cu.output(D)
 
-        from timeit import default_timer as timer
-
-        # warm up
-        cu.enqueue(product, ntid=dProd.size, args=(dA, dB, dProd))
-        cu.enqueue(sum, 	ntid=dSum.size,  args=(dProd, dC, dSum))
-        cu.wait()
-
-        # real deal
-        ts = timer()
         cu.enqueue(product, ntid=dProd.size, args=(dA, dB, dProd))
         cu.enqueue(sum, 	ntid=dSum.size,  args=(dProd, dC, dSum))
 

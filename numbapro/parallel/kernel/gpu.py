@@ -1,6 +1,7 @@
 import math
 import numpy
 import numba
+from weakref import WeakSet
 
 from numbapro import cuda
 from numba.decorators import resolve_argtypes
@@ -18,10 +19,10 @@ class CUDAComputeUnit(CU):
         self.__compiled_count = 0
         self.__env = CudaEnvironment.get_environment('numbapro.cuda')
         self.__stream = cuda.stream()
-        self.__devmem_cache = {}
         self.__kernel_cache = {}
         self.__writeback = set()
-    
+        self.__enqueued_args = []
+
     @property
     def _stream(self):
         return self.__stream
@@ -78,6 +79,7 @@ class CUDAComputeUnit(CU):
 
         # run kernel
         jittedkern[griddim, blockdim, self.__stream](ntid, *args)
+        self.__enqueued_args.append(args) # keep ref to args
 
     def _run_epilog(self):
         for mem in self.__writeback:
@@ -86,6 +88,7 @@ class CUDAComputeUnit(CU):
     def _wait(self):
         self._run_epilog()
         self.__stream.synchronize()
+        self.__enqueued_args = [] # reset
 
     def _input(self, ary):
         return cuda.to_device(ary, stream=self.__stream)
