@@ -54,7 +54,8 @@ class CUDAComputeUnit(CU):
             # Prepare kernel function
             uid = self.__compiled_count
             kwds = dict(uid  = uid,
-                        args = ', '.join("arg%d" % i for i, _ in enumerate(args)),
+                        args = ', '.join("arg%d" % i 
+                                         for i, _ in enumerate(args)),
                         core = 'corefn')
             kernelsource = cuda_driver_kernel_template.format(**kwds)
 

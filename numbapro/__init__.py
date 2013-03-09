@@ -150,3 +150,4 @@ from numba import (is_registered,
 __all__ = numba.__all__ + ['vectorize', 'guvectorize', 'prange']
 
 import numbapro.cuda
+from numbapro.parallel.kernel import CU

@@ -2,7 +2,7 @@ from __future__ import print_function
 import sys
 from contextlib import closing
 import numpy as np
-from numbapro.parallel.kernel import CU
+from numbapro import CU
 
 # do saxpy in two kernels
 
@@ -32,7 +32,7 @@ def saxpy(target='cpu'):
         from timeit import default_timer as timer
 
         # warm up
-        
+
         dA = cu.input(A)
         dB = cu.input(B)
         dC = cu.input(C)
@@ -81,7 +81,8 @@ def saxpy(target='cpu'):
     print('throughput'.center(50, '-'))
     print('numpy:', totaldatasize / tnp / 2**20, 'MB/s')
     print('cu   :', totaldatasize / tcu / 2**20, 'MB/s')
-    
+
 
 if __name__ == '__main__':
     saxpy()
+
