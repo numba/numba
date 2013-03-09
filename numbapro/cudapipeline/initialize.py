@@ -18,9 +18,11 @@ def initialize():
         return True
     except CudaSupportError, e:
         last_error = e
+        _init_poison_jit_registry()
         return False
     except NvvmSupportError, e:
         last_error = e
+        _init_poison_jit_registry()
         return False
 #
 # Privates
@@ -39,4 +41,10 @@ def _init_numba_jit_registry():
     from numba.decorators import jit_targets, autojit_wrappers
     jit_targets[('gpu', 'ast')] = cuda_jit
     autojit_wrappers[('gpu', 'ast')] = CudaAutoJitNumbaFunction
+
+def _init_poison_jit_registry():
+    from numba.decorators import jit_targets
+    def poison(*args, **kws):
+        raise last_error
+    jit_targets[('gpu', 'ast')] = poison
 
