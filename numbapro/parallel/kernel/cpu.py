@@ -54,7 +54,8 @@ class CPUComputeUnit(CU):
 
         # others
         self.__kernel_cache = {}
-        self.__cpu_count = cpu_count() - 1
+        self.__cpu_count = max(cpu_count() - 1, 1)
+        assert self.__cpu_count > 0
 
     def _close(self):
         self.__queue.put(StopIteration)
