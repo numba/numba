@@ -23,7 +23,7 @@ typedef struct worker {
 typedef struct winthread_worker {
     worker_t base;
     HANDLE   thread;
-} pthread_worker_t;
+} winthread_worker_t;
 #else
 #include <pthread.h>
 typedef struct pthread_worker {
