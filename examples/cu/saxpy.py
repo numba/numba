@@ -20,7 +20,7 @@ def saxpy(target='cpu'):
     A = np.arange(n)
     B = A.copy()
     C = A.copy()
-    totaldatasize = A.size * 4.
+    totaldatasize = A.size * 4. * A.dtype.itemsize
     print('Total data size %.2fMB' % (totaldatasize / 2**20) )
 #    print(A)
 #    print(B)
