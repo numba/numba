@@ -1094,6 +1094,9 @@ class struct(Type):
     def subtype_list(self):
         return [field[1] for field in self.fields]
 
+    def __hash__(self):
+        return hash(tuple(self.fields))
+
     def is_prefix(self, other_struct):
         other_fields = other_struct.fields[:len(self.fields)]
         return self.fields == other_fields

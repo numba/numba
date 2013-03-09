@@ -12,8 +12,10 @@ import inspect
 from numba import error
 
 def getpos(node):
-    return node.lineno, node.col_offset
-
+    try:
+        return node.lineno, node.col_offset
+    except:
+        return 0, 0
 # ______________________________________________________________________
 
 class SourceDescr(object):

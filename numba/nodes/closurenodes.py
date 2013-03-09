@@ -107,7 +107,7 @@ class ClosureCallNode(NativeCallNode):
         self.func = call_node.func
         self.closure_type = closure_type
 
-        self.argnames = ast_extract_arg_id(self.func_def.args.args)[self.need_closure_scope:]
+        self.argnames = [name.id for name in self.func_def.args.args[self.need_closure_scope:]]
         self.expected_nargs = len(self.argnames)
 
         args, keywords = call_node.args, call_node.keywords

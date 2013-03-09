@@ -454,12 +454,7 @@ class ClosureSpecializer(ClosureTransformer):
 
         # Assign function arguments that are cellvars
         for arg in self.ast.args.args:
-            if isinstance(arg, ast.Name):
-                name = arg.id
-            elif isinstance(arg, ast.arg):
-                name = ast.arg
-            else:
-                raise TypeError('Cannot handle %r' % arg)
+            name = arg.id
 
             if name in node.scope_type.unmangled_symtab:
                 dst = lookup_scope_attribute(scope, name, ast.Store())

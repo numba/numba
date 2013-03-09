@@ -17,16 +17,6 @@ from collections import Iterable
 from numba import utils, typesystem
 
 PY3 = sys.version_info[0] == 3
-if PY3:
-    def ast_extract_arg_id(args):
-        if isinstance(args, Iterable):
-            return [name.arg for name in args]
-        return args.arg
-else:
-    def ast_extract_arg_id(args):
-        if isinstance(args, Iterable):
-            return [name.id for name in args]
-        return args.id
 
 def get_include():
     numba_root = os.path.dirname(os.path.abspath(__file__))

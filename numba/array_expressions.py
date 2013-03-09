@@ -273,7 +273,7 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
 
         variables = [b.variable(name_node.type, "op%d" % i)
                      for i, name_node in enumerate([lhs] + operands)]
-        miniargs = map(b.funcarg, variables)
+        miniargs = [b.funcarg(variable) for variable in variables]
         body = miniutils.build_kernel_call(lfunc.name, signature, miniargs, b)
 
         minikernel = b.function_from_numpy(

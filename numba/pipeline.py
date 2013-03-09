@@ -15,7 +15,7 @@ from timeit import default_timer as _timer
 import llvm.core as lc
 
 # import numba.closures
-from numba import PY3, ast_extract_arg_id
+from numba import PY3
 from numba import error
 from numba import functions
 from numba import naming
@@ -34,6 +34,7 @@ from numba.asdl import schema
 from numba.minivect import minitypes
 import numba.visitors
 from numba.specialize import comparisons, loops, exceptions, funccalls
+from numba import astsix
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class Pipeline(object):
     """
 
     order = [
+        'ast3to2'
         'resolve_templates',
         'validate_signature',
         'cfg',
@@ -209,12 +211,17 @@ class Pipeline(object):
     ### Pipeline stages
     #
 
+    def ast3to2(self, ast):
+        if not PY3:
+            return ast
+        return astsix.AST3to2().visit(ast)
+
     def resolve_templates(self, ast):
         # TODO: Unify with decorators module
         if self.template_signature is not None:
             from numba import typesystem
 
-            argnames = ast_extract_arg_id(ast.args.args)
+            argnames = [name.id for name in ast.args.args]
 
             argtypes = list(self.func_signature.args)
 
@@ -552,13 +559,28 @@ class SimplePipelineStage(PipelineStage):
         transform = self.make_specializer(self.transformer, ast, env)
         return transform.visit(ast)
 
+
+class AST3to2(PipelineStage):
+
+    def transform(self, ast, env):
+        if not PY3:
+            return ast
+        return astsix.AST3to2().visit(ast)
+
+
+def ast3to2(ast, env):
+    if not PY3:
+        return ast
+    return astsix.AST3to2().visit(ast)
+
+
 def resolve_templates(ast, env):
     # TODO: Unify with decorators module
     crnt = env.translation.crnt
     if crnt.template_signature is not None:
         from numba import typesystem
 
-        argnames = ast_extract_arg_id(ast.args.args)
+        argnames = [name.id for name in ast.args.args]
         argtypes = list(crnt.func_signature.args)
 
         typesystem.resolve_templates(crnt.locals, crnt.template_signature,
