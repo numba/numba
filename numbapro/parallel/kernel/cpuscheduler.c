@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "cpuscheduler.h"
-#define MAX_BURST 64
+#define MAX_BURST 128
 
 #define MIN(a, b) ((a) > (b) ? (b) : (a))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
