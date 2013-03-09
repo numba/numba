@@ -2,7 +2,7 @@ import numpy
 import numba
 from numba import numbawrapper, jit as _numba_jit, autojit as _numba_autojit
 from numba.decorators import compile_function
-from .environment import CUEnvironment
+from .cpuenv import CUEnvironment
 
 def cu_jit(restype=None, argtypes=None, nopython=False,
            _llvm_module=None, env_name=None, env=None,
