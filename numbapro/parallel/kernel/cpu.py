@@ -22,15 +22,16 @@ class CPUComputeUnit(CU):
         from os.path import join, dirname
         self.__env = CUEnvironment.get_environment('numbapro.cu')
         # setup llvm engine
-        with open(join(dirname(__file__), 'atomic.ll')) as fin:
-            self.__module = _lc.Module.from_assembly(fin)
+        with open(join(dirname(__file__), 'atomic.bc')) as fin:
+            self.__module = _lc.Module.from_bitcode(fin)
         self.__module.id = str(self)
 
         if not detect_avx_support():
             features = '-avx'
         else:
             features = ''
-        tm = _le.TargetMachine.new(opt=2, cm=_le.CM_JITDEFAULT, features=features)
+        tm = _le.TargetMachine.new(opt=2, cm=_le.CM_JITDEFAULT,
+                                   features=features)
         passmanagers = _lp.build_pass_managers(tm, opt=2,
                                                inline_threshold=2000,
                                                loop_vectorize=True,
@@ -156,7 +157,7 @@ def make_cpu_kernel_wrapper(kernel):
     # entry
     bldr = _lc.Builder.new(bbentry)
     begin, end, args = func.args
-    
+
     innerargs = []
     for i in range(1, len(oargtys)):
         gep = bldr.gep(args, [const_int(0), const_int(i)])

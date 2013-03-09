@@ -49,7 +49,7 @@ ext_modules = [
         cython_include_dirs = [minivect.get_include()],
         cython_gdb=True,
     ),
-               
+
     CythonExtension(
         name = "numbapro.dispatch",
         sources = ["numbapro/dispatch.pyx"],
@@ -59,7 +59,7 @@ ext_modules = [
         extra_link_args = OMP_LINK,
         cython_gdb=True,
     ),
-             
+
     CythonExtension(
         name = "numbapro.parallel.kernel._cpuscheduler",
         sources = ["numbapro/parallel/kernel/_cpuscheduler.pyx",
@@ -111,4 +111,6 @@ setup(
     ext_modules = ext_modules,
     packages = find_packages(),
     cmdclass = cmdclass,
+    package_data ={'numbapro.parallel.kernel': ['atomic.bc']},
 )
+
