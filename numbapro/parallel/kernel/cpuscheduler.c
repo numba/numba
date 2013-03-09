@@ -35,11 +35,16 @@ typedef struct pthread_worker {
 typedef struct gang{
     worker_t    **members;
     int           len;
+    // Count completed threads which moved into workstealing mode.
+    // Only used when workstealing is enabled.
     volatile int  done;
+    // Counter for kernel execution; used to check race condition.
+    // Only used when workstealing is enabled.
     volatile int  runct;
     int           ntid;
     kernel_t      kernel;
     void         *args;
+    // Atomic add function.  Can be NULL, which means disable workstealing.
     atomic_add_t  atomic_add;
 } gang_t;
 
@@ -127,7 +132,7 @@ gang_t* init_gang_workers(int ncpu, kernel_t kernel, int ntid,
 static inline
 void fini_gang(gang_t *gang)
 {
-    if (gang->ntid != gang->runct) {
+    if (gang->atomic_add && gang->ntid != gang->runct) {
         printf("race condition detected: ntid=%d runct=%d\n",
                gang->ntid, gang->runct);
         exit(1);
@@ -140,22 +145,39 @@ void fini_gang(gang_t *gang)
 static
 void run_worker(worker_t *worker)
 {
-    while (1){
-        // lock
-        lock(worker->parent, &worker->queue.lock);
-        // critical section
-        int begin = worker->queue.begin;
-        int end = MIN(begin + MAX_BURST, worker->queue.end);
-        worker->queue.begin += end - begin;
-        // unlock
-        unlock(worker->parent, &worker->queue.lock);
-        if (begin >= end) break;
-        // run kernel
-        worker->parent->kernel(begin, end, worker->parent->args);
-        worker->parent->atomic_add(&worker->parent->runct, end - begin);
-    }
-    worker->parent->done += 1;
 
+    if (worker->parent->atomic_add){
+        while (1){
+            // lock
+            lock(worker->parent, &worker->queue.lock);
+            // critical section
+            int begin = worker->queue.begin;
+            int end = MIN(begin + MAX_BURST, worker->queue.end);
+            worker->queue.begin += end - begin;
+            // unlock
+            unlock(worker->parent, &worker->queue.lock);
+            if (begin >= end) break;
+            // run kernel
+            worker->parent->kernel(begin, end, worker->parent->args);
+            worker->parent->atomic_add(&worker->parent->runct, end - begin);
+        }
+        worker->parent->atomic_add(&worker->parent->done, 1);
+    } else {
+        while (1){
+            int begin = worker->queue.begin;
+            int end = MIN(begin + MAX_BURST, worker->queue.end);
+            worker->queue.begin += end - begin;
+            if (begin >= end) break;
+            // run kernel
+            worker->parent->kernel(begin, end, worker->parent->args);
+        }
+
+    }
+
+    if (!worker->parent->atomic_add) {
+        // workstealing is diabled
+        return;
+    }
     // I'm done with my work. Let's steal some from others.
     worker_t **peers = worker->parent->members;
     const int npeer = worker->parent->len;
