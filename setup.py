@@ -61,10 +61,10 @@ ext_modules = [
     ),
 
     CythonExtension(
-        name = "numbapro.parallel.kernel._cpuscheduler",
-        sources = ["numbapro/parallel/kernel/_cpuscheduler.pyx",
-                   "numbapro/parallel/kernel/cpuscheduler.c"],
-        depends = ["numbapro/parallel/kernel/cpuscheduler.pxd"],
+        name = "numbapro.parallel.kernel.cpuimpl._cpuscheduler",
+        sources = ["numbapro/parallel/kernel/cpuimpl/_cpuscheduler.pyx",
+                   "numbapro/parallel/kernel/cpuimpl/cpuscheduler.c"],
+        depends = ["numbapro/parallel/kernel/cpuimpl/cpuscheduler.pxd"],
         extra_compile_args = ['-D_FORTIFY_SOURCE=0'],
 #        cython_gdb=True,
     ),
@@ -111,6 +111,6 @@ setup(
     ext_modules = ext_modules,
     packages = find_packages(),
     cmdclass = cmdclass,
-    package_data ={'numbapro.parallel.kernel': ['atomic.bc']},
+    package_data ={'numbapro.parallel.kernel.cpuimpl': ['atomic.bc']},
 )
 

@@ -8,7 +8,7 @@ from numba.decorators import resolve_argtypes
 from numbapro.cudapipeline.environment import CudaEnvironment
 from numbapro.cudapipeline.devicearray import DeviceArray
 
-from .cu import CU
+from ..cu import CU
 
 #
 # CUDA CU

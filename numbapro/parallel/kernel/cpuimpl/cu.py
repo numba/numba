@@ -9,9 +9,9 @@ import llvm.core as _lc
 import llvm.passes as _lp
 from llvm.workaround.avx_support import detect_avx_support
 
+from ..cu import CU
 from .cpuenv import CUEnvironment
 from .cpudecor import cu_jit
-from .cu import CU
 from ._cpuscheduler import WorkGang
 
 #
