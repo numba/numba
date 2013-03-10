@@ -31,6 +31,8 @@ class TestRand(unittest.TestCase):
         dvals = cu.input(vals)
         dout  = cu.output(out)
 
+        cu.configure(builtins.random.seed, 0xbeef)
+
         cu.enqueue(builtins.random.uniform,
                    ntid=drng.size, args=(drng,))
 

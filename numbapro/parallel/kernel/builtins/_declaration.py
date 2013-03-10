@@ -19,3 +19,5 @@ class Declaration(object):
     def get_implementation(self, target):
         return self.__impls[target]
 
+class Configuration(Declaration):
+    pass

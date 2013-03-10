@@ -28,6 +28,9 @@ class ComputeUnit(object):
     def target(self):
         return self.__target
 
+    def configure(self, key, val):
+        self._configure(key, val)
+
     def enqueue(self, fn, ntid, args=()):
         if isinstance(fn, Declaration):
             name, impl = fn.get_implementation(self.target)
@@ -70,6 +73,12 @@ class ComputeUnit(object):
         
         Default behavior does nothing.
         '''
+        pass
+
+    def _configure(self, key, val):
+        key.get_implementation(self.target).impl(self, val)
+
+    def _execute_builtin(name, impl, ntid, args):
         pass
 
     def _execute_kernel(self, func, ntid, ins, outs):

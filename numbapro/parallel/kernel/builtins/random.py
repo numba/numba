@@ -1,4 +1,10 @@
-from _declaration import Declaration
+from _declaration import Declaration, Configuration
+
+seed = Configuration('seed', '''
+seed [int]
+    
+    Seed for the PRNG.
+''')
 
 uniform = Declaration('uniform', '''
 uniform(ary)
@@ -22,16 +28,21 @@ normal(ary)
 #
 # Implementation
 #
-def _get_or_insert_prng(cu):
-    from time import time
+def _get_or_insert_prng(cu, seed=None):
     from numbapro.cudalib import curand
+    kws = {'stream': cu._stream}
+    if seed is not None:
+        kws['seed'] = int(seed)
     skey = 'prng'
     prng = cu._state.get(skey)
     if prng is None:
-        prng = curand.PRNG(seed=int(time()), stream=cu._stream)
+        prng = curand.PRNG(**kws)
         cu._state.set(skey, prng)
     return prng
 
+@seed.register('gpu')
+def gpu_seed(cu, seed):
+    _get_or_insert_prng(cu, seed=seed)
 
 @uniform.register('gpu')
 def gpu_uniform(cu, ntid, args):
