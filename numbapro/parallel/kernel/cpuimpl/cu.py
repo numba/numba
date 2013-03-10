@@ -144,7 +144,7 @@ def make_cpu_kernel_wrapper(kernel):
     ity = _lc.Type.int()
     oargtys = kernel.type.pointee.args
     packedargs = _lc.Type.pointer(_lc.Type.struct(oargtys))
-    argtys = [ity] * 2 + [packedargs]
+    argtys = [ity] * 3 + [packedargs]
 
     fnty = _lc.Type.function(_lc.Type.void(), argtys)
     func = module.add_function(fnty, 'wrapper.%s' % kernel.name)
@@ -156,7 +156,7 @@ def make_cpu_kernel_wrapper(kernel):
 
     # entry
     bldr = _lc.Builder.new(bbentry)
-    begin, end, args = func.args
+    wid, begin, end, args = func.args
 
     innerargs = []
     for i in range(1, len(oargtys)):

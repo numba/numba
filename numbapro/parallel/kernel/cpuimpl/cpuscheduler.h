@@ -5,13 +5,14 @@
 /*
  * Type for kernel functions
  *
+ * id    --- worker id.
  * begin --- first tid.
  * end   --- last tid + 1.
  * args  --- a pointer to a structure of arguments.
  *           the structure must have the following layout:
  *           { int tid, argtype arg0, argtype1 arg1, ..., argtypeN argN }
  */
-typedef void (*kernel_t)     (int begin, int end, void* args);
+typedef void (*kernel_t)     (int id, int begin, int end, void* args);
 
 /*
  * Type for atomic add function.

@@ -14,6 +14,7 @@ typedef struct queue {
 } queue_t;
 
 typedef struct worker {
+    int             id;
     queue_t         queue;
     struct gang    *parent;
 } worker_t;
@@ -108,6 +109,7 @@ void init_workers(gang_t *gang, int sizeof_worker, int taskperqueue)
         ntask += taskperqueue;
         int end = MIN(ntask, gang->ntid);
 
+        worker->id = i;
         worker->queue.begin = begin;
         worker->queue.end   = end;
         worker->queue.lock  = 0;
@@ -145,8 +147,9 @@ void fini_gang(gang_t *gang)
 static
 void run_worker(worker_t *worker)
 {
-
     if (worker->parent->atomic_add){
+        // When workstealing is enabled, each worker split the queue into
+        // smaller burst and loops until all work is done.
         while (1){
             // lock
             lock(worker->parent, &worker->queue.lock);
@@ -158,20 +161,18 @@ void run_worker(worker_t *worker)
             unlock(worker->parent, &worker->queue.lock);
             if (begin >= end) break;
             // run kernel
-            worker->parent->kernel(begin, end, worker->parent->args);
+            worker->parent->kernel(worker->id, begin, end,
+                                   worker->parent->args);
             worker->parent->atomic_add(&worker->parent->runct, end - begin);
         }
         worker->parent->atomic_add(&worker->parent->done, 1);
     } else {
-        while (1){
-            int begin = worker->queue.begin;
-            int end = MIN(begin + MAX_BURST, worker->queue.end);
-            worker->queue.begin += end - begin;
-            if (begin >= end) break;
-            // run kernel
-            worker->parent->kernel(begin, end, worker->parent->args);
-        }
-
+        // When workstealing is disabled, each worker simply run on the entire
+        // range of the queue in one go.
+        int begin = worker->queue.begin;
+        int end = worker->queue.end;
+        // run kernel
+        worker->parent->kernel(worker->id, begin, end, worker->parent->args);
     }
 
     if (!worker->parent->atomic_add) {
@@ -204,7 +205,7 @@ void run_worker(worker_t *worker)
         unlock(worker->parent, &peer->queue.lock);
         if (begin < end) {
             // run kernel
-            worker->parent->kernel(begin, end, worker->parent->args);
+            worker->parent->kernel(worker->id, begin, end, worker->parent->args);
             worker->parent->atomic_add(&worker->parent->runct, end - begin);
         }
     }
