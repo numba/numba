@@ -19,9 +19,18 @@ from ._cpuscheduler import WorkGang
 #
 class CPUComputeUnit(CU):
     def _init(self):
-        from os.path import join, dirname
         self.__env = CUEnvironment.get_environment('numbapro.cu')
+        self._init_llvm()
+        self._init_manager()
+        # others
+        self.__kernel_cache = {}
+        self.__cpu_count = max(cpu_count() - 1, 1)
+        assert self.__cpu_count > 0
+
+    def _init_llvm(self):
         # setup llvm engine
+        from os.path import join, dirname
+
         with open(join(dirname(__file__), 'atomic.bc')) as fin:
             self.__module = _lc.Module.from_bitcode(fin)
         self.__module.id = str(self)
@@ -46,6 +55,7 @@ class CPUComputeUnit(CU):
         atomic_add_ptr = self.__engine.get_pointer_to_function(atomic_add_fn)
         self.__atomic_add_ptr = atomic_add_ptr
 
+    def _init_manager(self):
         # manager thread
         self.__queue = Queue()
         self.__manager = threading.Thread(target=(self.__manager_logic),
@@ -53,10 +63,6 @@ class CPUComputeUnit(CU):
         self.__manager.daemon = True
         self.__manager.start()
 
-        # others
-        self.__kernel_cache = {}
-        self.__cpu_count = max(cpu_count() - 1, 1)
-        assert self.__cpu_count > 0
 
     def _close(self):
         self.__queue.put(StopIteration)
