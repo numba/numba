@@ -53,7 +53,7 @@ class TestNormDist(unittest.TestCase):
     def _template(self, target):
         n = 1000000
         with closing(CU(target)) as cu:
-            seed = np.random.random_integers(0, 0xffffffff,
+            seed = np.random.random_integers(0, 0xfffffff,
                                              size=n).astype(np.int32)
             normdist = np.empty(n, dtype=np.double)
             d_seed = cu.input(seed)
