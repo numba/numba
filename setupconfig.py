@@ -1,0 +1,57 @@
+import os
+import functools
+from distutils.extension import Extension
+
+import numpy as np
+
+def prefix_module(prefix, module_name):
+    if prefix:
+        return ".".join(prefix.split("/") + [module_name])
+    return module_name
+
+def prefix_path(prefix, path):
+    if prefix:
+        return "%s/%s" % (prefix.rstrip("/"), path.lstrip("/"))
+    return path
+
+def make_extension(prefix, modname, sources, depends, **kwds):
+    _prefix_path = functools.partial(prefix_path, prefix)
+
+    return Extension(
+        prefix_module(prefix, modname),
+        sources=map(_prefix_path, sources),
+        depends=map(_prefix_path, depends),
+        **kwds
+    )
+
+def get_extensions(prefix):
+    include_dirs = [prefix_path(prefix, 'include'),
+                    np.get_include()]
+
+    perfecthash_deps = ["include/perfecthash.h"]
+
+    Extension = functools.partial(make_extension, prefix)
+
+    extensions = [
+        Extension("extensibletype.extensibletype",
+                  ["extensibletype/extensibletype.pyx",
+                   #'../ulib/src/base/md5sum.c',
+                   #'../ulib/src/base/hash.c'
+                  ],
+                  include_dirs=include_dirs,
+                  depends=perfecthash_deps),
+
+        Extension("extensibletype.intern",
+                  ["extensibletype/intern.pyx"],
+                  include_dirs=include_dirs,
+                  depends=["include/globalinterning.h",
+                           "include/interning.h",
+                           "include/perfecthash.h"]),
+
+        Extension("extensibletype.methodtable",
+                  ["extensibletype/methodtable.pyx"],
+                  include_dirs=include_dirs,
+                  depends=perfecthash_deps),
+    ]
+
+    return extensions
