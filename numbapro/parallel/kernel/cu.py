@@ -38,6 +38,9 @@ class ComputeUnit(object):
         else:
             self._execute_kernel(fn, ntid, args)
 
+    def enqueue_write(self, ary):
+        self._enqueue_write(ary)
+
     def wait(self):
         self._wait()
 
@@ -83,6 +86,10 @@ class ComputeUnit(object):
 
     def _execute_kernel(self, func, ntid, ins, outs):
         raise NotImplementedError
+
+
+    def _enqueue_write(self, ary):
+        pass
     
     def _wait(self):
         pass

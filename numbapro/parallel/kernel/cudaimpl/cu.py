@@ -82,6 +82,11 @@ class CUDAComputeUnit(CU):
         jittedkern[griddim, blockdim, self.__stream](ntid, *args)
         self.__enqueued_args.append(args) # keep ref to args
 
+    
+    def _enqueue_write(self, ary):
+        self.__writeback.remove(ary)
+        ary.to_host(stream=self.__stream)
+
     def _run_epilog(self):
         for mem in self.__writeback:
             mem.to_host(stream=self.__stream)
