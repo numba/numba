@@ -3,3 +3,4 @@
 *.so
 *.o
 build
+cython_debug

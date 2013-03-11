@@ -112,6 +112,7 @@ def _hack_to_implement_pymodulo(module):
         if regex_py_modulo.match(func.name):
             assert func.is_declaration
             func.add_attribute(_lc.ATTR_ALWAYS_INLINE)
+            func.linkage = _lc.LINKAGE_LINKONCE_ODR
             bb = func.append_basic_block('entry')
             b = _lc.Builder.new(bb)
             if func.type.pointee.return_type.kind == _lc.TYPE_INTEGER:
