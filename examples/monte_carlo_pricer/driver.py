@@ -24,7 +24,7 @@ def driver(pricer):
     print
 
     NumCompute = NumPath * NumStep
-    print '%.2fs' % (NumCompute / (te - ts) / 1e6), 'MStep per second'
+    print '%.2f' % (NumCompute / (te - ts) / 1e6), 'MStep per second'
     print '%fs' % (te - ts)
 
 
