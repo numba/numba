@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 from fnmatch import fnmatchcase
 from distutils.util import convert_path
 from distutils.core import setup, Extension
@@ -72,6 +73,14 @@ def get_include():
     """
     numba_root = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(numba_root, "numba", "include")
+
+def install_pyextensibletype():
+    root = os.path.dirname(os.path.abspath(__file__))
+    setup_script = os.path.join(root, 'deps', 'pyextensibletype', 'setup.py')
+    subprocess.check_call([sys.executable, setup_script, 'install'])
+
+if set(sys.argv) & set(('build', 'build_ext', 'install')): # TODO: Do this better
+    install_pyextensibletype()
 
 numba_include_dir = get_include()
 
