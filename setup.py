@@ -76,8 +76,9 @@ def get_include():
 
 def install_pyextensibletype():
     root = os.path.dirname(os.path.abspath(__file__))
-    setup_script = os.path.join(root, 'deps', 'pyextensibletype', 'setup.py')
-    subprocess.check_call([sys.executable, setup_script, 'install'])
+    pyext_root = os.path.join(root, 'deps', 'pyextensibletype')
+    subprocess.check_call([sys.executable, 'setup.py', 'install'],
+                          cwd=pyext_root)
 
 if set(sys.argv) & set(('build', 'build_ext', 'install')): # TODO: Do this better
     install_pyextensibletype()
