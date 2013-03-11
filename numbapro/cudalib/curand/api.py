@@ -193,7 +193,7 @@ def _get_prng():
 
 
 def _get_qrng(bits):
-    assert bits in {32, 64}
+    assert bits in (32, 64)
     key = 'qrng%d' % bits
     qrng = _global_rng.get(key)
     if not qrng:
