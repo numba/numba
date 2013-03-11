@@ -99,6 +99,10 @@ cdef class PerfectHashMethodTable(object):
         return (<uintptr_t> self.table.entries[idx].ptr,
                 self.table.entries[idx].flags)
 
+    def __dealloc__(self):
+        stdlib.free(self.table)
+        self.table = NULL
+
     property table_ptr:
         def __get__(self):
             return <uintptr_t> self.table
