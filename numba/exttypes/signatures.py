@@ -42,15 +42,6 @@ class Method(object):
 # Utilities
 #------------------------------------------------------------------------
 
-def validate_method(py_func, sig, is_static):
-    assert isinstance(py_func, types.FunctionType)
-
-    nargs = py_func.__code__.co_argcount - 1 + is_static
-    if len(sig.args) != nargs:
-        raise error.NumbaError(
-            "Expected %d argument types in function "
-            "%s (don't include 'self')" % (nargs, py_func.__name__))
-
 def get_classmethod_func(func):
     """
     Get the Python function the classmethod or staticmethod is wrapping.
@@ -68,6 +59,68 @@ def get_classmethod_func(func):
 # Method Validators
 #------------------------------------------------------------------------
 
+class Validator(object):
+    "Interface for method validators"
+
+    def validate(self, method, ext_type):
+        """
+        Validate a Method. Raise an exception for user typing errors.
+        """
+
+class ArgcountValidator(Validator):
+    """
+    Validate a signature against the number of arguments the function expects.
+    """
+
+    def validate(self, method, ext_type):
+        """
+        Validate a signature (which is None if not declared by the user)
+        for a method.
+        """
+        if method.signature is None:
+            return
+
+        nargs = method.py_func.__code__.co_argcount - 1 + method.is_static
+        if len(method.signature.args) != nargs:
+            raise error.NumbaError(
+                "Expected %d argument types in function "
+                "%s (don't include 'self')" % (nargs, method.name))
+
+class InitValidator(Validator):
+    """
+    Validate the init method of extension classes.
+    """
+
+    def validate(self, method, ext_type):
+        if method.name == '__init__' and (method.is_class or method.is_static):
+            raise error.NumbaError("__init__ method should not be a class- "
+                                   "or staticmethod")
+
+class JitInitValidator(Validator):
+    """
+    Validate the init method for jit functions. Issue a warning when the
+    signature is omitted.
+    """
+
+    def validate(self, method, ext_type):
+        if method.name == '__init__' and method.signature is None:
+            self.check_init_args(method, ext_type)
+
+    def check_init_args(self, method, ext_type):
+        if inspect.getargspec(method.py_func).args:
+            warnings.warn(
+                "Constructor for class '%s' has no signature, "
+                "assuming arguments have type 'object'" %
+                ext_type.py_class.__name__)
+
+
+jit_validators = [ArgcountValidator(), InitValidator(), JitInitValidator()]
+autojit_validators = [ArgcountValidator(), InitValidator()]
+
+#------------------------------------------------------------------------
+# Method Validators
+#------------------------------------------------------------------------
+
 class MethodMaker(object):
     """
     Creates Methods from python functions and validates user-declared
@@ -80,46 +133,55 @@ class MethodMaker(object):
     def no_signature(self, method):
         "Called when no signature is found for the method"
 
-    def default_signature(self, method, method_name):
-        "Retrieve the default method signature for the given method"
+    def default_signature(self, method):
+        """
+        Retrieve the default method signature for the given method if
+        no user-declared signature exists.
+        """
 
     def make_method_type(self, method):
         "Create a method type for the given Method and declared signature"
-
-# ______________________________________________________________________
-# Method processing for @jit classes
-
-class JitMethodMaker(MethodMaker):
-
-    def no_signature(self, method):
-        raise error.NumbaError(
-            "Method '%s' does not have signature" % (method.__name__,))
-
-    def validate_init_method(self, init_method):
-        if inspect.getargspec(init_method).args:
-            warnings.warn(
-                "Constructor for class '%s' has no signature, "
-                "assuming arguments have type 'object'" %
-                self.ext_type.py_class.__name__)
-
-    def default_signature(self, method, method_name):
-        if (method_name == '__init__' and
-                isinstance(method, types.FunctionType)):
-            self.validate_init_method(method)
-
-            argtypes = [numba.object_] * (method.__code__.co_argcount - 1)
-            default_signature = numba.void(*argtypes)
-            return default_signature
-        else:
-            return None
-
-    def make_method_type(self, method):
         restype = method.signature.return_type
         argtypes = method.signature.args
         signature = typesystem.ExtMethodType(
                     return_type=restype, args=argtypes, name=method.name,
                     is_class=method.is_class, is_static=method.is_static)
         return signature
+
+# ______________________________________________________________________
+# Method processing for @jit classes
+
+class JitMethodMaker(MethodMaker):
+
+    def no_signature(self, py_func):
+        if py_func.__name__ != '__init__':
+            raise error.NumbaError(
+                "Method '%s' does not have signature" % (py_func.__name__,))
+
+    def default_signature(self, method):
+        if method.name == '__init__' and method.signature is None:
+            argtypes = [numba.object_] * (method.py_func.__code__.co_argcount - 1)
+            default_signature = numba.void(*argtypes)
+            return default_signature
+        else:
+            return None
+
+# ______________________________________________________________________
+# Method processing for @autojit classes
+
+class AutojitMethodMaker(MethodMaker):
+
+    def __init__(self, ext_type, argtypes):
+        super(AutojitMethodMaker, self).__init__(ext_type)
+        self.argtypes = argtypes
+
+    def default_signature(self, method):
+        if method.name == '__init__' and method.signature is None:
+            default_signature = numba.void(*self.argtypes)
+            return default_signature
+        else:
+            return None
+
 
 #------------------------------------------------------------------------
 # Method signature parsing
@@ -130,56 +192,39 @@ class MethodSignatureProcessor(object):
     Processes signatures of extension types.
     """
 
-    def __init__(self, class_dict, ext_type, method_maker):
+    def __init__(self, class_dict, ext_type, method_maker, validators):
         self.class_dict = class_dict
         self.ext_type = ext_type
         self.method_maker = method_maker
 
-    def get_signature(self, is_class, is_static, sig):
-        """
-        Create a signature given the user-specified signature. E.g.
+        # List of method validators: [Validator]
+        self.validators = validators
 
-            class Foo(object):
-                @void()                 # becomes: void(ext_type(Foo))
-                def method(self): ...
-        """
-        if is_static:
-            leading_arg_types = ()
-        elif is_class:
-            leading_arg_types = (numba.object_,)
-        else:
-            leading_arg_types = (self.ext_type,)
-
-        argtypes = leading_arg_types + sig.args
-        restype = sig.return_type
-        return minitypes.FunctionType(return_type=restype, args=argtypes)
-
-    def process_signature(self, method, method_name, default_signature,
+    def process_signature(self, method, method_name,
                           is_static=False, is_class=False):
         """
         Verify a method signature.
 
         Returns a Method object and the resolved signature.
+        Returns None if the object isn't a method.
         """
+
+        signature = None
+
         while True:
             if isinstance(method, types.FunctionType):
                 # Process function
-                if default_signature is None:
+                if signature is None:
                     self.method_maker.no_signature(method)
 
-                validate_method(method, default_signature or object_(),
-                                is_static)
-                if default_signature is None:
-                    default_signature = minitypes.FunctionType(return_type=None,
-                                                               args=[])
-                sig = self.get_signature(is_class, is_static, default_signature)
-                method = Method(method, method_name, sig, is_class, is_static)
+                method = Method(method, method_name, signature,
+                                is_class, is_static)
                 return method
 
             elif isinstance(method, minitypes.Function):
                 # @double(...)
                 # def func(self, ...): ...
-                default_signature = method.signature
+                signature = method.signature
                 method = method.py_func
 
             else:
@@ -193,6 +238,25 @@ class MethodSignatureProcessor(object):
 
                 method = get_classmethod_func(method)
 
+    def update_signature(self, method):
+        """
+        Update a method signature with the extension type for 'self'.
+
+            class Foo(object):
+                @void()                 # becomes: void(ext_type(Foo))
+                def method(self): ...
+        """
+        if method.is_static:
+            leading_arg_types = ()
+        elif method.is_class:
+            leading_arg_types = (numba.object_,)
+        else:
+            leading_arg_types = (self.ext_type,)
+
+        argtypes = leading_arg_types + method.signature.args
+        restype = method.signature.return_type
+        method.signature = restype(*argtypes)
+
     def get_method_signatures(self):
         """
         Return [Method] for each decorated method in the class
@@ -200,13 +264,17 @@ class MethodSignatureProcessor(object):
         methods = []
 
         for method_name, method in self.class_dict.iteritems():
-            default_signature = self.method_maker.default_signature(method,
-                                                                    method_name)
-
-            method = self.process_signature(method, method_name,
-                                            default_signature)
+            method = self.process_signature(method, method_name)
             if method is None:
                 continue
+
+            for validator in self.validators:
+                validator.validate(method, self.ext_type)
+
+            if method.signature is None:
+                method.signature = self.method_maker.default_signature(method)
+
+            self.update_signature(method)
 
             method_type = self.method_maker.make_method_type(method)
             methods.append((method, method_type))

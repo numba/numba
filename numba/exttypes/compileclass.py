@@ -14,8 +14,11 @@ from numba.exttypes import extension_types
 
 class ExtensionCompiler(object):
 
+    # [signature.Validator]
+    method_validators = None
+
     def __init__(self, env, py_class, ext_type, flags,
-                 inheriter, attrbuilder, vtabbuilder):
+                 method_maker, inheriter, attrbuilder, vtabbuilder):
         self.env = env
         self.py_class = py_class
         self.class_dict = dict(vars(py_class))
@@ -25,6 +28,7 @@ class ExtensionCompiler(object):
         self.inheriter = inheriter
         self.attrbuilder = attrbuilder
         self.vtabbuilder = vtabbuilder
+        self.method_maker = method_maker
 
         # Partial function environments held after type inference has run
         self.func_envs = {}
@@ -54,10 +58,10 @@ class ExtensionCompiler(object):
             * Verify signatures
             * Populate ext_type with method signatures (ExtMethodType)
         """
-        method_maker = signatures.JitMethodMaker(self.ext_type)
         processor = signatures.MethodSignatureProcessor(self.class_dict,
                                                         self.ext_type,
-                                                        method_maker)
+                                                        self.method_maker,
+                                                        self.method_validators)
 
         for method, method_type in processor.get_method_signatures():
             self.ext_type.add_method(method.name, method_type)
@@ -111,13 +115,6 @@ class ExtensionCompiler(object):
         method_pointers, lmethods = self.compile_methods()
         vtab = self.vtabbuilder.build_vtab(self.ext_type, method_pointers)
         return self.build_extension_type(lmethods, method_pointers, vtab)
-
-    def inherit_method(self, method_name, *args, **kwargs):
-        """
-        Inherit a method from a superclass in the vtable.
-
-        :return: a pointer to the function.
-        """
 
     def compile_methods(self):
         """

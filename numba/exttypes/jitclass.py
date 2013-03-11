@@ -66,8 +66,14 @@ class JitExtensionCompiler(compileclass.ExtensionCompiler):
     Compile @jit extension classes.
     """
 
+    method_validators = signatures.jit_validators
+
     def inherit_method(self, method_name, slot_idx):
-        "Inherit a method from a superclass in the vtable"
+        """
+        Inherit a method from a superclass in the vtable.
+
+        :return: a pointer to the function.
+        """
         parent_method_pointers = utils.get_method_pointers(self.py_class)
 
         assert parent_method_pointers is not None
@@ -96,9 +102,11 @@ class JitExtensionCompiler(compileclass.ExtensionCompiler):
             pipeline.run_env(self.env, func_env, pipeline_name='compile')
 
             lmethods.append(func_env.lfunc)
-            method_pointers.append((method_name, func_env.translator.lfunc_pointer))
+            method_pointers.append((method_name,
+                                    func_env.translator.lfunc_pointer))
 
-            self.class_dict[method_name] = method.result(func_env.numba_wrapper_func)
+            self.class_dict[method_name] = method.result(
+                func_env.numba_wrapper_func)
 
         return method_pointers, lmethods
 
@@ -171,12 +179,14 @@ def create_extension(env, py_class, flags):
     """
     flags.pop('llvm_module', None)
 
-    ext_type = typesystem.ExtensionType(py_class)
+    ext_type = typesystem.JitExtensionType(py_class)
 
-    extension_compiler = JitExtensionCompiler(env, py_class, ext_type, flags,
-                                              JitAttributesInheriter(),
-                                              JitAttributeBuilder(),
-                                              virtual.StaticVTabBuilder())
+    extension_compiler = JitExtensionCompiler(
+        env, py_class, ext_type, flags,
+        signatures.JitMethodMaker(ext_type),
+        JitAttributesInheriter(),
+        JitAttributeBuilder(),
+        virtual.StaticVTabBuilder())
     extension_compiler.infer()
     extension_type = extension_compiler.compile()
     return extension_type
