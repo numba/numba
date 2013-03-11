@@ -31,12 +31,12 @@ class ComputeUnit(object):
     def configure(self, key, val):
         self._configure(key, val)
 
-    def enqueue(self, fn, ntid, args=()):
-        if isinstance(fn, Declaration):
-            name, impl = fn.get_implementation(self.target)
+    def enqueue(self, kernel, ntid, args=()):
+        if isinstance(kernel, Declaration):
+            name, impl = kernel.get_implementation(self.target)
             self._execute_builtin(name, impl, ntid, args)
         else:
-            self._execute_kernel(fn, ntid, args)
+            self._execute_kernel(kernel, ntid, args)
 
     def enqueue_write(self, ary):
         self._enqueue_write(ary)

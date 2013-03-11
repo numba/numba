@@ -30,6 +30,14 @@ def cu_pow(A, B):
     i = cuda.grid(1)
     A[i] = A[i] ** B[i]
 
+def cu_sin(A):
+    i = cuda.grid(1)
+    A[i] = math.sin(A[i])
+
+def cu_cos(A):
+    i = cuda.grid(1)
+    A[i] = math.cos(A[i])
+
 N = 10
 
 class TestCudaMath(support.CudaTestCase):
@@ -78,6 +86,14 @@ class TestCudaMath(support.CudaTestCase):
     def test_log(self):
         self._template_f4(cu_log, np.log)
         self._template_f8(cu_log, np.log)
+    
+#    def test_sin(self):
+#        self._template_f4(cu_sin, np.sin)
+#        self._template_f8(cu_sin, np.sin)
+
+#    def test_cos(self):
+#        self._template_f4(cu_cos, np.cos)
+#        self._template_f8(cu_cos, np.cos)
 
     def test_pow(self):
         self._template_f4f4(cu_pow, np.power)
