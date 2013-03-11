@@ -136,12 +136,12 @@ class SmallMemoryManager(object):
     NBYTES = 2**21
     BLOCKSZ = 32
 
-    Driver = _driver.Driver()
-
     @classmethod
     def get(cls, *args, **kws):
         '''One instance per thread.'''
-        if not hasattr(cls.Driver._THREAD_LOCAL, 'smm'):
+        drv = _driver.Driver()
+        if not hasattr(drv._THREAD_LOCAL, 'smm'):
+            cls.Driver = drv
             cls.Driver._THREAD_LOCAL.smm = cls(*args, **kws)
         return cls.Driver._THREAD_LOCAL.smm
 

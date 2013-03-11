@@ -2,7 +2,7 @@ from __future__ import print_function
 import unittest
 from contextlib import closing
 import numpy as np
-from numbapro.parallel.kernel import CU
+from numbapro import CU, cuda
 from numbapro.parallel.kernel import builtins
 from numbapro import npy_intp
 
@@ -12,6 +12,10 @@ def randgather(tid, rnd, vals, out):
 
 class TestRand(unittest.TestCase):
     def test_gpu(self):
+        if not cuda.is_available:
+            print('Skipping CUDA test')
+            return
+
         with closing(CU('gpu')) as cu:
             self._template(cu)
 

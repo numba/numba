@@ -123,5 +123,5 @@ def _auto_device(ary, stream=0):
 #
 # Initialize the CUDA system
 #
-_initialize.initialize()
+is_available = _initialize.initialize()
 

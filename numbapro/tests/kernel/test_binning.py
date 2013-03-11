@@ -1,7 +1,7 @@
 import unittest
 from contextlib import closing
 import numpy as np
-from numbapro.parallel.kernel import CU
+from numbapro import CU, cuda
 
 def zero(tid, ary):
     ary[tid] = 0
@@ -20,6 +20,10 @@ class TestBinning(unittest.TestCase):
             self._template(cu)
 
     def test_gpu(self):
+        if not cuda.is_available:
+            print('Skipping CUDA test')
+            return
+
         with closing(CU('gpu')) as cu:
             self._template(cu)
 

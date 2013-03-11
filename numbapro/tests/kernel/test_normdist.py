@@ -4,7 +4,7 @@ from math import pi
 import unittest
 #import matplotlib.pyplot as plt
 
-from numbapro import CU, uint32, double
+from numbapro import CU, cuda, uint32, double
 
 A = 1664525
 C = 1013904223
@@ -44,6 +44,10 @@ class TestNormDist(unittest.TestCase):
         self._template('cpu')
 
     def test_gpu(self):
+        if not cuda.is_available:
+            print('Skipping CUDA test')
+            return
+
         self._template('gpu')
 
     def _template(self, target):

@@ -2,7 +2,7 @@ from __future__ import print_function
 import unittest
 from contextlib import closing
 import numpy as np
-from numbapro.parallel.kernel import CU
+from numbapro import CU, cuda
 
 def incr(tid, A):
     A[tid] += 1
@@ -15,6 +15,10 @@ class TestInOut(unittest.TestCase):
                 self._template(cu)
 
     def test_gpu(self):
+        if not cuda.is_available:
+            print('Skipping CUDA test')
+            return
+
 #        print('gpu')
         with closing(CU('gpu')) as cu:
             for i in range(10):
