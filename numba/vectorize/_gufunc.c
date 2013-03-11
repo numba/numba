@@ -8,8 +8,18 @@
 #include "numpy/ndarraytypes.h"
 
 MOD_INIT(gufunc) {
+
+    PyObject *m;
+
     import_array();
     import_umath();
+
+    MOD_DEF(m, "gufunc", "No docs", NULL)
+
+    if (m == NULL)
+        return MOD_ERROR_VAL;
+
+    return MOD_SUCCESS_VAL(m);
 }
 
 
