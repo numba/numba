@@ -1,6 +1,6 @@
 from nose.tools import eq_, ok_
 import numpy as np
-from .. import extensibletype
+from .. import extensibletype, methodtable
 
 def draw_hashes(rng, nitems):
     hashes = rng.randint(2**32, size=nitems).astype(np.uint64)
@@ -35,11 +35,11 @@ def test_methodtable():
     flags = range(1, len(ids) + 1)
     funcs = range(len(ids))
 
-    methodtable = extensibletype.PerfectHashMethodTable(
+    table = methodtable.PerfectHashMethodTable(
         len(ids), ids, flags, funcs)
 
     for (signature, flag, func) in zip(ids, flags, funcs):
-        result = methodtable.find_method(signature)
+        result = table.find_method(signature)
         assert result is not None
         got_func, got_flag = result
         assert func == got_func, (func, got_func)
