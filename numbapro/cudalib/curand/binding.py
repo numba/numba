@@ -311,7 +311,7 @@ class Generator(finalizer.OwnerMixin):
         return fn(self._handle, ptr, num, mean, stddev)
 
     def generate_poisson(self, devout, num, lmbd):
-        if devout.dtype not in {np.dtype(np.uint32), np.dtype(np.int32)}:
+        if devout.dtype not in (np.dtype(np.uint32), np.dtype(np.int32)):
             raise ValueError("Only accept int32 or uint32 arrays")
         dptr = devout.device_raw_ptr.value
         ptr = cast(c_void_p(dptr), POINTER(c_uint))
