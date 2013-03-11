@@ -53,7 +53,7 @@ capsule_getpointer(PyObject *capsule, const char *sig)
 #if PY_VERSION_HEX >= 0x02070000 && !(PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION == 0)
   cobj = PyCapsule_GetPointer(capsule, sig);
 #else
-  cobj = PyCObject_AsVoidPtr(p);
+  cobj = PyCObject_AsVoidPtr(capsule);
 #endif
 
   return cobj;
