@@ -6,31 +6,33 @@ import numpy as np
 
 def prefix_module(prefix, module_name):
     if prefix:
-        return ".".join(prefix.split("/") + [module_name])
+        return "%s.%s" % (prefix, module_name)
+
     return module_name
 
 def prefix_path(prefix, path):
     if prefix:
         return "%s/%s" % (prefix.rstrip("/"), path.lstrip("/"))
+
     return path
 
-def make_extension(prefix, modname, sources, depends, **kwds):
-    _prefix_path = functools.partial(prefix_path, prefix)
+def make_extension(path_prefix, module_prefix, modname, sources, depends, **kwds):
+    _prefix_path = functools.partial(prefix_path, path_prefix)
 
     return Extension(
-        prefix_module(prefix, modname),
+        prefix_module(module_prefix, modname),
         sources=map(_prefix_path, sources),
         depends=map(_prefix_path, depends),
         **kwds
     )
 
-def get_extensions(prefix):
-    include_dirs = [prefix_path(prefix, 'include'),
+def get_extensions(path_prefix, module_prefix=""):
+    include_dirs = [prefix_path(path_prefix, 'include'),
                     np.get_include()]
 
     perfecthash_deps = ["include/perfecthash.h"]
 
-    Extension = functools.partial(make_extension, prefix)
+    Extension = functools.partial(make_extension, path_prefix, module_prefix)
 
     extensions = [
         Extension("extensibletype.extensibletype",
