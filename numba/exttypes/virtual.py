@@ -77,7 +77,7 @@ def build_hashing_vtab(vtab_type, method_pointers):
     """
     Build hash-based vtable.
     """
-    from extensibletype import extensibletype
+    from extensibletype import methodtable
 
     n = len(method_pointers)
 
@@ -85,6 +85,6 @@ def build_hashing_vtab(vtab_type, method_pointers):
                for method_name, method_type in vtab_type.fields]
     flags = [0] * n
 
-    vtab = extensibletype.PerfectHashMethodTable(n, ids, flags,
-                                                 method_pointers)
+    vtab = methodtable.PerfectHashMethodTable(n, ids, flags,
+                                              method_pointers)
     return vtab
