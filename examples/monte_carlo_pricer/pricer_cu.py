@@ -9,7 +9,7 @@ from numbapro import CU
 from numbapro.parallel.kernel import builtins
 #from matplotlib import pyplot
 
-def step(tid, paths, dt,  prices, c0, c1, noises):
+def step(tid, paths, dt, prices, c0, c1, noises):
     paths[tid] = prices[tid] * np.exp(c0 * dt + c1 * noises[tid])
 
 def monte_carlo_pricer(paths, dt, interest, volatility):
