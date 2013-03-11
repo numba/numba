@@ -5,6 +5,12 @@ Extension types
 from numba.typesystem import *
 
 class ExtensionType(NumbaType, minitypes.ObjectType):
+    """
+    Extension type Numba type.
+
+    Available to users through MyExtensionType.exttype (or
+    numba.typeof(MyExtensionType).
+    """
 
     is_extension = True
     is_final = False
@@ -70,6 +76,7 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
             self.methods.append((method_name, method_signature))
 
     def get_signature(self, method_name):
+        "Get the signature for the given method name. Returns ExtMethodType"
         signature, vtab_offset = self.methoddict[method_name]
         return signature
 
@@ -84,21 +91,43 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
         self.symtab.update([(name, numba.symtab.Variable(type))
                                for name, type in attribute_list])
 
+
+class JitExtensionType(ExtensionType):
+    "Type for @jit extension types"
+
+    is_jit_extension = True
+
     def __repr__(self):
-        return "<Extension %s>" % self.name
+        return "<JitExtension %s>" % self.name
 
     def __str__(self):
         if self.attribute_struct:
-            return "<Extension %s(%s)>" % (self.name,
-                                           self.attribute_struct.fielddict)
+            return "<JitExtension %s(%s)>" % (
+                self.name, self.attribute_struct.fielddict)
         return repr(self)
+
+
+class AutojitExtensionType(ExtensionType):
+    "Type for @autojit extension types"
+
+    is_autojit_extension = True
+
+    def __repr__(self):
+        return "<AutojitExtension %s>" % self.name
+
+    def __str__(self):
+        if self.attribute_struct:
+            return "<AutojitExtension %s(%s)>" % (
+                self.name, self.attribute_struct.fielddict)
+        return repr(self)
+
 
 class ExtMethodType(NumbaType, minitypes.FunctionType):
     """
-    Extension method type used for vtab purposes.
+    Extension method type.
 
-    is_class: is classmethod?
-    is_static: is staticmethod?
+        is_class: is classmethod?
+        is_static: is staticmethod?
     """
 
     def __init__(self, return_type, args, name=None,
