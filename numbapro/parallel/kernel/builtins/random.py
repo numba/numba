@@ -17,10 +17,12 @@ uniform(ary)
 ''')
 
 normal  = Declaration('normal', '''
-normal(ary)
+normal(ary, mean=0, sigma=1)
 
     Write random floating-point values into `ary`.
     The values are sampled from a normal distribution.
 
-    ary --- a contiguous array of float or double.
+    ary   --- a contiguous array of float or double.
+    mean  --- the center of the distribtion.
+    sigma --- the std-deviation of the distribution.
 ''')
