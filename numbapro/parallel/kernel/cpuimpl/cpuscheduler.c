@@ -82,9 +82,10 @@ gang_t* init_gang(int ncpu, kernel_t kernel, int ntid,
                   atomic_add_t atomic_add,
                   int *taskperqueue)
 {
+    gang_t *gng;
     *taskperqueue = ntid / ncpu + (ntid % ncpu ? 1 : 0);
 
-    gang_t *gng  = malloc_zero(sizeof(gang_t));
+    gng  = malloc_zero(sizeof(gang_t));
     gng->len = ncpu;
     gng->done = 0;
     gng->members = malloc_zero(ncpu * sizeof(void*));
@@ -104,11 +105,13 @@ void init_workers(gang_t *gng, int sizeof_worker, int taskperqueue)
 {
     int i;
     int ntask = 0;
+    int begin, end;
+    worker_t *worker;
     for (i = 0; i < gng->len; ++i) {
-        worker_t *worker = malloc_zero(sizeof(pthread_worker_t));
-        int begin = ntask;
+        worker = malloc_zero(sizeof(pthread_worker_t));
+        begin = ntask;
         ntask += taskperqueue;
-        int end = MIN(ntask, gng->ntid);
+        end = MIN(ntask, gng->ntid);
 
         worker->id = i;
         worker->queue.begin = begin;
@@ -126,8 +129,10 @@ gang_t* init_gang_workers(int ncpu, kernel_t kernel, int ntid,
                           int sizeof_worker)
 {
     int taskperqueue;
-    gang_t* gng = init_gang(ncpu, kernel, ntid, args, arglen, atomic_add,
-                             &taskperqueue);
+    gang_t* gng;
+
+    gng = init_gang(ncpu, kernel, ntid, args, arglen, atomic_add,
+                    &taskperqueue);
     init_workers(gng, sizeof_worker, taskperqueue);
     return gng;
 }
@@ -148,6 +153,12 @@ void fini_gang(gang_t *gng)
 static
 void run_worker(worker_t *worker)
 {
+    int ip;
+    int begin, end;
+    int npeer;
+    worker_t **peers;
+    worker_t * peer;
+    
     if (worker->parent->atomic_add){
         // When workstealing is enabled, each worker split the queue into
         // smaller burst and loops until all work is done.
@@ -155,8 +166,8 @@ void run_worker(worker_t *worker)
             // lock
             lock(worker->parent, &worker->queue.lock);
             // critical section
-            int begin = worker->queue.begin;
-            int end = MIN(begin + MAX_BURST, worker->queue.end);
+            begin = worker->queue.begin;
+            end = MIN(begin + MAX_BURST, worker->queue.end);
             worker->queue.begin += end - begin;
             // unlock
             unlock(worker->parent, &worker->queue.lock);
@@ -170,8 +181,8 @@ void run_worker(worker_t *worker)
     } else {
         // When workstealing is disabled, each worker simply run on the entire
         // range of the queue in one go.
-        int begin = worker->queue.begin;
-        int end = worker->queue.end;
+        begin = worker->queue.begin;
+        end = worker->queue.end;
         // run kernel
         worker->parent->kernel(worker->id, begin, end, worker->parent->args);
     }
@@ -181,12 +192,11 @@ void run_worker(worker_t *worker)
         return;
     }
     // I'm done with my work. Let's steal some from others.
-    worker_t **peers = worker->parent->members;
-    const int npeer = worker->parent->len;
-    worker_t * peer;
+    peers = worker->parent->members;
+    npeer = worker->parent->len;
+
     while (worker->parent->done < worker->parent->len) {
         // find a peer that I can steal from
-        int ip;
         for(ip = 0; ip < npeer; ++ip){
             if (peers[ip] != worker) {   // not self
                 peer = peers[ip];
@@ -199,8 +209,8 @@ void run_worker(worker_t *worker)
         // lock
         lock(worker->parent, &peer->queue.lock);
         // critical section
-        int end = peer->queue.end;
-        int begin = MAX(peer->queue.begin, end - MAX_BURST);
+        end = peer->queue.end;
+        begin = MAX(peer->queue.begin, end - MAX_BURST);
         peer->queue.end -= end - begin;
         //unlock
         unlock(worker->parent, &peer->queue.lock);
@@ -231,11 +241,13 @@ gang_t* start_workers(int ncpu, kernel_t kernel, int ntid, void *args,
                       int arglen, atomic_add_t atomic_add)
 {
     int i;
-    gang_t *gng = init_gang_workers(ncpu, kernel, ntid, args, arglen,
-                                     atomic_add, sizeof(winthread_worker_t));
+    gang_t *gng;
+    winthread_worker_t* worker;
+    gng = init_gang_workers(ncpu, kernel, ntid, args, arglen,
+                            atomic_add, sizeof(winthread_worker_t));
 
     for (i = 0; i < gng->len; ++i) {
-        winthread_worker_t* worker = (winthread_worker_t*)gng->members[i];
+        worker = (winthread_worker_t*)gng->members[i];
         worker->thread = CreateThread(NULL, 0, (void*)run_worker,
                                       (void*)&worker->base, 0, NULL);
     }
@@ -246,8 +258,9 @@ gang_t* start_workers(int ncpu, kernel_t kernel, int ntid, void *args,
 void join_workers(gang_t *gng)
 {
     int i;
+    winthread_worker_t* worker;
     for (i = 0; i < gng->len; ++i){
-        winthread_worker_t* worker = (winthread_worker_t*)gng->members[i];
+        worker = (winthread_worker_t*)gng->members[i];
         WaitForSingleObject(worker->thread, INFINITE);
         CloseHandle(worker->thread);
         free(worker);
@@ -259,11 +272,13 @@ gang_t* start_workers(int ncpu, kernel_t kernel, int ntid, void *args,
                       int arglen, atomic_add_t atomic_add)
 {
     int i;
-    gang_t *gng = init_gang_workers(ncpu, kernel, ntid, args, arglen,
-                                     atomic_add, sizeof(pthread_worker_t));
+    gang_t *gng;
+    pthread_worker_t* worker;
+    gng = init_gang_workers(ncpu, kernel, ntid, args, arglen,
+                            atomic_add, sizeof(pthread_worker_t));
 
     for (i = 0; i < gng->len; ++i) {
-        pthread_worker_t* worker = (pthread_worker_t*)gng->members[i];
+        worker = (pthread_worker_t*)gng->members[i];
         pthread_create(&worker->thread, NULL, (void*(*)(void*))run_worker,
                        &worker->base);
     }
