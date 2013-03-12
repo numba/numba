@@ -70,11 +70,11 @@ def extending(table):
 # ______________________________________________________________________
 # Validate Table Ordering
 
-def validate_table_compatibility(table):
+def validate_extending_order_compatibility(table):
     parents = sort_parents(table)
-    vtabs = parents + [table]
+    tables = parents + [table]
 
-    for table_smaller, table_bigger in zip(vtabs, vtabs[1:]):
+    for table_smaller, table_bigger in zip(tables, tables[1:]):
         names1 = table_smaller.attributes
         names2 = table_bigger.attributes[:len(table_smaller.attributes)]
 
@@ -84,3 +84,4 @@ def validate_table_compatibility(table):
                 "base classes '%s' and '%s'" % (
                     table_smaller.py_class.__name__,
                     table_bigger.py_class.__name__))
+

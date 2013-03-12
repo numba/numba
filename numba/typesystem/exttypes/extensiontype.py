@@ -4,8 +4,10 @@
 Extension type types.
 """
 
+from numba.traits import traits, Delegate
 from numba.typesystem import *
 
+@traits
 class ExtensionType(NumbaType, minitypes.ObjectType):
     """
     Extension type Numba type.
@@ -17,17 +19,23 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
     is_extension = True
     is_final = False
 
+    methoddict = Delegate('vtab_type')
+    methodnames = Delegate('vtab_type')
+
+    attributedict = Delegate('attribute_table')
+    attributes = Delegate('attribute_table')
+
     def __init__(self, py_class, **kwds):
         super(ExtensionType, self).__init__(**kwds)
         assert isinstance(py_class, type), ("Must be a new-style class "
                                             "(inherit from 'object')")
         self.name = py_class.__name__
         self.py_class = py_class
+
         self.symtab = {}  # attr_name -> attr_type
-        self.methods = [] # (method_name, func_signature)
-        self.methoddict = {} # method_name -> (func_signature, vtab_index)
 
         self.compute_offsets(py_class)
+
         self.attribute_table = None
         self.vtab_type = None
 
