@@ -4,8 +4,10 @@
 Extension type types.
 """
 
+from numba.minivect import minitypes
+
 from numba.traits import traits, Delegate
-from numba.typesystem import *
+from numba.typesystem import NumbaType
 
 @traits
 class ExtensionType(NumbaType, minitypes.ObjectType):
@@ -21,6 +23,7 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
 
     methoddict = Delegate('vtab_type')
     methodnames = Delegate('vtab_type')
+    add_method = Delegate('vtab_type')
 
     attributedict = Delegate('attribute_table')
     attributes = Delegate('attribute_table')
