@@ -2,7 +2,9 @@
 Types for closures and inner functions.
 """
 
-from numba.typesystem import *
+from numba.minivect import minitypes
+from numba.typesystem.basetypes import NumbaType
+from numba.typesystem.exttypes.extensiontype import ExtensionType
 
 class ClosureType(NumbaType, minitypes.ObjectType):
     """
