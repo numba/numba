@@ -5,7 +5,7 @@ Virtual method table types and ordering.
 """
 
 from numba import error
-from numba.typesystem import *
+from numba.typesystem.basetypes import *
 from numba.typesystem.exttypes import ordering
 
 #------------------------------------------------------------------------
@@ -59,3 +59,19 @@ class VTabType(NumbaType):
         "Get the signature for the given method name. Returns ExtMethodType"
         method = self.methoddict[method_name]
         return method.signature
+
+    @property
+    def methods(self):
+        "Return methods in the order they were set in"
+        assert self.methodnames is not None
+        return map(self.methoddict.get, self.methodnames)
+
+    @property
+    def llvm_methods(self):
+        for m in self.methods:
+            yield m.lfunc
+
+    @property
+    def method_pointers(self):
+        for m in self.methods:
+            yield m.lfunc_pointer
