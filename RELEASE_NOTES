@@ -1,4 +1,11 @@
-Version (dev)
+Version (0.10)
+==============
+* Added Compute Unit (CU) API
+* Added cuRAND binding
+* Added CUDA device array
+* Various improvements to CUDA support
+
+Version (0.9)
 =============
 * Improve CUDA driver discovery.
 
