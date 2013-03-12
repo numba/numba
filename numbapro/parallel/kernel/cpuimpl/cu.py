@@ -19,6 +19,8 @@ from ._cpuscheduler import WorkGang
 #
 class CPUComputeUnit(CU):
     def _init(self):
+        self.enable_workstealing = False
+        
         self.__env = CUEnvironment.get_environment('numbapro.cu')
         self._init_llvm()
         self._init_manager()
@@ -26,7 +28,7 @@ class CPUComputeUnit(CU):
         self.__kernel_cache = {}
         self.__cpu_count = max(cpu_count() - 1, 1)
         assert self.__cpu_count > 0
-
+        
     def _init_llvm(self):
         # setup llvm engine
         from os.path import join, dirname
@@ -50,10 +52,13 @@ class CPUComputeUnit(CU):
         self.__engine.disable_lazy_compilation(True)
 
         # prepare dispatcher
-        atomics = 'atomic_add_i32'
-        atomic_add_fn = self.__module.get_function_named( 'atomic_add_i32')
-        atomic_add_ptr = self.__engine.get_pointer_to_function(atomic_add_fn)
-        self.__atomic_add_ptr = atomic_add_ptr
+        if self.enable_workstealing:
+            atomics = 'atomic_add_i32'
+            atomic_add_fn = self.__module.get_function_named( 'atomic_add_i32')
+            atomic_add_ptr = self.__engine.get_pointer_to_function(atomic_add_fn)
+            self.__atomic_add_ptr = atomic_add_ptr
+        else:
+            self.__atomic_add_ptr = 0
 
     def _init_manager(self):
         # manager thread
@@ -143,6 +148,14 @@ class CPUComputeUnit(CU):
 
     def _scratch(self, shape, dtype, order):
         return numpy.empty(shape, dtype=dtype, order=order)
+
+    @property
+    def enable_workstealing(self):
+        return self.__enable_workstealing
+
+    @enable_workstealing.setter
+    def enable_workstealing(self, enable):
+        self.__enable_workstealing = enable
 
 
 def make_cpu_kernel_wrapper(kernel):
