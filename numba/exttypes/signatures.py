@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 Handle signatures of methods in @jit and @autojit classes.
 """
@@ -54,68 +56,6 @@ def get_classmethod_func(func):
     else:
         assert isinstance(func, staticmethod)
         return func.__get__(object())
-
-#------------------------------------------------------------------------
-# Method Validators
-#------------------------------------------------------------------------
-
-class Validator(object):
-    "Interface for method validators"
-
-    def validate(self, method, ext_type):
-        """
-        Validate a Method. Raise an exception for user typing errors.
-        """
-
-class ArgcountValidator(Validator):
-    """
-    Validate a signature against the number of arguments the function expects.
-    """
-
-    def validate(self, method, ext_type):
-        """
-        Validate a signature (which is None if not declared by the user)
-        for a method.
-        """
-        if method.signature is None:
-            return
-
-        nargs = method.py_func.__code__.co_argcount - 1 + method.is_static
-        if len(method.signature.args) != nargs:
-            raise error.NumbaError(
-                "Expected %d argument types in function "
-                "%s (don't include 'self')" % (nargs, method.name))
-
-class InitValidator(Validator):
-    """
-    Validate the init method of extension classes.
-    """
-
-    def validate(self, method, ext_type):
-        if method.name == '__init__' and (method.is_class or method.is_static):
-            raise error.NumbaError("__init__ method should not be a class- "
-                                   "or staticmethod")
-
-class JitInitValidator(Validator):
-    """
-    Validate the init method for jit functions. Issue a warning when the
-    signature is omitted.
-    """
-
-    def validate(self, method, ext_type):
-        if method.name == '__init__' and method.signature is None:
-            self.check_init_args(method, ext_type)
-
-    def check_init_args(self, method, ext_type):
-        if inspect.getargspec(method.py_func).args:
-            warnings.warn(
-                "Constructor for class '%s' has no signature, "
-                "assuming arguments have type 'object'" %
-                ext_type.py_class.__name__)
-
-
-jit_validators = [ArgcountValidator(), InitValidator(), JitInitValidator()]
-autojit_validators = [ArgcountValidator(), InitValidator()]
 
 #------------------------------------------------------------------------
 # Method Validators

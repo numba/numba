@@ -159,7 +159,7 @@ class AttributesInheriter(object):
             # superclass is not a numba class
             return
 
-        struct_type = utils.get_struct_type(py_class)
+        struct_type = utils.get_attributes_type(py_class)
         vtab_type = utils.get_vtab_type(py_class)
         self.verify_base_class_compatibility(py_class, struct_type, vtab_type)
 

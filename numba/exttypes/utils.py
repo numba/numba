@@ -4,7 +4,7 @@
 # Read state from extension types
 #------------------------------------------------------------------------
 
-def get_struct_type(py_class):
+def get_attributes_type(py_class):
     "Return the attribute struct type of the numba extension type"
     return py_class.__numba_struct_type
 

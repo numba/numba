@@ -166,7 +166,7 @@ class AutojitAttributesInheriter(compileclass.AttributesInheriter):
         bases = [py_class]
         for base in py_class.__bases__:
             if is_numba_class(base):
-                attr_prefix = utils.get_struct_type(base).is_prefix(struct_type)
+                attr_prefix = utils.get_attributes_type(base).is_prefix(struct_type)
                 method_prefix = utils.get_vtab_type(base).is_prefix(vtab_type)
                 if not attr_prefix or not method_prefix:
                     raise error.NumbaError(
