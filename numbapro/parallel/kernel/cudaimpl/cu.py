@@ -5,7 +5,7 @@ from numbapro import cuda
 from numba.decorators import resolve_argtypes
 from numbapro.cudapipeline.environment import CudaEnvironment
 from numbapro.cudapipeline.devicearray import DeviceArray
-
+from numbapro.cudapipeline.error import CudaDriverError
 from ..cu import CU
 
 #
@@ -20,6 +20,8 @@ class CUDAComputeUnit(CU):
         self.__kernel_cache = {}
         self.__writeback = set()
         self.__enqueued_args = []
+        self.__device = cuda.get_current_device()
+        self.__max_blocksize = self.__device.MAX_THREADS_PER_BLOCK
 
     @property
     def _stream(self):
@@ -70,14 +72,22 @@ class CUDAComputeUnit(CU):
             self.__compiled_count += 1
 
         # configure kernel
-        blksz = 1024
-        ngrid = int(math.ceil(float(ntid) / blksz))
-        nblock = min(blksz, ntid)
-        griddim = ngrid, 1,
-        blockdim = nblock, 1
-
-        # run kernel
-        jittedkern[griddim, blockdim, self.__stream](ntid, *args)
+        while True:
+            blksz = self.__max_blocksize
+            ngrid = int(math.ceil(float(ntid) / blksz))
+            nblock = min(blksz, ntid)
+            griddim = ngrid, 1,
+            blockdim = nblock, 1
+            # run kernel
+            try:
+                jittedkern[griddim, blockdim, self.__stream](ntid, *args)
+            except CudaDriverError, e:
+                # assuming the reason is too much registers
+                # but who knows when the driver is not specific
+                # so the user has to suffer for the delay
+                blksz -= 32 # reduce 32 threads at a time
+            else:
+                break
         self.__enqueued_args.append(args) # keep ref to args
 
     
