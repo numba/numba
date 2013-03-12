@@ -7,34 +7,34 @@
 #define MIN(a, b) ((a) > (b) ? (b) : (a))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-typedef struct queue {
+typedef struct queue_struct {
     volatile int begin, end;
     volatile int lock;
 } queue_t;
 
-typedef struct worker {
-    int             id;
-    queue_t         queue;
-    struct gang    *parent;
+typedef struct worker_struct {
+    int                id;
+    queue_t            queue;
+    struct gang_struct *parent;
 } worker_t;
 
 #if defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)
 #include <windows.h>
 #define STATIC_INLINE static
-typedef struct winthread_worker {
+typedef struct winthread_worker_struct {
     worker_t base;
     HANDLE   thread;
 } winthread_worker_t;
 #else
 #include <pthread.h>
 #define STATIC_INLINE static inline
-typedef struct pthread_worker {
+typedef struct pthread_worker_struct {
     worker_t    base;
     pthread_t   thread;
 } pthread_worker_t;
 #endif
 
-typedef struct gang{
+typedef struct gang_struct{
     worker_t    **members;
     int           len;
     // Count completed threads which moved into workstealing mode.

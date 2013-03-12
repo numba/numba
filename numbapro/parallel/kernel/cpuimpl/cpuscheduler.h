@@ -22,14 +22,15 @@ typedef void (*kernel_t)     (int id, int begin, int end, void* args);
  * ptr --- pointer to an integer which will be added to
  * val --- the value adding to `ptr`.
  */
-typedef int  (*atomic_add_t) (volatile int *ptr, int val);
+typedef int (*atomic_add_t) (volatile int *ptr, int val);
 
-struct gang;
+struct gang_struct;
 
-struct gang* start_workers(int ncpu, kernel_t kernel, int ntid, void *args,
-                           int arglen, atomic_add_t atomic_add);
+struct gang_struct* start_workers(int ncpu, kernel_t kernel, int ntid,
+                                  void *args, int arglen,
+                                  atomic_add_t atomic_add);
 
-void join_workers(struct gang *gng);
+void join_workers(struct gang_struct *gng);
 
 
 #ifdef __cplusplus
