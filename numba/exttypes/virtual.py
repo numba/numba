@@ -20,6 +20,9 @@ virtual method tables:
 import numba
 import ctypes
 
+from numba.exttypes import compileclass
+from numba.typesystem.exttypes import ordering
+
 #------------------------------------------------------------------------
 # Static Virtual Method Tables
 #------------------------------------------------------------------------
@@ -57,16 +60,17 @@ def build_static_vtab(vtab_type, method_pointers):
 # ______________________________________________________________________
 # Build Virtual Method Table
 
-class StaticVTabBuilder(object):
+class StaticVTabBuilder(compileclass.VTabBuilder):
 
-    def build_vtab_type(self, ext_type):
-        "Build vtab type before compiling"
-        ext_type.vtab_type = numba.struct(
-            [(field_name, field_type.pointer())
-                for field_name, field_type in ext_type.methods])
+    def finalize(self, ext_type):
+        ext_type.vtab_type.create_method_ordering(ordering.extending)
 
     def build_vtab(self, ext_type, method_pointers):
-        return build_static_vtab(ext_type.vtab_type, method_pointers)
+        struct_vtable = numba.struct(
+            [(method.name, method.type.pointer())
+                 for method in ext_type.vtab_type.methods])
+
+        return build_static_vtab(struct_vtable, method_pointers)
 
 #------------------------------------------------------------------------
 # Hash-based virtual method tables
@@ -94,11 +98,10 @@ def build_hashing_vtab(vtab_type, method_pointers):
 # ______________________________________________________________________
 # Build Hash-based Virtual Method Table
 
-class HashBasedVTabBuilder(object):
+class HashBasedVTabBuilder(compileclass.VTabBuilder):
 
-    def build_vtab_type(self, ext_type):
-        "Build vtab type before compiling"
-        return numba.struct(ext_type.methods)
+    def finalize(self, ext_type):
+        ext_type.vtab_type.create_method_ordering(ordering.unordered)
 
     def build_vtab(self, ext_type, method_pointers):
         return build_hashing_vtab(ext_type.vtab_type, method_pointers)

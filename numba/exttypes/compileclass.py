@@ -117,6 +117,19 @@ class ExtensionCompiler(object):
         """
         for validator in self.exttype_validators:
             validator.validate(self.ext_type)
+
+    #------------------------------------------------------------------------
+    # Finalize Tables
+    #------------------------------------------------------------------------
+
+    def finalize_tables(self):
+        """
+        Finalize (fix) the attribute and method tables.
+        """
+        self.attrbuilder.finalize(self.ext_type)
+        self.vtabbuilder.finalize(self.ext_type)
+
+    #------------------------------------------------------------------------
     # Compilation
     #------------------------------------------------------------------------
 
@@ -163,77 +176,84 @@ class ExtensionCompiler(object):
 
 class AttributesInheriter(object):
     """
-    Inherit attributes and methods from parent classes.
+    Inherit attributes and methods from parent classes:
+
+        For attributes and methods ...
+
+            1) Build a table type
+            2) Copy supertype slots into subclass table type
     """
 
-    def inherit(self, ext_type, class_dict):
+    def inherit(self, ext_type):
         "Inherit attributes and methods from superclasses"
-        py_class = ext_type.py_class
-        if not is_numba_class(py_class):
-            # superclass is not a numba class
-            return
+        attr_table = self.build_attribute_table(ext_type)
+        ext_type.attribute_table = attr_table
 
-        bases = list(utils.get_numba_bases(py_class))
+        vtable = self.build_method_table(ext_type)
+        ext_type.vtab_type = vtable
 
-        attr_parents = map(utils.get_attributes_type, bases)
-        vtab_parents = map(utils.get_vtab_type, bases)
+    def build_attribute_table(self, ext_type):
+        bases = utils.get_numba_bases(ext_type.py_class)
 
-        self.inherit_attributes(ext_type, struct_type)
-        self.inherit_methods(ext_type, vtab_type)
+        parent_attrtables = [base.exttype.attribute_table for base in bases]
 
-    def inherit_attributes(self, ext_type, parent_struct_type):
+        attr_table = attributestype.ExtensionAttributesTableType(
+            parent_attrtables)
+
+        for base in bases:
+            self.inherit_attributes(attr_table, base.ext_type)
+
+    def build_method_table(self, ext_type):
+        bases = utils.get_numba_bases(ext_type.py_class)
+
+        parent_vtables = [base.exttype.vtab_type for base in bases]
+        vtable = vtabtype.VTabType(parent_vtables)
+
+        for base in bases:
+            self.inherit_methods(vtable, base.ext_type)
+
+    def inherit_attributes(self, derived_ext_type, base_ext_type):
         """
         Inherit attributes from a parent class.
         May be called multiple times for multiple bases.
         """
+        derived_ext_type.attribute_table.attributedict.update(
+                    base_ext_type.attribute_table.attributedict)
 
-    def inherit_methods(self, ext_type, parent_vtab_type):
+    def inherit_methods(self, derived_ext_type, base_ext_type):
         """
         Inherit methods from a parent class.
         May be called multiple times for multiple bases.
         """
+        derived_ext_type.vtab_type.methoddict.update(
+                    base_ext_type.vtab_type.methoddict)
 
-    def process_class_attribute_types(self, ext_type, class_dict):
-        """
-        Process class attribute types:
 
-            @jit
-            class Foo(object):
+def process_class_attribute_types(ext_type, class_dict):
+    """
+    Process class attribute types:
 
-                attr = double
-        """
-        for name, value in class_dict.iteritems():
-            if isinstance(value, minitypes.Type):
-                ext_type.symtab[name] = symtab.Variable(value,
-                                                        promotable_type=False)
+        @jit
+        class Foo(object):
+
+            attr = double
+    """
+    for name, value in class_dict.iteritems():
+        if isinstance(value, minitypes.Type):
+            ext_type.symtab[name] = symtab.Variable(
+                        value, promotable_type=False)
 
 #------------------------------------------------------------------------
 # Build Attributes
 #------------------------------------------------------------------------
 
 class AttributeBuilder(object):
+    """
+    Build attribute descriptors for Python-level access.
+    """
 
-    def build_attributes(self, ext_type):
-        """
-        Create attribute struct type from symbol table.
-        """
-        attrs = dict((name, var.type)
-                         for name, var in ext_type.symtab.iteritems())
-
-        if ext_type.attribute_table is None:
-            # No fields to inherit
-            ext_type.attribute_table = numba.struct(**attrs)
-        else:
-            # Inherit fields from parent
-            fields = []
-            for name, variable in ext_type.symtab.iteritems():
-                if name not in ext_type.attribute_table.fielddict:
-                    fields.append((name, variable.type))
-                    ext_type.attribute_table.fielddict[name] = variable.type
-
-            # Sort fields by rank
-            fields = numba.struct(fields).fields
-            ext_type.attribute_table.fields.extend(fields)
+    def finalize(self, ext_type):
+        "Finalize the attribute table (and fix the order if necessary)"
 
     def create_descr(self, attr_name):
         """
@@ -245,3 +265,21 @@ class AttributeBuilder(object):
         for attr_name, attr_type in ext_type.symtab.iteritems():
             descriptor = self.create_descr(attr_name)
             class_dict[attr_name] = descriptor
+
+#------------------------------------------------------------------------
+# Build Virtual Method Table
+#------------------------------------------------------------------------
+
+class VTabBuilder(object):
+    """
+    Build virtual method table for quick calling from Numba.
+    """
+
+    def finalize(self, ext_type):
+        "Finalize the method table (and fix the order if necessary)"
+
+    def build_vtab(self, ext_type, method_pointers):
+        """
+        Build a virtual method table.
+        The result will be kept alive on the extension type.
+        """

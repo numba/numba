@@ -1389,8 +1389,10 @@ class TypeInferer(visitors.NumbaTransformer):
 
     def _resolve_extension_attribute(self, node, type):
         attr = self.extattr_mangle(node.attr, type)
+
         if attr in type.methoddict:
             return nodes.ExtensionMethod(node.value, attr)
+
         if attr not in type.symtab:
             if type.is_resolved or not self.is_store(node.ctx):
                 raise error.NumbaError(
