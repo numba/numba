@@ -39,10 +39,10 @@ class UFuncBuilder(object):
     def build_ufunc_ast(self, tree):
         args = [ast.Name(id='op%d' % i, ctx=ast.Param())
                     for i, op in enumerate(self.operands)]
-        arguments = ast.arguments(args, # args
-                                  None, # vararg
-                                  None, # kwarg
-                                  [],   # defaults
+        arguments = ast.arguments(args=args,
+                                  vararg=None,
+                                  kwarg=None,
+                                  defaults=[],
         )
         body = ast.Return(value=tree)
         func = ast.FunctionDef(name='ufunc%d' % self.ufunc_counter,

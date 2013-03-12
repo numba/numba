@@ -63,6 +63,7 @@ class TestConstFolding(unittest.TestCase):
         with environment.TranslationContext(self.env, func, astree, func_sig):
             pipeline_callable = self.env.get_or_add_pipeline(
                 'const_folding', pipeline.ConstFolding)
+            astree = pipeline.AST3to2()(astree, self.env)
             ret_val = pipeline_callable(astree, self.env)
         return ret_val
 

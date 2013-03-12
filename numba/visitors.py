@@ -70,15 +70,7 @@ class NumbaVisitorMixin(CooperativeBase):
                                                                    self.locals)
             self.names = self.global_names = freevars
 
-            #TODO: Using a guard for PY3 does not work.
-            #Sometimes ast.args.args has objects of type ast.Name
-            tmp_ = []
-            for name in ast.args.args:
-                if hasattr(name, 'arg'):
-                    tmp_.append(name.arg)
-                else:
-                    tmp_.append(name.id)
-            self.argnames = tuple(tmp_)
+            self.argnames = tuple(name.id for name in ast.args.args)
 
             argnames = set(self.argnames)
             local_names = [local_name for local_name in locals
@@ -425,10 +417,9 @@ def determine_variable_status(env, ast, locals_dict):
 
     locals = set(v.assigned)
     locals.update(locals_dict)
-    if PY3:
-        locals.update(arg.arg for arg in ast.args.args)
-    else:
-        locals.update(arg.id for arg in ast.args.args)
+
+    locals.update([name.id for name in ast.args.args])
+
     locals.update(func_def.name for func_def in v.func_defs)
 
     freevars = set(v.referenced) - locals

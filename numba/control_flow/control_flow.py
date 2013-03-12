@@ -510,10 +510,7 @@ class ControlFlow(object):
             for block in self.blocks:
                 print(('DF(%d) = %s' % (block.id, block.dominance_frontier)))
 
-        if PY3:
-            argnames = [name.arg for name in ast.args.args]
-        else:
-            argnames = [name.id for name in ast.args.args]
+        argnames = [name.id for name in ast.args.args]
 
         #
         ### 1) Insert phi nodes in the right places

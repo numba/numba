@@ -12,10 +12,11 @@ from numba.special import *
 import os
 import sys
 import logging
+from collections import Iterable
+
 from numba import utils, typesystem
 
 PY3 = sys.version_info[0] == 3
-
 
 def get_include():
     numba_root = os.path.dirname(os.path.abspath(__file__))

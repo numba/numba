@@ -399,7 +399,7 @@ def test_closure_outer_locals():
 
     inner()
 
-__doc__ = rewrite_doc(__doc__)
+#__doc__ = rewrite_doc(__doc__)
 
 def try_(func, *args):
     try:
