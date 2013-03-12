@@ -54,8 +54,11 @@ from numba.exttypes import logger
 from numba.exttypes import virtual
 from numba.exttypes import signatures
 from numba.exttypes import utils
+from numba.exttypes import validators
 from numba.exttypes import compileclass
 from numba.exttypes import extension_types
+
+from numba.typesystem.exttypes import ordering
 
 #------------------------------------------------------------------------
 # Populate Extension Type with Methods
@@ -66,7 +69,8 @@ class JitExtensionCompiler(compileclass.ExtensionCompiler):
     Compile @jit extension classes.
     """
 
-    method_validators = signatures.jit_validators
+    method_validators = validators.jit_validators
+    exttype_validators = validators.jit_type_validators
 
     def inherit_method(self, method_name, slot_idx):
         """
@@ -138,25 +142,14 @@ class JitAttributesInheriter(compileclass.AttributesInheriter):
             func_signature = func_signature.return_type(*args)
             ext_type.add_method(method_name, func_signature)
 
-    def verify_base_class_compatibility(self, py_class, struct_type, vtab_type):
-        "Verify that we can build a compatible class layout"
-        bases = [py_class]
-        for base in py_class.__bases__:
-            if is_numba_class(base):
-                attr_prefix = utils.get_attributes_type(base).is_prefix(struct_type)
-                method_prefix = utils.get_vtab_type(base).is_prefix(vtab_type)
-                if not attr_prefix or not method_prefix:
-                    raise error.NumbaError(
-                                "Multiple incompatible base classes found: "
-                                "%s and %s" % (base, bases[-1]))
-
-                bases.append(base)
-
 #------------------------------------------------------------------------
 # Build Attributes Struct
 #------------------------------------------------------------------------
 
 class JitAttributeBuilder(compileclass.AttributeBuilder):
+
+    def finalize(self, attr_table):
+        ext_type.attribute_table.create_attribute_ordering(ordering.extending)
 
     def create_descr(self, attr_name):
         """
@@ -187,6 +180,9 @@ def create_extension(env, py_class, flags):
         JitAttributesInheriter(),
         JitAttributeBuilder(),
         virtual.StaticVTabBuilder())
+
     extension_compiler.infer()
+    extension_compiler.validate()
     extension_type = extension_compiler.compile()
+
     return extension_type

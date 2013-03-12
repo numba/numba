@@ -4,15 +4,14 @@
 Validate method signatures and inheritance compatiblity.
 """
 
-import types
 import warnings
 import inspect
 
 import numba
 from numba import *
 from numba import error
-from numba import typesystem
-from numba.minivect import minitypes
+
+from numba.typesystem.exttypes import ordering
 
 
 #------------------------------------------------------------------------
@@ -78,25 +77,98 @@ jit_validators = [ArgcountMethodValidator(), InitMethodValidator(), JitInitMetho
 autojit_validators = [ArgcountMethodValidator(), InitMethodValidator()]
 
 #------------------------------------------------------------------------
-# Inheritance Validators
+# Inheritance and Table Validators
 #------------------------------------------------------------------------
 
-class InheritanceValidator(object):
+class ExtTypeValidator(object):
     """
     Interface for validators that check for compatible inheritance trees.
     """
 
-    def validate(self, ext_type, base_ext_type):
+    def validate(self, ext_type):
         """
         Validate an extension type with its parents.
         """
 
-class AttributeValidator(object):
+# ______________________________________________________________________
+# Validate Table Ordering
+
+class AttributeTableOrderValidator(ExtTypeValidator):
+    "Validate attribute table with static order (non-hash-based)."
 
     def validate(self, ext_type):
-        attr_prefix = utils.get_attributes_type(base).is_prefix(struct_type)
+        ordering.validate_extending_order_compatibility(
+            ordering.AttributeTable(ext_type.attribute_table))
 
-        if not attr_prefix or not method_prefix:
-            raise error.NumbaError(
-                        "Multiple incompatible base classes found: "
-                        "%s and %s" % (base, bases[-1]))
+class MethodTableOrderValidator(ExtTypeValidator):
+    "Validate method table with static order (non-hash-based)."
+
+    def validate(self, ext_type):
+        ordering.validate_extending_order_compatibility(
+            ordering.VTable(ext_type.vtab_type))
+
+# ______________________________________________________________________
+# Validate Table Slot Types
+
+def validate_type_table(table, comparer):
+    """
+    Determine the compatability of this table with its parents given an
+    ordering.AbstractTable and a type compare function ((type1, type2) -> bool).
+    """
+    for parent in table.parents:
+        for attr_name, attr_type in parent.attrdict.iteritems():
+            type1 = table.attrdict[attr_name]
+            if not comparer(type1, attr_type):
+                raise error.NumbaError(
+                    "Found incompatible slot for method or "
+                    "attribute '%s':" % ())
+
+def drop_self_type(type):
+    if type.is_static:
+        return type
+
+    return type.return_type(*type.args[1:])
+
+class AttributeTypeValidator(ExtTypeValidator):
+    """
+    Validate attribute types in the table with attribute types in the parent
+    table.
+
+    E.g. if attribute 'foo' has type 'double' in the base class, then
+    it should also have type 'double' in the derived class.
+    """
+
+    def validate(self, ext_type):
+        comparer = lambda t1, t2: t1 == t2
+        validate_type_table(ext_type.attribute_table, comparer)
+
+
+class MethodTypeValidator(ExtTypeValidator):
+    """
+    Validate method signatures in the vtable with method signatures
+    in the parent table.
+    """
+
+    def validate(self, ext_type):
+        def comparer(t1, t2):
+            if t1.is_static and t2.is_static:
+                return t1 == t2
+            else:
+                return drop_self_type(t1) == drop_self_type(t2)
+
+        validate_type_table(ext_type.attribute_table, comparer)
+
+
+# Validators that validate the vtab/attribute struct order
+extending_order_validators = [
+    AttributeTableOrderValidator(),
+    MethodTableOrderValidator()
+]
+
+type_validators = [
+    AttributeTypeValidator(),
+    MethodTypeValidator(),
+]
+
+jit_type_validators = extending_order_validators + type_validators
+autojit_type_validators = type_validators

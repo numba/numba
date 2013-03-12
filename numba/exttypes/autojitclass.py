@@ -82,6 +82,7 @@ from numba.exttypes import logger
 from numba.exttypes import virtual
 from numba.exttypes import signatures
 from numba.exttypes import utils
+from numba.exttypes import validators
 from numba.exttypes import compileclass
 from numba.exttypes import extension_types
 
@@ -95,7 +96,8 @@ class AutojitExtensionCompiler(compileclass.ExtensionCompiler):
     Compile @autojit extension classes.
     """
 
-    method_validators = signatures.autojit_validators
+    method_validators = validators.autojit_validators
+    exttype_validators = validators.autojit_type_validators
 
     def inherit_method(self, method_name, slot_idx):
         "Inherit a method from a superclass in the vtable"

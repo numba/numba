@@ -3,19 +3,24 @@ from numba import error
 from numba import typesystem
 from numba import pipeline
 from numba import symtab
-from numba.exttypes.utils import is_numba_class
 from numba.minivect import minitypes
 
 from numba.exttypes import logger
-from numba.exttypes import virtual
 from numba.exttypes import signatures
 from numba.exttypes import utils
 from numba.exttypes import extension_types
 
+from numba.typesystem.exttypes import ordering
+from numba.typesystem.exttypes import vtabtype
+from numba.typesystem.exttypes import attributestype
+
 class ExtensionCompiler(object):
 
-    # [signature.MethodValidator]
+    # [validators.MethodValidator]
     method_validators = None
+
+    # [validators.ExtTypeValidator]
+    exttype_validators = None
 
     def __init__(self, env, py_class, ext_type, flags,
                  method_maker, inheriter, attrbuilder, vtabbuilder):
@@ -103,6 +108,15 @@ class ExtensionCompiler(object):
             self.type_infer_method(method)
 
     #------------------------------------------------------------------------
+    # Validate
+    #------------------------------------------------------------------------
+
+    def validate(self):
+        """
+        Validate that we can build the extension type.
+        """
+        for validator in self.exttype_validators:
+            validator.validate(self.ext_type)
     # Compilation
     #------------------------------------------------------------------------
 
