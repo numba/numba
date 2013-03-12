@@ -14,7 +14,7 @@ from numba.exttypes import extension_types
 
 class ExtensionCompiler(object):
 
-    # [signature.Validator]
+    # [signature.MethodValidator]
     method_validators = None
 
     def __init__(self, env, py_class, ext_type, flags,
@@ -45,6 +45,12 @@ class ExtensionCompiler(object):
         self.type_infer_methods()
         self.vtabbuilder.build_vtab_type(self.ext_type)
 
+        # [Method]
+        self.methods = None
+
+        # [ExtMethodType]
+        self.method_types = None
+
     def infer_attributes(self):
         self.inheriter.inherit(
             self.ext_type, self.class_dict)
@@ -63,24 +69,24 @@ class ExtensionCompiler(object):
                                                         self.method_maker,
                                                         self.method_validators)
 
-        for method, method_type in processor.get_method_signatures():
+        self.methods, self.method_types = processor.get_method_signatures()
+
+        # Update ext_type and class dict with known Method objects
+        for method, method_type in zip(self.methods, self.method_types):
             self.ext_type.add_method(method.name, method_type)
             self.class_dict[method.name] = method
 
-    def type_infer_method(self, method, method_name):
-        if method_name not in self.ext_type.methoddict:
-            return
-
-        signature = self.ext_type.get_signature(method_name)
-        restype, argtypes = signature.return_type, signature.args
-
+    def type_infer_method(self, method):
         func_env = pipeline.compile2(self.env, method.py_func,
-                                     restype, argtypes,
+                                     method.signature.return_type,
+                                     method.signature.args,
                                      pipeline_name='type_infer',
                                      **self.flags)
         self.func_envs[method] = func_env
 
-        self.ext_type.add_method(method_name, func_env.func_signature)
+        # Verify signature after type inference with registered
+        # (user-declared) signature
+        self.ext_type.add_method(method.name, func_env.func_signature)
 
     def type_infer_init_method(self):
         initfunc = self.class_dict.get('__init__', None)
@@ -90,11 +96,11 @@ class ExtensionCompiler(object):
         self.type_infer_method(initfunc, '__init__')
 
     def type_infer_methods(self):
-        for method_name, method in self.class_dict.iteritems():
-            if method_name in ('__new__', '__init__') or method is None:
+        for method in self.methods:
+            if method.name in ('__new__', '__init__'):
                 continue
 
-            self.type_infer_method(method, method_name)
+            self.type_infer_method(method)
 
     #------------------------------------------------------------------------
     # Compilation

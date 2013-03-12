@@ -197,7 +197,7 @@ class MethodSignatureProcessor(object):
         self.ext_type = ext_type
         self.method_maker = method_maker
 
-        # List of method validators: [Validator]
+        # List of method validators: [MethodValidator]
         self.validators = validators
 
     def process_signature(self, method, method_name,
@@ -259,9 +259,10 @@ class MethodSignatureProcessor(object):
 
     def get_method_signatures(self):
         """
-        Return [Method] for each decorated method in the class
+        Return ([Method], [ExtMethodType]) for each decorated method in the class
         """
         methods = []
+        method_types = []
 
         for method_name, method in self.class_dict.iteritems():
             method = self.process_signature(method, method_name)
@@ -277,7 +278,9 @@ class MethodSignatureProcessor(object):
             self.update_signature(method)
 
             method_type = self.method_maker.make_method_type(method)
-            methods.append((method, method_type))
 
-        return methods
+            methods.append(method)
+            method_types.append(method_type)
+
+        return methods, method_types
 
