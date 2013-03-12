@@ -25,12 +25,19 @@ class Method(object):
 
     def __init__(self, py_func, name, signature, is_class, is_static):
         self.py_func = py_func
+        # py_func.live_objects = []
+
         # Name of this function, py_func.__name__ is inherently unreliable
         self.name = name
         self.signature = signature
-        py_func.live_objects = []
+
         self.is_class = is_class
         self.is_static = is_static
+
+        # Filled out after extension method is compiled
+        # (ExtensionCompiler.compile_methods())
+        self.lfunc = None
+        self.lfunc_pointer = None
 
     def result(self, py_func):
         if self.is_class:
