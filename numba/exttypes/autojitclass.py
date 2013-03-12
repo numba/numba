@@ -3,13 +3,16 @@ Compiling @autojit extension classes works as follows:
 
     * Create an extension Numba/minivect type holding a symtab
     * Capture attribute types in the symtab in the same was as @jit
-    * Build attribute struct type
+    * Build attribute hash-based vtable, hashing on (attr_name, attr_type).
 
-        We probably want to use a perfect hash table for attributes, hashing
-        on (attr_name, attr_type), with only one entry having 'attr_name'
-        at any given time. This would allow callers to read attributes of
-        known or expected types (perhaps inferred from some
-        context) dynamically.
+        (attr_name, attr_type) is the only allowed key for that attribute
+        (i.e. this is fixed at compile time (for now). This means consumers
+        will always know the attribute type (and don't need to specialize
+        on different attribute types).
+
+        However, using a hash-based attribute table allows easy implementation
+        of multiple inheritance (virtual inheritance), without complicated
+        C++ dynamic offsets to base objects (see also virtual.py).
 
     For all methods M with static input types:
         * Compile M
