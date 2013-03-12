@@ -331,10 +331,10 @@ class Generator(finalizer.OwnerMixin):
         return fn, ptr
 
     def __uint32_or_uint64(self, devary, fn32, fn64):
-        if devary.dtype in {np.dtype(np.uint32), np.dtype(np.int32)}:
+        if devary.dtype in (np.dtype(np.uint32), np.dtype(np.int32)):
             fn = self._api.curandGenerate
             ity = c_uint
-        elif devary.dtype in {np.dtype(np.uint64), np.dtype(np.int64)}:
+        elif devary.dtype in (np.dtype(np.uint64), np.dtype(np.int64)):
             fn = self._api.curandGenerateLongLong
             ity = c_ulonglong
         else:
