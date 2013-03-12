@@ -680,7 +680,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             # unreachable code!
             reporting.warn_unreachable(node)
             return None
-
         return super(ControlFlowAnalysis, self).visit(node)
 
     def handle_inner_function(self, node):

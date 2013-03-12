@@ -141,7 +141,6 @@ def format_msg(type, source_lines, node, msg):
         print("%s^" % ("-" * colno))
 
     format_msg_simple(type, node, msg)
-    print
 
 def format_msg_simple(type, node, message):
     "Issue a warning"
