@@ -102,6 +102,12 @@ def select_device(device_id):
     context = driver.create_context(device)
     return device
 
+def get_current_device():
+    "Get current device associated with the current thread"
+    from numbapro.cudapipeline import driver
+    driver = driver.Driver()
+    return driver.get_current_context().device
+
 def close():
     '''Explicitly closes the context.
 
