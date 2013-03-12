@@ -52,7 +52,7 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
             result = False
         else:
             field_types = self.attribute_struct.fielddict.itervalues()
-            result = any(map(is_obj, field_types))
+            result = any(is_obj(ft) for ft in field_types)
 
         self._need_tp_dealloc = result
         return result

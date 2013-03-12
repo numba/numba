@@ -1033,8 +1033,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             # Hanlde the 'if' clause
             ifs = comprehension.ifs
             if len(ifs) > 1:
-                make_boolop = lambda op1, op2: ast.BoolOp(op=ast.And(),
-                                                          values=[op1, op2])
+                make_boolop = lambda op1_op2: ast.BoolOp(op=ast.And(),
+                                                         values=op1_op2)
                 if_test = reduce(make_boolop, ifs)
             elif len(ifs) == 1:
                 if_test, = ifs
