@@ -19,7 +19,7 @@ typedef struct worker {
     struct gang    *parent;
 } worker_t;
 
-#if defined(__WIN32__)
+#if defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)
 #include <windows.h>
 typedef struct winthread_worker {
     worker_t base;
