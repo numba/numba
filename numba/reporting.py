@@ -73,8 +73,11 @@ def sort_message(collected_message):
 class MessageCollection(object):
     """Collect error/warnings messages first then sort"""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, ast=None, source_lines=None, file=None):
         # (node, is_error, message)
+        self.file = file or sys.stdout
+        self.ast = ast
+        self.source_lines = source_lines
         self.messages = []
 
     def error(self, node, message):
@@ -83,20 +86,20 @@ class MessageCollection(object):
     def warning(self, node, message):
         self.messages.append((node, False, message))
 
-    def header(self, out):
+    def header(self):
         pass
 
-    def footer(self, out):
+    def footer(self):
         pass
 
     def report_message(self, message, node, type):
-        format_msg_simple(type, node, message)
+        self.file.write(format_msg_simple(type, node, message))
 
     def report(self, post_mortem=False):
         self.messages.sort(key=sort_message)
 
         if self.messages:
-            self.header(sys.stdout)
+            self.header()
 
         errors = []
         for node, is_error, message in self.messages:
@@ -109,49 +112,44 @@ class MessageCollection(object):
             self.report_message(message, node, type)
 
         if self.messages:
-            self.footer(sys.stdout)
+            self.footer()
 
         if errors and not post_mortem:
             raise error.NumbaError(*errors[0])
 
 class FancyMessageCollection(MessageCollection):
 
-    def __init__(self, ast, source_lines):
-        super(FancyMessageCollection, self).__init__()
-        self.ast = ast
-        self.source_lines = source_lines
+    def header(self):
+        self.file.write(" Numba Encountered Errors or Warnings ".center(80, "-") + '\n')
 
-    def header(self, out):
-        print(" Numba Encountered Errors or Warnings ".center(80, "-"), file=out)
-
-    def footer(self, out):
-        print("-" * 80, file=out)
+    def footer(self):
+        self.file.write("-" * 80 + '\n')
 
     def report_message(self, message, node, type):
-        format_msg(type, self.source_lines, node, message)
+        self.file.write(format_msg(type, self.source_lines, node, message))
 
 # ______________________________________________________________________
 
 def format_msg(type, source_lines, node, msg):
-    if hasattr(node, 'lineno'):
+    ret = ''
+    if node and hasattr(node, 'lineno') and source_lines:
         lineno, colno = getpos(node)
         line = source_lines[lineno]
 
-        print(line)
-        print("%s^" % ("-" * colno))
+        ret = line + '\n' + "%s^" % ("-" * colno) + '\n'
 
-    format_msg_simple(type, node, msg)
+    return ret + format_msg_simple(type, node, msg)
 
 def format_msg_simple(type, node, message):
     "Issue a warning"
     # printing allows us to test the code
-    print("%s %s%s" % (type, error.format_pos(node), message))
+    return "%s %s%s\n" % (type, error.format_pos(node), message)
     # logger.warning("Warning %s: %s", error.format_postup(getpos(node)), message)
 
 def warn_unreachable(node):
     "Generate a warning for unreachable code"
     if hasattr(node, 'lineno'):
-        print("Warning, unreachable code at %s" % error.format_pos(node).rstrip(': '))
+        print("Warning, unreachable code at %s\n" % error.format_pos(node).rstrip(': '))
 
 # ______________________________________________________________________
 
