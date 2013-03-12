@@ -127,6 +127,7 @@ def drop_self_type(type):
     if type.is_static:
         return type
 
+    assert len(type.args) >= 1 and type.args[0].is_extension
     return type.return_type(*type.args[1:])
 
 class AttributeTypeValidator(ExtTypeValidator):

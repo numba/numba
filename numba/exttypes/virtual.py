@@ -33,25 +33,23 @@ def vtab_name(field_name):
         field_name = '__numba_' + field_name.strip("_")
     return field_name
 
-def build_static_vtab(vtab_type, method_pointers):
+def build_static_vtab(vtable, vtab_struct):
     """
     Create ctypes virtual method table.
 
     vtab_type: the vtab struct type (typesystem.struct)
     method_pointers: a list of method pointers ([int])
     """
-    assert len(method_pointers) == len(vtab_type.fields)
-
     vtab_ctype = numba.struct(
         [(vtab_name(field_name), field_type)
-            for field_name, field_type in vtab_type.fields]).to_ctypes()
+            for field_name, field_type in vtab_struct.fields]).to_ctypes()
 
     methods = []
-    for (method_name, method_pointer), (field_name, field_type) in zip(
-                                        method_pointers, vtab_type.fields):
-        assert method_name == field_name
+    for method, (field_name, field_type) in zip(vtable.methods,
+                                                vtab_struct.fields):
         method_type_p = field_type.to_ctypes()
-        cmethod = ctypes.cast(ctypes.c_void_p(method_pointer), method_type_p)
+        method_void_p = ctypes.c_void_p(method.lfunc_pointer)
+        cmethod = ctypes.cast(method_void_p, method_type_p)
         methods.append(cmethod)
 
     vtab = vtab_ctype(*methods)
@@ -65,12 +63,14 @@ class StaticVTabBuilder(compileclass.VTabBuilder):
     def finalize(self, ext_type):
         ext_type.vtab_type.create_method_ordering(ordering.extending)
 
-    def build_vtab(self, ext_type, method_pointers):
-        struct_vtable = numba.struct(
-            [(method.name, method.type.pointer())
-                 for method in ext_type.vtab_type.methods])
+    def build_vtab(self, ext_type):
+        vtable = ext_type.vtab_type
 
-        return build_static_vtab(struct_vtable, method_pointers)
+        struct_vtable = numba.struct(
+            [(method.name, method.signature.pointer())
+                 for method in vtable.methods])
+
+        return build_static_vtab(vtable, struct_vtable)
 
 #------------------------------------------------------------------------
 # Hash-based virtual method tables
@@ -79,20 +79,20 @@ class StaticVTabBuilder(compileclass.VTabBuilder):
 def sep201_signature_string(functype):
     return str(functype)
 
-def build_hashing_vtab(vtab_type, method_pointers):
+def build_hashing_vtab(vtable):
     """
     Build hash-based vtable.
     """
     from extensibletype import methodtable
 
-    n = len(method_pointers)
+    n = len(vtable.methods)
 
     ids = [sep201_signature_string(method.type)
-               for method in vtab_type.methods]
+               for method in vtable.methods]
     flags = [0] * n
 
     vtab = methodtable.PerfectHashMethodTable(n, ids, flags,
-                                              method_pointers)
+                                              vtable.method_pointers)
     return vtab
 
 # ______________________________________________________________________
@@ -103,5 +103,5 @@ class HashBasedVTabBuilder(compileclass.VTabBuilder):
     def finalize(self, ext_type):
         ext_type.vtab_type.create_method_ordering(ordering.unordered)
 
-    def build_vtab(self, ext_type, method_pointers):
-        return build_hashing_vtab(ext_type.vtab_type, method_pointers)
+    def build_vtab(self, ext_type):
+        return build_hashing_vtab(ext_type.vtab_type)
