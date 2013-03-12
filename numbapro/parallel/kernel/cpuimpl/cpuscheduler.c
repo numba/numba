@@ -7,7 +7,6 @@
 #define MIN(a, b) ((a) > (b) ? (b) : (a))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-
 typedef struct queue {
     volatile int begin, end;
     volatile int lock;
@@ -63,18 +62,18 @@ void* malloc_zero(unsigned sz){
 }
 
 STATIC_INLINE
-void lock(gang_t* gang, volatile int *ptr){
+void lock(gang_t* gng, volatile int *ptr){
     int old;
     while (1){
-        old = gang->atomic_add(ptr, 1);
+        old = gng->atomic_add(ptr, 1);
         if (old == 0) return;
-        else gang->atomic_add(ptr, -1); // undo
+        else gng->atomic_add(ptr, -1); // undo
     }
 }
 
 STATIC_INLINE
-void unlock(gang_t* gang, volatile int *ptr){
-    gang->atomic_add(ptr, -1);
+void unlock(gang_t* gng, volatile int *ptr){
+    gng->atomic_add(ptr, -1);
 }
 
 STATIC_INLINE
@@ -85,39 +84,39 @@ gang_t* init_gang(int ncpu, kernel_t kernel, int ntid,
 {
     *taskperqueue = ntid / ncpu + (ntid % ncpu ? 1 : 0);
 
-    gang_t *gang  = malloc_zero(sizeof(gang_t));
-    gang->len = ncpu;
-    gang->done = 0;
-    gang->members = malloc_zero(ncpu * sizeof(void*));
-    gang->args = malloc_zero(arglen);
-    gang->kernel = kernel;
-    gang->ntid = ntid;
-    gang->runct = 0;
-    gang->atomic_add = atomic_add;
+    gang_t *gng  = malloc_zero(sizeof(gang_t));
+    gng->len = ncpu;
+    gng->done = 0;
+    gng->members = malloc_zero(ncpu * sizeof(void*));
+    gng->args = malloc_zero(arglen);
+    gng->kernel = kernel;
+    gng->ntid = ntid;
+    gng->runct = 0;
+    gng->atomic_add = atomic_add;
 
-    memcpy(gang->args, args, arglen); // keep copy of the arguments
+    memcpy(gng->args, args, arglen); // keep copy of the arguments
 
-    return gang;
+    return gng;
 }
 
 STATIC_INLINE
-void init_workers(gang_t *gang, int sizeof_worker, int taskperqueue)
+void init_workers(gang_t *gng, int sizeof_worker, int taskperqueue)
 {
     int i;
     int ntask = 0;
-    for (i = 0; i < gang->len; ++i) {
+    for (i = 0; i < gng->len; ++i) {
         worker_t *worker = malloc_zero(sizeof(pthread_worker_t));
         int begin = ntask;
         ntask += taskperqueue;
-        int end = MIN(ntask, gang->ntid);
+        int end = MIN(ntask, gng->ntid);
 
         worker->id = i;
         worker->queue.begin = begin;
         worker->queue.end   = end;
         worker->queue.lock  = 0;
-        worker->parent      = gang;
+        worker->parent      = gng;
 
-        gang->members[i] = (worker_t*)worker;
+        gng->members[i] = (worker_t*)worker;
     }
 }
 
@@ -127,23 +126,23 @@ gang_t* init_gang_workers(int ncpu, kernel_t kernel, int ntid,
                           int sizeof_worker)
 {
     int taskperqueue;
-    gang_t* gang = init_gang(ncpu, kernel, ntid, args, arglen, atomic_add,
+    gang_t* gng = init_gang(ncpu, kernel, ntid, args, arglen, atomic_add,
                              &taskperqueue);
-    init_workers(gang, sizeof_worker, taskperqueue);
-    return gang;
+    init_workers(gng, sizeof_worker, taskperqueue);
+    return gng;
 }
 
 STATIC_INLINE
-void fini_gang(gang_t *gang)
+void fini_gang(gang_t *gng)
 {
-    if (gang->atomic_add && gang->ntid != gang->runct) {
+    if (gng->atomic_add && gng->ntid != gng->runct) {
         printf("race condition detected: ntid=%d runct=%d\n",
-               gang->ntid, gang->runct);
+               gng->ntid, gng->runct);
         exit(1);
     }
-    free(gang->args);
-    free(gang->members);
-    free(gang);
+    free(gng->args);
+    free(gng->members);
+    free(gng);
 }
 
 static
@@ -222,7 +221,7 @@ gang_t* start_workers(int ncpu, kernel_t kernel, int ntid, void *args,
 }
 
 
-void join_workers(gang_t *gang){ }
+void join_workers(gang_t *gng){ }
 
 
 #else
@@ -232,55 +231,55 @@ gang_t* start_workers(int ncpu, kernel_t kernel, int ntid, void *args,
                       int arglen, atomic_add_t atomic_add)
 {
     int i;
-    gang_t *gang = init_gang_workers(ncpu, kernel, ntid, args, arglen,
+    gang_t *gng = init_gang_workers(ncpu, kernel, ntid, args, arglen,
                                      atomic_add, sizeof(winthread_worker_t));
 
-    for (i = 0; i < gang->len; ++i) {
-        winthread_worker_t* worker = (winthread_worker_t*)gang->members[i];
+    for (i = 0; i < gng->len; ++i) {
+        winthread_worker_t* worker = (winthread_worker_t*)gng->members[i];
         worker->thread = CreateThread(NULL, 0, (void*)run_worker,
                                       (void*)&worker->base, 0, NULL);
     }
-    return gang;
+    return gng;
 }
 
 
-void join_workers(gang_t *gang)
+void join_workers(gang_t *gng)
 {
     int i;
-    for (i = 0; i < gang->len; ++i){
-        winthread_worker_t* worker = (winthread_worker_t*)gang->members[i];
+    for (i = 0; i < gng->len; ++i){
+        winthread_worker_t* worker = (winthread_worker_t*)gng->members[i];
         WaitForSingleObject(worker->thread, INFINITE);
         CloseHandle(worker->thread);
         free(worker);
     }
-    fini_gang(gang);
+    fini_gang(gng);
 }
 #else
 gang_t* start_workers(int ncpu, kernel_t kernel, int ntid, void *args,
                       int arglen, atomic_add_t atomic_add)
 {
     int i;
-    gang_t *gang = init_gang_workers(ncpu, kernel, ntid, args, arglen,
+    gang_t *gng = init_gang_workers(ncpu, kernel, ntid, args, arglen,
                                      atomic_add, sizeof(pthread_worker_t));
 
-    for (i = 0; i < gang->len; ++i) {
-        pthread_worker_t* worker = (pthread_worker_t*)gang->members[i];
+    for (i = 0; i < gng->len; ++i) {
+        pthread_worker_t* worker = (pthread_worker_t*)gng->members[i];
         pthread_create(&worker->thread, NULL, (void*(*)(void*))run_worker,
                        &worker->base);
     }
-    return gang;
+    return gng;
 }
 
 
-void join_workers(gang_t *gang)
+void join_workers(gang_t *gng)
 {
     int i;
-    for (i = 0; i < gang->len; ++i){
-        pthread_worker_t* worker = (pthread_worker_t*)gang->members[i];
+    for (i = 0; i < gng->len; ++i){
+        pthread_worker_t* worker = (pthread_worker_t*)gng->members[i];
         pthread_join(worker->thread, NULL);
         free(worker);
     }
-    fini_gang(gang);
+    fini_gang(gng);
 }
 #endif
 
