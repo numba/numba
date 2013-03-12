@@ -21,12 +21,14 @@ typedef struct worker {
 
 #if defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)
 #include <windows.h>
+#define STATIC_INLINE static
 typedef struct winthread_worker {
     worker_t base;
     HANDLE   thread;
 } winthread_worker_t;
 #else
 #include <pthread.h>
+#define STATIC_INLINE static inline
 typedef struct pthread_worker {
     worker_t    base;
     pthread_t   thread;
@@ -53,14 +55,14 @@ typedef struct gang{
 // globals
 
 
-static inline
+STATIC_INLINE
 void* malloc_zero(unsigned sz){
     void* p = malloc(sz);
     memset(p, 0, sz);
     return p;
 }
 
-static inline
+STATIC_INLINE
 void lock(gang_t* gang, volatile int *ptr){
     int old;
     while (1){
@@ -70,12 +72,12 @@ void lock(gang_t* gang, volatile int *ptr){
     }
 }
 
-static inline
+STATIC_INLINE
 void unlock(gang_t* gang, volatile int *ptr){
     gang->atomic_add(ptr, -1);
 }
 
-static inline
+STATIC_INLINE
 gang_t* init_gang(int ncpu, kernel_t kernel, int ntid,
                   void *args, int arglen,
                   atomic_add_t atomic_add,
@@ -98,7 +100,7 @@ gang_t* init_gang(int ncpu, kernel_t kernel, int ntid,
     return gang;
 }
 
-static inline
+STATIC_INLINE
 void init_workers(gang_t *gang, int sizeof_worker, int taskperqueue)
 {
     int i;
@@ -119,7 +121,7 @@ void init_workers(gang_t *gang, int sizeof_worker, int taskperqueue)
     }
 }
 
-static inline
+STATIC_INLINE
 gang_t* init_gang_workers(int ncpu, kernel_t kernel, int ntid,
                           void *args, int arglen, atomic_add_t atomic_add,
                           int sizeof_worker)
@@ -131,7 +133,7 @@ gang_t* init_gang_workers(int ncpu, kernel_t kernel, int ntid,
     return gang;
 }
 
-static inline
+STATIC_INLINE
 void fini_gang(gang_t *gang)
 {
     if (gang->atomic_add && gang->ntid != gang->runct) {
