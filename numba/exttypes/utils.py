@@ -22,3 +22,8 @@ def get_method_pointers(py_class):
 
 def is_numba_class(py_class):
     return hasattr(py_class, '__numba_struct_type')
+
+def get_numba_bases(py_class):
+    for base in py_class.__mro__:
+        if is_numba_class(base):
+            yield base
