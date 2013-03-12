@@ -840,7 +840,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         """
         ext_type = node.value.type
         offset = ext_type.attr_offset
-        type = ext_type.attribute_struct
+        type = ext_type.attribute_table.to_struct()
 
         if isinstance(node.ctx, ast.Load):
             value_type = type.ref()         # Load result

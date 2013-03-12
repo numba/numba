@@ -77,9 +77,10 @@ def compute_object_offsets(ext_type, struct_offset):
     pointers, relative to the start of the attribute offsets.
     """
     offsets = []
-    for field_name, field_type in ext_type.attribute_struct.fields:
+    attr_struct = ext_type.attribute_table.to_struct()
+    for field_name, field_type in attr_struct.fields:
         if field_type.is_object or field_type.is_array:
-            offset = ext_type.attribute_struct.offsetof(field_name)
+            offset = attr_struct.offsetof(field_name)
             offsets.append(struct_offset + offset)
 
     return offsets
@@ -228,7 +229,7 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
     # Object offset for vtab is lower
     # Object attributes are located at lower + sizeof(void *), and end at
     # upper
-    struct_type = ext_numba_type.attribute_struct
+    struct_type = ext_numba_type.attribute_table.to_struct()
     struct_ctype = struct_type.to_ctypes()
     vtab_offset = compute_vtab_offset(ext_type)
     attrs_offset = compute_attrs_offset(ext_type)
