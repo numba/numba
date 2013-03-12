@@ -7,10 +7,6 @@ from .containertypes import *
 from .typemapper import *
 from .typeutils import *
 
-from .exttypes.extensiontype import (ExtensionType,
-                                     JitExtensionType,
-                                     AutojitExtensionType)
-
 from .shorthands import *
 
 # from typeset import *

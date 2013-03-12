@@ -87,16 +87,13 @@ class JitExtensionCompiler(compileclass.ExtensionCompiler):
         return pointer
 
     def compile_methods(self):
-        method_pointers = []
-        lmethods = []
-
-        for i, (method_name, func_signature) in enumerate(self.ext_type.methods):
-            if method_name not in self.class_dict:
-                pointer = self.inherit_method(method_name, i)
-                method_pointers.append((method_name, pointer))
+        for i, method in enumerate(self.methods):
+            if method.name not in self.class_dict:
+                pointer = self.inherit_method(method.name, i)
+                method_pointers.append((method.name, pointer))
                 continue
 
-            method = self.class_dict[method_name]
+            method = self.class_dict[method.name]
             # Don't use compile_after_type_inference, re-infer, since we may
             # have inferred some return types
             # TODO: delayed types and circular calls/variable assignments
@@ -105,42 +102,11 @@ class JitExtensionCompiler(compileclass.ExtensionCompiler):
             func_env = self.func_envs[method]
             pipeline.run_env(self.env, func_env, pipeline_name='compile')
 
-            lmethods.append(func_env.lfunc)
-            method_pointers.append((method_name,
-                                    func_env.translator.lfunc_pointer))
+            method.lfunc = func_env.lfunc
+            method.lfunc_pointer = func_env.translator.lfunc_pointer
 
-            self.class_dict[method_name] = method.result(
+            self.class_dict[method.name] = method.result(
                 func_env.numba_wrapper_func)
-
-        return method_pointers, lmethods
-
-#------------------------------------------------------------------------
-# Attribute Inheritance
-#------------------------------------------------------------------------
-
-class JitAttributesInheriter(compileclass.AttributesInheriter):
-    """
-    Inherit attributes and methods from parent classes.
-    """
-
-    def inherit_attributes(self, ext_type, parent_struct_type):
-        ext_type.parent_attr_struct = parent_struct_type
-        ext_type.attribute_table = numba.struct(parent_struct_type.fields)
-
-        for field_name, field_type in ext_type.attribute_table.fields:
-            ext_type.symtab[field_name] = symtab.Variable(field_type,
-                                                          promotable_type=False)
-
-    def inherit_methods(self, ext_type, parent_vtab_type):
-        ext_type.parent_vtab_type = parent_vtab_type
-
-        for method_name, method_type in parent_vtab_type.fields:
-            func_signature = method_type.base_type
-            args = list(func_signature.args)
-            if not (func_signature.is_class or func_signature.is_static):
-                args[0] = ext_type
-            func_signature = func_signature.return_type(*args)
-            ext_type.add_method(method_name, func_signature)
 
 #------------------------------------------------------------------------
 # Build Attributes Struct
@@ -148,7 +114,7 @@ class JitAttributesInheriter(compileclass.AttributesInheriter):
 
 class JitAttributeBuilder(compileclass.AttributeBuilder):
 
-    def finalize(self, attr_table):
+    def finalize(self, ext_type):
         ext_type.attribute_table.create_attribute_ordering(ordering.extending)
 
     def create_descr(self, attr_name):
@@ -177,11 +143,12 @@ def create_extension(env, py_class, flags):
     extension_compiler = JitExtensionCompiler(
         env, py_class, ext_type, flags,
         signatures.JitMethodMaker(ext_type),
-        JitAttributesInheriter(),
+        compileclass.AttributesInheriter(),
         JitAttributeBuilder(),
         virtual.StaticVTabBuilder())
 
     extension_compiler.infer()
+    extension_compiler.finalize_tables()
     extension_compiler.validate()
     extension_type = extension_compiler.compile()
 

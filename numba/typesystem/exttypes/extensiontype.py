@@ -74,7 +74,7 @@ class JitExtensionType(ExtensionType):
     def __str__(self):
         if self.attribute_table:
             return "<JitExtension %s(%s)>" % (
-                self.name, self.attribute_table.fielddict)
+                self.name, self.attribute_table.attributedict)
         return repr(self)
 
 # ______________________________________________________________________
@@ -91,6 +91,6 @@ class AutojitExtensionType(ExtensionType):
     def __str__(self):
         if self.attribute_table:
             return "<AutojitExtension %s(%s)>" % (
-                self.name, self.attribute_table.fielddict)
+                self.name, self.attribute_table.attributedict)
         return repr(self)
 
