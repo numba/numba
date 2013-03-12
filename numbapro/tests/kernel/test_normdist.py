@@ -53,6 +53,7 @@ class TestNormDist(unittest.TestCase):
     def _template(self, target):
         n = 1000000
         with closing(CU(target)) as cu:
+            np.random.seed(1234)
             seed = np.random.random_integers(0, 0xfffffff,
                                              size=n).astype(np.int32)
             normdist = np.empty(n, dtype=np.double)
@@ -63,10 +64,10 @@ class TestNormDist(unittest.TestCase):
         hist, bins = np.histogram(normdist, bins=50, normed=True)
         gold_norm = np.random.randn(n)
         gold_hist, gold_bins = np.histogram(gold_norm, bins=50, normed=True)
-
-        self.assertTrue(np.all(np.abs(bins - gold_bins) < 1))
+        err = ((bins - gold_bins) ** 2).sum()
+        self.assertTrue(err < 5)
         err_hist = ((hist - gold_hist) ** 2).sum()
-        self.assertTrue(np.all(err_hist < 0.5))
+        self.assertTrue(err_hist < 0.06)
 #        plt.hist(normdist, 50, normed=1)
 #        plt.hist(gold_norm, 50, normed=1)
 #        plt.show()
