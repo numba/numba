@@ -49,6 +49,11 @@ class AST3to2(ast.NodeTransformer):
         ast.copy_location(new_node, node)
         return new_node
 
+    def visit_Index(self, node):
+        if isinstance(node.value, ast.Ellipsis):
+            return node.value
+        return node
+
     def visit_arguments(self, node):
         ret = []
         for arg_node in node.args:
