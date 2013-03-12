@@ -1,8 +1,6 @@
 import math
 import numpy
 import numba
-from weakref import WeakSet
-
 from numbapro import cuda
 from numba.decorators import resolve_argtypes
 from numbapro.cudapipeline.environment import CudaEnvironment
