@@ -225,7 +225,7 @@ void join_workers(gang_t *gang){ }
 
 #else
 
-#if defined(__WIN32__)
+#if defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)
 gang_t* start_workers(int ncpu, kernel_t kernel, int ntid, void *args,
                       int arglen, atomic_add_t atomic_add)
 {
