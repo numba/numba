@@ -43,24 +43,32 @@ class ExtensionCompiler(object):
     #------------------------------------------------------------------------
 
     def infer(self):
-        self.infer_attributes()
+        """
+        Infer types:
+
+            1) Inherit attributes and methods
+
+                * Also build the vtab and attribute table types
+
+            2) Process class attribute types:
+
+                class Foo(object):
+                    myattr = double
+
+            3) Process method signatures @void(double) etc
+            4) Infer extension attribute types from the __init__ method
+            5) Verify compatability with base classses
+        """
+        self.inheriter.inherit(self.ext_type, self.class_dict)
+        process_class_attribute_types(self.ext_type, self.class_dict)
+
         self.process_method_signatures()
+
         self.type_infer_init_method()
         self.attrbuilder.build_attributes(self.ext_type)
+
         self.type_infer_methods()
         self.vtabbuilder.build_vtab_type(self.ext_type)
-
-        # [Method]
-        self.methods = None
-
-        # [ExtMethodType]
-        self.method_types = None
-
-    def infer_attributes(self):
-        self.inheriter.inherit(
-            self.ext_type, self.class_dict)
-        self.inheriter.process_class_attribute_types(
-            self.ext_type, self.class_dict)
 
     def process_method_signatures(self):
         """
@@ -74,10 +82,10 @@ class ExtensionCompiler(object):
                                                         self.method_maker,
                                                         self.method_validators)
 
-        self.methods, self.method_types = processor.get_method_signatures()
+        methods, method_types = processor.get_method_signatures()
 
         # Update ext_type and class dict with known Method objects
-        for method, method_type in zip(self.methods, self.method_types):
+        for method, method_type in zip(methods, method_types):
             self.ext_type.add_method(method.name, method_type)
             self.class_dict[method.name] = method
 
