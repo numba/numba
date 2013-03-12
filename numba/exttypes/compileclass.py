@@ -159,9 +159,10 @@ class AttributesInheriter(object):
             # superclass is not a numba class
             return
 
-        struct_type = utils.get_attributes_type(py_class)
-        vtab_type = utils.get_vtab_type(py_class)
-        self.verify_base_class_compatibility(py_class, struct_type, vtab_type)
+        bases = list(utils.get_numba_bases(py_class))
+
+        attr_parents = map(utils.get_attributes_type, bases)
+        vtab_parents = map(utils.get_vtab_type, bases)
 
         self.inherit_attributes(ext_type, struct_type)
         self.inherit_methods(ext_type, vtab_type)
@@ -192,10 +193,6 @@ class AttributesInheriter(object):
                 ext_type.symtab[name] = symtab.Variable(value,
                                                         promotable_type=False)
 
-    def verify_base_class_compatibility(self, py_class, struct_type, vtab_type):
-        "Verify that we can build a compatible class layout"
-
-
 #------------------------------------------------------------------------
 # Build Attributes
 #------------------------------------------------------------------------
@@ -209,20 +206,20 @@ class AttributeBuilder(object):
         attrs = dict((name, var.type)
                          for name, var in ext_type.symtab.iteritems())
 
-        if ext_type.attribute_struct is None:
+        if ext_type.attribute_table is None:
             # No fields to inherit
-            ext_type.attribute_struct = numba.struct(**attrs)
+            ext_type.attribute_table = numba.struct(**attrs)
         else:
             # Inherit fields from parent
             fields = []
             for name, variable in ext_type.symtab.iteritems():
-                if name not in ext_type.attribute_struct.fielddict:
+                if name not in ext_type.attribute_table.fielddict:
                     fields.append((name, variable.type))
-                    ext_type.attribute_struct.fielddict[name] = variable.type
+                    ext_type.attribute_table.fielddict[name] = variable.type
 
             # Sort fields by rank
             fields = numba.struct(fields).fields
-            ext_type.attribute_struct.fields.extend(fields)
+            ext_type.attribute_table.fields.extend(fields)
 
     def create_descr(self, attr_name):
         """

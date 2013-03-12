@@ -121,9 +121,9 @@ class JitAttributesInheriter(compileclass.AttributesInheriter):
 
     def inherit_attributes(self, ext_type, parent_struct_type):
         ext_type.parent_attr_struct = parent_struct_type
-        ext_type.attribute_struct = numba.struct(parent_struct_type.fields)
+        ext_type.attribute_table = numba.struct(parent_struct_type.fields)
 
-        for field_name, field_type in ext_type.attribute_struct.fields:
+        for field_name, field_type in ext_type.attribute_table.fields:
             ext_type.symtab[field_name] = symtab.Variable(field_type,
                                                           promotable_type=False)
 
