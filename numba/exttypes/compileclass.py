@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import numba
 from numba import error
 from numba import typesystem
@@ -10,6 +12,7 @@ from numba.exttypes import signatures
 from numba.exttypes import utils
 from numba.exttypes import extension_types
 
+from numba.typesystem.exttypes import methods
 from numba.typesystem.exttypes import ordering
 from numba.typesystem.exttypes import vtabtype
 from numba.typesystem.exttypes import attributestype
@@ -57,18 +60,15 @@ class ExtensionCompiler(object):
 
             3) Process method signatures @void(double) etc
             4) Infer extension attribute types from the __init__ method
-            5) Verify compatability with base classses
         """
-        self.inheriter.inherit(self.ext_type, self.class_dict)
+        self.inheriter.inherit(self.ext_type)
         process_class_attribute_types(self.ext_type, self.class_dict)
 
-        self.process_method_signatures()
+        # Process method signatures and set self.methods to [Method]
+        self.methods = self.process_method_signatures()
 
         self.type_infer_init_method()
-        self.attrbuilder.build_attributes(self.ext_type)
-
         self.type_infer_methods()
-        self.vtabbuilder.build_vtab_type(self.ext_type)
 
     def process_method_signatures(self):
         """
@@ -86,8 +86,10 @@ class ExtensionCompiler(object):
 
         # Update ext_type and class dict with known Method objects
         for method, method_type in zip(methods, method_types):
-            self.ext_type.add_method(method.name, method_type)
+            self.ext_type.add_method(method)
             self.class_dict[method.name] = method
+
+        return methods
 
     def type_infer_method(self, method):
         func_env = pipeline.compile2(self.env, method.py_func,
@@ -99,14 +101,27 @@ class ExtensionCompiler(object):
 
         # Verify signature after type inference with registered
         # (user-declared) signature
-        self.ext_type.add_method(method.name, func_env.func_signature)
+        method.signature = methods.ExtMethodType(
+            method.signature.return_type,
+            method.signature.args,
+            method.name,
+            is_class=method.signature.is_class,
+            is_static=method.signature.is_static)
+
+        self.ext_type.add_method(method)
 
     def type_infer_init_method(self):
         initfunc = self.class_dict.get('__init__', None)
         if initfunc is None:
             return
 
-        self.type_infer_method(initfunc, '__init__')
+        self.type_infer_method(initfunc)
+
+        # Merge ext_type.symtab into attribute table
+        table = self.ext_type.attribute_table
+        for attr_name, variable in self.ext_type.symtab.iteritems():
+            if attr_name not in table.attributedict:
+                table.attributedict[attr_name] = variable.type
 
     def type_infer_methods(self):
         for method in self.methods:
@@ -114,17 +129,6 @@ class ExtensionCompiler(object):
                 continue
 
             self.type_infer_method(method)
-
-    #------------------------------------------------------------------------
-    # Validate
-    #------------------------------------------------------------------------
-
-    def validate(self):
-        """
-        Validate that we can build the extension type.
-        """
-        for validator in self.exttype_validators:
-            validator.validate(self.ext_type)
 
     #------------------------------------------------------------------------
     # Finalize Tables
@@ -138,6 +142,17 @@ class ExtensionCompiler(object):
         self.vtabbuilder.finalize(self.ext_type)
 
     #------------------------------------------------------------------------
+    # Validate
+    #------------------------------------------------------------------------
+
+    def validate(self):
+        """
+        Validate that we can build the extension type.
+        """
+        for validator in self.exttype_validators:
+            validator.validate(self.ext_type)
+
+    #------------------------------------------------------------------------
     # Compilation
     #------------------------------------------------------------------------
 
@@ -147,33 +162,34 @@ class ExtensionCompiler(object):
 
             1) Process signatures such as @void(double)
             2) Infer native attributes through type inference on __init__
-            3) Path the extension type with a native attributes struct
+            3) Patch the extension type with a native attributes struct
             4) Infer types for all other methods
             5) Update the ext_type with a vtab type
             6) Compile all methods
         """
         self.class_dict['__numba_py_class'] = self.py_class
-        method_pointers, lmethods = self.compile_methods()
-        vtab = self.vtabbuilder.build_vtab(self.ext_type, method_pointers)
-        return self.build_extension_type(lmethods, method_pointers, vtab)
+        self.compile_methods()
+        vtable = self.vtabbuilder.build_vtab(self.ext_type)
+        return self.build_extension_type(vtable)
 
     def compile_methods(self):
         """
         Compile all methods, reuse function environments from type inference
         stage.
 
-        :return: ([method_pointers], [llvm_funcs])
+        ∀ methods M sets M.lfunc and M.lfunc_pointer
         """
 
-    def build_extension_type(self, lmethods, method_pointers, vtab):
+    def build_extension_type(self, vtable):
         """
         Build extension type from llvm methods and pointers and a populated
         virtual method table.
         """
         extension_type = extension_types.create_new_extension_type(
             self.py_class.__name__, self.py_class.__bases__, self.class_dict,
-            self.ext_type, vtab, self.ext_type.vtab_type,
-            lmethods, method_pointers)
+            self.ext_type, vtable, self.ext_type.vtab_type,
+            self.ext_type.vtab_type.llvm_methods,
+            self.ext_type.vtab_type.method_pointers)
 
         return extension_type
 
@@ -206,19 +222,23 @@ class AttributesInheriter(object):
         parent_attrtables = [base.exttype.attribute_table for base in bases]
 
         attr_table = attributestype.ExtensionAttributesTableType(
-            parent_attrtables)
+            ext_type.py_class, parent_attrtables)
 
         for base in bases:
             self.inherit_attributes(attr_table, base.ext_type)
+
+        return attr_table
 
     def build_method_table(self, ext_type):
         bases = utils.get_numba_bases(ext_type.py_class)
 
         parent_vtables = [base.exttype.vtab_type for base in bases]
-        vtable = vtabtype.VTabType(parent_vtables)
+        vtable = vtabtype.VTabType(ext_type.py_class, parent_vtables)
 
         for base in bases:
             self.inherit_methods(vtable, base.ext_type)
+
+        return vtable
 
     def inherit_attributes(self, derived_ext_type, base_ext_type):
         """
