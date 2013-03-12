@@ -1341,7 +1341,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         addr = id(node.object)
         obj_addr_int = self.generate_constant_int(addr, typesystem.Py_ssize_t)
         obj = self.builder.inttoptr(obj_addr_int,
-                                    typesystem.object_.to_llvm(self.context))
+                                    node.type.to_llvm(self.context))
         return obj
 
     def visit_NoneNode(self, node):
