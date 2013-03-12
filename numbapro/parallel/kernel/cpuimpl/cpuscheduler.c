@@ -108,7 +108,7 @@ void init_workers(gang_t *gng, int sizeof_worker, int taskperqueue)
     int begin, end;
     worker_t *worker;
     for (i = 0; i < gng->len; ++i) {
-        worker = malloc_zero(sizeof(pthread_worker_t));
+        worker = malloc_zero(sizeof_worker);
         begin = ntask;
         ntask += taskperqueue;
         end = MIN(ntask, gng->ntid);
