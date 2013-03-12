@@ -29,7 +29,7 @@ def default_intrinsic_library(context):
     '''    
     intrlib = IntrinsicLibrary(context)
     # install intrinsics
-    for fncls in all.itervalues():
+    for fncls in all.values():
         intrlib.add(fncls)
     return intrlib
 

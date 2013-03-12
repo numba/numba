@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-from itertools import imap, izip
 import copy
 import types
 import ctypes
@@ -37,7 +36,8 @@ def infer_container_type(typemapper, value):
     if len(value) < 30:
         # Figure out base type if the container is not too large
         unify = typemapper.promote_types
-        base_type = reduce(unify, imap(typemapper.from_python, value))
+        base_type = reduce(unify, (typemapper.from_python(child)
+                                   for child in value))
     else:
         base_type = object_
 

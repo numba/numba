@@ -6,7 +6,12 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 from functools import reduce
-from itertools import izip, starmap
+from itertools import starmap
+
+try:
+    from itertools import izip
+except ImportError:
+    izip = zip
 
 from numba.typesystem import basetypes
 from numba.minivect import minitypes

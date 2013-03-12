@@ -20,6 +20,11 @@ from .llvm_types import _int1, _int8, _int32, _int64, _intp, \
 
 from .scrape_multiarray_api import get_include, process_source
 
+from numba import PY3
+
+if PY3:
+    xrange = range
+
 # ______________________________________________________________________
 
 try:
@@ -123,7 +128,7 @@ class MultiarrayAPI (object):
         if include_source_path is None:
             include_source_path = get_include()
         self.api_map = process_source(include_source_path)
-        for symbol_name, (symbol_index, c_ty_str) in self.api_map.iteritems():
+        for symbol_name, (symbol_index, c_ty_str) in self.api_map.items():
             symbol_type = self.c_ty_str_to_llvm(c_ty_str)
             self._add_loader(symbol_name, symbol_index, symbol_type)
             setattr(self, symbol_name + '_ty', symbol_type)

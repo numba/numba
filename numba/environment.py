@@ -27,6 +27,13 @@ from numba.external.utility import default_utility_library
 
 logger = logging.getLogger(__name__)
 
+if PY3:
+    NoneType = type(None)
+    name_types = str
+else:
+    NoneType = types.NoneType
+    name_types = (str, unicode)
+
 default_pipeline_order = [
     'resolve_templates',
     'validate_signature',
@@ -88,6 +95,7 @@ default_numba_late_translate_pipeline_order = \
     default_numba_lower_pipeline_order + [
     'CodeGen',
 ]
+
 # ______________________________________________________________________
 # Convenience functions
 
@@ -115,7 +123,7 @@ class FunctionErrorEnvironment(object):
     """
 
     func = WriteOnceTypedProperty(
-        (types.NoneType, types.FunctionType),
+        (NoneType, types.FunctionType),
         'Function (or similar) being translated.')
 
     ast = TypedProperty(
@@ -205,7 +213,7 @@ class FunctionEnvironment(object):
         "Error environment for this function.")
 
     lfunc = TypedProperty(
-        (types.NoneType, llvm.core.Function),
+        (NoneType, llvm.core.Function),
         "Compiled, native, Numba function",
         None)
 
@@ -222,7 +230,7 @@ class FunctionEnvironment(object):
         True)
 
     llvm_wrapper_func = TypedProperty(
-        (llvm.core.Function, types.NoneType),
+        (llvm.core.Function, NoneType),
         'The LLVM wrapper function for the target function.  This is a '
         'wrapper function that accept python object arguments and returns an '
         'object.')
@@ -240,7 +248,7 @@ class FunctionEnvironment(object):
         '({ "local_var_name" : numba.symtab.Variable(local_var_type) })')
 
     function_globals = TypedProperty(
-        (dict, types.NoneType),
+        (dict, NoneType),
         "Globals dict of the function",)
 
     locals = TypedProperty(
@@ -259,7 +267,7 @@ class FunctionEnvironment(object):
         'Metadata for AST nodes of the function being compiled.')
 
     flow = TypedProperty(
-        (types.NoneType, ControlFlow),
+        (NoneType, ControlFlow),
         "Control flow graph. See numba.control_flow.",
         default=None)
 
@@ -292,7 +300,7 @@ class FunctionEnvironment(object):
         dict, 'Map from ast nodes to closures.')
 
     closure_scope = TypedProperty(
-        (dict, types.NoneType),
+        (dict, NoneType),
         'Collective symtol table containing all entries from outer '
         'functions.')
 
@@ -444,7 +452,7 @@ class TranslationEnvironment(object):
     numba = TypedProperty(_AbstractNumbaEnvironment, 'Parent environment')
 
     crnt = TypedProperty(
-        (FunctionEnvironment, types.NoneType),
+        (FunctionEnvironment, NoneType),
         'The environment corresponding to the current function under '
         'translation.')
 
@@ -643,7 +651,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     # ____________________________________________________________
     # Properties
 
-    name = TypedProperty((str, unicode), "Name of the environment.")
+    name = TypedProperty(name_types, "Name of the environment.")
 
     pipelines = TypedProperty(
         dict, 'Map from entry point names to PipelineStages.')

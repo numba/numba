@@ -24,6 +24,6 @@ def default_external_library(context):
     '''
     extlib = ExternalLibrary(context)
     
-    for fncls in all.itervalues():
+    for fncls in all.values():
         extlib.add(fncls())
     return extlib

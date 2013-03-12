@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 import ast
-from itertools import imap, chain
+from itertools import chain
 
 from numba import nodes
 from .debug import logger

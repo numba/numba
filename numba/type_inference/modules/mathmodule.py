@@ -10,7 +10,10 @@ from __future__ import print_function, division, absolute_import
 
 import math
 import cmath
-import __builtin__ as builtins
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
 
 import numpy as np
 

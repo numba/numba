@@ -4,7 +4,6 @@ from __future__ import print_function, division, absolute_import
 import os
 import sys
 import types
-import StringIO
 import unittest
 import functools
 
@@ -13,6 +12,11 @@ import nose.plugins.skip
 import numba
 from numba import *
 from . import doctest_support
+
+if numba.PY3:
+    import io
+else:
+    import StringIO as io
 
 jit_ = jit
 
@@ -104,7 +108,7 @@ def main():
 class StdoutReplacer(object):
     def __enter__(self, *args):
         self.out = sys.stdout
-        sys.stdout = StringIO.StringIO()
+        sys.stdout = io.StringIO()
         return sys.stdout
 
     def __exit__(self, *args):

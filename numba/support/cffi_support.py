@@ -5,8 +5,6 @@ obtaining the pointer and numba signature.
 """
 from __future__ import print_function, division, absolute_import
 
-from itertools import imap
-
 from numba import *
 from numba.minivect.minitypes import *
 from numba.minivect import minitypes, minierror

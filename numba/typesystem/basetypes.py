@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-import __builtin__ as builtins
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
 import math
 
 import numpy as np

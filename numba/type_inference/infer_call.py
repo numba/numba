@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-import __builtin__ as builtins
 
 import numba
 from numba import *
 from numba import error, nodes
 from numba.type_inference import module_type_inference
 from numba import typesystem
+
+if PY3:
+    import builtins
+else:
+    import __builtin__ as builtins
 
 debug = False
 #debug = True

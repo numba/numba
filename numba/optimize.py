@@ -7,7 +7,6 @@ Optimizations module.
 from __future__ import print_function, division, absolute_import
 
 import ast
-from itertools import imap
 
 from numba import typesystem
 from numba import visitors

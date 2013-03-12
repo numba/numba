@@ -61,7 +61,7 @@ def default_utility_library(context):
     """
     extlib = external.ExternalLibrary(context)
 
-    for utility_func in utility_funcs.itervalues():
+    for utility_func in utility_funcs.values():
         extlib.add(utility_func)
 
     return extlib

@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 import functools
-import __builtin__ as builtins
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
 
 from numba import error
 from numba.type_inference.module_type_inference import (register,
