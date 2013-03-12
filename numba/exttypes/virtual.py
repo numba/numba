@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 Virtual methods using virtual method tables.
 
@@ -81,10 +83,22 @@ def build_hashing_vtab(vtab_type, method_pointers):
 
     n = len(method_pointers)
 
-    ids = [sep201_signature_string(method_type)
-               for method_name, method_type in vtab_type.fields]
+    ids = [sep201_signature_string(method.type)
+               for method in vtab_type.methods]
     flags = [0] * n
 
     vtab = methodtable.PerfectHashMethodTable(n, ids, flags,
                                               method_pointers)
     return vtab
+
+# ______________________________________________________________________
+# Build Hash-based Virtual Method Table
+
+class HashBasedVTabBuilder(object):
+
+    def build_vtab_type(self, ext_type):
+        "Build vtab type before compiling"
+        return numba.struct(ext_type.methods)
+
+    def build_vtab(self, ext_type, method_pointers):
+        return build_hashing_vtab(ext_type.vtab_type, method_pointers)
