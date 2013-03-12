@@ -50,6 +50,7 @@ supposed to act as a drop-in replacement for numba::
 
    ufuncs
    generalizedufuncs
+   cu
    CUDAJit
    CUDAufunc
    CUDADevice
