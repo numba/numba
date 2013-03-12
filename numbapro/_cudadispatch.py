@@ -320,6 +320,7 @@ class CudaNumbaFuncDispatcher(object):
 
     def __init__(self, ptx_code, func_name, lfunctype):
         cu_module = _cuda.Module(ptx_code)
+        self.ptx = ptx_code
         self.cu_function = _cuda.Function(cu_module, func_name)
         self.typemap = _apply_typemap(lfunctype)
         # default to prefer cache
