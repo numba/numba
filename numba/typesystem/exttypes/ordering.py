@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 This module defines ordering schemes for virtual methods and attributes.
 
@@ -9,12 +11,13 @@ reorder any existing ones).
 """
 
 from numba.traits import traits, Delegate
-from numba.typesystem import *
+from numba import error
 
 #------------------------------------------------------------------------
 # Virtual Tables
 #------------------------------------------------------------------------
 
+@traits
 class AbstractTable(object):
 
     # Ordered attribute names
@@ -23,10 +26,15 @@ class AbstractTable(object):
     # Dict mapping attribute names to attribute entities
     attrdict = None
 
-    parents = Delegate('table', 'parents', doc='Parent tables')
+    py_class = Delegate('table')
 
     def __init__(self, table):
         self.table = table
+
+    @property
+    def parents(self):
+        cls = type(self)
+        return map(cls, self.table.parents)
 
 @traits
 class VTable(AbstractTable):
@@ -50,7 +58,7 @@ def sort_parents(table):
 
 def unordered(table):
     "Return table entities in a random order"
-    return table.attrdict.itervalues()
+    return list(table.attrdict)
 
 def extending(table):
     """
