@@ -5,7 +5,8 @@ Extension attribute table type. Supports ordered (struct) fields, or
 unordered (hash-based) fields.
 """
 
-from numba.typesystem import *
+import numba
+from numba.typesystem import NumbaType, is_obj
 from numba.typesystem.exttypes import ordering
 
 #------------------------------------------------------------------------
@@ -17,12 +18,21 @@ class ExtensionAttributesTableType(NumbaType):
     Type for extension type attributes.
     """
 
-    def __init__(self, parents):
+    def __init__(self, py_class, parents):
+        self.py_class = py_class
+
         # List of parent extension attribute table types
         self.parents = parents
 
         # attribute_name -> attribute_type
         self.attributedict = {}
+
+        # Ordered list of attribute names
+        self.attributes = None
+
+    def to_struct(self):
+        return numba.struct([(attr, self.attributedict[attr])
+                                 for attr in self.attributes])
 
     def create_attribute_ordering(self, orderer=ordering.unordered):
         """
