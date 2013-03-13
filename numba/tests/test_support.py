@@ -122,3 +122,32 @@ def testmod(module=None, runit=False):
         modname = module.__name__
 
     doctest_support.testmod(module, run_doctests=runit or modname == '__main__')
+
+#------------------------------------------------------------------------
+# Test Parametrization
+#------------------------------------------------------------------------
+
+def parametrize(*parameters):
+    """
+    @parametrize('foo', 'bar')
+    def test_func(foo_or_bar):
+        print foo_or_bar # prints 'foo' or 'bar'
+
+    Generates two functions: test_func_0 and test_func_1
+    """
+    def decorator(func):
+        for i, parameter in enumerate(parameters):
+            name = '%s_%d' % (func.__name__, i)
+
+            def testfunc(parameter=parameter):
+                return func(parameter)
+
+            testfunc.__name__ = name
+            if func.__doc__:
+                testfunc.__doc__ = func.__doc__.replace(func.__name__, name)
+
+            func.func_globals[name] = testfunc
+
+        return None
+
+    return decorator
