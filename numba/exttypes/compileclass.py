@@ -67,7 +67,16 @@ class ExtensionCompiler(object):
         # Process method signatures and set self.methods to [Method]
         self.methods = self.process_method_signatures()
 
+        # Build ext_type.symtab
+        build_extension_symtab(self.ext_type)
+
+        # Update ext_type.symtab
         self.type_infer_init_method()
+
+        # Update attribute table with ext_type.symtab
+        update_attribute_table(self.ext_type)
+
+        # Type infer the rest of the methods (with fixed attribute table!)
         self.type_infer_methods()
 
     def process_method_signatures(self):
@@ -105,8 +114,8 @@ class ExtensionCompiler(object):
             method.signature.return_type,
             method.signature.args,
             method.name,
-            is_class=method.signature.is_class,
-            is_static=method.signature.is_static)
+            is_class=method.is_class,
+            is_static=method.is_static)
 
         self.ext_type.add_method(method)
 
@@ -116,12 +125,6 @@ class ExtensionCompiler(object):
             return
 
         self.type_infer_method(initfunc)
-
-        # Merge ext_type.symtab into attribute table
-        table = self.ext_type.attribute_table
-        for attr_name, variable in self.ext_type.symtab.iteritems():
-            if attr_name not in table.attributedict:
-                table.attributedict[attr_name] = variable.type
 
     def type_infer_methods(self):
         for method in self.methods:
@@ -255,6 +258,9 @@ class AttributesInheriter(object):
         """
         vtable.methoddict.update(base_ext_type.vtab_type.methoddict)
 
+#------------------------------------------------------------------------
+# Extension Attribute Processing
+#------------------------------------------------------------------------
 
 def process_class_attribute_types(ext_type, class_dict):
     """
@@ -265,10 +271,52 @@ def process_class_attribute_types(ext_type, class_dict):
 
             attr = double
     """
+    table = ext_type.attribute_table
     for name, value in class_dict.iteritems():
         if isinstance(value, minitypes.Type):
-            ext_type.symtab[name] = symtab.Variable(
-                        value, promotable_type=False)
+            table.attributedict[name] = value
+
+def build_extension_symtab(ext_type):
+    """
+    Create symbol table for all attributes of the extension type. These
+    are Variables which are used by the type inferencer and used to
+    type check attribute assignments.
+
+    New attribute assignments create new Variables in the symtab. This
+    should be merged back into the attribute table after type inference
+    of the __init__ method. E.g.
+
+        class Foo(object):
+
+            value1 = double
+
+            def __init__(self, value2):
+                self.value2 = int_(value2)
+
+    Before type inference of __init__ we have:
+
+        symtab = { 'value1': Variable(double) }
+
+    and after type inference of __init__ we have:
+
+        symtab = { 'value1': Variable(double), 'value2': Variable(int_) }
+
+    We then need to update the attribute table with 'value2' and its type.
+    """
+    table = ext_type.attribute_table
+    for attr_name, attr_type in table.attributedict.iteritems():
+        ext_type.symtab[attr_name] = symtab.Variable(attr_type,
+                                                     promotable_type=False)
+
+def update_attribute_table(ext_type):
+    """
+    Update attribute table from extension type symtab. See
+    build_extension_symtab above.
+    """
+    table = ext_type.attribute_table
+    for name, variable in ext_type.symtab.iteritems():
+        if name not in table.attributedict:
+            table.attributedict[name] = variable.type
 
 #------------------------------------------------------------------------
 # Build Attributes
