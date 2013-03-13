@@ -174,10 +174,14 @@ class ExtensionCompiler(object):
         """
         self.class_dict['__numba_py_class'] = self.py_class
         self.compile_methods()
+
         vtable = self.vtabbuilder.build_vtab(self.ext_type)
-        extension_type = self.build_extension_type(vtable)
-        self.attrbuilder.build_descriptors(self.ext_type, extension_type)
-        return extension_type
+        extclass = self.build_extension_type(vtable)
+
+        self.attrbuilder.build_descriptors(self.ext_type, extclass)
+        self.update_extension_methods(extclass)
+
+        return extclass
 
     def compile_methods(self):
         """
@@ -199,6 +203,13 @@ class ExtensionCompiler(object):
             self.ext_type.vtab_type.method_pointers)
 
         return extension_type
+
+    def update_extension_methods(self, extclass):
+        """
+        Update the extension class with the function wrappers.
+        """
+        for method in self.methods:
+            setattr(extclass, method.name, method.get_wrapper())
 
 
 #------------------------------------------------------------------------

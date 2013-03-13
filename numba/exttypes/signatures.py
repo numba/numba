@@ -36,16 +36,17 @@ class Method(object):
 
         # Filled out after extension method is compiled
         # (ExtensionCompiler.compile_methods())
+        self.wrapper_func = None
         self.lfunc = None
         self.lfunc_pointer = None
 
-    def result(self, py_func):
+    def get_wrapper(self):
         if self.is_class:
-            return classmethod(py_func)
+            return classmethod(self.wrapper_func)
         elif self.is_static:
-            return staticmethod(py_func)
+            return staticmethod(self.wrapper_func)
         else:
-            return py_func
+            return self.wrapper_func
 
 #------------------------------------------------------------------------
 # Utilities
@@ -65,7 +66,7 @@ def get_classmethod_func(func):
         return func.__get__(object())
 
 #------------------------------------------------------------------------
-# Method Validators
+# Method Builders
 #------------------------------------------------------------------------
 
 class MethodMaker(object):
