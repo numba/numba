@@ -72,41 +72,15 @@ class JitExtensionCompiler(compileclass.ExtensionCompiler):
     method_validators = validators.jit_validators
     exttype_validators = validators.jit_type_validators
 
-    def inherit_method(self, method_name, slot_idx):
-        """
-        Inherit a method from a superclass in the vtable.
-
-        :return: a pointer to the function.
-        """
-        parent_method_pointers = utils.get_method_pointers(self.py_class)
-
-        assert parent_method_pointers is not None
-        name, pointer = parent_method_pointers[slot_idx]
-        assert name == method_name
-
-        return pointer
-
     def compile_methods(self):
         for i, method in enumerate(self.methods):
-            if method.name not in self.class_dict:
-                pointer = self.inherit_method(method.name, i)
-                method_pointers.append((method.name, pointer))
-                continue
-
-            method = self.class_dict[method.name]
-            # Don't use compile_after_type_inference, re-infer, since we may
-            # have inferred some return types
-            # TODO: delayed types and circular calls/variable assignments
-            logger.debug(method.py_func)
-
             func_env = self.func_envs[method]
             pipeline.run_env(self.env, func_env, pipeline_name='compile')
 
             method.lfunc = func_env.lfunc
             method.lfunc_pointer = func_env.translator.lfunc_pointer
 
-            self.class_dict[method.name] = method.result(
-                func_env.numba_wrapper_func)
+            method.wrapper_func = func_env.numba_wrapper_func
 
 #------------------------------------------------------------------------
 # Build Attributes Struct
