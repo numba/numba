@@ -35,6 +35,4 @@ def get_all_numba_bases(py_class):
     return bases[::-1]
 
 def get_numba_bases(py_class):
-    for base in py_class.__bases__:
-        if is_numba_class(base):
-            yield base
+    return filter(is_numba_class, py_class.__bases__)
