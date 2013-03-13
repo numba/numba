@@ -104,6 +104,8 @@ class ExtensionCompiler(object):
         func_env = pipeline.compile2(self.env, method.py_func,
                                      method.signature.return_type,
                                      method.signature.args,
+                                     # don't use qualified name
+                                     name=method.name,
                                      pipeline_name='type_infer',
                                      **self.flags)
         self.func_envs[method] = func_env
