@@ -557,7 +557,7 @@ class TypeInferer(visitors.NumbaTransformer):
             rhs_var = rhs_node.variable
 
         if lhs_var.type is None:
-            lhs_var.type = rhs_var.type
+            lhs_var.perform_assignment(rhs_var.type)
         elif lhs_var.type != rhs_var.type:
             if lhs_var.name in self.locals:
                 # Type must be consistent
@@ -569,19 +569,19 @@ class TypeInferer(visitors.NumbaTransformer):
                 # update the type graph to link it together correctly
                 assert lhs_var is lhs_var.type.variable
                 deferred_type = lhs_var.type
-                lhs_var.type = rhs_var.type
+                lhs_var.perform_assignment(rhs_var.type)
                 deferred_type.update()
             elif isinstance(lhs_node, ast.Name):
                 if lhs_var.renameable:
                     # Override type with new assignment
-                    lhs_var.type = rhs_var.type
+                    lhs_var.perform_assignment(rhs_var.type)
                 else:
                     # Promote type for cellvar or freevar
                     self.assert_assignable(lhs_var.type, rhs_var.type)
                     if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
                             lhs_var.promotable_type):
-                        lhs_var.type = self.promote_types(lhs_var.type,
-                                                          rhs_var.type)
+                        lhs_var.perform_assignment(
+                            self.promote_types(lhs_var.type, rhs_var.type))
 
         return rhs_node
 
