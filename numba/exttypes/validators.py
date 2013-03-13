@@ -124,7 +124,7 @@ def validate_type_table(table, comparer):
                     "attribute '%s':" % ())
 
 def drop_self_type(type):
-    if type.is_static:
+    if type.is_static or type.is_class:
         return type
 
     assert len(type.args) >= 1 and type.args[0].is_extension
@@ -141,7 +141,8 @@ class AttributeTypeValidator(ExtTypeValidator):
 
     def validate(self, ext_type):
         comparer = lambda t1, t2: t1 == t2
-        validate_type_table(ext_type.attribute_table, comparer)
+        abstract_table = ordering.AttributeTable(ext_type.attribute_table)
+        validate_type_table(abstract_table, comparer)
 
 
 class MethodTypeValidator(ExtTypeValidator):
@@ -151,13 +152,16 @@ class MethodTypeValidator(ExtTypeValidator):
     """
 
     def validate(self, ext_type):
-        def comparer(t1, t2):
+        def comparer(method1, method2):
+            t1 = method1.signature
+            t2 = method2.signature
             if t1.is_static and t2.is_static:
                 return t1 == t2
             else:
                 return drop_self_type(t1) == drop_self_type(t2)
 
-        validate_type_table(ext_type.attribute_table, comparer)
+        abstract_table = ordering.VTable(ext_type.vtab_type)
+        validate_type_table(abstract_table, comparer)
 
 
 # Validators that validate the vtab/attribute struct order
