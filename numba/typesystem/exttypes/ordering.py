@@ -39,7 +39,7 @@ class AbstractTable(object):
 @traits
 class VTable(AbstractTable):
 
-    attributes = Delegate('table', 'methods')
+    attributes = Delegate('table', 'methodnames')
     attrdict = Delegate('table', 'methoddict')
 
 @traits
