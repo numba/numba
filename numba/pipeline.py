@@ -28,7 +28,12 @@ from numba.type_inference import infer as type_inference
 from numba.asdl import schema
 from numba.minivect import minitypes
 import numba.visitors
-from numba.specialize import comparisons, loops, exceptions, funccalls
+
+from numba.specialize import comparisons
+from numba.specialize import loops
+from numba.specialize import exceptions
+from numba.specialize import funccalls
+from numba.specialize import exttypes
 
 logger = logging.getLogger(__name__)
 
@@ -427,6 +432,11 @@ class LateSpecializer(PipelineStage):
                                             env)
         return specializer.visit(ast)
 
+class ExtensionTypeLowerer(PipelineStage):
+    def transform(self, ast, env):
+        specializer = self.make_specializer(exttypes.ExtensionTypeLowerer,
+                                            ast, env)
+        return specializer.visit(ast)
 
 class SpecializeFunccalls(PipelineStage):
     def transform(self, ast, env):

@@ -5,6 +5,7 @@ from numba import *
 from numba import error
 from numba import typesystem
 from numba import visitors
+from numba import nodes
 from numba.typesystem import is_obj, promote_closest, promote_to_native
 
 class ExtensionTypeLowerer(visitors.NumbaTransformer):
@@ -33,11 +34,12 @@ class ExtensionTypeLowerer(visitors.NumbaTransformer):
     # Methods
 
     def visit_NativeFunctionCallNode(self, node):
-        self.visitchildren(node)
-
         if node.signature.is_bound_method:
             assert isinstance(node.function, nodes.ExtensionMethod)
+            self.visitlist(node.args)
             node = self.visit_ExtensionMethod(node.function, node)
+        else:
+            self.visitchildren(node)
 
         return node
 
