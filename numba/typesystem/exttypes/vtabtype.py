@@ -4,9 +4,11 @@
 Virtual method table types and ordering.
 """
 
+import numba
 from numba import error
 from numba.typesystem.basetypes import *
 from numba.typesystem.exttypes import ordering
+from numba.typesystem.exttypes import methods
 
 #------------------------------------------------------------------------
 # Virtual Method Table Type
@@ -75,3 +77,10 @@ class VTabType(NumbaType):
     def method_pointers(self):
         for m in self.methods:
             yield m.lfunc_pointer
+
+    @classmethod
+    def empty(cls, py_class):
+        "Create an empty finalized vtable type"
+        vtable = cls(py_class, [])
+        vtable.create_method_ordering()
+        return vtable
