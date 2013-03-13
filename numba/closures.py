@@ -221,9 +221,6 @@ def process_decorators(env, visit_func, node):
 # Closure Type Inference
 #------------------------------------------------------------------------
 
-def mangle(name, scope):
-    return name
-
 def outer_scope_field(scope_type):
     return scope_type.attribute_table.to_struct().fields[0]
 
@@ -235,13 +232,14 @@ def lookup_scope_attribute(cur_scope, var_name, ctx=None):
     scope_type = cur_scope.type
     outer_scope_name, outer_scope_type = outer_scope_field(scope_type)
 
-    if var_name in scope_type.unmangled_symtab:
-        return nodes.ExtTypeAttribute(value=cur_scope,
-                                      attr=mangle(var_name, scope_type),
-                                      ctx=ctx, ext_type=scope_type)
+
+    if var_name in scope_type.attributedict:
+        return nodes.ExtTypeAttribute.from_known_attribute(
+            value=cur_scope, attr=var_name, ctx=ctx, ext_type=scope_type)
     elif outer_scope_type.is_closure_scope:
-        scope = nodes.ExtTypeAttribute(value=cur_scope, attr=outer_scope_name,
-                                       ctx=ctx, ext_type=scope_type)
+        scope = nodes.ExtTypeAttribute.from_known_attribute(
+            value=cur_scope, attr=outer_scope_name, ctx=ctx, ext_type=scope_type)
+
         try:
             return lookup_scope_attribute(scope, var_name, ctx)
         except error.InternalError as e:
@@ -326,10 +324,9 @@ class ClosureTypeInferer(ClosureTransformer):
         scope_type = typesystem.ClosureScopeType(py_class, outer_scope_type)
         scope_type.unmangled_symtab = dict(fields)
 
-        mangled_fields = [(mangle(name, scope_type), type)
-                              for name, type in fields]
         AttrTable = attributestype.ExtensionAttributesTableType
-        scope_type.attribute_table = AttrTable.from_list(None, mangled_fields)
+        scope_type.attribute_table = AttrTable.from_list(py_class=None,
+                                                         attributes=fields)
 
         ext_type = extension_types.create_new_extension_type(
                 func_name , (object,), {}, scope_type,
