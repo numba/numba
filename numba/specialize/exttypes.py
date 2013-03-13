@@ -2,15 +2,10 @@ import ast
 
 import numba
 from numba import *
-from numba import error, closures
-from numba import macros, utils, typesystem
-from numba.symtab import Variable
-from numba import visitors, nodes, error, functions
-from numba import stdio_util, function_util
+from numba import error
+from numba import typesystem
+from numba import visitors
 from numba.typesystem import is_obj, promote_closest, promote_to_native
-from numba.nodes import constnodes
-from numba.external import utility
-from numba.utils import dump
 
 class ExtensionTypeLowerer(visitors.NumbaTransformer):
     """
