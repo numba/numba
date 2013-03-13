@@ -133,21 +133,32 @@ def parametrize(*parameters):
     def test_func(foo_or_bar):
         print foo_or_bar # prints 'foo' or 'bar'
 
-    Generates two functions: test_func_0 and test_func_1
+    Generates a unittest TestCase in the function's global scope named
+    'test_func_testcase' with parametrized test methods.
+
+    ':return: The original function
     """
     def decorator(func):
+        class TestCase(unittest.TestCase):
+            pass
+
+        TestCase.__name__ = func.__name__
+
         for i, parameter in enumerate(parameters):
             name = '%s_%d' % (func.__name__, i)
 
-            def testfunc(parameter=parameter):
+            def testfunc(self, parameter=parameter):
                 return func(parameter)
 
             testfunc.__name__ = name
             if func.__doc__:
                 testfunc.__doc__ = func.__doc__.replace(func.__name__, name)
 
-            func.func_globals[name] = testfunc
+            # func.func_globals[name] = unittest.FunctionTestCase(testfunc)
+            setattr(TestCase, name, testfunc)
 
-        return None
+
+        func.func_globals[func.__name__ + '_testcase'] = TestCase
+        return func
 
     return decorator
