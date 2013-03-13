@@ -875,7 +875,9 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
         ext_type = node.value.type
         offset = ext_type.vtab_offset
-        struct_type = ext_type.vtab_type.ref()
+
+        vtable_struct = ext_type.vtab_type.to_struct()
+        struct_type = vtable_struct.ref()
 
         struct_pointer_pointer = nodes.value_at_offset(node.value, offset,
                                                        struct_type.pointer())

@@ -65,12 +65,7 @@ class StaticVTabBuilder(compileclass.VTabBuilder):
 
     def build_vtab(self, ext_type):
         vtable = ext_type.vtab_type
-
-        struct_vtable = numba.struct(
-            [(method.name, method.signature.pointer())
-                 for method in vtable.methods])
-
-        return build_static_vtab(vtable, struct_vtable)
+        return build_static_vtab(vtable, vtable.to_struct())
 
 #------------------------------------------------------------------------
 # Hash-based virtual method tables

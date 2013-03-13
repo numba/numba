@@ -12,6 +12,7 @@ from numba import *
 from numba import error
 
 from numba.typesystem.exttypes import ordering
+from numba.typesystem.exttypes import methods
 
 
 #------------------------------------------------------------------------
@@ -123,13 +124,6 @@ def validate_type_table(table, comparer):
                     "Found incompatible slot for method or "
                     "attribute '%s':" % ())
 
-def drop_self_type(type):
-    if type.is_static or type.is_class:
-        return type
-
-    assert len(type.args) >= 1 and type.args[0].is_extension
-    return type.return_type(*type.args[1:])
-
 class AttributeTypeValidator(ExtTypeValidator):
     """
     Validate attribute types in the table with attribute types in the parent
@@ -155,10 +149,7 @@ class MethodTypeValidator(ExtTypeValidator):
         def comparer(method1, method2):
             t1 = method1.signature
             t2 = method2.signature
-            if t1.is_static and t2.is_static:
-                return t1 == t2
-            else:
-                return drop_self_type(t1) == drop_self_type(t2)
+            return methods.equal_signatures(t1, t2)
 
         abstract_table = ordering.VTable(ext_type.vtab_type)
         validate_type_table(abstract_table, comparer)

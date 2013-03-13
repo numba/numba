@@ -8,8 +8,8 @@ class ExtTypeAttribute(ExprNode):
         super(ExtTypeAttribute, self).__init__(**kwargs)
         self.value = value
         self.attr = attr
-        self.variable = ext_type.symtab[attr]
-        self.type = self.variable.type
+        self.type = ext_type.attributedict[attr]
+        self.variable = Variable(self.type)
         self.ctx = ctx
         self.ext_type = ext_type
 
