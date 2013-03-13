@@ -173,7 +173,9 @@ class ExtensionCompiler(object):
         self.class_dict['__numba_py_class'] = self.py_class
         self.compile_methods()
         vtable = self.vtabbuilder.build_vtab(self.ext_type)
-        return self.build_extension_type(vtable)
+        extension_type = self.build_extension_type(vtable)
+        self.attrbuilder.build_descriptors(self.ext_type, extension_type)
+        return extension_type
 
     def compile_methods(self):
         """
@@ -335,11 +337,14 @@ class AttributeBuilder(object):
         Create a descriptor that accesses the attribute from Python space.
         """
 
-    def build_descriptors(self, env, py_class, ext_type, class_dict):
+    def build_descriptors(self, ext_type, extension_class):
         "Cram descriptors into the class dict"
-        for attr_name, attr_type in ext_type.symtab.iteritems():
+        table = ext_type.attribute_table
+        class_dict = vars(extension_class)
+
+        for attr_name, attr_type in table.attributedict.iteritems():
             descriptor = self.create_descr(attr_name)
-            class_dict[attr_name] = descriptor
+            setattr(extension_class, attr_name, descriptor)
 
 #------------------------------------------------------------------------
 # Build Virtual Method Table
