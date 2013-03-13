@@ -206,9 +206,7 @@ class ExtensionCompiler(object):
         """
         extension_type = extension_types.create_new_extension_type(
             self.py_class.__name__, self.py_class.__bases__, self.class_dict,
-            self.ext_type, vtable, self.ext_type.vtab_type,
-            self.ext_type.vtab_type.llvm_methods,
-            self.ext_type.vtab_type.method_pointers)
+            self.ext_type, vtable)
 
         return extension_type
 

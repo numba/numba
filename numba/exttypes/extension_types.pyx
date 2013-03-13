@@ -28,6 +28,9 @@ cdef extern from *:
         Py_ssize_t tp_basicsize
         PyTypeObject *tp_base
 
+#------------------------------------------------------------------------
+# Code to compute table offsets in the objects
+#------------------------------------------------------------------------
 
 cdef Py_uintptr_t align(Py_uintptr_t p, size_t alignment) nogil:
     "Align on a boundary"
@@ -168,8 +171,7 @@ cdef int tp_traverse(PyObject *self, visitproc visit, void *arg):
 # Create Extension Type
 #------------------------------------------------------------------------
 
-def create_new_extension_type(name, bases, dict, ext_numba_type,
-                              vtab, vtab_type, llvm_methods, method_pointers):
+def create_new_extension_type(name, bases, classdict, exttype, vtable):
     """
     Create an extension type from the given name, bases and classdict. Also
     takes a vtab struct minitype, and a attr_struct_type describing the
@@ -213,10 +215,16 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
               * Attribute locations are determined by a perfect hash-based
                 table holding pointers to the attributes
     """
-    cdef PyTypeObject *ext_type_p
+    cdef PyTypeObject *extclass_p
     cdef Py_ssize_t vtab_offset, attrs_offset
 
-    orig_new = dict.get('__new__', None)
+    orig_new = classdict.get('__new__', None)
+
+    # __________________________________________________________________
+    # Extension type constructor
+
+    cdef bint base_is_object = bases == (object,)
+
     def new(cls, *args, **kwds):
         "Create a new object and patch it with a vtab"
         cdef PyObject *obj_p
@@ -225,8 +233,8 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
         if orig_new is not None:
             new_func = orig_new
         else:
-            assert issubclass(cls, ext_type), (cls, ext_type)
-            new_func = super(ext_type, cls).__new__
+            assert issubclass(cls, extclass), (cls, extclass)
+            new_func = super(extclass, cls).__new__
 
         if base_is_object:
             # Avoid warnings in py2.6:
@@ -235,7 +243,7 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
         else:
             obj = new_func(cls, *args, **kwds)
 
-        if (cls.__numba_vtab is not ext_type.__numba_vtab or
+        if (cls.__numba_vtab is not extclass.__numba_vtab or
                 not isinstance(obj, cls)):
             # Subclass will set the vtab and attributes
             return obj
@@ -245,71 +253,82 @@ def create_new_extension_type(name, bases, dict, ext_numba_type,
         obj_p = <PyObject *> obj
 
         vtab_location = <void **> ((<char *> obj_p) + vtab_offset)
-        if vtab:
+        if vtable:
             vtab_location[0] = <void *> <Py_uintptr_t> cls.__numba_vtab_p
         else:
             vtab_location[0] = NULL
 
         attrs_pointer = (<Py_uintptr_t> obj_p) + attrs_offset
         obj._numba_attrs = ctypes.cast(attrs_pointer,
-                                       cls.__numba_struct_ctype_p)[0]
+                                       cls.__numba_attributes_ctype)[0]
 
         return obj
 
-    dict['__new__'] = staticmethod(new)
-    ext_type = type(name, bases, dict)
-    assert isinstance(ext_type, type)
+    # __________________________________________________________________
+    # Create extension type
 
-    cdef bint base_is_object = bases == (object,)
+    classdict['__new__'] = staticmethod(new)
+    extclass = type(name, bases, classdict)
+    assert isinstance(extclass, type)
 
-    ext_type_p = <PyTypeObject *> ext_type
+    extclass_p = <PyTypeObject *> extclass
 
-    # Object offset for vtab is lower
-    # Object attributes are located at lower + sizeof(void *), and end at
-    # upper
-    struct_type = ext_numba_type.attribute_table.to_struct()
-    struct_ctype = struct_type.to_ctypes()
-    vtab_offset = compute_vtab_offset(ext_type)
-    attrs_offset = compute_attrs_offset(ext_type)
-    upper = attrs_offset + ctypes.sizeof(struct_ctype)
+    # __________________________________________________________________
+    # Update extension type
+
+    attr_struct_type = exttype.attribute_table.to_struct()
+    attr_struct_ctype = attr_struct_type.to_ctypes()
+
+    vtab_offset = compute_vtab_offset(extclass)
+    attrs_offset = compute_attrs_offset(extclass)
+
+    upper = attrs_offset + ctypes.sizeof(attr_struct_ctype)
     upper = align(upper, 8)
 
-    # print 'basicsize/vtab_offset/upper', ext_type_p.tp_basicsize, lower, upper
-    ext_type_p.tp_basicsize = upper
-    if ext_type_p.tp_itemsize:
+    # print 'basicsize/vtab_offset/upper', extclass_p.tp_basicsize, lower, upper
+    extclass_p.tp_basicsize = upper
+    if extclass_p.tp_itemsize:
         raise NotImplementedError("Subclassing variable sized objects")
 
     # TODO: Figure out ctypes policy on tp_dealloc/tp_traverse/tp_clear
     # TODO: Don't use ctypes at all, but generate descriptors directly
-    #if ext_numba_type.need_tp_dealloc:
-    #    ext_type_p.tp_dealloc = <destructor> tp_dealloc
-    #    ext_type_p.tp_clear = tp_clear
-    #    ext_type_p.tp_traverse = tp_traverse
+    #if exttype.need_tp_dealloc:
+    #    extclass_p.tp_dealloc = <destructor> tp_dealloc
+    #    extclass_p.tp_clear = tp_clear
+    #    extclass_p.tp_traverse = tp_traverse
 
-    ext_type.__numba_vtab_offset = vtab_offset
-    ext_type.__numba_obj_end = upper
-    ext_type.__numba_attr_offset = attrs_offset
+    extclass.__numba_vtab_offset = vtab_offset
+    extclass.__numba_obj_end = upper
+    extclass.__numba_attr_offset = attrs_offset
 
-    ext_type.__numba_vtab = vtab
-    ext_type.__numba_vtab_type = vtab_type
+    extclass.__numba_vtab = vtable
 
-    if vtab:
-        vtab_p = ctypes.byref(vtab)
-        ext_type.__numba_vtab_p = ctypes.cast(vtab_p, ctypes.c_void_p).value
+    if vtable:
+        vtab_p = ctypes.byref(vtable)
+        extclass.__numba_vtab_p = ctypes.cast(vtab_p, ctypes.c_void_p).value
     else:
-        ext_type.__numba_vtab_p = None
+        extclass.__numba_vtab_p = None
 
-    ext_type.__numba_orig_tp_new = <Py_uintptr_t> ext_type_p.tp_new
-    ext_type.__numba_struct_type = struct_type
-    ext_type.__numba_struct_ctype_p = struct_type.pointer().to_ctypes()
-    ext_type.__numba_lfuncs = llvm_methods
-    ext_type.__numba_method_pointers = method_pointers
-    ext_type.__numba_ext_type = ext_numba_type
-    ext_type.exttype = ext_numba_type
+    # __________________________________________________________________
+    # Set ctypes attribute struct type, such that __new__ can create
+    # _numba_attrs
 
-    offsets = getattr(ext_type, '__numba_object_offset', [])
-    offsets = offsets + compute_object_offsets(ext_numba_type, attrs_offset)
-    ext_type.__numba_object_offset = offsets
+    # TODO: Remove ctypes dependency and generate conversion descriptors
 
-    return ext_type
+    extclass.__numba_attributes_ctype = attr_struct_type.pointer().to_ctypes()
+
+    # __________________________________________________________________
+    # Set exttype attribute
+
+    extclass.__numba_ext_type = exttype
+    extclass.exttype = exttype
+
+    # __________________________________________________________________
+    # Set offsets to objects (for tp_traverse, tp_clear, etc)
+
+    offsets = getattr(extclass, '__numba_object_offset', [])
+    offsets = offsets + compute_object_offsets(exttype, attrs_offset)
+    extclass.__numba_object_offset = offsets
+
+    return extclass
 
