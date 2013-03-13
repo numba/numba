@@ -4,17 +4,30 @@ class ExtTypeAttribute(ExprNode):
 
     _fields = ['value']
 
-    def __init__(self, value, attr, ctx, ext_type, **kwargs):
+    def __init__(self, value, attr, variable, ctx, ext_type, **kwargs):
         super(ExtTypeAttribute, self).__init__(**kwargs)
         self.value = value
         self.attr = attr
-        self.type = ext_type.attributedict[attr]
-        self.variable = Variable(self.type)
+        self.type = variable.type
+        self.variable = variable
         self.ctx = ctx
         self.ext_type = ext_type
 
     def __repr__(self):
         return "%s.%s" % (self.value, self.attr)
+
+    @classmethod
+    def from_known_attribute(cls, value, attr, ctx, ext_type):
+        """
+        Create an extension type attribute node if the attribute is known
+        to exist (and isn't being inferred)
+        """
+        assert attr in ext_type.attributedict
+
+        import numba.symtab
+
+        variable = numba.symtab.Variable(ext_type.attributedict[attr])
+        return cls(value, attr, variable, ctx, ext_type)
 
 class NewExtObjectNode(ExprNode):
     """

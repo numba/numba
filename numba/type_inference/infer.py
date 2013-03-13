@@ -18,6 +18,7 @@ from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
 from numba import closures as closures
 from numba.support import numpy_support
+from numba.exttypes.variable import ExtensionAttributeVariable
 
 from numba.typesystem import is_obj, promote_closest, get_type
 from numba.utils import dump
@@ -1387,23 +1388,26 @@ class TypeInferer(visitors.NumbaTransformer):
 
         return attr_name
 
-    def _resolve_extension_attribute(self, node, type):
-        attr = self.extattr_mangle(node.attr, type)
+    def _resolve_extension_attribute(self, node, ext_type):
+        attr = self.extattr_mangle(node.attr, ext_type)
 
-        if attr in type.methoddict:
+        if attr in ext_type.methoddict:
             return nodes.ExtensionMethod(node.value, attr)
 
-        if attr not in type.symtab:
-            if type.is_resolved or not self.is_store(node.ctx):
+        if attr not in ext_type.attributedict:
+            if ext_type.is_resolved or not self.is_store(node.ctx):
                 raise error.NumbaError(
-                    node, "Cannot access attribute %s of type %s" % (
-                                                node.attr, type.name))
+                    node, "Cannot access attribute %s of ext_type %s" % (
+                                                node.attr, ext_type.name))
 
-            # Create entry in type's symbol table, resolve the actual type
-            # in the parent Assign node
-            type.symtab[attr] = Variable(None)
+            # Infer the type for this extension attribute using a
+            # special Variable
+            variable = ExtensionAttributeVariable(ext_type, attr, type=None)
+        else:
+            variable = Variable(ext_type.attributedict[attr])
 
-        return nodes.ExtTypeAttribute(node.value, attr, node.ctx, type)
+        return nodes.ExtTypeAttribute(node.value, attr, variable,
+                                      node.ctx, ext_type)
 
     def _resolve_struct_attribute(self, node, type):
         type = nodes.struct_type(type)
