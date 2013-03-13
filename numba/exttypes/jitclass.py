@@ -45,15 +45,10 @@ Compiling @jit extension classes works as follows:
 import numba
 from numba import error
 from numba import typesystem
-from numba import pipeline
-from numba import symtab
 from numba.exttypes.utils import is_numba_class
-from numba.minivect import minitypes
 
-from numba.exttypes import logger
 from numba.exttypes import virtual
 from numba.exttypes import signatures
-from numba.exttypes import utils
 from numba.exttypes import validators
 from numba.exttypes import compileclass
 from numba.exttypes import extension_types
@@ -84,6 +79,7 @@ class JitAttributeBuilder(compileclass.AttributeBuilder):
     def create_descr(self, attr_name):
         """
         Create a descriptor that accesses the attribute on the ctypes struct.
+        This is set by the extension type constructor __new__.
         """
         def _get(self):
             return getattr(self._numba_attrs, attr_name)
