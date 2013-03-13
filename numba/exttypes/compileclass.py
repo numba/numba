@@ -284,9 +284,9 @@ def build_extension_symtab(ext_type):
     are Variables which are used by the type inferencer and used to
     type check attribute assignments.
 
-    New attribute assignments create new Variables in the symtab. This
-    should be merged back into the attribute table after type inference
-    of the __init__ method. E.g.
+    New attribute assignments create new ExtensionAttributeVariable
+    variables in the symtab. These variables update the attribute table
+    during type inference:
 
         class Foo(object):
 
@@ -301,9 +301,10 @@ def build_extension_symtab(ext_type):
 
     and after type inference of __init__ we have:
 
-        symtab = { 'value1': Variable(double), 'value2': Variable(int_) }
-
-    We then need to update the attribute table with 'value2' and its type.
+        symtab = {
+            'value1': Variable(double),                   # type is fixed
+            'value2': ExtensionAttributeVariable(int_),   # type is inferred
+        }
     """
     table = ext_type.attribute_table
     for attr_name, attr_type in table.attributedict.iteritems():
