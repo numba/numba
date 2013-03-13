@@ -55,6 +55,7 @@ class ExtensionMethod(ExprNode):
 
         method = ext_type.methoddict[attr]
         self.type = method.signature
+        self.ext_type = ext_type
 
     def __repr__(self):
         return "%s.%s" % (self.value, self.attr)

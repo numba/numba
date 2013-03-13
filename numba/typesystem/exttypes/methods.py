@@ -15,6 +15,8 @@ class ExtMethodType(NumbaType, minitypes.FunctionType):
         is_bound_method: is bound method?
     """
 
+    is_extension_method = True
+
     def __init__(self, return_type, args, name=None,
                  is_class=False, is_static=False, **kwds):
         super(ExtMethodType, self).__init__(return_type, args, name, **kwds)

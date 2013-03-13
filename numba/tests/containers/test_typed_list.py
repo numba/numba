@@ -198,5 +198,6 @@ if __name__ == "__main__":
 else:
     import test_typed_list as module
 
-test(module)
-__test__ = {}
+index(int_)
+# test(module)
+# __test__ = {}
