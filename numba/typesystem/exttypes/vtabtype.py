@@ -32,6 +32,9 @@ class VTabType(NumbaType):
         # list of ordered method names
         self.methodnames = None
 
+        # Set of inherited method ({ method_name })
+        self.inherited = set()
+
     def create_method_ordering(self, orderer=ordering.unordered):
         """
         Create a consistent method ordering with the base types.

@@ -252,15 +252,18 @@ class AttributesInheriter(object):
         Inherit attributes from a parent class.
         May be called multiple times for multiple bases.
         """
-        attr_table.attributedict.update(
-            base_ext_type.attribute_table.attributedict)
+        base_attrs = base_ext_type.attribute_table.attributedict
+        attr_table.inherited.update(base_attrs)     # { attr_name }
+        attr_table.attributedict.update(base_attrs) # { attr_name : attr_type }
 
     def inherit_methods(self, vtable, base_ext_type):
         """
         Inherit methods from a parent class.
         May be called multiple times for multiple bases.
         """
-        vtable.methoddict.update(base_ext_type.vtab_type.methoddict)
+        base_methods = base_ext_type.vtab_type.methoddict
+        vtable.inherited.update(base_methods)   # { method_name }
+        vtable.methoddict.update(base_methods)  # { method_name : Method }
 
 #------------------------------------------------------------------------
 # Extension Attribute Processing

@@ -30,6 +30,9 @@ class ExtensionAttributesTableType(NumbaType):
         # Ordered list of attribute names
         self.attributes = None
 
+        # Set of inherited attribute names
+        self.inherited = set()
+
     def to_struct(self):
         return numba.struct([(attr, self.attributedict[attr])
                                  for attr in self.attributes])
