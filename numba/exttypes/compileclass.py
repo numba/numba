@@ -82,10 +82,10 @@ class ExtensionCompiler(object):
                                                         self.method_maker,
                                                         self.method_validators)
 
-        methods, method_types = processor.get_method_signatures()
+        methods = processor.get_method_signatures()
 
         # Update ext_type and class dict with known Method objects
-        for method, method_type in zip(methods, method_types):
+        for method in methods:
             self.ext_type.add_method(method)
             self.class_dict[method.name] = method
 
@@ -225,7 +225,7 @@ class AttributesInheriter(object):
             ext_type.py_class, parent_attrtables)
 
         for base in bases:
-            self.inherit_attributes(attr_table, base.ext_type)
+            self.inherit_attributes(attr_table, base.exttype)
 
         return attr_table
 
@@ -236,25 +236,24 @@ class AttributesInheriter(object):
         vtable = vtabtype.VTabType(ext_type.py_class, parent_vtables)
 
         for base in bases:
-            self.inherit_methods(vtable, base.ext_type)
+            self.inherit_methods(vtable, base.exttype)
 
         return vtable
 
-    def inherit_attributes(self, derived_ext_type, base_ext_type):
+    def inherit_attributes(self, attr_table, base_ext_type):
         """
         Inherit attributes from a parent class.
         May be called multiple times for multiple bases.
         """
-        derived_ext_type.attribute_table.attributedict.update(
-                    base_ext_type.attribute_table.attributedict)
+        attr_table.attributedict.update(
+            base_ext_type.attribute_table.attributedict)
 
-    def inherit_methods(self, derived_ext_type, base_ext_type):
+    def inherit_methods(self, vtable, base_ext_type):
         """
         Inherit methods from a parent class.
         May be called multiple times for multiple bases.
         """
-        derived_ext_type.vtab_type.methoddict.update(
-                    base_ext_type.vtab_type.methoddict)
+        vtable.methoddict.update(base_ext_type.vtab_type.methoddict)
 
 
 def process_class_attribute_types(ext_type, class_dict):

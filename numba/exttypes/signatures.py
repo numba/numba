@@ -204,12 +204,13 @@ class MethodSignatureProcessor(object):
         restype = method.signature.return_type
         method.signature = restype(*argtypes)
 
+        method.signature = self.method_maker.make_method_type(method)
+
     def get_method_signatures(self):
         """
-        Return ([Method], [ExtMethodType]) for each decorated method in the class
+        Return [Method] for each decorated method in the class
         """
         methods = []
-        method_types = []
 
         for method_name, method in self.class_dict.iteritems():
             method = self.process_signature(method, method_name)
@@ -224,10 +225,7 @@ class MethodSignatureProcessor(object):
 
             self.update_signature(method)
 
-            method_type = self.method_maker.make_method_type(method)
-
             methods.append(method)
-            method_types.append(method_type)
 
-        return methods, method_types
+        return methods
 
