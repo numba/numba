@@ -171,9 +171,47 @@ cdef int tp_traverse(PyObject *self, visitproc visit, void *arg):
 def create_new_extension_type(name, bases, dict, ext_numba_type,
                               vtab, vtab_type, llvm_methods, method_pointers):
     """
-    Create an extension type from the given name, bases and dict. Also
-    takes a vtab struct minitype, and a struct_type describing the
+    Create an extension type from the given name, bases and classdict. Also
+    takes a vtab struct minitype, and a attr_struct_type describing the
     object attributes.
+
+    For static extension types:
+
+            {
+                PyObject_HEAD
+                ...
+                vtable *
+                attribute1
+                   ...
+                attributeN
+            }
+
+        * The vtable is a contiguous block of memory holding function pointer
+
+        * Attributes are put directly in the object
+
+            * base classes must be compatible to allow a static ordering
+              (we don't do C++-like dynamic offsets)
+
+    For dynamic extension types:
+
+            {
+                PyObject_HEAD
+                ...
+                hash-based vtable *
+                hash-based attribute table *
+                attribute1
+                   ...
+                attributeN
+            }
+
+        * The vtable is a perfect hash-based vtable
+
+        * Attributes are put directly in the object, BUT consumers may
+          not rely on any ordering
+
+              * Attribute locations are determined by a perfect hash-based
+                table holding pointers to the attributes
     """
     cdef PyTypeObject *ext_type_p
     cdef Py_ssize_t vtab_offset, attrs_offset
