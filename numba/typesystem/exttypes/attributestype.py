@@ -60,8 +60,8 @@ class ExtensionAttributesTableType(NumbaType):
         if self.attributes is None:
             return str(self.attributedict)
 
-        return "{ %s }" % ", ".join("%r: %r" % (name, self.attributedict[name])
-                                        for name in self.attributes)
+        return "{%s}" % ", ".join("%r: %r" % (name, self.attributedict[name])
+                                      for name in self.attributes)
 
     def __repr__(self):
         return "AttributeTable(%s)" % self.strtable()

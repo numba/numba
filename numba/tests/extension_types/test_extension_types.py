@@ -109,7 +109,7 @@ exttype = ObjectAttrExtension.exttype
 class ExtensionTypeAsAttribute(object):
     """
     >>> print(ExtensionTypeAsAttribute.exttype)
-    <JitExtension ExtensionTypeAsAttribute({ 'attr': <JitExtension ObjectAttrExtension> })>
+    <JitExtension ExtensionTypeAsAttribute({'attr': <JitExtension ObjectAttrExtension>})>
     """
 
     def __init__(self, attr):
