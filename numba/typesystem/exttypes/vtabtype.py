@@ -48,7 +48,7 @@ class VTabType(NumbaType):
         if method.name in self.methoddict:
             # Patch current signature after type inference
             signature = self.get_signature(method.name)
-            assert method.signature.args == signature.args
+            assert methods.equal_signature_args(method.signature, signature)
             if signature.return_type is None:
                 signature.return_type = method.signature.return_type
             else:
