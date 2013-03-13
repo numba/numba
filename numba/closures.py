@@ -66,6 +66,9 @@ from numba.type_inference import module_type_inference
 from numba.minivect import  minitypes
 from numba.symtab import Variable
 
+from numba.typesystem.exttypes import vtabtype
+from numba.typesystem.exttypes import attributestype
+
 import logging
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
@@ -222,7 +225,7 @@ def mangle(name, scope):
     return name
 
 def outer_scope_field(scope_type):
-    return scope_type.attribute_struct.fields[0]
+    return scope_type.attribute_table.to_struct().fields[0]
 
 def lookup_scope_attribute(cur_scope, var_name, ctx=None):
     """
@@ -325,12 +328,13 @@ class ClosureTypeInferer(ClosureTransformer):
 
         mangled_fields = [(mangle(name, scope_type), type)
                               for name, type in fields]
-        scope_type.set_attributes(mangled_fields)
+        AttrTable = attributestype.ExtensionAttributesTableType
+        scope_type.attribute_table = AttrTable.from_list(None, mangled_fields)
 
         ext_type = extension_types.create_new_extension_type(
-                            func_name , (object,), {}, scope_type,
-                            vtab=None, vtab_type=numba.struct(),
-                            llvm_methods=[], method_pointers=[])
+                func_name , (object,), {}, scope_type,
+                vtab=None, vtab_type=vtabtype.VTabType.empty(py_class=None),
+                llvm_methods=[], method_pointers=[])
 
         # Instantiate closure scope
         logger.debug("Generate closure %s %s %s", node.name, scope_type,
@@ -584,7 +588,7 @@ class ClosureSpecializer(ClosureTransformer):
                              node.variable.is_freevar):
             logger.debug("Function %s, lookup %s in scope %s: %s",
                           self.ast.name, node.id, self.ast.cur_scope.type,
-                          self.ast.cur_scope.type.attribute_struct)
+                          self.ast.cur_scope.type.attribute_table)
             attr = lookup_scope_attribute(self.ast.cur_scope,
                                           var_name=node.id, ctx=node.ctx)
             return self.visit(attr)
