@@ -40,10 +40,8 @@ class ExtensionMethod(ExprNode):
         self.value = object
         self.attr = attr
 
-        method_type, self.vtab_index = ext_type.methoddict[attr]
-        self.type = minitypes.FunctionType(return_type=method_type.return_type,
-                                           args=method_type.args,
-                                           is_bound_method=True)
+        method = ext_type.methoddict[attr]
+        self.type = method.signature
 
     def __repr__(self):
         return "%s.%s" % (self.value, self.attr)

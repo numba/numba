@@ -97,7 +97,7 @@ def test_classmethods():
     test(Derived)
 
 if __name__ == '__main__':
-   test_staticmethods()
+   # test_staticmethods()
 #    test_classmethods()
-#     import doctest
-#     doctest.testmod()
+    import doctest
+    doctest.testmod()
