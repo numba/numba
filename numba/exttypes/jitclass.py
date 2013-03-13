@@ -72,16 +72,6 @@ class JitExtensionCompiler(compileclass.ExtensionCompiler):
     method_validators = validators.jit_validators
     exttype_validators = validators.jit_type_validators
 
-    def compile_methods(self):
-        for i, method in enumerate(self.methods):
-            func_env = self.func_envs[method]
-            pipeline.run_env(self.env, func_env, pipeline_name='compile')
-
-            method.lfunc = func_env.lfunc
-            method.lfunc_pointer = func_env.translator.lfunc_pointer
-
-            method.wrapper_func = func_env.numba_wrapper_func
-
 #------------------------------------------------------------------------
 # Build Attributes Struct
 #------------------------------------------------------------------------

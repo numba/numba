@@ -188,8 +188,16 @@ class ExtensionCompiler(object):
         Compile all methods, reuse function environments from type inference
         stage.
 
-        ∀ methods M sets M.lfunc and M.lfunc_pointer
+        ∀ methods M sets M.lfunc, M.lfunc_pointer and M.wrapper_func
         """
+        for i, method in enumerate(self.methods):
+            func_env = self.func_envs[method]
+            pipeline.run_env(self.env, func_env, pipeline_name='compile')
+
+            method.lfunc = func_env.lfunc
+            method.lfunc_pointer = func_env.translator.lfunc_pointer
+
+            method.wrapper_func = func_env.numba_wrapper_func
 
     def build_extension_type(self, vtable):
         """
