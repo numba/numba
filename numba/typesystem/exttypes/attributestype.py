@@ -55,3 +55,27 @@ class ExtensionAttributesTableType(NumbaType):
 
         self._need_tp_dealloc = result
         return result
+
+    def strtable(self):
+        if self.attributes is None:
+            return str(self.attributedict)
+
+        return "{ %s }" % ", ".join("%r: %r" % (name, self.attributedict[name])
+                                        for name in self.attributes)
+
+    def __repr__(self):
+        return "AttributeTable(%s)" % self.strtable()
+
+    @classmethod
+    def empty(cls, py_class):
+        table = ExtensionAttributesTableType(py_class, [])
+        table.create_attribute_ordering()
+        return table
+
+    @classmethod
+    def from_list(cls, py_class, attributes):
+        "Create a final attribute table from a list of attribute (name, type)."
+        table = ExtensionAttributesTableType(py_class, [])
+        table.attributedict.update(attributes)
+        table.attributes = [name for name, type in attributes]
+        return table
