@@ -44,4 +44,4 @@ class ClosureScopeType(ExtensionType):
             self.scope_prefix = self.parent_scope.scope_prefix + "0"
 
     def __repr__(self):
-        return "closure_scope(%s)" % self.attribute_struct
+        return "closure_scope(%s)" % self.attribute_table

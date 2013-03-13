@@ -52,16 +52,6 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
         self.vtab_offset = extension_types.compute_vtab_offset(py_class)
         self.attr_offset = extension_types.compute_attrs_offset(py_class)
 
-    def set_attributes(self, attribute_list):
-        """
-        Create the symbol table and attribute struct from a list of
-        (varname, attribute_type)
-        """
-        import numba.symtab
-
-        self.attribute_table = numba.struct(attribute_list)
-        self.symtab.update([(name, numba.symtab.Variable(type))
-                               for name, type in attribute_list])
 
 # ______________________________________________________________________
 # @jit
@@ -77,7 +67,7 @@ class JitExtensionType(ExtensionType):
     def __str__(self):
         if self.attribute_table:
             return "<JitExtension %s(%s)>" % (
-                self.name, self.attribute_table.attributedict)
+                    self.name, self.attribute_table.strtable())
         return repr(self)
 
 # ______________________________________________________________________
@@ -94,6 +84,6 @@ class AutojitExtensionType(ExtensionType):
     def __str__(self):
         if self.attribute_table:
             return "<AutojitExtension %s(%s)>" % (
-                self.name, self.attribute_table.attributedict)
+                    self.name, self.attribute_table.strtable())
         return repr(self)
 
