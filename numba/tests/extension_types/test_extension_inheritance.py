@@ -91,5 +91,5 @@ class Derived(Base):
         return format_str('Derived(%s)', self.value)
 
 if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

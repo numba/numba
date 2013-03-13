@@ -99,5 +99,5 @@ def test_classmethods():
 if __name__ == '__main__':
    # test_staticmethods()
 #    test_classmethods()
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

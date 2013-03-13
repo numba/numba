@@ -21,5 +21,5 @@ def compile_class(warn):
 
 if __name__ == '__main__':
     # compile_class(False)
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

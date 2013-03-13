@@ -109,7 +109,7 @@ exttype = ObjectAttrExtension.exttype
 class ExtensionTypeAsAttribute(object):
     """
     >>> print(ExtensionTypeAsAttribute.exttype)
-    <Extension ExtensionTypeAsAttribute({'attr': <Extension ObjectAttrExtension>})>
+    <JitExtension ExtensionTypeAsAttribute({ 'attr': <JitExtension ObjectAttrExtension> })>
     """
 
     def __init__(self, attr):
@@ -117,6 +117,5 @@ class ExtensionTypeAsAttribute(object):
 
 
 if __name__ == '__main__':
-#    print ExtensionTypeAsAttribute.exttype
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()
