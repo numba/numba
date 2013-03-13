@@ -62,6 +62,10 @@ class VTabType(NumbaType):
         method = self.methoddict[method_name]
         return method.signature
 
+    def to_struct(self):
+        return numba.struct([(m.name, m.signature.pointer())
+                                 for m in self.methods])
+
     @property
     def methods(self):
         "Return methods in the order they were set in"
