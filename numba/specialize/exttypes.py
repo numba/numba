@@ -160,6 +160,8 @@ class DynamicExtensionHandler(object):
         However, we could *preload* (**vtab_slot), where function calls
         invalidate the preload, if we were so inclined.
         """
+        from numba.utility import virtuallookup
+
         # Make the object we call the method on clone-able
         node.value = nodes.CloneableNode(node.value)
 
@@ -183,10 +185,10 @@ class DynamicExtensionHandler(object):
         # __________________________________________________________________
         # Retrieve method pointer
 
-        llvm_module = self.env.crnt.llvm_module
+        lookup = virtuallookup.lookup_method
+
         args = [vtab_struct_pp, prehash_node]
-        vmethod = function_util.utility_call(self.context, llvm_module,
-                                             'PerfectHashTableLookup', args)
+        vmethod = nodes.NativeCallNode(lookup.signature, args, lookup.lfunc)
         vmethod = nodes.CoercionNode(vmethod, func_signature.pointer())
 
         # __________________________________________________________________

@@ -20,7 +20,6 @@ def load_utilities():
     from . import library
     from . import numbacdef
     from . import refcounting
-    from . import virtuallookup
 
 class CBuilderLibrary(object):
     """
