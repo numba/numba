@@ -2,6 +2,8 @@
 Virtual method lookup written in Numba.
 """
 
+import ctypes
+
 import numba
 from numba import *
 from numba.exttypes import virtual
@@ -14,8 +16,9 @@ char_p = char.pointer()
 void_p = void.pointer()
 uint16_p = uint16.pointer()
 
-displacements_offset = table_t.offsetof('d')
-
+# This is a bad idea!
+# displacements_offset = table_t.offsetof('d')
+displacements_offset = ctypes.sizeof(table_t.to_ctypes())
 
 @jit(void_p(table_t_pp, uint64), wrap=False)
 def lookup_method(table_pp, prehash):
@@ -62,6 +65,8 @@ def lookup_method(table_pp, prehash):
     entry = table.entries[f ^ g]
 
     if entry.id == prehash:
+        # print "found!"
         return entry.ptr
     else:
+        print "not found :("
         return numba.NULL

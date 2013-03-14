@@ -21,9 +21,11 @@ import numba
 import ctypes
 
 from numba.typesystem import *
-from numba.typesystem.exttypes import ordering
-from extensibletype import methodtable
 from numba.minivect import minitypes
+from numba.typesystem.exttypes import ordering
+
+from numba.exttypes import extension_types
+from extensibletype import methodtable
 
 #------------------------------------------------------------------------
 # Virtual Method Table Interface
@@ -41,6 +43,12 @@ class VTabBuilder(object):
         """
         Build a virtual method table.
         The result will be kept alive on the extension type.
+        """
+
+    def wrap_vtable(self, vtable):
+        """
+        Wrap the vtable such that users can get a pointer to the underlying
+        data (extension_types.{Static,Dynamic}VtableWrapper).
         """
 
 #------------------------------------------------------------------------
@@ -87,6 +95,9 @@ class StaticVTabBuilder(VTabBuilder):
         vtable = ext_type.vtab_type
         return build_static_vtab(vtable, vtable.to_struct())
 
+    def wrap_vtable(self, vtable):
+        return extension_types.StaticVtableWrapper(vtable)
+
 #------------------------------------------------------------------------
 # Hash-based virtual method tables
 #------------------------------------------------------------------------
@@ -99,7 +110,6 @@ class StaticVTabBuilder(VTabBuilder):
 
 PyCustomSlots_Entry = numba.struct([
     ('id', uint64),
-    ('flags', Py_uintptr_t), # TODO: make flags part of id
     ('ptr', void.pointer()),
 ])
 
@@ -126,7 +136,8 @@ def sep201_signature_string(functype):
     return str(functype)
 
 def hash_signature(functype):
-    return sep201_hasher.hash_signature(functype)
+    sigstr = sep201_signature_string(functype)
+    return sep201_hasher.hash_signature(sigstr)
 
 def build_hashing_vtab(vtable):
     """
@@ -134,7 +145,7 @@ def build_hashing_vtab(vtable):
     """
     n = len(vtable.methods)
 
-    ids = [sep201_signature_string(method.type)
+    ids = [sep201_signature_string(method.signature)
                for method in vtable.methods]
     flags = [0] * n
 
@@ -153,3 +164,6 @@ class HashBasedVTabBuilder(VTabBuilder):
 
     def build_vtab(self, ext_type):
         return build_hashing_vtab(ext_type.vtab_type)
+
+    def wrap_vtable(self, vtable):
+        return extension_types.DynamicVtableWrapper(vtable)

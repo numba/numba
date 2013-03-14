@@ -168,10 +168,35 @@ cdef int tp_traverse(PyObject *self, visitproc visit, void *arg):
     return 0
 
 #------------------------------------------------------------------------
+# Simple Vtable Wrappers
+#------------------------------------------------------------------------
+
+class StaticVtableWrapper(object):
+    def __init__(self, vtable):
+        self.vtable = vtable
+
+    def get_vtable_pointer(self):
+        vtab_p = ctypes.byref(self.vtable)
+        return ctypes.cast(vtab_p, ctypes.c_void_p).value
+
+cdef class DynamicVtableWrapper(object):
+
+    cdef void *vtable_pointer
+    cdef public object vtable
+
+    def __init__(self, vtable):
+        self.vtable = vtable
+
+    def get_vtable_pointer(self):
+        # Return a vtable **
+        self.vtable_pointer = <void *> <Py_uintptr_t> self.vtable.table_ptr
+        return <Py_uintptr_t> &self.vtable_pointer
+
+#------------------------------------------------------------------------
 # Create Extension Type
 #------------------------------------------------------------------------
 
-def create_new_extension_type(name, bases, classdict, exttype, vtable):
+def create_new_extension_type(name, bases, classdict, exttype, vtable_wrapper):
     """
     Create an extension type from the given name, bases and classdict. Also
     takes a vtab struct minitype, and a attr_struct_type describing the
@@ -253,10 +278,7 @@ def create_new_extension_type(name, bases, classdict, exttype, vtable):
         obj_p = <PyObject *> obj
 
         vtab_location = <void **> ((<char *> obj_p) + vtab_offset)
-        if vtable:
-            vtab_location[0] = <void *> <Py_uintptr_t> cls.__numba_vtab_p
-        else:
-            vtab_location[0] = NULL
+        vtab_location[0] = <void *> <Py_uintptr_t> cls.__numba_vtab_p
 
         attrs_pointer = (<Py_uintptr_t> obj_p) + attrs_offset
         obj._numba_attrs = ctypes.cast(attrs_pointer,
@@ -301,13 +323,9 @@ def create_new_extension_type(name, bases, classdict, exttype, vtable):
     extclass.__numba_obj_end = upper
     extclass.__numba_attr_offset = attrs_offset
 
-    extclass.__numba_vtab = vtable
-
-    if vtable:
-        vtab_p = ctypes.byref(vtable)
-        extclass.__numba_vtab_p = ctypes.cast(vtab_p, ctypes.c_void_p).value
-    else:
-        extclass.__numba_vtab_p = None
+    # Keep vtable alive
+    extclass.__numba_vtab = vtable_wrapper
+    extclass.__numba_vtab_p = vtable_wrapper.get_vtable_pointer()
 
     # __________________________________________________________________
     # Set ctypes attribute struct type, such that __new__ can create

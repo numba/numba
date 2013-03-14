@@ -73,9 +73,6 @@ class ExtensionCompiler(object):
         # Update ext_type.symtab
         self.type_infer_init_method()
 
-        # Update attribute table with ext_type.symtab
-        update_attribute_table(self.ext_type)
-
         # Type infer the rest of the methods (with fixed attribute table!)
         self.type_infer_methods()
 
@@ -204,9 +201,11 @@ class ExtensionCompiler(object):
         Build extension type from llvm methods and pointers and a populated
         virtual method table.
         """
+        vtable_wrapper = self.vtabbuilder.wrap_vtable(vtable)
+
         extension_type = extension_types.create_new_extension_type(
             self.py_class.__name__, self.py_class.__bases__, self.class_dict,
-            self.ext_type, vtable)
+            self.ext_type, vtable_wrapper)
 
         return extension_type
 
@@ -332,16 +331,6 @@ def build_extension_symtab(ext_type):
     for attr_name, attr_type in table.attributedict.iteritems():
         ext_type.symtab[attr_name] = symtab.Variable(attr_type,
                                                      promotable_type=False)
-
-def update_attribute_table(ext_type):
-    """
-    Update attribute table from extension type symtab. See
-    build_extension_symtab above.
-    """
-    table = ext_type.attribute_table
-    for name, variable in ext_type.symtab.iteritems():
-        if name not in table.attributedict:
-            table.attributedict[name] = variable.type
 
 #------------------------------------------------------------------------
 # Build Attributes

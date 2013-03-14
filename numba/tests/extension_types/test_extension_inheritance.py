@@ -66,7 +66,7 @@ def make_classes(compiler):
 # Tests
 #------------------------------------------------------------------------
 
-@parametrize(jit) #, autojit)
+@parametrize(jit, autojit)
 def test_baseclass(compiler):
     Base, Derived = make_classes(compiler)
 
@@ -102,5 +102,5 @@ def test_derivedclass(compiler):
 
 
 if __name__ == '__main__':
-    # test_derivedclass(jit)
+    # test_baseclass(autojit)
     main()

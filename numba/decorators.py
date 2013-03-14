@@ -1,4 +1,5 @@
-from numba.exttypes.entrypoints import  jit_extension_class
+from numba.exttypes.entrypoints import  (jit_extension_class,
+                                         autojit_extension_class)
 
 __all__ = ['autojit', 'jit', 'export', 'exportmany']
 
@@ -86,6 +87,8 @@ def exportmany(signatures, env_name=None, env=None, **kws):
 #------------------------------------------------------------------------
 # Compilation Entry Points
 #------------------------------------------------------------------------
+
+# TODO: Redo this entire module
 
 def compile_function(env, func, argtypes, restype=None, **kwds):
     """
@@ -179,6 +182,16 @@ def _autojit(template_signature, target, nopython, env_name=None, env=None,
         """
         def compile_function(args, kwargs):
             "Compile the function given its positional and keyword arguments"
+            if isinstance(f, (type, types.ClassType)):
+                env = environment.NumbaEnvironment.get_environment(
+                    translator_kwargs.get('env', None))
+                argtypes = map(env.context.typemapper.from_python, args)
+
+                py_class = f
+                flags = translator_kwargs
+                flags.update(env_name=env_name)
+                return autojit_extension_class(env, py_class, flags, argtypes)
+
             signature = resolve_argtypes(numba_func, template_signature,
                                          args, kwargs, translator_kwargs)
 

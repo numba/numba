@@ -77,9 +77,12 @@ from numba.exttypes.utils import is_numba_class
 
 from numba.exttypes import logger
 from numba.exttypes import virtual
+from numba.exttypes import signatures
 from numba.exttypes import validators
 from numba.exttypes import compileclass
 from numba.exttypes import extension_types
+
+from numba.typesystem.exttypes import ordering
 
 
 #------------------------------------------------------------------------
@@ -100,6 +103,10 @@ class AutojitExtensionCompiler(compileclass.ExtensionCompiler):
 
 class AutojitAttributeBuilder(compileclass.AttributeBuilder):
 
+    def finalize(self, ext_type):
+        # TODO: hash-based attributes
+        ext_type.attribute_table.create_attribute_ordering(ordering.extending)
+
     def create_descr(self, attr_name):
         """
         Create a descriptor that accesses the attribute on the ctypes struct.
@@ -115,22 +122,28 @@ class AutojitAttributeBuilder(compileclass.AttributeBuilder):
 # Build Extension Type
 #------------------------------------------------------------------------
 
-def create_extension(env, py_class, flags):
+def create_extension(env, py_class, flags, argtypes):
     """
     Compile an extension class given the NumbaEnvironment and the Python
     class that contains the functions that are to be compiled.
     """
+    from extensibletype import intern
+    intern.global_intern_initialize()
+
     flags.pop('llvm_module', None)
 
     ext_type = typesystem.AutojitExtensionType(py_class)
 
     extension_compiler = AutojitExtensionCompiler(
         env, py_class, ext_type, flags,
+        signatures.AutojitMethodMaker(ext_type, argtypes),
         compileclass.AttributesInheriter(),
         AutojitAttributeBuilder(),
         virtual.HashBasedVTabBuilder())
 
     extension_compiler.infer()
+    extension_compiler.finalize_tables()
+    extension_compiler.validate()
     extension_type = extension_compiler.compile()
 
     return extension_type
