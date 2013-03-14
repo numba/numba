@@ -77,7 +77,7 @@ def build_static_vtab(vtable, vtab_struct):
 # ______________________________________________________________________
 # Build Virtual Method Table
 
-class StaticVTabBuilder(compileclass.VTabBuilder):
+class StaticVTabBuilder(VTabBuilder):
 
     def finalize(self, ext_type):
         ext_type.vtab_type.create_method_ordering(ordering.extending)
@@ -118,29 +118,33 @@ PyCustomSlots_Table = numba.struct([
 # ______________________________________________________________________
 # Hash-table building
 
+sep201_hasher = methodtable.Hasher()
+
 def sep201_signature_string(functype):
     return str(functype)
+
+def hash_signature(functype):
+    return sep201_hasher.hash_signature(functype)
 
 def build_hashing_vtab(vtable):
     """
     Build hash-based vtable.
     """
-    from extensibletype import methodtable
-
     n = len(vtable.methods)
 
     ids = [sep201_signature_string(method.type)
                for method in vtable.methods]
     flags = [0] * n
 
-    vtab = methodtable.PerfectHashMethodTable(n, ids, flags,
-                                              vtable.method_pointers)
+    vtab = methodtable.PerfectHashMethodTable(sep201_hasher)
+    vtab.generate_table(n, ids, flags, vtable.method_pointers)
+
     return vtab
 
 # ______________________________________________________________________
 # Build Hash-based Virtual Method Table
 
-class HashBasedVTabBuilder(compileclass.VTabBuilder):
+class HashBasedVTabBuilder(VTabBuilder):
 
     def finalize(self, ext_type):
         ext_type.vtab_type.create_method_ordering(ordering.unordered)
