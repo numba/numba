@@ -35,8 +35,8 @@ def test_methodtable():
     flags = range(1, len(ids) + 1)
     funcs = range(len(ids))
 
-    table = methodtable.PerfectHashMethodTable(
-        len(ids), ids, flags, funcs)
+    table = methodtable.PerfectHashMethodTable(methodtable.Hasher())
+    table.generate_table(len(ids), ids, flags, funcs)
 
     for (signature, flag, func) in zip(ids, flags, funcs):
         result = table.find_method(signature)

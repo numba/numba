@@ -39,6 +39,21 @@ cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
 
     return table
 
+
+cdef class Hasher(object):
+    """
+    Generate a globally unique hashes for signature strings.
+    """
+
+    def hash_signature(self, signature):
+        cdef uint64_t hashvalue
+        # cdef bytes md5 = hashlib.md5(signature).digest()
+        # (&hashvalue)[0] = (<uint64_t *> <char *> md5)[0]
+        hashvalue = intern.global_intern(signature)
+
+        return hashvalue
+
+
 cdef class PerfectHashMethodTable(object):
     """
     Simple wrapper for hash-based virtual method tables.
@@ -46,8 +61,12 @@ cdef class PerfectHashMethodTable(object):
 
     cdef PyCustomSlots_Table *table
     cdef uint16_t *displacements
+    cdef Hasher hasher
 
-    def __init__(self, n, ids, flags, funcs):
+    def __init__(self, hasher):
+        self.hasher = hasher
+
+    def generate_table(self, n, ids, flags, funcs):
         cdef Py_ssize_t i
         cdef cnp.ndarray[uint64_t] hashes
 
@@ -67,18 +86,10 @@ cdef class PerfectHashMethodTable(object):
             self.table.entries[i].flags = flag
             self.table.entries[i].ptr = <void *> <uintptr_t> func
 
-            hashes[i] = self.hash(signature)
+            hashes[i] = self.hasher.hash_signature(signature)
 
         # Perfect hash our table
         PyCustomSlots_PerfectHash(self.table, &hashes[0])
-
-    def hash(self, signature):
-        cdef uint64_t hashvalue
-        # cdef bytes md5 = hashlib.md5(signature).digest()
-        # (&hashvalue)[0] = (<uint64_t *> <char *> md5)[0]
-        hashvalue = intern.global_intern(signature)
-
-        return hashvalue
 
     def find_method(self, signature):
         """
@@ -86,7 +97,7 @@ cdef class PerfectHashMethodTable(object):
         critical code.
         """
         cdef uintptr_t id = intern.global_intern(signature)
-        cdef uint64_t prehash = self.hash(signature)
+        cdef uint64_t prehash = self.hasher.hash_signature(signature)
 
         cdef int idx = (((prehash >> self.table.r) & self.table.m_f) ^
                         self.displacements[prehash & self.table.m_g])
