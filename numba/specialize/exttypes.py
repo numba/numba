@@ -6,6 +6,7 @@ from numba import error
 from numba import typesystem
 from numba import visitors
 from numba import nodes
+from numba.traits import traits, Delegate
 from numba.typesystem import is_obj, promote_closest, promote_to_native
 
 class ExtensionTypeLowerer(visitors.NumbaTransformer):
@@ -110,14 +111,14 @@ class StaticExtensionHandler(object):
         offset = ext_type.vtab_offset
 
         vtable_struct = ext_type.vtab_type.to_struct()
-        struct_type = vtable_struct.ref()
+        vtable_struct_type = vtable_struct.ref()
 
-        struct_pointer_pointer = nodes.value_at_offset(node.value, offset,
-                                                       struct_type.pointer())
-        struct_pointer = nodes.DereferenceNode(struct_pointer_pointer)
+        vtab_struct_pointer_pointer = nodes.value_at_offset(
+            node.value, offset,vtable_struct_type.pointer())
+        vtab_struct_pointer = nodes.DereferenceNode(vtab_struct_pointer_pointer)
 
-        vmethod = nodes.StructAttribute(struct_pointer, node.attr,
-                                        ast.Load(), struct_type)
+        vmethod = nodes.StructAttribute(vtab_struct_pointer, node.attr,
+                                        ast.Load(), vtable_struct_type)
 
         # Insert first argument 'self' in args list
         args = call_node.args
@@ -131,9 +132,47 @@ class StaticExtensionHandler(object):
 # Handle Dynamic VTable Attributes and Methods
 #------------------------------------------------------------------------
 
+@traits
 class DynamicExtensionHandler(object):
     """
     Handle attribute lookup and method calls for autojit extensions
     with dynamic perfect-hash-based virtual method tables and dynamic
     object layouts.
     """
+
+    static_handler = StaticExtensionHandler()
+
+    # TODO: Implement hash-based attribute lookup
+    handle_attribute_lookup = Delegate('static_handler')
+
+    def handle_method_call(self, node, call_node):
+        """
+        Resolve an extension method of a dynamic hash-based vtable:
+
+            PyCustomSlots_Table ***vtab_slot = (((char *) obj) + vtab_offset)
+            lookup_virtual_method(*vtab_slot)
+
+        We may cache (*vtab_slot), but we may not cache (**vtab_slot), since
+        compilations may regenerate the table.
+
+        However, we could *preload* (**vtab_slot), where function calls
+        invalidate the preload, if we were so inclined.
+        """
+        # Make the object we call the method on clone-able
+        node.value = nodes.CloneableNode(node.value)
+
+        ext_type = node.value.type
+        offset = ext_type.vtab_offset
+
+        vtab_ppp = nodes.value_at_offset(node.value, offset,
+                                         void.pointer().pointer())
+        vtab_struct_pp = nodes.DereferenceNode(vtab_ppp)
+
+        vmethod = self.context.utility_library
+
+        # Insert first argument 'self' in args list
+        args = call_node.args
+        args.insert(0, nodes.CloneNode(node.value))
+        result = nodes.NativeFunctionCallNode(node.type, vmethod, args)
+
+        return result
