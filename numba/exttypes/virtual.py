@@ -23,6 +23,7 @@ import ctypes
 from numba.typesystem import *
 from numba.typesystem.exttypes import ordering
 from extensibletype import methodtable
+from numba.minivect import minitypes
 
 #------------------------------------------------------------------------
 # Virtual Method Table Interface
@@ -97,7 +98,7 @@ class StaticVTabBuilder(VTabBuilder):
 # TODO: types automatically
 
 PyCustomSlots_Entry = numba.struct([
-    ('id', char.pointer()),
+    ('id', uint64),
     ('flags', Py_uintptr_t), # TODO: make flags part of id
     ('ptr', void.pointer()),
 ])
@@ -111,7 +112,8 @@ PyCustomSlots_Table = numba.struct([
     ('b', uint16),
     ('r', uint8),
     ('reserved', uint8),
-    # ('d', uint16[b]), # 'b' trailing displacements
+    # actually: uint16[b], 'b' trailing displacements
+    ('d', minitypes.CArrayType(uint16, 0)), #0xffff)),
     # ('entries_mem', PyCustomSlot_Entry[n]), # 'n' trailing customslot entries
 ])
 

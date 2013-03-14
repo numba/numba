@@ -210,3 +210,4 @@ class DynamicExtensionHandler(object):
             pass
 
         return method_call
+

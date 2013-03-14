@@ -12,13 +12,13 @@ from numba.utility.cbuilder.library import register
 from numba.utility.cbuilder.numbacdef import NumbaCDefinition, from_numba
 from numba.exttypes import virtual
 
-from llvm_cbuilder import shortnames
+from llvm_cbuilder import shortnames, builder as cbuilder
 
 #------------------------------------------------------------------------
 # Perfect Hash Table Lookup
 #------------------------------------------------------------------------
 
-@register
+# @register
 class PerfectHashTableLookup(NumbaCDefinition):
     """
     Look up a method in a PyCustomSlots_Table ** given a prehash.
@@ -67,13 +67,16 @@ class PerfectHashTableLookup(NumbaCDefinition):
         table = table_t(self.cbuilder, table_p.handle)
 
         f = (prehash >> table.r.cast(prehash.type)) & table.m_f
-        g = table.d[prehash & table.m_g]
+        # g = table.d[prehash & table.m_g]
+        idx = (prehash & table.m_g).value
+        g = cbuilder.CVar(self, self.builder.gep(table.d.handle, [idx]))
+
+        f = f.cast(g.type)
         entry = table.entries[f ^ g]
 
-        with self.ifelse(entry.id == prehash) as ifelse:
-            with ifelse.then():
-                self.ret(entry.ptr)
-
-            with ifelse.otherwise():
-                self.ret(self.constant_null(shortnames.char))
-
+        # with self.ifelse(entry.id == prehash) as ifelse:
+        #     with ifelse.then():
+        #         self.ret(entry.ptr)
+        #
+        #     with ifelse.otherwise():
+        #         self.ret(self.constant_null(shortnames.char))
