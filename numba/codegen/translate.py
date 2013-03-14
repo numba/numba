@@ -1088,7 +1088,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         ast.BitOr:  ('or_',  ('or_', 'or_')),
         ast.BitXor: ('xor',  ('xor', 'xor')),
         ast.LShift: ('shl',  ('shl',  'shl')),   # shift left
-        ast.RShift: ('ashr', ('ashr',  'ashr')), # arithmetic shift right
+        ast.RShift: ('ashr', ('lshr',  'ashr')), # arithmetic shift right
     }
 
     _opnames = {
