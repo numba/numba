@@ -20,9 +20,27 @@ virtual method tables:
 import numba
 import ctypes
 
-from numba.exttypes import compileclass
 from numba.typesystem import *
 from numba.typesystem.exttypes import ordering
+from extensibletype import methodtable
+
+#------------------------------------------------------------------------
+# Virtual Method Table Interface
+#------------------------------------------------------------------------
+
+class VTabBuilder(object):
+    """
+    Build virtual method table for quick calling from Numba.
+    """
+
+    def finalize(self, ext_type):
+        "Finalize the method table (and fix the order if necessary)"
+
+    def build_vtab(self, ext_type, method_pointers):
+        """
+        Build a virtual method table.
+        The result will be kept alive on the extension type.
+        """
 
 #------------------------------------------------------------------------
 # Static Virtual Method Tables

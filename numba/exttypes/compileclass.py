@@ -368,21 +368,3 @@ class AttributeBuilder(object):
         for attr_name, attr_type in table.attributedict.iteritems():
             descriptor = self.create_descr(attr_name)
             setattr(extension_class, attr_name, descriptor)
-
-#------------------------------------------------------------------------
-# Build Virtual Method Table
-#------------------------------------------------------------------------
-
-class VTabBuilder(object):
-    """
-    Build virtual method table for quick calling from Numba.
-    """
-
-    def finalize(self, ext_type):
-        "Finalize the method table (and fix the order if necessary)"
-
-    def build_vtab(self, ext_type, method_pointers):
-        """
-        Build a virtual method table.
-        The result will be kept alive on the extension type.
-        """
