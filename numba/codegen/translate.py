@@ -918,7 +918,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         index = self.visit(node.slice)
         indices = [index]
 
-        lptr = self.builder.gep(value, indices)
+        if value.type.kind == llvm.core.TYPE_ARRAY:
+            lptr = self.builder.extract_value(value, index)
+        else:
+            lptr = self.builder.gep(value, indices)
+
         if node.slice.type.is_int:
             lptr = self._handle_ctx(node, lptr, node.value.type)
 
