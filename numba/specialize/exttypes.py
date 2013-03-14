@@ -6,6 +6,8 @@ from numba import error
 from numba import typesystem
 from numba import visitors
 from numba import nodes
+from numba import function_util
+from numba.exttypes import virtual
 from numba.traits import traits, Delegate
 from numba.typesystem import is_obj, promote_closest, promote_to_native
 
@@ -161,18 +163,50 @@ class DynamicExtensionHandler(object):
         # Make the object we call the method on clone-able
         node.value = nodes.CloneableNode(node.value)
 
-        ext_type = node.value.type
+        ext_type = node.ext_type
+        func_signature = node.type
         offset = ext_type.vtab_offset
+
+        # __________________________________________________________________
+        # Retrieve vtab
 
         vtab_ppp = nodes.value_at_offset(node.value, offset,
                                          void.pointer().pointer())
         vtab_struct_pp = nodes.DereferenceNode(vtab_ppp)
 
-        vmethod = self.context.utility_library
+        # __________________________________________________________________
+        # Calculate pre-hash
+
+        prehash = virtual.hash_signature(func_signature)
+        prehash_node = nodes.ConstNode(prehash, uint64)
+
+        # __________________________________________________________________
+        # Retrieve method pointer
+
+        llvm_module = self.env.crnt.llvm_module
+        args = [vtab_struct_pp, prehash_node]
+        vmethod = function_util.utility_call(self.context, llvm_module,
+                                             'PerfectHashTableLookup', args)
+        vmethod = nodes.CoercionNode(vmethod, func_signature.pointer())
+
+        # __________________________________________________________________
+        # Call method pointer
 
         # Insert first argument 'self' in args list
         args = call_node.args
         args.insert(0, nodes.CloneNode(node.value))
-        result = nodes.NativeFunctionCallNode(node.type, vmethod, args)
+        method_call = nodes.NativeFunctionCallNode(func_signature, vmethod, args)
 
-        return result
+        # __________________________________________________________________
+        # Generate fallback
+
+        always_present = node.attr in ext_type.vtab_type.methodnames
+        if always_present:
+            # TODO: assert method is not NULL (only in debug mode?)
+            pass
+        else:
+            # TODO: Check for NULL iff the methods presence is optional
+            # TODO: Generate object call
+            pass
+
+        return method_call

@@ -18,6 +18,7 @@ from llvm_cbuilder import shortnames
 # Perfect Hash Table Lookup
 #------------------------------------------------------------------------
 
+@register
 class PerfectHashTableLookup(NumbaCDefinition):
     """
     Look up a method in a PyCustomSlots_Table ** given a prehash.
@@ -30,7 +31,7 @@ class PerfectHashTableLookup(NumbaCDefinition):
 
         if (entry->id == prehash) {
             void *vmethod = entry.ptr
-            call vmethod
+            call vmethod(obj, ...)
         } else {
             PyObject_Call(obj, "method", ...)
         }
@@ -56,8 +57,23 @@ class PerfectHashTableLookup(NumbaCDefinition):
             ('table_slot', table_type.to_llvm(context)),
             ('prehash', uint64.to_llvm(context)),
         ]
-        self._retty_ = shortnames.pointer(shortnames.void)
+        self._retty_ = shortnames.void_p
 
     def body(self, table_pp, prehash):
         table_p = table_pp.atomic_load('monotonic', align=8)
-        
+
+        #table = table_p.load()
+        table_t = from_numba(self.context, virtual.PyCustomSlots_Table)
+        table = table_t(self.cbuilder, table_p.handle)
+
+        f = (prehash >> table.r.cast(prehash.type)) & table.m_f
+        g = table.d[prehash & table.m_g]
+        entry = table.entries[f ^ g]
+
+        with self.ifelse(entry.id == prehash) as ifelse:
+            with ifelse.then():
+                self.ret(entry.ptr)
+
+            with ifelse.otherwise():
+                self.ret(self.constant_null(shortnames.char))
+
