@@ -21,6 +21,7 @@ import numba
 import ctypes
 
 from numba.exttypes import compileclass
+from numba.typesystem import *
 from numba.typesystem.exttypes import ordering
 
 #------------------------------------------------------------------------
@@ -70,6 +71,34 @@ class StaticVTabBuilder(compileclass.VTabBuilder):
 #------------------------------------------------------------------------
 # Hash-based virtual method tables
 #------------------------------------------------------------------------
+
+# ______________________________________________________________________
+# Type Definitions
+
+# TODO: Use something like CFFI + type conversion to get these
+# TODO: types automatically
+
+PyCustomSlots_Entry = numba.struct([
+    ('id', char.pointer()),
+    ('flags', Py_uintptr_t), # TODO: make flags part of id
+    ('ptr', void.pointer()),
+])
+
+PyCustomSlots_Table = numba.struct([
+    ('flags', uint64),
+    ('m_f', uint64),
+    ('m_g', uint64),
+    ('entries', PyCustomSlots_Entry.pointer()),
+    ('n', uint16),
+    ('b', uint16),
+    ('r', uint8),
+    ('reserved', uint8),
+    # ('d', uint16[b]), # 'b' trailing displacements
+    # ('entries_mem', PyCustomSlot_Entry[n]), # 'n' trailing customslot entries
+])
+
+# ______________________________________________________________________
+# Hash-table building
 
 def sep201_signature_string(functype):
     return str(functype)
