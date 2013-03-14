@@ -7,8 +7,7 @@ cdef extern from "stdint.h":
 
 cdef extern from "perfecthash.h":
     ctypedef struct PyCustomSlots_Entry:
-        char *id
-        uintptr_t flags
+        uint64_t id
         void *ptr
 
     ctypedef struct PyCustomSlots_Table:

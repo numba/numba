@@ -13,6 +13,12 @@ def bucket_argsort(cnp.ndarray[uint16_t, mode='c'] p,
     _PyCustomSlots_bucket_argsort(&p[0], &binsizes[0],
                                   &number_of_bins_by_size[0])
 
+def draw_hashes(rng, nitems):
+    hashes = rng.randint(2**32, size=nitems).astype(np.uint64)
+    hashes <<= 32
+    hashes |= rng.randint(2**32, size=nitems).astype(np.uint64)
+    return hashes
+
 def perfect_hash(cnp.ndarray[uint64_t] hashes, int repeat=1):
     """Used for testing. Takes the hashes as input, and returns
        a permutation array and hash parameters:
@@ -25,8 +31,7 @@ def perfect_hash(cnp.ndarray[uint64_t] hashes, int repeat=1):
     table.base.b = 64
     table.base.entries = &table.entries_mem[0]
     for i in range(64):
-        table.entries_mem[i].id = NULL
-        table.entries_mem[i].flags = i
+        table.entries_mem[i].id = hashes[i]
         table.entries_mem[i].ptr = NULL
 
     cdef int r
@@ -37,7 +42,7 @@ def perfect_hash(cnp.ndarray[uint64_t] hashes, int repeat=1):
     p = np.zeros(64, dtype=np.uint16)
 
     for i in range(64):
-        p[i] = table.entries_mem[i].flags
+        p[i] = table.entries_mem[i].id & 0xFF
         d[i] = table.d[i]
 
     return p, table.base.r, table.base.m_f, table.base.m_g, d

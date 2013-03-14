@@ -2,8 +2,7 @@
 #include <stdlib.h>
 
 typedef struct {
-  char *id;
-  uintptr_t flags;
+  uint64_t id;
   void *ptr;
 } PyCustomSlots_Entry;
 

@@ -17,4 +17,4 @@ cdef class InternTable(object):
         intern_destroy_table(self.table)
 
     def intern(self, bytes key):
-        return <Py_uintptr_t> intern_key(self.table, key)
+        return intern_key(self.table, key)

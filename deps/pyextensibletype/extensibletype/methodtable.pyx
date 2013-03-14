@@ -3,6 +3,7 @@ cimport numpy as cnp
 import numpy as np
 
 from extensibletype cimport *
+from . import extensibletype
 
 import intern
 
@@ -23,9 +24,9 @@ cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
 
     size = roundup(size)
 
-    table = <PyCustomSlots_Table *> stdlib.malloc(
-        sizeof(PyCustomSlots_Table) + sizeof(uint16_t) * size +
-        sizeof(PyCustomSlots_Entry) * size)
+    table = <PyCustomSlots_Table *> stdlib.calloc(
+        1, sizeof(PyCustomSlots_Table) + sizeof(uint16_t) * size +
+           sizeof(PyCustomSlots_Entry) * size)
 
     if table == NULL:
         raise MemoryError
@@ -74,45 +75,48 @@ cdef class PerfectHashMethodTable(object):
         self.displacements = <uint16_t *> (<char *> self.table +
                                                sizeof(PyCustomSlots_Table))
 
-        hashes = np.empty(n, dtype=np.uint64)
+        hashes = np.empty(self.table.n, dtype=np.uint64)
 
         intern.global_intern_initialize()
 
         # Initialize hash table entries, build hash ids
         for i, (signature, flag, func) in enumerate(zip(ids, flags, funcs)):
-            id = intern.global_intern(signature)
-
-            self.table.entries[i].id = <char *> <uintptr_t> id
-            self.table.entries[i].flags = flag
+            self.table.entries[i].id = self.hasher.hash_signature(signature)
             self.table.entries[i].ptr = <void *> <uintptr_t> func
 
             hashes[i] = self.hasher.hash_signature(signature)
 
+        hashes[n:self.table.n] = extensibletype.draw_hashes(np.random,
+                                                            self.table.n - n)
+
         # Perfect hash our table
         PyCustomSlots_PerfectHash(self.table, &hashes[0])
+
+        for signature in ids:
+            assert self.find_method(signature)
 
     def find_method(self, signature):
         """
         Find method of the given signature. Use from non-performance
         critical code.
         """
-        cdef uintptr_t id = intern.global_intern(signature)
-        cdef uint64_t prehash = self.hasher.hash_signature(signature)
+        cdef uint64_t prehash = intern.global_intern(signature)
 
         cdef int idx = (((prehash >> self.table.r) & self.table.m_f) ^
                         self.displacements[prehash & self.table.m_g])
 
         assert 0 <= idx < self.size
 
-        if <uintptr_t> self.table.entries[idx].id != id:
+        if <uintptr_t> self.table.entries[idx].id != prehash:
             return None
 
         return (<uintptr_t> self.table.entries[idx].ptr,
-                self.table.entries[idx].flags)
+                self.table.entries[idx].id & 0xFF)
 
     def __dealloc__(self):
-        stdlib.free(self.table)
-        self.table = NULL
+        # stdlib.free(self.table)
+        # self.table = NULL
+        pass
 
     property table_ptr:
         def __get__(self):
