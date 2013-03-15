@@ -15,6 +15,7 @@ from numba.utils import  process_signature
 from numba.codegen import llvmwrapper
 from numba import environment
 import llvm.core as _lc
+from numba.wrapping import compiler
 
 logger = logging.getLogger(__name__)
 
@@ -128,87 +129,31 @@ def compile_function(env, func, argtypes, restype=None, **kwds):
             func_env.lfunc,
             func_env.numba_wrapper_func)
 
-def resolve_argtypes(numba_func, template_signature,
-                     args, kwargs, translator_kwargs):
-    """
-    Given an autojitting numba function, return the argument types.
-    These need to be resolved in order for the function cache to work.
-
-    TODO: have a single entry point that resolves the argument types!
-    """
-    assert not kwargs, "Keyword arguments are not supported yet"
-
-    locals_dict = translator_kwargs.get("locals", None)
-
-    argcount = numba_func.py_func.func_code.co_argcount
-    if argcount != len(args):
-        if argcount == 1:
-            arguments = 'argument'
-        else:
-            arguments = 'arguments'
-        raise TypeError("%s() takes exactly %d %s (%d given)" % (
-                                numba_func.py_func.__name__, argcount,
-                                arguments, len(args)))
-
-    return_type = None
-    argnames = inspect.getargspec(numba_func.py_func).args
-    env = environment.NumbaEnvironment.get_environment(
-        translator_kwargs.get('env', None))
-    argtypes = map(env.context.typemapper.from_python, args)
-
-    if template_signature is not None:
-        template_context, signature = typesystem.resolve_templates(
-                locals_dict, template_signature, argnames, argtypes)
-        return_type = signature.return_type
-        argtypes = list(signature.args)
-
-    if locals_dict is not None:
-        for i, argname in enumerate(argnames):
-            if argname in locals_dict:
-                new_type = locals_dict[argname]
-                argtypes[i] = new_type
-
-    return minitypes.FunctionType(return_type, tuple(argtypes))
 
 def _autojit(template_signature, target, nopython, env_name=None, env=None,
-             **translator_kwargs):
+             **flags):
     if env is None:
         env = environment.NumbaEnvironment.get_environment(env_name)
+
     def _autojit_decorator(f):
         """
         Defines a numba function, that, when called, specializes on the input
         types. Uses the AST translator backend. For the bytecode translator,
         use @autojit.
         """
-        def compile_function(args, kwargs):
-            "Compile the function given its positional and keyword arguments"
-            if isinstance(f, (type, types.ClassType)):
-                env = environment.NumbaEnvironment.get_environment(
-                    translator_kwargs.get('env', None))
-                argtypes = map(env.context.typemapper.from_python, args)
 
-                py_class = f
-                flags = translator_kwargs
-                flags.update(env_name=env_name)
-                return autojit_extension_class(env, py_class, flags, argtypes)
-
-            signature = resolve_argtypes(numba_func, template_signature,
-                                         args, kwargs, translator_kwargs)
-
-            jitter = jit_targets[(target, 'ast')]
-            dec = jitter(restype=signature.return_type,
-                         argtypes=signature.args,
-                         target=target, nopython=nopython, env=env,
-                         **translator_kwargs)
-
-            compiled_function = dec(f)
-            return compiled_function
+        if isinstance(f, (type, types.ClassType)):
+            compiler_cls = compiler.ClassCompiler
+        else:
+            compiler_cls = compiler.FunctionCompiler
 
         env.specializations.register(f)
         cache = env.specializations.get_autojit_cache(f)
 
+        compilerimpl = compiler_cls(env, f, nopython, flags, template_signature)
         wrapper = autojit_wrappers[(target, 'ast')]
-        numba_func = wrapper(f, compile_function, cache)
+        numba_func = wrapper(f, compilerimpl, cache)
+
         return numba_func
 
     return _autojit_decorator
