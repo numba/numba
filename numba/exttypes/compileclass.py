@@ -347,7 +347,6 @@ class AttributeBuilder(object):
     def build_descriptors(self, ext_type, extension_class):
         "Cram descriptors into the class dict"
         table = ext_type.attribute_table
-        class_dict = vars(extension_class)
 
         for attr_name, attr_type in table.attributedict.iteritems():
             descriptor = self.create_descr(attr_name)

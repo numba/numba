@@ -147,55 +147,21 @@ class AutojitMethodWrapperBuilder(compileclass.MethodWrapperBuilder):
         Process autojit methods (undecorated methods). Use the fast
         NumbaSpecializingWrapper cache when for when we're being called
         from python. When we need to add a new specialization,
-        autojit_method_wrapper is invoked to compile the method.
+        `autojit_method_compiler` is invoked to compile the method.
         """
+        from numba.wrapping import compiler
+
         for method_name, method in ext_type.vtab_type.untyped_methods.iteritems():
-            jitter = partial(autojit_method_compiler, env, extclass, method)
+            compiler_impl = compiler.MethodCompiler(
+                env, method.py_func, nopython=False, flags={},
+                template_signature=None, extclass=extclass, method=method)
 
             env.specializations.register(method.py_func)
             cache = env.specializations.get_autojit_cache(method.py_func)
 
             wrapper = numbawrapper.NumbaSpecializingWrapper(
-                method.py_func, jitter, cache)
+                method.py_func, compiler_impl, cache)
             setattr(extclass, method_name, wrapper)
-
-#------------------------------------------------------------------------
-# Autojit Method Wrapper
-#------------------------------------------------------------------------
-
-def autojit_method_compiler(env, extclass, method, args, kwargs):
-    """
-    Called to compile a new specialized method. The result should be
-    added to the perfect hash-based vtable.
-    """
-    # TODO: Templates, keyword arguments, method flags
-    argtypes = map(env.context.typemapper.from_python, args)
-    # argtypes = signatures.method_argtypes(method, extclass.exttype, argtypes)
-
-    # Compile
-    # compiled_method = numba.jit(argtypes=argtypes)(method.py_func)
-    func_env = pipeline.compile2(env, method.py_func, argtypes=argtypes)
-
-    # Create Method for the specialization
-    new_method = signatures.Method(
-        method.py_func,
-        method.name,
-        func_env.func_signature,
-        is_class=method.is_class,
-        is_static=method.is_static)
-
-    new_method.update_from_env(func_env)
-
-    # Update vtable type
-    vtable_wrapper = extclass.__numba_vtab
-    vtable_type = extclass.exttype.vtab_type
-    vtable_type.specialized_methods.append(new_method)
-
-    # Replace vtable (which will update the vtable all (live) objects use)
-    new_vtable = virtual.build_hashing_vtab(vtable_type)
-    vtable_wrapper.replace_vtable(new_vtable)
-
-    return func_env.numba_wrapper_func
 
 #------------------------------------------------------------------------
 # Autojit Extension Class Compiler
