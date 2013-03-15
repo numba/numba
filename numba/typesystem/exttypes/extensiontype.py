@@ -22,6 +22,8 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
     is_final = False
 
     methoddict = Delegate('vtab_type')
+    untyped_methods = Delegate('vtab_type')
+    specialized_methods = Delegate('vtab_type')
     methodnames = Delegate('vtab_type')
     add_method = Delegate('vtab_type')
 

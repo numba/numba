@@ -25,6 +25,9 @@ class ExtMethodType(NumbaType, minitypes.FunctionType):
         self.is_static_method = is_static
         self.is_bound_method = not (is_class or is_static)
 
+class AutojitMethodType(NumbaType):
+
+    is_autojit_method = True
 
 #------------------------------------------------------------------------
 # Method Signature Comparison
