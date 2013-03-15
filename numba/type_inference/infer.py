@@ -17,6 +17,7 @@ from numba.control_flow import ssa
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
 from numba import closures as closures
+import numba.wrapping.compiler
 from numba.support import numpy_support
 from numba.exttypes.variable import ExtensionAttributeVariable
 
@@ -1257,6 +1258,51 @@ class TypeInferer(visitors.NumbaTransformer):
         return infer_call.infer_typefunc(self.context, node,
                                          func_type, new_node)
 
+    def _resolve_autojit_method_call(self, call_node, ext_type, attr):
+        from numba.exttypes import signatures
+
+        argtypes = tuple(a.variable.type for a in call_node.args)
+        argtypes = (ext_type,) + argtypes
+
+        if (attr, argtypes) not in ext_type.specialized_methods:
+            if ext_type.extclass is None:
+                raise error.NumbaError(
+                    call_node, "Cannot yet call autojit methods from jit "
+                               "methods (which includes the constructor).")
+
+            # Compile the autojit method
+            # TODO: Compile for the base class ext_type (the class owning
+            # TODO: the method)
+            untyped_method = ext_type.untyped_methods[attr]
+            method = untyped_method.clone()
+            method.signature = typesystem.function(None, argtypes)
+
+            compiler_impl = numba.wrapping.compiler.MethodCompiler(
+                self.env, ext_type.extclass, method)
+            compiler_impl.compile(method.signature)
+
+            # Retrieve specialized method
+            method = ext_type.specialized_methods[attr, argtypes]
+
+            # Update method signature
+            method_maker = signatures.MethodMaker(ext_type)
+            method.signature = method_maker.make_method_type(method)
+        else:
+            method = ext_type.specialized_methods[attr, argtypes]
+
+        # Generate method access
+        extension_method_node = call_node.func
+        obj_node = extension_method_node.value
+
+        methodnode = nodes.ExtensionMethod(obj_node, attr, method)
+
+        # Generate method call
+        new_node = nodes.NativeFunctionCallNode(
+            method.signature, methodnode, call_node.args,
+            skip_self=True)
+
+        return new_node
+
     def visit_Call(self, node, visitchildren=True):
         if node.starargs or node.kwargs:
             raise error.NumbaError("star or keyword arguments not implemented")
@@ -1279,6 +1325,10 @@ class TypeInferer(visitors.NumbaTransformer):
         # TODO: Resolve variable types based on how they are used as arguments
         # TODO: in calls with known signatures
         new_node = None
+        if func_type.is_autojit_method:
+            assert isinstance(node.func, nodes.ExtensionMethod)
+            new_node = self._resolve_autojit_method_call(
+                node, node.func.ext_type, node.func.attr)
         if func_type.is_function:
             # Native function call
             no_keywords(node)
@@ -1392,7 +1442,12 @@ class TypeInferer(visitors.NumbaTransformer):
         attr = self.extattr_mangle(node.attr, ext_type)
 
         if attr in ext_type.methoddict:
-            return nodes.ExtensionMethod(node.value, attr)
+            method = self.ext_type.methoddict[self.attr]
+            return nodes.ExtensionMethod(node.value, attr, method)
+
+        if attr in ext_type.untyped_methods:
+            method = ext_type.untyped_methods[attr]
+            return nodes.AutojitExtensionMethod(node.value, attr, method)
 
         if attr not in ext_type.attributedict:
             if ext_type.is_resolved or not self.is_store(node.ctx):
