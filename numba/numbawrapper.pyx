@@ -143,23 +143,33 @@ cdef class _NumbaSpecializingWrapper(NumbaWrapper):
     Numba wrapper function for @autojit.
 
         py_func: original Python function
-        compiling_decorator: function that can compile the function given
-                             the argument values.
-                             (args, kwargs) -> compiled_callable
+        compiler: numba.wrapper.compiler.Compiler
+                  Compiles the function given the argument values.
         funccache: AutojitFunctionCache that can quickly lookup the right
                    specialization
     """
 
     cdef public AutojitFunctionCache funccache
-    cdef public object compiling_decorator
+    cdef public object compiler
 
-    def __init__(self, py_func, compiling_decorator, funccache):
+    def __init__(self, py_func, compiler, funccache):
         super(_NumbaSpecializingWrapper, self).__init__(py_func)
-        self.compiling_decorator = compiling_decorator
+        self.compiler = compiler
         self.funccache = funccache
 
     def __repr__(self):
         return '<specializing numba function(%s)>' % self.py_func
+
+    def add_specialization(self, signature):
+        numba_wrapper = self.compiler.compile(signature)
+
+        # NOTE: We do not always have args (e.g. if one autojit function
+        # or method calls another one). However, the first call from Python
+        # will retrieve it from the slow cache (env.specializations)
+
+        # self.funccache.add(args, numba_wrapper)
+
+        return numba_wrapper
 
     def __call__(self, *args, **kwargs):
         if len(kwargs):
@@ -168,7 +178,7 @@ cdef class _NumbaSpecializingWrapper(NumbaWrapper):
         numba_wrapper = self.funccache.lookup(args)
         if numba_wrapper is None:
             # print "Cache miss for function:", self.py_func.__name__
-            numba_wrapper = self.compiling_decorator(args, kwargs)
+            numba_wrapper = self.compiler.compile_from_args(args, kwargs)
             self.funccache.add(args, numba_wrapper)
 
         return PyObject_Call(<PyObject *> numba_wrapper,
