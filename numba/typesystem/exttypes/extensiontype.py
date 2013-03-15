@@ -36,6 +36,7 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
                                             "(inherit from 'object')")
         self.name = py_class.__name__
         self.py_class = py_class
+        self.extclass = None
 
         self.symtab = {}  # attr_name -> attr_type
 
