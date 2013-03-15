@@ -28,6 +28,12 @@ class VTabType(NumbaType):
         # method_name -> Method
         self.methoddict = {}
 
+        # method_name -> Method
+        self.untyped_methods = {}
+
+        # specialized methods (i.e. autojit method specializations)
+        self.specialized_methods = []
+
         # Set once create_method_ordering is called,
         # list of ordered method names
         self.methodnames = None
@@ -73,7 +79,8 @@ class VTabType(NumbaType):
     def methods(self):
         "Return methods in the order they were set in"
         assert self.methodnames is not None
-        return map(self.methoddict.get, self.methodnames)
+        methods = map(self.methoddict.get, self.methodnames)
+        return methods + self.specialized_methods
 
     @property
     def llvm_methods(self):
