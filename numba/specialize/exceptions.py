@@ -35,12 +35,8 @@ class ExceptionSpecializer(visitors.NumbaTransformer):
             badval = node.goodval
             eq = ast.NotEq()
 
-        test = ast.Compare(left=node.return_value, ops=[eq],
-                           comparators=[badval])
-        test.right = badval
-        test = nodes.typednode(test, bool_)
-
-        check = nodes.build_if(test=test, body=[node.raise_node], orelse=[])
+        check = nodes.if_else(eq, node.return_value, badval,
+                              lhs=node.raise_node, rhs=None)
         return self.visit(check)
 
     def visit_PyErr_OccurredNode(self, node):
