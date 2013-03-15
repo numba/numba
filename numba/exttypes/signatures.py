@@ -48,6 +48,11 @@ class Method(object):
         else:
             return self.wrapper_func
 
+    def update_from_env(self, func_env):
+        self.lfunc = func_env.lfunc
+        self.lfunc_pointer = func_env.translator.lfunc_pointer
+        self.wrapper_func = func_env.numba_wrapper_func
+
 #------------------------------------------------------------------------
 # Utilities
 #------------------------------------------------------------------------

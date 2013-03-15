@@ -74,6 +74,7 @@ from functools import partial
 
 import numba
 from numba import error
+from numba import pipeline
 from numba import typesystem
 from numba import numbawrapper
 from numba.exttypes.utils import is_numba_class
@@ -121,7 +122,7 @@ class AutojitMethodFilter(compileclass.Filterer):
         for method in methods:
             if method.signature is None:
                 # autojit method
-                ext_type.untyped_methods[method.name] = method
+                ext_type.vtab_type.untyped_methods[method.name] = method
             else:
                 # method with signature
                 typed_methods.append(method)
@@ -148,8 +149,8 @@ class AutojitMethodWrapperBuilder(compileclass.MethodWrapperBuilder):
         from python. When we need to add a new specialization,
         autojit_method_wrapper is invoked to compile the method.
         """
-        for method_name, method in ext_type.untyped_methods.iteritems():
-            jitter = partial(autojit_method_wrapper, extclass, method)
+        for method_name, method in ext_type.vtab_type.untyped_methods.iteritems():
+            jitter = partial(autojit_method_compiler, env, extclass, method)
 
             env.specializations.register(method.py_func)
             cache = env.specializations.get_autojit_cache(method.py_func)
@@ -162,25 +163,28 @@ class AutojitMethodWrapperBuilder(compileclass.MethodWrapperBuilder):
 # Autojit Method Wrapper
 #------------------------------------------------------------------------
 
-def autojit_method_wrapper(env, extclass, method, args, **kwargs):
+def autojit_method_compiler(env, extclass, method, args, kwargs):
     """
     Called to compile a new specialized method. The result should be
     added to the perfect hash-based vtable.
     """
     # TODO: Templates, keyword arguments, method flags
     argtypes = map(env.context.typemapper.from_python, args)
-    argtypes = signatures.method_argtypes(method, extclass.exttype, argtypes)
+    # argtypes = signatures.method_argtypes(method, extclass.exttype, argtypes)
 
     # Compile
-    compiled_method = numba.jit(argtypes=argtypes)(method.py_func)
+    # compiled_method = numba.jit(argtypes=argtypes)(method.py_func)
+    func_env = pipeline.compile2(env, method.py_func, argtypes=argtypes)
 
     # Create Method for the specialization
     new_method = signatures.Method(
         method.py_func,
         method.name,
-        compiled_method.signature,
+        func_env.func_signature,
         is_class=method.is_class,
         is_static=method.is_static)
+
+    new_method.update_from_env(func_env)
 
     # Update vtable type
     vtable_wrapper = extclass.__numba_vtab
@@ -191,7 +195,7 @@ def autojit_method_wrapper(env, extclass, method, args, **kwargs):
     new_vtable = virtual.build_hashing_vtab(vtable_type)
     vtable_wrapper.replace_vtable(new_vtable)
 
-    return compiled_method
+    return func_env.numba_wrapper_func
 
 #------------------------------------------------------------------------
 # Autojit Extension Class Compiler
@@ -204,8 +208,6 @@ class AutojitExtensionCompiler(compileclass.ExtensionCompiler):
 
     method_validators = validators.autojit_validators
     exttype_validators = validators.autojit_type_validators
-
-    method_filter = AutojitMethodFilter()
 
 #------------------------------------------------------------------------
 # Build Extension Type

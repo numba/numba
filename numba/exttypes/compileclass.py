@@ -196,11 +196,7 @@ class ExtensionCompiler(object):
         for i, method in enumerate(self.methods):
             func_env = self.func_envs[method]
             pipeline.run_env(self.env, func_env, pipeline_name='compile')
-
-            method.lfunc = func_env.lfunc
-            method.lfunc_pointer = func_env.translator.lfunc_pointer
-
-            method.wrapper_func = func_env.numba_wrapper_func
+            method.update_from_env(func_env)
 
     def build_extension_type(self, vtable):
         """
