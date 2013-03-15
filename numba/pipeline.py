@@ -224,7 +224,8 @@ def validate_signature(tree, env):
     if (isinstance(tree, ast_module.FunctionDef) and
         len(arg_types) != len(tree.args.args)):
         raise error.NumbaError(
-            "Incorrect number of types specified in @jit()")
+            "Incorrect number of types specified in @jit() for function %r" %
+            env.crnt.func_name)
 
     return tree
 
