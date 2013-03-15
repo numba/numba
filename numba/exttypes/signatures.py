@@ -135,6 +135,16 @@ class AutojitMethodMaker(MethodMaker):
 # Method signature parsing
 #------------------------------------------------------------------------
 
+def method_argtypes(method, ext_type, argtypes):
+    if method.is_static:
+        leading_arg_types = ()
+    elif method.is_class:
+        leading_arg_types = (numba.object_,)
+    else:
+        leading_arg_types = (ext_type,)
+
+    return leading_arg_types + tuple(argtypes)
+
 class MethodSignatureProcessor(object):
     """
     Processes signatures of extension types.
@@ -194,14 +204,7 @@ class MethodSignatureProcessor(object):
                 @void()                 # becomes: void(ext_type(Foo))
                 def method(self): ...
         """
-        if method.is_static:
-            leading_arg_types = ()
-        elif method.is_class:
-            leading_arg_types = (numba.object_,)
-        else:
-            leading_arg_types = (self.ext_type,)
-
-        argtypes = leading_arg_types + method.signature.args
+        argtypes = method_argtypes(method, self.ext_type, method.signature.args)
         restype = method.signature.return_type
         method.signature = restype(*argtypes)
 
