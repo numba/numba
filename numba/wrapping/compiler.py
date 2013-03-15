@@ -1,15 +1,14 @@
-from numba.exttypes.entrypoints import  autojit_extension_class
-
 import inspect
 
 from numba import typesystem, numbawrapper
-from numba import environment
-from numba import pipeline
+import numba.pipeline
 from numba.exttypes import virtual
 from numba.exttypes import signatures
+import numba.exttypes.entrypoints
+
 import numba.decorators
 
-def resolve_argtypes(py_func, template_signature,
+def resolve_argtypes(env, py_func, template_signature,
                      args, kwargs, translator_kwargs):
     """
     Given an autojitting numba function, return the argument types.
@@ -33,8 +32,6 @@ def resolve_argtypes(py_func, template_signature,
 
     return_type = None
     argnames = inspect.getargspec(py_func).args
-    env = environment.NumbaEnvironment.get_environment(
-        translator_kwargs.get('env', None))
     argtypes = map(env.context.typemapper.from_python, args)
 
     if template_signature is not None:
@@ -62,7 +59,8 @@ class Compiler(object):
         self.template_signature = template_signature
 
     def resolve_argtypes(self, args, kwargs):
-        signature = resolve_argtypes(self.py_func, self.template_signature,
+        signature = resolve_argtypes(self.env, self.py_func,
+                                     self.template_signature,
                                      args, kwargs, self.flags)
         return signature
 
@@ -96,8 +94,8 @@ class ClassCompiler(Compiler):
 
     def compile(self, signature):
         py_class = self.py_func
-        return autojit_extension_class(self.env, py_class, self.flags,
-                                       signature.args)
+        return numba.exttypes.entrypoints.autojit_extension_class(
+            self.env, py_class, self.flags, signature.args)
 
 #------------------------------------------------------------------------
 # Autojit Method Compiler
@@ -109,9 +107,9 @@ def autojit_method_compiler(env, extclass, method, signature):
     added to the perfect hash-based vtable.
     """
     # compiled_method = numba.jit(argtypes=argtypes)(method.py_func)
-    func_env = pipeline.compile2(env, method.py_func,
-                                 restype=signature.return_type,
-                                 argtypes=signature.args)
+    func_env = numba.pipeline.compile2(env, method.py_func,
+                                       restype=signature.return_type,
+                                       argtypes=signature.args)
 
     # Create Method for the specialization
     new_method = signatures.Method(
