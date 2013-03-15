@@ -186,11 +186,22 @@ cdef class DynamicVtableWrapper(object):
 
     def __init__(self, vtable):
         self.vtable = vtable
+        self.write_vtable_pointer(vtable)
 
     def get_vtable_pointer(self):
         # Return a vtable **
-        self.vtable_pointer = <void *> <Py_uintptr_t> self.vtable.table_ptr
         return <Py_uintptr_t> &self.vtable_pointer
+
+    def write_vtable_pointer(self, new_table):
+        self.vtable_pointer = <void *> <Py_uintptr_t> self.vtable.table_ptr
+
+    def replace_vtable(self, new_vtable):
+        old_vtable = self.vtable
+        self.vtable = new_vtable
+        self.write_vtable_pointer(new_vtable)
+
+        # TODO: Manage keep alive of old_vtable until all consumers are done
+        # TODO: with it
 
 #------------------------------------------------------------------------
 # Create Extension Type
