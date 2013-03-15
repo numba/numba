@@ -2,7 +2,7 @@
 Virtual method lookup written in Numba.
 """
 
-import ctypes
+import ctypes.util
 
 import numba
 from numba import *
@@ -20,7 +20,17 @@ uint16_p = uint16.pointer()
 # displacements_offset = table_t.offsetof('d')
 displacements_offset = ctypes.sizeof(table_t.to_ctypes())
 
-@jit(void_p(table_t_pp, uint64), wrap=False)
+#------------------------------------------------------------------------
+# Some libc functions
+#------------------------------------------------------------------------
+
+libc = ctypes.CDLL(ctypes.util.find_library('c'))
+
+abort = libc.abort
+abort.restype = None
+abort.argtypes = []
+
+@jit(void_p(table_t_pp, uint64), wrap=False, nopython=True)
 def lookup_method(table_pp, prehash):
     """
     Look up a method in a PyCustomSlots_Table ** given a prehash.
@@ -65,8 +75,15 @@ def lookup_method(table_pp, prehash):
     entry = table.entries[f ^ g]
 
     if entry.id == prehash:
-        # print "found!"
         return entry.ptr
     else:
-        print "not found :("
         return numba.NULL
+
+@jit(void_p(table_t_pp, uint64, char_p), wrap=False, nopython=True)
+def lookup_and_assert_method(table_pp, prehash, method_name):
+    result = lookup_method(table_pp, prehash)
+    if result == numba.NULL:
+        print "Error: expected method", method_name, "to be available."
+        abort()
+
+    return result

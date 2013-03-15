@@ -134,6 +134,9 @@ class StaticExtensionHandler(object):
 # Handle Dynamic VTable Attributes and Methods
 #------------------------------------------------------------------------
 
+def call_jit(jit_func, args):
+    return nodes.NativeCallNode(jit_func.signature, args, jit_func.lfunc)
+
 @traits
 class DynamicExtensionHandler(object):
     """
@@ -185,11 +188,20 @@ class DynamicExtensionHandler(object):
         # __________________________________________________________________
         # Retrieve method pointer
 
-        lookup = virtuallookup.lookup_method
+        # A method is always present when it was given a static signature,
+        # e.g. @double(double)
+        always_present = node.attr in ext_type.vtab_type.methodnames
 
         args = [vtab_struct_pp, prehash_node]
-        vmethod = nodes.NativeCallNode(lookup.signature, args, lookup.lfunc)
-        vmethod = nodes.CoercionNode(vmethod, func_signature.pointer())
+
+        if always_present:
+            lookup = virtuallookup.lookup_method
+        else:
+            lookup = virtuallookup.lookup_and_assert_method
+            args.append(nodes.const(node.attr, char.pointer()))
+
+        vmethod = call_jit(lookup, args).coerce(func_signature.pointer())
+        vmethod = vmethod.cloneable
 
         # __________________________________________________________________
         # Call method pointer
@@ -202,14 +214,19 @@ class DynamicExtensionHandler(object):
         # __________________________________________________________________
         # Generate fallback
 
-        always_present = node.attr in ext_type.vtab_type.methodnames
-        if always_present:
-            # TODO: assert method is not NULL (only in debug mode?)
-            pass
-        else:
-            # TODO: Check for NULL iff the methods presence is optional
-            # TODO: Generate object call
-            pass
+        if not always_present:
+            # Generate object call
+            obj_args = [nodes.CoercionNode(arg, object_) for arg in args]
+            obj_args.append(nodes.NULL)
+            object_call = function_util.external_call(
+                self.context, self.env.crnt.llvm_module,
+                'PyObject_CallMethodObjArgs', obj_args)
+
+            # if vmethod != NULL: vmethod(obj, ...)
+            # else: obj.method(...)
+            method_call = nodes.if_else(
+                ast.NotEq(),
+                vmethod.clone, nodes.NULL,
+                lhs=method_call, rhs=object_call)
 
         return method_call
-
