@@ -152,15 +152,13 @@ class AutojitMethodWrapperBuilder(compileclass.MethodWrapperBuilder):
         from numba.wrapping import compiler
 
         for method_name, method in ext_type.vtab_type.untyped_methods.iteritems():
-            compiler_impl = compiler.MethodCompiler(
-                env, method.py_func, nopython=False, flags={},
-                template_signature=None, extclass=extclass, method=method)
-
             env.specializations.register(method.py_func)
             cache = env.specializations.get_autojit_cache(method.py_func)
 
+            compiler_impl = compiler.MethodCompiler(env, extclass, method,)
             wrapper = numbawrapper.NumbaSpecializingWrapper(
                 method.py_func, compiler_impl, cache)
+
             setattr(extclass, method_name, wrapper)
 
 #------------------------------------------------------------------------

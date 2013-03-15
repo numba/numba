@@ -126,7 +126,8 @@ def autojit_method_compiler(env, extclass, method, signature):
     # Update vtable type
     vtable_wrapper = extclass.__numba_vtab
     vtable_type = extclass.exttype.vtab_type
-    vtable_type.specialized_methods.append(new_method)
+    vtable_type.specialized_methods[new_method.name,
+                                    signature.args] = new_method
 
     # Replace vtable (which will update the vtable all (live) objects use)
     new_vtable = virtual.build_hashing_vtab(vtable_type)
@@ -136,11 +137,10 @@ def autojit_method_compiler(env, extclass, method, signature):
 
 class MethodCompiler(Compiler):
 
-
-    def __init__(self, env, py_func, nopython, flags, template_signature,
-                 extclass, method):
-        super(MethodCompiler, self).__init__(env, py_func, nopython, flags,
-                                             template_signature)
+    def __init__(self, env, extclass, method, flags=None):
+        super(MethodCompiler, self).__init__(env, method.py_func,
+                                             method.nopython, flags or {},
+                                             method.template_signature)
         self.extclass = extclass
         self.method = method
 
