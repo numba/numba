@@ -174,6 +174,9 @@ cdef class _NumbaSpecializingWrapper(NumbaWrapper):
         return PyObject_Call(<PyObject *> numba_wrapper,
                              <PyObject *> args, NULL)
 
+    def __get__(self, instance, type):
+        return BoundSpecializingWrapper(self, instance, type)
+
 class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
 
     @property
@@ -188,6 +191,23 @@ class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
     def __module__(self):
         return self.module
 
+class BoundSpecializingWrapper(object):
+    """
+    Numba wrapper created for bound @autojit methods.
+    """
+
+    def __init__(self, specializing_wrapper, instance, type):
+        self.specializing_wrapper = specializing_wrapper
+
+        if instance is None:
+            firstarg = type
+        else:
+            firstarg = instance
+
+        self.firstarg = firstarg
+
+    def __call__(self, *args, **kwargs):
+        return self.specializing_wrapper(self.firstarg, *args, **kwargs)
 
 #------------------------------------------------------------------------
 # Autojit Fast Function Cache
