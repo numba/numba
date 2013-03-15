@@ -23,7 +23,8 @@ class Method(object):
     py_func: the python 'def' function
     """
 
-    def __init__(self, py_func, name, signature, is_class, is_static):
+    def __init__(self, py_func, name, signature, is_class, is_static,
+                 nopython=False):
         self.py_func = py_func
         # py_func.live_objects = []
 
@@ -33,6 +34,9 @@ class Method(object):
 
         self.is_class = is_class
         self.is_static = is_static
+
+        self.nopython = nopython
+        self.template_signature = None
 
         # Filled out after extension method is compiled
         # (ExtensionCompiler.compile_methods())
@@ -52,6 +56,11 @@ class Method(object):
         self.lfunc = func_env.lfunc
         self.lfunc_pointer = func_env.translator.lfunc_pointer
         self.wrapper_func = func_env.numba_wrapper_func
+
+    def clone(self):
+        return type(self)(self.py_func, self.name, self.signature,
+                          self.is_class, self.is_static, self.nopython)
+
 
 #------------------------------------------------------------------------
 # Utilities
