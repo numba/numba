@@ -181,6 +181,11 @@ class ExtensionCompiler(object):
         vtable = self.vtabbuilder.build_vtab(self.ext_type)
         extclass = self.build_extension_type(vtable)
 
+        # Set the extension class on the type. We may instead want an
+        # ExtensionEnvironment associated with each ext_type, but this
+        # would be a global thing
+        self.ext_type.extclass = extclass
+
         self.attrbuilder.build_descriptors(self.ext_type, extclass)
         self.methodwrapper.build_method_wrappers(
             self.env, extclass, self.ext_type)
