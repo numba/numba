@@ -86,11 +86,18 @@ class MethodMaker(object):
     def no_signature(self, method):
         "Called when no signature is found for the method"
 
-    def default_signature(self, method):
+    def default_signature(self, method, ext_type):
         """
         Retrieve the default method signature for the given method if
         no user-declared signature exists.
         """
+        if has_known_signature(method):
+            # We know the argument types, but we don't have a solid
+            # infrastucture for inter-procedural type inference yet
+            # return typesystem.function(None, [])
+            return None
+        else:
+            return None
 
     def make_method_type(self, method):
         "Create a method type for the given Method and declared signature"
@@ -100,6 +107,11 @@ class MethodMaker(object):
                     return_type=restype, args=argtypes, name=method.name,
                     is_class=method.is_class, is_static=method.is_static)
         return signature
+
+def has_known_signature(method):
+    argcount = method.py_func.__code__.co_argcount
+    return ((method.is_static and argcount == 0) or
+            (not method.is_static and argcount == 1))
 
 # ______________________________________________________________________
 # Method processing for @jit classes
@@ -111,13 +123,14 @@ class JitMethodMaker(MethodMaker):
             raise error.NumbaError(
                 "Method '%s' does not have signature" % (py_func.__name__,))
 
-    def default_signature(self, method):
-        if method.name == '__init__' and method.signature is None:
+    def default_signature(self, method, ext_type):
+        if method.name == '__init__':
             argtypes = [numba.object_] * (method.py_func.__code__.co_argcount - 1)
             default_signature = numba.void(*argtypes)
             return default_signature
         else:
-            return None
+            return super(JitMethodMaker, self).default_signature(
+                method, ext_type)
 
 # ______________________________________________________________________
 # Method processing for @autojit classes
@@ -128,12 +141,14 @@ class AutojitMethodMaker(MethodMaker):
         super(AutojitMethodMaker, self).__init__(ext_type)
         self.argtypes = argtypes
 
-    def default_signature(self, method):
-        if method.name == '__init__' and method.signature is None:
+    def default_signature(self, method, ext_type):
+        if method.name == '__init__':
             default_signature = numba.void(*self.argtypes)
             return default_signature
         else:
-            return None
+            return super(AutojitMethodMaker, self).default_signature(
+                method, ext_type)
+
 
 
 #------------------------------------------------------------------------
@@ -211,7 +226,7 @@ class MethodSignatureProcessor(object):
         """
         argtypes = method_argtypes(method, self.ext_type, method.signature.args)
         restype = method.signature.return_type
-        method.signature = restype(*argtypes)
+        method.signature = typesystem.function(restype, argtypes)
 
         method.signature = self.method_maker.make_method_type(method)
 
@@ -230,7 +245,8 @@ class MethodSignatureProcessor(object):
                 validator.validate(method, self.ext_type)
 
             if method.signature is None:
-                method.signature = self.method_maker.default_signature(method)
+                method.signature = self.method_maker.default_signature(
+                    method, self.ext_type)
 
             if method.signature is not None:
                 self.update_signature(method)
