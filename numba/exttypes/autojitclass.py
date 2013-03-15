@@ -70,9 +70,12 @@ Compiling @autojit extension classes works as follows:
         an autojit method).
 """
 
+from functools import partial
+
 import numba
 from numba import error
 from numba import typesystem
+from numba import numbawrapper
 from numba.exttypes.utils import is_numba_class
 
 from numba.exttypes import logger
@@ -84,18 +87,6 @@ from numba.exttypes import extension_types
 
 from numba.typesystem.exttypes import ordering
 
-
-#------------------------------------------------------------------------
-# Populate Extension Type with Methods
-#------------------------------------------------------------------------
-
-class AutojitExtensionCompiler(compileclass.ExtensionCompiler):
-    """
-    Compile @autojit extension classes.
-    """
-
-    method_validators = validators.autojit_validators
-    exttype_validators = validators.autojit_type_validators
 
 #------------------------------------------------------------------------
 # Build Attributes Struct
@@ -119,6 +110,104 @@ class AutojitAttributeBuilder(compileclass.AttributeBuilder):
         return property(_get, _set)
 
 #------------------------------------------------------------------------
+# Filter Methods
+#------------------------------------------------------------------------
+
+class AutojitMethodFilter(compileclass.Filterer):
+
+    def filter(self, methods, ext_type):
+        typed_methods = []
+
+        for method in methods:
+            if method.signature is None:
+                # autojit method
+                ext_type.untyped_methods[method.name] = method
+            else:
+                # method with signature
+                typed_methods.append(method)
+
+        return typed_methods
+
+#------------------------------------------------------------------------
+# Build Method Wrappers
+#------------------------------------------------------------------------
+
+class AutojitMethodWrapperBuilder(compileclass.MethodWrapperBuilder):
+
+    def build_method_wrappers(self, env, extclass, ext_type):
+        """
+        Update the extension class with the function wrappers.
+        """
+        self.process_typed_methods(env, extclass, ext_type)
+        self.process_untyped_methods(env, extclass, ext_type)
+
+    def process_untyped_methods(self, env, extclass, ext_type):
+        """
+        Process autojit methods (undecorated methods). Use the fast
+        NumbaSpecializingWrapper cache when for when we're being called
+        from python. When we need to add a new specialization,
+        autojit_method_wrapper is invoked to compile the method.
+        """
+        for method_name, method in ext_type.untyped_methods.iteritems():
+            jitter = partial(autojit_method_wrapper, extclass, method)
+
+            env.specializations.register(method.py_func)
+            cache = env.specializations.get_autojit_cache(method.py_func)
+
+            wrapper = numbawrapper.NumbaSpecializingWrapper(
+                method.py_func, jitter, cache)
+            setattr(extclass, method_name, wrapper)
+
+#------------------------------------------------------------------------
+# Autojit Method Wrapper
+#------------------------------------------------------------------------
+
+def autojit_method_wrapper(env, extclass, method, args, **kwargs):
+    """
+    Called to compile a new specialized method. The result should be
+    added to the perfect hash-based vtable.
+    """
+    # TODO: Templates, keyword arguments, method flags
+    argtypes = map(env.context.typemapper.from_python, args)
+    argtypes = signatures.method_argtypes(method, extclass.exttype, argtypes)
+
+    # Compile
+    compiled_method = numba.jit(argtypes=argtypes)(method.py_func)
+
+    # Create Method for the specialization
+    new_method = signatures.Method(
+        method.py_func,
+        method.name,
+        compiled_method.signature,
+        is_class=method.is_class,
+        is_static=method.is_static)
+
+    # Update vtable type
+    vtable_wrapper = extclass.__numba_vtab
+    vtable_type = extclass.exttype.vtab_type
+    vtable_type.specialized_methods.append(new_method)
+
+    # Replace vtable (which will update the vtable all (live) objects use)
+    new_vtable = virtual.build_hashing_vtab(vtable_type)
+    vtable_wrapper.replace_vtable(new_vtable)
+
+    return compiled_method
+
+#------------------------------------------------------------------------
+# Autojit Extension Class Compiler
+#------------------------------------------------------------------------
+
+class AutojitExtensionCompiler(compileclass.ExtensionCompiler):
+    """
+    Compile @autojit extension classes.
+    """
+
+    method_validators = validators.autojit_validators
+    exttype_validators = validators.autojit_type_validators
+
+    method_filter = AutojitMethodFilter()
+
+#------------------------------------------------------------------------
 # Build Extension Type
 #------------------------------------------------------------------------
 
@@ -138,8 +227,10 @@ def create_extension(env, py_class, flags, argtypes):
         env, py_class, ext_type, flags,
         signatures.AutojitMethodMaker(ext_type, argtypes),
         compileclass.AttributesInheriter(),
+        AutojitMethodFilter(),
         AutojitAttributeBuilder(),
-        virtual.HashBasedVTabBuilder())
+        virtual.HashBasedVTabBuilder(),
+        AutojitMethodWrapperBuilder())
 
     extension_compiler.infer()
     extension_compiler.finalize_tables()

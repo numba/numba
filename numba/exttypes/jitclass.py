@@ -56,7 +56,7 @@ from numba.exttypes import extension_types
 from numba.typesystem.exttypes import ordering
 
 #------------------------------------------------------------------------
-# Populate Extension Type with Methods
+# Jit Extension Class Compiler
 #------------------------------------------------------------------------
 
 class JitExtensionCompiler(compileclass.ExtensionCompiler):
@@ -104,8 +104,10 @@ def create_extension(env, py_class, flags):
         env, py_class, ext_type, flags,
         signatures.JitMethodMaker(ext_type),
         compileclass.AttributesInheriter(),
+        compileclass.Filterer(),
         JitAttributeBuilder(),
-        virtual.StaticVTabBuilder())
+        virtual.StaticVTabBuilder(),
+        compileclass.MethodWrapperBuilder())
 
     extension_compiler.infer()
     extension_compiler.finalize_tables()

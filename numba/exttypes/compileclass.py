@@ -26,7 +26,12 @@ class ExtensionCompiler(object):
     exttype_validators = None
 
     def __init__(self, env, py_class, ext_type, flags,
-                 method_maker, inheriter, attrbuilder, vtabbuilder):
+                 method_maker,
+                 inheriter,
+                 method_filter,
+                 attrbuilder,
+                 vtabbuilder,
+                 methodwrapper):
         self.env = env
         self.py_class = py_class
         self.class_dict = dict(vars(py_class))
@@ -34,9 +39,11 @@ class ExtensionCompiler(object):
         self.flags = flags
 
         self.inheriter = inheriter
+        self.method_filter = method_filter
         self.attrbuilder = attrbuilder
         self.vtabbuilder = vtabbuilder
         self.method_maker = method_maker
+        self.methodwrapper = methodwrapper
 
         # Partial function environments held after type inference has run
         self.func_envs = {}
@@ -127,10 +134,8 @@ class ExtensionCompiler(object):
 
     def type_infer_methods(self):
         for method in self.methods:
-            if method.name in ('__new__', '__init__'):
-                continue
-
-            self.type_infer_method(method)
+            if method.name not in ('__new__', '__init__') and method.signature:
+                self.type_infer_method(method)
 
     #------------------------------------------------------------------------
     # Finalize Tables
@@ -176,7 +181,8 @@ class ExtensionCompiler(object):
         extclass = self.build_extension_type(vtable)
 
         self.attrbuilder.build_descriptors(self.ext_type, extclass)
-        self.update_extension_methods(extclass)
+        self.methodwrapper.build_method_wrappers(
+            self.env, extclass, self.ext_type)
 
         return extclass
 
@@ -208,14 +214,6 @@ class ExtensionCompiler(object):
             self.ext_type, vtable_wrapper)
 
         return extension_type
-
-    def update_extension_methods(self, extclass):
-        """
-        Update the extension class with the function wrappers.
-        """
-        for method in self.methods:
-            setattr(extclass, method.name, method.get_wrapper())
-
 
 #------------------------------------------------------------------------
 # Attribute Inheritance
@@ -357,3 +355,27 @@ class AttributeBuilder(object):
         for attr_name, attr_type in table.attributedict.iteritems():
             descriptor = self.create_descr(attr_name)
             setattr(extension_class, attr_name, descriptor)
+
+#------------------------------------------------------------------------
+# Build Method Wrappers
+#------------------------------------------------------------------------
+
+class MethodWrapperBuilder(object):
+
+    def build_method_wrappers(self, env, extclass, ext_type):
+        """
+        Update the extension class with the function wrappers.
+        """
+        self.process_typed_methods(env, extclass, ext_type)
+
+    def process_typed_methods(self, env, extclass, ext_type):
+        for method in ext_type.methoddict.itervalues():
+            setattr(extclass, method.name, method.get_wrapper())
+
+#------------------------------------------------------------------------
+# Filters
+#------------------------------------------------------------------------
+
+class Filterer(object):
+    def filter(self, iterable, *args):
+        return list(iterable)
