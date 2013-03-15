@@ -96,6 +96,7 @@ class ExtensionCompiler(object):
                                                         self.method_validators)
 
         methods = processor.get_method_signatures()
+        methods = self.method_filter.filter(methods, self.ext_type)
 
         # Update ext_type and class dict with known Method objects
         for method in methods:
