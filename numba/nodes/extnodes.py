@@ -1,4 +1,5 @@
 from numba.nodes import *
+from numba.typesystem.exttypes import methods
 
 class ExtTypeAttribute(ExprNode):
 
@@ -46,19 +47,27 @@ class ExtensionMethod(ExprNode):
     _fields = ['value']
     call_node = None
 
-    def __init__(self, object, attr, **kwargs):
+    def __init__(self, obj, attr, method, **kwargs):
         super(ExtensionMethod, self).__init__(**kwargs)
-        ext_type = object.variable.type
+        ext_type = obj.variable.type
         assert ext_type.is_extension
-        self.value = object
+        self.value = obj
         self.attr = attr
 
-        method = ext_type.methoddict[attr]
-        self.type = method.signature
         self.ext_type = ext_type
+
+        self.initialize_type(method)
+
+    def initialize_type(self, method):
+        self.type = method.signature
 
     def __repr__(self):
         return "%s.%s" % (self.value, self.attr)
+
+class AutojitExtensionMethod(ExtensionMethod):
+
+    def initialize_type(self, method):
+        self.type = methods.AutojitMethodType()
 
 
 #class ExtensionMethodCall(Node):
