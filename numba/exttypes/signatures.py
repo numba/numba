@@ -227,7 +227,8 @@ class MethodSignatureProcessor(object):
             if method.signature is None:
                 method.signature = self.method_maker.default_signature(method)
 
-            self.update_signature(method)
+            if method.signature is not None:
+                self.update_signature(method)
 
             methods.append(method)
 
