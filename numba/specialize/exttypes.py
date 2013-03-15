@@ -31,7 +31,7 @@ class ExtensionTypeLowerer(visitors.NumbaTransformer):
         """
         handler = self.get_handler(node.ext_type)
         self.visitchildren(node)
-        return handler.handle_attribute_lookup(node)
+        return handler.handle_attribute_lookup(self.env, node)
 
     # ______________________________________________________________________
     # Methods
@@ -56,7 +56,7 @@ class ExtensionTypeLowerer(visitors.NumbaTransformer):
                                          "must be called" % node.attr)
 
         handler = self.get_handler(node.ext_type)
-        return handler.handle_method_call(node, call_node)
+        return handler.handle_method_call(self.env, node, call_node)
 
 
 #------------------------------------------------------------------------
@@ -69,7 +69,7 @@ class StaticExtensionHandler(object):
     with C++/Cython-like virtual method tables and static object layouts.
     """
 
-    def handle_attribute_lookup(self, node):
+    def handle_attribute_lookup(self, env, node):
         """
         Resolve an extension attribute for a static object layout.
 
@@ -94,7 +94,7 @@ class StaticExtensionHandler(object):
 
         return result
 
-    def handle_method_call(self, node, call_node):
+    def handle_method_call(self, env, node, call_node):
         """
         Resolve an extension method of a static (C++/Cython-like) vtable:
 
@@ -150,7 +150,7 @@ class DynamicExtensionHandler(object):
     # TODO: Implement hash-based attribute lookup
     handle_attribute_lookup = Delegate('static_handler')
 
-    def handle_method_call(self, node, call_node):
+    def handle_method_call(self, env, node, call_node):
         """
         Resolve an extension method of a dynamic hash-based vtable:
 
@@ -198,7 +198,7 @@ class DynamicExtensionHandler(object):
             lookup = virtuallookup.lookup_method
         else:
             lookup = virtuallookup.lookup_and_assert_method
-            args.append(nodes.const(node.attr, char.pointer()))
+            args.append(nodes.const(node.attr, c_string_type))
 
         vmethod = call_jit(lookup, args).coerce(func_signature.pointer())
         vmethod = vmethod.cloneable
@@ -214,12 +214,13 @@ class DynamicExtensionHandler(object):
         # __________________________________________________________________
         # Generate fallback
 
-        if not always_present:
+        if not always_present and False:
+            # TODO: Enable this path and generate a phi for the result
             # Generate object call
             obj_args = [nodes.CoercionNode(arg, object_) for arg in args]
             obj_args.append(nodes.NULL)
             object_call = function_util.external_call(
-                self.context, self.env.crnt.llvm_module,
+                env.context, env.crnt.llvm_module,
                 'PyObject_CallMethodObjArgs', obj_args)
 
             # if vmethod != NULL: vmethod(obj, ...)
