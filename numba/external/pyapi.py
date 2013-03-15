@@ -25,6 +25,11 @@ class PyObject_CallMethod(ExternalFunction):
     return_type = object_
     is_vararg = True
 
+class PyObject_CallMethodObjArgs(ExternalFunction):
+    arg_types = [object_, c_string_type]
+    return_type = object_
+    is_vararg = True
+
 class PyObject_Type(ExternalFunction):
     '''
         Added to aid debugging
