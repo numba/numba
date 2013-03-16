@@ -98,6 +98,7 @@ class CUDAComputeUnit(CU):
     def _run_epilog(self):
         for mem in self.__writeback:
             mem.to_host(stream=self.__stream)
+        self.__writeback = set() # reset writeback
 
     def _wait(self):
         self._run_epilog()
