@@ -349,14 +349,18 @@ class FunctionEnvironment(object):
         self.func_signature = func_signature
 
         if name is None:
-            if self.func and self.func.__module__:
-                module_name = self.func.__module__
-                name = '.'.join([module_name, self.func.__name__])
+            if self.func:
+                name = self.func.__name__
             else:
                 name = self.ast.name
 
+        if self.func and self.func.__module__:
+            qname = '.'.join([self.func.__module__, name])
+        else:
+            qname = name
+
         if mangled_name is None:
-            mangled_name = naming.specialized_mangle(name,
+            mangled_name = naming.specialized_mangle(qname,
                                                      self.func_signature.args)
 
         self.func_name = name
