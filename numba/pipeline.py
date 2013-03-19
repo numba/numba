@@ -60,10 +60,6 @@ def module_name(func):
 
     return 'tmp.module.%s.%x' % (name, func_id)
 
-#------------------------------------------------------------------------
-# Entry points
-#------------------------------------------------------------------------
-
 def run_pipeline2(env, func, func_ast, func_signature,
                   pipeline=None, **kwargs):
     assert pipeline is None
