@@ -39,7 +39,7 @@ try:
     rk_interval = mtrand.rk_interval
     rk_gamma = mtrand.rk_gamma
     rk_normal = mtrand.rk_normal
-except AttributeError, e:
+except AttributeError as e:
     raise ImportError(str(e))
 
 rk_randomseed.argtypes = [ct.POINTER(rk_state)]

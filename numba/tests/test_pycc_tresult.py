@@ -23,11 +23,11 @@ def test_pycc():
         lib.multf.restype = c_float
 
         res = lib.mult(123, 321)
-        print(('lib.mult(123, 321) =', res))
+        print('lib.mult(123, 321) = %f', res)
         assert res == 123 * 321
 
         res = lib.multf(987, 321)
-        print(('lib.multf(987, 321) =', res))
+        print('lib.multf(987, 321) = %f' % res)
         assert res == 987 * 321
     finally:
         del lib
@@ -41,11 +41,11 @@ def test_pycc():
         import numba.tests.compiled_with_pycc as lib
         try:
             res = lib.mult(123, 321)
-            print 'lib.mult(123, 321) =', res
+            print('lib.mult(123, 321) = %f' % res)
             assert res == 123 * 321
 
             res = lib.multf(987, 321)
-            print 'lib.multf(987, 321) =', res
+            print('lib.multf(987, 321) = %f', res)
             assert res == 987 * 321
         finally:
             del lib

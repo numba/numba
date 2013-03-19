@@ -124,7 +124,7 @@ else:
                            for signal_name, signal_code in vars(signal).items()
                                if signal_name.startswith("SIG"))
 
-def test(whitelist=None, blacklist=None):
+def test(whitelist=None, blacklist=None, print_failures_only=False):
     import os
     from os.path import dirname, join
     import subprocess
@@ -151,26 +151,33 @@ def test(whitelist=None, blacklist=None):
                     continue
 
                 run += 1
-                sys.stdout.write("running %-61s" % (modname,))
+                if not print_failures_only:
+                    sys.stdout.write("running %-61s" % (modname,))
+
                 process = subprocess.Popen([sys.executable, '-m', modname],
                                            stdout=subprocess.PIPE,
                                            stderr=subprocess.PIPE)
                 out, err = process.communicate()
 
                 if process.returncode == 0:
-                    print("SUCCESS")
+                    if not print_failures_only:
+                        sys.stdout.write("SUCCESS\n")
                 else:
-                    print(("FAILED: %s" % map_returncode_to_message(
-                                                process.returncode)))
+                    if print_failures_only:
+                        sys.stdout.write("running %-61s" % (modname,))
+
+                    sys.stdout.write("FAILED: %s\n" % map_returncode_to_message(
+                                                    process.returncode))
                     if PY3:
                         out = str(out, encoding='UTF-8')
                         err = str(err, encoding='UTF-8')
-                    print(out)
-                    print(err)
-                    print(("-" * 80))
+                    sys.stdout.write(out)
+                    sys.stdout.write(err)
+                    sys.stdout.write("-" * 80)
+                    sys.stdout.write('\n')
                     failed += 1
 
-    print(("ran test files: failed: (%d/%d)" % (failed, run)))
+    sys.stdout.write("ran test files: failed: (%d/%d)\n" % (failed, run))
     return failed
 
 def nose_run(module=None):

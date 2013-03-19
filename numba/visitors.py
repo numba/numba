@@ -6,8 +6,8 @@ try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
-
-from numba import functions
+import types
+from numba import functions, PY3
 from numba import nodes
 from numba.nodes.metadata import annotate, query
 from numba.typesystem.typemapper import have_properties
@@ -84,12 +84,23 @@ class NumbaVisitorMixin(CooperativeBase):
             self.names = self.global_names = f_code.co_names
             self.varnames = self.local_names = list(f_code.co_varnames)
 
+            if PY3:
+                def recurse_co_consts(fco):
+                    for _var in fco.co_consts:
+                        if not isinstance(_var, types.CodeType):
+                            continue
+                        self.varnames.extend((_name for _name in _var.co_varnames
+                                              if not _name.startswith('.')))
+                        recurse_co_consts(_var)
+
+                recurse_co_consts(f_code)
+
+            self.argnames = self.varnames[:f_code.co_argcount]
+
             if f_code.co_cellvars:
                 self.varnames.extend(
-                        cellvar for cellvar in f_code.co_cellvars
-                                    if cellvar not in self.varnames)
-
-            self.argnames = f_code.co_varnames[:f_code.co_argcount]
+                    cellvar for cellvar in f_code.co_cellvars
+                    if cellvar not in self.varnames)
 
             self.cellvars = set(f_code.co_cellvars)
             self.freevars = set(f_code.co_freevars)

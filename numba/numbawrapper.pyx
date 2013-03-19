@@ -64,7 +64,7 @@ def create_function(methoddef, py_func, lfunc_pointer, signature, modname):
     cdef PyMethodDef *ml = <PyMethodDef *> methoddef_p
     cdef Py_uintptr_t lfunc_p = lfunc_pointer
 
-    result = NumbaFunction_NewEx(ml, modname, getattr(py_func, "func_code", None),
+    result = NumbaFunction_NewEx(ml, modname, getattr(py_func, "__code__", None),
                                  NULL, <void *> lfunc_p, signature, py_func)
     return result
 

@@ -156,8 +156,8 @@ class Compiler(object):
     def write_native_object(self, output, **kws):
         self._process_inputs(**kws)
         lmod = self._cull_exports()
-	#print(lmod)
-	tm = le.TargetMachine.new(reloc=le.RELOC_PIC, features='-avx')
+        #print(lmod)
+        tm = le.TargetMachine.new(reloc=le.RELOC_PIC, features='-avx')
         with open(output, 'wb') as fout:
             objfile = tm.emit_object(lmod)
             fout.write(objfile)

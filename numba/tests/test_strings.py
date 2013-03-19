@@ -45,7 +45,7 @@ def test():
 
 @jit(void())
 def string_constant():
-    print "hello world"
+    print("hello world")
 
 if __name__ == '__main__':
     string_constant()

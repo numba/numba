@@ -10,13 +10,6 @@ Derived(20.0)
 10.0
 >>> Derived(10.0).py_method()
 10.0
->>> Base.py_method(object())
-Traceback (most recent call last):
-    ...
-TypeError: unbound method numba_function_or_method object must be called with Base instance as first argument (got object instance instead)
-
-Test numba virtual methods
-
 >>> Base(4.0).method()
 4.0
 >>> Base(4.0).getvalue()
@@ -33,8 +26,18 @@ Test numba virtual methods
 """
 
 import sys
-
+import numba
 from numba import *
+
+if not numba.PY3:
+    # The operation is valid in Python 3
+
+    __doc__ = """
+    >>> Base.py_method(object())
+    Traceback (most recent call last):
+    ...
+    TypeError: unbound method numba_function_or_method object must be called with Base instance as first argument (got object instance instead)
+    """
 
 def format_str(msg, *values):
     return msg % values

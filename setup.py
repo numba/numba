@@ -45,6 +45,10 @@ def find_packages(where='.', exclude=()):
             ):
                 out.append(prefix+name)
                 stack.append((fn, prefix+name+'.'))
+
+    if sys.version_info[0] == 3:
+        exclude = exclude + ('*py2only*', )
+
     for pat in list(exclude) + ['ez_setup', 'distribute_setup']:
         out = [item for item in out if not fnmatchcase(item, pat)]
     return out
