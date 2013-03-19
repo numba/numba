@@ -31,6 +31,7 @@ from numba.asdl import schema
 from numba.minivect import minitypes
 import numba.visitors
 from numba.specialize import comparisons, loops, exceptions, funccalls
+from numba import astsix
 
 logger = logging.getLogger(__name__)
 
@@ -198,13 +199,28 @@ class SimplePipelineStage(PipelineStage):
         transform = self.make_specializer(self.transformer, ast, env)
         return transform.visit(ast)
 
+
+class AST3to2(PipelineStage):
+
+    def transform(self, ast, env):
+        if not PY3:
+            return ast
+        return astsix.AST3to2().visit(ast)
+
+
+def ast3to2(ast, env):
+    if not PY3:
+        return ast
+    return astsix.AST3to2().visit(ast)
+
+
 def resolve_templates(ast, env):
     # TODO: Unify with decorators module
     crnt = env.translation.crnt
     if crnt.template_signature is not None:
         from numba import typesystem
 
-        argnames = [arg.id for arg in ast.args.args]
+        argnames = [name.id for name in ast.args.args]
         argtypes = list(crnt.func_signature.args)
 
         typesystem.resolve_templates(crnt.locals, crnt.template_signature,

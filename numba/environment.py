@@ -28,6 +28,7 @@ from numba.external.utility import default_utility_library
 logger = logging.getLogger(__name__)
 
 default_pipeline_order = [
+    'ast3to2',
     'resolve_templates',
     'validate_signature',
     'update_signature',
@@ -63,6 +64,7 @@ default_pipeline_order = [
 ]
 
 default_type_infer_pipeline_order = [
+    'ast3to2',
     'ControlFlowAnalysis',
     'TypeInfer',
 ]
@@ -71,11 +73,13 @@ compile_idx = default_pipeline_order.index('TypeInfer') + 1
 default_compile_pipeline_order = default_pipeline_order[compile_idx:]
 
 default_dummy_type_infer_pipeline_order = [
+    'ast3to2',
     'TypeInfer',
     'TypeSet',
 ]
 
 default_numba_lower_pipeline_order = [
+    'ast3to2',
     'LateSpecializer',
     'SpecializeFunccalls',
     'SpecializeExceptions',
