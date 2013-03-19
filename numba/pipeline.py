@@ -13,6 +13,7 @@ import random
 import llvm.core as lc
 
 # import numba.closures
+from numba import PY3
 from numba import error
 from numba import functions
 from numba import transforms
