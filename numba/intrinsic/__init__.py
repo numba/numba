@@ -9,8 +9,7 @@ all = {}
 
 def _import_all():
     global __all__
-    mods = ['math_intrinsic',
-            'string_intrinsic']
+    mods = ['string_intrinsic']
     for k in mods:
         mod = __import__(__name__ + '.' + k, fromlist=['__all__'])
         __all__.extend(mod.__all__)
