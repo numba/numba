@@ -28,3 +28,5 @@ install:
 
 script: cd ~; python -c "import sys;import numba;sys.exit(0 if numba.test([]) == 0 else 1)"
 
+notifications:
+  email: false
