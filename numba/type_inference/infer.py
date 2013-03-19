@@ -878,12 +878,19 @@ class TypeInferer(visitors.NumbaTransformer):
         lhs = node.left
         comparators = node.comparators
         types = [lhs.variable.type] + [c.variable.type for c in comparators]
-        if len(set(types))!=1:
+
+        result_type = bool_
+
+        if len(set(types)) != 1:
             type = reduce(self.context.promote_types, types)
-            node.left = nodes.CoercionNode(lhs, type)
-            node.comparators = [nodes.CoercionNode(c, type)
-                                for c in comparators]
-        node.variable = Variable(minitypes.bool_)
+            if type.is_array:
+                result_type = typesystem.array(bool_, type.ndim)
+            else:
+                node.left = nodes.CoercionNode(lhs, type)
+                node.comparators = [nodes.CoercionNode(c, type)
+                                    for c in comparators]
+
+        node.variable = Variable(result_type)
         return node
 
     #------------------------------------------------------------------------

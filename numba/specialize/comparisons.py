@@ -9,6 +9,7 @@ from numba import error
 from numba import visitors, nodes
 from numba import function_util
 from numba.symtab import Variable
+from numba.typesystem import is_obj
 from numba import pyconsts
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ class SpecializeComparisons(visitors.NumbaTransformer):
     def single_compare(self, node):
         rhs = node.comparators[0]
 
-        if node.left.type.is_object:
+        if is_obj(node.left.type):
             node = self.single_compare_objects(node)
 
         elif node.left.type.is_pointer and rhs.type.is_pointer:
@@ -84,11 +85,11 @@ class SpecializeComparisons(visitors.NumbaTransformer):
         # Call PyObject_RichCompareBool
         compare = function_util.external_call(self.context,
                                               self.llvm_module,
-                                              'PyObject_RichCompareBool',
+                                              'PyObject_RichCompare',
                                               args=args)
 
         # Coerce int result to bool
-        return nodes.CoercionNode(compare, bool_)
+        return nodes.CoercionNode(compare, node.type)
 
     def visit_Compare(self, node):
         "Reduce cascaded comparisons into single comparisons"
@@ -99,11 +100,18 @@ class SpecializeComparisons(visitors.NumbaTransformer):
         compare_nodes = []
         comparators = [nodes.CloneableNode(c) for c in node.comparators]
 
+        if node.type.is_array:
+            if len(node.comparators) > 1:
+                raise error.NumbaError(
+                        node, "Cannot determine truth value of boolean array "
+                              "(use any or all)")
+
         # Build comparison nodes
         left = node.left
         for op, right in zip(node.ops, comparators):
             node = ast.Compare(left=left, ops=[op], comparators=[right])
-            node = nodes.typednode(node, bool_)
+            node = nodes.typednode(node, self.context.promote_types(left.type,
+                                                                    right.type))
 
             # Handle comparisons specially based on their types
             node = self.single_compare(node)
