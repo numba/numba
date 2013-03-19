@@ -2,7 +2,7 @@
 # ______________________________________________________________________
 
 from numba import uint32, int16
-from numba.decorators import jit
+from numba.decorators import jit, autojit
 
 import unittest
 import __builtin__
