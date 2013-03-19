@@ -80,6 +80,8 @@ from numba.typesystem.typeset import *
 from numba.codegen import translate
 from numba.decorators import *
 from numba import decorators
+from numba.intrinsic.numba_intrinsic import (declare_intrinsic,
+                                             declare_instruction)
 
 __all__ = typesystem.__all__ + decorators.__all__ + special.__all__
 __all__.extend(["numeric", "floating", "complextypes"])

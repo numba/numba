@@ -1269,7 +1269,7 @@ class TypeInferer(visitors.NumbaTransformer):
 
         func_variable = node.func.variable
         func_type = func_variable.type
-        func = infer_call.resolve_function(func_type, func_variable.name)
+        func = infer_call.resolve_function(func_variable)
 
         #if not self.analyse and func_type.is_cast and len(node.args) == 1:
         #    # Short-circuit casts

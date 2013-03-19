@@ -1301,6 +1301,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)
 
+    def visit_IntrinsicNode(self, node):
+        args = self.visitlist(node.args)
+        return node.intrinsic.emit_code(self.lfunc, self.builder, args)
+
     def visit_PointerCallNode(self, node):
         node.llvm_func = self.visit(node.function)
         return self.visit_NativeCallNode(node)
