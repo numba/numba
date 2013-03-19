@@ -11,6 +11,7 @@ Infer types for NumPy functionality. This includes:
 """
 from __future__ import print_function, division, absolute_import
 
+import warnings
 from functools import reduce
 
 import numpy as np
@@ -48,6 +49,15 @@ def resolve_attribute_dtype(dtype, default=None):
             return typesystem.from_numpy_dtype(numpy_attr)
         elif issubclass(numpy_attr, np.generic):
             return typesystem.from_numpy_dtype(np.dtype(numpy_attr))
+        elif numpy_attr is not None:
+            try:
+                dtype = np.dtype(numpy_attr)
+            except TypeError:
+                warnings.warn("Unable to infer dtype for '%s'" % numpy_attr)
+            else:
+                return typesystem.from_numpy_dtype(dtype)
+
+    return None
 
 def get_dtype(dtype_arg, default_dtype=None):
     """
@@ -133,6 +143,8 @@ def empty(shape, dtype, order):
         return None
 
     dtype = get_dtype(dtype, float64)
+    if dtype is None:
+        return object_
 
     if shape.is_int:
         ndim = 1
