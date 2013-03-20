@@ -16,6 +16,15 @@ def iter_fields(node):
             pass
 
 
+
+class With(ast.stmt):
+    """
+    Node for AST compatibility with python 3.3.
+    """
+
+    _fields = ['context_expr', 'optional_vars', 'body']
+
+
 class AST3to2(ast.NodeTransformer):
 
     def _visit_list(self, alist):
@@ -89,7 +98,13 @@ class AST3to2(ast.NodeTransformer):
                                        "Only one 'with' context is support")
 
             withitem = node.items[0]
-            node.context_expr = withitem.context_expr
-            node.optional_vars = withitem.optional_vars
 
+            new_node = With()
+            new_node.context_expr = withitem.context_expr
+            new_node.optional_vars = withitem.optional_vars
+            new_node.body = node.body
+
+            node = ast.copy_location(new_node, node)
+
+        self.generic_visit(node)
         return node

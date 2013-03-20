@@ -102,7 +102,6 @@ def build_for(**kwargs):
     merge_cfg_in_ast(['target_block'], ['target'], result)
     return result
 
-
 class LowLevelBasicBlockNode(Node):
     """
     Evaluate a statement or expression in a new LLVM basic block.
