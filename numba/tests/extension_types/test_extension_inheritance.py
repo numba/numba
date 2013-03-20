@@ -66,7 +66,7 @@ def make_classes(compiler):
 # Tests
 #------------------------------------------------------------------------
 
-@parametrize(jit, autojit)
+@parametrize(jit) #, autojit)
 def test_baseclass(compiler):
     Base, Derived = make_classes(compiler)
 

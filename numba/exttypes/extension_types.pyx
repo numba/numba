@@ -335,8 +335,14 @@ def create_new_extension_type(name, bases, classdict, exttype, vtable_wrapper):
     extclass.__numba_attr_offset = attrs_offset
 
     # Keep vtable alive
-    extclass.__numba_vtab = vtable_wrapper
-    extclass.__numba_vtab_p = vtable_wrapper.get_vtable_pointer()
+    if vtable_wrapper is None:
+        # vtable_wrapper is None e.g. for the closure scope, which does
+        # not need methods
+        extclass.__numba_vtab = None
+        extclass.__numba_vtab_p = 0
+    else:
+        extclass.__numba_vtab = vtable_wrapper
+        extclass.__numba_vtab_p = vtable_wrapper.get_vtable_pointer()
 
     # __________________________________________________________________
     # Set ctypes attribute struct type, such that __new__ can create

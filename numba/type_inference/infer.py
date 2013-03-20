@@ -1442,7 +1442,7 @@ class TypeInferer(visitors.NumbaTransformer):
         attr = self.extattr_mangle(node.attr, ext_type)
 
         if attr in ext_type.methoddict:
-            method = self.ext_type.methoddict[self.attr]
+            method = ext_type.methoddict[attr]
             return nodes.ExtensionMethod(node.value, attr, method)
 
         if attr in ext_type.untyped_methods:
