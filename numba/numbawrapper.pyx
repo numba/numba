@@ -89,6 +89,11 @@ cdef tuple hash_on_value_types = (
     types.BuiltinMethodType,
 ) # + support_classes
 
+def add_hash_by_value_type(type):
+    global hash_on_value_types
+
+    hash_on_value_types += (type,)
+
 #------------------------------------------------------------------------
 # @jit function creation
 #------------------------------------------------------------------------

@@ -5,8 +5,9 @@ import string
 
 import numba
 from numba import *
-from numba.type_inference.module_type_inference import register_value
 from numba import nodes
+from numba import numbawrapper
+from numba.type_inference.module_type_inference import register_value
 
 #------------------------------------------------------------------------
 # Intrinsic Classes
@@ -45,6 +46,8 @@ class NumbaIntrinsic(Intrinsic):
 
 def is_numba_intrinsic(value):
     return isinstance(value, Intrinsic)
+
+numbawrapper.add_hash_by_value_type(Intrinsic)
 
 #------------------------------------------------------------------------
 # Build Intrinsic Wrapper

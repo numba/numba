@@ -120,4 +120,5 @@ if __name__ == '__main__':
 #smoketest()
 #list_genexp()
 #test_listcomp()
+# smoketest()
 testmod()
