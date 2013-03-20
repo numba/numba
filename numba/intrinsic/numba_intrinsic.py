@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
+
 import string
 
 import numba
@@ -55,9 +58,9 @@ def make_intrinsic(intrinsic):
     argnames = ", ".join(string.ascii_letters[:nargs])
 
     args = (intrinsic.name, argnames, argnames)
-    exec ("@nb.jit(intrinsic.func_signature)\n"
-          "def %s(%s):\n"
-          "    return intrinsic(%s)\n" % args) in d, d
+    exec("@nb.jit(intrinsic.func_signature)\n"
+         "def %s(%s):\n"
+         "    return intrinsic(%s)\n" % args, d)
 
     return d[intrinsic.name]
 
