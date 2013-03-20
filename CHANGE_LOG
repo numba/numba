@@ -1,3 +1,12 @@
+Version 0.7.2
+* Official Python 3 support (python 3.2 and 3.3)
+* Support for intrinsics and instructions
+* Various bug fixes (see https://github.com/numba/numba/issues?milestone=7&state=closed)
+
+Version 0.7.1
+-------------
+* Various bug fixes
+
 Version 0.7
 -----------
 * Open sourced single-threaded ufunc vectorizer
