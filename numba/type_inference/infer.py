@@ -509,12 +509,12 @@ class TypeInferer(visitors.NumbaTransformer):
 
         if not valid_type:
             self.error(node.value,
-                       'Only NumPy attributes and list or tuple literals are '
-                       'supported')
+                       'Only NumPy attributes and list or tuple literals can '
+                       'currently be unpacked')
         elif value_type.size != len(targets):
             self.error(node.value,
-                       "Too many/few arguments to unpack, got (%d, %d)" %
-                                            (value_type.size, len(targets)))
+                       "Too many/few arguments for tuple unpacking, "
+                       "got (%d, %d)" % (value_type.size, len(targets)))
 
         # Generate an assignment for each unpack
         result = []
