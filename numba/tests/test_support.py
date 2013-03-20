@@ -110,6 +110,27 @@ class StdoutReplacer(object):
     def __exit__(self, *args):
         sys.stdout = self.out
 
+
+def fix_module_doctest_py3(module):
+    """
+    Rewrite docs for python 3
+    """
+    if not numba.PY3:
+        return
+    if module.__doc__:
+        try:
+            module.__doc__ = rewrite_doc(module.__doc__)
+        except:
+            pass
+    for name in dir(module):
+        if name.startswith('__'):
+            continue
+        value = getattr(module, name)
+        try:
+            value.__doc__ = rewrite_doc(value.__doc__)
+        except:
+            pass
+
 def testmod(module=None, runit=False):
     """
     Tests a doctest modules with numba functions. When run in nosetests, only
@@ -124,4 +145,5 @@ def testmod(module=None, runit=False):
     else:
         modname = module.__name__
 
+    fix_module_doctest_py3(module)
     doctest_support.testmod(module, run_doctests=runit or modname == '__main__')

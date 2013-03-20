@@ -132,8 +132,9 @@ def check_definitions(flow, compiler_directives):
                                             entry.name)
             else:
                 if warn_unused and entry.warn_unused and flow.is_tracked(entry):
-                    messages.warning(entry, "Unused variable '%s'" %
-                                            entry.name)
+                    if getattr(entry, 'lineno', 1) > 0:
+                        messages.warning(entry, "Unused variable '%s'" %
+                                                entry.name)
             entry.cf_used = False
 
     messages.report()

@@ -510,10 +510,7 @@ class ControlFlow(object):
             for block in self.blocks:
                 print(('DF(%d) = %s' % (block.id, block.dominance_frontier)))
 
-        if PY3:
-            argnames = [name.arg for name in ast.args.args]
-        else:
-            argnames = [name.id for name in ast.args.args]
+        argnames = [name.id for name in ast.args.args]
 
         #
         ### 1) Insert phi nodes in the right places
@@ -683,7 +680,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             # unreachable code!
             reporting.warn_unreachable(node)
             return None
-
         return super(ControlFlowAnalysis, self).visit(node)
 
     def handle_inner_function(self, node):
@@ -1037,8 +1033,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             # Hanlde the 'if' clause
             ifs = comprehension.ifs
             if len(ifs) > 1:
-                make_boolop = lambda op1, op2: ast.BoolOp(op=ast.And(),
-                                                          values=[op1, op2])
+                make_boolop = lambda op1_op2: ast.BoolOp(op=ast.And(),
+                                                         values=op1_op2)
                 if_test = reduce(make_boolop, ifs)
             elif len(ifs) == 1:
                 if_test, = ifs

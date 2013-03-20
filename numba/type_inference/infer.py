@@ -509,17 +509,19 @@ class TypeInferer(visitors.NumbaTransformer):
 
         if not valid_type:
             self.error(node.value,
-                       'Only NumPy attributes and list or tuple literals are '
-                       'supported')
+                       'Only NumPy attributes and list or tuple literals can '
+                       'currently be unpacked')
         elif value_type.size != len(targets):
             self.error(node.value,
-                       "Too many/few arguments to unpack, got (%d, %d)" %
-                                            (value_type.size, len(targets)))
+                       "Too many/few arguments for tuple unpacking, "
+                       "got (%d, %d)" % (value_type.size, len(targets)))
 
         # Generate an assignment for each unpack
         result = []
         for i, target in enumerate(targets):
-            if value_type.is_carray or value_type.is_sized_pointer:
+            is_literal = isinstance(node.value, (ast.Tuple, ast.List))
+            if (value_type.is_carray or
+                    value_type.is_sized_pointer or not is_literal):
                 # C array
                 value = nodes.index(node.value, i)
             else:
@@ -838,7 +840,9 @@ class TypeInferer(visitors.NumbaTransformer):
         node.right = self.visit(node.right)
 
         if nodes.is_bitwise(node.op):
-            typesystem.require([node.left, node.right], ["is_int", 'is_object'])
+            typesystem.require([node.left, node.right], ["is_int",
+                                                         'is_object',
+                                                         'is_bool'])
 
         v1, v2 = node.left.variable, node.right.variable
         promotion_type = self.promote(v1, v2)
@@ -876,12 +880,19 @@ class TypeInferer(visitors.NumbaTransformer):
         lhs = node.left
         comparators = node.comparators
         types = [lhs.variable.type] + [c.variable.type for c in comparators]
-        if len(set(types))!=1:
+
+        result_type = bool_
+
+        if len(set(types)) != 1:
             type = reduce(self.context.promote_types, types)
-            node.left = nodes.CoercionNode(lhs, type)
-            node.comparators = [nodes.CoercionNode(c, type)
-                                for c in comparators]
-        node.variable = Variable(minitypes.bool_)
+            if type.is_array:
+                result_type = typesystem.array(bool_, type.ndim)
+            else:
+                node.left = nodes.CoercionNode(lhs, type)
+                node.comparators = [nodes.CoercionNode(c, type)
+                                    for c in comparators]
+
+        node.variable = Variable(result_type)
         return node
 
     #------------------------------------------------------------------------
@@ -1269,7 +1280,7 @@ class TypeInferer(visitors.NumbaTransformer):
 
         func_variable = node.func.variable
         func_type = func_variable.type
-        func = infer_call.resolve_function(func_type, func_variable.name)
+        func = infer_call.resolve_function(func_variable)
 
         #if not self.analyse and func_type.is_cast and len(node.args) == 1:
         #    # Short-circuit casts

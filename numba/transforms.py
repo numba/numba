@@ -308,7 +308,12 @@ class ResolveCoercions(visitors.NumbaTransformer):
         new_node = node
 
         node_type = node.node.type
-        if node_type.is_numeric:
+        if node_type.is_bool:
+            new_node = function_util.external_call(self.context,
+                                                   self.llvm_module,
+                                                   "PyBool_FromLong",
+                                                   args=[node.node])
+        elif node_type.is_numeric:
             cls = None
             args = node.node,
             if node_type.is_int:
@@ -339,11 +344,6 @@ class ResolveCoercions(visitors.NumbaTransformer):
             args = [nodes.CoercionNode(node.node, int64),
                     nodes.ObjectInjectNode(ctypes_pointer_type, object_)]
             new_node = nodes.call_pyfunc(ctypes.cast, args)
-        elif node_type.is_bool:
-            new_node = function_util.external_call(self.context,
-                                                   self.llvm_module,
-                                                   "PyBool_FromLong",
-                                                   args=[node.node])
 
         self.generic_visit(new_node)
         return new_node

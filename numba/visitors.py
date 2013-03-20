@@ -6,8 +6,8 @@ try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
-
-from numba import functions
+import types
+from numba import functions, PY3
 from numba import nodes
 from numba.nodes.metadata import annotate, query
 from numba.typesystem.typemapper import have_properties
@@ -70,15 +70,7 @@ class NumbaVisitorMixin(CooperativeBase):
                                                                    self.locals)
             self.names = self.global_names = freevars
 
-            #TODO: Using a guard for PY3 does not work.
-            #Sometimes ast.args.args has objects of type ast.Name
-            tmp_ = []
-            for name in ast.args.args:
-                if hasattr(name, 'arg'):
-                    tmp_.append(name.arg)
-                else:
-                    tmp_.append(name.id)
-            self.argnames = tuple(tmp_)
+            self.argnames = tuple(name.id for name in ast.args.args)
 
             argnames = set(self.argnames)
             local_names = [local_name for local_name in locals
@@ -92,12 +84,23 @@ class NumbaVisitorMixin(CooperativeBase):
             self.names = self.global_names = f_code.co_names
             self.varnames = self.local_names = list(f_code.co_varnames)
 
+            if PY3:
+                def recurse_co_consts(fco):
+                    for _var in fco.co_consts:
+                        if not isinstance(_var, types.CodeType):
+                            continue
+                        self.varnames.extend((_name for _name in _var.co_varnames
+                                              if not _name.startswith('.')))
+                        recurse_co_consts(_var)
+
+                recurse_co_consts(f_code)
+
+            self.argnames = self.varnames[:f_code.co_argcount]
+
             if f_code.co_cellvars:
                 self.varnames.extend(
-                        cellvar for cellvar in f_code.co_cellvars
-                                    if cellvar not in self.varnames)
-
-            self.argnames = f_code.co_varnames[:f_code.co_argcount]
+                    cellvar for cellvar in f_code.co_cellvars
+                    if cellvar not in self.varnames)
 
             self.cellvars = set(f_code.co_cellvars)
             self.freevars = set(f_code.co_freevars)
@@ -425,10 +428,9 @@ def determine_variable_status(env, ast, locals_dict):
 
     locals = set(v.assigned)
     locals.update(locals_dict)
-    if PY3:
-        locals.update(arg.arg for arg in ast.args.args)
-    else:
-        locals.update(arg.id for arg in ast.args.args)
+
+    locals.update([name.id for name in ast.args.args])
+
     locals.update(func_def.name for func_def in v.func_defs)
 
     freevars = set(v.referenced) - locals

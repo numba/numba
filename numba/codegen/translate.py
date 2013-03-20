@@ -1059,7 +1059,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         if lhs.type.is_float and rhs.type.is_float:
             lfunc = self.builder.fcmp
             lop = _compare_mapping_float[op]
-        elif lhs.type.is_int_like and rhs.type.is_int_like:
+        elif lhs.type.is_int and rhs.type.is_int:
             lfunc = self.builder.icmp
             if lhs.type.signed:
                 mapping = _compare_mapping_sint
@@ -1086,7 +1086,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         ast.BitOr:  ('or_',  ('or_', 'or_')),
         ast.BitXor: ('xor',  ('xor', 'xor')),
         ast.LShift: ('shl',  ('shl',  'shl')),   # shift left
-        ast.RShift: ('ashr', ('ashr',  'ashr')), # arithmetic shift right
+        ast.RShift: ('ashr', ('lshr',  'ashr')), # arithmetic shift right
     }
 
     _opnames = {
@@ -1100,12 +1100,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             return op.__name__.lower()
 
     def _handle_mod(self, node, lhs, rhs):
-        _, func = self.context.intrinsic_library.declare(self.llvm_module,
-                                                        'PyModulo',
-                                                        arg_types = (node.type,
-                                                                     node.type),
-                                                        return_type = node.type)
-        return self.builder.call(func, (lhs, rhs))
+        from numba.utility import math_utilities
+
+        py_modulo = math_utilities.py_modulo(node.type, (node.left.type,
+                                                         node.right.type))
+        lfunc = self.env.crnt.llvm_module.get_or_insert_function(
+            py_modulo.lfunc.type.pointee, py_modulo.lfunc.name)
+
+        return self.builder.call(lfunc, (lhs, rhs))
 
     def _handle_complex_binop(self, lhs, op, rhs):
         opname = self.opname(op)
@@ -1300,6 +1302,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)
+
+    def visit_IntrinsicNode(self, node):
+        args = self.visitlist(node.args)
+        return node.intrinsic.emit_code(self.lfunc, self.builder, args)
 
     def visit_PointerCallNode(self, node):
         node.llvm_func = self.visit(node.function)

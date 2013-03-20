@@ -64,7 +64,7 @@ def create_function(methoddef, py_func, lfunc_pointer, signature, modname):
     cdef PyMethodDef *ml = <PyMethodDef *> methoddef_p
     cdef Py_uintptr_t lfunc_p = lfunc_pointer
 
-    result = NumbaFunction_NewEx(ml, modname, getattr(py_func, "func_code", None),
+    result = NumbaFunction_NewEx(ml, modname, getattr(py_func, "__code__", None),
                                  NULL, <void *> lfunc_p, signature, py_func)
     return result
 
@@ -89,6 +89,11 @@ cdef tuple hash_on_value_types = (
     types.BuiltinMethodType,
 ) # + support_classes
 
+def add_hash_by_value_type(type):
+    global hash_on_value_types
+
+    hash_on_value_types += (type,)
+
 #------------------------------------------------------------------------
 # @jit function creation
 #------------------------------------------------------------------------
@@ -101,13 +106,14 @@ cdef class NumbaCompiledWrapper(NumbaWrapper):
         lfunc: LLVM function
     """
 
-    cdef public object lfunc, signature, wrapper
+    cdef public object lfunc, signature, wrapper, lfunc_pointer
 
     def __init__(self, py_func, signature, lfunc):
         super(NumbaCompiledWrapper, self).__init__(py_func)
 
         self.signature = signature
         self.lfunc = lfunc
+        self.lfunc_pointer = None
 
     def __repr__(self):
         return '<compiled numba function (%s) :: %s>' % (self.py_func,

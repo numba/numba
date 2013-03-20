@@ -38,7 +38,7 @@ Test list/dict/tuple literals
 ...     def __init__(self, value):
 ...         self.value = value
 ...     def __del__(self):
-...         print 'deleting...'
+...         print('deleting...')
 ...
 >>> sys.getrefcount(attr_count(C(object())))
 deleting...
@@ -47,14 +47,11 @@ deleting...
 >>> obj = object()
 >>> sys.getrefcount(obj)
 2
->>> try:
-...     exc(obj)
-... except TypeError, e:
-...     del e
-...     sys.exc_clear()
-... else:
-...     raise Exception("An exception should have been raised")
+>>> exc(obj)
+Traceback (most recent call last):
 ...
+TypeError: 'object' object is not callable
+
 >>> sys.getrefcount(obj)
 2
 
@@ -67,9 +64,9 @@ deleting...
 4
 
 >>> def test_count_arguments(f, obj):
-...     print sys.getrefcount(obj)
+...     print(sys.getrefcount(obj))
 ...     f(obj)
-...     print sys.getrefcount(obj)
+...     print(sys.getrefcount(obj))
 ...
 >>> test_count_arguments(count_arguments2, object())
 3
