@@ -66,6 +66,10 @@ or simply
     $ pip install numba
 ```
 
+**NOTE:** Make sure you install *distribute* instead of setuptools. Using setuptools
+          may mean that source files do not get cythonized and may result in an
+          error during installation.
+
 Documentation
 =============
 
