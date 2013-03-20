@@ -519,7 +519,9 @@ class TypeInferer(visitors.NumbaTransformer):
         # Generate an assignment for each unpack
         result = []
         for i, target in enumerate(targets):
-            if value_type.is_carray or value_type.is_sized_pointer:
+            is_literal = isinstance(node.value, (ast.Tuple, ast.List))
+            if (value_type.is_carray or
+                    value_type.is_sized_pointer or not is_literal):
                 # C array
                 value = nodes.index(node.value, i)
             else:
