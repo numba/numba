@@ -1,6 +1,6 @@
 import os
 from ctypes import *
-
+from numba import PY3
 from numba.pycc import find_shared_ending
 from numba.pycc import pycc
 
@@ -54,4 +54,7 @@ def test_pycc():
             os.unlink(out_modulename)
 
 if __name__ == "__main__":
-    test_pycc()
+    if PY3:
+        print('pycc is not yet supported in Python 3')
+    else:
+        test_pycc()
