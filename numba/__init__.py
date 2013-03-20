@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-# Import all special functions before registering the Numba module
-# type inferer
 
 from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 
+# Import all special functions before registering the Numba module
+# type inferer
 from numba.special import *
 
 import os
 import sys
 import logging
-from collections import Iterable
 
 from numba import utils, typesystem
 
