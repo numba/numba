@@ -39,6 +39,10 @@ class Intrinsic(object):
                 self.name == other.name and
                 self.func_signature == other.func_signature)
 
+    def __hash__(self):
+        return hash((type(self), self.name, self.func_signature))
+
+
 class NumbaInstruction(Intrinsic):
 
     def emit_code(self, lfunc, builder, llvm_args):
