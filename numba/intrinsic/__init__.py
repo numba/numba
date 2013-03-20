@@ -2,7 +2,6 @@
 from __future__ import print_function, division, absolute_import
 import llvm.core
 from .intrinsic import IntrinsicLibrary
-from .numba_intrinsic import is_numba_intrinsic
 
 __all__ = []
 all = {}
@@ -32,5 +31,3 @@ def default_intrinsic_library(context):
     for fncls in all.itervalues():
         intrlib.add(fncls)
     return intrlib
-
-    
