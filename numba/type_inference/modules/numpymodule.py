@@ -43,8 +43,8 @@ def resolve_attribute_dtype(dtype, default=None):
     if dtype.is_numpy_dtype:
         return dtype
 
-    if dtype.is_numpy_attribute:
-        numpy_attr = getattr(dtype.module, dtype.attr, None)
+    if dtype.is_known_value:
+        numpy_attr = dtype.value
         if isinstance(numpy_attr, np.dtype):
             return typesystem.from_numpy_dtype(numpy_attr)
         elif issubclass(numpy_attr, np.generic):
