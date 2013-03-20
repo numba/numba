@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import ast
 
 from numba import templating
@@ -64,7 +66,7 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer):
             from meta import asttools
 
             module = ast.Module(body=[ufunc_ast])
-            print asttools.python_source(module)
+            print((asttools.python_source(module)))
 
         # Vectorize Python function
         if lhs is None:
@@ -272,7 +274,7 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
 
         variables = [b.variable(name_node.type, "op%d" % i)
                      for i, name_node in enumerate([lhs] + operands)]
-        miniargs = map(b.funcarg, variables)
+        miniargs = [b.funcarg(variable) for variable in variables]
         body = miniutils.build_kernel_call(lfunc.name, signature, miniargs, b)
 
         minikernel = b.function_from_numpy(

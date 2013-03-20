@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import llvm.core
 from .intrinsic import IntrinsicLibrary
 
@@ -6,8 +8,7 @@ all = {}
 
 def _import_all():
     global __all__
-    mods = ['math_intrinsic',
-            'string_intrinsic']
+    mods = ['string_intrinsic']
     for k in mods:
         mod = __import__(__name__ + '.' + k, fromlist=['__all__'])
         __all__.extend(mod.__all__)
@@ -30,5 +31,3 @@ def default_intrinsic_library(context):
     for fncls in all.itervalues():
         intrlib.add(fncls)
     return intrlib
-
-    

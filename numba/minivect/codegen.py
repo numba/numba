@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Code generator module. Subclass CodeGen to implement a code generator
 as a visitor.
 """
+from __future__ import print_function, division, absolute_import
 
 import sys
 import string

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 from .external import ExternalFunction
 from numba import *
 
@@ -237,6 +239,10 @@ class PyObject_RichCompareBool(ExternalFunction):
     return_type = int_
     badval = -1
     # check_pyerr_occurred = True
+
+class PyObject_RichCompare(ExternalFunction):
+    arg_types = [object_, object_, int_]
+    return_type = object_
 
 __all__ = [k for k, v in globals().items()
            if (v != ExternalFunction

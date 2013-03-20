@@ -1,10 +1,10 @@
 from numba.tests.cfg.test_cfg_type_infer import *
+from numba.tests.test_support import autojit_py3doc
 
 
 
-
-@autojit(warnstyle='simple')
-def test_circular_error(): # doctest ignores ellipses ???
+@autojit_py3doc(warnstyle='simple')
+def test_circular_error():
     """
     >>> test_circular_error()
     Traceback (most recent call last):
@@ -194,7 +194,7 @@ def test_circular_compare3():
             x = cond or x < i
             cond = x
             x = i
-            print i
+            print(i)
 
     return cond, x
 
@@ -340,7 +340,7 @@ def test_delayed_string_indexing2():
 
     return s, x
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_string_indexing_error():
     """
     >>> test_string_indexing_error()
@@ -357,7 +357,7 @@ def test_string_indexing_error():
         elif i < 5:
             s = s[i:]
 
-@autojit(warn=False)
+@autojit_py3doc(warn=False)
 def test_string_indexing_error2():
     """
     >>> chr(test_string_indexing_error2())

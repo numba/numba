@@ -10,13 +10,13 @@ def timer(pyfunc, numbafunc, *args, **kwargs):
     t1 = time.time()
     pyresult = pyfunc(*args, **kwargs)
     t2 = time.time()
-    print 'python function took: {0}'.format(t2-t1)
+    print(('python function took: {0}'.format(t2-t1)))
 
     t3 = time.time()
     numbaresult = numbafunc(*args, **kwargs)
     t4 = time.time()
-    print 'numba function took: {0}'.format(t4-t3)
-    print 'speedup: {0}x'.format(np.round((t2-t1) / (t4-t3),2))
+    print(('numba function took: {0}'.format(t4-t3)))
+    print(('speedup: {0}x'.format(np.round((t2-t1) / (t4-t3),2))))
 
     assert np.allclose(pyresult, numbaresult)
 
@@ -27,15 +27,15 @@ def timer2(pyfunc, numbafunc, *args, **kwargs):
     pyargs = args + (pyresult,)
     pyfunc(*pyargs, **kwargs)
     t2 = time.time()
-    print 'python function took: {0}'.format(t2-t1)
+    print(('python function took: {0}'.format(t2-t1)))
 
     t3 = time.time()
     numbaresult = np.empty_like(args[0])
     nbargs = args + (numbaresult,)
     numbafunc(*nbargs, **kwargs)
     t4 = time.time()
-    print 'numba function took: {0}'.format(t4-t3)
-    print 'speedup: {0}x'.format(np.round((t2-t1) / (t4-t3),2))
+    print(('numba function took: {0}'.format(t4-t3)))
+    print(('speedup: {0}x'.format(np.round((t2-t1) / (t4-t3),2))))
 
     assert np.allclose(pyresult, numbaresult)
 

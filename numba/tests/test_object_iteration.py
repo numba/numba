@@ -10,7 +10,7 @@ def test_object_iteration(obj):
     3
     """
     for x in obj:
-        print x
+        print(x)
 
 if __name__ == '__main__':
 #    test_object_iteration([1, 2, 3])

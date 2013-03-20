@@ -14,7 +14,7 @@ def simple():
         ...
     NumbaError: 17:10: local variable 'a' referenced before assignment
     """
-    print a
+    print(a)
     a = 0
 
 def simple2(arg):
@@ -58,14 +58,14 @@ def nowimpossible(a):
     if a:
         b = 1
     if a:
-        print b
+        print(b)
 
 def fromclosure():
     """
     >> result = jitv(fromclosure)
     """
     def bar():
-        print a
+        print(a)
     a = 1
     return bar
 
@@ -84,15 +84,15 @@ def generic_args_call(*args, **kwargs):
     return args, kwargs
 
 def cascaded(x):
-    print a, b
+    print((a, b))
     a = b = x
 
 def from_import():
-    print bar
+    print(bar)
     from foo import bar
 
 def regular_import():
-    print foo
+    print(foo)
     import foo
 
 def raise_stat():
@@ -150,5 +150,5 @@ def uninitialized_augmented_assignment_loop():
     x = 0
 
 if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

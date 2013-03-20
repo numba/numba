@@ -4,8 +4,7 @@ import numpy.random as nr
 import os.path
 from numpy.distutils.misc_util import get_shared_lib_extension
 
-direc = os.path.dirname(nr.__file__)
-mtrand = ct.CDLL(direc + os.path.sep + 'mtrand' + get_shared_lib_extension())
+mtrand = ct.CDLL(nr.mtrand.__file__)
 
 # Should we parse this from randomkit.h in the numpy directory? 
 RK_STATE_LEN = len(nr.get_state()[1])
@@ -33,14 +32,20 @@ class rk_state(ct.Structure):
                ("p3", ct.c_double),
                ("p4", ct.c_double)]
 
-rk_randomseed = mtrand.rk_randomseed
+try:
+    rk_randomseed = mtrand.rk_randomseed
+    rk_seed = mtrand.rk_seed
+    rk_interval = mtrand.rk_interval
+    rk_gamma = mtrand.rk_gamma
+    rk_normal = mtrand.rk_normal
+except AttributeError as e:
+    raise ImportError(str(e))
+
 rk_randomseed.argtypes = [ct.POINTER(rk_state)]
 
-rk_seed = mtrand.rk_seed
 rk_seed.restype = None
 rk_seed.argtypes = [ct.c_long, ct.POINTER(rk_state)]
 
-rk_interval = mtrand.rk_interval
 rk_interval.restype = ct.c_ulong
 rk_interval.argtypes = [ct.c_ulong, ct.POINTER(rk_state)]
 

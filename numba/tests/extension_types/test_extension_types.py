@@ -1,50 +1,94 @@
 import sys
 
+import numba
 from numba import *
 
 def format_str(msg, *values):
     return msg % values
 
-@jit
-class MyExtension(object):
-    """
-    >>> obj = MyExtension(10.0)
-    >>> obj.value
-    10.0
-    >>> obj._numba_attrs.value
-    10.0
-    >>> obj.setvalue(20.0)
-    >>> obj.getvalue()
-    20.0
-    >>> obj.value
-    20.0
-    >>> obj.getvalue.__name__
-    'getvalue'
-    >>> obj.getvalue.__doc__
-    'Return value'
-    >>> type(obj.getvalue.__func__)
-    <type 'numba_function_or_method'>
-    >>> obj._numba_attrs._fields_
-    [('value', <class 'ctypes.c_double'>)]
-    """
+if numba.PY3:
+    @jit
+    class MyExtension(object):
+        """
+        >>> obj = MyExtension(10.0)
+        >>> obj.value
+        10.0
+        >>> obj._numba_attrs.value
+        10.0
+        >>> obj.setvalue(20.0)
+        >>> obj.getvalue()
+        20.0
+        >>> obj.value
+        20.0
+        >>> obj.getvalue.__name__
+        'getvalue'
+        >>> obj.getvalue.__doc__
+        'Return value'
+        >>> type(obj.getvalue.__func__)
+        <class 'numba_function_or_method'>
+        >>> obj._numba_attrs._fields_
+        [('value', <class 'ctypes.c_double'>)]
+        """
 
-    @void(double)
-    def __init__(self, myfloat):
-        self.value = myfloat
+        @void(double)
+        def __init__(self, myfloat):
+            self.value = myfloat
 
-    @double()
-    def getvalue(self):
-        "Return value"
-        return self.value
+        @double()
+        def getvalue(self):
+            "Return value"
+            return self.value
 
-    @void(double)
-    def setvalue(self, value):
-        "Set value"
-        self.value = value
+        @void(double)
+        def setvalue(self, value):
+            "Set value"
+            self.value = value
 
-    @object_()
-    def __repr__(self):
-        return format_str('MyExtension%s', self.value)
+        @object_()
+        def __repr__(self):
+            return format_str('MyExtension%s', self.value)
+else:
+    @jit
+    class MyExtension(object):
+        """
+        >>> obj = MyExtension(10.0)
+        >>> obj.value
+        10.0
+        >>> obj._numba_attrs.value
+        10.0
+        >>> obj.setvalue(20.0)
+        >>> obj.getvalue()
+        20.0
+        >>> obj.value
+        20.0
+        >>> obj.getvalue.__name__
+        'getvalue'
+        >>> obj.getvalue.__doc__
+        'Return value'
+        >>> type(obj.getvalue.__func__)
+        <type 'numba_function_or_method'>
+        >>> obj._numba_attrs._fields_
+        [('value', <class 'ctypes.c_double'>)]
+        """
+
+        @void(double)
+        def __init__(self, myfloat):
+            self.value = myfloat
+
+        @double()
+        def getvalue(self):
+            "Return value"
+            return self.value
+
+        @void(double)
+        def setvalue(self, value):
+            "Set value"
+            self.value = value
+
+        @object_()
+        def __repr__(self):
+            return format_str('MyExtension%s', self.value)
+
 
 @jit
 class ObjectAttrExtension(object):
@@ -117,5 +161,4 @@ class ExtensionTypeAsAttribute(object):
 
 
 if __name__ == '__main__':
-    import numba
     numba.testmod()

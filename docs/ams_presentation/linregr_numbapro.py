@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 '''
 Only added decorators to the linregr_python.py implementation.
 '''
+from __future__ import print_function, division, absolute_import
 
 import numbapro
 from numba import autojit, jit, f8, int32, void

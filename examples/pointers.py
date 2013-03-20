@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import numba
 from numba import *
 from numba.tests.test_support import autojit_py3doc

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 from numba import *
 import numpy as np
 from timeit import default_timer as timer

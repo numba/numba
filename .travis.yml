@@ -5,7 +5,6 @@ python:
   - "2.7"
   - "3.2"
   - "3.3"
-  # - "pypy"
 
 # branches:
 #   only:
@@ -15,29 +14,22 @@ python:
 
 install:
   - wget "http://repo.continuum.io/pkgs/free/linux-64/llvm-3.2-0.tar.bz2"
-  - # wget "http://repo.continuum.io/pkgs/free/linux-64/llvmpy-0.10.0-py27_0.tar.bz2"
   - tar -xjf llvm-3.2-0.tar.bz2
   - PATH+=":`pwd`/bin"
   - export LD_LIBRARY_PATH="`pwd`/lib"
   - export LLVM_CONFIG_PATH="`pwd`/bin/llvm-config"
   - $LLVM_CONFIG_PATH --cflags # test llvm-config
   - export LLVMPY_DYNLINK=1
-  - # pip install llvmpy
-  - git clone git://github.com/llvmpy/llvmpy.git
+  - git clone git://github.com/hgrecco/llvmpy.git -q
   - cd llvmpy ; python setup.py install -q ; cd ..
   - pip -q install cython --install-option="--no-cython-compile" # This takes long
   - pip -q install -r requirements.txt --use-mirrors
-  - python setup.py build_ext --inplace
+  - python setup.py install -q
 
-script: python runtests.py # nosetests
-
-matrix:
-  allow_failures:
-    - python: pypy
+script: cd ~; python -c "import sys;import numba;sys.exit(0 if numba.test([]) == 0 else 1)"
 
 notifications:
   email: false
   flowdock: "cb7bc57e58b3d42f77685f93211c03ab"
   on_success: "change"
   on_failure: "always" # "change"
-

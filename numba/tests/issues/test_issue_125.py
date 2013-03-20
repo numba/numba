@@ -15,6 +15,7 @@ def test_uint_int_div_ary():
     gold = np.empty(NPATHS, dtype=np.int32)
     got = gold.copy()
     uint_int_div_ary(gold, normdist, seed)
+
     print('expect %s' % gold)
     sig = void(uint32[:], double[:], uint32[:])
     numba_func = jit(sig)(uint_int_div_ary)

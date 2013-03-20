@@ -1,19 +1,21 @@
-# Import all special functions before registering the Numba module
-# type inferer
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 
 from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 
+# Import all special functions before registering the Numba module
+# type inferer
 from numba.special import *
 
 import os
 import sys
 import logging
+
 from numba import utils, typesystem
 
 PY3 = sys.version_info[0] == 3
-
 
 def get_include():
     numba_root = os.path.dirname(os.path.abspath(__file__))
@@ -58,7 +60,7 @@ def _config_logger():
 _config_logger()
 
 
-from . import  special
+from . import special
 from numba.typesystem import *
 from numba.minivect.minitypes import FunctionType
 from numba.error import *
@@ -77,6 +79,8 @@ from numba.typesystem.typeset import *
 from numba.codegen import translate
 from numba.decorators import *
 from numba import decorators
+from numba.intrinsic.numba_intrinsic import (declare_intrinsic,
+                                             declare_instruction)
 
 __all__ = typesystem.__all__ + decorators.__all__ + special.__all__
 __all__.extend(["numeric", "floating", "complextypes"])
@@ -119,10 +123,16 @@ else:
                            for signal_name, signal_code in vars(signal).items()
                                if signal_name.startswith("SIG"))
 
-def test(whitelist=None, blacklist=None):
+def test(whitelist=None, blacklist=None, print_failures_only=False):
     import os
     from os.path import dirname, join
     import subprocess
+    import sys
+
+    # FIXME
+    # temporarily disable pycc test on win32
+    if sys.platform.startswith('win32'):
+        blacklist = ['test_pycc_tresult']
 
     run = failed = 0
     for root, dirs, files in os.walk(join(dirname(__file__), 'tests')):
@@ -140,26 +150,33 @@ def test(whitelist=None, blacklist=None):
                     continue
 
                 run += 1
-                sys.stdout.write("running %-61s" % (modname,))
+                if not print_failures_only:
+                    sys.stdout.write("running %-61s" % (modname,))
+
                 process = subprocess.Popen([sys.executable, '-m', modname],
                                            stdout=subprocess.PIPE,
                                            stderr=subprocess.PIPE)
                 out, err = process.communicate()
 
                 if process.returncode == 0:
-                    print("SUCCESS")
+                    if not print_failures_only:
+                        sys.stdout.write("SUCCESS\n")
                 else:
-                    print("FAILED: %s" % map_returncode_to_message(
-                                                process.returncode))
+                    if print_failures_only:
+                        sys.stdout.write("running %-61s" % (modname,))
+
+                    sys.stdout.write("FAILED: %s\n" % map_returncode_to_message(
+                                                    process.returncode))
                     if PY3:
                         out = str(out, encoding='UTF-8')
                         err = str(err, encoding='UTF-8')
-                    print(out)
-                    print(err)
-                    print("-" * 80)
+                    sys.stdout.write(out)
+                    sys.stdout.write(err)
+                    sys.stdout.write("-" * 80)
+                    sys.stdout.write('\n')
                     failed += 1
 
-    print("ran test files: failed: (%d/%d)" % (failed, run))
+    sys.stdout.write("ran test files: failed: (%d/%d)\n" % (failed, run))
     return failed
 
 def nose_run(module=None):

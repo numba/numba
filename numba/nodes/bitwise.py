@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import ast
 from numba.nodes import *
 from numba import typesystem

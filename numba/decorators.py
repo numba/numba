@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
+
 from numba.exttypes.entrypoints import  (jit_extension_class,
                                          autojit_extension_class)
 

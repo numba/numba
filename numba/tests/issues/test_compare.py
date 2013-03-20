@@ -46,7 +46,7 @@ def test_compare_while(a):
         while True:
             break
         else:
-            print "hello"
+            print("hello")
             return a * 3
         break
     return a * 2
@@ -62,7 +62,7 @@ def compare_error():
 def test_compare_error():
     try:
         compare_error()
-    except Exception, e:
+    except Exception as e:
         assert str(e) == "I cannot compare!", str(e)
     else:
         raise Exception("Expected exception!")

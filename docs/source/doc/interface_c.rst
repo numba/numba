@@ -70,4 +70,82 @@ An example is shown below:
 
 .. literalinclude:: /../../examples/pointers.py
 
+Using Intrinsics
+================
+
+Numba allows users to declare and use LLVM intrinsics and instructions directly.
+This allows one to implement very low-level features directly in Python, while
+maintaining compatibility with Python code not compiled with numba itself.
+
+.. function:: declare_intrinsic(func_signature, intrinsic_name)
+
+   This declares an LLVM intrinsic function with the given name.
+   E.g.
+
+::
+
+    # declare i64 @llvm.readcyclecounter()
+    intrin = numba.declare_intrinsic(int64(), "llvm.readcyclecounter")
+    print intrin()
+
+.. NOTE:: Intrinsics are not yet implemented. Only the instructions below are.
+
+.. function:: declare_instruction(func_signature, intrinsic_name)
+
+   This declares an LLVM instruction named ``name`` as a function.
+   E.g. we can use the ``srem`` instruction [#]_ to calculate the remainder
+   of a signed integer, in an equivalent manner to how modulo works
+   in C (see [#]_ and [#]_ for how this differs from Python).
+
+::
+
+
+    >>> rem = nb.declare_instruction(int32(int32, int32), 'srem')
+    >>>
+    >>> @jit(int32(int32, int32))
+    ... def py_modulo(a, n):
+    ...     r = rem(a, n)
+    ...     if r != 0 and (r ^ n) < 0:
+    ...         r += n
+    ...     return r
+
+    >>> # Instructions and intrinsics works directly in Python
+    >>> print rem(5, 2), rem(5, -2), rem(-5, 2), rem(-5, -2)
+    1 1 -1 -1
+
+    >>> # ... and are jitted in Numba functions
+    >>> print py_modulo(5, 2), py_modulo(5, -2), py_modulo(-5, 2), py_modulo(-5, -2)
+    1 -1 1 -1
+
+    >>> print py_modulo.lfunc
+    define i32 @__numba_specialized_6___main___2E_py_modulo(i32 %a, i32 %n) nounwind readnone {
+    entry:
+      %0 = srem i32 %a, %n
+      %1 = icmp ne i32 %0, 0
+      %2 = xor i32 %0, %n
+      %3 = icmp slt i32 %2, 0
+      %or.cond = and i1 %1, %3
+      %4 = select i1 %or.cond, i32 %n, i32 0
+      %. = add i32 %4, %0
+      ret i32 %.
+    }
+
+As you can see the instructions can be used in Numba, where the instruction
+is inserted directly in the instruction stream, or pure-Python, where arguments
+are converted to native values, the operation executed, and the result returned
+as a Python object. We can verify that our modulo function works in pure Python::
+
+    >>> print py_modulo.py_func(5,  2), py_modulo.py_func( 5, -2), \
+    ...       py_modulo.py_func(-5, 2), py_modulo.py_func(-5, -2)
+    1 -1 1 -1
+
+.. NOTE:: Numba does not validate the signatures or validity of instructions
+          and intrinsics. This is the responsibility of the user. Fortunately,
+          the validity can be quickly verified :)
+
+References
+==========
+.. [#] http://llvm.org/docs/LangRef.html#srem-instruction
+.. [#] http://en.wikipedia.org/wiki/Modulo_operation
+.. [#] http://wiki.cython.org/enhancements/division
 

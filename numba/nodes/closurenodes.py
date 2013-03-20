@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 from numba.nodes import *
 
 # not really an expression, but used in an assignment
@@ -105,11 +107,7 @@ class ClosureCallNode(NativeCallNode):
         self.func = call_node.func
         self.closure_type = closure_type
 
-        if PY3:
-            self.argnames = [name.arg for name in self.func_def.args.args]
-        else:
-            self.argnames = [name.id for name in self.func_def.args.args]
-        self.argnames = self.argnames[self.need_closure_scope:]
+        self.argnames = [name.id for name in self.func_def.args.args[self.need_closure_scope:]]
         self.expected_nargs = len(self.argnames)
 
         args, keywords = call_node.args, call_node.keywords

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 ### Copyright (2012) Continuum Analytics, Inc
 ### All Rights Reserved
 

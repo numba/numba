@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import llvm
 import llvm.core as lc
 import llvm.passes as lp
@@ -57,18 +59,6 @@ class LLVMContextManager(object):
         self.__pm = passmanagers.pm
 
         self.__string_constants = {}
-
-    def get_string_constant(self, const_str):
-        if (id(self.module), const_str) in self.__string_constants:
-            ret_val = self.__string_constants[(id(self.module), const_str)]
-        else:
-            lconst_str = lc.Constant.stringz(const_str)
-            ret_val = self.module.add_global_variable(lconst_str.type, "__STR_%d" %
-                                                 (len(self.__string_constants),))
-            ret_val.initializer = lconst_str
-            ret_val.linkage = lc.LINKAGE_LINKONCE_ODR
-            self.__string_constants[(id(self.module), const_str)] = ret_val
-        return ret_val
 
     @property
     def module(self):

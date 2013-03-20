@@ -6,7 +6,7 @@ Test phi node (or similar) generation for CFG joins beyond
 if-then-else statements.
 '''
 # ______________________________________________________________________
-
+from __future__ import print_function
 import sys
 from numba import *
 
@@ -124,7 +124,7 @@ class TestIf(unittest.TestCase):
                 raise ImportError
             from meta.decompiler import decompile_func
         except ImportError:
-            print >>sys.stderr, "Skipping if test, meta not available"
+            print("Skipping if test, meta not available", file=sys.stderr)
         else:
             import ast, inspect
             if_fn_4c = jit(restype=i4, argtypes=[i4, i4], backend='ast')(if_fn_4)

@@ -33,7 +33,7 @@ def int_runvar():
     >>> int_runvar()
     [0L, 4L, 8L]
     """
-    print [x*2 for x in range(5) if x % 2 == 0]
+    print([x*2 for x in range(5) if x % 2 == 0])
 
 #@jit
 #class A(object):
@@ -120,4 +120,5 @@ if __name__ == '__main__':
 #smoketest()
 #list_genexp()
 #test_listcomp()
+# smoketest()
 testmod()

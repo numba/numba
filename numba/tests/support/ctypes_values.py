@@ -5,8 +5,7 @@ import numpy.random as nr
 import os.path
 from numpy.distutils.misc_util import get_shared_lib_extension
 
-direc = os.path.dirname(nr.__file__)
-mtrand = ct.CDLL(direc + os.path.sep + 'mtrand' + get_shared_lib_extension())
+mtrand = ct.CDLL(nr.mtrand.__file__)
 
 # Should we parse this from randomkit.h in the numpy directory? 
 RK_STATE_LEN = len(nr.get_state()[1])
@@ -39,7 +38,7 @@ try:
     rk_seed = mtrand.rk_seed
     rk_gamma = mtrand.rk_gamma
     rk_normal = mtrand.rk_normal
-except AttributeError, e:
+except AttributeError as e:
     raise ImportError(str(e))
 
 rk_randomseed.argtypes = [ct.POINTER(rk_state)]

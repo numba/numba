@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 This module provides a variety of transforms that transform the AST
 into a final form ready for code generation.
@@ -74,6 +75,7 @@ bytecode using meta. We run the following transformations:
         in the face of type coercions, which LLVM does not provide any
         leniency for.
 """
+from __future__ import print_function, division, absolute_import
 
 
 import sys
@@ -306,7 +308,12 @@ class ResolveCoercions(visitors.NumbaTransformer):
         new_node = node
 
         node_type = node.node.type
-        if node_type.is_numeric:
+        if node_type.is_bool:
+            new_node = function_util.external_call(self.context,
+                                                   self.llvm_module,
+                                                   "PyBool_FromLong",
+                                                   args=[node.node])
+        elif node_type.is_numeric:
             cls = None
             args = node.node,
             if node_type.is_int:
@@ -337,11 +344,6 @@ class ResolveCoercions(visitors.NumbaTransformer):
             args = [nodes.CoercionNode(node.node, int64),
                     nodes.ObjectInjectNode(ctypes_pointer_type, object_)]
             new_node = nodes.call_pyfunc(ctypes.cast, args)
-        elif node_type.is_bool:
-            new_node = function_util.external_call(self.context,
-                                                   self.llvm_module,
-                                                   "PyBool_FromLong",
-                                                   args=[node.node])
 
         self.generic_visit(new_node)
         return new_node
@@ -791,7 +793,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         # return nodes.ObjectTempNode(new_slice)
 
     def visit_Attribute(self, node):
-        if self.nopython and not node.value.type.is_module:
+        if (self.nopython and not node.value.type.is_module and
+            not node.value.type.is_complex):
             raise error.NumbaError(
                     node, "Cannot access Python attribute in nopython context (%s)" % node.attr)
 

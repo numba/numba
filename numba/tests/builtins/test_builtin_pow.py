@@ -44,5 +44,5 @@ def pow2_const():
 
 if __name__ == '__main__':
 #    import logging; logging.getLogger().setLevel(0)
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

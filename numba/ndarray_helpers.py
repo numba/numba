@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 # For reference:
 #    typedef struct {
 #    PyObject_HEAD                   // indices (skipping the head)

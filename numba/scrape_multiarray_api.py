@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# -*- coding: utf-8 -*-
 # ______________________________________________________________________
 '''scrape_multiarray_api
 
@@ -6,6 +7,7 @@ Utilities for reading the __multiarray_api.h file, and scraping three
 things: symbolic names of API members, array indices for those
 members, and LLVM types for those members.
 '''
+from __future__ import print_function, division, absolute_import
 # ______________________________________________________________________
 
 import sys
@@ -157,7 +159,7 @@ def main (*args, **kws):
     if len(args) == 0:
         args = (get_include(),)
     for arg in args:
-        print gen_python(process_source(arg))
+        print((gen_python(process_source(arg))))
 
 # ______________________________________________________________________
 

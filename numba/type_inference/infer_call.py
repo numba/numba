@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import __builtin__ as builtins
 
 import numba
@@ -9,12 +11,13 @@ from numba import typesystem
 debug = False
 #debug = True
 
-def resolve_function(func_type, func_name):
+def resolve_function(func_variable):
     "Get a function object given a function name"
     func = None
+    func_type = func_variable.type
 
     if func_type.is_builtin:
-        func = getattr(builtins, func_name)
+        func = getattr(builtins, func_variable.name)
     elif func_type.is_global:
         func = func_type.value
     elif func_type.is_module_attribute:
@@ -27,6 +30,10 @@ def resolve_function(func_type, func_name):
     return func
 
 def infer_typefunc(context, call_node, func_type, default_node):
+    func_var = call_node.func.variable
+    if func_var.is_constant:
+        func_type = typesystem.KnownValueType(func_var.constant_value)
+
     if (func_type.is_known_value and
             module_type_inference.is_registered(func_type.value)):
         # Try the module type inferers

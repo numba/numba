@@ -10,14 +10,14 @@
 >>> py_abs(-5.5)
 5.5
 
->>> long(int32_abs(-5))
-10L
->>> long(int_abs(-5))
-10L
->>> long(long_abs(-5))
-10L
->>> long(ulong_abs(5))
-10L
+>>> int(int32_abs(-5))
+10
+>>> int(int_abs(-5))
+10
+>>> int(long_abs(-5))
+10
+>>> int(ulong_abs(5))
+10
 
 >>> long_long_abs(-(2**33)) == 2**34
 True
@@ -100,5 +100,5 @@ def complex128_abs(a):
 
 if __name__ == '__main__':
 #    print long(int32_abs(-5))
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

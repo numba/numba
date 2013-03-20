@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 """
 Promote and demote values of differing types in a minivect AST. This is run
 before code generation. In LLVM types need to be equivalent for binary
 operations.
 """
+from __future__ import print_function, division, absolute_import
 
 import sys
 import copy

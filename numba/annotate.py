@@ -1,10 +1,10 @@
 # -*- coding: UTF-8 -*-
-
 """
 numba --annotate
 
 Adapted from Cython/Compiler/Annotate.py
 """
+from __future__ import print_function, division, absolute_import
 
 # Note: Work in progress
 

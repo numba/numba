@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import ast
 
 import llvm
@@ -1061,7 +1063,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         if lhs.type.is_float and rhs.type.is_float:
             lfunc = self.builder.fcmp
             lop = _compare_mapping_float[op]
-        elif lhs.type.is_int_like and rhs.type.is_int_like:
+        elif lhs.type.is_int and rhs.type.is_int:
             lfunc = self.builder.icmp
             if lhs.type.signed:
                 mapping = _compare_mapping_sint
@@ -1102,12 +1104,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             return op.__name__.lower()
 
     def _handle_mod(self, node, lhs, rhs):
-        _, func = self.context.intrinsic_library.declare(self.llvm_module,
-                                                        'PyModulo',
-                                                        arg_types = (node.type,
-                                                                     node.type),
-                                                        return_type = node.type)
-        return self.builder.call(func, (lhs, rhs))
+        from numba.utility import math_utilities
+
+        py_modulo = math_utilities.py_modulo(node.type, (node.left.type,
+                                                         node.right.type))
+        lfunc = self.env.crnt.llvm_module.get_or_insert_function(
+            py_modulo.lfunc.type.pointee, py_modulo.lfunc.name)
+
+        return self.builder.call(lfunc, (lhs, rhs))
 
     def _handle_complex_binop(self, lhs, op, rhs):
         opname = self.opname(op)
@@ -1126,7 +1130,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         meth = getattr(self.builder, llvm_method_name)
         if not lhs.type == rhs.type:
-            print lhs.type, rhs.type
+            print((lhs.type, rhs.type))
             assert False, ast.dump(node)
 
         result = meth(lhs, rhs)
@@ -1303,6 +1307,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)
 
+    def visit_IntrinsicNode(self, node):
+        args = self.visitlist(node.args)
+        return node.intrinsic.emit_code(self.lfunc, self.builder, args)
+
     def visit_PointerCallNode(self, node):
         node.llvm_func = self.visit(node.function)
         return self.visit_NativeCallNode(node)
@@ -1343,7 +1351,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         addr = id(node.object)
         obj_addr_int = self.generate_constant_int(addr, typesystem.Py_ssize_t)
         obj = self.builder.inttoptr(obj_addr_int,
-                                    typesystem.object_.to_llvm(self.context))
+                                    node.type.to_llvm(self.context))
         return obj
 
     def visit_NoneNode(self, node):
@@ -1732,7 +1740,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             else:
                 lvalue = llvm.core.Constant.int(ltype, constant)
         elif type.is_c_string:
-            lvalue = self.env.llvm_context.get_string_constant(constant)
+            lvalue = self.env.constants_manager.get_string_constant(constant)
             type_char_p = typesystem.c_string_type.to_llvm(self.context)
             lvalue = self.builder.bitcast(lvalue, type_char_p)
         elif type.is_bool:

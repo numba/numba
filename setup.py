@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import os
 import sys
 import subprocess
@@ -44,6 +46,10 @@ def find_packages(where='.', exclude=()):
             ):
                 out.append(prefix+name)
                 stack.append((fn, prefix+name+'.'))
+
+    if sys.version_info[0] == 3:
+        exclude = exclude + ('*py2only*', )
+
     for pat in list(exclude) + ['ez_setup', 'distribute_setup']:
         out = [item for item in out if not fnmatchcase(item, pat)]
     return out
@@ -53,7 +59,7 @@ def run_2to3():
     from distutils.command.build_py import build_py_2to3 as build_py
     print("Installing 2to3 fixers")
     # need to convert sources to Py3 on installation
-    fixes = 'print dict imports imports2 tuple_params unicode ' \
+    fixes = 'dict imports imports2 unicode ' \
             'xrange itertools itertools_imports long types'.split()
     fixes = ['lib2to3.fixes.fix_' + fix 
              for fix in fixes]

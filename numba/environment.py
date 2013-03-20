@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import weakref
 import ast as ast_module
 import types
@@ -6,7 +8,7 @@ import pprint
 
 import llvm.core
 
-from numba import pipeline, naming, error, reporting
+from numba import pipeline, naming, error, reporting, PY3
 from numba.control_flow.control_flow import ControlFlow
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
 from numba.minivect.minitypes import FunctionType
@@ -14,6 +16,7 @@ from numba import functions, symtab
 from numba.utility.cbuilder import library
 from numba.nodes import metadata
 from numba.codegen import translate
+from numba.codegen import globalconstants
 
 from numba.intrinsic import default_intrinsic_library
 from numba.external import default_external_library
@@ -25,6 +28,7 @@ from numba.external.utility import default_utility_library
 logger = logging.getLogger(__name__)
 
 default_pipeline_order = [
+    'ast3to2',
     'resolve_templates',
     'validate_signature',
     'update_signature',
@@ -61,6 +65,7 @@ default_pipeline_order = [
 ]
 
 default_type_infer_pipeline_order = [
+    'ast3to2',
     'ControlFlowAnalysis',
     'TypeInfer',
 ]
@@ -69,11 +74,13 @@ compile_idx = default_pipeline_order.index('TypeInfer') + 1
 default_compile_pipeline_order = default_pipeline_order[compile_idx:]
 
 default_dummy_type_infer_pipeline_order = [
+    'ast3to2',
     'TypeInfer',
     'TypeSet',
 ]
 
 default_numba_lower_pipeline_order = [
+    'ast3to2',
     'LateSpecializer',
     'SpecializeFunccalls',
     'SpecializeExceptions',
@@ -207,6 +214,11 @@ class FunctionEnvironment(object):
         "Compiled, native, Numba function",
         None)
 
+    lfunc_pointer = TypedProperty(
+        (int, long),
+        "Pointer to underlying compiled function. Can be used as a callback.",
+    )
+
     link = TypedProperty(
         bool,
         'Flag indicating whether the LLVM function needs to be linked into '
@@ -308,7 +320,7 @@ class FunctionEnvironment(object):
         True)
 
     warnstyle = TypedProperty(
-        basestring,
+        str if PY3 else basestring,
         'Warning style, currently available: simple, fancy',
         default='fancy'
     )
@@ -343,14 +355,18 @@ class FunctionEnvironment(object):
         self.func_signature = func_signature
 
         if name is None:
-            if self.func and self.func.__module__:
-                module_name = self.func.__module__
-                name = '.'.join([module_name, self.func.__name__])
+            if self.func:
+                name = self.func.__name__
             else:
                 name = self.ast.name
 
+        if self.func and self.func.__module__:
+            qname = '.'.join([self.func.__module__, name])
+        else:
+            qname = name
+
         if mangled_name is None:
-            mangled_name = naming.specialized_mangle(name,
+            mangled_name = naming.specialized_mangle(qname,
                                                      self.func_signature.args)
 
         self.func_name = name
@@ -370,7 +386,7 @@ class FunctionEnvironment(object):
         if function_globals is not None:
             self.function_globals = function_globals
         else:
-            self.function_globals = self.func.func_globals
+            self.function_globals = self.func.__globals__
 
         self.locals = locals if locals is not None else {}
         self.template_signature = template_signature
@@ -692,6 +708,12 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
     llvm_context = TypedProperty(
         translate.LLVMContextManager,
         "Manages the global LLVM module and linkages of new translations."
+    )
+
+    constants_manager = TypedProperty(
+        globalconstants.LLVMConstantsManager,
+        "Holds constant values in an LLVM module.",
+        default=globalconstants.LLVMConstantsManager(),
     )
 
     # ____________________________________________________________

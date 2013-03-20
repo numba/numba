@@ -1,7 +1,10 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 from itertools import imap, izip
 import copy
 import types
 import ctypes
+from functools import reduce
 
 import llvm.core
 import numpy as np

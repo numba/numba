@@ -46,5 +46,4 @@ def test_typeof():
     # assert derived_typeof() == (double, int_, float_), derived_typeof()
 
 if __name__ == '__main__':
-    import numba
     numba.testmod()

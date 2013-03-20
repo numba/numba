@@ -31,5 +31,8 @@ if __name__ == '__main__':
    # round2(10.497, 2)
    # round_val(object())
     round_val(3.6)
-    import doctest
-    doctest.testmod()
+    import numba
+    if numba.PY3:
+        __doc__ = __doc__.replace('TypeError: a float is required',
+                                  "TypeError: type object doesn't define __round__ method")
+    numba.testmod()

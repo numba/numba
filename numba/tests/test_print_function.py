@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import sys
 import unittest
 import StringIO
@@ -7,19 +9,20 @@ from numba import *
 
 @autojit(backend='ast')
 def print_(value):
-    print value
+    print(value)
 
 @autojit(backend='ast', nopython=True)
 def print_nopython(value):
-    print "value", value
+    print("value", end=" ")
+    print(value)
 
 @autojit(backend='ast')
 def print_to_stream(stream, value):
-    print >>stream, value
+    print(value, file=stream)
 
 @autojit(backend='ast')
 def print_no_newline(stream, value):
-    print >>stream, value,
+    print(value, end=' ', file=stream)
 
 class TestPrint(unittest.TestCase):
     def test_print(self):
@@ -48,5 +51,9 @@ class TestPrint(unittest.TestCase):
         assert data == "14.1 ", repr(data)
 
 if __name__ == "__main__":
-    print_nopython(10)
+    # The following isn't currently supported.  See issue #147
+    #(https://github.com/numba/numba/issues/147).
+
+    #print_nopython(10)
+
     unittest.main()

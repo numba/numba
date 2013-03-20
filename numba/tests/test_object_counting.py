@@ -38,7 +38,7 @@ Test list/dict/tuple literals
 ...     def __init__(self, value):
 ...         self.value = value
 ...     def __del__(self):
-...         print 'deleting...'
+...         print('deleting...')
 ...
 >>> sys.getrefcount(attr_count(C(object())))
 deleting...
@@ -47,14 +47,11 @@ deleting...
 >>> obj = object()
 >>> sys.getrefcount(obj)
 2
->>> try:
-...     exc(obj)
-... except TypeError, e:
-...     del e
-...     sys.exc_clear()
-... else:
-...     raise Exception("An exception should have been raised")
+>>> exc(obj)
+Traceback (most recent call last):
 ...
+TypeError: 'object' object is not callable
+
 >>> sys.getrefcount(obj)
 2
 
@@ -67,9 +64,9 @@ deleting...
 4
 
 >>> def test_count_arguments(f, obj):
-...     print sys.getrefcount(obj)
+...     print(sys.getrefcount(obj))
 ...     f(obj)
-...     print sys.getrefcount(obj)
+...     print(sys.getrefcount(obj))
 ...
 >>> test_count_arguments(count_arguments2, object())
 3
@@ -104,7 +101,7 @@ class Unique(object):
 def use_objects(obj_array):
     for i in range(10):
         var = obj_array[i]
-        print var
+        print(var)
 
 def test_refcounting():
     L = np.array([Unique(i) for i in range(10)], dtype=np.object)
@@ -116,7 +113,7 @@ def test_refcounting():
     # This fails in nose
     #expected = "\n".join("Unique(%d)" % i for i in range(10)) + '\n'
     #print out.getvalue() == expected
-    print [sys.getrefcount(obj) for obj in L]
+    print([sys.getrefcount(obj) for obj in L])
 
 @autojit(backend='ast', warn=False)
 def fresh_obj():
@@ -198,5 +195,5 @@ def count_arguments3(obj):
 if __name__ == "__main__":
 #    print sys.getrefcount(fresh_obj())
 #    exc(object())
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

@@ -1,16 +1,19 @@
+# -*- coding: utf-8 -*-
 """
 This module contains the Pipeline class which provides a pluggable way to
 define the transformations and the order in which they run on the AST.
 """
+from __future__ import print_function, division, absolute_import
 
 import ast as ast_module
 import logging
 import pprint
 import random
-
+import types
 import llvm.core as lc
 
 # import numba.closures
+from numba import PY3
 from numba import error
 from numba import functions
 from numba import transforms
@@ -34,6 +37,8 @@ from numba.specialize import loops
 from numba.specialize import exceptions
 from numba.specialize import funccalls
 from numba.specialize import exttypes
+
+from numba import astsix
 
 logger = logging.getLogger(__name__)
 
@@ -201,13 +206,28 @@ class SimplePipelineStage(PipelineStage):
         transform = self.make_specializer(self.transformer, ast, env)
         return transform.visit(ast)
 
+
+class AST3to2(PipelineStage):
+
+    def transform(self, ast, env):
+        if not PY3:
+            return ast
+        return astsix.AST3to2().visit(ast)
+
+
+def ast3to2(ast, env):
+    if not PY3:
+        return ast
+    return astsix.AST3to2().visit(ast)
+
+
 def resolve_templates(ast, env):
     # TODO: Unify with decorators module
     crnt = env.translation.crnt
     if crnt.template_signature is not None:
         from numba import typesystem
 
-        argnames = [arg.id for arg in ast.args.args]
+        argnames = [name.id for name in ast.args.args]
         argtypes = list(crnt.func_signature.args)
 
         typesystem.resolve_templates(crnt.locals, crnt.template_signature,
@@ -474,6 +494,7 @@ class CodeGen(PipelineStage):
         func_env.translator = self.make_specializer(
             translate.LLVMCodeGenerator, ast, env,
             **func_env.kwargs)
+
         func_env.translator.translate()
         func_env.lfunc = func_env.translator.lfunc
         return ast
@@ -489,11 +510,14 @@ class LinkingStage(PipelineStage):
         # Link libraries into module
         env.context.intrinsic_library.link(func_env.lfunc.module)
         # env.context.cbuilder_library.link(func_env.lfunc.module)
+        env.constants_manager.link(func_env.lfunc.module)
 
         if func_env.link:
             # Link function into fat LLVM module
             func_env.lfunc = env.llvm_context.link(func_env.lfunc)
             func_env.translator.lfunc = func_env.lfunc
+
+        func_env.lfunc_pointer = func_env.translator.lfunc_pointer
 
         return ast
 
@@ -540,7 +564,7 @@ class ComposedPipelineStage(PipelineStage):
     @staticmethod
     def check_stage(stage):
         def _check_stage_object(stage_obj):
-            if (isinstance(stage_obj, type) and
+            if (isinstance(stage_obj, (type, types.ClassType)) and
                     issubclass(stage_obj, PipelineStage)):
                 stage_obj = stage_obj()
             return stage_obj

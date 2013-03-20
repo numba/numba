@@ -2,8 +2,19 @@
 Test Python- and Numba-level inheritance.
 """
 
+import numba
 from numba import *
 from numba.tests.test_support import parametrize, main
+
+if not numba.PY3:
+    # The operation is valid in Python 3
+
+    __doc__ = """
+    >>> Base.py_method(object())
+    Traceback (most recent call last):
+    ...
+    TypeError: unbound method numba_function_or_method object must be called with Base instance as first argument (got object instance instead)
+    """
 
 def format_str(msg, *values):
     return msg % values

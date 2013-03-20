@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 # Uses Python.asdl to test against some python script
 # and some manually built ast
 

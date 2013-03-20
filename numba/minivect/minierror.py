@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Define some errors that may be raised by the compiler.
 """
+from __future__ import print_function, division, absolute_import
 
 class Error(Exception):
     "Base exception class"

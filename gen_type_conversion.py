@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 """
 Generate generated_conversions.c
 
 Utilities adjusted from Cython/Compiler/PyrexTypes.pyx
 """
+from __future__ import print_function, division, absolute_import
 
 import os
 

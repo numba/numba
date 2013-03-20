@@ -1,6 +1,6 @@
 from numba import *
 import numba as nb
-
+from numba.tests.test_support import autojit_py3doc
 @autojit
 def index(type):
     """
@@ -20,7 +20,7 @@ def index(type):
     tlist.append(0)
     tlist.append(1)
     tlist.append(2)
-    return map(str, [tlist, tlist[0], tlist[1], tlist[2]])
+    return [str(tlist), str(tlist[0]), str(tlist[1]), str(tlist[2])]
 
 @autojit
 def index_error(type):
@@ -41,7 +41,7 @@ def index_error(type):
     tlist.append(2)
     return tlist[4]
 
-@autojit
+@autojit_py3doc
 def append(type):
     """
     >>> append(int_)
@@ -57,7 +57,7 @@ def append(type):
     l4 = len(tlist)
     return l1, l2, l3, l4
 
-@autojit
+@autojit_py3doc
 def append_many(type):
     """
     >>> append_many(int_)
@@ -68,7 +68,7 @@ def append_many(type):
         tlist.append(i)
     return len(tlist)
 
-@autojit
+@autojit_py3doc
 def pop(type):
     """
     >>> pop(int_)
@@ -82,15 +82,15 @@ def pop(type):
         tlist.append(i)
 
     l1 = len(tlist)
-    print tlist.pop()
+    print((tlist.pop()))
     l2 = len(tlist)
-    print tlist.pop()
+    print((tlist.pop()))
     l3 = len(tlist)
-    print tlist.pop()
+    print((tlist.pop()))
     l4 = len(tlist)
     return l1, l2, l3, l4
 
-@autojit
+@autojit_py3doc
 def pop_many(type):
     """
     >>> pop_many(int_)
@@ -107,7 +107,7 @@ def pop_many(type):
 
     return initial_length, len(tlist)
 
-@autojit
+@autojit_py3doc
 def from_iterable(type, iterable):
     """
     >>> from_iterable(int_, [1, 2, 3])
@@ -136,7 +136,7 @@ def from_iterable(type, iterable):
     """
     return nb.typedlist(type, iterable)
 
-@autojit
+@autojit_py3doc
 def test_count(type, L):
     """
     >>> test_count(int_, [1, 2, 3, 4, 5, 1, 2])
@@ -145,7 +145,7 @@ def test_count(type, L):
     tlist = nb.typedlist(type, L)
     return tlist.count(0), tlist.count(3), tlist.count(1)
 
-@autojit
+@autojit_py3doc
 def test_count_complex(type, L):
     """
     >>> test_count_complex(complex128, [1+1j, 1+2j, 2+1j, 2+2j, 1+1j, 2+2j, 2+2j])
@@ -154,7 +154,7 @@ def test_count_complex(type, L):
     tlist = nb.typedlist(type, L)
     return tlist.count(1+2j), tlist.count(1+1j), tlist.count(2+2j)
 
-@autojit
+@autojit_py3doc
 def test_index(type):
     """
     >>> test_index(int_)

@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Type inference for NumPy binary ufuncs and their methods.
 """
+from __future__ import print_function, division, absolute_import
 
 import numpy as np
 

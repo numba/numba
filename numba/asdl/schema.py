@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import sys
 import ast
 from . import asdl
@@ -89,16 +91,16 @@ class Schema(object):
         return SchemaVerifier(self, context).visit(ast)
 
     def debug(self):
-        print "Schema %s" % self.name
+        print(("Schema %s" % self.name))
         for k, fs in self.types.items():
-            print '    --', k, fs
+            print(('    --', k, fs))
         for k, fs in self.dfns.items():
             if fs.is_sum():
-                print '   ', k
+                print(('   ', k))
                 for f in fs.fields:
-                    print '       |', f
+                    print(('       |', f))
             else:
-                print '   ', k, '=', ', '.join(map(str, fs.fields))
+                print(('   ', k, '=', ', '.join(map(str, fs.fields))))
 
 class SchemaContext(object):
     '''Keep information about context:

@@ -4,7 +4,7 @@ from numba import *
 def operands(dtype=np.double):
     return np.arange(10, dtype=dtype), np.arange(100, dtype=dtype).reshape(10, 10)
 
-def test_kernel(kernel, *args):
+def check_kernel(kernel, *args):
     new_args = [arg.copy() for arg in args]
     result = kernel(*new_args)
 
@@ -67,10 +67,10 @@ def test(dtype):
         assert v1.ctypes.data == v3.ctypes.data
         assert v2.ctypes.data == v4.ctypes.data
 
-        test_kernel(broadcast_expr1, a, b)
-        test_kernel(broadcast_expr2, a, b)
-        test_kernel(broadcast_expr3, a, b)
-        test_kernel(broadcast_expr4, a, b)
+        check_kernel(broadcast_expr1, a, b)
+        check_kernel(broadcast_expr2, a, b)
+        check_kernel(broadcast_expr3, a, b)
+        check_kernel(broadcast_expr4, a, b)
 
 @autojit
 def broadcast_expr5(m1, m2):
@@ -96,12 +96,12 @@ def test_index_slice_assmt(dtype):
     >>> test_index_slice_assmt(np.complex128)
     """
     a, b = operands(dtype)
-    test_kernel(broadcast_expr5, a, b)
-    test_kernel(broadcast_expr6, a, b)
+    check_kernel(broadcast_expr5, a, b)
+    check_kernel(broadcast_expr6, a, b)
 
     b = np.arange(10000).reshape(10, 10, 10, 10)
     a = b[0]
-    test_kernel(broadcast_expr7, a, b)
+    check_kernel(broadcast_expr7, a, b)
 
 @autojit
 def shape_mismatch(a, b):
@@ -126,8 +126,5 @@ def test_shape_mismatch():
     """
 
 if __name__ == "__main__":
-#    a = np.arange(5)
-#    b = np.arange(25).reshape(5, 5)
-#    print broadcast_expr1(a, b) - (a + b)
-    import doctest
-    doctest.testmod()
+    import numba
+    numba.testmod()

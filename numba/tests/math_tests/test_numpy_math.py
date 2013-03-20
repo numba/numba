@@ -66,13 +66,13 @@ def test_math_funcs():
         func = functions[func_name]
         for dest_type in dest_types:
             signature = minitypes.FunctionType(None, [dest_type, dest_type])
-            print "executing...", func_name, signature
+            print(("executing...", func_name, signature))
 
             try:
                 numba_func = jit(signature)(func)
             except error.NumbaError as e:
                 exceptions += 1
-                print func_name, dest_type, e
+                print((func_name, dest_type, e))
                 continue
 
             x, y = 5.2, 6.9
@@ -99,7 +99,7 @@ def test_array_math():
     functions = get_functions()
     for func_name, func in functions.iteritems():
         for dst_type in dst_types:
-            print "array math", func_name, dst_type
+            print(("array math", func_name, dst_type))
             dtype = dst_type.get_dtype()
             a = np.arange(1, 5, dtype=dtype)
             b = np.arange(5, 9, dtype=dtype)
@@ -109,8 +109,8 @@ def test_array_math():
 
 @autojit
 def expm1(a, b):
-    print numba.typeof(a)
-    print numba.typeof(np.expm1(a))
+    print((numba.typeof(a)))
+    print((numba.typeof(np.expm1(a))))
 #    result = a**2 + b**2
 #    print "... :)"
 #    print np.expm1(result), "..."

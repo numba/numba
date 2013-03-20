@@ -34,7 +34,7 @@ def _for_loop(start, stop, inc):
     for value in range(start, stop, inc):
         acc += value
 
-    print value
+    print(value)
     return acc
 
 for_loop = decorators.autojit(backend='ast')(_for_loop)
@@ -241,7 +241,7 @@ class TestTypeInference(unittest.TestCase):
 #        try:
 #            sig, symtab = infer(arg_rebind, functype(int_, [int_]),
 #                                allow_rebind_args=False)
-#        except minierror.UnpromotableTypeError, e:
+#        except minierror.UnpromotableTypeError as e:
 #            msg = str(sorted(e.args, key=str))
 #            self.assertEqual("[(double, const char *)]", msg)
 #        else:

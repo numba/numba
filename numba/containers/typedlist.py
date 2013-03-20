@@ -1,9 +1,8 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import numba as nb
 from numba import *
-from numba import nodes
-from numba import typesystem
 from numba.containers import orderedcontainer
-import typedlist as typedlist_module
 
 import numpy as np
 

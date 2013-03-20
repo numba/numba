@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 This module provides a minimal type system, and ways to promote types, as
 well as ways to convert to an LLVM type system. A set of predefined types are
@@ -26,6 +27,7 @@ Traceback (most recent call last):
    ...
 InvalidTypeSpecification: Step may only be provided once, and only in the first or last dimension.
 """
+from __future__ import print_function, division, absolute_import
 
 __all__ = ['Py_ssize_t', 'void', 'char', 'uchar', 'short', 'ushort',
            'int_', 'uint', 'long_', 'ulong', 'longlong', 'ulonglong',
@@ -222,6 +224,8 @@ class TypeMapper(object):
             return self.promote_arrays(type1, type2)
         elif type1 in string_types and type2 in string_types:
             return c_string_type
+        elif type1.is_bool and type2.is_bool:
+            return bool_
         else:
             raise minierror.UnpromotableTypeError((type1, type2))
 
@@ -345,9 +349,10 @@ def find_type_of_size(size, typelist):
     assert False, "Type of size %d not found: %s" % (size, typelist)
 
 NONE_KIND = 0
-INT_KIND = 1
-FLOAT_KIND = 2
-COMPLEX_KIND = 3
+BOOL_KIND = 1
+INT_KIND = 2
+FLOAT_KIND = 3
+COMPLEX_KIND = 4
 
 class Type(miniutils.ComparableObjectMixin):
     """
@@ -685,19 +690,6 @@ class NamedType(Type):
             return "%s %s" % (self.name, " ".join(self.qualifiers))
         return str(self.name)
 
-class BoolType(NamedType):
-    is_bool = True
-    name = "bool"
-
-    def __repr__(self):
-        return ("int %s" % " ".join(self.qualifiers)).rstrip()
-
-    def __str__(self):
-        return ("bool %s" % " ".join(self.qualifiers)).rstrip()
-
-    def to_llvm(self, context):
-        return llvm.core.Type.int(1)
-
 class NumericType(NamedType):
     """
     Base class for numeric types.
@@ -749,6 +741,23 @@ class IntType(NumericType):
             return self.name + "_t"
         else:
             return str(self)
+
+
+class BoolType(IntType):
+    is_bool = True
+    name = "bool"
+    kind = BOOL_KIND
+    rank = 0
+
+    def __repr__(self):
+        return ("int %s" % " ".join(self.qualifiers)).rstrip()
+
+    def __str__(self):
+        return ("bool %s" % " ".join(self.qualifiers)).rstrip()
+
+    def to_llvm(self, context):
+        return llvm.core.Type.int(1)
+
 
 class FloatType(NumericType):
     is_float = True
@@ -1092,6 +1101,9 @@ class struct(Type):
     @property
     def subtype_list(self):
         return [field[1] for field in self.fields]
+
+    def __hash__(self):
+        return hash(tuple(self.fields))
 
     def is_prefix(self, other_struct):
         other_fields = other_struct.fields[:len(self.fields)]

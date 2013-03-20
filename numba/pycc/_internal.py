@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 import logging
 import os
 import sys
@@ -5,6 +7,7 @@ import functools
 from numba import environment
 from numba import llvm_types
 import llvm.core as lc
+import llvm.ee as le
 logger = logging.getLogger(__name__)
 
 __all__ = ['which', 'find_linker', 'find_args', 'find_shared_ending',
@@ -116,8 +119,9 @@ class Compiler(object):
         for submod in exports_env.function_module_map.values():
             ret_val.link_in(submod)
 
-        # Link in cbuilder utilities
+        # Link in cbuilder utilities and string constants
         self.env.context.cbuilder_library.link(ret_val)
+        self.env.constants_manager.link(ret_val)
 
         if exports_env.wrap_exports:
             method_defs = []
@@ -152,8 +156,11 @@ class Compiler(object):
     def write_native_object(self, output, **kws):
         self._process_inputs(**kws)
         lmod = self._cull_exports()
+        #print(lmod)
+        tm = le.TargetMachine.new(reloc=le.RELOC_PIC, features='-avx')
         with open(output, 'wb') as fout:
-            fout.write(lmod.to_native_object())
+            objfile = tm.emit_object(lmod)
+            fout.write(objfile)
 
     def emit_header(self, output):
         from numba.minivect import minitypes

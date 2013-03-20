@@ -67,6 +67,7 @@ Developer Documentation
    :maxdepth: 1
 
    doc/architecture.rst
+   doc/ir.rst
    doc/reference.rst
 
 

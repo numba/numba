@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Support for CFFI. Allows checking whether objects are CFFI functions and
 obtaining the pointer and numba signature.
 """
+from __future__ import print_function, division, absolute_import
 
 from itertools import imap
 
@@ -43,7 +45,7 @@ def map_type(cffi_type):
                                for name, field_type in cffi_type.fields])
     elif cffi_type.kind == 'function':
         restype = map_type(cffi_type.result)
-        argtypes = map(map_type, cffi_type.args)
+        argtypes = [map_type(arg) for arg in cffi_type.args]
         result = minitypes.FunctionType(restype, argtypes,
                                         is_vararg=cffi_type.ellipsis).pointer()
     else:

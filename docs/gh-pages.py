@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """Script to commit the doc build outputs into the github-pages repo.
 
 Use:
@@ -10,6 +11,7 @@ that is how the resulting directory will be named.
 
 In practice, you should use either actual clean tags from a current build or
 something like 'current' as a stable URL for the most current version of the """
+from __future__ import print_function, division, absolute_import
 
 #-----------------------------------------------------------------------------
 # Imports
@@ -86,7 +88,7 @@ if __name__ == '__main__':
             tag = sh2('git describe --exact-match')
         except CalledProcessError:
             tag = "dev"   # Fallback
-            print "Using dev"
+            print("Using dev")
     
     startdir = os.getcwdu()
     if not os.path.exists(pages_dir):
@@ -127,13 +129,13 @@ if __name__ == '__main__':
 
         sh('git add -A %s' % tag)
         sh('git commit -m"Updated doc release: %s"' % tag)
-        print
-        print 'Most recent 3 commits:'
+        print()
+        print('Most recent 3 commits:')
         sys.stdout.flush()
         sh('git --no-pager log --oneline HEAD~3..')
     finally:
         cd(startdir)
 
-    print
-    print 'Now verify the build in: %r' % dest
-    print "If everything looks good, 'git push'"
+    print()
+    print('Now verify the build in: %r' % dest)
+    print("If everything looks good, 'git push'")

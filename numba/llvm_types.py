@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 '''llvm_types
 
 Utility module containing common (to Numba) LLVM types.
 '''
+from __future__ import print_function, division, absolute_import
 # ______________________________________________________________________
 
 import ctypes
@@ -82,6 +84,8 @@ class _LLVMCaster(object):
 
     def cast(self, lvalue, dst_ltype, *args, **kws):
         src_ltype = lvalue.type
+        if src_ltype == dst_ltype:
+            return lvalue
         return self.build_cast(self.builder, lvalue, dst_ltype, *args, **kws)
 
     def build_pointer_cast(_, builder, lval1, lty2):

@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Type functions for Python builtins.
 """
+from __future__ import print_function, division, absolute_import
 
 from numba import *
 from numba import nodes
@@ -98,7 +100,7 @@ def abs_(context, node, x):
 
 @register_builtin((2, 3))
 def pow_(context, node, base, exponent, mod):
-    import mathmodule
+    from . import mathmodule
     return mathmodule.pow_(context, node, base, exponent)
 
 @register_builtin((1, 2))
