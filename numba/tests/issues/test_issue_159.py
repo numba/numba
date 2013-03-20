@@ -8,3 +8,4 @@ def ff(T):
 
 x=np.ones(100,dtype=np.double)
 ff(x)
+assert np.all(x == 1.0)
