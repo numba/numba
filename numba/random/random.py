@@ -4,8 +4,7 @@ import numpy.random as nr
 import os.path
 from numpy.distutils.misc_util import get_shared_lib_extension
 
-direc = os.path.dirname(nr.__file__)
-mtrand = ct.CDLL(direc + os.path.sep + 'mtrand' + get_shared_lib_extension())
+mtrand = ct.CDLL(nr.mtrand.__file__)
 
 # Should we parse this from randomkit.h in the numpy directory? 
 RK_STATE_LEN = len(nr.get_state()[1])
