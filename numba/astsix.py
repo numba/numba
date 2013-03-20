@@ -1,5 +1,8 @@
+import sys
 import ast
 import pprint
+
+from numba import error
 
 def iter_fields(node):
     """
@@ -66,3 +69,27 @@ class AST3to2(ast.NodeTransformer):
                 raise TypeError('Cannot transform node %r' % arg_node)
         return ast.arguments(args=ret, defaults=node.defaults,
                              kwarg=node.kwarg, vararg=node.vararg)
+
+    def visit_With(self, node):
+        """
+        Rewrite the With statement.
+
+        Python < 3.3:
+
+             With(expr context_expr, expr? optional_vars, stmt* body)
+
+        Python 3.3:
+
+            With(withitem* items, stmt* body)
+            withitem = (expr context_expr, expr? optional_vars)
+        """
+        if sys.version_info[:2] >= (3, 3):
+            if len(node.items) > 1:
+                raise error.NumbaError(node,
+                                       "Only one 'with' context is support")
+
+            withitem = node.items[0]
+            node.context_expr = withitem.context_expr
+            node.optional_vars = withitem.optional_vars
+
+        return node
