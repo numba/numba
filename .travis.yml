@@ -30,3 +30,6 @@ script: cd ~; python -c "import sys;import numba;sys.exit(0 if numba.test([]) ==
 
 notifications:
   email: false
+  flowdock: "cb7bc57e58b3d42f77685f93211c03ab"
+  on_success: "change"
+  on_failure: "always" # "change"
