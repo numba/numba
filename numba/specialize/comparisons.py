@@ -115,10 +115,12 @@ class SpecializeComparisons(visitors.NumbaTransformer):
             #     bool array of array comparison
             #     bool otherwise
 
-            result_type = self.context.promote_types(left.type, right.type)
-            if not result_type.is_array:
+            if left.type.is_array or right.type.is_array:
                 # array < x -> Array(bool_, array.ndim)
+                result_type = self.context.promote_types(left.type, right.type)
+            else:
                 result_type = bool_
+
             nodes.typednode(node, result_type)
 
             # Handle comparisons specially based on their types
