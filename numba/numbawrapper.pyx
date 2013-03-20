@@ -48,6 +48,33 @@ cdef class NumbaWrapper(object):
         self.func_doc = py_func.__doc__
         self.module = py_func.__module__
 
+
+    def __get__(self, obj, objtype):
+        """Allow NumbaWrapper to be bound and used for instance methods.
+        """
+        if obj is None:
+            return self
+        return _BoundNumbaWrapper(self, obj)
+
+
+cdef class _BoundNumbaWrapper(object):
+    cdef public object wrapper
+    cdef public object obj
+
+    def __init__(self, wrapper, obj):
+        self.wrapper = wrapper
+        self.obj = obj
+
+
+    def __repr__(self):
+        return "<_BoundNumbaWrapper (%s, %s)>" % (self.wrapper, self.obj)
+
+
+    def __call__(self, *args, **kwargs):
+        realArgs = ( self.obj, ) + args
+        return self.wrapper(*realArgs, **kwargs)
+
+
 #------------------------------------------------------------------------
 # Create Numba Functions (numbafunction.c)
 #------------------------------------------------------------------------
