@@ -100,8 +100,8 @@ class SpecializeComparisons(visitors.NumbaTransformer):
         compare_nodes = []
         comparators = [nodes.CloneableNode(c) for c in node.comparators]
 
-        if node.type.is_array:
-            if len(node.comparators) > 1:
+        if len(node.comparators) > 1:
+            if node.type.is_array:
                 raise error.NumbaError(
                         node, "Cannot determine truth value of boolean array "
                               "(use any or all)")
@@ -110,8 +110,16 @@ class SpecializeComparisons(visitors.NumbaTransformer):
         left = node.left
         for op, right in zip(node.ops, comparators):
             node = ast.Compare(left=left, ops=[op], comparators=[right])
-            node = nodes.typednode(node, self.context.promote_types(left.type,
-                                                                    right.type))
+
+            # Set result type of comparison:
+            #     bool array of array comparison
+            #     bool otherwise
+
+            result_type = self.context.promote_types(left.type, right.type)
+            if not result_type.is_array:
+                # array < x -> Array(bool_, array.ndim)
+                result_type = bool_
+            nodes.typednode(node, result_type)
 
             # Handle comparisons specially based on their types
             node = self.single_compare(node)
