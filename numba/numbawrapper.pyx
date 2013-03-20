@@ -101,13 +101,14 @@ cdef class NumbaCompiledWrapper(NumbaWrapper):
         lfunc: LLVM function
     """
 
-    cdef public object lfunc, signature, wrapper
+    cdef public object lfunc, signature, wrapper, lfunc_pointer
 
     def __init__(self, py_func, signature, lfunc):
         super(NumbaCompiledWrapper, self).__init__(py_func)
 
         self.signature = signature
         self.lfunc = lfunc
+        self.lfunc_pointer = None
 
     def __repr__(self):
         return '<compiled numba function (%s) :: %s>' % (self.py_func,

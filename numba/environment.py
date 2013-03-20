@@ -213,6 +213,11 @@ class FunctionEnvironment(object):
         "Compiled, native, Numba function",
         None)
 
+    lfunc_pointer = TypedProperty(
+        (int, long),
+        "Pointer to underlying compiled function. Can be used as a callback.",
+    )
+
     link = TypedProperty(
         bool,
         'Flag indicating whether the LLVM function needs to be linked into '

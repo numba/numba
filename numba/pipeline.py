@@ -482,6 +482,7 @@ class CodeGen(PipelineStage):
         func_env.translator = self.make_specializer(
             translate.LLVMCodeGenerator, ast, env,
             **func_env.kwargs)
+
         func_env.translator.translate()
         func_env.lfunc = func_env.translator.lfunc
         return ast
@@ -503,6 +504,8 @@ class LinkingStage(PipelineStage):
             # Link function into fat LLVM module
             func_env.lfunc = env.llvm_context.link(func_env.lfunc)
             func_env.translator.lfunc = func_env.lfunc
+
+        func_env.lfunc_pointer = func_env.translator.lfunc_pointer
 
         return ast
 
