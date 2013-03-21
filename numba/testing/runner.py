@@ -12,7 +12,7 @@ from numba import PY3
 # doctest compatible for jit or autojit numba functions
 from numba.testing.test_support import testmod
 
-EXCLUDE_TEST_PACKAGES = []
+EXCLUDE_TEST_PACKAGES = ["numba.minivect"]
 
 def exclude_package_dirs(dirs):
     for exclude_pkg in EXCLUDE_TEST_PACKAGES:
@@ -41,11 +41,18 @@ def find_testdirs():
     import numba
 
     numba_pkg = os.path.dirname(os.path.abspath(numba.__file__))
+
     for root, dirs, files in os.walk(numba_pkg):
+        exclude_package_dirs(dirs)
         for dir in dirs:
             if dir in ('tests',):
-                yield os.path.join(root, dir)
-                dirs.remove(dir)
+                testdir = os.path.join(root, dir)
+                qname = qualified_test_name(testdir)
+                if any(qname.startswith(e) for e in EXCLUDE_TEST_PACKAGES):
+                    dirs.remove(dir)
+                else:
+                    yield testdir
+
                 break
 
 try:
@@ -85,7 +92,6 @@ class TestRunner(object):
     def run(self, testdir):
         for root, dirs, files in os.walk(testdir):
             qname = qualified_test_name(root)
-            exclude_package_dirs(dirs)
 
             for fn in files:
                 if fn.startswith('test_') and fn.endswith('.py'):
