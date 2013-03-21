@@ -89,13 +89,13 @@ def test_baseclass(compiler):
 
     try:
         Base.py_method(object())
-    except TypeError, e:
+    except TypeError as e:
         assert e.args[0] == ('unbound method numba_function_or_method '
                              'object must be called with BaseClass '
                              'instance as first argument (got object '
                              'instance instead)'), e.args[0]
     else:
-        raise Exception
+        raise Exception("Expected an exception")
 
 @parametrize(jit) #, autojit)
 def test_derivedclass(compiler):

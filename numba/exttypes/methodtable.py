@@ -81,7 +81,7 @@ class VTabType(object):
         "Return methods in the order they were set in"
         assert self.methodnames is not None
         methods = map(self.methoddict.get, self.methodnames)
-        return methods + self.specialized_methods.values()
+        return list(methods) + self.specialized_methods.values()
 
     @property
     def llvm_methods(self):

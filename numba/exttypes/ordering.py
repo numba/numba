@@ -36,7 +36,7 @@ class AbstractTable(object):
     @property
     def parents(self):
         cls = type(self)
-        return map(cls, self.table.parents)
+        return list(map(cls, self.table.parents))
 
 @traits
 class VTable(AbstractTable):

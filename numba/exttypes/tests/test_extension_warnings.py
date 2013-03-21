@@ -2,8 +2,8 @@
 >>> compile_class(False).__name__
 'Base'
 >>> compile_class(True).__name__
-Warning 17:11: Unused argument 'self'
-Warning 17:17: Unused argument 'argument'
+Warning ...: Unused argument '...'
+Warning ...: Unused argument '...'
 'Base'
 """
 
@@ -20,6 +20,6 @@ def compile_class(warn):
     return Base
 
 if __name__ == '__main__':
-    # compile_class(False)
+    # compile_class(True)
     import numba
     numba.testmod()
