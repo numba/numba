@@ -6,11 +6,12 @@ python:
   - "3.2"
   - "3.3"
 
-# branches:
-#   only:
-#     - master
-#     - devel
-#     - release
+branches:
+  only:
+    - master
+    - devel
+    - release
+    - autoclass
 
 install:
   - wget "http://repo.continuum.io/pkgs/free/linux-64/llvm-3.2-0.tar.bz2"
