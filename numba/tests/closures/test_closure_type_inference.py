@@ -5,7 +5,7 @@
 import numpy as np
 
 from numba import *
-from numba.tests.test_support import *
+from numba.testing.test_support import *
 
 @autojit
 def test_cellvar_promotion(a):

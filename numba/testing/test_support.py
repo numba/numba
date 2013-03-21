@@ -12,7 +12,7 @@ from nose.tools import nottest
 import nose.plugins.skip
 import numba
 from numba import *
-from . import doctest_support
+from numba.testing import doctest_support
 
 jit_ = jit
 

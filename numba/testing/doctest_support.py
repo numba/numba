@@ -78,4 +78,3 @@ def testmod(m=None, run_doctests=True):
         result =  unittest.TextTestRunner(verbosity=2).run(suite)
         if not result.wasSuccessful():
             raise Exception("Doctests failed: %s" % result)
-

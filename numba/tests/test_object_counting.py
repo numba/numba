@@ -87,8 +87,8 @@ import ctypes
 
 from numba import *
 import numpy as np
+from numba.testing import test_support
 
-from numba.tests import test_support
 
 class Unique(object):
     def __init__(self, value):

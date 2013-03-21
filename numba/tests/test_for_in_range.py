@@ -1,6 +1,6 @@
 # Adapted from cython/tests/run/for_in_range.pyx
 
-from numba.tests.test_support import *
+from numba.testing.test_support import *
 
 @autojit_py3doc(warn=False)
 def test_modify():

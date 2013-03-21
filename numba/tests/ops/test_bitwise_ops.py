@@ -2,7 +2,7 @@ import sys
 
 import numba
 
-from numba.tests.test_support import autojit_py3doc
+from numba.testing.test_support import autojit_py3doc
 # NOTE: See also issues/test_issue_56
 
 @autojit_py3doc

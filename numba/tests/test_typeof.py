@@ -1,7 +1,7 @@
 import numpy as np
 import numba
 from numba import *
-from numba.tests.test_support import autojit_py3doc
+from numba.testing.test_support import autojit_py3doc
 @jit
 class Foo(object):
     def __init__(self, arg):

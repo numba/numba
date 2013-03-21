@@ -1,4 +1,4 @@
-from numba.tests.test_support import parametrize
+from numba.testing.test_support import parametrize
 
 @parametrize('foo', 'bar')
 def func(arg):

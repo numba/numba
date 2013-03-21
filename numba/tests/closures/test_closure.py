@@ -1,5 +1,5 @@
 import numba; from numba import *; from numba.error import NumbaError
-from numba.tests.test_support import rewrite_doc
+from numba.testing.test_support import rewrite_doc
 @autojit
 def error1():
     def inner():
