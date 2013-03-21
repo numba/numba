@@ -21,8 +21,8 @@ def make_extension(path_prefix, module_prefix, modname, sources, depends, **kwds
 
     return Extension(
         prefix_module(module_prefix, modname),
-        sources=map(_prefix_path, sources),
-        depends=map(_prefix_path, depends),
+        sources=list(map(_prefix_path, sources)),
+        depends=list(map(_prefix_path, depends)),
         **kwds
     )
 
