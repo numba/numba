@@ -183,7 +183,7 @@ def parametrize(*parameters):
             setattr(TestCase, name, testfunc)
 
 
-        func.func_globals[func.__name__ + '_testcase'] = TestCase
+        func.__globals__[func.__name__ + '_testcase'] = TestCase
         return func
 
     return decorator
