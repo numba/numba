@@ -8,8 +8,9 @@ Interfacing with C
 Ctypes and CFFI
 ===============
 Numba supports jitting ctypes and CFFI function calls. Numba will automatically
-figure out the signatures of the functions and data. Below is a gibbs sampling
-code that accesses ctypes (or CFFI) functions defined in another module (
+figure out the signatures of the functions and data. Below is a Gibbs sampling
+implementation that accesses ctypes (or CFFI) functions defined in another
+module (
 ``rk_seed``,  ``rk_gamma`` and ``rk_normal``), and that passes in a pointer to a struct
 also allocated with ctypes (``state_p``)::
 
@@ -36,7 +37,7 @@ Writing Low-level Code
 ======================
 
 Numba allows users to deal with high-level as well as low-level C-like code.
-Users can access and define new or external stucts, deal with pointers, and
+Users can access and define new or external structs, deal with pointers, and
 call C functions natively.
 
 .. NOTE:: Type declarations are covered in in :ref:`types`.
