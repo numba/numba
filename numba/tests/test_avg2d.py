@@ -6,7 +6,7 @@ import numpy
 
 from numba import f8
 from numba.decorators import jit, autojit
-from numba.tests import test_support
+from numba.testing import test_support
 
 import unittest
 import __builtin__

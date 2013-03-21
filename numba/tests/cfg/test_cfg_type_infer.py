@@ -1,6 +1,6 @@
 import numpy as np
 
-from numba.tests.test_support import *
+from numba.testing.test_support import *
 from numba.minivect import minitypes
 from numba import pipeline, environment, functions, error
 

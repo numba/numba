@@ -1,7 +1,7 @@
 import ctypes
 import numba
 from numba import *
-from numba.tests.test_support import testmod, autojit_py3doc
+from numba.testing.test_support import testmod, autojit_py3doc
 
 import numpy as np
 

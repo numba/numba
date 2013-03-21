@@ -1,5 +1,5 @@
 from numba.tests.cfg.test_cfg_type_infer import *
-from numba.tests.test_support import autojit_py3doc
+from numba.testing.test_support import autojit_py3doc
 
 
 

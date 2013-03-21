@@ -28,5 +28,5 @@ def invalid_compare(a):
 
 
 if __name__ == '__main__':
-    from numba.tests import test_support
+    from numba.testing import test_support
     test_support.testmod()

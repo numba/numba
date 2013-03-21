@@ -13,7 +13,7 @@ from numba import *
 
 import numpy
 from numba.decorators import jit, autojit
-from numba.tests import test_support
+from numba.testing import test_support
 
 # ______________________________________________________________________
 

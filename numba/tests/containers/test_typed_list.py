@@ -1,6 +1,6 @@
 from numba import *
 import numba as nb
-from numba.tests.test_support import autojit_py3doc
+from numba.testing.test_support import autojit_py3doc
 @autojit
 def index(type):
     """

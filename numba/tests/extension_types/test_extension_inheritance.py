@@ -4,7 +4,7 @@ Test Python- and Numba-level inheritance.
 
 import numba
 from numba import *
-from numba.tests.test_support import parametrize, main
+from numba.testing.test_support import parametrize, main
 
 if not numba.PY3:
     # The operation is valid in Python 3

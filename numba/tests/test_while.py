@@ -6,7 +6,7 @@ from numba import *
 import numpy
 from nose.tools import nottest
 
-from numba.tests import test_support
+from numba.testing import test_support
 from numba.utils import debugout
 
 # ______________________________________________________________________
