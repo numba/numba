@@ -19,4 +19,4 @@ def get_all_numba_bases(py_class):
     return bases[::-1]
 
 def get_numba_bases(py_class):
-    return filter(is_numba_class, py_class.__bases__)
+    return list(filter(is_numba_class, py_class.__bases__))
