@@ -6,7 +6,7 @@ import numba
 from numba import *
 
 from numba.testing.test_support import *
-from numba.tests.cfg.test_cfg_type_infer import infer as _infer, types, functype
+from numba.control_flow.tests.test_cfg_type_infer import infer as _infer
 from numba import typesystem
 
 T = numba.template()

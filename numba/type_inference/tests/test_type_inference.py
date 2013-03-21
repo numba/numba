@@ -136,7 +136,7 @@ def arg_rebind(a):
 
 # ______________________________________________________________________
 
-from numba.tests.cfg.test_cfg_type_infer import infer, functype
+from numba.control_flow.tests.test_cfg_type_infer import infer, functype
 
 class TestTypeInference(unittest.TestCase):
     def test_simple_func(self):

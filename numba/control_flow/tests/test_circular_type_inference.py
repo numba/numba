@@ -1,4 +1,4 @@
-from numba.tests.cfg.test_cfg_type_infer import *
+from numba.control_flow.tests.test_cfg_type_infer import *
 from numba.testing.test_support import autojit_py3doc
 
 
