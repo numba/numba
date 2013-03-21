@@ -9,7 +9,6 @@ import numba
 from numba import error
 from numba.minivect import minitypes
 from numba.support import ctypes_support, cffi_support
-from numba.wrapping import bindingmethods
 
 import numpy as np
 

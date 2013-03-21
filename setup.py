@@ -89,8 +89,6 @@ def install_pyextensibletype():
 if set(sys.argv) & set(('build', 'build_ext', 'install')): # TODO: Do this better
     install_pyextensibletype()
 
-# Unbound and bound method binding
-numba_binding_include = os.path.join(numba_root, "numba", "wrapping")
 numba_include_dir = get_include()
 
 gen_type_conversion.run()
