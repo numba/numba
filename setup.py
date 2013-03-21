@@ -20,7 +20,6 @@ if sys.version_info[:2] < (2, 6):
 
 import versioneer
 
-
 versioneer.versionfile_source = 'numba/_version.py'
 versioneer.versionfile_build = 'numba/_version.py'
 versioneer.tag_prefix = ''
@@ -73,11 +72,12 @@ def run_2to3():
 if sys.version_info[0] >= 3:
     run_2to3()
 
+numba_root = os.path.dirname(os.path.abspath(__file__))
+
 def get_include():
     """Use numba.get_include() instead (make numba importable without
     building it first)
     """
-    numba_root = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(numba_root, "numba", "include")
 
 def install_pyextensibletype():
@@ -89,6 +89,8 @@ def install_pyextensibletype():
 if set(sys.argv) & set(('build', 'build_ext', 'install')): # TODO: Do this better
     install_pyextensibletype()
 
+# Unbound and bound method binding
+numba_binding_include = os.path.join(numba_root, "numba", "wrapping")
 numba_include_dir = get_include()
 
 gen_type_conversion.run()
@@ -152,7 +154,8 @@ setup(
             name = "numba.numbawrapper",
             sources = ["numba/numbawrapper.pyx", "numba/numbafunction.c"],
             depends = ["numba/numbafunction.h"],
-            include_dirs=[numba_include_dir, numpy.get_include()],
+            include_dirs=[numba_include_dir,
+                          numpy.get_include()],
             cython_gdb=True),
     ],
     cmdclass = cmdclass,

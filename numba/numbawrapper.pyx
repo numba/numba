@@ -5,9 +5,11 @@ cimport numpy as cnp
 import types
 import ctypes
 
+import numba
 from numba import error
 from numba.minivect import minitypes
 from numba.support import ctypes_support, cffi_support
+from numba.wrapping import bindingmethods
 
 import numpy as np
 
@@ -191,7 +193,14 @@ cdef class _NumbaSpecializingWrapper(NumbaWrapper):
                              <PyObject *> args, NULL)
 
     def __get__(self, instance, type):
-        return BoundSpecializingWrapper(self, instance, type)
+        if instance is None:
+            if numba.PY3:
+                return UnboundFunctionWrapper(self, type)
+            else:
+                return self
+
+        return BoundSpecializingWrapper(self, instance)
+
 
 class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
 
@@ -207,23 +216,71 @@ class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
     def __module__(self):
         return self.module
 
-class BoundSpecializingWrapper(object):
+
+#------------------------------------------------------------------------
+# Unbound Methods
+#------------------------------------------------------------------------
+
+cdef class UnboundFunctionWrapper(object):
     """
-    Numba wrapper created for bound @autojit methods.
+    Wraps unbound functions in Python 3, for jit and autojit methods.
+    PyInstanceMethod does not check whether 'self' is an instance of 'type'.
+
+    Hence the following works in Python 3:
+
+        class C(object):
+            def m(self):
+                print self
+
+        C.m(object())
+
+    However, this is dangerous for numba code, since it expects an instance
+    of 'C' (and may access fields in a low-level way).
     """
 
-    def __init__(self, specializing_wrapper, instance, type):
-        self.specializing_wrapper = specializing_wrapper
+    cdef public object func, type
 
-        if instance is None:
-            firstarg = type
-        else:
-            firstarg = instance
-
-        self.firstarg = firstarg
+    def __init__(self, func, type):
+        self.func = func
+        self.type = type
 
     def __call__(self, *args, **kwargs):
-        return self.specializing_wrapper(self.firstarg, *args, **kwargs)
+        assert len(args) > 0, "Unbound method must have at least one argument"
+
+        if not isinstance(args[0], self.type):
+            raise TypeError(
+                ("unbound method numba_function_or_method object must be "
+                 "called with %s instance as first argument "
+                 "(got %s instance instead)") % (self.type.__name__,
+                                                 type(args[0]).__name__))
+
+        return self.func(*args, **kwargs)
+
+
+cdef public Create_NumbaUnboundMethod(PyObject *func, PyObject *type):
+    assert type != NULL
+    obj = UnboundFunctionWrapper(<object> func, <object> type)
+    return obj
+
+#------------------------------------------------------------------------
+# Bound Methods
+#------------------------------------------------------------------------
+
+cdef class BoundSpecializingWrapper(object):
+    """
+    Numba wrapper created for bound @autojit methods. Note that @jit methods
+    don't need this, since numbafunction does the binding.
+    """
+
+    cdef public object specializing_wrapper, type
+
+    def __init__(self, specializing_wrapper, instance):
+        self.specializing_wrapper = specializing_wrapper
+        self.instance = instance
+
+    def __call__(self, *args, **kwargs):
+        return self.specializing_wrapper(self.instance, *args, **kwargs)
+
 
 #------------------------------------------------------------------------
 # Autojit Fast Function Cache
