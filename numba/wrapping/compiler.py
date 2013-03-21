@@ -20,7 +20,7 @@ def resolve_argtypes(env, py_func, template_signature,
 
     locals_dict = translator_kwargs.get("locals", None)
 
-    argcount = py_func.func_code.co_argcount
+    argcount = py_func.__code__.co_argcount
     if argcount != len(args):
         if argcount == 1:
             arguments = 'argument'
@@ -32,7 +32,7 @@ def resolve_argtypes(env, py_func, template_signature,
 
     return_type = None
     argnames = inspect.getargspec(py_func).args
-    argtypes = map(env.context.typemapper.from_python, args)
+    argtypes = [env.context.typemapper.from_python(x) for x in args]
 
     if template_signature is not None:
         template_context, signature = typesystem.resolve_templates(
