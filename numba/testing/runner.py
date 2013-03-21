@@ -79,7 +79,7 @@ def test(whitelist=None, blacklist=None, print_failures_only=False):
     sys.stdout.write("ran test files: failed: (%d/%d)\n" % (runner.failed,
                                                             runner.ran))
 
-    return runner.failed == 0
+    return 0 if runner.failed == 0 else 1
 
 
 class TestRunner(object):
