@@ -3,9 +3,10 @@ from __future__ import print_function, division, absolute_import
 # Uses Python.asdl to test against some python script
 # and some manually built ast
 
-
-import unittest, support
+import unittest
 import ast, os, inspect
+
+from numba.asdl.tests import support
 
 class TestGood(support.SchemaTestCase):
     def test_self(self):
