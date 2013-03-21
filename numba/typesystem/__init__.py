@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+
+from numba.minivect.minitypes import *
+from numba.minivect.minitypes import (FunctionType)
+
 from .basetypes import *
-from .exttypes import *
 from .closuretypes import *
 from .ssatypes import *
 from .templatetypes import *

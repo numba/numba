@@ -6,7 +6,7 @@ from __future__ import print_function, division, absolute_import
 
 from numba.minivect import minitypes
 from numba.typesystem.basetypes import NumbaType
-from numba.typesystem.exttypes.extensiontype import ExtensionType
+from numba.exttypes.types.extensiontype import ExtensionType
 
 class ClosureType(NumbaType, minitypes.ObjectType):
     """

@@ -17,15 +17,16 @@ virtual method tables:
     https://github.com/numfocus/sep/blob/master/sep201.rst
 """
 
-import numba
 import ctypes
 
+from extensibletype import methodtable
+
+import numba
 from numba.typesystem import *
 from numba.minivect import minitypes
-from numba.typesystem.exttypes import ordering
-
+from numba.exttypes import ordering
 from numba.exttypes import extension_types
-from extensibletype import methodtable
+
 
 #------------------------------------------------------------------------
 # Virtual Method Table Interface

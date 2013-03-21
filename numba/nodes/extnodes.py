@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 from numba.nodes import *
-from numba.typesystem.exttypes import methods
+from numba.exttypes.types import methods
 
 class ExtTypeAttribute(ExprNode):
 

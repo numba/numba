@@ -42,18 +42,14 @@ Compiling @jit extension classes works as follows:
     for efficiency.
 """
 
-import numba
-from numba import error
 from numba import typesystem
-from numba.exttypes.utils import is_numba_class
 
 from numba.exttypes import virtual
 from numba.exttypes import signatures
 from numba.exttypes import validators
 from numba.exttypes import compileclass
-from numba.exttypes import extension_types
-
-from numba.typesystem.exttypes import ordering
+from numba.exttypes import ordering
+from numba.exttypes import types as etypes
 
 #------------------------------------------------------------------------
 # Jit Extension Class Compiler
@@ -98,7 +94,7 @@ def create_extension(env, py_class, flags):
     """
     flags.pop('llvm_module', None)
 
-    ext_type = typesystem.JitExtensionType(py_class)
+    ext_type = etypes.JitExtensionType(py_class)
 
     extension_compiler = JitExtensionCompiler(
         env, py_class, ext_type, flags,

@@ -70,23 +70,14 @@ Compiling @autojit extension classes works as follows:
         an autojit method).
 """
 
-from functools import partial
-
-import numba
-from numba import error
-from numba import pipeline
 from numba import typesystem
 from numba import numbawrapper
-from numba.exttypes.utils import is_numba_class
 
-from numba.exttypes import logger
 from numba.exttypes import virtual
 from numba.exttypes import signatures
 from numba.exttypes import validators
 from numba.exttypes import compileclass
-from numba.exttypes import extension_types
-
-from numba.typesystem.exttypes import ordering
+from numba.exttypes import ordering
 
 
 #------------------------------------------------------------------------

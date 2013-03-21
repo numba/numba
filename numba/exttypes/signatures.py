@@ -4,6 +4,8 @@
 Handle signatures of methods in @jit and @autojit classes.
 """
 
+from __future__ import print_function, division, absolute_import
+
 import types
 import warnings
 import inspect
@@ -12,6 +14,7 @@ import numba
 from numba import *
 from numba import error
 from numba import typesystem
+from numba.exttypes import types as etypes
 from numba.minivect import minitypes
 
 #------------------------------------------------------------------------
@@ -112,7 +115,7 @@ class MethodMaker(object):
         "Create a method type for the given Method and declared signature"
         restype = method.signature.return_type
         argtypes = method.signature.args
-        signature = typesystem.ExtMethodType(
+        signature = etypes.ExtMethodType(
                     return_type=restype, args=argtypes, name=method.name,
                     is_class=method.is_class, is_static=method.is_static)
         return signature

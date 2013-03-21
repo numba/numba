@@ -1,6 +1,6 @@
 import inspect
 
-from numba import typesystem, numbawrapper
+from numba import typesystem
 import numba.pipeline
 from numba.exttypes import virtual
 from numba.exttypes import signatures

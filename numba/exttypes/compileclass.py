@@ -1,21 +1,18 @@
 # -*- coding: utf-8 -*-
 
-import numba
-from numba import error
-from numba import typesystem
+from __future__ import print_function, division, absolute_import
+
 from numba import pipeline
 from numba import symtab
 from numba.minivect import minitypes
 
-from numba.exttypes import logger
 from numba.exttypes import signatures
 from numba.exttypes import utils
 from numba.exttypes import extension_types
-
-from numba.typesystem.exttypes import methods
-from numba.typesystem.exttypes import ordering
-from numba.typesystem.exttypes import vtabtype
-from numba.typesystem.exttypes import attributestype
+from numba.exttypes import ordering
+from numba.exttypes import methodtable
+from numba.exttypes import attributetable
+from numba.exttypes.types import methods
 
 class ExtensionCompiler(object):
 
@@ -244,7 +241,7 @@ class AttributesInheriter(object):
 
         parent_attrtables = [base.exttype.attribute_table for base in bases]
 
-        attr_table = attributestype.ExtensionAttributesTableType(
+        attr_table = attributetable.AttributeTable(
             ext_type.py_class, parent_attrtables)
 
         for base in bases:
@@ -256,7 +253,7 @@ class AttributesInheriter(object):
         bases = utils.get_numba_bases(ext_type.py_class)
 
         parent_vtables = [base.exttype.vtab_type for base in bases]
-        vtable = vtabtype.VTabType(ext_type.py_class, parent_vtables)
+        vtable = methodtable.VTabType(ext_type.py_class, parent_vtables)
 
         for base in bases:
             self.inherit_methods(vtable, base.exttype)

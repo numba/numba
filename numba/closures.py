@@ -50,9 +50,9 @@ outer, so all variables can be resolved.
 These scopes are instances of a numba extension class.
 """
 from __future__ import print_function, division, absolute_import
-
 import ast
 import ctypes
+import logging
 
 import numba.decorators
 from numba import *
@@ -67,11 +67,8 @@ from numba import utils
 from numba.type_inference import module_type_inference
 from numba.minivect import  minitypes
 from numba.symtab import Variable
-
-from numba.typesystem.exttypes import vtabtype
-from numba.typesystem.exttypes import attributestype
-
-import logging
+from numba.exttypes import methodtable
+from numba.exttypes import attributetable
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
 
@@ -326,7 +323,7 @@ class ClosureTypeInferer(ClosureTransformer):
         scope_type = typesystem.ClosureScopeType(py_class, outer_scope_type)
         scope_type.unmangled_symtab = dict(fields)
 
-        AttrTable = attributestype.ExtensionAttributesTableType
+        AttrTable = attributetable.AttributeTable
         scope_type.attribute_table = AttrTable.from_list(py_class=None,
                                                          attributes=fields)
 

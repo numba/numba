@@ -4,15 +4,15 @@
 Validate method signatures and inheritance compatiblity.
 """
 
+from __future__ import print_function, division, absolute_import
+
 import warnings
 import inspect
 
-import numba
-from numba import *
 from numba import error
 
-from numba.typesystem.exttypes import ordering
-from numba.typesystem.exttypes import methods
+from numba.exttypes import ordering
+from numba.exttypes.types import methods
 
 
 #------------------------------------------------------------------------
