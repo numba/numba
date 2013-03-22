@@ -18,6 +18,12 @@ from numba import typesystem
 class NormalizeAST(visitors.NumbaTransformer):
     "Normalize AST"
 
+    function_level = 0
+
+    #------------------------------------------------------------------------
+    # Validation
+    #------------------------------------------------------------------------
+
     def visit_GeneratorExp(self, node):
         raise error.NumbaError(
                 node, "Generator comprehensions are not yet supported")
@@ -32,6 +38,42 @@ class NormalizeAST(visitors.NumbaTransformer):
 
     def visit_Raise(self, node):
         raise error.NumbaError(node, "Raise statement not implemented yet")
+
+    #------------------------------------------------------------------------
+    # Normalization
+    #------------------------------------------------------------------------
+
+    def visit_FunctionDef(self, node):
+        if self.function_level:
+            return self.handle_inner_function(node)
+
+        self.function_level += 1
+        self.visitchildren(node)
+        self.function_level -= 1
+        return node
+
+    def handle_inner_function(self, node):
+        "Create assignment code for inner functions and mark the assignment"
+        lhs = ast.Name(node.name, ast.Store())
+        ast.copy_location(lhs, node)
+
+        rhs = FuncDefExprNode(func_def=node)
+        ast.copy_location(rhs, node)
+
+        fields = rhs._fields
+        rhs._fields = []
+        assmnt = ast.Assign(targets=[lhs], value=rhs)
+        result = self.visit(assmnt)
+        rhs._fields = fields
+
+        return result
+
+    def visit_FunctionDef(self, node):
+        #for arg in node.args:
+        #    if arg.default:
+        #        self.visitchildren(arg)
+        if self.function_level:
+            return self.handle_inner_function(node)
 
     def visit_ListComp(self, node):
         """
@@ -99,3 +141,15 @@ class NormalizeAST(visitors.NumbaTransformer):
         assignment = ast.Assign([target], bin_op)
         assignment.inplace_op = node.op
         return self.visit(assignment)
+
+
+#------------------------------------------------------------------------
+# Nodes
+#------------------------------------------------------------------------
+
+class FuncDefExprNode(nodes.Node):
+    """
+    Wraps an inner function node until the closure code kicks in.
+    """
+
+    _fields = ['func_def']
