@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+from __future__ import print_function, division, absolute_import
 import numba as nb
 from numba import *
 
@@ -51,10 +51,10 @@ def solve(n):
         return None, None
 
 
-print solve(8)
+print(solve(8))
 # %timeit solve(8)
 
 # Comment out @jit/@autojit
-# print solve(8)
+# print(solve(8))
 # %timeit solve(8)
 
