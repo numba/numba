@@ -75,6 +75,9 @@ class NormalizeAST(visitors.NumbaTransformer):
         if self.function_level:
             return self.handle_inner_function(node)
 
+        self.visitchildren(node)
+        return node
+
     def visit_ListComp(self, node):
         """
         Rewrite list comprehensions to the equivalent for loops.
