@@ -3,25 +3,9 @@ from __future__ import print_function, division, absolute_import
 from numba.control_flow.cfstats import *
 from numba.reporting import *
 
-def compute_uninitialized_phis(flow):
-    """
-    Compute potentially uninitialized phi variables.
-    """
-    maybe_uninitialized = set()
-
-    for phi_var, phi_node in flow.blocks[0].phis.iteritems():
-        if phi_var.uninitialized:
-            maybe_uninitialized.add(phi_var)
-
-    for block in flow.blocks[1:]:
-        for phi_var, phi_node in block.phis:
-            if any(x in maybe_uninitialized for x in phi_node.incoming):
-                maybe_uninitialized.add(phi_var)
-
-    return maybe_uninitialized
-
 def allow_null(node):
     return False
+
 
 def check_definitions(flow, compiler_directives):
     flow.initialize()
@@ -62,12 +46,6 @@ def check_definitions(flow, compiler_directives):
                 for assmt in state:
                     assmt.refs.add(stat)
 
-    # Check variable usage
-    warn_maybe_uninitialized = compiler_directives['warn.maybe_uninitialized']
-    warn_unused_result = compiler_directives['warn.unused_result']
-    warn_unused = compiler_directives['warn.unused']
-    warn_unused_arg = compiler_directives['warn.unused_arg']
-
     messages = MessageCollection()
 
     # assignment hints
@@ -76,7 +54,22 @@ def check_definitions(flow, compiler_directives):
         node.cf_maybe_null = maybe_null
         node.cf_is_null = maybe_null and len(node.cf_state) == 1
 
-    # Find uninitialized references and cf-hints
+    check_uninitialized(messages, references, compiler_directives)
+    warn_unused_result(assignments, messages, compiler_directives)
+    warn_unused_entries(flow, messages, compiler_directives)
+
+    messages.report()
+
+    for node in assmt_nodes:
+        node.cf_state = None #ControlFlowState(node.cf_state)
+    for node in references:
+        node.cf_state = None #ControlFlowState(node.cf_state)
+
+
+def check_uninitialized(messages, references, directives):
+    "Find uninitialized references and cf-hints"
+    warn_maybe_uninitialized = directives['warn.maybe_uninitialized']
+
     for node, entry in references.iteritems():
         if Uninitialized in node.cf_state:
             node.cf_maybe_null = True
@@ -90,7 +83,7 @@ def check_definitions(flow, compiler_directives):
                 is_unspecified = False #entry.type.is_unspecified
                 error_on_uninitialized = False #entry.error_on_uninitialized
                 if entry.renameable and (is_object or is_unspecified or
-                                         error_on_uninitialized):
+                                             error_on_uninitialized):
                     messages.error(
                         node,
                         "local variable '%s' referenced before assignment"
@@ -109,23 +102,17 @@ def check_definitions(flow, compiler_directives):
             node.cf_is_null = False
             node.cf_maybe_null = False
 
-    # Unused result
-    for assmt in assignments:
-        if not assmt.refs: # and not assmt.entry.is_pyclass_attr
-        # and not assmt.entry.in_closure):
-            if assmt.entry.cf_references and warn_unused_result:
-                if assmt.is_arg:
-                    messages.warning(assmt, "Unused argument value '%s'" %
-                                            assmt.entry.name)
-                else:
-                    messages.warning(assmt, "Unused result in '%s'" %
-                                            assmt.entry.name)
-            assmt.lhs.cf_used = False
+def warn_unused_entries(flow, messages, directives):
+    """
+    Generate warnings for unused variables or arguments. This is issues when
+    an argument or variable is unused entirely in the function.
+    """
+    warn_unused = directives['warn.unused']
+    warn_unused_arg = directives['warn.unused_arg']
 
-    # Unused entries
     for entry in flow.entries:
         if (not entry.cf_references and not entry.is_cellvar and
-            entry.renameable): # and not entry.is_pyclass_attr
+                entry.renameable): # and not entry.is_pyclass_attr
             if entry.is_arg:
                 if warn_unused_arg:
                     messages.warning(entry, "Unused argument '%s'" %
@@ -137,9 +124,23 @@ def check_definitions(flow, compiler_directives):
                                                 entry.name)
             entry.cf_used = False
 
-    messages.report()
+def warn_unused_result(assignments, messages, directives):
+    """
+    Warn about unused variable definitions. This is issued for individual
+    definitions, e.g.
 
-    for node in assmt_nodes:
-        node.cf_state = None #ControlFlowState(node.cf_state)
-    for node in references:
-        node.cf_state = None #ControlFlowState(node.cf_state)
+        i = 0   # this definition generates a warning
+        i = 1
+        print i
+    """
+    warn_unused_result = directives['warn.unused_result']
+    for assmt in assignments:
+        if not assmt.refs:
+            if assmt.entry.cf_references and warn_unused_result:
+                if assmt.is_arg:
+                    messages.warning(assmt, "Unused argument value '%s'" %
+                                            assmt.entry.name)
+                else:
+                    messages.warning(assmt, "Unused result in '%s'" %
+                                            assmt.entry.name)
+            assmt.lhs.cf_used = False
