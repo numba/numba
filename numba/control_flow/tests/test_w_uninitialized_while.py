@@ -54,7 +54,7 @@ def simple_while_pos(n):
 #        del x
 
 def jitfunc(func):
-    jit(int_(int_))(func)
+    jit(int_(int_), warnstyle='simple')(func)
 
 __doc__ = """
 >>> jitfunc(simple_while)

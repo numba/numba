@@ -270,7 +270,6 @@ class SpecializeObjectIteration(visitors.NumbaTransformer):
     """
 
     def visit_For(self, node):
-        print (id(node))
         while_node = make_while_from_for(node)
 
         test = nodes.const(True, bool_)

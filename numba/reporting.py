@@ -79,8 +79,10 @@ class MessageCollection(object):
         self.ast = ast
         self.source_lines = source_lines
         self.messages = []
+        self.have_errors = False
 
     def error(self, node, message):
+        self.have_errors = True
         self.messages.append((node, True, message))
 
     def warning(self, node, message):
@@ -117,6 +119,7 @@ class MessageCollection(object):
         if errors and not post_mortem:
             raise error.NumbaError(*errors[0])
 
+
 class FancyMessageCollection(MessageCollection):
 
     def header(self):
@@ -146,19 +149,16 @@ def format_msg_simple(type, node, message):
     return "%s %s%s\n" % (type, error.format_pos(node), message)
     # logger.warning("Warning %s: %s", error.format_postup(getpos(node)), message)
 
-def warn_unreachable(node):
-    "Generate a warning for unreachable code"
-    if hasattr(node, 'lineno'):
-        print("Warning, unreachable code at %s\n" % error.format_pos(node).rstrip(': '))
-
 # ______________________________________________________________________
 
-def report(function_error_env, post_mortem, exc=None):
+def report(env, exc=None):
     """
     :param function_error_env: the FunctionErrorEnvironment
     :param post_mortem: whether to enable post-mortem debugging of Numba
     :param exc: currently propagating exception
     """
+    function_error_env = env.crnt.error_env
+    post_mortem = function_error_env.enable_post_mortem
     if exc is not None:
         function_error_env.collection.error(exc.node, exc.msg)
 

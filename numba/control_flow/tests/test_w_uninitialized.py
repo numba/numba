@@ -1,10 +1,10 @@
 from numba import *
 
-jitv = jit(void())
-jitvi = jit(void(int_))
-jitvii = jit(void(int_, int_))
-jitii = jit(int_(int_))
-jitiii = jit(int_(int_, int_))
+jitv = jit(void(), warnstyle='simple')
+jitvi = jit(void(int_), warnstyle='simple')
+jitvii = jit(void(int_, int_), warnstyle='simple')
+jitii = jit(int_(int_), warnstyle='simple')
+jitiii = jit(int_(int_, int_), warnstyle='simple')
 
 
 def simple():

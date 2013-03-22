@@ -1,6 +1,6 @@
 from numba import *
 
-jitv = jit(void()) #, nopython=True)
+jitv = jit(void(), warnstyle='simple') #, nopython=True)
 
 
 
@@ -8,7 +8,7 @@ jitv = jit(void()) #, nopython=True)
 def simple_return():
     """
     >>> result = jitv(simple_return)
-    Warning, unreachable code at 14:4
+    Warning 14:4: Unreachable code
     """
     return
     print('Where am I?')
@@ -16,12 +16,12 @@ def simple_return():
 def simple_loops():
     """
     >>> result = jitv(simple_loops)
-    Warning, unreachable code at 28:8
-    Warning, unreachable code at 32:8
-    Warning, unreachable code at 36:8
-    Warning, unreachable code at 41:12
-    Warning, unreachable code at 46:8
-    Warning, unreachable code at 50:4
+    Warning 28:8: Unreachable code
+    Warning 32:8: Unreachable code
+    Warning 36:8: Unreachable code
+    Warning 41:12: Unreachable code
+    Warning 46:8: Unreachable code
+    Warning 50:4: Unreachable code
     """
     for i in range(10):
         continue

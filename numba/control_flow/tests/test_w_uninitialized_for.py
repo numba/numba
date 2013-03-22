@@ -80,7 +80,7 @@ def for_finally_outer(p, f):
         del x
 
 def jitfunc(func):
-    jit(int_(int_))(func)
+    jit(int_(int_), warnstyle='simple')(func)
 
 __doc__ = """
 >>> jitfunc(simple_for)
