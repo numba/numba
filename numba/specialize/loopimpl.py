@@ -10,7 +10,7 @@ import numba
 from numba import *
 from numba import function_util
 from numba import visitors, nodes, error, functions
-from numba.typesystem import typematch
+from numba.typesystem.typematch import typematch
 
 logger = logging.getLogger(__name__)
 
