@@ -7,6 +7,7 @@ Initial AST validation and normalization.
 from __future__ import print_function, division, absolute_import
 
 import ast
+import copy
 
 from numba import error
 from numba import nodes
@@ -78,3 +79,23 @@ class NormalizeAST(visitors.NumbaTransformer):
 
         expr = nodes.ExpressionNode(stmts=[list_create, body], expr=list_value)
         return self.visit(expr)
+
+    def visit_AugAssign(self, node):
+        """
+        Inplace assignment.
+
+        Resolve a += b to a = a + b. Set 'inplace_op' attribute of the
+        Assign node so later stages may recognize inplace assignment.
+
+        Do this now, so that we can correctly mark the RHS reference.
+        """
+        target = node.target
+
+        rhs_target = copy.deepcopy(target)
+        rhs_target.ctx = ast.Load()
+        ast.fix_missing_locations(rhs_target)
+
+        bin_op = ast.BinOp(rhs_target, node.op, node.value)
+        assignment = ast.Assign([target], bin_op)
+        assignment.inplace_op = node.op
+        return self.visit(assignment)
