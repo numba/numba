@@ -35,7 +35,7 @@ def error5():
 
     inner(10, a=20, b=30)
 
-@autojit
+@autojit(warnstyle='simple')
 def closure1():
     a = 10
     @jit(restype=void, argtypes=[int_])

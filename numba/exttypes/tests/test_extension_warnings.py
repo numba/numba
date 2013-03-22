@@ -10,7 +10,7 @@ Warning ...: Unused argument '...'
 from numba import *
 
 def compile_class(warn):
-    @jit(warn=warn) # TODO: only issue error once !
+    @jit(warn=warn, warnstyle='simple') # TODO: only issue error once !
     class Base(object):
 
         @void(int_)
