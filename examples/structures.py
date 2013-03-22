@@ -19,9 +19,9 @@ def hypot(data):
 
     return result
 
-print hypot(a)
+print(hypot(a))
 
 # Notice inferred return type
-print hypot.signature
+print(hypot.signature)
 # Notice native sqrt calls and for.body direct access to memory...
-#print hypot.lfunc
+#print(hypot.lfunc)

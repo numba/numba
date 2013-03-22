@@ -37,7 +37,7 @@ start = time.time()
 result = convolve(image, filter)
 duration2 = time.time() - start
 
-print "Time for LLVM code = %f\nTime for convolve = %f" % (duration, duration2)
+print("Time for LLVM code = %f\nTime for convolve = %f" % (duration, duration2))
 
 from pylab import subplot, imshow, show, title, gray
 subplot(1,2,1)

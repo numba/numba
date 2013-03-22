@@ -17,11 +17,11 @@ def generate_power_func(n):
         return x ** n
 
     # This is a native call
-    print nth_power(10)
+    print(nth_power(10))
 
     # Return closure and keep all cell variables alive
     return nth_power
 
 for n in range(2, 5):
     func = generate_power_func(n)
-    print [func(x) for x in linspace(1.,2.,10.)]
+    print([func(x) for x in linspace(1.,2.,10.)])

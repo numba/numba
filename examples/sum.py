@@ -21,11 +21,11 @@ import time
 start = time.time()
 res = sum2d(arr)
 duration = time.time() - start
-print "Result from python is %s in %s (msec)" % (res, duration*1000)
+print("Result from python is %s in %s (msec)" % (res, duration*1000))
 
 start = time.time()
 res = csum2d(arr)
 duration2 = time.time() - start
-print "Result from compiled is %s in %s (msec)" % (res, duration2*1000)
+print("Result from compiled is %s in %s (msec)" % (res, duration2*1000))
 
-print "Speed up is %s" % (duration / duration2)
+print("Speed up is %s" % (duration / duration2))
