@@ -8,8 +8,8 @@ class MyClass(object):
     
 @autojit(locals=dict(mydouble=double)) # specify types for local variables
 def call_method(obj):
-    print obj.mymethod("hello")   # object result
+    print(obj.mymethod("hello"))  # object result
     mydouble = obj.mymethod(10.2) # native double
-    print mydouble * 2            # native multiplication
+    print(mydouble * 2)           # native multiplication
     
 call_method(MyClass())

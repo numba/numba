@@ -32,7 +32,7 @@ def main ():
     import time
     t0 = time.time()
     fbcorr(imgs, filt, output)
-    print time.time() - t0
+    print(time.time() - t0)
 
 if __name__ == "__main__":
     main()
