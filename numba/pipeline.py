@@ -21,6 +21,7 @@ from numba import control_flow
 from numba import optimize
 from numba import closures
 from numba import reporting
+from numba import normalize
 from numba.codegen import llvmwrapper
 from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
@@ -304,6 +305,12 @@ def create_lfunc3(tree, env):
     func_env = env.translation.crnt
     create_lfunc(tree, env)
     return tree
+
+
+class NormalizeASTStage(PipelineStage):
+    def transform(self, ast, env):
+        transform = self.make_specializer(normalize.NormalizeAST, ast, env)
+        return transform.visit(ast)
 
 class ControlFlowAnalysis(PipelineStage):
     _pre_condition_schema = None

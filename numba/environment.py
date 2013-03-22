@@ -33,6 +33,7 @@ default_pipeline_order = [
     'validate_signature',
     'update_signature',
     'create_lfunc1',
+    'NormalizeASTStage',
     'ControlFlowAnalysis',
     #'ConstFolding',
     'TypeInfer',
