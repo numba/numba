@@ -29,7 +29,9 @@ and are serialized in a table (and they may participate in circular
 references, i.e. in a graph):
 
 Serialization to LLVM IR (or a direct textual serialization) will
-consist of something like a generated table, e.g.::
+consist of something like a generated table, e.g.
+
+.. code-block:: pycon
 
     >>> mod = schema.parse("foo = @Foo(str name, foo attr)")
 
@@ -59,7 +61,9 @@ visitor dispatch (compile with Cython or pre-compile with Numba).
 
 We can generate automatic mapping code to map schema instances to
 opaguely typed LLVM IR automatically, which is the abstract syntax
-generated post-order. E.g. ``a + b * c`` becomes::
+generated post-order. E.g. ``a + b * c`` becomes:
+
+.. code-block:: llvm
 
     !0 = metadata !{ metadata !"operator", i8* "Mul" }
     !1 = metadata !{ metadata !"operator", i8* "Add" }
@@ -72,7 +76,9 @@ generated post-order. E.g. ``a + b * c`` becomes::
     }
 
 The LLVM IR contains the high-level block structure, i.e. an ``if`` statement
-will generate IR along the following lines::
+will generate IR along the following lines:
+
+.. code-block:: llvm
 
     define i8* @func() {
         %0 = blockaddress(@func, %bb_true)
@@ -124,13 +130,15 @@ The initial IR is what numba decorators produce given a pure
 Python AST, function or class as input.
 
 
-Sample schema::
+Sample schema
+
+.. code-block:: ocaml
 
     module initial {
 
         mod = NumbaModule(unit* stats)
 
-        unit =
+        unit
           = lambda
           | class
 
