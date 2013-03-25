@@ -75,9 +75,13 @@ class CudaTypeInferer(_infer.TypeInferer):
 
             shape = tuple()
 
-            for elem in kws['shape'].elts:
-                node = self.visit(elem)
-                shape += (node.pyval,)
+            arg_shape = kws['shape']
+            if hasattr(arg_shape, 'elts'):
+                for elem in arg_shape.elts:
+                    node = self.visit(elem)
+                    shape += (node.pyval,)
+            else:
+                shape = (arg_shape.n,)
 
             dtype_id = kws['dtype'].id # FIXME must be a ast.Name
             dtype = self.func.func_globals[dtype_id] # FIXME must be a Numba type

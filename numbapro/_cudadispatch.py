@@ -341,7 +341,7 @@ class CudaNumbaFuncDispatcher(object):
                 return val
         return [convert(ty, val) for ty, val in zip(self.typemap, args)]
 
-    def __call__(self, args, griddim, blkdim, stream=0):
+    def __call__(self, args, griddim, blkdim, stream=0, sharedmem=0):
         args = self._cast_args(args)
 
         kernel_args = []
@@ -368,7 +368,8 @@ class CudaNumbaFuncDispatcher(object):
             arg = _typemapper[ty](arg)
             kernel_args.append(arg)
 
-        cu_func = self.cu_function.configure(griddim, blkdim, stream=stream)
+        cu_func = self.cu_function.configure(griddim, blkdim, stream=stream,
+                                             sharedmem=sharedmem)
 
         cu_func(*kernel_args)
 

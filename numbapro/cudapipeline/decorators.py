@@ -76,8 +76,9 @@ class CudaBaseFunction(numbawrapper.NumbaWrapper):
     _griddim = 1, 1, 1      # default grid dimension
     _blockdim = 1, 1, 1     # default block dimension
     _stream = 0
+    _sharedmem = 0
     
-    def configure(self, griddim, blockdim, stream=0):
+    def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         '''Returns a new instance that is configured with the
             specified kernel grid dimension and block dimension.
 
@@ -87,6 +88,11 @@ class CudaBaseFunction(numbawrapper.NumbaWrapper):
             '''
         import copy
         inst = copy.copy(self) # clone the object
+
+        if not isinstance(griddim, tuple):
+            griddim = (int(griddim),)
+        if not isinstance(blockdim, tuple):
+            blockdim = (int(blockdim),)
 
         inst._griddim = griddim
         inst._blockdim = blockdim
@@ -98,6 +104,7 @@ class CudaBaseFunction(numbawrapper.NumbaWrapper):
             inst._blockdim += (1,)
 
         inst._stream = stream
+        inst._sharedmem = sharedmem
 
         return inst
 
@@ -140,7 +147,8 @@ class CudaNumbaFunction(CudaBaseFunction):
             of the CUDA kernel.
             '''
         return self.dispatcher(args, self._griddim, self._blockdim,
-                               stream=self._stream)
+                               stream=self._stream,
+                               sharedmem=self._sharedmem)
 
     #    @property
     #    def compute_capability(self):
@@ -176,7 +184,10 @@ class CudaAutoJitNumbaFunction(CudaBaseFunction):
              raise error.NumbaError("Cannot handle keyword arguments yet")
         fakeargs = tuple(self.__trick_autojit(args))
         numba_wrapper = self.compiling_decorator(fakeargs, kwargs)
-        return numba_wrapper[self._griddim, self._blockdim](*args)
+        ready = numba_wrapper.configure(self._griddim, self._blockdim,
+                                        stream=self._stream,
+                                        sharedmem=self._sharedmem)
+        return ready(*args)
 
     def __trick_autojit(self, args):
         for val in args:
