@@ -26,6 +26,13 @@ def cu_array_double_2d(dst):
     smem[j, i] = dst[j, i]          # store in smem
     dst[j, i] = smem[j, i] * 2      # use smem
 
+@jit(argtypes=[f4[:]], target='gpu')
+def cu_array_double_dyn(dst):
+    smem = cuda.shared.array(dtype=f4) # dynamic shared memory
+    i = cuda.grid(1)
+    smem[i] = dst[i]
+    dst[i] = smem[i] * 2
+# in CUDA Kernel
 
 class TestCudaSMem(support.CudaTestCase):
     def test_array_double(self):
@@ -46,6 +53,16 @@ class TestCudaSMem(support.CudaTestCase):
         
         for i, (got, expect) in enumerate(zip(A.flatten(), Gold.flatten())):
             self.assertEqual(got, expect, "%s != %s at i=%d" % (got, expect, i))
+
+    def test_array_double_dyn(self):
+        A = np.array(np.random.random(256), dtype=np.float32)
+        Gold = A * 2
+        #print cu_array_double_dyn.ptx
+        cu_array_double_dyn[(1,), (A.shape[0],), 0, A.shape[0] * 4](A)
+
+        for i, (got, expect) in enumerate(zip(A, Gold)):
+            self.assertEqual(got, expect, "%s != %s at i=%d" % (got, expect, i))
+
 
 if __name__ == '__main__':
     unittest.main()

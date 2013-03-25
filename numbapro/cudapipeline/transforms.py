@@ -1,6 +1,6 @@
 import ast
 
-from llvm.core import Constant, Type
+from llvm.core import Constant, Type, LINKAGE_INTERNAL, LINKAGE_EXTERNAL
 
 from numba.codegen import translate as _translate
 from numba.type_inference import infer as _infer
@@ -75,13 +75,16 @@ class CudaTypeInferer(_infer.TypeInferer):
 
             shape = tuple()
 
-            arg_shape = kws['shape']
-            if hasattr(arg_shape, 'elts'):
-                for elem in arg_shape.elts:
-                    node = self.visit(elem)
-                    shape += (node.pyval,)
-            else:
-                shape = (arg_shape.n,)
+            if 'shape' in kws:
+                arg_shape = kws['shape']
+                if hasattr(arg_shape, 'elts'):
+                    for elem in arg_shape.elts:
+                        node = self.visit(elem)
+                        shape += (node.pyval,)
+                else:
+                    shape = (arg_shape.n,)
+            if not shape:
+                shape = (0,)
 
             dtype_id = kws['dtype'].id # FIXME must be a ast.Name
             dtype = self.func.func_globals[dtype_id] # FIXME must be a Numba type
@@ -186,7 +189,11 @@ class CudaCodeGenerator(_translate.LLVMCodeGenerator):
         smem_elemtype = node.dtype.to_llvm(self.context)
         smem_type = Type.array(smem_elemtype, int(node.elemcount))
         smem = mod.add_global_variable(smem_type, 'smem', ADDRSPACE_SHARED)
-        smem.initializer = Constant.undef(smem_type)
+        if node.shape == (0,):
+            smem.linkage = LINKAGE_EXTERNAL
+        else:
+            smem.linkage = LINKAGE_INTERNAL
+            smem.initializer = Constant.undef(smem_type)
 
         smem_elem_ptr_ty = Type.pointer(smem_elemtype)
         smem_elem_ptr_ty_addrspace = Type.pointer(smem_elemtype,
