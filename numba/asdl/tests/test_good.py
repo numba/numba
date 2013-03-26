@@ -35,7 +35,8 @@ class TestGood(support.SchemaTestCase):
     def _test_script(self, path):
         if path.startswith('.'):
             path = os.path.join(os.path.dirname(__file__), path)
-        the_script = open(path).read()
+        with open(path) as the_file:
+            the_script = the_file.read()
         the_ast = ast.parse(the_script)
         self.schema.verify(the_ast)  # should not raise
 
