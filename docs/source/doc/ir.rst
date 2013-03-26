@@ -81,7 +81,7 @@ LLVM IR
 ^^^^^^^
 
 We can generate automatic mapping code to map schema instances to
-opaguely typed LLVM IR automatically, which is the abstract syntax
+opaquely typed LLVM IR automatically, which is the abstract syntax
 generated post-order. E.g. ``a + b * c`` becomes:
 
 .. code-block:: llvm

@@ -14,7 +14,7 @@ def bubblesort(X, doprint):
                 X[i] = X[i + 1]
                 X[i + 1] = tmp
 #        if doprint:
-#            print "Iteration:", X
+#            print("Iteration: %d" % X)
 
 bubblesort_fast = autojit(bubblesort)
 #bubblesort_fast = jit(void(int64[::1], bool_))(bubblesort)
@@ -25,17 +25,17 @@ def main():
 
     Xtest = np.array(list(reversed(range(8))), dtype=dtype)
 
-    print '== Test Pure-Python =='
+    print('== Test Pure-Python ==')
     X0 = Xtest.copy()
     bubblesort(X0, True)
 
-    print '== Test Numba == '
+    print('== Test Numba == ')
     X1 = Xtest.copy()
     bubblesort_fast(X1, True)
 #    return
 
-    print X0
-    print X1
+    print(X0)
+    print(X1)
     assert all(X0 == X1)
 
     REP = 10
@@ -57,9 +57,9 @@ def main():
 
     assert all(X0 == X1)
 
-    print 'Python', tpython
-    print 'Numba', tnumba
-    print 'Speedup', tpython / tnumba, 'x'
+    print('Python', tpython)
+    print('Numba', tnumba)
+    print('Speedup', tpython / tnumba, 'x')
 
 
 if __name__ == '__main__':

@@ -1,3 +1,4 @@
+distribute
 nose
 meta
 numpy>=1.6
