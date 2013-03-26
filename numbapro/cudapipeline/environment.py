@@ -180,10 +180,14 @@ def _link_llvm_math_intrinsics(module, cc):
     to_be_removed = set()    # functions to be deleted
     inlinelist = []          # functions to be inlined
 
-    library = {
+
+    library_map = {
         2 : CUDA_MATH_INTRINSICS_2,
         3 : CUDA_MATH_INTRINSICS_3,
-    }[cc]
+    }
+    if cc not in library_map:
+        raise Exception("NumbaPro does not support CC%d.x" % cc)
+    library = library_map[cc]
 
     # find all known math intrinsics and implement them.
     for lfunc in module.functions:
