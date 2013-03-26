@@ -8,10 +8,7 @@ import collections
 from functools import reduce
 from itertools import starmap
 
-try:
-    from itertools import izip
-except ImportError:
-    izip = zip
+from itertools import izip
 
 from numba.typesystem import basetypes
 from numba.minivect import minitypes
