@@ -3,7 +3,7 @@ from .. import intern
 def test_global_interning():
     try:
         intern.global_intern("hello")
-    except AssertionError, e:
+    except AssertionError as e:
         pass
     else:
         raise Exception("Expects complaint about uninitialized table")

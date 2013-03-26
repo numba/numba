@@ -224,7 +224,7 @@ class FunctionEnvironment(object):
         None)
 
     lfunc_pointer = TypedProperty(
-        (int, long),
+        (int, long) if not PY3 else int,
         "Pointer to underlying compiled function. Can be used as a callback.",
     )
 

@@ -83,7 +83,7 @@ def lookup_method(table_pp, prehash):
 def lookup_and_assert_method(table_pp, prehash, method_name):
     result = lookup_method(table_pp, prehash)
     if result == numba.NULL:
-        print "Error: expected method", method_name, "to be available."
+        print("Error: expected method %s to be available." % (method_name,))
         abort()
 
     return result

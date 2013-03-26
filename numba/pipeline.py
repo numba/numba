@@ -565,7 +565,7 @@ class ComposedPipelineStage(PipelineStage):
     @staticmethod
     def check_stage(stage):
         def _check_stage_object(stage_obj):
-            if (isinstance(stage_obj, (type, types.ClassType)) and
+            if (isinstance(stage_obj, type) and
                     issubclass(stage_obj, PipelineStage)):
                 stage_obj = stage_obj()
             return stage_obj

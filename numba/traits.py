@@ -14,7 +14,7 @@ import inspect
 
 def traits(cls):
     "@traits class decorator"
-    for name, py_func in vars(cls).iteritems():
+    for name, py_func in vars(cls).items():
         if isinstance(py_func, TraitBase):
             py_func.set_attr_name(name)
 

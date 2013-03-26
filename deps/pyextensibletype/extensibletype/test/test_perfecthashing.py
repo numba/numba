@@ -19,10 +19,10 @@ def test_basic():
     assert len(prehashes) == len(set(prehashes))
     p, r, m_f, m_g, d = extensibletype.perfect_hash(prehashes, repeat=10**5)
     hashes = ((prehashes >> r) & m_f) ^ d[prehashes & m_g]
-    print p
-    print d
+    print(p)
+    print(d)
     hashes.sort()
-    print hashes
+    print(hashes)
     assert len(hashes) == len(np.unique(hashes))
 
 def test_methodtable():
