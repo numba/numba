@@ -535,7 +535,7 @@ need low-level equivalents, which means one of two things:
 LLVM facilitates the latter point, but is in no way caters to
 the first. Yet what we want is the former, for the sake of expressiveness.
 
-Resuing LLVM Passes
+Reusing LLVM Passes
 ===================
 Although LLVM IR does not cater well to some of the high-level
 transformations we want to make, it provides a useful infrastructure to
@@ -639,8 +639,8 @@ Our goal is to resolve this type graph in topological order, such that
 we know the type for each variable definition (``x_0``, ``x_1``, etc).
 
 In order to do a topological sort, we compute the condensation graph
-by finding the strongly connected components. The resulting graph
-looks like this:
+by finding the strongly connected components and condensing them
+into single graph nodes. The resulting graph looks like this:
 
 .. digraph:: typegraph
 
