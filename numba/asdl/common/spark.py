@@ -24,7 +24,6 @@ from __future__ import print_function, division, absolute_import
 __version__ = 'SPARK-0.7 (pre-alpha-5)'
 
 import re
-import string
 
 def _namelist(instance):
     namelist, namedict, classlist = [], {}, [instance.__class__]
@@ -58,7 +57,7 @@ class GenericScanner:
                 rv.append(self.makeRE(name))
 
         rv.append(self.makeRE('t_default'))
-        return string.join(rv, '|')
+        return '|'.join(rv)
 
     def error(self, s, pos):
         print("Lexical error at position %s" % pos)
@@ -173,7 +172,7 @@ class GenericParser:
 
     def addRule(self, doc, func, _preprocess=1):
         fn = func
-        rules = string.split(doc)
+        rules = doc.split()
 
         index = []
         for i in range(len(rules)):
@@ -832,9 +831,9 @@ def _dump(tokens, sets, states):
             print('\t', item)
             for (lhs, rhs), pos in states[item[0]].items:
                 print('\t\t', lhs, '::=', end=' ')
-                print(string.join(rhs[:pos]), end=' ')
+                print(' '.join(rhs[:pos]), end=' ')
                 print('.', end=' ')
-                print(string.join(rhs[pos:]))
+                print(' '.join(rhs[pos:]))
         if i < len(tokens):
             print()
             print('token', str(tokens[i]))
