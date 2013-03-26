@@ -665,6 +665,27 @@ We can compute strongly connected components using many libraries (including
 LLVM or networkx). Currently we have our own, which we can replace.
 Expected save: 21 SLOC (https://github.com/markflorisson88/numba/blob/phimerge/numba/typesystem/ssatypes.py#L677)
 
+Building a Call Graph
+---------------------
+This will be useful to use LLVM for in order to:
+
+    * Efficiently infer types of direct or indirect uses of recursion for autojit
+      functions or methods
+    * Detect such recusion by letting LLVM find the SCCs in the call graph, and
+      resolving in an analogous and cooperative manner to how we resolve the type graph
+
+Writing LLVM Passes
+-------------------
+We have a few constructs that may be better written as LLVM passes over simpler
+(lower-level) constructs (with exapnded control flow, three-address code arithmetic
+instructions, etc). We showed one such example already, but one can think
+of many others.
+
+We can define the penultimate IR in LLVM, such that any passes before code generator
+and after lowering of high-level constructions an be performed on this IR. This allows
+us to use the full power of LLVM where it is most adequate. Furthermore, we can likely
+do away with (most of) our code generator if we define our IR stages well.
+
 References
 ==========
 .. [#] Attribute Grammars in Haskell with UUAG, A. Loh, http://www.andres-loeh.de/AGee.pdf
