@@ -535,6 +535,136 @@ need low-level equivalents, which means one of two things:
 LLVM facilitates the latter point, but is in no way caters to
 the first. Yet what we want is the former, for the sake of expressiveness.
 
+Resuing LLVM Passes
+===================
+Although LLVM IR does not cater well to some of the high-level
+transformations we want to make, it provides a useful infrastructure to
+do certain things. This includes:
+
+    * SSA Graph Computation (as well as reaching definitions, etc)
+    * CFG simplification
+    * Finding SCCs in various graphs (CFG, SSA, call graph, etc)
+    * Build a call graph
+    * Aiding lower-level and TAC transformations
+
+Below we will discuss a plan for resuability.
+
+SSA
+---
+We currently construct our own CFG and compute the SSA graph from the
+CFG containing abstract statements that represent definitions and uses
+(loads and stores).
+
+As mentioned, the advantage of having our own CFG construction includes:
+
+    * Expressiveness of high-level operations
+    * Automatic code generation and translation into IRs with expanded
+      control flow
+
+The advantage of having our own reaching definitions (reused from Cython's
+control flow, ``Cython/Compiler/FlowControl``) is the great support for
+errors and warnings for:
+
+    * Definitely unbound variables (error)
+    * Potentionally unbound variables (warning)
+    * Unused variables (warning)
+
+as well as other categories. LLVM on the other hand classifies reads
+from uninitialized variables as undefined behaviour.
+
+Numba initializes potentially unbound variables to a "bad" value (``nan``,
+``0xdeadbeef``, etc). We can use the same mechanism to construct valid
+LLVM IR, and compute the SSA graph from our subset program, consisting only
+of:
+
+    * expanded control flow
+    * variable stores
+    * variable loads
+
+This LLVM-constructed SSA graph can be mapped back to our high-lever IR
+with relative ease if we simply remembered which LLVM basic block associates
+with which basic block in our IR.
+
+Expected save: 220 SLOC (https://github.com/markflorisson88/numba/blob/phimerge/numba/control_flow/ssa.py#L20).
+
+.. NOTE:: This operates under the assumption that we have a general
+          framework that can map LLVM transformations back to our IR
+          representation automatically.
+
+Type Dependence Graph Construction
+----------------------------------
+From the SSA graph we compute a type graph by inferring all variable
+assignments. This graph often has cycles, due to the back-edge in
+the CFG for loops. For instance we may have the following code::
+
+    x = 0
+    for i in range(10):
+        x = f(x)
+
+    y = x
+
+Where ``f`` is an external autojit function (i.e., it's output type depends
+on it's dynamic input type).
+
+We get the following type graph:
+
+.. digraph:: typegraph
+
+    x_0 -> int
+    x_0 -> x_1
+    x_2 -> x_1
+    x_2 -> f
+    f -> x_1
+    x_1 -> y_0
+
+    i_0 -> range
+    range -> int
+
+Below we show the correspondence of the SSA variable definitions to their
+basic blocks:
+
+.. digraph:: cfg
+
+    "entry: [ x_0, i_0 ]" -> "condition: [ x_1 ]" -> "body: [ x_2 ]"
+    "body: [ x_2 ]" -> "condition: [ x_1 ]"
+    "condition: [ x_1 ]" -> "exit: [ y_2 ]"
+
+.. entry -> x_0
+.. entry -> i_0
+.. condition -> x_1
+.. body -> x_2
+.. exit -> y_2
+
+Our goal is to resolve this type graph in topological order, such that
+we know the type for each variable definition (``x_0``, ``x_1``, etc).
+
+In order to do a topological sort, we compute the condensation graph
+by finding the strongly connected components. The resulting graph
+looks like this:
+
+.. digraph:: typegraph
+
+    x_0 -> int
+    x_0 -> SCC0
+    SCC0 -> y_0
+    i_0 -> range
+    range -> int
+
+And ``SCC0`` contains the cycle in the type graph. We now have a
+well-defined preorder for which we can process each node in topological
+order on the transpose graph, doing the following:
+
+    * If the node represents a concrete type, propagate result along edge
+    * If the node represents a function over an argument of the given input types,
+      infer the result type of this function
+    * For each SCC, process all internal nodes using fixpoint iteration
+      given all input types to the SCC. Update internal nodes with their result
+      types.
+
+We can compute strongly connected components using many libraries (including
+LLVM or networkx). Currently we have our own, which we can replace.
+Expected save: 21 SLOC (https://github.com/markflorisson88/numba/blob/phimerge/numba/typesystem/ssatypes.py#L677)
+
 References
 ==========
 .. [#] Attribute Grammars in Haskell with UUAG, A. Loh, http://www.andres-loeh.de/AGee.pdf
