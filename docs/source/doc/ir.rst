@@ -611,11 +611,13 @@ We get the following type graph:
 .. digraph:: typegraph
 
     x_0 -> int
-    x_0 -> x_1
-    x_2 -> x_1
+
+    x_1 -> x_0
+    x_1 -> x_2
     x_2 -> f
     f -> x_1
-    x_1 -> y_0
+
+    y_0 -> x_1
 
     i_0 -> range
     range -> int
@@ -645,8 +647,9 @@ into single graph nodes. The resulting graph looks like this:
 .. digraph:: typegraph
 
     x_0 -> int
-    x_0 -> SCC0
-    SCC0 -> y_0
+    SCC0 -> x_0
+    y_0 -> SCC0
+
     i_0 -> range
     range -> int
 
