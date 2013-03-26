@@ -101,6 +101,12 @@ class Variable(object):
         self.preloaded_shape = None    # tuple of size ndim
         self.preloaded_strides = None  # tuple of size ndim
 
+    def perform_assignment(self, rhs_type):
+        """
+        Called when an assignment is made to this variable.
+        """
+        self.type = rhs_type
+
     @classmethod
     def make_shared_property(cls, name):
         def _get(self):

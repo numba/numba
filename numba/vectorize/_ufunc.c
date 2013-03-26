@@ -3,8 +3,18 @@
 #include "_internal.h"
 
 MOD_INIT(ufunc) {
+
+    PyObject *m;
+
     import_array();
     import_umath();
+
+    MOD_DEF(m, "ufunc", "No docs", NULL)
+
+    if (m == NULL)
+        return MOD_ERROR_VAL;
+
+    return MOD_SUCCESS_VAL(m);
 }
 
 static PyObject *

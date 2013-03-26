@@ -84,7 +84,7 @@ def empty_assign():
         pass
     print(i)
 
-@autojit
+@autojit(warnstyle='simple')
 def last_value():
     for i in range(10):
         pass

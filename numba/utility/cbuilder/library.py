@@ -18,6 +18,11 @@ def register(utility):
     registered_utilities.append(utility)
     return utility
 
+def load_utilities():
+    from . import library
+    from . import numbacdef
+    from . import refcounting
+
 class CBuilderLibrary(object):
     """
     Library of cbuilder functions.
@@ -29,6 +34,7 @@ class CBuilderLibrary(object):
 
     def declare_registered(self, env):
         "Declare all utilities in our module"
+        load_utilities()
         for registered_utility in registered_utilities:
             self.declare(registered_utility, env, self.module)
 

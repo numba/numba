@@ -2,7 +2,7 @@ import sys
 
 import numba
 
-from numba.tests.test_support import autojit_py3doc
+from numba.testing.test_support import autojit_py3doc
 # NOTE: See also issues/test_issue_56
 
 @autojit_py3doc
@@ -16,12 +16,12 @@ def test_bitwise_and(a, b):
     >>> test_bitwise_and(0b01, 2.0)
     Traceback (most recent call last):
         ...
-    NumbaError: 27:15: Expected an int, or object
+    NumbaError: 27:15: Expected an int, or object, or bool
 
     >>> test_bitwise_and(2.0, 0b01)
     Traceback (most recent call last):
         ...
-    NumbaError: 27:11: Expected an int, or object
+    NumbaError: 27:11: Expected an int, or object, or bool
 
     """
     return a & b
@@ -43,12 +43,12 @@ def test_bitwise_or(a, b):
     >>> test_bitwise_or(0b01, 2.0)
     Traceback (most recent call last):
         ...
-    NumbaError: 54:15: Expected an int, or object
+    NumbaError: 54:15: Expected an int, or object, or bool
 
     >>> test_bitwise_or(2.0, 0b01)
     Traceback (most recent call last):
         ...
-    NumbaError: 54:11: Expected an int, or object
+    NumbaError: 54:11: Expected an int, or object, or bool
 
     """
     return a | b
@@ -71,12 +71,12 @@ def test_bitwise_xor(a, b):
     >>> test_bitwise_xor(0b01, 2.0)
     Traceback (most recent call last):
         ...
-    NumbaError: 82:15: Expected an int, or object
+    NumbaError: 82:15: Expected an int, or object, or bool
 
     >>> test_bitwise_xor(2.0, 0b01)
     Traceback (most recent call last):
         ...
-    NumbaError: 82:11: Expected an int, or object
+    NumbaError: 82:11: Expected an int, or object, or bool
 
     """
     return a ^ b

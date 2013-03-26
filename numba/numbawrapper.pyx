@@ -5,6 +5,7 @@ cimport numpy as cnp
 import types
 import ctypes
 
+import numba
 from numba import error
 from numba.minivect import minitypes
 from numba.support import ctypes_support, cffi_support
@@ -64,7 +65,7 @@ def create_function(methoddef, py_func, lfunc_pointer, signature, modname):
     cdef PyMethodDef *ml = <PyMethodDef *> methoddef_p
     cdef Py_uintptr_t lfunc_p = lfunc_pointer
 
-    result = NumbaFunction_NewEx(ml, modname, getattr(py_func, "func_code", None),
+    result = NumbaFunction_NewEx(ml, modname, getattr(py_func, "__code__", None),
                                  NULL, <void *> lfunc_p, signature, py_func)
     return result
 
@@ -89,6 +90,11 @@ cdef tuple hash_on_value_types = (
     types.BuiltinMethodType,
 ) # + support_classes
 
+def add_hash_by_value_type(type):
+    global hash_on_value_types
+
+    hash_on_value_types += (type,)
+
 #------------------------------------------------------------------------
 # @jit function creation
 #------------------------------------------------------------------------
@@ -101,13 +107,14 @@ cdef class NumbaCompiledWrapper(NumbaWrapper):
         lfunc: LLVM function
     """
 
-    cdef public object lfunc, signature, wrapper
+    cdef public object lfunc, signature, wrapper, lfunc_pointer
 
     def __init__(self, py_func, signature, lfunc):
         super(NumbaCompiledWrapper, self).__init__(py_func)
 
         self.signature = signature
         self.lfunc = lfunc
+        self.lfunc_pointer = None
 
     def __repr__(self):
         return '<compiled numba function (%s) :: %s>' % (self.py_func,
@@ -143,23 +150,33 @@ cdef class _NumbaSpecializingWrapper(NumbaWrapper):
     Numba wrapper function for @autojit.
 
         py_func: original Python function
-        compiling_decorator: function that can compile the function given
-                             the argument values.
-                             (args, kwargs) -> compiled_callable
+        compiler: numba.wrapper.compiler.Compiler
+                  Compiles the function given the argument values.
         funccache: AutojitFunctionCache that can quickly lookup the right
                    specialization
     """
 
     cdef public AutojitFunctionCache funccache
-    cdef public object compiling_decorator
+    cdef public object compiler
 
-    def __init__(self, py_func, compiling_decorator, funccache):
+    def __init__(self, py_func, compiler, funccache):
         super(_NumbaSpecializingWrapper, self).__init__(py_func)
-        self.compiling_decorator = compiling_decorator
+        self.compiler = compiler
         self.funccache = funccache
 
     def __repr__(self):
         return '<specializing numba function(%s)>' % self.py_func
+
+    def add_specialization(self, signature):
+        numba_wrapper = self.compiler.compile(signature)
+
+        # NOTE: We do not always have args (e.g. if one autojit function
+        # or method calls another one). However, the first call from Python
+        # will retrieve it from the slow cache (env.specializations)
+
+        # self.funccache.add(args, numba_wrapper)
+
+        return numba_wrapper
 
     def __call__(self, *args, **kwargs):
         if len(kwargs):
@@ -168,11 +185,21 @@ cdef class _NumbaSpecializingWrapper(NumbaWrapper):
         numba_wrapper = self.funccache.lookup(args)
         if numba_wrapper is None:
             # print "Cache miss for function:", self.py_func.__name__
-            numba_wrapper = self.compiling_decorator(args, kwargs)
+            numba_wrapper = self.compiler.compile_from_args(args, kwargs)
             self.funccache.add(args, numba_wrapper)
 
         return PyObject_Call(<PyObject *> numba_wrapper,
                              <PyObject *> args, NULL)
+
+    def __get__(self, instance, type):
+        if instance is None:
+            if numba.PY3:
+                return UnboundFunctionWrapper(self, type)
+            else:
+                return self
+
+        return BoundSpecializingWrapper(self, instance)
+
 
 class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
 
@@ -187,6 +214,71 @@ class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
     @property
     def __module__(self):
         return self.module
+
+
+#------------------------------------------------------------------------
+# Unbound Methods
+#------------------------------------------------------------------------
+
+cdef class UnboundFunctionWrapper(object):
+    """
+    Wraps unbound functions in Python 3, for jit and autojit methods.
+    PyInstanceMethod does not check whether 'self' is an instance of 'type'.
+
+    Hence the following works in Python 3:
+
+        class C(object):
+            def m(self):
+                print self
+
+        C.m(object())
+
+    However, this is dangerous for numba code, since it expects an instance
+    of 'C' (and may access fields in a low-level way).
+    """
+
+    cdef public object func, type
+
+    def __init__(self, func, type):
+        self.func = func
+        self.type = type
+
+    def __call__(self, *args, **kwargs):
+        assert len(args) > 0, "Unbound method must have at least one argument"
+
+        if not isinstance(args[0], self.type):
+            raise TypeError(
+                ("unbound method numba_function_or_method object must be "
+                 "called with %s instance as first argument "
+                 "(got %s instance instead)") % (self.type.__name__,
+                                                 type(args[0]).__name__))
+
+        return self.func(*args, **kwargs)
+
+
+cdef public Create_NumbaUnboundMethod(PyObject *func, PyObject *type):
+    assert type != NULL
+    obj = UnboundFunctionWrapper(<object> func, <object> type)
+    return obj
+
+#------------------------------------------------------------------------
+# Bound Methods
+#------------------------------------------------------------------------
+
+cdef class BoundSpecializingWrapper(object):
+    """
+    Numba wrapper created for bound @autojit methods. Note that @jit methods
+    don't need this, since numbafunction does the binding.
+    """
+
+    cdef public object specializing_wrapper, type
+
+    def __init__(self, specializing_wrapper, instance):
+        self.specializing_wrapper = specializing_wrapper
+        self.instance = instance
+
+    def __call__(self, *args, **kwargs):
+        return self.specializing_wrapper(self.instance, *args, **kwargs)
 
 
 #------------------------------------------------------------------------

@@ -81,7 +81,7 @@ class TestBasicVectorize(unittest.TestCase):
         def_oneone = OneOne(itype, otype)
         oneone = def_oneone(module)
 
-        tyslist = [list(map(_llvm_ty_to_dtype, [itype, otype]))]
+        tyslist = [[_llvm_ty_to_dtype(itype), _llvm_ty_to_dtype(otype)]]
         ufunc = basic_vectorize_from_func(oneone, tyslist, exe.engine)
 
         print(module)

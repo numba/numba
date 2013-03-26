@@ -3,9 +3,12 @@
 #include <Python.h>
 #include "_numba.h"
 
+extern PyObject *Create_NumbaUnboundMethod(PyObject *, PyObject *);
+
 #if PY_MAJOR_VERSION >= 3
-  #define PyMethod_New(func, self, klass) ( \
-              (self) ? PyMethod_New(func, self) : PyInstanceMethod_New(func))
+  #define PyMethod_New(func, self, type) ( \
+          (self) ? PyMethod_New(func, self) : \
+                   Create_NumbaUnboundMethod(func, type))
 #endif
 
 
@@ -419,6 +422,7 @@ static PyObject *NumbaFunction_descr_get(PyObject *func, PyObject *obj, PyObject
 
     if (obj == Py_None)
         obj = NULL;
+
     return PyMethod_New(func, obj, type);
 }
 

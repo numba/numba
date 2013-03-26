@@ -13,7 +13,7 @@ from numba import *
 from numba.decorators import jit
 from numba.utils import debugout
 from numba.llvm_types import _plat_bits
-from numba.tests import test_support
+from numba.testing import test_support
 
 import numpy
 import itertools

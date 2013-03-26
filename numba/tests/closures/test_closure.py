@@ -1,5 +1,5 @@
-from numba import *; from numba.error import NumbaError
-from numba.tests.test_support import rewrite_doc
+import numba; from numba import *; from numba.error import NumbaError
+from numba.testing.test_support import rewrite_doc
 @autojit
 def error1():
     def inner():
@@ -35,7 +35,7 @@ def error5():
 
     inner(10, a=20, b=30)
 
-@autojit
+@autojit(warnstyle='simple')
 def closure1():
     a = 10
     @jit(restype=void, argtypes=[int_])
@@ -399,13 +399,14 @@ def test_closure_outer_locals():
 
     inner()
 
-__doc__ = rewrite_doc(__doc__)
+#__doc__ = rewrite_doc(__doc__)
 
 def try_(func, *args):
     try:
         func(*args)
     except NumbaError as e:
-        print("%s: %s" % (type(e).__name__, e))
+        print("%s%s: %s" % ('numba.error.' if numba.PY3 else '',
+                            type(e).__name__, e))
 
 if __name__ == '__main__':
 #    closure1 = closure_arg(1)

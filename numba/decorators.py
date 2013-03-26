@@ -1,22 +1,24 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+
+from numba.exttypes.entrypoints import  (jit_extension_class,
+                                         autojit_extension_class)
+
 __all__ = ['autojit', 'jit', 'export', 'exportmany']
 
 import types
-import functools
 import logging
 import inspect
 
 from numba import *
 from numba import typesystem, numbawrapper
-from numba import utils, functions
-from numba.codegen import translate
-from numba import  pipeline, extension_type_inference
+from numba import  functions
 from .minivect import minitypes
-from numba.utils import debugout, process_signature
+from numba.utils import  process_signature
 from numba.codegen import llvmwrapper
 from numba import environment
 import llvm.core as _lc
+from numba.wrapping import compiler
 
 logger = logging.getLogger(__name__)
 
@@ -87,20 +89,10 @@ def exportmany(signatures, env_name=None, env=None, **kws):
     return _export
 
 #------------------------------------------------------------------------
-# Extension Classes
-#------------------------------------------------------------------------
-
-def jit_extension_class(py_class, translator_kwargs, env):
-    llvm_module = translator_kwargs.get('llvm_module', None)
-    if llvm_module is None:
-        llvm_module = _lc.Module.new('tmp.extension_class.%X' % id(py_class))
-        translator_kwargs['llvm_module'] = llvm_module
-    return extension_type_inference.create_extension(
-        env, py_class, translator_kwargs)
-
-#------------------------------------------------------------------------
 # Compilation Entry Points
 #------------------------------------------------------------------------
+
+# TODO: Redo this entire module
 
 def compile_function(env, func, argtypes, restype=None, **kwds):
     """
@@ -109,8 +101,7 @@ def compile_function(env, func, argtypes, restype=None, **kwds):
     cache.
 
     Returns a triplet of (signature, llvm_func, python_callable)
-    `python_callable` may be the original function, or a ctypes callable
-    if the function was compiled.
+    `python_callable` is the wrapper function (NumbaFunction).
     """
     function_cache = env.specializations
 
@@ -141,77 +132,31 @@ def compile_function(env, func, argtypes, restype=None, **kwds):
             func_env.lfunc,
             func_env.numba_wrapper_func)
 
-def resolve_argtypes(numba_func, template_signature,
-                     args, kwargs, translator_kwargs):
-    """
-    Given an autojitting numba function, return the argument types.
-    These need to be resolved in order for the function cache to work.
-
-    TODO: have a single entry point that resolved the argument types!
-    """
-    assert not kwargs, "Keyword arguments are not supported yet"
-
-    locals_dict = translator_kwargs.get("locals", None)
-
-    argcount = numba_func.py_func.__code__.co_argcount
-    if argcount != len(args):
-        if argcount == 1:
-            arguments = 'argument'
-        else:
-            arguments = 'arguments'
-        raise TypeError("%s() takes exactly %d %s (%d given)" % (
-                                numba_func.py_func.__name__, argcount,
-                                arguments, len(args)))
-
-    return_type = None
-    argnames = inspect.getargspec(numba_func.py_func).args
-    env = environment.NumbaEnvironment.get_environment(
-        translator_kwargs.get('env', None))
-    argtypes = [env.context.typemapper.from_python(x) for x in args]
-
-    if template_signature is not None:
-        template_context, signature = typesystem.resolve_templates(
-                locals_dict, template_signature, argnames, argtypes)
-        return_type = signature.return_type
-        argtypes = list(signature.args)
-
-    if locals_dict is not None:
-        for i, argname in enumerate(argnames):
-            if argname in locals_dict:
-                new_type = locals_dict[argname]
-                argtypes[i] = new_type
-
-    return minitypes.FunctionType(return_type, tuple(argtypes))
 
 def _autojit(template_signature, target, nopython, env_name=None, env=None,
-             **translator_kwargs):
+             **flags):
     if env is None:
         env = environment.NumbaEnvironment.get_environment(env_name)
+
     def _autojit_decorator(f):
         """
         Defines a numba function, that, when called, specializes on the input
         types. Uses the AST translator backend. For the bytecode translator,
         use @autojit.
         """
-        def compile_function(args, kwargs):
-            "Compile the function given its positional and keyword arguments"
-            signature = resolve_argtypes(numba_func, template_signature,
-                                         args, kwargs, translator_kwargs)
 
-            jitter = jit_targets[(target, 'ast')]
-            dec = jitter(restype=signature.return_type,
-                         argtypes=signature.args,
-                         target=target, nopython=nopython, env=env,
-                         **translator_kwargs)
-
-            compiled_function = dec(f)
-            return compiled_function
+        if isinstance(f, (type, types.ClassType)):
+            compiler_cls = compiler.ClassCompiler
+        else:
+            compiler_cls = compiler.FunctionCompiler
 
         env.specializations.register(f)
         cache = env.specializations.get_autojit_cache(f)
 
+        compilerimpl = compiler_cls(env, f, nopython, flags, template_signature)
         wrapper = autojit_wrappers[(target, 'ast')]
-        numba_func = wrapper(f, compile_function, cache)
+        numba_func = wrapper(f, compilerimpl, cache)
+
         return numba_func
 
     return _autojit_decorator
@@ -231,7 +176,7 @@ def autojit(template_signature=None, backend='ast', target='cpu',
                            nopython=nopython, locals=locals, **kwargs)(func)
         else:
             raise Exception("The autojit decorator should be called: "
-                            "@autojit(backend='ast')")
+                            "@autojit()")
 
     if backend == 'bytecode':
         return _not_implemented

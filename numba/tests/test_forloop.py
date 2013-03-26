@@ -7,7 +7,7 @@ Test the Numba compiler on a simple for loop over an iterable object.
 # ______________________________________________________________________
 
 from numba import *
-from numba.tests import test_support
+from numba.testing import test_support
 
 import numpy
 

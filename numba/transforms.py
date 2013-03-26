@@ -308,7 +308,12 @@ class ResolveCoercions(visitors.NumbaTransformer):
         new_node = node
 
         node_type = node.node.type
-        if node_type.is_numeric:
+        if node_type.is_bool:
+            new_node = function_util.external_call(self.context,
+                                                   self.llvm_module,
+                                                   "PyBool_FromLong",
+                                                   args=[node.node])
+        elif node_type.is_numeric:
             cls = None
             args = node.node,
             if node_type.is_int:
@@ -339,11 +344,6 @@ class ResolveCoercions(visitors.NumbaTransformer):
             args = [nodes.CoercionNode(node.node, int64),
                     nodes.ObjectInjectNode(ctypes_pointer_type, object_)]
             new_node = nodes.call_pyfunc(ctypes.cast, args)
-        elif node_type.is_bool:
-            new_node = function_util.external_call(self.context,
-                                                   self.llvm_module,
-                                                   "PyBool_FromLong",
-                                                   args=[node.node])
 
         self.generic_visit(new_node)
         return new_node
@@ -610,14 +610,6 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         self.generic_visit(node)
         return nodes.ObjectTempNode(node)
 
-    def visit_NativeFunctionCallNode(self, node):
-        if node.signature.is_bound_method:
-            assert isinstance(node.function, nodes.ExtensionMethod)
-            return self.visit_ExtensionMethod(node.function, node)
-
-        self.visitchildren(node)
-        return node
-
     def visit_ObjectCallNode(self, node):
         # self.generic_visit(node)
         assert node.function
@@ -833,69 +825,6 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
         self.generic_visit(node)
         return node
-
-    def visit_ExtTypeAttribute(self, node):
-        """
-        Resolve an extension attribute:
-
-            ((attributes_struct *)
-                 (((char *) obj) + attributes_offset))->attribute
-        """
-        ext_type = node.value.type
-        offset = ext_type.attr_offset
-        type = ext_type.attribute_struct
-
-        if isinstance(node.ctx, ast.Load):
-            value_type = type.ref()         # Load result
-        else:
-            value_type = type.pointer()     # Use pointer for storage
-
-        struct_pointer = nodes.value_at_offset(node.value, offset,
-                                               value_type)
-        result = nodes.StructAttribute(struct_pointer, node.attr,
-                                       node.ctx, type.ref())
-
-        return self.visit(result)
-
-    def visit_ExtensionMethod(self, node, call_node=None):
-        """
-        Resolve an extension method:
-
-            typedef {
-                double (*method1)(double);
-                ...
-            } vtab_struct;
-
-            vtab_struct *vtab = *(vtab_struct **) (((char *) obj) + vtab_offset)
-            void *method = vtab[index]
-        """
-        if call_node is None:
-            raise error.NumbaError(node, "Referenced extension method '%s' "
-                                         "must be called" % node.attr)
-
-        # Make the object we call the method on clone-able
-        node.value = nodes.CloneableNode(self.visit(node.value))
-
-        ext_type = node.value.type
-        offset = ext_type.vtab_offset
-        struct_type = ext_type.vtab_type.ref()
-
-        struct_pointer_pointer = nodes.value_at_offset(node.value, offset,
-                                                       struct_type.pointer())
-        struct_pointer = nodes.DereferenceNode(struct_pointer_pointer)
-
-        vmethod = nodes.StructAttribute(struct_pointer, node.attr,
-                                        ast.Load(), struct_type)
-
-        # Visit argument list for call
-        args = self.visitlist(call_node.args)
-
-        # Insert first argument 'self' in args list
-        args.insert(0, nodes.CloneNode(node.value))
-        result = nodes.NativeFunctionCallNode(node.type, vmethod, args)
-        result.signature.is_bound_method = False
-
-        return self.visit(result)
 
     def visit_ArrayNewNode(self, node):
         if self.nopython:

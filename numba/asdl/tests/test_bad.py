@@ -2,7 +2,9 @@
 from __future__ import print_function, division, absolute_import
 # Use Python.asdl to test bad ast.
 
-import unittest, support, ast
+import unittest, ast
+
+from numba.asdl.tests import support
 
 class TestBad(support.SchemaTestCase):
     def test_module_missing_body(self):

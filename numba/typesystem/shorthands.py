@@ -76,3 +76,6 @@ def list_(base_type, size=-1):
     :return: a tuple type representation
     """
     return ListType(base_type, size)
+
+def function(return_type, argtypes):
+    return minitypes.FunctionType(return_type, argtypes)

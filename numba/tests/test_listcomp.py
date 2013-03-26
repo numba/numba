@@ -1,7 +1,7 @@
 # Based on cython/tests/run/listcomp.pyx
 
 from numba import *
-from numba.tests.test_support import testmod, autojit_py3doc
+from numba.testing.test_support import testmod, autojit_py3doc
 
 @autojit_py3doc
 def smoketest():
@@ -120,4 +120,5 @@ if __name__ == '__main__':
 #smoketest()
 #list_genexp()
 #test_listcomp()
+# smoketest()
 testmod()

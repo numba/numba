@@ -4,7 +4,9 @@ Types for closures and inner functions.
 """
 from __future__ import print_function, division, absolute_import
 
-from numba.typesystem import *
+from numba.minivect import minitypes
+from numba.typesystem.basetypes import NumbaType
+from numba.exttypes.types.extensiontype import ExtensionType
 
 class ClosureType(NumbaType, minitypes.ObjectType):
     """
@@ -44,4 +46,4 @@ class ClosureScopeType(ExtensionType):
             self.scope_prefix = self.parent_scope.scope_prefix + "0"
 
     def __repr__(self):
-        return "closure_scope(%s)" % self.attribute_struct
+        return "closure_scope(%s)" % self.attribute_table

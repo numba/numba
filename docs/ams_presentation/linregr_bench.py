@@ -21,8 +21,8 @@ def run(gradient_descent, X, Y, iterations=1000, alpha=1e-6):
 
     timing = te - ts
 
-    print "x-offset = {}    slope = {}".format(*theta)
-    print "time elapsed: {} s".format(timing)
+    print("x-offset = {}    slope = {}".format(*theta))
+    print("time elapsed: {} s".format(timing))
 
     return theta, timing
 
@@ -38,22 +38,22 @@ def main():
     pylab.scatter(X, Y, marker='o', c='b')
     pylab.title('Linear Regression')
 
-    print 'Python'.center(80, '-')
+    print('Python'.center(80, '-'))
     theta_python, time_python = run(linregr_python.gradient_descent, X, Y)
 
-    print 'Numba'.center(80, '-')
+    print('Numba'.center(80, '-'))
     theta_numba, time_numba  = run(linregr_numba.gradient_descent, X, Y)
 
-    print 'NumbaPro'.center(80, '-')
+    print('NumbaPro'.center(80, '-'))
     theta_numbapro, time_numbapro  = run(linregr_numbapro.gradient_descent, X, Y)
 
     # make sure all method yields the same result
     assert np.allclose(theta_python, theta_numba)
     assert np.allclose(theta_python, theta_numbapro)
 
-    print 'Summary'.center(80, '=')
-    print 'Numba speedup %.1fx' % (time_python / time_numba)
-    print 'NumbaPro speedup %.1fx' % (time_python / time_numbapro)
+    print('Summary'.center(80, '='))
+    print('Numba speedup %.1fx' % (time_python / time_numba))
+    print('NumbaPro speedup %.1fx' % (time_python / time_numbapro))
 
     plot(X, theta_numba, c='r')
     pylab.show()

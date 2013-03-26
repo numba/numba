@@ -81,5 +81,5 @@ class TestConversion(unittest.TestCase):
 
 if __name__ == "__main__":
 #    TestConversion("test_pointer_conversion").test_pointer_conversion()
-    from numba.tests import test_support
+    from numba.testing import test_support
     test_support.main()

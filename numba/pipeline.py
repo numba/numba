@@ -9,10 +9,11 @@ import ast as ast_module
 import logging
 import pprint
 import random
-
+import types
 import llvm.core as lc
 
 # import numba.closures
+from numba import PY3
 from numba import error
 from numba import functions
 from numba import transforms
@@ -20,6 +21,7 @@ from numba import control_flow
 from numba import optimize
 from numba import closures
 from numba import reporting
+from numba import normalize
 from numba.codegen import llvmwrapper
 from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
@@ -30,7 +32,14 @@ from numba.type_inference import infer as type_inference
 from numba.asdl import schema
 from numba.minivect import minitypes
 import numba.visitors
-from numba.specialize import comparisons, loops, exceptions, funccalls
+
+from numba.specialize import comparisons
+from numba.specialize import loops
+from numba.specialize import exceptions
+from numba.specialize import funccalls
+from numba.specialize import exttypes
+
+from numba import astsix
 
 logger = logging.getLogger(__name__)
 
@@ -181,9 +190,7 @@ class PipelineStage(object):
                     flags, parent_func_env = env.translation.stack[-2]
                     error_env.merge_in(parent_func_env.error_env)
                 else:
-                    reporting.report(error_env,
-                                     error_env.enable_post_mortem,
-                                     exc=e)
+                    reporting.report(env, exc=e)
                 raise
 
         env.translation.crnt.ast = ast
@@ -198,13 +205,28 @@ class SimplePipelineStage(PipelineStage):
         transform = self.make_specializer(self.transformer, ast, env)
         return transform.visit(ast)
 
+
+class AST3to2(PipelineStage):
+
+    def transform(self, ast, env):
+        if not PY3:
+            return ast
+        return astsix.AST3to2().visit(ast)
+
+
+def ast3to2(ast, env):
+    if not PY3:
+        return ast
+    return astsix.AST3to2().visit(ast)
+
+
 def resolve_templates(ast, env):
     # TODO: Unify with decorators module
     crnt = env.translation.crnt
     if crnt.template_signature is not None:
         from numba import typesystem
 
-        argnames = [arg.id for arg in ast.args.args]
+        argnames = [name.id for name in ast.args.args]
         argtypes = list(crnt.func_signature.args)
 
         typesystem.resolve_templates(crnt.locals, crnt.template_signature,
@@ -221,7 +243,8 @@ def validate_signature(tree, env):
     if (isinstance(tree, ast_module.FunctionDef) and
         len(arg_types) != len(tree.args.args)):
         raise error.NumbaError(
-            "Incorrect number of types specified in @jit()")
+            "Incorrect number of types specified in @jit() for function %r" %
+            env.crnt.func_name)
 
     return tree
 
@@ -282,6 +305,12 @@ def create_lfunc3(tree, env):
     func_env = env.translation.crnt
     create_lfunc(tree, env)
     return tree
+
+
+class NormalizeASTStage(PipelineStage):
+    def transform(self, ast, env):
+        transform = self.make_specializer(normalize.NormalizeAST, ast, env)
+        return transform.visit(ast)
 
 class ControlFlowAnalysis(PipelineStage):
     _pre_condition_schema = None
@@ -429,6 +458,11 @@ class LateSpecializer(PipelineStage):
                                             env)
         return specializer.visit(ast)
 
+class ExtensionTypeLowerer(PipelineStage):
+    def transform(self, ast, env):
+        specializer = self.make_specializer(exttypes.ExtensionTypeLowerer,
+                                            ast, env)
+        return specializer.visit(ast)
 
 class SpecializeFunccalls(PipelineStage):
     def transform(self, ast, env):
@@ -465,6 +499,7 @@ class CodeGen(PipelineStage):
         func_env.translator = self.make_specializer(
             translate.LLVMCodeGenerator, ast, env,
             **func_env.kwargs)
+
         func_env.translator.translate()
         func_env.lfunc = func_env.translator.lfunc
         return ast
@@ -486,6 +521,8 @@ class LinkingStage(PipelineStage):
             # Link function into fat LLVM module
             func_env.lfunc = env.llvm_context.link(func_env.lfunc)
             func_env.translator.lfunc = func_env.lfunc
+
+        func_env.lfunc_pointer = func_env.translator.lfunc_pointer
 
         return ast
 
@@ -513,11 +550,7 @@ class WrapperStage(PipelineStage):
 class ErrorReporting(PipelineStage):
     "Sort and issue warnings and errors"
     def transform(self, ast, env):
-        func_env = env.translation.crnt
-        error_env = func_env.error_env
-        post_mortem = error_env.enable_post_mortem
-        reporting.report(error_env,
-                         post_mortem=post_mortem)
+        reporting.report(env)
         return ast
 
 class ComposedPipelineStage(PipelineStage):
@@ -532,7 +565,7 @@ class ComposedPipelineStage(PipelineStage):
     @staticmethod
     def check_stage(stage):
         def _check_stage_object(stage_obj):
-            if (isinstance(stage_obj, type) and
+            if (isinstance(stage_obj, (type, types.ClassType)) and
                     issubclass(stage_obj, PipelineStage)):
                 stage_obj = stage_obj()
             return stage_obj

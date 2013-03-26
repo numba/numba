@@ -50,9 +50,9 @@ outer, so all variables can be resolved.
 These scopes are instances of a numba extension class.
 """
 from __future__ import print_function, division, absolute_import
-
 import ast
 import ctypes
+import logging
 
 import numba.decorators
 from numba import *
@@ -62,13 +62,13 @@ from numba import nodes
 from numba import typesystem
 from numba import typedefs
 from numba import numbawrapper
-from numba import extension_types
+from numba.exttypes import extension_types
 from numba import utils
 from numba.type_inference import module_type_inference
 from numba.minivect import  minitypes
 from numba.symtab import Variable
-
-import logging
+from numba.exttypes import methodtable
+from numba.exttypes import attributetable
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
 
@@ -220,11 +220,8 @@ def process_decorators(env, visit_func, node):
 # Closure Type Inference
 #------------------------------------------------------------------------
 
-def mangle(name, scope):
-    return name
-
 def outer_scope_field(scope_type):
-    return scope_type.attribute_struct.fields[0]
+    return scope_type.attribute_table.to_struct().fields[0]
 
 def lookup_scope_attribute(cur_scope, var_name, ctx=None):
     """
@@ -234,13 +231,14 @@ def lookup_scope_attribute(cur_scope, var_name, ctx=None):
     scope_type = cur_scope.type
     outer_scope_name, outer_scope_type = outer_scope_field(scope_type)
 
-    if var_name in scope_type.unmangled_symtab:
-        return nodes.ExtTypeAttribute(value=cur_scope,
-                                      attr=mangle(var_name, scope_type),
-                                      ctx=ctx, ext_type=scope_type)
+
+    if var_name in scope_type.attributedict:
+        return nodes.ExtTypeAttribute.from_known_attribute(
+            value=cur_scope, attr=var_name, ctx=ctx, ext_type=scope_type)
     elif outer_scope_type.is_closure_scope:
-        scope = nodes.ExtTypeAttribute(value=cur_scope, attr=outer_scope_name,
-                                       ctx=ctx, ext_type=scope_type)
+        scope = nodes.ExtTypeAttribute.from_known_attribute(
+            value=cur_scope, attr=outer_scope_name, ctx=ctx, ext_type=scope_type)
+
         try:
             return lookup_scope_attribute(scope, var_name, ctx)
         except error.InternalError as e:
@@ -325,14 +323,12 @@ class ClosureTypeInferer(ClosureTransformer):
         scope_type = typesystem.ClosureScopeType(py_class, outer_scope_type)
         scope_type.unmangled_symtab = dict(fields)
 
-        mangled_fields = [(mangle(name, scope_type), type)
-                              for name, type in fields]
-        scope_type.set_attributes(mangled_fields)
+        AttrTable = attributetable.AttributeTable
+        scope_type.attribute_table = AttrTable.from_list(py_class=None,
+                                                         attributes=fields)
 
         ext_type = extension_types.create_new_extension_type(
-                            func_name , (object,), {}, scope_type,
-                            vtab=None, vtab_type=numba.struct(),
-                            llvm_methods=[], method_pointers=[])
+                func_name , (object,), {}, scope_type, None)
 
         # Instantiate closure scope
         logger.debug("Generate closure %s %s %s", node.name, scope_type,
@@ -464,12 +460,7 @@ class ClosureSpecializer(ClosureTransformer):
 
         # Assign function arguments that are cellvars
         for arg in self.ast.args.args:
-            if isinstance(arg, ast.Name):
-                name = arg.id
-            elif isinstance(arg, ast.arg):
-                name = ast.arg
-            else:
-                raise TypeError('Cannot handle %r' % arg)
+            name = arg.id
 
             if name in node.scope_type.unmangled_symtab:
                 dst = lookup_scope_attribute(scope, name, ast.Store())
@@ -586,7 +577,7 @@ class ClosureSpecializer(ClosureTransformer):
                              node.variable.is_freevar):
             logger.debug("Function %s, lookup %s in scope %s: %s",
                           self.ast.name, node.id, self.ast.cur_scope.type,
-                          self.ast.cur_scope.type.attribute_struct)
+                          self.ast.cur_scope.type.attribute_table)
             attr = lookup_scope_attribute(self.ast.cur_scope,
                                           var_name=node.id, ctx=node.ctx)
             return self.visit(attr)

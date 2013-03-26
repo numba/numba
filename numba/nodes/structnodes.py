@@ -17,13 +17,13 @@ def struct_type(type):
 
     return type
 
-class StructAttribute(ExtTypeAttribute):
+class StructAttribute(ExprNode):
     # expr : = StructAttribute(expr, string, expr_context, Type, metadata)
     # metadata := StructAttribute | ComplexAttribute
     _fields = ['value']
 
     def __init__(self, value, attr, ctx, type, **kwargs):
-        super(ExtTypeAttribute, self).__init__(**kwargs)
+        super(StructAttribute, self).__init__(**kwargs)
         self.value = value
         self.attr = attr
         self.ctx = ctx

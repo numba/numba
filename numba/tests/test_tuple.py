@@ -10,7 +10,7 @@ import numpy
 
 from numba import *
 from numba.decorators import jit
-from numba.tests import test_support
+from numba.testing import test_support
 
 import unittest
 

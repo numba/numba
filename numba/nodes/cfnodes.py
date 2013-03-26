@@ -102,6 +102,14 @@ def build_for(**kwargs):
     merge_cfg_in_ast(['target_block'], ['target'], result)
     return result
 
+def if_else(op, cond_left, cond_right, lhs, rhs):
+    "Implements 'lhs if cond_left <op> cond_right else rhs'"
+    test = ast.Compare(left=cond_left, ops=[op],
+                       comparators=[cond_right])
+    test.right = cond_right
+    test = typednode(test, bool_)
+
+    return build_if(test=test, body=[lhs], orelse=[rhs] if rhs else [])
 
 class LowLevelBasicBlockNode(Node):
     """

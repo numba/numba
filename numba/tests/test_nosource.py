@@ -7,7 +7,9 @@ def test_nosource():
 def foo (): return 99
 
 '''
-    exec(source)
+    new_locals = {}
+    exec(source, globals(), new_locals)
+    foo = new_locals['foo']
     assert foo() == 99
 
 if sys.version_info[:2] < (2, 7):

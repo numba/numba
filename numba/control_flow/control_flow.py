@@ -510,10 +510,7 @@ class ControlFlow(object):
             for block in self.blocks:
                 print(('DF(%d) = %s' % (block.id, block.dominance_frontier)))
 
-        if PY3:
-            argnames = [name.arg for name in ast.args.args]
-        else:
-            argnames = [name.id for name in ast.args.args]
+        argnames = [name.id for name in ast.args.args]
 
         #
         ### 1) Insert phi nodes in the right places
@@ -613,8 +610,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
     function_level = 0
 
-    def __init__(self, context, func, ast, allow_rebind_args, env=None,
-                 **kwargs):
+    def __init__(self, context, func, ast, allow_rebind_args, env, **kwargs):
         super(ControlFlowAnalysis, self).__init__(context, func, ast, env=env,
                                                   **kwargs)
         self.visitchildren = self.generic_visit
@@ -634,6 +630,11 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         flow = ControlFlow(self.env, self.source_descr)
         self.env.translation.crnt.flow = flow
         self.flow = flow
+
+        # TODO: Use the message collection from the environment
+        # messages = reporting.MessageCollection()
+        messages = env.crnt.error_env.collection
+        self.warner = reaching.CFWarner(messages, self.current_directives)
 
         if env:
             if hasattr(env, 'translation'):
@@ -677,13 +678,13 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
     def visit(self, node):
         if hasattr(node, 'lineno'):
             self.mark_position(node)
+
         if not self.flow.block:
             # Unreachable code
             # NOTE: removing this here means there is no validation of the
             # unreachable code!
-            reporting.warn_unreachable(node)
+            self.warner.warn_unreachable(node)
             return None
-
         return super(ControlFlowAnalysis, self).visit(node)
 
     def handle_inner_function(self, node):
@@ -740,7 +741,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
 
         # Cleanup graph
         # self.flow.normalize()
-        reaching.check_definitions(self.flow, self.current_directives)
+        reaching.check_definitions(self.env, self.flow, self.warner)
 
         # self.render_gv(node)
 
@@ -1037,8 +1038,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             # Hanlde the 'if' clause
             ifs = comprehension.ifs
             if len(ifs) > 1:
-                make_boolop = lambda op1, op2: ast.BoolOp(op=ast.And(),
-                                                          values=[op1, op2])
+                make_boolop = lambda op1_op2: ast.BoolOp(op=ast.And(),
+                                                         values=op1_op2)
                 if_test = reduce(make_boolop, ifs)
             elif len(ifs) == 1:
                 if_test, = ifs

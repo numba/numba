@@ -35,10 +35,12 @@ else:
     name_types = (str, unicode)
 
 default_pipeline_order = [
+    'ast3to2',
     'resolve_templates',
     'validate_signature',
     'update_signature',
     'create_lfunc1',
+    'NormalizeASTStage',
     'ControlFlowAnalysis',
     #'ConstFolding',
     'TypeInfer',
@@ -59,6 +61,7 @@ default_pipeline_order = [
     'SpecializeLoops',
     'FixASTLocations',
     'LateSpecializer',
+    'ExtensionTypeLowerer',
     'SpecializeFunccalls',
     'SpecializeExceptions',
     'FixASTLocations',
@@ -70,6 +73,7 @@ default_pipeline_order = [
 ]
 
 default_type_infer_pipeline_order = [
+    'ast3to2',
     'ControlFlowAnalysis',
     'TypeInfer',
 ]
@@ -78,11 +82,13 @@ compile_idx = default_pipeline_order.index('TypeInfer') + 1
 default_compile_pipeline_order = default_pipeline_order[compile_idx:]
 
 default_dummy_type_infer_pipeline_order = [
+    'ast3to2',
     'TypeInfer',
     'TypeSet',
 ]
 
 default_numba_lower_pipeline_order = [
+    'ast3to2',
     'LateSpecializer',
     'SpecializeFunccalls',
     'SpecializeExceptions',
@@ -216,6 +222,11 @@ class FunctionEnvironment(object):
         (NoneType, llvm.core.Function),
         "Compiled, native, Numba function",
         None)
+
+    lfunc_pointer = TypedProperty(
+        (int, long),
+        "Pointer to underlying compiled function. Can be used as a callback.",
+    )
 
     link = TypedProperty(
         bool,
@@ -353,14 +364,18 @@ class FunctionEnvironment(object):
         self.func_signature = func_signature
 
         if name is None:
-            if self.func and self.func.__module__:
-                module_name = self.func.__module__
-                name = '.'.join([module_name, self.func.__name__])
+            if self.func:
+                name = self.func.__name__
             else:
                 name = self.ast.name
 
+        if self.func and self.func.__module__:
+            qname = '.'.join([self.func.__module__, name])
+        else:
+            qname = name
+
         if mangled_name is None:
-            mangled_name = naming.specialized_mangle(name,
+            mangled_name = naming.specialized_mangle(qname,
                                                      self.func_signature.args)
 
         self.func_name = name

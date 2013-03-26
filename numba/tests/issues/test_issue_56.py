@@ -1,5 +1,5 @@
 from numba import *
-from numba.tests import test_support
+from numba.testing import test_support
 
 import numpy
 

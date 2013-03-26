@@ -26,4 +26,6 @@ def get_dict(x):
 
 if __name__ == '__main__':
     import numba
+    from numba.testing.test_support import rewrite_doc
+    __doc__ = rewrite_doc(__doc__)
     numba.testmod()

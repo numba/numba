@@ -8,6 +8,7 @@ try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
+
 from functools import reduce
 
 import numba
@@ -22,7 +23,9 @@ from numba.control_flow import ssa
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
 from numba import closures as closures
+import numba.wrapping.compiler
 from numba.support import numpy_support
+from numba.exttypes.variable import ExtensionAttributeVariable
 
 from numba.typesystem import is_obj, promote_closest, get_type
 from numba.utils import dump
@@ -50,7 +53,7 @@ def lookup_global(env, name, position_node):
     elif name in func_env.function_globals:
         value = func_env.function_globals[name]
     elif func and name == func.__name__:
-        # Assume recursive function
+        # Assume recursive function, grab function from cache
         value = numba.jit(func_env.func_signature)(func)
     else:
         raise error.NumbaError(position_node, "No global named '%s'" % (name,))
@@ -509,17 +512,19 @@ class TypeInferer(visitors.NumbaTransformer):
 
         if not valid_type:
             self.error(node.value,
-                       'Only NumPy attributes and list or tuple literals are '
-                       'supported')
+                       'Only NumPy attributes and list or tuple literals can '
+                       'currently be unpacked')
         elif value_type.size != len(targets):
             self.error(node.value,
-                       "Too many/few arguments to unpack, got (%d, %d)" %
-                                            (value_type.size, len(targets)))
+                       "Too many/few arguments for tuple unpacking, "
+                       "got (%d, %d)" % (value_type.size, len(targets)))
 
         # Generate an assignment for each unpack
         result = []
         for i, target in enumerate(targets):
-            if value_type.is_carray or value_type.is_sized_pointer:
+            is_literal = isinstance(node.value, (ast.Tuple, ast.List))
+            if (value_type.is_carray or
+                    value_type.is_sized_pointer or not is_literal):
                 # C array
                 value = nodes.index(node.value, i)
             else:
@@ -562,7 +567,7 @@ class TypeInferer(visitors.NumbaTransformer):
             rhs_var = rhs_node.variable
 
         if lhs_var.type is None:
-            lhs_var.type = rhs_var.type
+            lhs_var.perform_assignment(rhs_var.type)
         elif lhs_var.type != rhs_var.type:
             if lhs_var.name in self.locals:
                 # Type must be consistent
@@ -574,19 +579,19 @@ class TypeInferer(visitors.NumbaTransformer):
                 # update the type graph to link it together correctly
                 assert lhs_var is lhs_var.type.variable
                 deferred_type = lhs_var.type
-                lhs_var.type = rhs_var.type
+                lhs_var.perform_assignment(rhs_var.type)
                 deferred_type.update()
             elif isinstance(lhs_node, ast.Name):
                 if lhs_var.renameable:
                     # Override type with new assignment
-                    lhs_var.type = rhs_var.type
+                    lhs_var.perform_assignment(rhs_var.type)
                 else:
                     # Promote type for cellvar or freevar
                     self.assert_assignable(lhs_var.type, rhs_var.type)
                     if (lhs_var.type.is_numeric and rhs_var.type.is_numeric and
                             lhs_var.promotable_type):
-                        lhs_var.type = self.promote_types(lhs_var.type,
-                                                          rhs_var.type)
+                        lhs_var.perform_assignment(
+                            self.promote_types(lhs_var.type, rhs_var.type))
 
         return rhs_node
 
@@ -838,7 +843,9 @@ class TypeInferer(visitors.NumbaTransformer):
         node.right = self.visit(node.right)
 
         if nodes.is_bitwise(node.op):
-            typesystem.require([node.left, node.right], ["is_int", 'is_object'])
+            typesystem.require([node.left, node.right], ["is_int",
+                                                         'is_object',
+                                                         'is_bool'])
 
         v1, v2 = node.left.variable, node.right.variable
         promotion_type = self.promote(v1, v2)
@@ -876,12 +883,19 @@ class TypeInferer(visitors.NumbaTransformer):
         lhs = node.left
         comparators = node.comparators
         types = [lhs.variable.type] + [c.variable.type for c in comparators]
-        if len(set(types))!=1:
+
+        result_type = bool_
+
+        if len(set(types)) != 1:
             type = reduce(self.context.promote_types, types)
-            node.left = nodes.CoercionNode(lhs, type)
-            node.comparators = [nodes.CoercionNode(c, type)
-                                for c in comparators]
-        node.variable = Variable(minitypes.bool_)
+            if type.is_array:
+                result_type = typesystem.array(bool_, type.ndim)
+            else:
+                node.left = nodes.CoercionNode(lhs, type)
+                node.comparators = [nodes.CoercionNode(c, type)
+                                    for c in comparators]
+
+        node.variable = Variable(result_type)
         return node
 
     #------------------------------------------------------------------------
@@ -1261,6 +1275,51 @@ class TypeInferer(visitors.NumbaTransformer):
         return infer_call.infer_typefunc(self.context, node,
                                          func_type, new_node)
 
+    def _resolve_autojit_method_call(self, call_node, ext_type, attr):
+        from numba.exttypes import signatures
+
+        argtypes = tuple(a.variable.type for a in call_node.args)
+        argtypes = (ext_type,) + argtypes
+
+        if (attr, argtypes) not in ext_type.specialized_methods:
+            if ext_type.extclass is None:
+                raise error.NumbaError(
+                    call_node, "Cannot yet call autojit methods from jit "
+                               "methods (which includes the constructor).")
+
+            # Compile the autojit method
+            # TODO: Compile for the base class ext_type (the class owning
+            # TODO: the method)
+            untyped_method = ext_type.untyped_methods[attr]
+            method = untyped_method.clone()
+            method.signature = typesystem.function(None, argtypes)
+
+            compiler_impl = numba.wrapping.compiler.MethodCompiler(
+                self.env, ext_type.extclass, method)
+            compiler_impl.compile(method.signature)
+
+            # Retrieve specialized method
+            method = ext_type.specialized_methods[attr, argtypes]
+
+            # Update method signature
+            method_maker = signatures.MethodMaker(ext_type)
+            method.signature = method_maker.make_method_type(method)
+        else:
+            method = ext_type.specialized_methods[attr, argtypes]
+
+        # Generate method access
+        extension_method_node = call_node.func
+        obj_node = extension_method_node.value
+
+        methodnode = nodes.ExtensionMethod(obj_node, attr, method)
+
+        # Generate method call
+        new_node = nodes.NativeFunctionCallNode(
+            method.signature, methodnode, call_node.args,
+            skip_self=True)
+
+        return new_node
+
     def visit_Call(self, node, visitchildren=True):
         if node.starargs or node.kwargs:
             raise error.NumbaError("star or keyword arguments not implemented")
@@ -1269,7 +1328,7 @@ class TypeInferer(visitors.NumbaTransformer):
 
         func_variable = node.func.variable
         func_type = func_variable.type
-        func = infer_call.resolve_function(func_type, func_variable.name)
+        func = infer_call.resolve_function(func_variable)
 
         #if not self.analyse and func_type.is_cast and len(node.args) == 1:
         #    # Short-circuit casts
@@ -1283,6 +1342,10 @@ class TypeInferer(visitors.NumbaTransformer):
         # TODO: Resolve variable types based on how they are used as arguments
         # TODO: in calls with known signatures
         new_node = None
+        if func_type.is_autojit_method:
+            assert isinstance(node.func, nodes.ExtensionMethod)
+            new_node = self._resolve_autojit_method_call(
+                node, node.func.ext_type, node.func.attr)
         if func_type.is_function:
             # Native function call
             no_keywords(node)
@@ -1392,21 +1455,31 @@ class TypeInferer(visitors.NumbaTransformer):
 
         return attr_name
 
-    def _resolve_extension_attribute(self, node, type):
-        attr = self.extattr_mangle(node.attr, type)
-        if attr in type.methoddict:
-            return nodes.ExtensionMethod(node.value, attr)
-        if attr not in type.symtab:
-            if type.is_resolved or not self.is_store(node.ctx):
+    def _resolve_extension_attribute(self, node, ext_type):
+        attr = self.extattr_mangle(node.attr, ext_type)
+
+        if attr in ext_type.methoddict:
+            method = ext_type.methoddict[attr]
+            return nodes.ExtensionMethod(node.value, attr, method)
+
+        if attr in ext_type.untyped_methods:
+            method = ext_type.untyped_methods[attr]
+            return nodes.AutojitExtensionMethod(node.value, attr, method)
+
+        if attr not in ext_type.attributedict:
+            if ext_type.is_resolved or not self.is_store(node.ctx):
                 raise error.NumbaError(
-                    node, "Cannot access attribute %s of type %s" % (
-                                                node.attr, type.name))
+                    node, "Cannot access attribute %s of ext_type %s" % (
+                                                node.attr, ext_type.name))
 
-            # Create entry in type's symbol table, resolve the actual type
-            # in the parent Assign node
-            type.symtab[attr] = Variable(None)
+            # Infer the type for this extension attribute using a
+            # special Variable
+            variable = ExtensionAttributeVariable(ext_type, attr, type=None)
+        else:
+            variable = Variable(ext_type.attributedict[attr])
 
-        return nodes.ExtTypeAttribute(node.value, attr, node.ctx, type)
+        return nodes.ExtTypeAttribute(node.value, attr, variable,
+                                      node.ctx, ext_type)
 
     def _resolve_struct_attribute(self, node, type):
         type = nodes.struct_type(type)
