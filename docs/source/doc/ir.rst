@@ -4,7 +4,7 @@ Numba IR Stages
 
 To allow Numba as a general purpose compiler, we provide different entry
 points. These entry points also allow for further decoupling of the Numba
-architecture. We propose three new Intermediate Representations (IRs),
+architecture. We propose several new Intermediate Representations (IRs),
 from high-level to low-level:
 
     * The Python AST IR (input to a numba frontend)
@@ -54,10 +54,31 @@ rewrites::
 
 Use of Schemas
 --------------
-We can use our schemas to generate Python AST classes, which can
-also verify the typing (using ``TypedProperty``). Each node can
-furthermore implement its own ``visit`` method, allowing for quick
-visitor dispatch (compile with Cython or pre-compile with Numba).
+We can use our schemas to:
+
+    * Validate IR instances
+    * Generate Python AST classes with typed properties and fast
+      visitor dispatching
+    * Generate Higher- or Lower-level LLVM IR
+    * Generate conversion code to and from an ATerm representation
+    * Generate a flat representation. E.g. a form of Three Address Code
+    * Generate an implementation in other languages that can load a
+      serialized representation and construct an AST in that langauge
+    * Generate type definitions and serialization routines in
+      other languages.
+
+        .. NOTE:: This can help other languages target Numba as
+                  a backend compiler more easily, since they can
+                  build up the IR using in-memory data structures for
+                  the IR most suitable to their needs.
+
+    * Generate definitions for use in Attribute Grammars ()
+    * Executable IR (:ref:`executable`)
+
+.. _llvm_ir:
+
+LLVM IR
+^^^^^^^
 
 We can generate automatic mapping code to map schema instances to
 opaguely typed LLVM IR automatically, which is the abstract syntax
@@ -81,38 +102,124 @@ will generate IR along the following lines:
 .. code-block:: llvm
 
     define i8* @func() {
-        %0 = blockaddress(@func, %bb_true)
-        %1 = blockaddress(@func, %bb_false)
-        %2 = i8*  @If(i8* %0, i8* %1)
+    entry:
+        %0 = blockaddress(@func, %bb_test)
+        %1 = blockaddress(@func, %bb_true)
+        %2 = blockaddress(@func, %bb_false)
+        %3 = i8*  @If(i8* %0, i8* %1, i8* %2)
 
-      "bb_true":
+      bb_test:
         ...
 
-      "bb_false":
+      bb_true:
+        ...
+
+      bb_false:
         ...
     }
 
-Other things we can do from our schema:
+An LLVM IR instance can be mapped back losslessly to an IR instance of a
+different representation (e.g. a DAG).
 
-    * Generate conversion code to and from JSON or XML
-    * Generate conversion code to and from an ATerm representation
-    * Generate an implementation in other languages that can load a
-      serialized representation and construct an AST in that langauge
-    * Travis' idea, make the IR executable.
+We can use a well-defined abstraction that can map these higher-level
+constructs to the lower-level equilvent. This can be used
+simultenously by:
 
-        * Implement a library to which the generated abstract
-          LLVM IR can link.
-          E.g. implement functions such as ``@BinOp(%lhs, %rhs)``.
+    * The control flow graph builder
+    * Any IR that wants control flow expanded
+    * The code generator
 
-        * Generate conversion code to and from a high-level Python AST
-          or source code.
+We can use this
+construct to expand our IR to IR that corresponds more closely to
+the final IR we would generate, where all control flow is expanded
+to branches::
 
-          For instance, ``PointerIndex(base_type, node, index)`` becomes
-          ``Call(func=Name('base_type'), args=[Subscript(subnode, index)])``.
-          This function can then be compiled and interpreted with Python,
-          using abstract argument inputs (or maybe we can write a
-          simple AST evaluator).
+    define i8* @func() {
+    entry:
+        br label %bb_test
 
+      bb_test:
+        %test = ...
+        br i1 %test, label %bb_true, label %bb_false
+
+      bb_true:
+        ...
+        br label %bb_false
+
+      bb_false:
+        ...
+        br label %bb_exit
+
+      bb_exit:
+        ...
+
+    }
+
+Passes can do not care about special control structures can then execute
+on this IR.
+
+.. _executable:
+
+Executable IR
+^^^^^^^^^^^^^
+
+There are two ideas:
+
+    * Implement a library to which the generated abstract
+      LLVM IR can link. E.g. implement functions such as
+      ``@BinOp(%add, %lhs, %rhs)`` (we can call this function
+      ``PyNumber_Add``).
+
+If we define new lowered IRs are a specialized subset of higher-level
+IRs, we get execution for free:
+
+   * Generate conversion code to and from a high-level Python AST
+     or source code.
+
+     For instance, ``PointerIndex(base_type, node, index)`` becomes
+     ``Call(func=Name('base_type'), args=[Subscript(subnode, index)])``.
+     This function can then be compiled and interpreted with Python,
+     using abstract argument inputs.
+
+Alternatively, if we already know which operations our data corresponds
+to, we can generate a simple AST or bytecode evaluator.
+
+.. _cfg:
+
+Control Flow
+------------
+We can have a single abstraction that can create basic blocks and
+link blocks together. For instance we for the following structure::
+
+    For(expr target, expr iter, stmt* body, stmt* orelse)
+
+We have the following CFG:
+
+.. digraph:: cfg
+
+    entry -> condition -> body -> condition -> orelse -> exit
+
+In this CFG, ``break`` and ``continue`` correspond to the following edges:
+
+.. digraph:: break
+
+    break -> exit
+    continue -> condition
+
+We can use this single abstraction to:
+
+   * Create a CFG at any time in any IR stage. For instance we can
+     generate LLVM IR automatically with expanded control flow.
+
+     .. NOTE:: This also includes the code generator, which doesn't
+               hconditionave to handle any block structures.
+
+   * Retain high-level information that allows for simple
+     classification and accurate error reporting.
+
+     .. NOTE:: This is important to allow us to easily rewrite entire
+               control flow structures, such as outlining of the prange
+               construct.
 
 Initial Python-like IR
 ----------------------
@@ -285,3 +392,6 @@ The low-level portable IR is a low-level, platform agnostic, IR that:
       ``long_``, pointers, structs, etc. The notion of high-level
       concepts such as arrays or objects is gone.
 
+References
+==========
+.. [#] Attribute Grammars in Haskell with UUAG, A. Loh, http://www.andres-loeh.de/AGee.pdf
