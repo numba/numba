@@ -72,7 +72,7 @@ We can use our schemas to:
                   build up the IR using in-memory data structures for
                   the IR most suitable to their needs.
 
-    * Generate definitions for use in Attribute Grammars ()
+    * Generate definitions for use in Attribute Grammars ([#]_)
     * Executable IR (:ref:`executable`)
 
 .. _llvm_ir:
@@ -184,43 +184,6 @@ IRs, we get execution for free:
 Alternatively, if we already know which operations our data corresponds
 to, we can generate a simple AST or bytecode evaluator.
 
-.. _cfg:
-
-Control Flow
-------------
-We can have a single abstraction that can create basic blocks and
-link blocks together. For instance we for the following structure::
-
-    For(expr target, expr iter, stmt* body, stmt* orelse)
-
-We have the following CFG:
-
-.. digraph:: cfg
-
-    entry -> condition -> body -> condition -> orelse -> exit
-
-In this CFG, ``break`` and ``continue`` correspond to the following edges:
-
-.. digraph:: break
-
-    break -> exit
-    continue -> condition
-
-We can use this single abstraction to:
-
-   * Create a CFG at any time in any IR stage. For instance we can
-     generate LLVM IR automatically with expanded control flow.
-
-     .. NOTE:: This also includes the code generator, which doesn't
-               hconditionave to handle any block structures.
-
-   * Retain high-level information that allows for simple
-     classification and accurate error reporting.
-
-     .. NOTE:: This is important to allow us to easily rewrite entire
-               control flow structures, such as outlining of the prange
-               construct.
-
 Initial Python-like IR
 ----------------------
 
@@ -231,11 +194,12 @@ syntax exludes:
       to ``Assign`` of the function and subsequent
       decorator applications and assignments
     * No list, dict, set or generators comprehensions, which are
-      normalized to ``For(...)`` etc + method calls
+      normalized to ``For(...)`` etc + method calls to ``list.append``,
+      etc.
+    * Normalized comparisons
 
 The initial IR is what numba decorators produce given a pure
 Python AST, function or class as input.
-
 
 Sample schema
 
@@ -392,6 +356,186 @@ The low-level portable IR is a low-level, platform agnostic, IR that:
       ``long_``, pointers, structs, etc. The notion of high-level
       concepts such as arrays or objects is gone.
 
+.. _cfg:
+
+Control Flow
+============
+
+We can have a single abstraction that can create basic blocks and
+link blocks together. For instance we for the following structure::
+
+    For(expr target, expr iter, stmt* body, stmt* orelse)
+
+We have the following CFG:
+
+.. digraph:: cfg
+
+    entry -> condition -> body -> condition -> orelse -> exit
+
+In this CFG, ``break`` and ``continue`` correspond to the following edges:
+
+.. digraph:: break
+
+    break -> exit
+    continue -> condition
+
+We can use this single abstraction to:
+
+   * Create a CFG at any time in any IR stage. For instance we can
+     generate LLVM IR automatically with expanded control flow.
+
+     .. NOTE:: This also includes the code generator, which doesn't
+               have to handle any block structures.
+
+   * Retain high-level information that allows for simple
+     classification and accurate error reporting.
+
+     .. NOTE:: This is important to allow us to easily rewrite entire
+               control flow structures, such as outlining of the prange
+               construct.
+
+IR Suitability
+==============
+An important consideration for an IR is how well transformations are
+defined over it, and how efficient those transformations are. For instance,
+a pass that combines instructions works far better on a simple three-address
+representation than an AST. Design considerations ([#]_):
+
+    * Level and machine independence
+    * Structure
+    * Expressiveness
+    * Appropriateness for transformation and code generation
+
+
+To evaluate some of these metrics we will look at some concretizations.
+
+Structure
+---------
+We can consider expanded or abstract control flow:
+
+    * We want to compute an SSA graph. Clearly we need a control flow
+      graph in order to perform this computation.
+
+    * We want to *outline* a prange construct. Consider what this looks
+      like using unexpanded and expanded control flow.
+
+    Unexpanded::
+
+        For(iter=prange(...)) ->
+            [ MakeClosure(For(iter=prange(adjust_bounds(...))) ; InvokeThreadPool ]
+
+    Expanded:
+
+        * Match a loop
+        * Scan preceding statements for ``t = iter(prange(...))``
+        * Outline ``[ t ; loop ]``
+        * Apply ``adjust_bounds`` to ``iter(prange(...))``
+        * Perform range transformation to rewrite using counters
+
+
+Consider also error reporting facilities. For instance, let's assume
+we want to disallow break from parallel loops.
+
+    Unexanded:
+
+        ``Break -> error``
+
+    Expanded:
+
+        * Scan for ``prange`` (similar to above, namely match a loop,
+          scan preceding statement for ``iter()``)
+        * Find a CFG edge that points outside the loop body region
+          (e.g. the exit block of the loop, or a block further outside
+          the region)
+
+Clearly, some transformations are easier to perform using expanded control flow, e.g.:
+
+    * Computing SSA
+    * Dead-code elimination
+    * Control flow simplification
+    * Transformations to structured control flow
+    * and so forth
+
+Expressiveness
+--------------
+Consider a high-level type system, that has:
+
+    * Full or partial functions as first-class values
+
+        * This subsumes closurs and all methods (bound, unbound, class, static)
+    * Types as first-class values
+    * (Extension) Classes as first-class values
+    * Containers such as
+
+        * Arrays
+        * Typed lists, sets, dicts, channels, and so forth
+
+Program instances using these constructs must be quickly identifyable to aid
+easy tranformation. For instance, ``obj.method(10)`` should be quickly transformable
+using rules along the following lines:
+
+.. code-block:: ocaml
+
+    Attribute(value.type=object, attr)
+        -> PyObject_GetAttrString(value, attr)
+
+    Attribute(value, attr).type=ExtensionMethod(..., is_jit=True)
+        -> ExtensionMethodStruct(value, method)
+
+with:
+
+.. code-block:: c
+
+      [
+          typedef {
+              double (*method1)(double);
+              ...
+          } vtab_struct;
+
+          vtab_struct *vtab = *(vtab_struct **) (((char *) obj) + vtab_offset)
+          void *method = vtab[index]
+      ]
+
+
+A call for object then exands to ``PyObject_Call``, and a method call to a
+``NativeCall`` of ``ExtensionMethodStruct.method`` with first argument
+``ExtensionMethodStruct.value`` ('self').
+
+A later pass can then combine consecutive instructions and optimize them, i.e.
+
+.. code-block:: ocaml
+
+    [
+        method = PyObject_GetAttrString(obj, attr);
+        PyObject_Call(method, value, args)
+    ]
+        -> PyObject_CallMethod(obj, attr, args)
+
+A similar pass for extension methods would then avoid building the
+intermediate struct.
+
+.. NOTE:: Note how we could combine the first and second passes to detect method
+          calls. Such a rule would be well-expressed on a tree or graph structure.
+          The first rule as specified would work well on both a tree or three-address
+          code. The latter is specified best on TAC.
+
+The point we're trying to make is that we need to encode many different kinds
+of first-class values, which have high-level types. These constucts must be
+quickly identifyable and transformable using a high-level type system that
+can support constructs of the high-level language.
+
+Using a low-level type system such as LLVM's or C's means high-level types
+need low-level equivalents, which means one of two things:
+
+    * You use an abstract type classifier, which needs to be composable
+    * You use a lower-level representation which more closely resembles
+      the type of the value in its lowered representation (e.g. a struct
+      of a function pointer and an object pointer).
+
+LLVM facilitates the latter point, but is in no way caters to
+the first. Yet what we want is the former, for the sake of expressiveness.
+
 References
 ==========
 .. [#] Attribute Grammars in Haskell with UUAG, A. Loh, http://www.andres-loeh.de/AGee.pdf
+.. [#] Advanced Compiler Design and Implementation, Steven S. Muchnick
