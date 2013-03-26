@@ -6,11 +6,13 @@ __pycache__
 *.o
 *.bak
 *.pybackup
-numba/extension_types.c
+extension_types.c
 numba/external/utilities/generated_conversions.[ch]
 numba/external/utilities/generated_conversions.c
-numba/numbawrapper.c
+numba/numbawrapper.[ch]
 numba/pyconsts.c
+intern.c
+methodtable.c
 
 .idea/
 build/
