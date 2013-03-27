@@ -72,8 +72,8 @@ class CUDAComputeUnit(CU):
             self.__compiled_count += 1
 
         # configure kernel
+        blksz = self.__max_blocksize
         while True:
-            blksz = self.__max_blocksize
             ngrid = int(math.ceil(float(ntid) / blksz))
             nblock = min(blksz, ntid)
             griddim = ngrid, 1,
