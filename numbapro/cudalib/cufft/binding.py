@@ -6,18 +6,18 @@ from numbapro.cudalib.libutils import Lib, ctype_function
 from numbapro.cudapipeline.driver import cu_stream
 from numbapro._utils import finalizer
 
-STATUS = dict(
-  CUFFT_SUCCESS        = 0x0,
-  CUFFT_INVALID_PLAN   = 0x1,
-  CUFFT_ALLOC_FAILED   = 0x2,
-  CUFFT_INVALID_TYPE   = 0x3,
-  CUFFT_INVALID_VALUE  = 0x4,
-  CUFFT_INTERNAL_ERROR = 0x5,
-  CUFFT_EXEC_FAILED    = 0x6,
-  CUFFT_SETUP_FAILED   = 0x7,
-  CUFFT_INVALID_SIZE   = 0x8,
-  CUFFT_UNALIGNED_DATA = 0x9
-)
+STATUS = {
+  0x0 : 'CUFFT_SUCCESS',
+  0x1 : 'CUFFT_INVALID_PLAN',
+  0x2 : 'CUFFT_ALLOC_FAILED',
+  0x3 : 'CUFFT_INVALID_TYPE',
+  0x4 : 'CUFFT_INVALID_VALUE',
+  0x5 : 'CUFFT_INTERNAL_ERROR',
+  0x6 : 'CUFFT_EXEC_FAILED',
+  0x7 : 'CUFFT_SETUP_FAILED',
+  0x8 : 'CUFFT_INVALID_SIZE',
+  0x9 : 'CUFFT_UNALIGNED_DATA',
+}
 
 cufftResult = c_int
 
@@ -85,11 +85,11 @@ class libcufft(Lib):
     cufftPlanMany = ctype_function(cufftResult,
                                    POINTER(cufftHandle), # plan
                                    c_int,                # rank
-                                   POINTER(c_int),       # n
-                                   POINTER(c_int),       # inembed
+                                   c_void_p, # POINTER(c_int) n
+                                   c_void_p, # POINTER(c_int) inembed
                                    c_int,                # istride
                                    c_int,                # idist
-                                   POINTER(c_int),       # onembed
+                                   c_void_p, # POINTER(c_int) onembed
                                    c_int,                # ostride
                                    c_int,                # odist
                                    cufftType,            # type
@@ -163,7 +163,7 @@ class Plan(finalizer.OwnerMixin):
         inst = object.__new__(cls)
         inst._api = libcufft()
         inst._handle = cufftHandle()
-        BATCH = 1 # deprecated args to cufftPlan1d
+        BATCH = 1           # deprecated args to cufftPlan1d
         status = inst._api.cufftPlan1d(byref(inst._handle), int(nx), int(dtype),
                                        BATCH)
         inst.dtype = dtype
@@ -178,6 +178,7 @@ class Plan(finalizer.OwnerMixin):
         inst._handle = cufftHandle()
         status = inst._api.cufftPlan2d(byref(inst._handle), int(nx), int(ny),
                                        int(dtype))
+        inst.dtype = dtype
         inst._finalizer_track((inst._handle, inst._api))
         return inst
 
@@ -188,14 +189,30 @@ class Plan(finalizer.OwnerMixin):
         inst._api = libcufft()
         inst._handle = cufftHandle()
         status = inst._api.cufftPlan3d(byref(inst._handle), int(nx), int(ny),
-                                       int(dtype))
+                                       int(nz), int(dtype))
+        inst.dtype = dtype
         inst._finalizer_track((inst._handle, inst._api))
         return inst
 
     @classmethod
-    def many(cls, shape, dtype):
+    def many(cls, shape, dtype, batch=1):
         "cufftPlanMany"
-        raise NotImplementedError
+        inst = object.__new__(cls)
+        inst._api = libcufft()
+        inst._handle = cufftHandle()
+
+        c_shape = np.asarray(shape, dtype=np.int32)
+        status = inst._api.cufftPlanMany(byref(inst._handle),
+                                         len(shape),
+                                         c_shape.ctypes.data,
+                                         None, 1, 0,
+                                         None, 1, 0,
+                                         int(dtype), int(batch))
+        inst.shape = shape
+        inst.dtype = dtype
+        inst.batch = batch
+        inst._finalizer_track((inst._handle, inst._api))
+        return inst
 
     @classmethod
     def _finalize(cls, res):
@@ -206,7 +223,31 @@ class Plan(finalizer.OwnerMixin):
         "Associate a CUDA stream to this plan object"
         return self._api.cufftSetStream(self._handle, stream)
 
+    def set_compatibility_mode(self, mode):
+        return self._api.cufftSetCompatibilityMode(self._handle, mode)
+
+    def set_native_mode(self):
+        return self.set_compatibility_mode(CUFFT_COMPATIBILITY_NATIVE)
+
+    def set_fftw_padding_mode(self):
+        return self.set_compatibility_mode(CUFFT_COMPATIBILITY_FFTW_PADDING)
+    
+    def set_fftw_asymmetric_mode(self):
+        return self.set_compatibility_mode(CUFFT_COMPATIBILITY_FFTW_ASYMMETRIC)
+
+    def set_fftw_all_mode(self):
+        return self.set_compatibility_mode(CUFFT_COMPATIBILITY_FFTW_ALL)
+
+    set_native_mode = set_fftw_padding_mode
+
     def exe(self, idata, odata, dir):
-        meth = getattr(self._api, 'cufftExec' + cufft_dtype_to_name[self.dtype])
+        postfix = cufft_dtype_to_name[self.dtype]
+        meth = getattr(self._api, 'cufftExec' + postfix)
         return meth(self._handle, idata.device_raw_ptr.value,
                     odata.device_raw_ptr.value, int(dir))
+
+    def forward(self, idata, odata):
+        return self.exe(idata, odata, dir=CUFFT_FORWARD)
+
+    def inverse(self, idata, odata):
+        return self.exe(idata, odata, dir=CUFFT_INVERSE)

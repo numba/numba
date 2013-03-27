@@ -89,6 +89,11 @@ def mapped(*arylist, **kws):
 
 # Device selection
 
+@_driver.require_context
+def auto_context():
+    "Ensure a context is made for this thread"
+    pass
+
 def select_device(device_id):
     '''Call this before any CUDA feature is used in each thread.
 
@@ -119,11 +124,11 @@ def close():
 
 
 
-def _auto_device(ary, stream=0):
+def _auto_device(ary, stream=0, copy=True):
     if isinstance(ary, DeviceArrayBase):
         return ary, False
     else:
-        return to_device(ary, stream=stream), True
+        return to_device(ary, copy=copy, stream=stream), True
 
 
 #
