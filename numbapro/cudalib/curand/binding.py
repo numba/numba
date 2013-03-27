@@ -1,8 +1,8 @@
-import sys
 import numpy as np
 from ctypes import *
 
 from numbapro.cudapipeline.driver import cu_stream
+from numbapro.cudalib.libutils import Lib, ctype_function
 from numbapro._utils import finalizer
 
 # enum curandStatus
@@ -108,66 +108,13 @@ curandMethod_t = c_int
 curandGenerator_t = c_void_p
 p_curandGenerator_t = POINTER(curandGenerator_t)
 
-
-class ctype_function(object):
-    def __init__(self, restype=None, *argtypes):
-        self.restype = restype
-        self.argtypes = argtypes
-
 class CuRandError(Exception):
     def __init__(self, code):
         super(CuRandError, self).__init__(STATUS[code])
 
-class libcurand(object):
-    __singleton = None
-
-    def __new__(self, override_path=None):
-        # Check if we already have opened the dll
-        if self.__singleton is None:
-            # No
-
-            # Determine dll extension type for the platform
-            if sys.platform == 'win32':
-                dlext = '.dll'
-                dllopener = WinDLL
-            elif sys.platform == 'darwin':
-                dlext = '.dylib'
-                dllopener = CDLL
-            else:
-                dlext = '.so'
-                dllopener = CDLL
-            # Open the DLL
-            path = 'libcurand' + dlext if not override_path else override_path
-            dll = dllopener(path)
-
-            # Create new instance
-            inst = object.__new__(libcurand)
-            self.__singleton = inst
-            inst.dll = dll
-            inst.__initialize()
-        else:
-            inst = self.__singleton
-        return inst
-
-    def __initialize(self):
-        # Populate the instance with the functions
-        for name, obj in vars(type(self)).items():
-            if isinstance(obj, ctype_function):
-                fn = getattr(self.dll, name)
-                fn.restype = obj.restype
-                fn.argtypes = obj.argtypes
-                setattr(self, name, self._auto_checking_wrapper(fn))
-
-    def _auto_checking_wrapper(self, fn):
-        def wrapped(*args, **kws):
-            status = fn(*args, **kws)
-            self.check_error(status)
-            return status
-        return wrapped
-
-    def check_error(self, status):
-        if status != 0:
-            raise CuRandError(status)
+class libcurand(Lib):
+    lib = 'libcurand'
+    ErrorType = CuRandError
 
     @property
     def version(self):
