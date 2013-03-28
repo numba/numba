@@ -82,7 +82,7 @@ Or, through the one line decorator syntax::
     def matmulcore(A, B, C):
         ...
 
-**Note:** `GUVectorize(..., target='gpu').build_ufunc` returns an *ufunc-like* object.  See `documentation for CUDA ufunc <CUDAufunc.html>`_ for detail.
+.. NOTE:: `GUVectorize(..., target='gpu').build_ufunc` returns an *ufunc-like* object.  See `documentation for CUDA ufunc <CUDAufunc.html>`_ for detail.
 
 There are times when the gufunc kernel uses too much GPU resources, which can
 can the kernel launch to fail.  User to explicitly control the maximum size of

@@ -36,7 +36,7 @@ Users can than create a new context with another device.
     cuda.select_device(1)  # assuming we have 2 GPUs
 
 
-**Note:** Compiled functions are associated with the context CUDA context.
+.. NOTE:: Compiled functions are associated with the context CUDA context.
 This makes it not very useful to close and create new devices.
 But, it is certainly useful for choosing which device to use when the machine
 has multiple GPUs.
@@ -51,7 +51,7 @@ has multiple GPUs.
     It is possible to use multiple devices by using multiple threads and
     associating different devices to different threads.
 
-    **NOTE:**  The compute mode of a device can be configured to be
+    .. NOTE::  The compute mode of a device can be configured to be
     exclusive to a thread or process.  This prevents the user from creating
     multiple context on the same device in different threads.  The solution is to
     use the `nvidia-smi` commandline tool to query and modify the compute mode.

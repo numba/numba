@@ -12,7 +12,7 @@ class FFTPlan(object):
     MODE_FFTW_PADDING = _cufft.CUFFT_COMPATIBILITY_FFTW_PADDING
     MODE_FFTW_ASYMMETRIC = _cufft.CUFFT_COMPATIBILITY_FFTW_ASYMMETRIC
     MODE_FFTW_ALL = _cufft.CUFFT_COMPATIBILITY_FFTW_ALL
-    MODE_FFTW_DEFAULT = _cufft.CUFFT_COMPATIBILITY_DEFAULT
+    MODE_DEFAULT = _cufft.CUFFT_COMPATIBILITY_DEFAULT
 
     SUPPORTED_TYPES = _prepare_types({
         (np.float32, np.complex64)     : 'R2C',
@@ -24,7 +24,7 @@ class FFTPlan(object):
     })
 
     def __init__(self, shape, itype, otype, batch=1, stream=0,
-                 mode=MODE_FFTW_DEFAULT):
+                 mode=MODE_DEFAULT):
         '''
         shape --- input array shape
         itype --- input data type

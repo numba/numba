@@ -55,7 +55,7 @@ StreamVectorize         StreamVectorize aims to provide a cache optimized versio
                         contiguous buffers (small enough presumably to fit in cache)
                         and then executes the code on those chunks.
 
-                        **Note:** StreamVectorize is still in experimental stages. Computation speeds may vary.
+                        .. NOTE:: StreamVectorize is still in experimental stages. Computation speeds may vary.
 
                         **Usage:**
 
@@ -67,7 +67,7 @@ CudaVectorize           CUDAVectorize uses translated code from Numba and conver
                         `PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_,
                         which is then compiled by CUDA and loaded on the device when called with array inputs.
 
-                        **Note:** `vectorizer.build_ufunc` returns an *ufunc-like* object.  See `documentation for CUDA ufunc <CUDAufunc.html>`_ for detail.
+                        .. NOTE:: `vectorizer.build_ufunc` returns an *ufunc-like* object.  See `documentation for CUDA ufunc <CUDAufunc.html>`_ for detail.
 
                         **Usage:**
 

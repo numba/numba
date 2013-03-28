@@ -146,7 +146,7 @@ the CU object an opportunity to optimize the memory transfer.
 For `output` and `inout` tags, the writeback from device to host is only
 guarenteed to happen when the CU object is synchronized through `cu.wait`.
 
-**NOTE:** Scalars can be used directly as array kernel argument.
+.. NOTE:: Scalars can be used directly as array kernel argument.
 
 
 Math Support
