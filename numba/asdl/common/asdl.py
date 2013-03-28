@@ -126,6 +126,22 @@ class ASDLParser(spark.GenericParser, object):
                                   msg="expected 'module', found %s" % module)
         return Module(name, definitions, version)
 
+    def p_module_1(self, xxx_todo_changeme1):
+        " module ::= Id Id { } "
+        (module, name, _0, definitions, _1) = xxx_todo_changeme1
+        if module.value != "module":
+            raise ASDLSyntaxError(module.lineno,
+                                  msg="expected 'module', found %s" % module)
+        return Module(name, None, None)
+
+    def p_module_2(self, xxx_todo_changeme1):
+        " module ::= Id Id { definitions } "
+        (module, name, _0, definitions, _1) = xxx_todo_changeme1
+        if module.value != "module":
+            raise ASDLSyntaxError(module.lineno,
+                                  msg="expected 'module', found %s" % module)
+        return Module(name, definitions, None)
+
     def p_version(self, xxx_todo_changeme2):
         "version ::= Id String"
         (version, V) = xxx_todo_changeme2
@@ -241,7 +257,7 @@ class ASDLParser(spark.GenericParser, object):
         (type, _) = xxx_todo_changeme22
         return Field(type, opt=True)
 
-builtin_types = ("identifier", "string", "int", "bool", "object")
+builtin_types = ("identifier", "string", "int", "bool", "object", "bytes")
 
 # below is a collection of classes to capture the AST of an AST :-)
 # not sure if any of the methods are useful yet, but I'm adding them
