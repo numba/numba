@@ -205,7 +205,7 @@ def uniform(size, dtype=np.float, device=False):
     '''Generate floating point random number sampled
     from a uniform distribution
 
-    size --- number of samples; optional, default to array size
+    size --- number of samples
     dtype --- np.float32 or np.float64
     device --- set to True to return a device array instead or ndarray
     '''
@@ -223,7 +223,9 @@ def normal(mean, sigma, size, dtype=np.float, device=False):
     '''Generate floating point random number sampled
     from a normal distribution
 
-    size --- number of samples; optional, default to array size
+    mean --- center point of the distribution
+    sigma --- standard deviation of the distribution
+    size --- number of samples
     dtype --- np.float32 or np.float64
     device --- set to True to return a device array instead or ndarray
     '''
@@ -240,8 +242,10 @@ def normal(mean, sigma, size, dtype=np.float, device=False):
 def lognormal(mean, sigma, size, dtype=np.float, device=False):
     '''Generate floating point random number sampled
     from a log-normal distribution
-
-    size --- number of samples; optional, default to array size
+    
+    mean --- center point of the distribution
+    sigma --- standard deviation of the distribution
+    size --- number of samples
     dtype --- np.float32 or np.float64
     device --- set to True to return a device array instead or ndarray
     '''
@@ -256,11 +260,11 @@ def lognormal(mean, sigma, size, dtype=np.float, device=False):
         return ary
 
 def poisson(lmbd, size, device=False):
-    '''Generate floating point random number sampled
+    '''Generate int32 random number sampled
     from a poisson distribution
 
     lmbda --- lambda
-    size --- number of samples; optional, default to array size
+    size --- number of samples
     device --- set to True to return a device array instead or ndarray
     '''
     ary = np.empty(size, dtype=np.uint32)
@@ -277,7 +281,9 @@ def quasi(size, bits=32, nd=1, device=False):
     '''
     Generate quasi random number using SOBOL{bits} RNG type.
         
+    size --- number of samples
     bits --- bit length of output element; e.g. 32 or 64.
+    nd   --- number of dimension 
     device --- set to True to return a device array instead or ndarray
     '''
     if bits == 64:

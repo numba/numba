@@ -55,6 +55,7 @@ supposed to act as a drop-in replacement for numba::
    CUDAufunc
    CUDADevice
    CUDASupport
+   cudalib
    prange
 
 
