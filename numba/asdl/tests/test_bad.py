@@ -49,8 +49,10 @@ class TestBad(support.SchemaTestCase):
         else:
             with self.capture_error() as cap:
                 self.schema.verify(the_ast)
-            self.assertEqual(str(cap.exception),
-                            "At arguments.args[0]: Cannot be a Raise")
+            self.assertIn(
+                str(cap.exception),
+                ["At arguments.args[0]: Cannot be a Raise",
+                 "At arguments.args[0]: Expecting arg but got Raise"])
 
     def test_return_missing_lineno(self):
         the_ast = ast.Return(col_offset=0)
