@@ -84,6 +84,21 @@ Or, through the one line decorator syntax::
 
 **Note:** `GUVectorize(..., target='gpu').build_ufunc` returns an *ufunc-like* object.  See `documentation for CUDA ufunc <CUDAufunc.html>`_ for detail.
 
+There are times when the gufunc kernel uses too much GPU resources, which can
+can the kernel launch to fail.  User to explicitly control the maximum size of
+thread block by setting setting the `max_blocksize` attribute on the compiled
+gufunc object.  
+
+::
+    
+    
+    @guvectorize(..., target='gpu')
+    def very_complex_kernel(A, B, C):
+        ...
+        
+    very_complex_kernel.max_blocksize = 32  # limits to 32 threads per block
+
+
 Generalized ufuncs with Array Expressions
 =========================================
 If your generalized ufunc kernel contains array expressions, you will need to use the 'ast' Numba backend.
