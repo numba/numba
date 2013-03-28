@@ -1,6 +1,6 @@
-===============================
-Compute Unit (OpenCL-like) API
-===============================
+=================================
+Compute Unit (Experimental) API
+=================================
 
 The compute unit (CU) API provides a portable interface for heterogeneous
 (CPU+GPU) parallel programming.  This API is similar to OpenCL.  Users write
@@ -111,8 +111,8 @@ CPU target to terminate cleanly.  The best practive is to use
         ...
 
 
-Data Arrays
-------------
+Tagging Data Arrays
+--------------------
 The CU API is tightly integrated with the numpy array.  To pass arrays to 
 the CU object, use the `input`, `output`, `inout`, `scratch` and `scratch_like`
 methods of the CU object.  
@@ -138,6 +138,15 @@ It has the following signature::
 User should treat the return value of these methods as an opaque handle to 
 the memory buffer on the CU.  Only use these handles as arguments to kernel 
 calls.
+
+User can consider these method as tagging the memory buffer on the host.  The
+actual memory transfer is not guaranteed to happen immediately.  This leaves
+the CU object an opportunity to optimize the memory transfer.
+
+For `output` and `inout` tags, the writeback from device to host is only
+guarenteed to happen when the CU object is synchronized through `cu.wait`.
+
+**NOTE:** Scalars can be used directly as array kernel argument.
 
 
 Math Support
