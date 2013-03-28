@@ -221,7 +221,7 @@ class Plan(finalizer.OwnerMixin):
 
     def set_stream(self, stream):
         "Associate a CUDA stream to this plan object"
-        return self._api.cufftSetStream(self._handle, stream)
+        return self._api.cufftSetStream(self._handle, stream._handle)
 
     def set_compatibility_mode(self, mode):
         return self._api.cufftSetCompatibilityMode(self._handle, mode)
