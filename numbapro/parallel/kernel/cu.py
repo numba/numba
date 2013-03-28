@@ -38,9 +38,6 @@ class ComputeUnit(object):
         else:
             self._execute_kernel(kernel, ntid, args)
 
-    def enqueue_write(self, ary):
-        self._enqueue_write(ary)
-
     def wait(self):
         self._wait()
 

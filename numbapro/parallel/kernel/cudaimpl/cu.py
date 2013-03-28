@@ -1,12 +1,30 @@
 import math
 import numpy
 import numba
+from weakref import WeakValueDictionary
 from numbapro import cuda
 from numba.decorators import resolve_argtypes
 from numbapro.cudapipeline.environment import CudaEnvironment
 from numbapro.cudapipeline.devicearray import DeviceArray
 from numbapro.cudapipeline.error import CudaDriverError
 from ..cu import CU
+
+
+class WeakSet(object):
+    def __init__(self):
+        self._con = WeakValueDictionary()
+
+    def add(self, obj):
+        self._con[id(obj)] = obj
+
+    def remove(self, obj):
+        del self._con[id(obj)]
+
+    def __iter__(self):
+        return iter(v for k, v in self._con.iteritems())
+
+    def __contains__(self, obj):
+        return id(obj) in self._con
 
 #
 # CUDA CU
@@ -17,8 +35,8 @@ class CUDAComputeUnit(CU):
         self.__compiled_count = 0
         self.__env = CudaEnvironment.get_environment('numbapro.cuda')
         self.__stream = cuda.stream()
+        self.__wrcache = WeakSet()
         self.__kernel_cache = {}
-        self.__writeback = set()
         self.__enqueued_args = []
         self.__device = cuda.get_current_device()
         self.__max_blocksize = self.__device.MAX_THREADS_PER_BLOCK
@@ -88,34 +106,40 @@ class CUDAComputeUnit(CU):
                 blksz -= 32 # reduce 32 threads at a time
             else:
                 break
-        self.__enqueued_args.append(args) # keep ref to args
-
-    
-    def _enqueue_write(self, ary):
-        self.__writeback.remove(ary)
-        ary.to_host(stream=self.__stream)
+        self.__enqueued_args.extend(args) # keep ref to args
 
     def _run_epilog(self):
-        for mem in self.__writeback:
-            mem.to_host(stream=self.__stream)
-        self.__writeback = set() # reset writeback
+        # process device->host memory transfer
+        uids = set()
+        for arg in self.__enqueued_args:
+            argid = id(arg) # use id because arg may not be hashable
+            if argid not in uids: # new
+                uids.add(argid)
+                if self._isoutarray(arg):
+                    arg.to_host(stream=self.__stream)
 
     def _wait(self):
         self._run_epilog()
         self.__stream.synchronize()
         self.__enqueued_args = [] # reset
 
+    def _isoutarray(self, obj):
+        try:
+            return obj in self.__wrcache
+        except:
+            raise
+
     def _input(self, ary):
         return cuda.to_device(ary, stream=self.__stream)
 
     def _output(self, ary):
         devary = cuda.to_device(ary, copy=False, stream=self.__stream)
-        self.__writeback.add(devary)
+        self.__wrcache.add(devary)
         return devary
 
     def _inout(self, ary):
         devary = self._input(ary)
-        self.__writeback.add(devary)
+        self.__wrcache.add(devary)
         return devary
 
     def _scratch(self, shape, dtype, order):

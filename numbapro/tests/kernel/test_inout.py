@@ -34,6 +34,21 @@ class TestInOut(unittest.TestCase):
 #        print('A0', A0)
         self.assertTrue(all(A == A0 + 1))
 
+class TestGPUOutQueue(unittest.TestCase):
+    def test_gpu_out_queue(self):
+        if not cuda.is_available:
+            print('Skipping CUDA test')
+            return
+        with closing(CU('gpu')) as cu:
+            A = np.arange(10)
+            A0 = A.copy()
+            dA = cu.inout(A)
+            cu.enqueue(incr, ntid=dA.size, args=(dA,))
+            cu.wait()
+            self.assertTrue(all(A == A0 + 1))
+            cu.enqueue(incr, ntid=dA.size, args=(dA,))
+            cu.wait()
+            self.assertTrue(all(A == A0 + 2))
 
 if __name__ == '__main__':
     unittest.main()
