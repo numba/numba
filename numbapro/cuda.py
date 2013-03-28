@@ -3,12 +3,12 @@ import numpy as np
 
 from .cudapipeline import initialize as _initialize
 from .cudapipeline.special_values import *
-from .cudapipeline import driver as _driver
+from .cudapipeline.driver import require_context
 from .cudapipeline.devicearray import DeviceArrayBase, DeviceNDArray, DeviceArray
 from .cudapipeline.decorators import jit, autojit
 
 # NDarray device helper
-@_driver.require_context
+@require_context
 def to_device(ary, stream=0, copy=True):
     devarray = ary.view(type=DeviceNDArray)
     devarray.device_allocate(stream=stream)
@@ -16,7 +16,7 @@ def to_device(ary, stream=0, copy=True):
         devarray.to_device(stream=stream)
     return devarray
 
-@_driver.require_context
+@require_context
 def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
     dtype = np.dtype(dtype)
     if isinstance(shape, (int, long)):
@@ -44,13 +44,13 @@ def device_array_like(ary, stream=0):
                         strides=ary.strides, stream=stream)
 
 # Stream helper
-@_driver.require_context
+@require_context
 def stream():
     from numbapro.cudapipeline.driver import Stream
     return Stream()
 
 # Page lock
-@_driver.require_context
+@require_context
 @contextlib.contextmanager
 def pinned(*arylist):
     from numbapro._utils.ndarray import ndarray_datasize
@@ -63,7 +63,7 @@ def pinned(*arylist):
     del pmlist
 
 
-@_driver.require_context
+@require_context
 @contextlib.contextmanager
 def mapped(*arylist, **kws):
     assert not kws or 'stream' in kws, "Only accept 'stream' as keyword."
@@ -88,11 +88,6 @@ def mapped(*arylist, **kws):
     del pmlist
 
 # Device selection
-
-@_driver.require_context
-def auto_context():
-    "Ensure a context is made for this thread"
-    pass
 
 def select_device(device_id):
     '''Call this before any CUDA feature is used in each thread.

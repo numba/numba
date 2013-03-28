@@ -23,6 +23,7 @@ class FFTPlan(object):
         (np.complex128, np.complex128) : 'Z2Z',
     })
 
+    @_cuda.require_context
     def __init__(self, shape, itype, otype, batch=1, stream=0,
                  mode=MODE_DEFAULT):
         '''
@@ -32,9 +33,6 @@ class FFTPlan(object):
         batch --- maximum number of operation to perform.
         stream --- a CUDA stream for all the operations to put on.
         '''
-
-        # Ensure we have a context, otherwise, cuFFT creates its own.
-        _cuda.auto_context()
         
         itype = np.dtype(itype)
         otype = np.dtype(otype)
