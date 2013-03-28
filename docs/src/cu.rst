@@ -168,7 +168,7 @@ The following math functions are *only* supported on CPU target:
 
 
 Builtins Kernels
----------------
+----------------
 
 There are a few builtin kernels supplied under the namespace 
 `numbapro.parallel.kernel.builtins`.
