@@ -4,7 +4,11 @@ import os
 import sys
 from fnmatch import fnmatchcase
 from distutils.util import convert_path
-from distutils.core import setup, Extension
+
+try:
+    from setuptools import setup, Extension
+except ImportError:
+    from distutils.core import setup, Extension
 
 import numpy
 
@@ -106,7 +110,11 @@ setup(
     ],
     description="compiling Python code using LLVM",
     packages=find_packages(),
-    scripts=['numba/pycc/pycc'],
+    entry_points = {
+        'console_scripts': [
+            'pycc = numba.pycc:main',
+            ]
+    },
     package_data={
         '': ['*.md'],
         'numba.minivect': ['include/*'],

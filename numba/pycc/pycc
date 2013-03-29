@@ -1,9 +1,0 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-### Copyright (2012) Continuum Analytics, Inc
-### All Rights Reserved
-
-
-if __name__ == "__main__":
-    from . import main
-    main()
