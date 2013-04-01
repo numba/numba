@@ -219,10 +219,6 @@ class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
     def __module__(self):
         return self.module
 
-    def __getattr__(self, attr):
-        "Allow dispatching to unbound methods for extension classes"
-        return getattr(self.py_func, attr)
-
 
 #------------------------------------------------------------------------
 # Unbound Methods
@@ -287,7 +283,6 @@ cdef class BoundSpecializingWrapper(object):
 
     def __call__(self, *args, **kwargs):
         return self.specializing_wrapper(self.instance, *args, **kwargs)
-
 
 #------------------------------------------------------------------------
 # Autojit Fast Function Cache

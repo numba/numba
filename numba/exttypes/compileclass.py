@@ -31,7 +31,7 @@ class ExtensionCompiler(object):
                  methodwrapper):
         self.env = env
         self.py_class = py_class
-        self.class_dict = dict(vars(py_class))
+        self.class_dict = utils.get_class_dict(py_class)
         self.ext_type = ext_type
         self.flags = flags
 

@@ -152,14 +152,15 @@ def _autojit(template_signature, target, nopython, env_name=None, env=None,
 
         if isinstance(f, CLASS_TYPES):
             compiler_cls = compiler.ClassCompiler
+            wrapper = entrypoints.autojit_class_wrapper
         else:
             compiler_cls = compiler.FunctionCompiler
+            wrapper = autojit_wrappers[(target, 'ast')]
 
         env.specializations.register(f)
         cache = env.specializations.get_autojit_cache(f)
 
         compilerimpl = compiler_cls(env, f, nopython, flags, template_signature)
-        wrapper = autojit_wrappers[(target, 'ast')]
         numba_func = wrapper(f, compilerimpl, cache)
 
         return numba_func

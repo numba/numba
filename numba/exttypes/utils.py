@@ -20,3 +20,6 @@ def get_all_numba_bases(py_class):
 
 def get_numba_bases(py_class):
     return list(filter(is_numba_class, py_class.__bases__))
+
+def get_class_dict(unspecialized_autojit_py_class):
+    return unspecialized_autojit_py_class.__numba_class_dict

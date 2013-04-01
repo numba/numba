@@ -76,6 +76,7 @@ from functools import partial
 from numba import pipeline
 from numba import typesystem
 from numba import numbawrapper
+from numba.minivect import minitypes
 
 from numba.exttypes import types as etypes
 from numba.exttypes import virtual
@@ -212,14 +213,92 @@ class AutojitExtensionCompiler(compileclass.ExtensionCompiler):
         return (self.py_class,)
 
 #------------------------------------------------------------------------
-# Build Extension Type
+# Unbound Methods from Python
 #------------------------------------------------------------------------
 
-def create_extension_compiler(env, py_class, flags, argtypes):
+class UnboundDelegatingMethod(object):
+    """
+    Function in the unspecialized class that is used for delegation to
+    a method in a specialized class, i.e.
+
+        A.method(A(10.0)) -> A(10.0).method()
+
+    This method can never be bound, since __new__ always returns specialized
+    instances (so the unspecialized class cannot be instantiated!).
+    """
+
+    def __init__(self, py_class, name):
+        self.py_class = py_class
+        self.name = name
+
+    def __call__(self, obj, *args, **kwargs):
+        return getattr(obj, self.name)(*args, **kwargs)
+
+
+def make_delegations(py_class):
+    """
+    Make delegation unbound methods that delegate from the unspecialized
+    class to the specialized class. E.g.
+
+        m = A.method
+        m(A(10.0))      # Delegate to A[double].method
+    """
+    class_dict = vars(py_class)
+    for name, func in class_dict.iteritems():
+        if isinstance(func, minitypes.Function):
+            class_dict[name] = UnboundDelegatingMethod(py_class, name)
+
+#------------------------------------------------------------------------
+# Make Specializing Class -- Entry Point for decorator application
+#------------------------------------------------------------------------
+
+def autojit_class_wrapper(py_class, compiler_impl, cache):
+    """
+    Invoked when a class is decorated with @autojit.
+
+    :param py_class: decorated python class
+    :param compiler_impl: compiler.ClassCompiler
+    :param cache: FunctionCache
+    :return: py_class that returns specialized object instances
+    """
+    from numba import numbawrapper
+
+    # Back up class dict, since we're going to modify it
+    py_class.__numba_class_dict = dict(vars(py_class))
+
+    # runtime_args -> specialized extension type instance
+    class_specializer = numbawrapper.NumbaSpecializingWrapper(
+        py_class, compiler_impl, cache)
+
+    # Patch py_class.__new__ to return specialized object instances
+    def __new__(cls, *args, **kwargs):
+        return class_specializer(*args, **kwargs)
+
+    py_class.__new__ = __new__
+
+    # Make delegation methods for unbound methods
+    make_delegations(py_class)
+
+    # Setup up partial compilation environment
+    # partial_env = create_partial_extension_environment(
+    #     compiler_impl.env, py_class, compiler_impl.flags)
+    # compiler_impl.partial_ext_env = partial_env
+
+    return py_class
+
+#------------------------------------------------------------------------
+# Build Extension Type -- Compiler Entry Point
+#------------------------------------------------------------------------
+
+# def create_partial_extension_environment(env, py_class, flags, argtypes):
+def create_extension(env, py_class, flags, argtypes):
     """
     Create a partial environment to compile specialized versions of the
     extension class in.
+
+    Inovked when calling the wrapped class
     """
+    # TODO: Remove argtypes! Partial environment!
     from extensibletype import intern
     intern.global_intern_initialize()
 
@@ -237,6 +316,9 @@ def create_extension_compiler(env, py_class, flags, argtypes):
         AutojitMethodWrapperBuilder())
 
     extension_compiler.init()
+    # return extension_compiler
+
+# def compile_class(extension_compiler, argtypes):
     extension_compiler.infer()
     extension_compiler.finalize_tables()
     extension_compiler.validate()

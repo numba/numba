@@ -1,6 +1,7 @@
 import numba
 from numba.exttypes import jitclass
 from numba.exttypes import autojitclass
+from numba.exttypes.autojitclass import autojit_class_wrapper
 
 from llvm import core as _lc
 
