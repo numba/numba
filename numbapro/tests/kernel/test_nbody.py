@@ -38,6 +38,10 @@ def nbody(tid, xi, yi, zi, xj, yj, zj, m, result,
 
 class TestInfiniteLoop(unittest.TestCase):
     def test_infinite_loop(self):
+        if not cuda.is_available:
+            print('Skipping CUDA test')
+            return
+
         cu = CU('gpu') # or 'gpu' if you have CUDA
         with closing(cu):
             n = np.int32(1000)          # Number of particles 
