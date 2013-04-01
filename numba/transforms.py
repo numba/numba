@@ -515,8 +515,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         if dest is not None:
             raise error.NumbaError(dest, "No file may be given in nopython mode")
 
-        stdin, stdout, stderr = stdio_util.get_stdio_streams()
-        stdout = stdio_util.get_stream_as_node(stdout)
+        # stdin, stdout, stderr = stdio_util.get_stdio_streams()
+        # stdout = stdio_util.get_stream_as_node(stdout)
 
         format = codegen.get_printf_specifier(value.type)
         if format is None:
@@ -615,8 +615,9 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         assert node.function
 
         if self.nopython:
+            meth_name = node.name and ' (%r)' % node.name
             raise error.NumbaError(node, "Cannot use object call in "
-                                         "nopython context")
+                                         "nopython context" + meth_name)
 
         node.function = self.visit(node.function)
         node.args_tuple = self.visit(node.args_tuple)
