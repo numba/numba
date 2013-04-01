@@ -850,7 +850,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             incref_base = nodes.IncrefNode(base)
             args.append(base.clone)
 
-        array = nodes.PyArray_NewFromDescr(args).cloneable
+        array = nodes.PyArray_NewFromDescr(args)
+        array = nodes.ObjectTempNode(array).cloneable
         body = [incref_descr, incref_base, array, setbase]
 
         if node.base is not None:
