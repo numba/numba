@@ -165,6 +165,10 @@ class AutojitExtensionCompiler(compileclass.ExtensionCompiler):
     method_validators = validators.autojit_validators
     exttype_validators = validators.autojit_type_validators
 
+    def get_bases(self):
+        # TODO: subclassing
+        return (self.py_class,)
+
 #------------------------------------------------------------------------
 # Build Extension Type
 #------------------------------------------------------------------------

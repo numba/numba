@@ -201,6 +201,35 @@ class ExtensionCompiler(object):
             pipeline.run_env(self.env, func_env, pipeline_name='compile')
             method.update_from_env(func_env)
 
+    def get_bases(self):
+        """
+        Get base classes for the resulting extension type.
+
+        For jit types, these are simply the bases of the Python class we
+        decorated. For autojit-decorated classes however, we want a
+        specialization tree like this:
+
+                     A
+                   / | \
+                A0   |  A1
+                 |   |  |
+                 |   B  |
+                 | /  \ |
+                B0     B1
+
+        We get this horrid inheritance tree because we want:
+
+            issubclass(A_specialized, A)
+            isinstance(A_specialized(), A)
+
+        as well as
+
+            issubclass(B_specialized, A_specialized)
+
+        since B will want to use A's methods and attributes.
+        """
+        return self.py_class.__bases__
+
     def build_extension_type(self, vtable):
         """
         Build extension type from llvm methods and pointers and a populated
@@ -209,7 +238,7 @@ class ExtensionCompiler(object):
         vtable_wrapper = self.vtabbuilder.wrap_vtable(vtable)
 
         extension_type = extension_types.create_new_extension_type(
-            self.py_class.__name__, self.py_class.__bases__, self.class_dict,
+            self.py_class.__name__, self.get_bases(), self.class_dict,
             self.ext_type, vtable_wrapper)
 
         return extension_type
