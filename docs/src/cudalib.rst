@@ -225,8 +225,8 @@ Instantiate a new FFTPlan object.
           
 The class provides two methods::
     
-        forward(ary, out=None):
-        inverse(ary, out=None):
+        forward(ary, out=None)
+        inverse(ary, out=None)
             
 The `forward` method computes the forward FFT on ary and stores the result to
 `out`.  If `out` is None, an inplace operation is performed.
