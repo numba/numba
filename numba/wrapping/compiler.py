@@ -108,38 +108,6 @@ class ClassCompiler(Compiler):
 # Autojit Method Compiler
 #------------------------------------------------------------------------
 
-def autojit_method_compiler(env, extclass, method, signature):
-    """
-    Called to compile a new specialized method. The result should be
-    added to the perfect hash-based vtable.
-    """
-    # compiled_method = numba.jit(argtypes=argtypes)(method.py_func)
-    func_env = numba.pipeline.compile2(env, method.py_func,
-                                       restype=signature.return_type,
-                                       argtypes=signature.args)
-
-    # Create Method for the specialization
-    new_method = signatures.Method(
-        method.py_func,
-        method.name,
-        func_env.func_signature,
-        is_class=method.is_class,
-        is_static=method.is_static)
-
-    new_method.update_from_env(func_env)
-
-    # Update vtable type
-    vtable_wrapper = extclass.__numba_vtab
-    vtable_type = extclass.exttype.vtab_type
-    vtable_type.specialized_methods[new_method.name,
-                                    signature.args] = new_method
-
-    # Replace vtable (which will update the vtable all (live) objects use)
-    new_vtable = virtual.build_hashing_vtab(vtable_type)
-    vtable_wrapper.replace_vtable(new_vtable)
-
-    return func_env.numba_wrapper_func
-
 class MethodCompiler(Compiler):
 
     def __init__(self, env, extclass, method, flags=None):
@@ -150,5 +118,6 @@ class MethodCompiler(Compiler):
         self.method = method
 
     def compile(self, signature):
+        from numba.exttypes.autojitclass import autojit_method_compiler
         return autojit_method_compiler(
             self.env, self.extclass, self.method, signature)
