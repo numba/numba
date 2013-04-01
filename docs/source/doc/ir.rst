@@ -8,14 +8,87 @@ architecture. We propose several new Intermediate Representations (IRs),
 from high-level to low-level:
 
     * The Python AST IR (input to a numba frontend)
-    * Initial Python-like IR
+    * Normalized IR
+
+        - Like a Python AST, but contains normalized structures
+          (assignments, comparisons, list comprehensions, etc)
     * Untyped IR in SSA form
+
+        - Expanded control flow (with annotations)
     * Typed IR in SSA form
     * Low-level IR in SSA form
     * Final LLVM IR, the final input for LLVM. This IR is unportable
       since the sizes of types are fixed.
 
 All IRs except the last are portable across machine architectures.
+We get the following options for rewrites:
+
+.. digraph:: stages
+
+    "Python AST" -> Normalized
+    Normalized -> "Stage 1"
+    "Stage 1" -> "Untyped SSA"
+    "Untyped SSA" -> "Stage 2"
+    "Stage 2" -> "Typed SSA IR"
+    "Typed SSA IR" -> "Stage 3"
+    "Stage 3" -> "Low-level IR"
+    "Low-level IR" -> "Stage 4"
+    "Stage 4" -> "Final LLVM"
+
+Each stage specifies a point for a series of IR transformations that together
+define the input for the next stage. Each rewrite may target a different IR stage:
+
+    * The input to `Stage 1` is an AST with all high-level syntactic constructs
+      left intact. This allows high-level transformations that operate or
+      expand most suitable at an abstract syntax level.
+    * The input to `Stage 2` is a Function with a sequence of basic blocks
+      (expanded control flow), such that all control flow can be handled
+      uniformly (and there may still be high-level annotations that signify
+      where loops are (so that we don't have to find them again from the
+      dominator tree and CFG), where exceptions are raised and caught, etc).
+      Def/use and variable merges are explicit.
+
+      Expressions and statements are encoded in sequences of AST expression trees.
+      Expressions result in implicit Values which can be referred to in subsequent
+      expression trees without re-evaluation (we can replace the
+      CloneNode/CloneableNode mechanisms that currently allow subtree sharing).
+    * The input to `Stage 3` is the same as to `Stage 2`, except that
+      it additionally contains type information (and type promotions).
+    * `Stage 4` is a low-level three-address code representation that
+      still has polymorphic operations, such as ``c = add(a, b)``,
+      where ``a`` and ``b`` can be operands of any scalar type. A final
+      pass then lowers these constructs to specialized LLVM instructions.
+
+IRs up to the low-level IR (input to `Stage 4`) should still contain explicit
+variable stores, so that passes can rewrite variable assignments to for instance
+assignments to struct or extension type instance members. Keeping stores and loads
+to and from these variables in the original order is important in the context
+of closures (or any function call which can modify a stack variable through a pointer).
+
+.. NOTE:: Maybe we should only do this for cell- and free variables, and fix
+          closures before CFA?
+
+We must make sure to support preloads for variable definitions across basic
+blocks, e.g.::
+
+    if ...:
+        A = ...
+    else:
+        A = ...
+
+    for i in range(...):
+        use(A[0])
+
+In this example we want to preload ``A.data`` (and ``a.strides[0]``). This can
+probably work equally well if each expression value is an implicit definition
+and we have a way to find Values given a Phi. We then get::
+
+    ValueC = BinOp(ValueA, Add, ValueB)
+    Store(Name('c'), ValueC)
+
+Instead of::
+
+    Assign(Name('c'), BinOp(Name('a'), Add, Name('b')))
 
 Intermediate Representations
 ============================
@@ -407,7 +480,7 @@ representation than an AST. Design considerations ([#]_):
     * Appropriateness for transformation and code generation
 
 
-To evaluate some of these metrics we will look at some concretizations.
+To evaluate some of these metrics we will look at some concretions.
 
 Structure
 ---------
