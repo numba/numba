@@ -79,6 +79,7 @@ from numba import numbawrapper
 from numba.minivect import minitypes
 
 from numba.exttypes import types as etypes
+from numba.exttypes import utils
 from numba.exttypes import virtual
 from numba.exttypes import signatures
 from numba.exttypes import validators
@@ -246,7 +247,7 @@ def make_delegations(py_class):
     class_dict = vars(py_class)
     for name, func in class_dict.iteritems():
         if isinstance(func, minitypes.Function):
-            class_dict[name] = UnboundDelegatingMethod(py_class, name)
+            setattr(py_class, name, UnboundDelegatingMethod(py_class, name))
 
 #------------------------------------------------------------------------
 # Make Specializing Class -- Entry Point for decorator application
@@ -274,7 +275,7 @@ def autojit_class_wrapper(py_class, compiler_impl, cache):
     def __new__(cls, *args, **kwargs):
         return class_specializer(*args, **kwargs)
 
-    py_class.__new__ = __new__
+    py_class.__new__ = staticmethod(__new__)
 
     # Make delegation methods for unbound methods
     make_delegations(py_class)
@@ -307,7 +308,7 @@ def create_extension(env, py_class, flags, argtypes):
     ext_type = etypes.AutojitExtensionType(py_class)
 
     extension_compiler = AutojitExtensionCompiler(
-        env, py_class, ext_type, flags,
+        env, py_class, utils.get_class_dict(py_class), ext_type, flags,
         signatures.AutojitMethodMaker(ext_type, argtypes),
         compileclass.AttributesInheriter(),
         AutojitMethodFilter(),

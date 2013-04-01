@@ -22,7 +22,7 @@ class ExtensionCompiler(object):
     # [validators.ExtTypeValidator]
     exttype_validators = None
 
-    def __init__(self, env, py_class, ext_type, flags,
+    def __init__(self, env, py_class, class_dict, ext_type, flags,
                  method_maker,
                  inheriter,
                  method_filter,
@@ -31,7 +31,7 @@ class ExtensionCompiler(object):
                  methodwrapper):
         self.env = env
         self.py_class = py_class
-        self.class_dict = utils.get_class_dict(py_class)
+        self.class_dict = class_dict
         self.ext_type = ext_type
         self.flags = flags
 

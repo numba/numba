@@ -2,7 +2,8 @@
 from __future__ import print_function, division, absolute_import
 
 from numba.exttypes.entrypoints import  (jit_extension_class,
-                                         autojit_extension_class)
+                                         autojit_extension_class,
+                                         autojit_class_wrapper)
 
 __all__ = ['autojit', 'jit', 'export', 'exportmany']
 
@@ -152,7 +153,7 @@ def _autojit(template_signature, target, nopython, env_name=None, env=None,
 
         if isinstance(f, CLASS_TYPES):
             compiler_cls = compiler.ClassCompiler
-            wrapper = entrypoints.autojit_class_wrapper
+            wrapper = autojit_class_wrapper
         else:
             compiler_cls = compiler.FunctionCompiler
             wrapper = autojit_wrappers[(target, 'ast')]

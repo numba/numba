@@ -97,7 +97,7 @@ def create_extension(env, py_class, flags):
     ext_type = etypes.JitExtensionType(py_class)
 
     extension_compiler = JitExtensionCompiler(
-        env, py_class, ext_type, flags,
+        env, py_class, dict(vars(py_class)), ext_type, flags,
         signatures.JitMethodMaker(ext_type),
         compileclass.AttributesInheriter(),
         compileclass.Filterer(),
