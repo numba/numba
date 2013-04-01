@@ -105,6 +105,7 @@ def create_extension(env, py_class, flags):
         virtual.StaticVTabBuilder(),
         compileclass.MethodWrapperBuilder())
 
+    extension_compiler.init()
     extension_compiler.infer()
     extension_compiler.finalize_tables()
     extension_compiler.validate()

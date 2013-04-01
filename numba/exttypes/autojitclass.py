@@ -70,6 +70,9 @@ Compiling @autojit extension classes works as follows:
         an autojit method).
 """
 
+import copy
+from functools import partial
+
 from numba import typesystem
 from numba import numbawrapper
 
@@ -140,6 +143,9 @@ class AutojitMethodWrapperBuilder(compileclass.MethodWrapperBuilder):
         NumbaSpecializingWrapper cache when for when we're being called
         from python. When we need to add a new specialization,
         `autojit_method_compiler` is invoked to compile the method.
+
+        extclass: the extension type
+        ext_type.py_class: the unspecialized class that was decorated
         """
         from numba.wrapping import compiler
 
@@ -147,7 +153,7 @@ class AutojitMethodWrapperBuilder(compileclass.MethodWrapperBuilder):
             env.specializations.register(method.py_func)
             cache = env.specializations.get_autojit_cache(method.py_func)
 
-            compiler_impl = compiler.MethodCompiler(env, extclass, method,)
+            compiler_impl = compiler.MethodCompiler(env, extclass, method)
             wrapper = numbawrapper.NumbaSpecializingWrapper(
                 method.py_func, compiler_impl, cache)
 
@@ -173,10 +179,10 @@ class AutojitExtensionCompiler(compileclass.ExtensionCompiler):
 # Build Extension Type
 #------------------------------------------------------------------------
 
-def create_extension(env, py_class, flags, argtypes):
+def create_extension_compiler(env, py_class, flags, argtypes):
     """
-    Compile an extension class given the NumbaEnvironment and the Python
-    class that contains the functions that are to be compiled.
+    Create a partial environment to compile specialized versions of the
+    extension class in.
     """
     from extensibletype import intern
     intern.global_intern_initialize()
@@ -194,6 +200,7 @@ def create_extension(env, py_class, flags, argtypes):
         virtual.HashBasedVTabBuilder(),
         AutojitMethodWrapperBuilder())
 
+    extension_compiler.init()
     extension_compiler.infer()
     extension_compiler.finalize_tables()
     extension_compiler.validate()

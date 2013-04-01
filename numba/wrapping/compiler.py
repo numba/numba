@@ -86,6 +86,13 @@ class FunctionCompiler(Compiler):
 
 class ClassCompiler(Compiler):
 
+    def __init__(self, *args, **kwargs):
+        super(ClassCompiler, self).__init__(*args, **kwargs)
+
+        # from numba.exttypes.autojitclass import create_extension_compiler
+        # self.extension_compiler = create_extension_compiler(
+        #     self.env, self.py_func, self.flags)
+
     def resolve_argtypes(self, args, kwargs):
         assert not kwargs
         argtypes = map(self.env.context.typemapper.from_python, args)

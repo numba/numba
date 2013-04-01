@@ -46,12 +46,12 @@ class ExtensionCompiler(object):
         self.func_envs = {}
 
     #------------------------------------------------------------------------
-    # Type Inference
+    # Initialized and Inheritance
     #------------------------------------------------------------------------
 
-    def infer(self):
+    def init(self):
         """
-        Infer types:
+        Initialize:
 
             1) Inherit attributes and methods
 
@@ -63,8 +63,9 @@ class ExtensionCompiler(object):
                     myattr = double
 
             3) Process method signatures @void(double) etc
-            4) Infer extension attribute types from the __init__ method
         """
+        self.class_dict['__numba_py_class'] = self.py_class
+
         self.inheriter.inherit(self.ext_type)
         process_class_attribute_types(self.ext_type, self.class_dict)
 
@@ -73,12 +74,6 @@ class ExtensionCompiler(object):
 
         # Build ext_type.symtab
         build_extension_symtab(self.ext_type)
-
-        # Update ext_type.symtab
-        self.type_infer_init_method()
-
-        # Type infer the rest of the methods (with fixed attribute table!)
-        self.type_infer_methods()
 
     def process_method_signatures(self):
         """
@@ -101,6 +96,21 @@ class ExtensionCompiler(object):
             self.class_dict[method.name] = method
 
         return methods
+
+    #------------------------------------------------------------------------
+    # Type Inference
+    #------------------------------------------------------------------------
+
+    def infer(self):
+        """
+            1) Infer extension attribute types from the __init__ method
+            2) Type infer all methods
+        """
+        # Update ext_type.symtab
+        self.type_infer_init_method()
+
+        # Type infer the rest of the methods (with fixed attribute table!)
+        self.type_infer_methods()
 
     def type_infer_method(self, method):
         func_env = pipeline.compile2(self.env, method.py_func,
@@ -172,7 +182,6 @@ class ExtensionCompiler(object):
             5) Update the ext_type with a vtab type
             6) Compile all methods
         """
-        self.class_dict['__numba_py_class'] = self.py_class
         self.compile_methods()
 
         vtable = self.vtabbuilder.build_vtab(self.ext_type)
