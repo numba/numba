@@ -73,6 +73,7 @@ Compiling @autojit extension classes works as follows:
 from numba import typesystem
 from numba import numbawrapper
 
+from numba.exttypes import types as etypes
 from numba.exttypes import virtual
 from numba.exttypes import signatures
 from numba.exttypes import validators
@@ -178,7 +179,7 @@ def create_extension(env, py_class, flags, argtypes):
 
     flags.pop('llvm_module', None)
 
-    ext_type = typesystem.AutojitExtensionType(py_class)
+    ext_type = etypes.AutojitExtensionType(py_class)
 
     extension_compiler = AutojitExtensionCompiler(
         env, py_class, ext_type, flags,
