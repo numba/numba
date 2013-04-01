@@ -20,6 +20,6 @@ func2(A)
 new_refcnt = sys.getrefcount(A)
 assert refcnt == new_refcnt
 
-normal_result = map(sys.getrefcount, func2.py_func(A))
-numba_result = map(sys.getrefcount, func2(A))
+normal_result = list(map(sys.getrefcount, func2.py_func(A)))
+numba_result = list(map(sys.getrefcount, func2(A)))
 assert normal_result == numba_result
