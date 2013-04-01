@@ -118,7 +118,7 @@ class MultiarrayAPI (object):
                 builder.gep(
                     builder.load(api),
                     [lc.Constant.int(_int32, symbol_index)]))
-            return builder.bitcast(load_val, symbol_type)
+            return builder.bitcast(load_val, symbol_type, name=symbol_name)
         fn_name = "load_" + symbol_name
         _load_symbol.__name__ = fn_name
         setattr(self, fn_name, _load_symbol)
