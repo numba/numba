@@ -214,7 +214,7 @@ class DynamicExtensionHandler(object):
         # __________________________________________________________________
         # Generate fallback
 
-        if not always_present and False:
+        if not always_present:
             # TODO: Enable this path and generate a phi for the result
             # Generate object call
             obj_args = [nodes.CoercionNode(arg, object_) for arg in args]
