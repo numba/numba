@@ -476,10 +476,10 @@ using rules along the following lines:
 
 .. code-block:: ocaml
 
-    Attribute(value.type=object, attr)
+    Attribute(Value(type=object_), attr)
         -> PyObject_GetAttrString(value, attr)
 
-    Attribute(value, attr).type=ExtensionMethod(..., is_jit=True)
+    Attribute(ExtensionMethod(..., is_jit=True), value, attr)
         -> ExtensionMethodStruct(value, method)
 
 with:
@@ -585,7 +585,6 @@ This LLVM-constructed SSA graph can be mapped back to our high-lever IR
 with relative ease if we simply remembered which LLVM basic block associates
 with which basic block in our IR.
 
-Expected save: 220 SLOC (https://github.com/markflorisson88/numba/blob/phimerge/numba/control_flow/ssa.py#L20).
 
 .. NOTE:: This operates under the assumption that we have a general
           framework that can map LLVM transformations back to our IR
@@ -663,10 +662,6 @@ order on the transpose graph, doing the following:
     * For each SCC, process all internal nodes using fixpoint iteration
       given all input types to the SCC. Update internal nodes with their result
       types.
-
-We can compute strongly connected components using many libraries (including
-LLVM or networkx). Currently we have our own, which we can replace.
-Expected save: 21 SLOC (https://github.com/markflorisson88/numba/blob/phimerge/numba/typesystem/ssatypes.py#L677)
 
 Building a Call Graph
 ---------------------
