@@ -1,3 +1,10 @@
+Version (0.10.1)
+================
+* Fix CU memory leak
+* Fix CU hanging on some GPU
+* Improve error message for unsupported GPU devices
+* Add cuFFT
+
 Version (0.10)
 ==============
 * Added Compute Unit (CU) API
