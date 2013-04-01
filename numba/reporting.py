@@ -137,9 +137,9 @@ def format_msg(type, source_lines, node, msg):
     ret = ''
     if node and hasattr(node, 'lineno') and source_lines:
         lineno, colno = getpos(node)
-        line = source_lines[lineno]
-
-        ret = line + '\n' + "%s^" % ("-" * colno) + '\n'
+        if lineno < len(source_lines):
+            line = source_lines[lineno]
+            ret = line + '\n' + "%s^" % ("-" * colno) + '\n'
 
     return ret + format_msg_simple(type, node, msg)
 
