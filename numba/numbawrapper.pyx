@@ -147,7 +147,8 @@ def is_numba_wrapper(numbafunction):
 
 cdef class _NumbaSpecializingWrapper(NumbaWrapper):
     """
-    Numba wrapper function for @autojit.
+    Numba wrapper function for @autojit. Specializes py_func when called with
+    new argtypes.
 
         py_func: original Python function
         compiler: numba.wrapper.compiler.Compiler
@@ -202,6 +203,9 @@ cdef class _NumbaSpecializingWrapper(NumbaWrapper):
 
 
 class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
+    """
+    Python class to allow overriding properties such as __name__.
+    """
 
     @property
     def __name__(self):
@@ -216,7 +220,7 @@ class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
         return self.module
 
     def __getattr__(self, attr):
-        # Allow dispatching to unbound methods for extension classes
+        "Allow dispatching to unbound methods for extension classes"
         return getattr(self.py_func, attr)
 
 
