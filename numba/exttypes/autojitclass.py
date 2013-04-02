@@ -287,6 +287,7 @@ class UnboundDelegatingMethod(object):
         self.name = name
 
     def __call__(self, obj, *args, **kwargs):
+        numbawrapper.unbound_method_type_check(self.py_class, obj)
         return getattr(obj, self.name)(*args, **kwargs)
 
 

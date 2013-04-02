@@ -224,6 +224,14 @@ class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
 # Unbound Methods
 #------------------------------------------------------------------------
 
+def unbound_method_type_check(py_class, obj):
+    if not isinstance(obj, py_class):
+        raise TypeError(
+            "unbound method numba_function_or_method object must be "
+            "called with %s instance as first argument "
+            "(got %s instance instead)" % (py_class.__name__, type(obj).__name__))
+
+
 cdef class UnboundFunctionWrapper(object):
     """
     Wraps unbound functions in Python 3, for jit and autojit methods.
@@ -249,14 +257,7 @@ cdef class UnboundFunctionWrapper(object):
 
     def __call__(self, *args, **kwargs):
         assert len(args) > 0, "Unbound method must have at least one argument"
-
-        if not isinstance(args[0], self.type):
-            raise TypeError(
-                ("unbound method numba_function_or_method object must be "
-                 "called with %s instance as first argument "
-                 "(got %s instance instead)") % (self.type.__name__,
-                                                 type(args[0]).__name__))
-
+        unbound_method_type_check(self.type, args[0])
         return self.func(*args, **kwargs)
 
 
