@@ -18,6 +18,14 @@ def make_base(compiler):
             self.value1 = value1
             self.value2 = value2
 
+        @void(int_)
+        def setvalue(self, value):
+            self.value1 = value
+
+        @double()
+        def getvalue1(self):
+            return self.value1
+
     return Base
 
 def make_derived(compiler):
@@ -44,6 +52,10 @@ def test_baseclass_attrs(compiler):
 
     assert Base(10, 11.0).value1 == 10.0
     assert Base(10, 11.0).value2 == 11
+
+    obj = Base(10, 11.0)
+    obj.setvalue(12)
+    assert obj.getvalue1() == 12.0
 
 @parametrize(jit) #, autojit)
 def test_derivedclass_attrs(compiler):

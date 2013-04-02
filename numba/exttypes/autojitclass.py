@@ -302,7 +302,8 @@ def make_delegations(py_class):
     """
     class_dict = vars(py_class)
     for name, func in class_dict.iteritems():
-        if isinstance(func, minitypes.Function):
+        if isinstance(func, (minitypes.Function, staticmethod, classmethod)):
+            print("creating delegation:", name, func)
             setattr(py_class, name, UnboundDelegatingMethod(py_class, name))
 
 #------------------------------------------------------------------------
