@@ -210,6 +210,56 @@ class AutojitExtensionCompiler(compileclass.ExtensionCompiler):
     exttype_validators = validators.autojit_type_validators
 
     def get_bases(self):
+        """
+        Get base classes for the resulting extension type.
+
+        We can try several inheritance schemes, for instance we could go for
+        a specialization tree as follows:
+
+                     A
+                   / | \
+                A0   |  A1
+                 |   |  |
+                 |   B  |
+                 | /  \ |
+                B0     B1
+
+        Which gets us:
+
+            issubclass(A_specialized, A)
+            isinstance(A_specialized(), A)
+
+        as well as
+
+            issubclass(B_specialized, A_specialized)
+
+        However, to support this scheme, the unspecialized class A must:
+
+            1) Be subclassable
+            2) Return specialized object instances when instantiated
+            3) Support unbound method calls
+
+        1) requires that A be a class, and then 2) implies that A's metaclass
+        overrides __call__ or that A implements __new__.
+
+        However, since A_specialized subclasses A, A_specialized.__new__ would
+        need to skip A.__new__, which requires numba to insert a __new__
+        or modify a user's __new__ method in A_specialized.
+
+        The metaclass option seems more feasible:
+
+            A_meta.__call__ -> specialized object instance
+
+        Users can then override a metaclass in a Python (or numba?) subclass
+        as follows:
+
+            class MyMeta(type(MyNumbaClass)):
+                ...
+
+        The metaclass can also support indexing:
+
+            A_specialized = A[{'attrib_a': double}]
+        """
         # TODO: subclassing
         return (self.py_class,)
 

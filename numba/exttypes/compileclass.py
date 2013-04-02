@@ -215,27 +215,8 @@ class ExtensionCompiler(object):
         Get base classes for the resulting extension type.
 
         For jit types, these are simply the bases of the Python class we
-        decorated. For autojit-decorated classes however, we want a
-        specialization tree like this:
-
-                     A
-                   / | \
-                A0   |  A1
-                 |   |  |
-                 |   B  |
-                 | /  \ |
-                B0     B1
-
-        We get this horrid inheritance tree because we want:
-
-            issubclass(A_specialized, A)
-            isinstance(A_specialized(), A)
-
-        as well as
-
-            issubclass(B_specialized, A_specialized)
-
-        since B will want to use A's methods and attributes.
+        decorated. For autojit-decorated classes we get a more complicated
+        inheritance scheme (see AutojitExtensionCompiler.get_bases).
         """
         return self.py_class.__bases__
 
