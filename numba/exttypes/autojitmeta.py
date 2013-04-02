@@ -19,7 +19,7 @@ def create_unspecialized_cls(py_class, class_specializer):
         NumbaSpecializingWrapper (args -> specialized object instance)
     """
 
-    class AutojitMeta(_AutojitMeta, type(py_class)):
+    class AutojitMeta(type(py_class)):
         """
         Metaclass base for autojit classes.
 
