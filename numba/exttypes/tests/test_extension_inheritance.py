@@ -114,4 +114,5 @@ def test_derivedclass(compiler):
 
 if __name__ == '__main__':
     # test_baseclass(autojit)
+    # test_derivedclass(autojit)
     main()
