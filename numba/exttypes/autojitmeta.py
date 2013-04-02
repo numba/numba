@@ -63,21 +63,3 @@ def create_specialized_metaclass(py_class):
             return type.__call__(cls, *args, **kwargs)
 
     return SpecializedMeta
-
-
-if __name__ == '__main__':
-    from numba import *
-
-    @autojit
-    class C(object):
-        def __init__(self, value):
-            self.value = value
-
-    obj = C(10.0)
-    print(type(obj).exttype)
-
-    specialized_cls = C[{'value': double}]
-    print(specialized_cls, C, specialized_cls is C)
-
-    assert issubclass(specialized_cls, C)
-    assert isinstance(obj, C)
