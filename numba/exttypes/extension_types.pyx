@@ -256,6 +256,9 @@ def create_new_extension_type(metacls, name, bases, classdict,
     cdef Py_ssize_t vtab_offset, attrs_offset
 
     orig_new = classdict.get('__new__', None)
+    if orig_new:
+        #
+        orig_new = orig_new.__func__ # staticmethod is not callable!
 
     # __________________________________________________________________
     # Extension type constructor
