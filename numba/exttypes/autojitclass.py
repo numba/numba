@@ -73,6 +73,7 @@ Compiling @autojit extension classes works as follows:
 import copy
 from functools import partial
 
+from numba import error
 from numba import pipeline
 from numba import typesystem
 from numba import numbawrapper
@@ -319,11 +320,16 @@ def autojit_class_wrapper(py_class, compiler_impl, cache):
     """
     from numba import numbawrapper
 
+    if utils.is_numba_class(py_class):
+        raise error.NumbaError("Subclassing not yet supported "
+                               "for autojit classes")
+
     # runtime_args -> specialized extension type instance
     class_specializer = numbawrapper.NumbaSpecializingWrapper(
         py_class, compiler_impl, cache)
 
     py_class = autojitmeta.create_unspecialized_cls(py_class, class_specializer)
+    py_class.__is_numba_autojit = True
 
     # Update the class from which we derive specializations (which will be
     # passed to create_extension() below)

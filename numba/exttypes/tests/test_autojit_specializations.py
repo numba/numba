@@ -6,7 +6,6 @@ Test properties of specialized classes and test indexing.
 
 from __future__ import print_function, division, absolute_import
 
-
 from numba import *
 
 @autojit

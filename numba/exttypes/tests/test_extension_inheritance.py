@@ -19,7 +19,7 @@ if not numba.PY3:
 def format_str(msg, *values):
     return msg % values
 
-def make_classes(compiler):
+def make_base(compiler):
     @compiler
     class BaseClass(object):
 
@@ -48,6 +48,11 @@ def make_classes(compiler):
         @object_()
         def __repr__(self):
             return format_str('Base(%s)', self.value)
+
+    return BaseClass
+
+def make_derived(compiler):
+    BaseClass = make_base(compiler)
 
     @compiler
     class DerivedClass(BaseClass):
@@ -79,7 +84,7 @@ def make_classes(compiler):
 
 @parametrize(jit, autojit)
 def test_baseclass(compiler):
-    Base, Derived = make_classes(compiler)
+    Base = make_base(compiler)
 
     assert str(Base(10.0)) == 'Base(10.0)'
     assert Base(10.0).py_method() == 10.0
@@ -99,7 +104,7 @@ def test_baseclass(compiler):
 
 @parametrize(jit) #, autojit)
 def test_derivedclass(compiler):
-    Base, Derived = make_classes(compiler)
+    Base, Derived = make_derived(compiler)
 
     assert str(Derived(20.0)) == 'Derived(20.0)'
     assert Derived(10.0).py_method() == 10.0
@@ -113,6 +118,6 @@ def test_derivedclass(compiler):
 
 
 if __name__ == '__main__':
-    # test_baseclass(autojit)
+    test_baseclass(autojit)
     # test_derivedclass(autojit)
     main()

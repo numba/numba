@@ -6,7 +6,7 @@ import numba
 from numba import *
 from numba.testing.test_support import parametrize, main
 
-def get_classes(compiler):
+def make_base(compiler):
     @compiler
     class Base(object):
 
@@ -17,6 +17,11 @@ def get_classes(compiler):
         def __init__(self, value1, value2):
             self.value1 = value1
             self.value2 = value2
+
+    return Base
+
+def make_derived(compiler):
+    Base = make_base(compiler)
 
     @compiler
     class Derived(Base):
@@ -35,14 +40,14 @@ def get_classes(compiler):
 
 @parametrize(jit, autojit)
 def test_baseclass_attrs(compiler):
-    Base, Derived = get_classes(compiler)
+    Base = make_base(compiler)
 
     assert Base(10, 11.0).value1 == 10.0
     assert Base(10, 11.0).value2 == 11
 
-@parametrize(jit, autojit)
+@parametrize(jit) #, autojit)
 def test_derivedclass_attrs(compiler):
-    Base, Derived = get_classes(compiler)
+    Base, Derived = make_derived(compiler)
 
     obj = Derived(10, 11.0)
     obj.setvalue(9)
@@ -50,5 +55,5 @@ def test_derivedclass_attrs(compiler):
 
 
 if __name__ == '__main__':
-    test_derivedclass_attrs(autojit)
-    # main()
+    # test_derivedclass_attrs(autojit)
+    main()
