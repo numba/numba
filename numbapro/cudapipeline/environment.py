@@ -103,12 +103,14 @@ from llvm import ee as _le
 from llvm import passes as _lp
 
 
-regex_py_modulo = re.compile('__numba_specialized_\d+___py_modulo')
+regex_py_modulo = re.compile('__numba_specialized_\d+_numba_2E_utility_2E_math_utilities_2E_py_modulo')
 
 def _hack_to_implement_pymodulo(module):
     '''XXX: I should fix the linkage instead.
-        '''
+    '''
+
     for func in module.functions:
+        print '>>>', func
         if regex_py_modulo.match(func.name):
             assert func.is_declaration
             func.add_attribute(_lc.ATTR_ALWAYS_INLINE)
