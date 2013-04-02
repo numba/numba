@@ -203,9 +203,10 @@ cdef class _NumbaSpecializingWrapper(NumbaWrapper):
 
 
 class NumbaSpecializingWrapper(_NumbaSpecializingWrapper):
-    """
-    Python class to allow overriding properties such as __name__.
-    """
+    # Don't make this a docstring, it breaks the __doc__ propertyr
+    # """
+    # Python class to allow overriding properties such as __name__.
+    # """
 
     @property
     def __name__(self):
