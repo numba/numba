@@ -85,6 +85,7 @@ from numba.exttypes import signatures
 from numba.exttypes import validators
 from numba.exttypes import compileclass
 from numba.exttypes import ordering
+from numba.exttypes import autojitmeta
 
 
 #------------------------------------------------------------------------
@@ -263,6 +264,9 @@ class AutojitExtensionCompiler(compileclass.ExtensionCompiler):
         # TODO: subclassing
         return (self.py_class,)
 
+    def get_metacls(self):
+        return autojitmeta.create_specialized_metaclass(self.py_class)
+
 #------------------------------------------------------------------------
 # Unbound Methods from Python
 #------------------------------------------------------------------------
@@ -314,18 +318,18 @@ def autojit_class_wrapper(py_class, compiler_impl, cache):
     """
     from numba import numbawrapper
 
-    # Back up class dict, since we're going to modify it
-    py_class.__numba_class_dict = dict(vars(py_class))
-
     # runtime_args -> specialized extension type instance
     class_specializer = numbawrapper.NumbaSpecializingWrapper(
         py_class, compiler_impl, cache)
 
-    # Patch py_class.__new__ to return specialized object instances
-    def __new__(cls, *args, **kwargs):
-        return class_specializer(*args, **kwargs)
+    py_class = autojitmeta.create_unspecialized_cls(py_class, class_specializer)
 
-    py_class.__new__ = staticmethod(__new__)
+    # Update the class from which we derive specializations (which will be
+    # passed to create_extension() below)
+    compiler_impl.py_func = py_class
+
+    # Back up class dict, since we're going to modify it
+    py_class.__numba_class_dict = dict(vars(py_class))
 
     # Make delegation methods for unbound methods
     make_delegations(py_class)
@@ -347,7 +351,8 @@ def create_extension(env, py_class, flags, argtypes):
     Create a partial environment to compile specialized versions of the
     extension class in.
 
-    Inovked when calling the wrapped class
+    Inovked when calling the wrapped class to compile a specialized
+    new extension type.
     """
     # TODO: Remove argtypes! Partial environment!
     from extensibletype import intern

@@ -354,7 +354,7 @@ cdef class AutojitFunctionCache(object):
     functions.FunctionCache.
     """
 
-    cdef dict specializations
+    cdef public dict specializations
 
     # list of dtypes that need to be alive in order for the id() hash to
     # remain valid

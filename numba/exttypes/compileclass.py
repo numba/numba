@@ -220,6 +220,12 @@ class ExtensionCompiler(object):
         """
         return self.py_class.__bases__
 
+    def get_metacls(self):
+        """
+        Return the metaclass for the specialized extension type.
+        """
+        return type
+
     def build_extension_type(self, vtable):
         """
         Build extension type from llvm methods and pointers and a populated
@@ -228,6 +234,7 @@ class ExtensionCompiler(object):
         vtable_wrapper = self.vtabbuilder.wrap_vtable(vtable)
 
         extension_type = extension_types.create_new_extension_type(
+            self.get_metacls(),
             self.py_class.__name__, self.get_bases(), self.class_dict,
             self.ext_type, vtable_wrapper)
 

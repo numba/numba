@@ -328,7 +328,7 @@ class ClosureTypeInferer(ClosureTransformer):
                                                          attributes=fields)
 
         ext_type = extension_types.create_new_extension_type(
-                func_name , (object,), {}, scope_type, None)
+                type, func_name , (object,), {}, scope_type, None)
 
         # Instantiate closure scope
         logger.debug("Generate closure %s %s %s", node.name, scope_type,

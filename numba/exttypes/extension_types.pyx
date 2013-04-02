@@ -207,7 +207,8 @@ cdef class DynamicVtableWrapper(object):
 # Create Extension Type
 #------------------------------------------------------------------------
 
-def create_new_extension_type(name, bases, classdict, exttype, vtable_wrapper):
+def create_new_extension_type(metacls, name, bases, classdict,
+                              exttype, vtable_wrapper):
     """
     Create an extension type from the given name, bases and classdict. Also
     takes a vtab struct minitype, and a attr_struct_type describing the
@@ -301,7 +302,7 @@ def create_new_extension_type(name, bases, classdict, exttype, vtable_wrapper):
     # Create extension type
 
     classdict['__new__'] = staticmethod(new)
-    extclass = type(name, bases, classdict)
+    extclass = metacls(name, bases, classdict)
     assert isinstance(extclass, type)
 
     extclass_p = <PyTypeObject *> extclass
