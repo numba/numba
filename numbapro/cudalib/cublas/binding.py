@@ -226,20 +226,18 @@ class libcublas(Lib):
 class c_complex(Structure):
     _fields_ = [('real', c_float), ('imag', c_float)]
 
-    def __new__(cls, real=0, imag=0):
+    def __init__(self, real=0, imag=0):
         if isinstance(real, complex):
-            real = real.real
-            imag = real.imag
-        return super(c_complex, cls).__new__(cls, real=real, imag=imag)
+            real, imag = real.real, real.imag
+        super(c_complex, self).__init__(real, imag)
 
 class c_double_complex(Structure):
     _fields_ = [('real', c_double), ('imag', c_double)]
 
-    def __new__(cls, real=0, imag=0):
+    def __init__(self, real=0, imag=0):
         if isinstance(real, complex):
-            real = real.real
-            imag = real.imag
-        return super(c_double_complex, cls).__new__(cls, real=real, imag=imag)
+            real, imag = real.real, real.imag
+        super(c_double_complex, self).__init__(real, imag)
 
 def _return_scalar(result):
     if isinstance(result, (c_complex, c_double_complex)):
