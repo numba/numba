@@ -12,7 +12,7 @@ def make_base(compiler):
         @double()
         def getvalue(self):
             return self.value
-    #
+
         @staticmethod
         @double()
         def static1():
