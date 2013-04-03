@@ -108,22 +108,56 @@ regex_py_modulo = re.compile('__numba_specialized_\d+_numba_2E_utility_2E_math_u
 def _hack_to_implement_pymodulo(module):
     '''XXX: I should fix the linkage instead.
     '''
+    def is_srem(lfunc):
+        "Check if this is using signed modulo"
+        for bb in lfunc.basic_blocks:
+            for inst in bb.instructions:
+                if 'srem' == inst.opcode_name:
+                    return True
+        return False
+
+    def set_attr(lfunc):
+        "Set inline and linkonce"
+        lfunc.linkage = _lc.LINKAGE_LINKONCE_ODR
+        lfunc.add_attribute(_lc.ATTR_ALWAYS_INLINE)
+
+    def impl_srem(lfunc):
+        "Define lfunc for signed modulo"
+        set_attr(lfunc)
+        bb = func.append_basic_block('')
+        b = _lc.Builder.new(bb)
+        b.ret(b.srem(*lfunc.args))
+
+    def impl_urem(lfunc):
+        "Define lfunc for unsigned modulo"
+        set_attr(lfunc)
+        bb = func.append_basic_block('')
+        b = _lc.Builder.new(bb)
+        b.ret(b.urem(*lfunc.args))
+
+    def impl_frem(lfunc):
+        "Define lfunc for float modulo"
+        set_attr(lfunc)
+        bb = func.append_basic_block('')
+        b = _lc.Builder.new(bb)
+        b.ret(b.frem(*lfunc.args))
+
+    env = _env.NumbaEnvironment.get_environment()
+    global_module = env.llvm_context.module
 
     for func in module.functions:
-        print '>>>', func
         if regex_py_modulo.match(func.name):
             assert func.is_declaration
-            func.add_attribute(_lc.ATTR_ALWAYS_INLINE)
-            func.linkage = _lc.LINKAGE_LINKONCE_ODR
-            bb = func.append_basic_block('entry')
-            b = _lc.Builder.new(bb)
             if func.type.pointee.return_type.kind == _lc.TYPE_INTEGER:
-                rem = b.srem
+                # integer implementation
+                ref = global_module.get_function_named(func.name)
+                if is_srem(ref):
+                    impl_srem(func)
+                else:
+                    impl_urem(func)
             else:
-                raise Exception("Does not support modulo of float-point number.")
-            b.ret(rem(*func.args))
-            del b
-            del bb
+                # float implementation
+                impl_frem(func)
 
 def _generate_ptx(module, kernels):
     from numbapro.cudapipeline import nvvm, driver
