@@ -34,6 +34,10 @@ abort = libc.abort
 abort.restype = None
 abort.argtypes = []
 
+printf = libc.printf
+printf.restype = ctypes.c_int
+printf.argtypes = [ctypes.c_char_p]
+
 @jit(void_p(table_t_pp, uint64), wrap=False, nopython=True)
 def lookup_method(table_pp, prehash):
     """
@@ -87,7 +91,11 @@ def lookup_method(table_pp, prehash):
 def lookup_and_assert_method(table_pp, prehash, method_name):
     result = lookup_method(table_pp, prehash)
     if result == numba.NULL:
-        print "Error: expected method", method_name, "to be available."
+        # printf("Error: expected method %s to be available\n", method_name)
+        # print "Error: expected method", method_name,  "to be available"
+        printf("Error: expected method ")
+        printf(method_name)
+        printf("to be available\n")
         abort()
 
     return result
