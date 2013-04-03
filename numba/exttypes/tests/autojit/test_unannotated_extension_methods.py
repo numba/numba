@@ -80,6 +80,8 @@ obj1 = Base1(10.0)
 obj2 = Base2(10.0)
 obj3 = Base3(10.0)
 
+assert obj1.value == obj2.value == obj3.value == 10.0
+
 dtypes = (
     np.float32, np.int32,
     np.double, np.int64,
