@@ -182,7 +182,7 @@ class DynamicExtensionHandler(object):
         # __________________________________________________________________
         # Calculate pre-hash
 
-        prehash = virtual.hash_signature(func_signature)
+        prehash = virtual.hash_signature(func_signature, func_signature.name)
         prehash_node = nodes.ConstNode(prehash, uint64)
 
         # __________________________________________________________________

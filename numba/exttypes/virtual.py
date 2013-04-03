@@ -133,11 +133,12 @@ PyCustomSlots_Table = numba.struct([
 
 sep201_hasher = methodtable.Hasher()
 
-def sep201_signature_string(functype):
+def sep201_signature_string(functype, name):
+    functype = minitypes.FunctionType(functype.return_type, functype.args, name)
     return str(functype)
 
-def hash_signature(functype):
-    sigstr = sep201_signature_string(functype)
+def hash_signature(functype, name):
+    sigstr = sep201_signature_string(functype, name)
     return sep201_hasher.hash_signature(sigstr)
 
 def build_hashing_vtab(vtable):
@@ -146,13 +147,13 @@ def build_hashing_vtab(vtable):
     """
     n = len(vtable.methods)
 
-    ids = [sep201_signature_string(method.signature)
+    ids = [sep201_signature_string(method.signature, method.name)
                for method in vtable.methods]
     flags = [0] * n
 
     vtab = methodtable.PerfectHashMethodTable(sep201_hasher)
     vtab.generate_table(n, ids, flags, vtable.method_pointers)
-
+    # print(vtab)
     return vtab
 
 # ______________________________________________________________________
