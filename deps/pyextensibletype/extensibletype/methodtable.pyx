@@ -50,6 +50,9 @@ cdef class Hasher(object):
         cdef uint64_t hashvalue
         # cdef bytes md5 = hashlib.md5(signature).digest()
         # (&hashvalue)[0] = (<uint64_t *> <char *> md5)[0]
+        if isinstance(signature, str):
+            # Python 3
+            signature = signature.encode("ascii")
         hashvalue = intern.global_intern(signature)
 
         return hashvalue

@@ -24,7 +24,7 @@ assert isinstance(obj, C)
 
 try:
     C[{'value': int_}]
-except KeyError, e:
+except KeyError as e:
     assert e.args[0] == {'value': int_}
 else:
     raise Exception
