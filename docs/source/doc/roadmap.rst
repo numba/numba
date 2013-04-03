@@ -49,6 +49,23 @@ E.g.::
     intrin = numba.declare_intrinsic(int64(), "llvm.readcyclecounter")
     print intrin()
 
+Source Annotator
+----------------
+Analogous to ``cython --annotate``, a tool that annotates numba source code
+and finds and highlights which parts contain object calls. Ideally, this would
+also include, for each source line (expand on click?):
+
+    * The final (unoptimized) LLVM bitcode
+
+        - And optionally the optimized code and/or assembly
+
+    * Code from intermediate numba representations
+
+        - After we start implementing several layers of IR,
+          see http://numba.pydata.org/numba-doc/dev/doc/ir.html
+
+    * The type of each sub-expression and variable (on hover?)
+
 Numba Loader
 ------------
 Allow two forms of code caching:
