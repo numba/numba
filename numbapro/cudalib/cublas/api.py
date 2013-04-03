@@ -246,7 +246,9 @@ class Blas(object):
                                   np.float64: 'Drotmg'})
 
 
+#----------------
 # utils
+#----------------
 
 def _sentry_same_shape(*arys):
     first = arys[0]
