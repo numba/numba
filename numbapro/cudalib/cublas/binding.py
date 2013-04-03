@@ -246,80 +246,80 @@ def _return_scalar(result):
         return result.value
 
 def _Tnrm2(fmt, cty):
-    def _wrapped(self, n, x, incx):
+    def nrm2(self, n, x, incx):
         result = cty()
         fn = getattr(self._api, 'cublas%snrm2_v2' % fmt)
         fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
            byref(result))
         return _return_scalar(result)
-    return _wrapped
+    return nrm2
 
 def _Tdot(fmt, cty, postfix=''):
-    def _wrapped(self, n, x, incx, y, incy):
+    def dot(self, n, x, incx, y, incy):
         result = cty()
         fn = getattr(self._api, 'cublas%sdot%s_v2' % (fmt, postfix))
         fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
            y.device_raw_ptr.value, int(incy), byref(result))
         return _return_scalar(result)
-    return _wrapped
+    return dot
 
 def _Tscal(fmt, cty):
-    def _wrapped(self, n, alpha, x, incx):
+    def scal(self, n, alpha, x, incx):
         "Stores result to x"
         c_alpha = cty(alpha)
         fn = getattr(self._api, 'cublas%sscal_v2' % fmt)
         fn(self._handle, int(n), byref(c_alpha), x.device_raw_ptr.value,
            int(incx))
-    return _wrapped
+    return scal
 
 def _Taxpy(fmt, cty):
-    def _wrapped(self, n, alpha, x, incx, y, incy):
+    def axpy(self, n, alpha, x, incx, y, incy):
         "Stores result to y"
         c_alpha = cty(alpha)
         fn = getattr(self._api, 'cublas%saxpy_v2' % fmt)
         fn(self._handle, int(n), byref(c_alpha), x.device_raw_ptr.value,
            int(incx), y.device_raw_ptr.value, int(incy))
-    return _wrapped
+    return axpy
 
 def _Itamax(fmt, cty):
-    def _wrapped(self, n, x, incx):
+    def amax(self, n, x, incx):
         result = c_int()
         fn = getattr(self._api, 'cublasI%samax_v2' % fmt)
         fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
            byref(result))
         return result.value
-    return _wrapped
+    return amax
 
 def _Itamin(fmt, cty):
-    def _wrapped(self, n, x, incx):
+    def amin(self, n, x, incx):
         result = c_int()
         fn = getattr(self._api, 'cublasI%samin_v2' % fmt)
         fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
            byref(result))
         return result.value
-    return _wrapped
+    return amin
 
 def _Tasum(fmt, cty):
-    def _wrapped(self, n, x, incx):
+    def asum(self, n, x, incx):
         result = cty()
         fn = getattr(self._api, 'cublas%sasum_v2' % fmt)
         fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
            byref(result))
         return _return_scalar(result)
-    return _wrapped
+    return asum
 
 def _Trot(fmt, cty, sty):
-    def _wrapped(self, n, x, incx, y, incy, c, s):
+    def rot(self, n, x, incx, y, incy, c, s):
         "Stores to x and y"
         c_c = cty(c)
         c_s = sty(s)
         fn = getattr(self._api, 'cublas%srot_v2' % fmt)
         fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
            y.device_raw_ptr.value, int(incy), byref(c_c), byref(c_s))
-    return _wrapped
+    return rot
 
 def _Trotg(fmt, ty, cty):
-    def _wrapped(self, a, b):
+    def rotg(self, a, b):
         c_a = ty(a)
         c_b = ty(b)
         c_c = cty()
@@ -328,10 +328,10 @@ def _Trotg(fmt, ty, cty):
         fn(self._handle, byref(c_a), byref(c_b), byref(c_c), byref(c_s))
         r, z, c, s = map(_return_scalar, [c_a, c_b, c_c, c_s])
         return r, z, c, s
-    return _wrapped
+    return rotg
 
 def _Trotm(fmt, dtype):
-    def _wrapped(self, n, x, incx, y, incy, param):
+    def rotm(self, n, x, incx, y, incy, param):
         "Stores result to x, y"
         fn = getattr(self._api, 'cublas%srotm_v2' % fmt)
         assert len(param.shape) == 1
@@ -339,10 +339,10 @@ def _Trotm(fmt, dtype):
         assert param.dtype == np.dtype(dtype)
         fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
            y.device_raw_ptr.value, int(incy), param.ctypes.data)
-    return _wrapped
+    return rotm
 
 def _Trotmg(fmt, cty, dtype):
-    def _wrapped(self, d1, d2, x1, y1):
+    def rotmg(self, d1, d2, x1, y1):
         fn = getattr(self._api, 'cublas%srotmg_v2' % fmt)
         c_d1 = cty(d1)
         c_d2 = cty(d2)
@@ -352,7 +352,7 @@ def _Trotmg(fmt, cty, dtype):
         fn(self._handle, byref(c_d1), byref(c_d2), byref(c_x1), byref(c_y1),
            param.ctypes.data)
         return param
-    return _wrapped
+    return rotmg
 
 
 class cuBlas(finalizer.OwnerMixin):

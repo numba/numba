@@ -319,11 +319,201 @@ class TestCuBlasBinding(unittest.TestCase):
             self.assertEqual(h21, 0)
             self.assertEqual(h22, 0)
 
-
     def test_Srotmg(self):
         self.Trotmg('Srotmg', np.float32)
-        
+
+    def test_Drotmg(self):
+        self.Trotmg('Drotmg', np.float64)
+
+
+class TestCuBlasAPI(unittest.TestCase):
+    def setUp(self):
+        from numbapro.cudalib.cublas import Blas
+        self.blas = Blas()
+
+
+    def Tnrm2(self, fn, dtype):
+        x = np.random.random(10).astype(dtype)
+        got = fn(x)
+        exp = np.linalg.norm(x)
+        self.assertTrue(np.allclose(got, exp))
+
+    def test_nrm2(self):
+        self.Tnrm2(self.blas.nrm2, np.float32)
+        self.Tnrm2(self.blas.nrm2, np.float64)
+        self.Tnrm2(self.blas.nrm2, np.complex64)
+        self.Tnrm2(self.blas.nrm2, np.complex128)
+
+    def Tdot(self, fn, dtype):
+        x = np.random.random(10).astype(dtype)
+        y = np.random.random(10).astype(dtype)
+        got = self.blas.dot(x, y)
+        exp = np.dot(x, y)
+        self.assertTrue(np.allclose(got, exp))
+
+    def test_dot(self):
+        self.Tdot(self.blas.dot, np.float32)
+        self.Tdot(self.blas.dot, np.float64)
+        self.Tdot(self.blas.dotu, np.complex64)
+        self.Tdot(self.blas.dotu, np.complex128)
+
+    def Tdotc(self, fn, dtype):
+        x = np.random.random(10).astype(dtype)
+        y = np.random.random(10).astype(dtype)
+        got = self.blas.dotc(x, y)
+        exp = np.vdot(x, y)
+        self.assertTrue(np.allclose(got, exp))
+
+    def test_dotc(self):
+        self.Tdot(self.blas.dotc, np.float32)
+
+    def Tscal(self, fn, dtype, alpha):
+        x = np.random.random(10).astype(dtype)
+        x0 = x.copy()
+        fn(alpha, x)
+        self.assertTrue(np.allclose(x0 * alpha, x))
+
+    def test_scal(self):
+        self.Tscal(self.blas.scal, np.float32, 1.234)
+        self.Tscal(self.blas.scal, np.float64, 1.234)
+        self.Tscal(self.blas.scal, np.complex64, 1.234+5j)
+        self.Tscal(self.blas.scal, np.complex128, 1.234+5j)
+        self.Tscal(self.blas.scal, np.complex64, 1.234)
+        self.Tscal(self.blas.scal, np.complex128, 1.234)
+
+    def Taxpy(self, fn, dtype, alpha):
+        x = np.random.random(10).astype(dtype)
+        y = np.random.random(10).astype(dtype)
+        y0 = y.copy()
+
+        fn(alpha, x, y)
+
+        self.assertTrue(np.allclose(alpha * x + y0, y))
+
+    def test_axpy(self):
+        self.Taxpy(self.blas.axpy, np.float32, 1.234)
+        self.Taxpy(self.blas.axpy, np.float64, 1.234)
+        self.Taxpy(self.blas.axpy, np.complex64, 1.234j)
+        self.Taxpy(self.blas.axpy, np.complex128, 1.234j)
+
+    def Itamax(self, fn, dtype):
+        x = np.random.random(10).astype(dtype)
+        got = fn(x)
+        self.assertTrue(np.allclose(np.argmax(x), got))
+
+    def test_amax(self):
+        self.Itamax(self.blas.amax, np.float32)
+        self.Itamax(self.blas.amax, np.float64)
+        self.Itamax(self.blas.amax, np.complex64)
+        self.Itamax(self.blas.amax, np.complex128)
+
+    def Itamin(self, fn, dtype):
+        x = np.random.random(10).astype(dtype)
+        got = fn(x)
+        self.assertTrue(np.allclose(np.argmin(x), got))
+
+    def test_amin(self):
+        self.Itamin(self.blas.amin, np.float32)
+        self.Itamin(self.blas.amin, np.float64)
+        self.Itamin(self.blas.amin, np.complex64)
+        self.Itamin(self.blas.amin, np.complex128)
+
+    def Tasum(self, fn, dtype):
+        x = np.random.random(10).astype(dtype)
+        got = fn(x)
+        self.assertTrue(np.allclose(np.sum(x), got))
+
+    def test_asum(self):
+        self.Tasum(self.blas.asum, np.float32)
+        self.Tasum(self.blas.asum, np.float64)
+        self.Tasum(self.blas.asum, np.complex64)
+        self.Tasum(self.blas.asum, np.complex128)
     
+    def Trot(self, fn, dtype):
+        x = np.random.random(10).astype(dtype)
+        y = np.random.random(10).astype(dtype)
+        angle = 1.342
+        c = np.cos(angle)
+        s = np.sin(angle)
+
+        x0, y0 = c * x + s * y, -s * x + c * y
+
+        fn(x, y, c, s)
+
+        self.assertTrue(np.allclose(x, x0))
+        self.assertTrue(np.allclose(y, y0))
+
+    def test_rot(self):
+        self.Trot(self.blas.rot, np.float32)
+        self.Trot(self.blas.rot, np.float64)
+        self.Trot(self.blas.rot, np.complex64)
+        self.Trot(self.blas.rot, np.complex128)
+
+    def Trotg(self, fn, dt1, dt2):
+        a, b = (np.array(np.random.random(), dtype=dt1),
+                np.array(np.random.random(), dtype=dt2))
+        r, z, c, s = fn(a, b)
+
+        rot = np.array([[c,           s],
+                        [-np.conj(s), c]])
+        vec = np.array([[a],
+                        [b]])
+        exp = np.dot(rot, vec)
+        got = np.array([[r],
+                        [0.0]])
+        self.assertTrue(np.allclose(exp, got, atol=1e-6))
+
+    def test_rotg(self):
+        self.Trotg(self.blas.rotg, np.float32, np.float32)
+        self.Trotg(self.blas.rotg, np.float64, np.float64)
+        self.Trotg(self.blas.rotg, np.complex64, np.complex64)
+        self.Trotg(self.blas.rotg, np.complex128, np.complex128)
+
+    def Trotm(self, fn, dtype):
+        x = np.random.random(10).astype(dtype)
+        y = np.random.random(10).astype(dtype)
+
+        param = np.random.random(5).astype(dtype)
+        param[0] = -1.0
+        h11, h21, h12, h22 = param[1:].tolist()
+
+        x0, y0 = h11 * x + h12 * y, h21 * x + h22 * y
+
+        fn(x, y, param)
+
+        self.assertTrue(np.allclose(x, x0))
+        self.assertTrue(np.allclose(y, y0))
+
+    def test_rotm(self):
+        self.Trotm(self.blas.rotm, np.float32)
+        self.Trotm(self.blas.rotm, np.float64)
+
+    def Trotmg(self, fn, dtype):
+        d1, d2, x1, y1 = np.random.random(4).tolist()
+        
+        param = fn(d1, d2, x1, y1)
+
+        flag, h11, h21, h12, h22 = param.tolist()
+
+        if flag == -1.0:
+            pass # don't know how to check
+        elif flag == 0.0:
+            self.assertEqual(h11, 0)
+            self.assertEqual(h22, 0)
+        elif flag == 1.0:
+            self.assertEqual(h12, 0)
+            self.assertEqual(h21, 0)
+        else:
+            self.assertEqual(flag, -2.0)
+            self.assertEqual(h11, 0)
+            self.assertEqual(h12, 0)
+            self.assertEqual(h21, 0)
+            self.assertEqual(h22, 0)
+
+    def test_rotmg(self):
+        self.Trotmg(self.blas.rotmg, np.float32)
+        self.Trotmg(self.blas.rotmg, np.float64)
 
 if __name__ == '__main__':
     unittest.main()
+
