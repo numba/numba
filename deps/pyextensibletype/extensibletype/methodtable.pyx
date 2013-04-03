@@ -40,6 +40,12 @@ cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
 
     return table
 
+def make_bytes(s):
+    if isinstance(s, str):
+        # Python 3
+        s = s.encode("ascii")
+
+    return s
 
 cdef class Hasher(object):
     """
@@ -50,11 +56,8 @@ cdef class Hasher(object):
         cdef uint64_t hashvalue
         # cdef bytes md5 = hashlib.md5(signature).digest()
         # (&hashvalue)[0] = (<uint64_t *> <char *> md5)[0]
-        if isinstance(signature, str):
-            # Python 3
-            signature = signature.encode("ascii")
-        hashvalue = intern.global_intern(signature)
 
+        hashvalue = intern.global_intern(make_bytes(signature))
         return hashvalue
 
 
@@ -113,7 +116,7 @@ cdef class PerfectHashMethodTable(object):
         Find method of the given signature. Use from non-performance
         critical code.
         """
-        cdef uint64_t prehash = intern.global_intern(signature)
+        cdef uint64_t prehash = intern.global_intern(make_bytes(signature))
 
         cdef int idx = (((prehash >> self.table.r) & self.table.m_f) ^
                         self.displacements[prehash & self.table.m_g])
