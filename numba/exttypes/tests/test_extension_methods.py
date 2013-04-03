@@ -62,6 +62,8 @@ def make_derived(compiler):
     class Derived(Base):
         pass
 
+    return Base, Derived
+
 #------------------------------------------------------------------------
 # Tests
 #------------------------------------------------------------------------
@@ -106,7 +108,7 @@ def test_derived_classmethods(compiler):
     run_classmethods(Derived)
 
 if __name__ == '__main__':
-    Base = make_base(autojit)
-    obj = Base(2.0)
-    run_staticmethods(Base)
-    # main()
+    # Base = make_base(autojit)
+    # obj = Base(2.0)
+    # run_staticmethods(Base)
+    main()

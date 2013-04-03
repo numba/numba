@@ -7,8 +7,6 @@ Handle signatures of methods in @jit and @autojit classes.
 from __future__ import print_function, division, absolute_import
 
 import types
-import warnings
-import inspect
 
 import numba
 from numba import *
@@ -92,9 +90,6 @@ class MethodMaker(object):
     signatures.
     """
 
-    def __init__(self, ext_type):
-        self.ext_type = ext_type
-
     def no_signature(self, method):
         "Called when no signature is found for the method"
 
@@ -149,8 +144,7 @@ class JitMethodMaker(MethodMaker):
 
 class AutojitMethodMaker(MethodMaker):
 
-    def __init__(self, ext_type, argtypes):
-        super(AutojitMethodMaker, self).__init__(ext_type)
+    def __init__(self, argtypes):
         self.argtypes = argtypes
 
     def default_signature(self, method, ext_type):
@@ -177,6 +171,48 @@ def method_argtypes(method, ext_type, argtypes):
 
     return leading_arg_types + tuple(argtypes)
 
+def process_signature(method, method_name, method_maker=MethodMaker()):
+    """
+    Verify a method signature.
+
+    Returns a Method object and the resolved signature.
+    Returns None if the object isn't a method.
+    """
+
+    signature = None
+
+    is_static=False
+    is_class=False
+
+    while True:
+        if isinstance(method, types.FunctionType):
+            # Process function
+            if signature is None:
+                method_maker.no_signature(method)
+
+            method = Method(method, method_name, signature,
+                            is_class, is_static)
+            return method
+
+        elif isinstance(method, minitypes.Function):
+            # @double(...)
+            # def func(self, ...): ...
+            signature = method.signature
+            method = method.py_func
+
+        else:
+            # Process staticmethod and classmethod
+            if isinstance(method, staticmethod):
+                is_static = True
+            elif isinstance(method, classmethod):
+                is_class = True
+            else:
+                return None
+
+            method = get_classmethod_func(method)
+
+    assert False # Unreachable
+
 class MethodSignatureProcessor(object):
     """
     Processes signatures of extension types.
@@ -189,44 +225,6 @@ class MethodSignatureProcessor(object):
 
         # List of method validators: [MethodValidator]
         self.validators = validators
-
-    def process_signature(self, method, method_name,
-                          is_static=False, is_class=False):
-        """
-        Verify a method signature.
-
-        Returns a Method object and the resolved signature.
-        Returns None if the object isn't a method.
-        """
-
-        signature = None
-
-        while True:
-            if isinstance(method, types.FunctionType):
-                # Process function
-                if signature is None:
-                    self.method_maker.no_signature(method)
-
-                method = Method(method, method_name, signature,
-                                is_class, is_static)
-                return method
-
-            elif isinstance(method, minitypes.Function):
-                # @double(...)
-                # def func(self, ...): ...
-                signature = method.signature
-                method = method.py_func
-
-            else:
-                # Process staticmethod and classmethod
-                if isinstance(method, staticmethod):
-                    is_static = True
-                elif isinstance(method, classmethod):
-                    is_class = True
-                else:
-                    return None
-
-                method = get_classmethod_func(method)
 
     def update_signature(self, method):
         """
@@ -249,7 +247,7 @@ class MethodSignatureProcessor(object):
         methods = []
 
         for method_name, method in self.class_dict.iteritems():
-            method = self.process_signature(method, method_name)
+            method = process_signature(method, method_name)
             if method is None:
                 continue
 

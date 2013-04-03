@@ -314,7 +314,6 @@ class UnboundDelegatingMethod(object):
         numbawrapper.unbound_method_type_check(self.py_class, obj)
         return getattr(obj, self.name)(*args, **kwargs)
 
-
 def make_delegations(py_class):
     """
     Make delegation unbound methods that delegate from the unspecialized
@@ -326,10 +325,20 @@ def make_delegations(py_class):
     class_dict = vars(py_class)
     for name, func in class_dict.iteritems():
         if isinstance(func, (minitypes.Function, staticmethod, classmethod)):
-            print("creating delegation:", name, func)
-            setattr(py_class, name, UnboundDelegatingMethod(py_class, name))
+            method = signatures.process_signature(func, name)
+            if method.is_class or method.is_static:
+                # Class or static method: use the pure Python function wrapped
+                # in classmethod()/staticmethod()
+                method.wrapper_func = method.py_func
+                new_func = method.get_wrapper()
+            else:
+                # Regular unbound method. Create dispatcher to bound method
+                # when called
+                new_func = UnboundDelegatingMethod(py_class, name)
 
-#------------------------------------------------------------------------
+            setattr(py_class, name, new_func)
+
+        #------------------------------------------------------------------------
 # Make Specializing Class -- Entry Point for decorator application
 #------------------------------------------------------------------------
 
@@ -395,7 +404,7 @@ def create_extension(env, py_class, flags, argtypes):
 
     extension_compiler = AutojitExtensionCompiler(
         env, py_class, utils.get_class_dict(py_class), ext_type, flags,
-        signatures.AutojitMethodMaker(ext_type, argtypes),
+        signatures.AutojitMethodMaker(argtypes),
         compileclass.AttributesInheriter(),
         AutojitMethodFilter(),
         AutojitAttributeBuilder(),

@@ -9,7 +9,6 @@ from numba.minivect import minitypes
 from numba.exttypes import signatures
 from numba.exttypes import utils
 from numba.exttypes import extension_types
-from numba.exttypes import ordering
 from numba.exttypes import methodtable
 from numba.exttypes import attributetable
 from numba.exttypes.types import methods
