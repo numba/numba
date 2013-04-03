@@ -277,7 +277,7 @@ cdef class BoundSpecializingWrapper(object):
     don't need this, since numbafunction does the binding.
     """
 
-    cdef public object specializing_wrapper, type
+    cdef public object specializing_wrapper, type, instance
 
     def __init__(self, specializing_wrapper, instance):
         self.specializing_wrapper = specializing_wrapper
