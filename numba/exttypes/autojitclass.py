@@ -402,8 +402,10 @@ def create_extension(env, py_class, flags, argtypes):
 
     ext_type = etypes.AutojitExtensionType(py_class)
 
+    class_dict = dict(utils.get_class_dict(py_class))
+
     extension_compiler = AutojitExtensionCompiler(
-        env, py_class, utils.get_class_dict(py_class), ext_type, flags,
+        env, py_class, class_dict, ext_type, flags,
         signatures.AutojitMethodMaker(argtypes),
         compileclass.AttributesInheriter(),
         AutojitMethodFilter(),
