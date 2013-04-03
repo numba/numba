@@ -215,8 +215,31 @@ class AutojitExtensionCompiler(compileclass.ExtensionCompiler):
         """
         Get base classes for the resulting extension type.
 
-        We can try several inheritance schemes, for instance we could go for
-        a specialization tree as follows:
+        We can try several inheritance schemes. We can choose between:
+
+            1) One unspecialized - general - class
+
+                * This must bind specialized methods on each object instance
+                  to allow method calls from Python, making object allocation
+                  more expensive
+
+                * We must take the max() of tp_basicsize to allow enough
+                  space for all specializations. However, the specialization
+                  universe is not known up front, so we must allocate
+                  attributes separately on the heap (or perhaps we must
+                  override tp_alloc to use a dynamic size depending on the
+                  specialization - but this may conflict with non-numba base
+                  classes).
+
+            2) One specialized class per instance
+
+                * This allows us to experiment with static layouts for
+                  attributes or methods more easily
+
+                * It seems more intuitive to back specialized objects with
+                  a specialized type
+
+        We will go with 2). We could go for a specialization tree as follows:
 
                      A
                    / | \
