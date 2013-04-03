@@ -871,7 +871,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
     def visit_Return(self, node):
         if node.value is not None:
-            value_type = node.value.type
             rettype = self.func_signature.return_type
 
             retval = self.visit(node.value)

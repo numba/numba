@@ -85,4 +85,8 @@ def test_python_specialize_method(param):
     assert np.all(A == L)
 
 if __name__ == '__main__':
-    main()
+    A = np.arange(10, dtype=np.float32)
+    L = obj1.make_list(A)
+    assert np.all(A == L)
+
+    # main()

@@ -1302,7 +1302,7 @@ class TypeInferer(visitors.NumbaTransformer):
             method = ext_type.specialized_methods[attr, argtypes]
 
             # Update method signature
-            method_maker = signatures.MethodMaker(ext_type)
+            method_maker = signatures.MethodMaker()
             method.signature = method_maker.make_method_type(method)
         else:
             method = ext_type.specialized_methods[attr, argtypes]
