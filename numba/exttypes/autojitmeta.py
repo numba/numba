@@ -43,6 +43,9 @@ def create_unspecialized_cls(py_class, class_specializer):
         def specializations(cls):
             return class_specializer.funccache.specializations.values()
 
+        # def __repr__(cls):
+        #     return "<Unspecialized Class %s at 0x%x>" % (cls.__name__, id(cls))
+
 
     return AutojitMeta(py_class.__name__,
                        py_class.__bases__,
@@ -61,5 +64,8 @@ def create_specialized_metaclass(py_class):
     class SpecializedMeta(type(py_class)):
         def __call__(cls, *args, **kwargs):
             return type.__call__(cls, *args, **kwargs)
+
+        # def __repr__(cls):
+        #     return "<Specialized Class %s at 0x%x>" % (cls.__name__, id(cls))
 
     return SpecializedMeta
