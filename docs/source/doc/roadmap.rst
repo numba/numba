@@ -4,28 +4,264 @@
 Numba Roadmap
 *******************
 
-* full support for type inference on NumPy functions
-* compile everything -- don't fail unless (nopython option given)
-* speeding up calling overhead of autojit
-* autojit of classes
-  * based on native dispatch (replace vtable)
-  * similar approach for native attributes (dynamic storage / data polymorphism)
-* Better code-generated for loops (using TBAA or other code-generation) to avoid multiple stride-array lookups.
-* zero-cost exceptions
-    - stack trace through libunwind/apple backtrace/LLVM info based on instruction pointer
-* debug info
-* native dispatch (SEP 200/201)
-* vector-types in Numba
-* struct references
-    - use cheap heap allocated objects + garbage collection?
-    - use julia for the lifting
-* blaze support
-    - compile abstract blaze expressions into kernels
-    - generate native call to blaze kernel
-* code caching
-* generators/parallel tasks
-* typed containers (dict, list, tuple)
-* Python 3.3 support (optional type-annotations)
-* SPIR support (OpenCL)
-* GPU support in Numba
-* Array Expression support in Numba
+This document describes features we want in numba, but do not
+have yet. We will order these from less involed to more involved,
+to provide different entry points to numba development.
+
+Less intricate
+==============
+Here as some less intricate topics, providing easier starting points
+for new contributors:
+
+NumPy Type Inference
+--------------------
+Full/more support for type inference on NumPy functions:
+
+    * http://numba.pydata.org/numba-doc/dev/doc/type_inference.html
+    * https://github.com/numba/numba/tree/devel/numba/type_inference/modules
+
+Typed Containers
+----------------
+We currently have (naive implementations of):
+
+    * typedlist  (https://github.com/numba/numba/blob/devel/numba/containers/typedlist.py)
+    * typedtuple (https://github.com/numba/numba/blob/devel/numba/containers/typedtuple.py)
+
+But we want many more! Some ideas:
+
+    * typeddict
+    * typedset
+    * typedchannel
+
+        - one thread-safe (nogil) and one requiring the GIL
+
+Perhaps also the ordered variants of ``typeddict`` and ``typedset``.
+
+Intrinsics
+----------
+Support for LLVM intrinsics (we only have instructions at the moment):
+
+    * http://numba.pydata.org/numba-doc/dev/doc/interface_c.html#using-intrinsics
+    * https://github.com/numba/numba/blob/devel/numba/intrinsic/numba_intrinsic.py
+
+E.g.::
+
+    intrin = numba.declare_intrinsic(int64(), "llvm.readcyclecounter")
+    print intrin()
+
+Numba Loader
+------------
+Allow two forms of code caching:
+
+    * For distribution (portable IR)
+    * Locally on disk (unportable compiled binaries)
+
+The first bullet will allow library writers to distribute
+numba code while not being tied to numba versions that users
+have installed. This would be similar to distribution of
+C code compiled from Cython source:
+
+.. code-block:: bash
+
+    $ numba --compile foo.py
+    Writing foo.numba
+
+We can now distribute ``foo.numba``.
+Load code explicitly:
+
+.. code-block:: python
+
+    from numba import loader
+    foo = loader.load("foo.numba")
+    foo.func()
+
+... or use an import hook:
+
+.. code-block:: python
+
+    from numba import loader
+    loader.install_hook()
+
+    import foo
+    foo.func()
+
+... or compile to extension modules during setup:
+
+.. code-block:: python
+
+    from numba.loader import NumbaExtension
+
+    setup(
+        ...,
+        ext_modules=[
+            NumbaExtension("foo.bar",
+                           sources=["foo/bar.numba"]),
+            ],
+    )
+
+Or perhaps more conveniently, implement ``find_numba_modules()``
+to find all ``*.numba`` source files and return a list of
+``NumbaExtension``.
+
+This also plays into the IR discussion found here:
+http://numba.pydata.org/numba-doc/dev/doc/ir.html
+
+JIT Special Methods
+-------------------
+Jit operations that result in calls to special methods like ``__len__``,
+``__getitem__``, etc. This requires some careful thought as to the stage where
+this transformation should take place.
+
+Array Expressions
+-----------------
+Array Expression support in Numba, including scans, reductions, etc.
+Or maybe we should make Blaze a hard dependency for that?
+
+More intricate
+==============
+More intricate topics, in no particular order:
+
+Extension Types
+---------------
+* Support autojit class inheritance
+* Support partial method specialization
+
+::
+
+    @Any(int_, Any)
+    def my_method(self, a, b):
+        ...
+
+Infer the return type and specialize on parameter type ``b``, but
+fix parameter type ``a``.
+
+* Allow annotation of pure-python only methods (don't compile)
+
+What we also need is native dispatch of foreign callables, in a
+sustainable way: SEP 200 and SEP 201
+    * https://github.com/numfocus/sep/
+    * Widen support in scientific community
+
+Recursion
+---------
+Support recursion for autojit functions and methods:
+
+    * Construct call graph
+    * Build condensation graph and resolve
+
+        - similar to cycles in SSA
+
+Exceptions
+----------
+Support for zero-cost exceptions: support in the runtime libraries for
+all models:
+
+    * True zero-cost exceptions
+
+        - Stack trace through libunwind/apple backtrace/LLVM info
+          based on instruction pointer
+        - http://llvm.org/docs/LangRef.html#invoke-instruction
+        - http://llvm.org/docs/ExceptionHandling.html
+
+    * Setjmp/longjmp
+
+        - Optionally with exception analysis to allow cheap cleanup for
+          the simpler cases
+
+    * Costful exceptions
+
+        - "return -1"
+        - Implement fast ``NumbaErr_Occurred()`` or change calling
+          convention for native or void returns
+
+We also need to allow users to take the pointer to a numba ``jit``
+function::
+
+    numba.addressof(my_numba_function)
+
+We can allow specifying an exception model:
+
+    * ``write_unraisable=True``: This does not propagate, but uses
+      PyErr_WriteUnraisable
+
+    * ``propagate=True``: Implies ``write_unraisable=False``. Callers
+      check with ``NumbaErr_Occurred()`` (or for NULL if object return).
+      Maybe also specify a range of badvals:
+
+        - int -> 0xdeadbeef (``ret == 0xdeadbeef && NumbaErr_Occurred()``)
+        - float -> float('nan') (``ret != ret && NumbaErr_Occurred()``)
+
+Debug info
+----------
+GDB Backtraces!
+
+See:
+
+    * https://github.com/llvmpy/llvmpy/blob/debuginfo/llvm/debuginfo.py
+    * https://github.com/llvmpy/llvmpy/blob/debuginfo/test/test_debuginfo.py
+
+Or is there a successor to that?
+
+Struct references
+-----------------
+Use cheap heap allocated objects + garbage collection?
+
+    * or atomic reference counts?
+
+Use stack-allocation + escape analysis?
+
+Blaze
+-----
+Blaze support:
+
+    * compile abstract blaze expressions into kernels
+    * generate native call to blaze kernel
+
+Generators/parallel Tasks
+-------------------------
+Support for generators based on green threading support:
+
+    * Write typed channels as autojit class
+    * Support green thread context switching
+    * Rewrite iteration over generators
+
+::
+
+    def g(N):
+        for i in range(N):
+            yield f(i)      # write to channel (triggering a context switch)
+
+    def consume():
+        gen = g(100)        # create task with bound parameter N and channel C
+        for i in gen:       # read from C until exhaustion
+            use(i)
+
+See also
+https://groups.google.com/a/continuum.io/forum/#!searchin/numba-users/generators/numba-users/gaVgArRrXqw/HTyTzaXsW_EJ
+for how this compares to generators based on closures.
+
+Python 3.3 support
+------------------
+We support Python 3.3, but we can additionally support type-annotations:
+
+.. code-block:: python3
+
+    def func(a: int_, b: float_) -> double:
+        ...
+
+Maybe this can work with numba.automodule(my_numba_module) as well as with
+jit and autojit methods.
+
+
+GPUs
+----
+
+    * SPIR support (OpenCL)
+
+Vector support
+--------------
+
+    * Vector-types in Numba
+
+        - What does this look like?
+

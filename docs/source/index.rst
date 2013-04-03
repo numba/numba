@@ -68,6 +68,7 @@ Developer Documentation
 
    doc/architecture.rst
    doc/ir.rst
+   doc/roadmap.rst
    doc/reference.rst
 
 
