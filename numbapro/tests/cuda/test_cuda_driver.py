@@ -61,6 +61,7 @@ class TestCudaDriver(support.CudaTestCase):
         device = Device(0)
         self.assertTrue('COMPUTE_CAPABILITY' in device.attributes)
         self.assertTrue('MAX_THREADS_PER_BLOCK' in device.attributes)
+        self.assertTrue('MULTIPROCESSOR_COUNT' in device.attributes)
 
         ccmajor, _ = device.COMPUTE_CAPABILITY
         if ccmajor >= 2:

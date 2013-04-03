@@ -39,7 +39,13 @@ class CUDAComputeUnit(CU):
         self.__kernel_cache = {}
         self.__enqueued_args = []
         self.__device = cuda.get_current_device()
+        self.__warpsize = self.__device.WARP_SIZE
         self.__max_blocksize = self.__device.MAX_THREADS_PER_BLOCK
+        if self.__device.COMPUTE_CAPABILITY <= 2:
+            # defined in CUDA-C Programming Guide
+            self.__max_resident_block = 8
+        else:
+            self.__max_resident_block = 16
 
     @property
     def _stream(self):
@@ -89,24 +95,39 @@ class CUDAComputeUnit(CU):
             # keep stats
             self.__compiled_count += 1
 
-        # configure kernel
+        self.__try_to_launch_kernel(jittedkern, ntid, args)
+        self.__enqueued_args.extend(args) # keep ref to args
+
+    def __try_to_launch_kernel(self, kernel, ntid, args):
+        '''Try to lauch the CUDA kernel and
+        try to optimize grid and block dimension to maximize occupancy.'''
         blksz = self.__max_blocksize
+        WARPSZ = self.__warpsize
         while True:
-            ngrid = int(math.ceil(float(ntid) / blksz))
-            nblock = min(blksz, ntid)
-            griddim = ngrid, 1,
-            blockdim = nblock, 1
+            # optimize to maximum # of resident blocks
+            nthread = min(blksz, ntid)
+            nblock = int(math.ceil(float(ntid) / nthread))
+            if nblock < self.__max_resident_block and nblock > WARPSZ:
+                blksz -= WARPSZ
+            else:
+                break
+        while True:
+            griddim = nblock, 1,
+            blockdim = nthread, 1
             # run kernel
             try:
-                jittedkern[griddim, blockdim, self.__stream](ntid, *args)
+                kernel[griddim, blockdim, self.__stream](ntid, *args)
             except CudaDriverError, e:
                 # assuming the reason is too much registers
                 # but who knows when the driver is not specific
                 # so the user has to suffer for the delay
-                blksz -= 32 # reduce 32 threads at a time
+                blksz -= WARPSZ # reduce 32 threads at a time
+                nthread = min(blksz, ntid)
+                if nthread <= 0:
+                    raise Exception("Cannot launch kernel for unknown reason.")
+                nblock = int(math.ceil(float(ntid) / nthread))
             else:
                 break
-        self.__enqueued_args.extend(args) # keep ref to args
 
     def _run_epilog(self):
         # process device->host memory transfer
