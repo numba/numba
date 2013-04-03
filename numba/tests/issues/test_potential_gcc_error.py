@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
+
 # This tests a potential GCC 4.1.2 miscompile of LLVM.
 # The problem is observed as a error in greedy register allocation pass,
 # which resulted as a segfault.

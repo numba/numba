@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
+
 # Thanks to Neal Becker
 
 import numpy as np
@@ -34,4 +37,5 @@ N = 100
 u = np.tile (np.log (np.ones (L)/L), (N, 1))
 #v = log_exp_sum (u)
 from timeit import timeit
-print timeit ('log_exp_sum(u)', 'from __main__ import u, log_exp_sum', number=50)
+print(timeit(
+    'log_exp_sum(u)', 'from __main__ import u, log_exp_sum', number=50))

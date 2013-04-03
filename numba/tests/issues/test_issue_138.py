@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
+
 import numpy as np
 from numba import autojit, jit, double, void, int32
 

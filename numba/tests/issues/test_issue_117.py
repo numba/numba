@@ -1,6 +1,10 @@
+# -*- coding: utf-8 -*-
+
 '''
 This bug is nondeterministic.  Run it a few times.
 '''
+
+from __future__ import print_function, division, absolute_import
 
 import numpy as np
 
