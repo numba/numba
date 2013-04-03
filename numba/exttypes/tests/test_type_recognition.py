@@ -2,21 +2,24 @@
 >>> test_typeof()
 """
 
-import sys
 import numba
 from numba import *
-from nose.tools import raises
 
-@jit
-class Base(object):
+def make_base(compiler):
+    @compiler
+    class Base(object):
 
-    value1 = double
-    value2 = int_
+        value1 = double
+        value2 = int_
 
-    @void(int_, double)
-    def __init__(self, value1, value2):
-        self.value1 = value1
-        self.value2 = value2
+        @void(int_, double)
+        def __init__(self, value1, value2):
+            self.value1 = value1
+            self.value2 = value2
+
+    return Base
+
+Base = make_base(jit)
 
 @jit
 class Derived(Base):
@@ -45,5 +48,21 @@ def test_typeof():
     # assert base_typeof() == (double, int_), base_typeof()
     # assert derived_typeof() == (double, int_, float_), derived_typeof()
 
+
+#------------------------------------------------------------------------
+# Test Specialized autojit typeof
+#------------------------------------------------------------------------
+
+AutoBase = make_base(autojit)
+
+@autojit
+def attrtypes(obj):
+    return numba.typeof(obj.value1), numba.typeof(obj.value2)
+
+def test_autobase():
+    obj = AutoBase(10, 11.0)
+    assert attrtypes(obj) == (double, int_)
+
 if __name__ == '__main__':
-    numba.testmod()
+    test_typeof()
+    test_autobase()
