@@ -73,7 +73,7 @@ dtypes = (
     np.complex64, np.complex128,
 )
 
-params = (# zip(cycle([obj1]), dtypes) +
+params = (zip(cycle([obj1]), dtypes) +
           zip(cycle([obj2]), dtypes))
 
 @parametrize(*params)
@@ -85,8 +85,8 @@ def test_python_specialize_method(param):
     assert np.all(A == L)
 
 if __name__ == '__main__':
-    A = np.arange(10, dtype=np.float32)
-    L = obj1.make_list(A)
-    assert np.all(A == L)
+    # A = np.arange(10, dtype=np.float32)
+    # L = obj1.make_list(A)
+    # assert np.all(A == L)
 
-    # main()
+    main()

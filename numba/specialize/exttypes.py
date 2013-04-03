@@ -214,20 +214,21 @@ class DynamicExtensionHandler(object):
         # __________________________________________________________________
         # Generate fallback
 
-        if not always_present:
-            # TODO: Enable this path and generate a phi for the result
-            # Generate object call
-            obj_args = [nodes.CoercionNode(arg, object_) for arg in args]
-            obj_args.append(nodes.NULL)
-            object_call = function_util.external_call(
-                env.context, env.crnt.llvm_module,
-                'PyObject_CallMethodObjArgs', obj_args)
-
-            # if vmethod != NULL: vmethod(obj, ...)
-            # else: obj.method(...)
-            method_call = nodes.if_else(
-                ast.NotEq(),
-                vmethod.clone, nodes.NULL,
-                lhs=method_call, rhs=object_call)
+        # TODO: Subclassing!
+        # if not always_present:
+        #     # TODO: Enable this path and generate a phi for the result
+        #     # Generate object call
+        #     obj_args = [nodes.CoercionNode(arg, object_) for arg in args]
+        #     obj_args.append(nodes.NULL)
+        #     object_call = function_util.external_call(
+        #         env.context, env.crnt.llvm_module,
+        #         'PyObject_CallMethodObjArgs', obj_args)
+        #
+        #     # if vmethod != NULL: vmethod(obj, ...)
+        #     # else: obj.method(...)
+        #     method_call = nodes.if_else(
+        #         ast.NotEq(),
+        #         vmethod.clone, nodes.NULL,
+        #         lhs=method_call, rhs=object_call)
 
         return method_call
