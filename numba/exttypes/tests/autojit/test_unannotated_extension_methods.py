@@ -88,8 +88,8 @@ dtypes = (
     np.complex64, np.complex128,
 )
 
-params = (zip(cycle([obj1]), dtypes) +
-          zip(cycle([obj3]), dtypes))
+params = (list(zip(cycle([obj1]), dtypes)) +
+          list(zip(cycle([obj3]), dtypes)))
 
 # ______________________________________________________________________
 # Parameterized tests
