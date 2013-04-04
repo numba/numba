@@ -161,6 +161,7 @@ def _autojit(template_signature, target, nopython, env_name=None, env=None,
         env.specializations.register(f)
         cache = env.specializations.get_autojit_cache(f)
 
+        flags['target'] = target
         compilerimpl = compiler_cls(env, f, nopython, flags, template_signature)
         numba_func = wrapper(f, compilerimpl, cache)
 
