@@ -3,7 +3,7 @@ import numpy
 import numba
 from weakref import WeakValueDictionary
 from numbapro import cuda
-from numba.decorators import resolve_argtypes
+from numba.wrapping.compiler import resolve_argtypes
 from numbapro.cudapipeline.environment import CudaEnvironment
 from numbapro.cudapipeline.devicearray import DeviceArray
 from numbapro.cudapipeline.error import CudaDriverError

@@ -175,15 +175,15 @@ class CudaNumbaFunction(CudaBaseFunction):
 
 class CudaAutoJitNumbaFunction(CudaBaseFunction):
 
-    def __init__(self, py_func, compiling_decorator, funccache):
+    def __init__(self, py_func, compiler, funccache):
         super(CudaAutoJitNumbaFunction, self).__init__(py_func)
-        self.compiling_decorator = compiling_decorator
+        self.compiler = compiler
 
     def __call__(self, *args, **kwargs):
         if len(kwargs):
              raise error.NumbaError("Cannot handle keyword arguments yet")
         fakeargs = tuple(self.__trick_autojit(args))
-        numba_wrapper = self.compiling_decorator(fakeargs, kwargs)
+        numba_wrapper = self.compiler.compile_from_args(fakeargs, kwargs)
         ready = numba_wrapper.configure(self._griddim, self._blockdim,
                                         stream=self._stream,
                                         sharedmem=self._sharedmem)
