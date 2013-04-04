@@ -144,6 +144,59 @@ as a Python object. We can verify that our modulo function works in pure Python:
           and intrinsics. This is the responsibility of the user. Fortunately,
           the validity can be quickly verified :)
 
+Using Numba Functions in External Code
+======================================
+
+Users can take the address of a numba compiled function using ``numba.addressof``:
+
+.. function:: addressof(jit_func, propagate=True)
+
+    Take the address of ``jit_func`` as a ctypes function. ``propagate`` indicates
+    whether uncaught exceptions propogate or are written to stderr.
+
+::
+
+    @jit(int32(int32, int32))
+    def mul(a, b):
+        return a * b
+
+    cmul = numba.addressof(mul)
+    print cmul(5, 2)
+
+    # Get the address as an Python int
+    addr_int = ctypes.cast(cmul, ctypes.c_void_p).value
+    print hex(addr_int)
+
+Callers can currently check for exceptions (where appropriate) using
+``PyErr_Occurred()`` (which requires the GIL).
+
+``nopython`` functions
+which do not directly or indirectly call functions requiring the GIL or
+use the ``with python`` construct can be called without the GIL. Numba
+does not check whether this is valid, nor does it currently acquire the GIL.
+
+Currently supported bad values for return types:
+
+=================   =============
+Return Type         Bad Value
+=================   =============
+``object_``         ``NULL``
+``floating``        ``NaN``
+=================   =============
+
+These can be checked as follows:
+
+.. code-block:: c
+
+    float ret = my_numba_func(...);
+    if (ret != ret && PyErr_Occurred()) {
+        // Handle error
+    }
+
+The error indicator for integer values is currently undecided, since
+constants in LLVM bitcode are printed in decimal form, but hex codes
+can be a better choice for other scenarios.
+
 References
 ==========
 .. [#] http://llvm.org/docs/LangRef.html#srem-instruction

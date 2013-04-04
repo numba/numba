@@ -198,7 +198,7 @@ function::
 
 We can allow specifying an exception model:
 
-    * ``write_unraisable=True``: This does not propagate, but uses
+    * ``propagate=False``: This does not propagate, but uses
       PyErr_WriteUnraisable
 
     * ``propagate=True``: Implies ``write_unraisable=False``. Callers
@@ -207,6 +207,9 @@ We can allow specifying an exception model:
 
         - int -> 0xdeadbeef (``ret == 0xdeadbeef && NumbaErr_Occurred()``)
         - float -> float('nan') (``ret != ret && NumbaErr_Occurred()``)
+
+.. NOTE:: We have ``numba.addressof()``, but we don't have ``NumbaErr_Occurred()``
+          yet.
 
 Debug info
 ----------
