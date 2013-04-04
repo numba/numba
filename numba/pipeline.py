@@ -545,6 +545,9 @@ class WrapperStage(PipelineStage):
             func_env.numba_wrapper_func = numbawrapper
             func_env.llvm_wrapper_func = lfuncwrapper
 
+            # Set pointer to function for external code and numba.addressof()
+            numbawrapper.lfunc_pointer = func_env.lfunc_pointer
+
         return ast
 
 class ErrorReporting(PipelineStage):
