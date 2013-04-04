@@ -263,8 +263,6 @@ def create_new_extension_type(metacls, name, bases, classdict,
     # __________________________________________________________________
     # Extension type constructor
 
-    cdef bint base_is_object = bases == (object,)
-
     def new(cls, *args, **kwds):
         "Create a new object and patch it with a vtab"
         cdef PyObject *obj_p
@@ -277,7 +275,7 @@ def create_new_extension_type(metacls, name, bases, classdict,
             new_func = super(extclass, cls).__new__
 
         if base_is_object:
-            # Avoid warnings in py2.6:
+            # Avoid warnings in py2.6 and errors in py3.x:
             #     DeprecationWarning: object.__new__() takes no parameters
             obj = new_func(cls)
         else:
@@ -307,6 +305,9 @@ def create_new_extension_type(metacls, name, bases, classdict,
     classdict['__new__'] = staticmethod(new)
     extclass = metacls(name, bases, classdict)
     assert isinstance(extclass, type)
+
+    superclass_new = super(extclass, extclass).__new__
+    cdef bint base_is_object = superclass_new.__self__ is object
 
     extclass_p = <PyTypeObject *> extclass
 
