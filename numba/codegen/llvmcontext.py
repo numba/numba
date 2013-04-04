@@ -39,13 +39,13 @@ class LLVMContextManager(object):
         m = self.__module = lc.Module.new("numba_executable_module")
         # Create the TargetMachine
         features = ''
-        try:
-            from llvm.workaround.avx_support import detect_avx_support
-            if not detect_avx_support():
-                features = '-avx'
-        except ImportError:
-            # Old llvm, disable AVX for all
-            features = '-avx'
+        # try:
+        #     from llvm.workaround.avx_support import detect_avx_support
+        #     if not detect_avx_support():
+        #         features = '-avx'
+        # except ImportError:
+        #     # Old llvm, disable AVX for all
+        features = '-avx'
         tm = self.__machine = le.TargetMachine.new(opt=cg, cm=le.CM_JITDEFAULT,
                                                    features=features)
         # Create the ExceutionEngine

@@ -20,6 +20,26 @@ def func(a, b):
 def error_func():
     pass
 
+# TODO: struct pointer support
+
+before_computed_column = struct([
+    ('x', float32),
+    ('y', float32)])
+
+with_computed_column = struct([
+    ('mean', float32),
+    ('x', float32),
+    ('y', float32)])
+
+signature = void(with_computed_column.ref(),
+                 before_computed_column.ref())
+
+# @jit(signature, nopython=True)
+def cc_kernel(dst, src):
+    dst.mean = (src.x + src.y) / 2.0
+    dst.x = src.x
+    dst.y = src.y
+
 #------------------------------------------------------------------------
 # Tests
 #------------------------------------------------------------------------
@@ -47,6 +67,19 @@ def test_addressof_error(arg, **kwds):
     ValueError: Writing unraisable exception is not yet supported
     """
     return numba.addressof(arg, **kwds)
+
+def test_address_of_struct_function():
+    S1 = before_computed_column.to_ctypes()
+    S2 = with_computed_column.to_ctypes()
+    ctypes_kernel = numba.addressof(cc_kernel)
+
+    s1 = S1(10, 5)
+    s2 = S2(0, 0, 0)
+    ctypes_kernel(s2, s1)
+
+    assert s2.x == s1.x
+    assert s2.y == s1.y
+    assert s2.mean == (s1.x + s1.y) / 2.0
 
 
 numba.testmod()
