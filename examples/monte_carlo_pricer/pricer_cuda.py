@@ -21,10 +21,7 @@ def cu_monte_carlo_pricer(paths, dt, interest, volatility, normdist, seed):
     c1 = volatility * math.sqrt(dt)
     randnum = seed[i]
     for j in range(1, paths.shape[1]):         # foreach time step
-        elt = randnum % normdist.shape[0]
-#        # XXX: math.abs and abs is not working?
-        if elt < 0 :
-            elt = -elt # abs value of elt
+        elt = abs(randnum % normdist.shape[0])
         noise = normdist[elt]
         paths[i, j] = paths[i, j - 1] * math.exp(c0 * dt + c1 * noise)
         # generate next random number
