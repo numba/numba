@@ -508,9 +508,9 @@ class DeferredCallType(ReanalyzeCircularType):
         self.call_node = call_node
 
     def retry_infer(self):
-        node = self.type_inferer.visit_Call(self.call_node,
-                                            visitchildren=False)
-        return node.variable.type
+        node = self.type_inferer.visit_Call(self.call_node),
+#                                            visitchildren=False)
+        return node[0].variable.type
 
     def __repr__(self):
         return "<deferred_call(%s, %s)" % (self.call_node,
