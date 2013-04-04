@@ -14,23 +14,23 @@ Documentation for numba
    :titlesonly:
    :maxdepth: 2
 
-   doc/userguide.rst
-   doc/types.rst
-   doc/pythonstuff.rst
+   userguide.rst
+   types.rst
+   pythonstuff.rst
 
 **Arrays:**
 
 .. toctree::
    :maxdepth: 2
 
-   doc/arrays.rst
+   arrays.rst
 
 **Interfacing with native code:**
 
 .. toctree::
    :maxdepth: 2
 
-   doc/interface_c.rst
+   interface_c.rst
 
 **Misc:**
 
@@ -38,8 +38,8 @@ Documentation for numba
    :titlesonly:
    :maxdepth: 2
 
-   doc/pycc.rst
-   doc/type_inference.rst
+   pycc.rst
+   type_inference.rst
 
 **Examples:**
 
@@ -47,8 +47,8 @@ Documentation for numba
    :titlesonly:
    :maxdepth: 2
 
-   doc/doctest.rst
-   doc/examples.rst
+   doctest.rst
+   examples.rst
 
 **Releases:**
 
@@ -56,7 +56,7 @@ Documentation for numba
    :titlesonly:
    :maxdepth: 2
 
-   doc/releases.rst
+   releases.rst
 
 Developer Documentation
 ------------------------
@@ -66,10 +66,10 @@ Developer Documentation
    :titlesonly:
    :maxdepth: 1
 
-   doc/architecture.rst
-   doc/ir.rst
-   doc/roadmap.rst
-   doc/reference.rst
+   architecture.rst
+   ir.rst
+   roadmap.rst
+   reference.rst
 
 
 Indices and tables
