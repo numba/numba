@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+
+"""
+Test hash-based virtual method tables.
+"""
+
 from __future__ import print_function, division, absolute_import
 
 import numba as nb
@@ -9,6 +14,10 @@ from numba.exttypes import ordering
 from numba.exttypes import methodtable
 from numba.exttypes.signatures import Method
 from numba.testing.test_support import parametrize, main
+
+#------------------------------------------------------------------------
+# Signature enumeration
+#------------------------------------------------------------------------
 
 class py_class(object):
     pass
@@ -42,6 +51,9 @@ make_methods2 = lambda: [
         for argtype1 in all_types
             for argtype2 in all_types]
 
+#------------------------------------------------------------------------
+# Table building
+#------------------------------------------------------------------------
 
 def make_table(methods):
     table = methodtable.VTabType(py_class, [])
