@@ -17,5 +17,3 @@ class A(object):
         return 10 * other
 
 assert A().a(10) == 100
-
-

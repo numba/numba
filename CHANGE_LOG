@@ -1,4 +1,14 @@
+Version 0.8
+-----------
+* Support for autojit classes
+    * Inheritance not yet supported
+* Python 3 support for pycc
+* Allow retrieval of ctypes function wrapper
+    * And hence support retrieval of a pointer to the function
+* Fixed a memory leak of array slicing views
+
 Version 0.7.2
+-------------
 * Official Python 3 support (python 3.2 and 3.3)
 * Support for intrinsics and instructions
 * Various bug fixes (see https://github.com/numba/numba/issues?milestone=7&state=closed)
