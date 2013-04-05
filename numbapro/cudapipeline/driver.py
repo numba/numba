@@ -269,6 +269,9 @@ class Driver(object):
         #                                    unsigned int  Flags)
         'cuMemHostGetDevicePointer': (c_int, POINTER(cu_device_ptr),
                                       c_void_p, c_uint),
+
+        # CUresult cuMemGetInfo(size_t * free, size_t * total)
+        'cuMemGetInfo' : (c_int, POINTER(c_size_t), POINTER(c_size_t)),
     }
 
     OLD_API_PROTOTYPES = {
@@ -524,6 +527,15 @@ class Device(object):
 
     def __str__(self):
         return "CUDA device %d" % self.id
+
+    def get_memory_info(self):
+        "Returns (free, total) memory in bytes on the device."
+        free = c_size_t()
+        total = c_size_t()
+        error = self.driver.cuMemGetInfo(byref(free), byref(total))
+        msg = 'Failed to get memory info on device %d' % self.id
+        self.driver.check_error(error, msg)
+        return free.value, total.value
 
     def __read_attributes(self):
         got_value = c_int()

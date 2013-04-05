@@ -9,11 +9,14 @@ from .cudapipeline.decorators import jit, autojit
 
 # NDarray device helper
 @require_context
-def to_device(ary, stream=0, copy=True):
-    devarray = ary.view(type=DeviceNDArray)
-    devarray.device_allocate(stream=stream)
+def to_device(ary, stream=0, copy=True, to=None):
+    if to is None:
+        devarray = ary.view(type=DeviceNDArray)
+        devarray.device_allocate(stream=stream)
+    else:
+        devarray = to
     if copy:
-        devarray.to_device(stream=stream)
+        devarray.copy_to_device(ary, stream=stream)
     return devarray
 
 @require_context

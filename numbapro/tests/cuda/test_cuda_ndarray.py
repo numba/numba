@@ -43,6 +43,15 @@ class TestCudaNDArray(support.CudaTestCase):
 
         self.assertTrue((array == original).all())
 
+    def test_devicearray_replace(self):
+        N = 100
+        array = np.arange(N, dtype=np.int32)
+        original = array.copy()
+        gpumem = cuda.to_device(array)
+        cuda.to_device(array * 2, to=gpumem)
+        gpumem.to_host()
+        self.assertTrue((array == original * 2).all())
+
 
 if __name__ == '__main__':
     unittest.main()

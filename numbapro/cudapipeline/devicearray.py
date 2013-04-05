@@ -26,6 +26,16 @@ class DeviceArrayBase(object):
         return self.device_raw._handle
 
 
+    def copy_to_host(self, array, size=-1, stream=0):
+        if size < 0:
+            size = self.device_raw.bytesize
+        self.device_raw.from_device_raw(array.ctypes.data, size,
+                                           stream=stream)
+
+    def copy_to_device(self, array, stream=0):
+        ndarray_device_transfer_data(array, self.device_raw, stream=stream)
+
+
 class DeviceArray(DeviceArrayBase):
     '''
     A memory object that only lives on the device-side.
@@ -69,12 +79,6 @@ class DeviceArray(DeviceArrayBase):
     def dtype(self):
         return self.__dtype
 
-    def copy_to_host(self, array, size=-1, stream=0):
-        if size < 0:
-            size = self.device_raw.bytesize
-        self.__device_data.from_device_raw(array.ctypes.data, size,
-                                           stream=stream)
-
 
 class DeviceNDArray(DeviceArrayBase, np.ndarray):
     @_driver.require_context
@@ -111,13 +115,6 @@ class DeviceNDArray(DeviceArrayBase, np.ndarray):
     def to_host(self, stream=0):
         dataptr, datasize = self.__gpu_readback
         self.__device_data.from_device_raw(dataptr, datasize, stream=stream)
-
-    def copy_to_host(self, array, size=-1, stream=0):
-        dataptr, datasize = self.__gpu_readback
-        if size < 0:
-            size = datasize
-        self.__device_data.from_device_raw(array.ctypes.data, size,
-                                           stream=stream)
 
     def free_device(self):
         '''
