@@ -35,6 +35,7 @@ cu_function = c_void_p          # an opaque handle
 cu_device_ptr = c_size_t        # defined as unsigned int on 32-bit
                                 # and unsigned long long on 64-bit machine
 cu_stream = c_void_p            # an opaque handle
+cu_event = c_void_p
 
 CUDA_SUCCESS                              = 0
 CUDA_ERROR_INVALID_VALUE                  = 1
@@ -137,6 +138,17 @@ CU_MEMHOSTREGISTER_PORTABLE = 0x01
 # cuMemHostGetDevicePointer() may be called on the host pointer.
 # Flag for cuMemHostRegister()
 CU_MEMHOSTREGISTER_DEVICEMAP = 0x02
+
+
+# Default event flag
+CU_EVENT_DEFAULT        = 0x0
+# Event uses blocking synchronization
+CU_EVENT_BLOCKING_SYNC  = 0x1
+# Event will not record timing data
+CU_EVENT_DISABLE_TIMING = 0x2
+# Event is suitable for interprocess use. CU_EVENT_DISABLE_TIMING must be set
+CU_EVENT_INTERPROCESS   = 0x4
+
 
 def _build_reverse_error_map():
     import sys
@@ -272,6 +284,34 @@ class Driver(object):
 
         # CUresult cuMemGetInfo(size_t * free, size_t * total)
         'cuMemGetInfo' : (c_int, POINTER(c_size_t), POINTER(c_size_t)),
+
+        # CUresult cuEventCreate	(	CUevent * 	phEvent,
+        #                               unsigned int 	Flags )
+        'cuEventCreate': (c_int, POINTER(cu_event), c_uint),
+
+        # CUresult cuEventDestroy	(	CUevent 	hEvent	 )
+        'cuEventDestroy': (c_int, cu_event),
+
+        # CUresult cuEventElapsedTime	(	float * 	pMilliseconds,
+        #                                   CUevent 	hStart,
+        #                                   CUevent 	hEnd )
+        'cuEventElapsedTime': (c_int, POINTER(c_float), cu_event, cu_event),
+
+        # CUresult cuEventQuery	(	CUevent 	hEvent	 )
+        'cuEventQuery': (c_int, cu_event),
+
+        # CUresult cuEventRecord	(	CUevent 	hEvent,
+        #                               CUstream 	hStream )
+        'cuEventRecord': (c_int, cu_event, cu_stream),
+
+        # CUresult cuEventSynchronize	(	CUevent 	hEvent	 )
+        'cuEventSynchronize': (c_int, cu_event),
+
+
+        # CUresult cuStreamWaitEvent	(	CUstream        hStream,
+        #                                   CUevent         hEvent,
+        #                                	unsigned int 	Flags )
+        'cuStreamWaitEvent': (c_int, cu_stream, cu_event, c_uint),
     }
 
     OLD_API_PROTOTYPES = {
@@ -566,8 +606,9 @@ class _Context(finalizer.OwnerMixin):
     def __init__(self, device):
         self.device = device
         self._handle = cu_context()
+        flags = 0
         if self.device.CAN_MAP_HOST_MEMORY:
-            flags = CU_CTX_MAP_HOST
+            flags |= CU_CTX_MAP_HOST
         error = self.driver.cuCtxCreate(byref(self._handle), flags,
                                         self.device.id)
         self.driver.check_error(error,
@@ -893,7 +934,76 @@ class Function(finalizer.OwnerMixin):
         launch_kernel(self._handle, self.griddim, self.blockdim,
                       self.sharedmem, self.stream, args)
 
-def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, stream_handle, args):
+class Event(finalizer.OwnerMixin):
+    def __init__(self, timing=True):
+        self.context = Driver().current_context()
+        self._handle = cu_event()
+        self.timing = timing
+        flags = 0
+        if not timing:
+            flags |= CU_EVENT_DISABLE_TIMING
+        error = self.driver.cuEventCreate(byref(self._handle), flags)
+        self.driver.check_error(error, 'Failed to create event')
+        self._finalizer_track(self._handle)
+
+    @classmethod
+    def _finalize(cls, handle):
+        driver = Driver()
+        error =  driver.cuEventDestroy(handle)
+        driver.check_error(error, 'Failed to unload module', exit=True)
+
+    def query(self):
+        '''Returns True if all work before the most recent record has completed;
+        otherwise, returns False.
+        '''
+        status = self.driver.cuEventQuery(self._handle)
+        if status == CUDA_ERROR_NOT_READY:
+            return False
+        self.driver.check_error(status, 'Failed to query event')
+        return True
+
+    def record(self, stream=0):
+        '''Set the record state of the event at the stream.
+        '''
+        hstream = stream._handle if stream else 0
+        error = self.driver.cuEventRecord(self._handle, hstream)
+        self.driver.check_error(error, 'Failed to record event')
+
+    def synchronize(self):
+        '''Synchronize the host thread for the completion of the event.
+        '''
+        error = self.driver.cuEventSynchronize(self._handle)
+        self.driver.check_error(error, 'Failed to synchronize event')
+
+    def wait(self, stream=0):
+        '''All future works submitted to stream will wait util the event 
+        completes.
+        '''
+        hstream = stream._handle if stream else 0
+        flags = 0
+        error = self.driver.cuStreamWaitEvent(hstream, self._handle, flags)
+        self.driver.check_error(error, 'Failed to do stream wait event')
+
+    def elapsed_time(self, evtend):
+        return event_elapsed_time(self, evtend)
+
+    @property
+    def driver(self):
+        return self.device.driver
+
+    @property
+    def device(self):
+        return self.context.device
+
+def event_elapsed_time(evtstart, evtend):
+    driver = evtstart.driver
+    msec = c_float()
+    err = driver.cuEventElapsedTime(byref(msec), evtstart._handle,
+                                    evtend._handle)
+    driver.check_error(err, 'Failed to get elapsed time')
+    return msec.value
+
+def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
     driver = Driver()
     if driver.old_api:
         error = driver.cuFuncSetBlockShape(cufunc_handle,  *blockdim)
@@ -930,7 +1040,7 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, stream_handle, ar
 
 
         gx, gy, _ = griddim
-        error = driver.cuLaunchGridAsync(cufunc_handle, gx, gy, stream_handle)
+        error = driver.cuLaunchGridAsync(cufunc_handle, gx, gy, hstream)
 
         driver.check_error(error, 'Failed to launch kernel')
     else:
@@ -951,7 +1061,7 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, stream_handle, ar
                     gx, gy, gz,
                     bx, by, bz,
                     sharedmem,
-                    stream_handle,
+                    hstream,
                     params,
                     None)
 

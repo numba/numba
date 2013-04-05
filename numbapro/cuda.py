@@ -90,6 +90,11 @@ def mapped(*arylist, **kws):
         yield devarylist
     del pmlist
 
+def event(timing=True):
+    from numbapro.cudapipeline.driver import Event
+    evt = Event(timing=timing)
+    return evt
+
 # Device selection
 
 def select_device(device_id):
@@ -119,8 +124,6 @@ def close():
     from numbapro.cudapipeline import driver as cu
     driver = cu.Driver()
     driver.release_context(driver.current_context())
-
-
 
 def _auto_device(ary, stream=0, copy=True):
     if isinstance(ary, DeviceArrayBase):

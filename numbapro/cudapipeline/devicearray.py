@@ -166,7 +166,6 @@ class DeviceNDArray(DeviceArrayBase, np.ndarray):
         self.__gpu_readback = self.ctypes.data, size
         return self
 
-
     @property
     def device_memory(self):
         try:
