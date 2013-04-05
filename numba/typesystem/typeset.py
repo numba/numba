@@ -115,6 +115,9 @@ class typeset(minitypes.Type):
 
         return None
 
+    def __iter__(self):
+        return iter(self.types)
+
     def __repr__(self):
         return "typeset(%s, ...)" % (self.first_type,)
 
