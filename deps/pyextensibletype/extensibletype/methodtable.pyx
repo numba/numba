@@ -19,6 +19,11 @@ def roundup(x):
     x += 1
     return x
 
+class HashingError(Exception):
+    """
+    Raised when we can't create a perfect hash-based function table.
+    """
+
 cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
     cdef PyCustomSlots_Table *table
 
@@ -70,7 +75,7 @@ cdef class PerfectHashMethodTable(object):
     cdef uint16_t *displacements
     cdef Hasher hasher
 
-    cdef object id_to_signature, signatures
+    cdef object id_to_signature, signatures, fs, gs
 
     def __init__(self, hasher):
         self.hasher = hasher
@@ -90,6 +95,8 @@ cdef class PerfectHashMethodTable(object):
         intern.global_intern_initialize()
 
         # Initialize hash table entries, build hash ids
+        assert len(ids) == len(flags) == len(funcs)
+
         for i, (signature, flag, func) in enumerate(zip(ids, flags, funcs)):
             id = self.hasher.hash_signature(signature)
 
@@ -103,10 +110,12 @@ cdef class PerfectHashMethodTable(object):
                                                             self.table.n - n)
 
         # Perfect hash our table
-        PyCustomSlots_PerfectHash(self.table, &hashes[0])
+        if PyCustomSlots_PerfectHash(self.table, &hashes[0]) < 0:
+            # TODO: sensible error messages
+            raise HashingError("Unable to create perfect hash table")
 
-        for signature in ids:
-            assert self.find_method(signature)
+        for i, signature in enumerate(ids):
+            assert self.find_method(signature), (i, signature)
 
         # For debugging
         self.signatures = ids
@@ -118,8 +127,8 @@ cdef class PerfectHashMethodTable(object):
         """
         cdef uint64_t prehash = intern.global_intern(make_bytes(signature))
 
-        cdef int idx = (((prehash >> self.table.r) & self.table.m_f) ^
-                        self.displacements[prehash & self.table.m_g])
+        cdef uint64_t idx = (((prehash >> self.table.r) & self.table.m_f) ^
+                             self.displacements[prehash & self.table.m_g])
 
         assert 0 <= idx < self.size
 
@@ -135,7 +144,7 @@ cdef class PerfectHashMethodTable(object):
             id = self.table.entries[i].id
             ptr = <uintptr_t> self.table.entries[i].ptr
             sig = self.id_to_signature.get(id, "<empty>")
-            s = "    id: %20d  funcptr: %20d  signature: %s" % (id, ptr, sig)
+            s = "    id: 0x%-16x  funcptr: %20d  signature: %s" % (id, ptr, sig)
             buf.append(s)
 
         buf.append(")")

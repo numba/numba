@@ -133,6 +133,7 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
 }
 
 int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
+  int result;
   uint16_t bin, j;
   uint8_t binsize;
   uint16_t i, n = table->n, b = table->b;
@@ -145,10 +146,13 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
   uint8_t number_of_bins_by_size[BIN_LIMIT];
   PyCustomSlots_Entry *entries_copy = malloc(sizeof(PyCustomSlots_Entry) * n);
 
+  if (!bins || !binsizes || !p || !taken || !entries_copy)
+    goto error;
+
   for (i = 0; i != n; ++i) {
     entries_copy[i] = table->entries[i];
   }
-  
+
   /* Bin the n hashes into b bins based on the g hash. Also count the
      number of bins of each size. */
   for (bin = 0; bin != b; ++bin) {
@@ -163,7 +167,7 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
     binsize = ++binsizes[bin];
     if (binsize == BIN_LIMIT) {
       printf("ERROR 1\n");
-      return -1;
+      goto error;
     }
     bins[BIN_LIMIT * bin + binsize - 1] = i;
     number_of_bins_by_size[binsize - 1]--;
@@ -187,6 +191,20 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
     }
   }
 
+  if (retcode != 0) {
+     printf("no suitable table found\n");
+     goto error;
+  }
+
+  result = 0;
+  goto cleanup;
+
+error:
+
+  result = -1;
+
+cleanup:
+
   /*TODO does not free on error... */
   free(bins);
   free(binsizes);
@@ -194,5 +212,5 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
   free(taken);
   free(entries_copy);
 
-  return 0;
+  return result;
 }
