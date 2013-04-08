@@ -395,8 +395,6 @@ def create_extension(env, py_class, flags, argtypes):
     new extension type.
     """
     # TODO: Remove argtypes! Partial environment!
-    from extensibletype import intern
-    intern.global_intern_initialize()
 
     flags.pop('llvm_module', None)
 
