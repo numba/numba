@@ -92,7 +92,7 @@ def register_pyextensibletype():
     root = os.path.dirname(os.path.abspath(__file__))
     deps_root = os.path.join(root, 'deps')
     pyext_root = os.path.join(deps_root, 'pyextensibletype')
-    pyext_dst = os.path.join("root", "numba", "pyextensibletype")
+    pyext_dst = os.path.join(root, "numba", "pyextensibletype")
 
     if os.path.exists(pyext_dst):
         shutil.rmtree(pyext_dst)
