@@ -1,5 +1,5 @@
-from numbapro import vectorize
-from numba import *
+#from numba import *
+from numbapro import vectorize, f8, f4
 import math
 import numpy as np
 import unittest

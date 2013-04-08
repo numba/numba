@@ -74,24 +74,40 @@ class CudaUFuncDispatcher(object):
 
         # convert arguments to ndarray if they are not
         args = list(args) # convert to list
-        for i, v in enumerate(args):
-            if not isinstance(v, np.ndarray):
-                args[i] = np.asarray(v)
+        has_device_array_arg = any(isinstance(v, DeviceArrayBase) for v in args)
+
+        for i, arg in enumerate(args):
+            if not isinstance(arg, (np.ndarray, DeviceArrayBase)):
+                args[i] = ary = np.asarray(arg)
 
         # get the dtype for each argument
-        dtypes = tuple(a.dtype for a in args)
+        def _get_dtype(x):
+            try:
+                return x.dtype
+            except AttributeError:
+                return np.dtype(type(x))
+
+        dtypes = tuple(_get_dtype(a) for a in args)
 
         # find the fitting function
         result_dtype, cuda_func = self._get_function_by_dtype(dtypes)
         MAX_THREAD = min(cuda_func.device.MAX_THREADS_PER_BLOCK,
                          self.max_blocksize)
 
-        is_device_ndarray = [isinstance(x, DeviceArrayBase) for x in args]
+        if has_device_array_arg:
+            # Ugly: convert array scalar into zero-strided one element array.
+            for i, ary in enumerate(args):
+                if not ary.shape:
+                    data = np.asscalar(ary)
+                    ary = np.ndarray(shape=(1,), strides=(0,))
+                    ary[0] = data
+                    args[i] = ary
 
-        if all(is_device_ndarray):
             # NOTE: When using DeviceArrayBase,
             #       it is assumed to be properly broadcasted.
             self._arguments_requirement(args)
+
+            args, argconv = zip(*(cuda._auto_device(a) for a in args))
     
             element_count = self._determine_element_count(args)
             nctaid, ntid = self._determine_dimensions(element_count, MAX_THREAD)
@@ -109,9 +125,12 @@ class CudaUFuncDispatcher(object):
 
             cuda_func[griddim, blockdim, stream](*kernel_args)
 
+            for ary, conv in zip(args, argconv):
+                if conv:
+                    ary.to_host()
             return device_out
 
-        elif not any(is_device_ndarray):
+        else:
             broadcast_arrays = self._prepare_inputs(args)
             element_count = self._determine_element_count(broadcast_arrays)
 
@@ -146,8 +165,6 @@ class CudaUFuncDispatcher(object):
             device_out.to_host(stream) # only retrive the last one
             # Revert the shape of the array if it has been modified earlier
             return out.reshape(reshape)
-        else:
-            raise ValueError("Cannot mix DeviceArrayBase and ndarray as args")
 
     def _get_function_by_dtype(self, dtypes):
         try:
@@ -162,7 +179,10 @@ class CudaUFuncDispatcher(object):
 
     def _arguments_requirement(self, args):
         assert args[0].ndim == 1
-        assert all(x.shape == args[0].shape for x in args)
+        # Accept same shape or array scalar
+        assert all(x.shape == args[0].shape or
+                   (x.strides == (0,) and x.shape == (1,))
+                   for x in args)
 
     def _determine_dimensions(self, n, max_thread):
         # determine grid and block dimension
