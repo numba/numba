@@ -90,19 +90,21 @@ def register_pyextensibletype():
     import shutil
 
     root = os.path.dirname(os.path.abspath(__file__))
-    numba_root = os.path.join(root, "numba")
-    pyext_root = os.path.join(root, 'deps', 'pyextensibletype')
-    pyext_dst = os.path.join(numba_root, "pyextensibletype")
+    deps_root = os.path.join(root, 'deps')
+    pyext_root = os.path.join(deps_root, 'pyextensibletype')
+    pyext_dst = os.path.join("root", "numba", "pyextensibletype")
 
     if os.path.exists(pyext_dst):
         shutil.rmtree(pyext_dst)
 
-    shutil.copytree(pyext_root, pyext_dst)
-
-    with open(os.path.join(pyext_dst, '__init__.py'), 'w'):
+    with open(os.path.join(deps_root, '__init__.py'), 'w'):
+        pass
+    with open(os.path.join(pyext_root, '__init__.py'), 'w'):
         pass
 
-    from numba.pyextensibletype import setupconfig
+    shutil.copytree(pyext_root, pyext_dst)
+
+    from deps.pyextensibletype import setupconfig
     exts = setupconfig.get_extensions(pyext_dst, "numba.pyextensibletype")
 
     return exts
