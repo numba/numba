@@ -12,7 +12,7 @@ from numba import PY3
 # doctest compatible for jit or autojit numba functions
 from numba.testing.test_support import testmod
 
-EXCLUDE_TEST_PACKAGES = ["numba.minivect"]
+EXCLUDE_TEST_PACKAGES = ["numba.minivect", "numba.pyextensibletype"]
 
 def exclude_package_dirs(dirs):
     for exclude_pkg in EXCLUDE_TEST_PACKAGES:

@@ -86,15 +86,29 @@ def get_include():
     """
     return os.path.join(numba_root, "numba", "include")
 
-def install_pyextensibletype():
-    root = os.path.dirname(os.path.abspath(__file__))
-    pyext_root = os.path.join(root, 'deps', 'pyextensibletype')
-    subprocess.check_call([sys.executable, 'setup.py', 'install'],
-                          cwd=pyext_root)
+def register_pyextensibletype():
+    import shutil
 
-# TODO: Find a better means of knowing when to install pyextensibletype...
-if set(sys.argv) & set(('build', 'build_ext', 'install')):
-    install_pyextensibletype()
+    root = os.path.dirname(os.path.abspath(__file__))
+    numba_root = os.path.join(root, "numba")
+    pyext_root = os.path.join(root, 'deps', 'pyextensibletype')
+    pyext_dst = os.path.join(numba_root, "pyextensibletype")
+
+    if os.path.exists(pyext_dst):
+        shutil.rmtree(pyext_dst)
+
+    shutil.copytree(pyext_root, pyext_dst)
+
+    with open(os.path.join(pyext_dst, '__init__.py'), 'w'):
+        pass
+
+    from numba.pyextensibletype import setupconfig
+    exts = setupconfig.get_extensions(pyext_dst, "numba.pyextensibletype")
+
+    return exts
+
+# TODO: Finish and release pyextensibletype
+extensibletype_extensions = register_pyextensibletype()
 
 numba_include_dir = get_include()
 
@@ -135,7 +149,7 @@ setup(
         'numba': ['*.c', '*.h', 'include/*', '*.pxd'],
         'numba.vectorize': ['*.h'],
     },
-    ext_modules=[
+    ext_modules=extensibletype_extensions + [
         Extension(
             name="numba.vectorize._internal",
             sources=["numba/vectorize/_internal.c",

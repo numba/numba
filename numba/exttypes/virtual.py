@@ -19,14 +19,11 @@ virtual method tables:
 
 import ctypes
 
-from extensibletype import methodtable
-
 import numba
 from numba.typesystem import *
 from numba.minivect import minitypes
 from numba.exttypes import ordering
 from numba.exttypes import extension_types
-
 
 #------------------------------------------------------------------------
 # Virtual Method Table Interface
@@ -131,13 +128,20 @@ PyCustomSlots_Table = numba.struct([
 # ______________________________________________________________________
 # Hash-table building
 
-sep201_hasher = methodtable.Hasher()
+def initialize_interner():
+    from numba.pyextensibletype.extensibletype import intern
+    intern.global_intern_initialize()
 
 def sep201_signature_string(functype, name):
     functype = minitypes.FunctionType(functype.return_type, functype.args, name)
     return str(functype)
 
 def hash_signature(functype, name):
+    from numba.pyextensibletype.extensibletype import methodtable
+
+    initialize_interner()
+    sep201_hasher = methodtable.Hasher()
+
     sigstr = sep201_signature_string(functype, name)
     return sep201_hasher.hash_signature(sigstr)
 
@@ -145,12 +149,15 @@ def build_hashing_vtab(vtable):
     """
     Build hash-based vtable.
     """
+    from numba.pyextensibletype.extensibletype import methodtable
+
     n = len(vtable.methods)
 
     ids = [sep201_signature_string(method.signature, method.name)
                for method in vtable.methods]
     flags = [0] * n
 
+    sep201_hasher = methodtable.Hasher()
     vtab = methodtable.PerfectHashMethodTable(sep201_hasher)
     vtab.generate_table(n, ids, flags, vtable.method_pointers)
     # print(vtab)
