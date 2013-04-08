@@ -9,6 +9,7 @@ extern "C" {
 
 #include <Python.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include "siphash24.h"
 
 #if PY_MAJOR_VERSION < 3
@@ -28,7 +29,7 @@ extern "C" {
 typedef struct _intern_table_t {
     PyObject *signature_to_key;
     PyObject *key_to_signature;
-    char secrets[16*4];             /* 4 secret keys, which we try in succession */
+    char secrets[16*4]; /* 4 secret keys, which we try in succession */
 } intern_table_t;
 
 /* Prototypes */
@@ -36,12 +37,26 @@ static void intern_destroy_table(intern_table_t *table);
 
 /* API */
 
+static void
+_print_secrets(intern_table_t *table)
+{
+    int i, j;
+
+    for (i = 0; i < 4; i++) {
+        printf("secret key[%d] = {", i);
+        for (j = 0; j < 16; j += 4) {
+            printf(" %-8x, ", *(int32_t *) &table->secrets[i * 16 + j]);
+        }
+        printf("}\n");
+    }
+}
+
 /* Create an intern table from preallocated memory.
    Returns NULL on failure with an appropriate exception set. */
 static intern_table_t *
 intern_create_table(intern_table_t *table)
 {
-    int i, randval;
+    int i;
 
     table->signature_to_key = NULL;
     table->key_to_signature = NULL;
@@ -52,14 +67,16 @@ intern_create_table(intern_table_t *table)
     if (!table->signature_to_key || !table->key_to_signature)
         goto bad;
 
-    for (i = 0; i < 16 * 4; i+=2) {
-        randval = rand(); /* TODO: use a better prng */
-
+    for (i = 0; i < 16 * 4; i += 2) {
         /* Take the lower two bytes from the random value, since
-           RAND_MAX is at least 2**16 */
-        table->secrets[i + 0] = ((char *) &randval)[sizeof(int) - 2];
-        table->secrets[i + 1] = ((char *) &randval)[sizeof(int) - 1];
+               RAND_MAX is at least 2**16 */
+        short randval = (short) rand(); /* TODO: use a better prng */
+
+        table->secrets[i + 0] = ((char *) &randval)[0];
+        table->secrets[i + 1] = ((char *) &randval)[1];
     }
+
+    _print_secrets(table);
 
     return table;
 bad:

@@ -26,22 +26,23 @@ class HashingError(Exception):
 
 cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
     cdef PyCustomSlots_Table *table
+    cdef int nbins = size * 2
 
     size = roundup(size)
 
     table = <PyCustomSlots_Table *> stdlib.calloc(
-        1, sizeof(PyCustomSlots_Table) + sizeof(uint16_t) * size +
+        1, sizeof(PyCustomSlots_Table) + sizeof(uint16_t) * nbins +
            sizeof(PyCustomSlots_Entry) * size)
 
     if table == NULL:
         raise MemoryError
 
     table.n = size
-    table.b = size
+    table.b = nbins
     table.flags = 0
 
     table.entries = <PyCustomSlots_Entry *> ((<char *> &table[1]) +
-                                             size * sizeof(uint16_t))
+                                             table.b * sizeof(uint16_t))
 
     return table
 
@@ -90,7 +91,7 @@ cdef class PerfectHashMethodTable(object):
         self.displacements = <uint16_t *> (<char *> self.table +
                                                sizeof(PyCustomSlots_Table))
 
-        hashes = np.empty(self.table.n, dtype=np.uint64)
+        hashes = np.zeros(self.table.n, dtype=np.uint64)
 
         intern.global_intern_initialize()
 
@@ -108,6 +109,7 @@ cdef class PerfectHashMethodTable(object):
 
         hashes[n:self.table.n] = extensibletype.draw_hashes(np.random,
                                                             self.table.n - n)
+        assert len(np.unique(hashes)) == len(hashes)
 
         # Perfect hash our table
         if PyCustomSlots_PerfectHash(self.table, &hashes[0]) < 0:
