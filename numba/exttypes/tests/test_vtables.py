@@ -6,11 +6,12 @@ Test hash-based virtual method tables.
 
 from __future__ import print_function, division, absolute_import
 
+import itertools
+
 import numba as nb
 from numba import *
 from numba.minivect.minitypes import FunctionType
 from numba.exttypes import virtual
-from numba.exttypes import ordering
 from numba.exttypes import methodtable
 from numba.exttypes.signatures import Method
 from numba.testing.test_support import parametrize, main
@@ -48,8 +49,7 @@ make_methods1 = lambda: [
 
 make_methods2 = lambda: [
     method(myfunc2, 'method', FunctionType(argtype1, [argtype1, argtype2]))
-        for argtype1 in all_types
-            for argtype2 in all_types]
+        for argtype1, argtype2 in itertools.product(all_types, all_types)]
 
 #------------------------------------------------------------------------
 # Table building
@@ -59,7 +59,7 @@ def make_table(methods):
     table = methodtable.VTabType(py_class, [])
     table.create_method_ordering()
 
-    for i, method in enumerate(make_methods1()):
+    for i, method in enumerate(methods):
         key = method.name, method.signature.args
         method.lfunc_pointer = i
         table.specialized_methods[key] = method
@@ -77,6 +77,8 @@ def make_hashtable(methods):
 # Tests
 #------------------------------------------------------------------------
 
+# many_methods = make_methods1() + make_methods2()
+
 @parametrize(make_methods1())
 def test_specializations(methods):
     hashtable = make_hashtable(methods)
@@ -86,5 +88,7 @@ def test_specializations(methods):
         key = virtual.sep201_signature_string(method.signature, method.name)
         assert hashtable.find_method(key), (i, method, key)
 
+
 if __name__ == '__main__':
+    # test_specializations(make_methods2())
     main()

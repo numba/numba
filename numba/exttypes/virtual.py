@@ -159,7 +159,7 @@ def build_hashing_vtab(vtable):
 
     sep201_hasher = methodtable.Hasher()
     vtab = methodtable.PerfectHashMethodTable(sep201_hasher)
-    vtab.generate_table(n, ids, flags, vtable.method_pointers)
+    vtab.generate_table(n, ids, flags, list(vtable.method_pointers))
     # print(vtab)
     return vtab
 
