@@ -6,11 +6,20 @@ extern "C" {
 
 #include <Python.h>
 #include <structmember.h>
-#include <stdint.h>
-/* Some stdint.h implementations:
-Portable: http://www.azillionmonkeys.com/qed/pstdint.h
-MSVC: http://msinttypes.googlecode.com/svn/trunk/stdint.h
+
+/*
+Make this work by default on all platforms using pstdint:
+
+    Portable: http://www.azillionmonkeys.com/qed/pstdint.h
+
+There is also:
+
+    MSVC: http://msinttypes.googlecode.com/svn/trunk/stdint.h
+
+We could conditionally include it, but we would need to use something
+like autoconf...
 */
+#include <pstdint.h>
 
 #if defined(__GNUC__) && (__GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 95))
   #define PY_CUSTOMSLOTS_LIKELY(x)   __builtin_expect(!!(x), 1)

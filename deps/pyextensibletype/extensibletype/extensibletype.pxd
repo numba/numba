@@ -1,4 +1,4 @@
-cdef extern from "stdint.h":
+cdef extern from "pstdint.h":
     ctypedef unsigned int uint32_t
     ctypedef unsigned long long uint64_t
     ctypedef unsigned short uint16_t

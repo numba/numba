@@ -12,9 +12,11 @@
    You should have received a copy of the CC0 Public Domain Dedication along with
    this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 */
-#include <stdint.h>
+
 #include <stdio.h>
 #include <string.h>
+#include "pstdint.h"
+
 typedef uint64_t u64;
 typedef uint32_t u32;
 typedef uint8_t u8;

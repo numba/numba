@@ -29,7 +29,7 @@ cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
     cdef int nbins
 
     size = roundup(size)
-    nbins = size #* 2
+    nbins = size
 
     table = <PyCustomSlots_Table *> stdlib.calloc(
         1, sizeof(PyCustomSlots_Table) + sizeof(uint16_t) * nbins +

@@ -1,5 +1,5 @@
-#include <stdint.h>
 #include <stdlib.h>
+#include "pstdint.h"
 
 typedef struct {
   uint64_t id;

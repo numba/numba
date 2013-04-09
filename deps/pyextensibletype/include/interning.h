@@ -9,7 +9,7 @@ extern "C" {
 
 #include <Python.h>
 #include <stdlib.h>
-#include <stdint.h>
+#include "pstdint.h"
 #include "siphash24.h"
 
 #if PY_MAJOR_VERSION < 3
