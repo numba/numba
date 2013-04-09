@@ -133,7 +133,7 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
 }
 
 int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
-  int result;
+  int result, r, retcode;
   uint16_t bin, j;
   uint8_t binsize;
   uint16_t i, n = table->n, b = table->b;
@@ -181,7 +181,6 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
   /* Find perfect table -- try again for each choice of r */
   table->m_f = m_f;
   table->m_g = m_g;
-  int r, retcode;
   for (r = 64; r != -1; --r) {
     table->r = r;
     retcode = _PyCustomSlots_FindDisplacements(table, hashes, binsizes, bins, p,
