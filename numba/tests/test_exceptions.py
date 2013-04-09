@@ -33,4 +33,4 @@ def boom3():
 
 if __name__ == "__main__":
     import numba
-    numba.testmod()
+    numba.testing.testmod()

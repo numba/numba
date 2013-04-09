@@ -101,4 +101,4 @@ def complex128_abs(a):
 if __name__ == '__main__':
 #    print long(int32_abs(-5))
     import numba
-    numba.testmod()
+    numba.testing.testmod()

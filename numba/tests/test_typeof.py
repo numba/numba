@@ -51,4 +51,4 @@ def test_typeof_numba3(arg):
     """
     return numba.typeof(arg)
 
-numba.testmod()
+numba.testing.testmod()

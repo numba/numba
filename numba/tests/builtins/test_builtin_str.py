@@ -20,4 +20,4 @@ def str_convert(x):
 
 if __name__ == '__main__':
     import numba
-    numba.testmod()
+    numba.testing.testmod()

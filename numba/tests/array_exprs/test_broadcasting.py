@@ -127,4 +127,4 @@ def test_shape_mismatch():
 
 if __name__ == "__main__":
     import numba
-    numba.testmod()
+    numba.testing.testmod()

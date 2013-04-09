@@ -421,4 +421,4 @@ if __name__ == '__main__':
 #    test_call_closure_from_closure()()
     # wrong_restype()
     import numba
-    numba.testmod()
+    numba.testing.testmod()

@@ -196,4 +196,4 @@ if __name__ == "__main__":
 #    print sys.getrefcount(fresh_obj())
 #    exc(object())
     import numba
-    numba.testmod()
+    numba.testing.testmod()

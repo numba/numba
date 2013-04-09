@@ -26,4 +26,4 @@ def float_conjugate():
 
 if __name__ == '__main__':
     import numba
-    numba.testmod()
+    numba.testing.testmod()

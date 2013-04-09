@@ -62,4 +62,4 @@ if __name__ == "__main__":
 #    jitv(simple_loops)
 #    jitv(simple_return)
     import numba
-    numba.testmod()
+    numba.testing.testmod()

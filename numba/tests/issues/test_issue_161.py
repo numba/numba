@@ -18,4 +18,4 @@ def tuple_unpacking_error(obj):
     a, b = obj
 
 if __name__ == "__main__":
-    numba.testmod()
+    numba.testing.testmod()

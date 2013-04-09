@@ -191,7 +191,7 @@ def test_reverse(type, value):
 #    return tlist
 
 def test(module):
-    nb.testmod(module, runit=True)
+    nb.testing.testmod(module)
 
 if __name__ == "__main__":
     import __main__ as module

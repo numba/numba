@@ -41,4 +41,4 @@ def test_compare_null():
     """
     return voidp(Py_uintptr_t(0)) == numba.NULL
 
-numba.testmod()
+numba.testing.testmod()

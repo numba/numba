@@ -46,4 +46,4 @@ def create_fractal(min_x, max_x, min_y, max_y, image, iters):
 
 if __name__ == "__main__":
     import numba
-    numba.testmod()
+    numba.testing.testmod()

@@ -82,4 +82,4 @@ def test_address_of_struct_function():
     assert s2.mean == (s1.x + s1.y) / 2.0
 
 
-numba.testmod()
+numba.testing.testmod()

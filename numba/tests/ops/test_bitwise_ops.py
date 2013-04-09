@@ -112,4 +112,4 @@ def test_invert(a):
     return ~a
 
 
-numba.testmod()
+numba.testing.testmod()

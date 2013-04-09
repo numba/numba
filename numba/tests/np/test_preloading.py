@@ -67,4 +67,4 @@ if __name__ == "__main__":
 #    preload_arg(a)
 #    preload_phi(a)
     import numba
-    numba.testmod()
+    numba.testing.testmod()

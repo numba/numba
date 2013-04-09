@@ -67,4 +67,4 @@ Warning 17:11: local variable 'a' might be referenced before assignment
 if __name__ == "__main__":
 #    jitfunc(simple_while_break)
     import numba
-    numba.testmod()
+    numba.testing.testmod()

@@ -22,4 +22,4 @@ def compile_class(warn):
 if __name__ == '__main__':
     # compile_class(True)
     import numba
-    numba.testmod()
+    numba.testing.testmod()

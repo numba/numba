@@ -108,4 +108,4 @@ if __name__ == "__main__":
     #    jitfunc(simple_for_break)
     #    jitfunc(simple_for_pos)
     import numba
-    numba.testmod()
+    numba.testing.testmod()

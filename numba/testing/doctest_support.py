@@ -64,17 +64,16 @@ class MyDocTestFinder(doctest.DocTestFinder):
         res = doctest.DocTestFinder.find(self, obj, **kws)
         return res
 
-def testmod(m=None, run_doctests=True):
+def testmod(m=None, run_doctests=True, optionflags=doctest_options,
+            verbosity=2):
     """
     Fix a Cython module's doctests, then call doctest.testmod()
-
-    All other arguments are passed directly to doctest.testmod().
     """
     fix_module_doctest(m)
     if run_doctests:
         finder = MyDocTestFinder(exclude_empty=False)
         suite = doctest.DocTestSuite(m, test_finder=finder,
-                                     optionflags=doctest_options)
-        result =  unittest.TextTestRunner(verbosity=2).run(suite)
+                                     optionflags=optionflags)
+        result =  unittest.TextTestRunner(verbosity=verbosity).run(suite)
         if not result.wasSuccessful():
             raise Exception("Doctests failed: %s" % result)

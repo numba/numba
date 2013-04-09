@@ -54,7 +54,7 @@ def test_slicing_result():
 
 if __name__ == "__main__":
     import numba
-    numba.testmod()
+    numba.testing.testmod()
 
 #    a = np.arange(10)
 #    t = time.time()

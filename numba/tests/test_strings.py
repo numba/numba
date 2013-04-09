@@ -51,4 +51,4 @@ if __name__ == '__main__':
     string_constant()
 
     import numba
-    numba.testmod()
+    numba.testing.testmod()

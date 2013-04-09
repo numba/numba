@@ -228,7 +228,7 @@ def test_error_array_variable1(value, obj1):
 
 def test():
     from . import test_cfg_type_infer
-    testmod(test_cfg_type_infer, runit=True)
+    testmod(test_cfg_type_infer)
 
 if __name__ == '__main__':
     testmod()

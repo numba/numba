@@ -135,7 +135,7 @@ def fix_module_doctest_py3(module):
         except:
             pass
 
-def testmod(module=None, runit=False):
+def testmod(module=None, run=True, optionflags=None,):
     """
     Tests a doctest modules with numba functions. When run in nosetests, only
     populates module.__test__, when run as main, runs the doctests.
@@ -146,11 +146,9 @@ def testmod(module=None, runit=False):
         module = __import__(modname)
         # module = types.ModuleType(modname)
         # vars(module).update(mod_globals)
-    else:
-        modname = module.__name__
 
     fix_module_doctest_py3(module)
-    doctest_support.testmod(module, run_doctests=runit or modname == '__main__')
+    doctest_support.testmod(module, run_doctests=run)
 
 #------------------------------------------------------------------------
 # Test Parametrization

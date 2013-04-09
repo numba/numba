@@ -65,4 +65,4 @@ exception: 48:10: object of type int cannot be indexed
 
 if __name__ == '__main__':
     import numba
-    numba.testmod()
+    numba.testing.testmod()

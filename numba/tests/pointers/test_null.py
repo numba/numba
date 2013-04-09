@@ -27,4 +27,4 @@ def test_compare_null_attribute():
 if __name__ == '__main__':
     # test_compare_null()
     # test_compare_null_attribute()
-    numba.testmod()
+    numba.testing.testmod()

@@ -35,4 +35,4 @@ if __name__ == '__main__':
     if numba.PY3:
         __doc__ = __doc__.replace('TypeError: a float is required',
                                   "TypeError: type object doesn't define __round__ method")
-    numba.testmod()
+    numba.testing.testmod()
