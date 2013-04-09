@@ -26,9 +26,10 @@ class HashingError(Exception):
 
 cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
     cdef PyCustomSlots_Table *table
-    cdef int nbins = size * 2
+    cdef int nbins
 
     size = roundup(size)
+    nbins = size #* 2
 
     table = <PyCustomSlots_Table *> stdlib.calloc(
         1, sizeof(PyCustomSlots_Table) + sizeof(uint16_t) * nbins +
@@ -76,7 +77,7 @@ cdef class PerfectHashMethodTable(object):
     cdef uint16_t *displacements
     cdef Hasher hasher
 
-    cdef object id_to_signature, signatures, fs, gs
+    cdef object id_to_signature, signatures
 
     def __init__(self, hasher):
         self.hasher = hasher

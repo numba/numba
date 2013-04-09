@@ -76,7 +76,7 @@ intern_create_table(intern_table_t *table)
         table->secrets[i + 1] = ((char *) &randval)[1];
     }
 
-    _print_secrets(table);
+    /* _print_secrets(table); */
 
     return table;
 bad:

@@ -1,3 +1,5 @@
+import itertools
+
 from nose.tools import eq_, ok_
 import numpy as np
 from .. import extensibletype, methodtable
@@ -25,8 +27,20 @@ def test_basic():
     print(hashes)
     assert len(hashes) == len(np.unique(hashes))
 
+# ---
+# Test methodtable
+
+def make_signature(type_permutation):
+    return "".join(type_permutation[:-1]) + '->' + type_permutation[-1]
+
+def make_ids():
+    types = ['f', 'd', 'i', 'l', 'O']
+    power = 6
+    return map(make_signature, itertools.product(*(types,) * power))
+
 def test_methodtable():
-    ids = ["ff->f", "dd->d", "ii->i", "ll->l", "OO->O"]
+    # ids = ["ff->f", "dd->d", "ii->i", "ll->l", "OO->O"]
+    ids = make_ids()[:31]
     flags = range(1, len(ids) + 1)
     funcs = range(len(ids))
 
@@ -36,7 +50,7 @@ def test_methodtable():
     for (signature, flag, func) in zip(ids, flags, funcs):
         result = table.find_method(signature)
         assert result is not None
+
         got_func, got_flag = result
         assert func == got_func, (func, got_func)
         # assert flag == got_flag, (flag, got_flag)
-
