@@ -13,10 +13,16 @@ def bucket_argsort(cnp.ndarray[uint16_t, mode='c'] p,
     _PyCustomSlots_bucket_argsort(&p[0], &binsizes[0],
                                   &number_of_bins_by_size[0])
 
+def get_random_hashes(rng, nitems):
+    return rng.randint(-2**31, 2**31-1, size=nitems).astype(np.uint64)
+
 def draw_hashes(rng, nitems):
-    hashes = rng.randint(2**32, size=nitems).astype(np.uint64)
+    assert sizeof(long) >= 4
+
+    hashes = get_random_hashes(rng, nitems)
     hashes <<= 32
-    hashes |= rng.randint(2**32, size=nitems).astype(np.uint64)
+    hashes |= get_random_hashes(rng, nitems)
+
     return hashes
 
 def perfect_hash(cnp.ndarray[uint64_t] hashes, int repeat=1):
