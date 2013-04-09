@@ -42,13 +42,25 @@ If you're not using anaconda, you will need LLVM with RTTI enabled:
 
 * Compile LLVM 3.2
 
+See https://github.com/llvmpy/llvmpy for the most up-to-date instructions.
+
 ```bash
     $ wget http://llvm.org/releases/3.2/llvm-3.2.src.tar.gz
     $ tar zxvf llvm-3.2.src.tar.gz
-    $ ./configure --enable-optimized
+    $ ./configure --enable-optimized --prefix=LLVM_BUILD_DIR
+    $ # It is recommended to separate the custom build from the default system
+    $ # package.
     $ # Be sure your compiler architecture is same as version of Python you will use
     $ #  e.g. -arch i386 or -arch x86_64.  It might be best to be explicit about this.
-    $ make install
+    $ REQUIRES_RTTI=1 make install
+```
+
+* Install llvmpy
+
+```bash
+    $ git clone https://github.com/llvmpy/llvmpy
+    $ cd llvmpy
+    $ LLVM_CONFIG_PATH=LLVM_BUILD_DIR/bin/llvm-config python setup.py install
 ```
 
 * Installing Numba
