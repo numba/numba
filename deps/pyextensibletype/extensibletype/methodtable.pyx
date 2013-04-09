@@ -112,6 +112,10 @@ cdef class PerfectHashMethodTable(object):
                                                             self.table.n - n)
         assert len(np.unique(hashes)) == len(hashes)
 
+        # print "-----------------------"
+        # print self
+        # print "-----------------------"
+
         # Perfect hash our table
         if PyCustomSlots_PerfectHash(self.table, &hashes[0]) < 0:
             # TODO: sensible error messages
@@ -135,7 +139,7 @@ cdef class PerfectHashMethodTable(object):
 
         assert 0 <= idx < self.size
 
-        if <uintptr_t> self.table.entries[idx].id != prehash:
+        if self.table.entries[idx].id != prehash:
             return None
 
         return (<uintptr_t> self.table.entries[idx].ptr,

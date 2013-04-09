@@ -40,7 +40,7 @@ def make_ids():
 
 def test_methodtable():
     # ids = ["ff->f", "dd->d", "ii->i", "ll->l", "OO->O"]
-    ids = make_ids()[:31]
+    ids = make_ids()[:500]
     flags = range(1, len(ids) + 1)
     funcs = range(len(ids))
 
