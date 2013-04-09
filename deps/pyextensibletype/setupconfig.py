@@ -54,6 +54,11 @@ def get_extensions(path_prefix, module_prefix=""):
                   ["extensibletype/methodtable.pyx"],
                   include_dirs=include_dirs,
                   depends=perfecthash_deps),
+
+        Extension("extensibletype.test.pstdint",
+                  ["extensibletype/test/pstdint.pyx"],
+                  include_dirs=include_dirs,
+                  depends=["include/pstdint.h"]),
     ]
 
     return extensions
