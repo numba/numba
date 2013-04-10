@@ -50,9 +50,9 @@ def get_functions():
     return locals()
 
 dest_types = [
-   int_,
-   short,
-   Py_ssize_t,
+    int_,
+    short,
+    Py_ssize_t,
     float_,
     double,
     complex128
