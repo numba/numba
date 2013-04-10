@@ -52,7 +52,7 @@ class ModuleFilter(Filter):
 
 class FileFilter(Filter):
     def filter(self, root, dirs, files):
-        return dirs, [fn for fn in files if fn.endswidth(".py")]
+        return dirs, [fn for fn in files if fn.endswith(".py")]
 
 # ______________________________________________________________________
 # Test discovery
@@ -120,6 +120,7 @@ def test(whitelist=None, blacklist=None, print_failures_only=False):
             pkg.startswith(p) for p in EXCLUDE_TEST_PACKAGES)),
         PackageFilter(lambda pkg: not pkg.endswith(".__pycache__")),
         ModuleFilter(lambda modname: modname.split('.')[-1].startswith("test_")),
+        FileFilter(),
     ]
 
     if whitelist:
