@@ -4,13 +4,13 @@
    contain the root `toctree` directive.
 
 
-NumbaPro*
-=========
+NumbaPro
+========
 
 NumbaPro is an enhanced version of Numba which adds premium features and
 functionality that allow developers to rapidly create optimized code that integrates well with NumPy.
 
-With NumbaPro Python developers can define NumPy ufuncs and generalized ufuncs
+With NumbaPro, Python developers can define NumPy ufuncs and generalized ufuncs
 in Python, which are compiled to machine code dynamically and loaded on the fly.
 Additionally, NumbaPro offers developers the ability to target multicore and
 GPU architectures with Python code for both ufuncs and general-purpose code.
@@ -25,39 +25,85 @@ its best to optimize the code for the GPU architecture.  Alternatively,
 CUDA-based API is provided for writing CUDA code specifically in Python for
 ultimate control of the hardware (with thread and block identities).
 
-GPU support is rapidly improving but still an area where you may encounter
-difficulties.   Please let us know if you have any trouble with our GPU
-support.
+Getting Started
+---------------
 
-See `release notes <releases.html>`_ for a summary of changes in each release.
+Let's start with a simple function to add together all the pairwise values in two NumPy arrays.
+Asking NumbaPro to compile this python function to vectorized machine code for execution
+on the CPU is as simple as adding a single line of code (invoked via a decorator on the
+function)::
 
-Current Features
-----------------
+    from numbapro import vectorize
+    
+    @vectorize('f4(f4, f4)', target='cpu')
+    def sum(a, b):
+        return a + b
 
-Current features of NumbaPro include support for (parallel) numpy ufuncs and gufuncs,
-CUDA support and a multi-threaded parallel range.
+    # Invoke like:  result_array = sum(big_input_1, big_input_2)
 
-Functionality of numbapro is made available through the numbapro namespace, as is
-supposed to act as a drop-in replacement for numba::
+Similarly, one can instead target the GPU for execution of the same python function by
+modifying a single line in the above example::
 
-    import numbapro as numba
+    @vectorize('f4(f4, f4)', target='gpu')
 
-.. NOTE:: Although we do not recommend using import star, we will often do so
-          in our examples for brevity (``from numbapro import *``)
+Targeting the GPU for execution introduces the potential for numerous GPU-specific
+optimizations so as a starting point for more complex scenarios, one can also target
+the GPU with NumbaPro via its Just-In-Time (JIT) compiler::
+
+    from numbapro import cuda, f4
+    
+    @cuda.jit(argtypes=[f4[:], f4[:], f4[:]], target='gpu')
+    def sum(a, b, result):
+        i = cuda.grid(1)
+        result[i] = a[i] + b[i]
+
+    # Invoke like:  sum[grid_dim, block_dim](big_input_1, big_input_2, result_array)
+
+NumbaPro also supports a higher-level approach for targeting the GPU via the still
+rapidly evolving ComputeUnit (CU) abstraction.  Working with CU involves
+concepts from stream computing interfaces for working with CUDA-capable GPUs.
+As a starting example::
+
+    from numbapro import CU
+    import numpy as np
+    
+    def sum(tid, a, b, result):
+        result[tid] = a[tid] + b[tid]
+
+    def execute_sum_on_gpu_via_CU(a, b):
+        assert a.shape == b.shape
+        cu = CU(target='gpu')
+        with closing(cu):
+            result = np.zeros_like(a)
+            d_result = cu.output(result)
+            cu.enqueue(sum, ntid=result.size, args=(a, b, result))
+            cu.wait()
+        return result
+
+Features
+--------
+
+Major features of NumbaPro include support for (parallel) NumPy ufuncs and gufuncs,
+CUDA support for GPU execution and a multi-threaded parallel range.
+
 
 .. toctree::
    :maxdepth: 1
 
    ufuncs
    generalizedufuncs
-   cu
+   prange
    CUDAJit
    CUDAufunc
    CUDADevice
    CUDASupport
    cudalib
-   prange
+   cu
 
+Release Notes
+-------------
+
+See `release notes <releases.html>`_ for a summary of changes in each release.
 
 Indices and tables
 -------------------
