@@ -104,4 +104,5 @@ class TestBitwiseLoop(unittest.TestCase):
         self.assertTrue(exp == got, msg % (a, b, got, exp))
 
 if __name__ == '__main__':
+    # TestBitwiseLoop('test_loop_all_simpler').debug()
     unittest.main()

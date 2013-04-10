@@ -843,9 +843,11 @@ class TypeInferer(visitors.NumbaTransformer):
         node.right = self.visit(node.right)
 
         if nodes.is_bitwise(node.op):
-            typesystem.require([node.left, node.right], ["is_int",
-                                                         'is_object',
-                                                         'is_bool'])
+            # TODO: Do this better
+            typesystem.require(
+                [n for n in [node.left, node.right]
+                       if self.is_resolved(n.variable.type)],
+                ["is_int", 'is_object', 'is_bool'])
 
         v1, v2 = node.left.variable, node.right.variable
         promotion_type = self.promote(v1, v2)
