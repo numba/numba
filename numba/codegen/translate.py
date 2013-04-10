@@ -787,10 +787,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         self.builder.position_at_end(then_block)
         then_value = self.visit(node.body)
+        then_block = self.builder.basic_block
         self.builder.branch(merge_block)
 
         self.builder.position_at_end(else_block)
         else_value = self.visit(node.orelse)
+        else_block = self.builder.basic_block
         self.builder.branch(merge_block)
 
         self.builder.position_at_end(merge_block)
