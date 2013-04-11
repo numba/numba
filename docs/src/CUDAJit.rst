@@ -1,21 +1,20 @@
--------------
 CUDA JIT
--------------
+========
 
-**Note: CUDA JIT is still in experimental stages.  Computation speeds may have unexpected results.**
-
-**Warning: CUDA devices with compute capability less than 1.3 do not support double precision arithmetic.**
-
-CUDA JIT translates Python function into a CUDA kernel.  It uses translated code from Numba and converts it to `PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_.  NumbaPro interacts with the CUDA Driver Libraries to load the PTX onto the CUDA device and execute.
+CUDA JIT translates Python functions into PTX code which execute as CUDA
+kernels.  More specifically, it uses translated code from Numba and
+converts it to 
+`PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_.
+NumbaPro interacts with the CUDA Driver Libraries to load the PTX onto
+the CUDA device and execute.
 
 Imports
 -------
 
 ::
 
+	from numbapro import cuda, jit, float32
 	import numpy as np
-	from numbapro import *
-	from numbapro import cuda
 
 
 CUDA Kernel Definition
@@ -28,7 +27,7 @@ back to the host upon completion of the kernel.
 
 ::
 
-	@jit(argtypes=[f4[:], f4[:], f4[:]], target='gpu')
+	@jit(argtypes=[float32[:], float32[:], float32[:]], target='gpu')
 	def cuda_sum(a, b, c):
 		tid = cuda.threadIdx.x
 		blkid = cuda.blockIdx.x
@@ -117,10 +116,10 @@ For example:::
     tpb = 32
     n = bpg * tpb
 
-    @jit(argtypes=[f4[:,:], f4[:,:], f4[:,:]], target='gpu')
+    @jit(argtypes=[float32[:,:], float32[:,:], float32[:,:]], target='gpu')
     def cu_square_matrix_mul(A, B, C):
-        sA = cuda.shared.array(shape=(tpb, tpb), dtype=f4)
-        sB = cuda.shared.array(shape=(tpb, tpb), dtype=f4)
+        sA = cuda.shared.array(shape=(tpb, tpb), dtype=float32)
+        sB = cuda.shared.array(shape=(tpb, tpb), dtype=float32)
 
         tx = cuda.threadIdx.x
         ty = cuda.threadIdx.y
@@ -149,7 +148,7 @@ For example:::
         if x < n and y < n:
             C[y, x] = acc
 
-The same code in CUDA-C will be:::
+The equivalent code in CUDA-C would be:::
 
     #define pos2d(Y, X, W) ((Y) * (W) + (X))
 

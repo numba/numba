@@ -73,11 +73,11 @@ As a starting example::
     def execute_sum_on_gpu_via_CU(a, b):
         assert a.shape == b.shape
         cu = CU(target='gpu')
-        with closing(cu):
-            result = np.zeros_like(a)
-            d_result = cu.output(result)
-            cu.enqueue(sum, ntid=result.size, args=(a, b, result))
-            cu.wait()
+        result = np.zeros_like(a)
+        d_result = cu.output(result)
+        cu.enqueue(sum, ntid=result.size, args=(a, b, result))
+        cu.wait()
+        cu.close()
         return result
 
 Features
