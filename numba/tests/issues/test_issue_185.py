@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, division, absolute_import
+# from __future__ import division, absolute_import
 
 # Thanks to Neal Becker
 
@@ -12,10 +12,13 @@ from math import exp, log1p
 @vectorize([f8(f8,f8)])
 def log_exp_sum2 (a, b):
     if a >= b:
-        return a + log1p (exp (-(a-b)))
+        return a + (exp (-(a-b)))
     else:
-        return b + log1p (exp (-(b-a)))
+        return b + (exp (-(b-a)))
     ## return max (a, b) + log1p (exp (-abs (a - b)))
+
+
+print log_exp_sum2(np.arange(1, 10, dtype=np.double), np.arange(2, 11, dtype=np.double))
 
 #@autojit
 @jit(f8[:,:] (f8[:,:]))
