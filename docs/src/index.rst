@@ -33,9 +33,9 @@ Asking NumbaPro to compile this python function to vectorized machine code for e
 on the CPU is as simple as adding a single line of code (invoked via a decorator on the
 function)::
 
-    from numbapro import vectorize
+    from numbapro import vectorize, float32
     
-    @vectorize('f4(f4, f4)', target='cpu')
+    @vectorize(float32(float32, float32), target='cpu')
     def sum(a, b):
         return a + b
 
@@ -44,15 +44,15 @@ function)::
 Similarly, one can instead target the GPU for execution of the same python function by
 modifying a single line in the above example::
 
-    @vectorize('f4(f4, f4)', target='gpu')
+    @vectorize(float32(float32, float32), target='gpu')
 
 Targeting the GPU for execution introduces the potential for numerous GPU-specific
 optimizations so as a starting point for more complex scenarios, one can also target
 the GPU with NumbaPro via its Just-In-Time (JIT) compiler::
 
-    from numbapro import cuda, f4
+    from numbapro import cuda, float32
     
-    @cuda.jit(argtypes=[f4[:], f4[:], f4[:]], target='gpu')
+    @cuda.jit(argtypes=[float32[:], float32[:], float32[:]])
     def sum(a, b, result):
         i = cuda.grid(1)
         result[i] = a[i] + b[i]
@@ -93,11 +93,11 @@ CUDA support for GPU execution and a multi-threaded parallel range.
    ufuncs
    generalizedufuncs
    prange
-   CUDAJit
    CUDAufunc
+   CUDAJit
+   cudalib
    CUDADevice
    CUDASupport
-   cudalib
    cu
 
 Release Notes
