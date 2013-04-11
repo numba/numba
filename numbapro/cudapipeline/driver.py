@@ -157,6 +157,10 @@ def _build_reverse_error_map():
     return dict((getattr(module, i), i)
                 for i in filter(lambda x: x.startswith(prefix), globals()))
 
+# Expose bytearray creation
+bytearray_from = pythonapi.PyByteArray_FromStringAndSize
+bytearray_from.restype = py_object
+bytearray_from.argtypes = c_void_p, c_ssize_t
 
 class Driver(object):
     '''Facade to the CUDA Driver API.  A singleton class.  It is safe to
@@ -218,12 +222,13 @@ class Driver(object):
         # CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize);
         'cuMemAlloc':         (c_int, POINTER(cu_device_ptr), c_size_t),
 
-        # CUresult cuMemsetD8(CUdeviceptr dstDevice, unsigned char uc, size_t N);
+        # CUresult cuMemsetD8(CUdeviceptr dstDevice, unsigned char uc, size_t N)
         'cuMemsetD8':         (c_int, cu_device_ptr, c_uint8, c_size_t),
 
         # CUresult cuMemsetD8Async(CUdeviceptr dstDevice, unsigned char uc,
         #                          size_t N, CUstream hStream);
-        'cuMemsetD8Async':    (c_int, cu_device_ptr, c_uint8, c_size_t, cu_stream),
+        'cuMemsetD8Async':    (c_int,
+                               cu_device_ptr, c_uint8, c_size_t, cu_stream),
 
         # CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost,
         #                       size_t ByteCount);
@@ -267,6 +272,15 @@ class Driver(object):
         'cuLaunchKernel':       (c_int, cu_function, c_uint, c_uint, c_uint,
                                  c_uint, c_uint, c_uint, c_uint, cu_stream,
                                  POINTER(c_void_p), POINTER(c_void_p)),
+
+        #  CUresult cuMemHostAlloc	(	void ** 	pp,
+        #                               size_t 	bytesize,
+        #                               unsigned int 	Flags
+        #                           )
+        'cuMemHostAlloc': (c_int, c_void_p, c_size_t, c_uint),
+
+        #  CUresult cuMemFreeHost	(	void * 	p	 )
+        'cuMemFreeHost': (c_int, c_void_p),
 
         # CUresult cuMemHostRegister(void * 	p,
         #                            size_t 	bytesize,
@@ -582,7 +596,8 @@ class Device(object):
         for name, num in self.ATTRIBUTES.items():
             error = self.driver.cuDeviceGetAttribute(byref(got_value), num,
                                                      self.id)
-            self.driver.check_error(error, 'Failed to read attribute "%s" from %s' % (name, self))
+            msg = 'Failed to read attribute "%s" from %s' % (name, self)
+            self.driver.check_error(error, msg)
             setattr(self, name, got_value.value)
 
         got_major = c_int()
@@ -590,7 +605,8 @@ class Device(object):
         error = self.driver.cuDeviceComputeCapability(byref(got_major),
                                                       byref(got_minor),
                                                       self.id)
-        self.driver.check_error(error, 'Failed to read compute capability from %s' % self)
+        msg = 'Failed to read compute capability from %s' % self
+        self.driver.check_error(error, msg)
 
         setattr(self, 'COMPUTE_CAPABILITY', (got_major.value, got_minor.value))
 
@@ -634,7 +650,8 @@ class Stream(finalizer.OwnerMixin):
         self.context = Driver().current_context()
         self._handle = cu_stream()
         error = self.driver.cuStreamCreate(byref(self._handle), 0)
-        self.driver.check_error(error, 'Failed to create stream on %s' % self.context)
+        msg = 'Failed to create stream on %s' % self.context
+        self.driver.check_error(error, msg)
         self._finalizer_track(self._handle)
 
     @classmethod
@@ -667,6 +684,7 @@ class Stream(finalizer.OwnerMixin):
     @property
     def device(self):
         return self.context.device
+
 
 class DevicePointer(object):
     '''Memory on the GPU deivce.
@@ -715,6 +733,38 @@ class DevicePointer(object):
     @property
     def device(self):
         return self.context.device
+
+class HostAllocMemory(finalizer.OwnerMixin):
+    def __init__(self, bytesize, map=False, portable=False, wc=False):
+        self.driver = Driver()
+        self.bytesize = bytesize
+        self._handle = c_void_p()
+        flags = 0
+        if map:
+            flags |= CU_MEMHOSTALLOC_DEVICEMAP
+        if portable:
+            flags |= CU_MEMHOSTALLOC_PORTABLE
+        if wc:
+            flags |= CU_MEMHOSTALLOC_WRITECOMBINED
+        error = self.driver.cuMemHostAlloc(byref(self._handle),
+                                      bytesize, flags)
+        self.driver.check_error(error, 'Failed to host alloc')
+        self._finalizer_track(self._handle)
+
+        self.devmem = cu_device_ptr()
+
+        error = self.driver.cuMemHostGetDevicePointer(byref(self.devmem),
+                                                      self._handle, 0)
+        self.driver.check_error(error, 'Failed to get device ptr from host ptr')
+
+    @classmethod
+    def _finalize(cls, handle):
+        driver = Driver()
+        driver.cuMemFreeHost(handle)
+
+    def get_host_buffer(self):
+        return bytearray_from(self._handle, self.bytesize)
+
 
 class AllocatedDeviceMemory(DevicePointer, finalizer.OwnerMixin):
     def __init__(self, bytesize=None):
@@ -832,8 +882,10 @@ class Module(finalizer.OwnerMixin):
         c_info_log_n = c_int(info_log_n)
         c_info_log_buffer = (c_char * info_log_n)()
 
-        option_keys = [CU_JIT_INFO_LOG_BUFFER, CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES]
-        option_vals = [cast(c_info_log_buffer, c_void_p), addressof(c_info_log_n)]
+        option_keys = [CU_JIT_INFO_LOG_BUFFER,
+                       CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES]
+        option_vals = [cast(c_info_log_buffer, c_void_p),
+                       addressof(c_info_log_n)]
         option_n = len(option_keys)
         c_option_keys = (c_int * option_n)(*option_keys)
         c_option_vals = (c_void_p * option_n)(*option_vals)
@@ -1033,8 +1085,8 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
                                            size)
             else:
                 size = sizeof(arg)
-                error = driver.cuParamSetv(cufunc_handle, offset, addressof(arg),
-                                                size)
+                error = driver.cuParamSetv(cufunc_handle, offset,
+                                           addressof(arg), size)
             driver.check_error(error, 'Failed to set parameter %d' % i)
             offset += size
 

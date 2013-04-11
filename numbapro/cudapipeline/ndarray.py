@@ -101,6 +101,9 @@ class SMMBucket(object):
     __eq__ = NotImplemented
     __ne__ = NotImplemented
 
+    def __repr__(self):
+        return 'SMMBucket(%s, %s, %s)' % (self.start, self.stop, self.refct)
+
 class SMMBucketCollection(object):
     def __init__(self):
         self.keys = []
@@ -117,7 +120,7 @@ class SMMBucketCollection(object):
 
     def remove_overlap(self, bucket):
         idx = self.index(bucket)
-        for i in range(idx, min(len(self), idx + 2)):
+        for i in range(idx, min(len(self) - 1, idx + 2)):
             b = self.keys[i]
             if b.overlaps(bucket):
                 del self.keys[i]
@@ -137,15 +140,17 @@ class SmallMemoryManager(object):
     BLOCKSZ = 32
 
     @classmethod
-    def get(cls, *args, **kws):
+    def get(cls, **kws):
         '''One instance per thread.'''
         drv = _driver.Driver()
         if not hasattr(drv._THREAD_LOCAL, 'smm'):
+            device = drv.get_current_context().device
             cls.Driver = drv
-            cls.Driver._THREAD_LOCAL.smm = cls(*args, **kws)
+            cls.Driver._THREAD_LOCAL.smm = cls(device, **kws)
         return cls.Driver._THREAD_LOCAL.smm
 
-    def __init__(self, nbytes=NBYTES, blocksz=BLOCKSZ):
+    def __init__(self, device, nbytes=NBYTES, blocksz=BLOCKSZ):
+        self.device = device
         self.nbytes = nbytes
         self.blocksz = blocksz
         self.blockct = self.nbytes // self.blocksz
@@ -160,7 +165,9 @@ class SmallMemoryManager(object):
         elemct = self.nbytes // self.itemsize
         hm = self.hostmemory = np.empty(elemct, dtype=self.dtype)
         # pinned the memory for direct GPU access
-        self.pinnedmemory = _driver.PinnedMemory(hm.ctypes.data, self.nbytes)
+        mapped = self.device.CAN_MAP_HOST_MEMORY
+        self.pinnedmemory = _driver.PinnedMemory(hm.ctypes.data, self.nbytes,
+                                                 mapped=mapped)
         # allocate gpu memory
         self.devicememory = _driver.AllocatedDeviceMemory(self.nbytes)
         self.devaddrbase = self.devicememory._handle.value
@@ -218,8 +225,9 @@ class SmallMemoryManager(object):
                 offset = index * self.blocksz
                 src = self.hostmemory.ctypes.data + offset
                 size = nval * self.itemsize
-                self.devicememory.to_device_raw(src, size, stream=stream,
-                                                offset=offset)
+                if self.device.CAN_MAP_HOST_MEMORY:
+                    self.devicememory.to_device_raw(src, size, stream=stream,
+                                                    offset=offset)
                 ptr = self.devaddrbase + bucket.start * self.blocksz
                 return ManagedPointer(self, value, _driver.cu_device_ptr(ptr))
         else:
@@ -235,7 +243,6 @@ class SmallMemoryManager(object):
         assert bucket.refct >= 0
         if bucket.refct == 0:
             self.usemap[bucket.start : bucket.stop] = False
-
 
 class ManagedPointer(_driver.DevicePointer, finalizer.OwnerMixin):
     def __init__(self, parent, value, handle):
