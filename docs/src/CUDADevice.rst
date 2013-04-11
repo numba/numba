@@ -5,7 +5,9 @@ For multi-GPU machines, users may want to select which GPU to use.
 By default the CUDA driver selects the fastest GPU as the device 0,
 which is the default device used by NumbaPro.
 
-The features introduced on this page is optional for most users.
+The features introduced on this page are generally not of interest
+unless working with systems hosting/offering more than one
+CUDA-capable GPU.
 
 Device Selection
 ----------------
