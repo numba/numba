@@ -6,8 +6,8 @@ for loops and Cython's ``prange``. The loops body is scheduled in seperate threa
 and they execute in a ``nopython`` numba context. ``prange`` automatically takes care of data privatization
 and reductions::
 
+    from numbapro import autojit
     import numbapro
-    from numbapro import *
 
     @autojit
     def parallel_sum(A):

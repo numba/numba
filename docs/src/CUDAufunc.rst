@@ -1,23 +1,35 @@
---------------
-CUDA ufunc
---------------
+CUDA Ufuncs and Generalized Ufuncs
+==================================
 
-This page describes the CUDA ufunc-like object returned from Vectorize.build_ufunc and GUVectorize.build_ufunc.
+This page describes the CUDA ufunc-like object returned from
+Vectorize.build_ufunc and GUVectorize.build_ufunc.
 
-To support the programming pattern of CUDA programs, CUDA Vectorize and GUVectorize cannot produce regular ufunc.  Instead, a ufunc-like object is returned.  This object is mostly compatible with regular ufunc.  The CUDA ufunc adds support for passing in-device arrays to reduce traffic over the PCI-express.  It also accepts a `stream` keyword for launching in asynchronous mode.
-
+To support the programming pattern of CUDA programs, CUDA Vectorize and
+GUVectorize cannot produce a conventional ufunc.  Instead, a ufunc-like
+object is returned.  This object is a close analog but not fully
+compatible with a regular NumPy ufunc.  The CUDA ufunc adds support for
+passing intra-device arrays (already on the GPU device) to reduce
+traffic over the PCI-express bus.  It also accepts a `stream` keyword
+for launching in asynchronous mode.
 
 Example: A Chunk at a Time
 ---------------------------
 
-Partitioning your data into chunks allows computation and memory transfer to be overlapped.  This can increase the throughput of your ufunc, and enables your ufunc to operate on data that is larger than the memory capacity of your GPU.  For example::
+Partitioning your data into chunks allows computation and memory transfer
+to be overlapped.  This can increase the throughput of your ufunc and
+enables your ufunc to operate on data that is larger than the memory
+capacity of your GPU.  For example::
 
+    from numbapro import vectorize, cuda, float32, float64
+    import numpy as np
+    
     # the ufunc kernel
     def discriminant(a, b, c):
         return math.sqrt(b ** 2 - 4 * a * c)
 
     # create the ufunc
-    cu_discriminant = vectorize([f4(f4, f4, f4), f8(f8, f8, f8)],
+    cu_discriminant = vectorize([float32(float32, float32, float32),
+                                 float64(float64, float64, float64)],
                                 target='gpu')(discriminant)
 
     N = 1e+8
@@ -68,18 +80,54 @@ Partitioning your data into chunks allows computation and memory transfer to be 
 Example: Calling Device Functions
 ----------------------------------
 
-All CUDA ufunc kernels can call other CUDA device functions::
+All CUDA ufunc kernels have the ability to call other CUDA device functions::
 
-    from numbapro import vectorize
-    from numbapro import *
+    from numbapro import vectorize, jit, float32
 
     # define a device function
-    @jit(f4(f4, f4, f4), device=True, inline=True, target='gpu')
+    @jit(float32(float32, float32, float32), device=True, inline=True, target='gpu')
     def cu_device_fn(x, y, z):
         return x ** y / z
 
     # define a ufunc that calls our device function
-    @vectorize([f4(f4, f4, f4)], target='gpu')
+    @vectorize([float32(float32, float32, float32)], target='gpu')
     def cu_ufunc(x, y, z):
         return cu_device_fn(x, y, z)
+
+Generalized CUDA ufuncs
+-----------------------
+Generalized ufuncs may be executed on the GPU using CUDA, analogous to
+the CUDA ufunc functionality.  This may be accomplished as follows::
+
+    from numbapro.vectorize import GUVectorize
+    
+    def matmulcore(A, B, C):
+        ...
+    
+    gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', target='gpu')
+
+Or, through the one line decorator syntax::
+
+    from numbapro import guvectorize
+
+    @guvectorize([void(float32[:,:], float32[:,:], float32[:,:])], '(m,n),(n,p)->(m,p)', target='gpu')
+    def matmulcore(A, B, C):
+        ...
+
+.. NOTE:: Remember that `GUVectorize(..., target='gpu').build_ufunc` returns an *ufunc-like* object.
+
+There are times when the gufunc kernel uses too many of a GPU's
+resources, which can cause the kernel launch to fail.  The user can
+explicitly control the maximum size of the thread block by setting
+the `max_blocksize` attribute on the compiled gufunc object.  
+
+::
+
+    from numbapro import guvectorize
+    
+    @guvectorize(..., target='gpu')
+    def very_complex_kernel(A, B, C):
+        ...
+        
+    very_complex_kernel.max_blocksize = 32  # limits to 32 threads per block
 
