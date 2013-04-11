@@ -29,7 +29,17 @@ del get_versions
 
 EXCLUDE_TEST_PACKAGES = []
 
-from numba.testing.runner import whitelist_match, map_returncode_to_message
+def map_returncode_to_message(retcode):
+    if retcode < 0:
+        retcode = -retcode
+        return signal_to_name.get(retcode, "Signal %d" % retcode)
+
+    return ""
+
+def whitelist_match(whitelist, modname):
+    if whitelist:
+        return any(item in modname for item in whitelist)
+    return True
 
 def exclude_package_dirs(dirs, cuda=False):
     excludes = EXCLUDE_TEST_PACKAGES
