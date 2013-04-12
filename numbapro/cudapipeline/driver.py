@@ -1100,6 +1100,17 @@ def host_pointer(obj):
     mv = memoryview(obj)
     return mviewbuf.memoryview_get_buffer(mv)
 
+def host_memory_extents(obj):
+    "Returns (start, end) the start and end pointer of the array (half open)."
+    mv = memoryview(obj)
+    return mviewbuf.memoryview_get_extents(mv)
+
+def host_memory_size(obj):
+    "Get the size of the memory"
+    s, e = host_memory_extents(obj)
+    assert e >= s
+    return e - s
+
 def device_pointer(obj):
     require_device_memory(obj)
     return obj.device_pointer

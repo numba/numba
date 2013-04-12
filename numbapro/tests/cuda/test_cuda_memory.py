@@ -73,5 +73,27 @@ class TestCudaMemoryFunctions(unittest.TestCase):
         driver.device_to_host(hst2, dev2, sz)
         self.assertTrue(numpy.all(hst == hst2))
 
+class TestMVExtent(unittest.TestCase):
+    def test_c_contiguous_array(self):
+        ary = numpy.arange(100)
+        arysz = ary.dtype.itemsize * ary.size
+        s, e = driver.host_memory_extents(ary)
+        self.assertTrue(ary.ctypes.data == s)
+        self.assertTrue(arysz == driver.host_memory_size(ary))
+
+    def test_f_contiguous_array(self):
+        ary = numpy.asfortranarray(numpy.arange(100).reshape(2, 50))
+        arysz = ary.dtype.itemsize * numpy.prod(ary.shape)
+        s, e = driver.host_memory_extents(ary)
+        self.assertTrue(ary.ctypes.data == s)
+        self.assertTrue(arysz == driver.host_memory_size(ary))
+
+    def test_single_element_array(self):
+        ary = numpy.asarray(numpy.uint32(1234))
+        arysz = ary.dtype.itemsize
+        s, e = driver.host_memory_extents(ary)
+        self.assertTrue(ary.ctypes.data == s)
+        self.assertTrue(arysz == driver.host_memory_size(ary))
+
 if __name__ == '__main__':
     unittest.main()
