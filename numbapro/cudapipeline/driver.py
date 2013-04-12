@@ -7,7 +7,7 @@ import sys, os, warnings
 import contextlib
 from ctypes import *
 from .error import *
-from numbapro._utils import finalizer
+from numbapro._utils import finalizer, mviewbuf
 import threading
 from weakref import WeakValueDictionary
 
@@ -238,6 +238,16 @@ class Driver(object):
         #                            size_t ByteCount, CUstream hStream);
         'cuMemcpyHtoDAsync':    (c_int, cu_device_ptr, c_void_p, c_size_t,
                                 cu_stream),
+        
+        # CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost,
+        #                       size_t ByteCount);
+        'cuMemcpyDtoD':         (c_int, cu_device_ptr, cu_device_ptr, c_size_t),
+
+        # CUresult cuMemcpyHtoDAsync(CUdeviceptr dstDevice, const void *srcHost,
+        #                            size_t ByteCount, CUstream hStream);
+        'cuMemcpyDtoDAsync':    (c_int, cu_device_ptr, cu_device_ptr, c_size_t,
+                                cu_stream),
+
 
         # CUresult cuMemcpyDtoH(void *dstHost, CUdeviceptr srcDevice,
         #                       size_t ByteCount);
@@ -1081,54 +1091,103 @@ def require_context(fn):
 # CUDA memory functions
 #
 
-def is_cuda_memory(obj):
+def host_pointer(obj):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous 
+    completes.
+    """
+    mv = memoryview(obj)
+    return mviewbuf.memoryview_get_buffer(mv)
+
+def device_pointer(obj):
+    require_device_memory(obj)
+    return obj.device_pointer
+
+def is_device_memory(obj):
+    """All CUDA memory object is recognized as an instance with the attribute
+    "__cuda_memory__" defined and its value evaluated to True.
+    
+    All CUDA memory object should also define an attribute named
+    "device_pointer" which value is an int(or long) object carrying the pointer
+    value of the device memory address.  This is not tested in this method.
+    """
     return getattr(obj, '__cuda_memory__', False)
 
-def require_cuda_memory(obj):
-    if not is_cuda_memory(obj):
+def require_device_memory(obj):
+    """A sentry for methods that accept CUDA memory object.
+    """
+    if not is_device_memory(obj):
         raise Exception("Not a CUDA memory object.")
 
-class DevicePointer(object):
-    '''Memory on the GPU deivce.
+def host_to_device(dst, src, size, stream=0):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous 
+    completes.
+    """
+    driver = dst.driver
+    varargs = []
 
-    The lifetime of the object is tied to the GPU memory handle; that is the
-    memory is released when this object is released.
-    '''
-    def __init__(self, handle):
-        self.device = self.driver.current_context().device
-        self._handle = handle
-        self._depends = []
+    if stream:
+        fn = driver.cuMemcpyHtoDAsync
+        varargs.append(stream._handle)
+    else:
+        fn = driver.cuMemcpyHtoD
 
-    def to_device_raw(self, src, size, stream=None, offset=0):
-        ptr = cu_device_ptr(self._handle.value + offset)
-        if stream:
-            error = self.driver.cuMemcpyHtoDAsync(ptr, src, size,
-                                                  stream._handle)
-        else:
-            error = self.driver.cuMemcpyHtoD(ptr, src, size)
-        self.driver.check_error(error, "Failed to copy memory H->D")
+    devptr = dst.device_pointer
+    hostptr = host_pointer(src)
+    
+    error = fn(device_pointer(dst), host_pointer(src), size, *varargs)
+    driver.check_error(error, "Failed to copy memory H->D")
 
-    def from_device_raw(self, dst, size, stream=None, offset=0):
-        ptr = cu_device_ptr(self._handle.value + offset)
-        if stream:
-            error = self.driver.cuMemcpyDtoHAsync(dst, ptr, size,
-                                                  stream._handle)
-        else:
-            error = self.driver.cuMemcpyDtoH(dst, ptr, size)
-        self.driver.check_error(error, "Failed to copy memory D->H")
+def device_to_host(dst, src, size, stream=0):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous 
+    completes.
+    """
+    driver = src.driver
+    varargs = []
 
-    def memset(self, val, size, stream=None):
-        if stream:
-            error = self.driver.cuMemsetD8Async(self._handle, val, size,
-                                                stream._handle)
-        else:
-            error = self.driver.cuMemsetD8(self._handle, val, size)
-        self.driver.check_error(error, "Failed to set memory")
+    if stream:
+        fn = driver.cuMemcpyDtoHAsync
+        varargs.append(stream._handle)
+    else:
+        fn = driver.cuMemcpyDtoH
 
-    def add_dependencies(self, *args):
-        self._depends.extend(args)
+    error = fn(host_pointer(dst), device_pointer(src), size, *varargs)
+    driver.check_error(error, "Failed to copy memory D->H")
 
-    @property
-    def driver(self):
-        return self.device.driver
+
+def device_to_device(dst, src, size, stream=0):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous 
+    completes.
+    """
+    driver = src.driver
+    varargs = []
+
+    if stream:
+        fn = driver.cuMemcpyDtoDAsync
+        varargs.append(stream._handle)
+    else:
+        fn = driver.cuMemcpyDtoD
+
+    error = fn(device_pointer(dst), device_pointer(src), size, *varargs)
+    driver.check_error(error, "Failed to copy memory D->H")
+
+def device_memset(dst, val, size, stream=0):
+    driver = dst.driver
+    varargs = []
+
+    if stream:
+        fn = driver.cuMemsetD8Async
+        varargs.append(stream._handle)
+    else:
+        fn = driver.cuMemsetD8
+
+    error = fn(device_pointer(dst), val, size, *varargs)
+    driver.check_error(error, "Failed to memset")
 
