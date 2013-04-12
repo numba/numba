@@ -23,3 +23,11 @@ def test_interning():
     id3 = intern.global_intern("hallo")
     assert id1 == id2
     assert id1 != id3
+
+def test_intern_many():
+    table = intern.InternTable()
+
+    for i in range(1000000):
+        table.global_intern("my randrom string %d" % i)
+        table.global_intern("my randrom string %d" % (i // 2))
+        table.global_intern("my randrom string %d" % (i // 4))
