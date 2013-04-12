@@ -119,7 +119,8 @@ cdef class PerfectHashMethodTable(object):
         # Perfect hash our table
         if PyCustomSlots_PerfectHash(self.table, &hashes[0]) < 0:
             # TODO: sensible error messages
-            raise HashingError("Unable to create perfect hash table")
+            raise HashingError(
+                "Unable to create perfect hash table for table: %s" % self)
 
         for i, signature in enumerate(ids):
             assert self.find_method(signature), (i, signature)
