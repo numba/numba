@@ -77,12 +77,10 @@ def make_hashtable(methods):
 # Tests
 #------------------------------------------------------------------------
 
-# many_methods = make_methods1() + make_methods2()
-
-@parametrize(make_methods1())
+@parametrize(make_methods1(), make_methods2())
 def test_specializations(methods):
     hashtable = make_hashtable(methods)
-    print(hashtable)
+    # print(hashtable)
 
     for i, method in enumerate(methods):
         key = virtual.sep201_signature_string(method.signature, method.name)

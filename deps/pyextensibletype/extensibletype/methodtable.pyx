@@ -29,7 +29,7 @@ cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
     cdef int nbins
 
     size = roundup(size)
-    nbins = size
+    nbins = size * 2
 
     table = <PyCustomSlots_Table *> stdlib.calloc(
         1, sizeof(PyCustomSlots_Table) + sizeof(uint16_t) * nbins +
@@ -41,6 +41,8 @@ cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
     table.n = size
     table.b = nbins
     table.flags = 0
+
+    assert table.b >= table.n, (table.b, table.n, nbins)
 
     table.entries = <PyCustomSlots_Entry *> ((<char *> &table[1]) +
                                              table.b * sizeof(uint16_t))
@@ -108,13 +110,17 @@ cdef class PerfectHashMethodTable(object):
             hashes[i] = id
             self.id_to_signature[id] = signature
 
+
         hashes[n:self.table.n] = extensibletype.draw_hashes(np.random,
                                                             self.table.n - n)
+        # print "n", n, "table.n", self.table.n, "table.b", self.table.b
         assert len(np.unique(hashes)) == len(hashes)
 
         # print "-----------------------"
         # print self
         # print "-----------------------"
+
+        assert self.table.b >= self.table.n, (self.table.b, self.table.n)
 
         # Perfect hash our table
         if PyCustomSlots_PerfectHash(self.table, &hashes[0]) < 0:
