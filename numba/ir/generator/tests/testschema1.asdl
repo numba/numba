@@ -1,0 +1,8 @@
+module MyModule version "0.1"
+{
+    root = Class1(object leaf1, object leaf2)
+         | Foo(object leaf)
+         | Bar(expr e)
+
+    expr = SomeExpr(object n)
+}
