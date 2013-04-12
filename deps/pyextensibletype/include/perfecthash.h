@@ -146,8 +146,10 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
   uint8_t number_of_bins_by_size[BIN_LIMIT];
   PyCustomSlots_Entry *entries_copy = malloc(sizeof(PyCustomSlots_Entry) * n);
 
-  if (!bins || !binsizes || !p || !taken || !entries_copy)
+  if (!bins || !binsizes || !p || !taken || !entries_copy) {
+    printf("Error: Unable to allocate memory\n");
     goto error;
+  }
 
   for (i = 0; i != n; ++i) {
     entries_copy[i] = table->entries[i];
@@ -166,7 +168,7 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
     bin = hashes[i] & m_g;
     binsize = ++binsizes[bin];
     if (binsize == BIN_LIMIT) {
-      printf("ERROR 1\n");
+      printf("Error: Bin limit reached\n");
       goto error;
     }
     bins[BIN_LIMIT * bin + binsize - 1] = i;
@@ -191,7 +193,7 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
   }
 
   if (retcode != 0) {
-     printf("no suitable table found\n");
+     printf("Error: No suitable table found\n");
      goto error;
   }
 
