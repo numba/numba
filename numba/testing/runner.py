@@ -3,16 +3,14 @@ from __future__ import print_function, division, absolute_import
 
 import os
 import sys
-from itertools import ifilter, imap
+from itertools import ifilter
 from functools import partial
 import subprocess
 
-from os.path import join, dirname
-
 from numba import PY3
 
-# doctest compatible for jit or autojit numba functions
-from numba.testing.test_support import testmod
+import numba
+root = os.path.dirname(os.path.abspath(numba.__file__))
 
 # ______________________________________________________________________
 # Test filtering
@@ -138,15 +136,16 @@ def test(whitelist=None, blacklist=None, print_failures_only=False):
 
     return 0 if runner.failed == 0 else 1
 
-def run_tests(test_runner, filters):
+def run_tests(test_runner, filters, root=root):
     """
     Run tests:
 
         - Find tests in packages called 'tests'
         - Run any test files under a 'tests' package or a subpackage
     """
-    testpkg_walker = Walker("numba", filters)
+    testpkg_walker = Walker(root, filters)
 
+    print("Running tests in %s" % os.path.join(root, "numba"))
     for testpkgs, _ in testpkg_walker.walk():
         for testpkg in testpkgs:
             if os.path.basename(testpkg) == "tests":
