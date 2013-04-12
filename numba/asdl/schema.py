@@ -18,15 +18,18 @@ def load(name):
     '''
     parser, loader = asdl.load_pyschema(name)
     python_asdl = loader.load()
+    return build_schema(python_asdl)
+
+def build_schema(asdl_tree):
     schblr = SchemaBuilder()
-    schblr.visit(python_asdl)
+    schblr.visit(asdl_tree)
     return schblr.schema
 
 class _rule(namedtuple('rule', ['kind', 'fields'])):
     __slots__ = ()
 
-    SUM = 0
-    PROD = 1
+    SUM = 0     # sums, e.g. Foo | Bar
+    PROD = 1    # producs, e.g. (Foo, Bar)
 
     @classmethod
     def sum(cls, fields):
@@ -92,6 +95,12 @@ class Schema(object):
         '''
         context = context if context is not None else SchemaContext()
         return SchemaVerifier(self, context).visit(ast)
+
+    def __str__(self):
+        return "%s(name=%s, types=%s, rules=%s)" % (type(self).__name__,
+                                                    self.name,
+                                                    self.types,
+                                                    self.dfns)
 
     def debug(self):
         print(("Schema %s" % self.name))

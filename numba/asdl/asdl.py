@@ -75,6 +75,11 @@ class ASDLLoader(object):
         return asdl
 
 
+def load(schema_name, schema_str, asdlmod):
+    parser = ASDLParser(asdlmod)
+    loader = ASDLLoader(parser, schema_str, schema_name)
+    return parser, loader
+
 #------------------------------------------------------------------------
 # Get ASDL implementation
 #------------------------------------------------------------------------
@@ -131,9 +136,7 @@ def load_pyschema(filename):
         asdlmod = _get_asdl_depending_on_version()
 
     asdl_str = open(srcfile).read()
-    parser = ASDLParser(asdlmod)
-    loader = ASDLLoader(parser, asdl_str, filename)
-    return parser, loader
+    return load(filename, asdl_str, asdlmod)
 
 #------------------------------------------------------------------------
 # Globals
