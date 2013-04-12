@@ -39,6 +39,10 @@ ext_modules = [
 #        include_dirs = [numpy.get_include(), minivect.get_include()],
 #        depends = ["numba_vectorize/_internal.h", miniutils_header_dep],
 #    ),
+    Extension(
+        name = 'numbapro._utils.mviewbuf',
+        sources = ['numbapro/_utils/mviewbuf.c'],
+    ),
 
 
     CythonExtension(
