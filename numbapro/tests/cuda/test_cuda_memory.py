@@ -1,4 +1,5 @@
 import unittest
+import ctypes
 import numpy
 from numbapro.cudapipeline import driver
 
@@ -94,6 +95,19 @@ class TestMVExtent(unittest.TestCase):
         s, e = driver.host_memory_extents(ary)
         self.assertTrue(ary.ctypes.data == s)
         self.assertTrue(arysz == driver.host_memory_size(ary))
+
+    def test_ctypes_struct(self):
+        class mystruct(ctypes.Structure):
+            _fields_ = [('x', ctypes.c_int), ('y', ctypes.c_int)]
+        data = mystruct(x=123, y=432)
+        sz = driver.host_memory_size(data)
+        self.assertTrue(ctypes.sizeof(data) == sz)
+
+    def test_ctypes_double(self):
+        data = ctypes.c_double(1.234)
+        sz = driver.host_memory_size(data)
+        self.assertTrue(ctypes.sizeof(data) == sz)
+
 
 if __name__ == '__main__':
     unittest.main()
