@@ -7,9 +7,9 @@ Generate IR utilities from ASDL schemas.
 from __future__ import print_function, division, absolute_import
 
 import os
-import ast
 import codecs
 import textwrap
+import cStringIO
 
 from numba.asdl import asdl
 from numba.asdl import schema
@@ -26,6 +26,8 @@ def generate(schema_name, schema_def, codegen_classes, file_allocator):
     asdl_tree = get_asdl(schema_name, schema_def)
     schema_instance = schema.build_schema(asdl_tree)
 
+    print(schema_instance)
+
     for codegen_class in codegen_classes:
         codegen = codegen_class(schema_name, schema_def, file_allocator)
         codegen.generate(emit_code, asdl_tree, schema_instance)
@@ -33,7 +35,7 @@ def generate(schema_name, schema_def, codegen_classes, file_allocator):
 def generate_from_file(schema_filename, codegens, output_dir):
     schema_name = os.path.basename(schema_filename)
     schema_str = open(schema_filename).read()
-    generate(schema_name, schema_str, codegens, FileAllocator(output_dir))
+    generate(schema_name, schema_str, codegens, DiskFileAllocator(output_dir))
 
 #------------------------------------------------------------------------
 # Code Generator Utilities
@@ -44,8 +46,8 @@ def get_asdl(schema_name, schema):
     asdl_tree = loader.load()
     return asdl_tree
 
-def emit_code(file, string):
-    file.write(string)
+def emit_code(file, obj):
+    file.write(str(obj))
 
 def is_simple(sum):
     """
@@ -60,18 +62,40 @@ def is_simple(sum):
     return True
 
 #------------------------------------------------------------------------
-# Code Generator Interface
+# File Handling
 #------------------------------------------------------------------------
+
+StreamWriter = codecs.getwriter('UTF-8')
 
 class FileAllocator(object):
 
-    def __init__(self, output_dir):
+    def __init__(self, output_dir=None):
         self.output_dir = output_dir
+
+        # file_name -> file
+        self.allocated_files = {}
+
+    def open_sourcefile(self, name):
+        "Allocate a file and save in in allocated_files"
+
+class DiskFileAllocator(FileAllocator):
 
     def open_sourcefile(self, name):
         filename = os.path.join(self.output_dir, name)
-        return codecs.open(filename, 'w', encoding='UTF-8')
+        file = codecs.open(filename, 'w', encoding='UTF-8')
+        self.allocated_files[name] = file
+        return file
 
+class MemoryFileAllocator(FileAllocator):
+
+    def open_sourcefile(self, name):
+        file = StreamWriter(cStringIO.StringIO())
+        self.allocated_files[name] = file
+        return file
+
+#------------------------------------------------------------------------
+# Code Generator Interface
+#------------------------------------------------------------------------
 
 class Codegen(object):
     """

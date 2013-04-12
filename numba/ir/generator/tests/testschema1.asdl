@@ -1,8 +1,8 @@
 module MyModule version "0.1"
 {
-    root = Class1(object leaf1, object leaf2)
+    root = Ham(object leaf1, object leaf2)
          | Foo(object leaf)
-         | Bar(expr e)
+         | Bar(expr e1, expr? e2)
 
     expr = SomeExpr(object n)
 }
