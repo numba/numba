@@ -10,7 +10,7 @@ def test_binsort():
     p = np.zeros(nbins, dtype=np.uint16)
     binsizes = np.random.randint(0, 7, size=nbins).astype(np.uint8)
     num_by_size = np.zeros(8, dtype=np.uint8)
-    x = np.bincount(binsizes).astype(np.uint8)
+    x = np.bincount(binsizes).astype(np.uint32)
     num_by_size[:x.shape[0]] = x
     extensibletype.bucket_argsort(p, binsizes, num_by_size)
     assert np.all(sorted(binsizes) == binsizes[p][::-1])
