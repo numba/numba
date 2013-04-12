@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-import sys
+
 import ast
-from . import asdl
 from collections import defaultdict, namedtuple
 import contextlib
+
+from . import asdl
+from .asdl import pyasdl
 
 def load(name):
     '''Load a ASDL Schema by name; e.g. "Python.asdl".
@@ -14,7 +16,8 @@ def load(name):
     This tries to load from the version-specific directory, first.
     If it failed, it loads from the common-directory.
     '''
-    python_asdl = asdl.load(name)
+    parser, loader = asdl.load_pyschema(name)
+    python_asdl = loader.load()
     schblr = SchemaBuilder()
     schblr.visit(python_asdl)
     return schblr.schema
@@ -243,7 +246,7 @@ class SchemaVerifier(ast.NodeVisitor):
                               "Unknown AST node type: %s" % name)
         return ret
 
-class SchemaBuilder(asdl.VisitorBase):
+class SchemaBuilder(pyasdl.VisitorBase):
     '''A single instance of SchemaBuilder can be used build different 
     Schema from different ASDL.
 
@@ -259,7 +262,7 @@ class SchemaBuilder(asdl.VisitorBase):
         super(SchemaBuilder, self).__init__()
 
     def visitModule(self, mod):
-        self.__schema = Schema(str(mod.name))
+        self._schema = Schema(str(mod.name))
         for dfn in mod.dfns:
             self.visit(dfn)
 
@@ -292,7 +295,7 @@ class SchemaBuilder(asdl.VisitorBase):
 
     @property
     def schema(self):
-        return self.__schema
+        return self._schema
 
 #
 # Builtin types handler
