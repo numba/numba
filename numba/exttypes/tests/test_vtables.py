@@ -77,7 +77,7 @@ def make_hashtable(methods):
 # Tests
 #------------------------------------------------------------------------
 
-@parametrize(make_methods1(), make_methods2())
+@parametrize(make_methods1(), make_methods2()[:6000])
 def test_specializations(methods):
     hashtable = make_hashtable(methods)
     # print(hashtable)

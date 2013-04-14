@@ -5,11 +5,11 @@ import hashlib
 
 cdef extern from "perfecthash.h":
     void _PyCustomSlots_bucket_argsort(uint16_t *p, uint8_t *binsizes,
-                                       uint32_t *number_of_bins_by_size)
+                                       uint16_t *number_of_bins_by_size)
 
 def bucket_argsort(cnp.ndarray[uint16_t, mode='c'] p,
                    cnp.ndarray[uint8_t, mode='c'] binsizes,
-                   cnp.ndarray[uint32_t, mode='c'] number_of_bins_by_size):
+                   cnp.ndarray[uint16_t, mode='c'] number_of_bins_by_size):
     _PyCustomSlots_bucket_argsort(&p[0], &binsizes[0],
                                   &number_of_bins_by_size[0])
 

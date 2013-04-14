@@ -14,7 +14,7 @@ cdef extern from "perfecthash.h":
         uint64_t flags
         uint64_t m_f, m_g
         PyCustomSlots_Entry *entries
-        uint32_t n, b
+        uint16_t n, b
         uint8_t r
 
     ctypedef struct PyCustomSlots_Table_64_64:

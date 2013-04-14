@@ -28,6 +28,6 @@ def test_intern_many():
     table = intern.InternTable()
 
     for i in range(1000000):
-        table.global_intern("my randrom string %d" % i)
-        table.global_intern("my randrom string %d" % (i // 2))
-        table.global_intern("my randrom string %d" % (i // 4))
+        table.intern("my randrom string %d" % i)
+        table.intern("my randrom string %d" % (i // 2))
+        table.intern("my randrom string %d" % (i // 4))

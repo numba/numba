@@ -204,6 +204,7 @@ _intern_key(intern_table_t *table, PyObject *key_obj, const char *key)
 
     if (value == NULL) {
         /* Key not in dict */
+        Py_INCREF(key_obj);
         if (make_prehash(table, key_obj, key, &prehash) < 0)
             goto bad;
     } else {

@@ -10,7 +10,7 @@ typedef struct {
   uint64_t flags;
   uint64_t m_f, m_g;
   PyCustomSlots_Entry *entries;
-  uint32_t n, b;
+  uint16_t n, b;
   uint8_t r;
   uint8_t reserved;
 
@@ -42,9 +42,10 @@ uint64_t PyCustomSlots_roundup_2pow(uint64_t x) {
 
 
 void _PyCustomSlots_bucket_argsort(uint16_t *p, uint8_t *binsizes,
-                                   uint32_t *number_of_bins_by_size) {
+                                   uint16_t *number_of_bins_by_size) {
   uint16_t *sort_bins[BIN_LIMIT];
-  int binsize, ibin, nbins;
+  int binsize;
+  uint32_t ibin, nbins;
   nbins = 0;
   /* We know how many bins there are of each size, so place pointers
      for each size along on the output array p */
@@ -72,7 +73,7 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
   uint16_t nbins = table->b;
   uint64_t m_f = table->m_f;
   uint8_t r = table->r;
-  int i, j, bin;
+  uint16_t i, j, bin;
 
   /* Step 1: Validate that f is 1:1 in each bin */
   for (j = 0; j != nbins; ++j) {
@@ -93,6 +94,7 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
   for (i = 0; i != nbins; ++i) {
     taken[i] = 0;
   }
+
   for (j = 0; j != nbins; ++j) {
     uint16_t dval;
     bin = p[j];
@@ -134,23 +136,17 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
 
 int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
   int result, r, retcode;
-  uint16_t bin, j;
+  uint32_t bin, j;
   uint8_t binsize;
-  uint32_t i, n = table->n, b = table->b;
+  uint16_t i, n = table->n, b = table->b;
   uint64_t m_f = PyCustomSlots_roundup_2pow(table->n) - 1;
   uint64_t m_g = (b - 1) & 0xffff;
   uint16_t *bins = malloc(sizeof(uint16_t) * b * BIN_LIMIT);
   uint8_t *binsizes = malloc(sizeof(uint8_t) * b);
   uint16_t *p = malloc(sizeof(uint16_t) * b);
-  uint8_t *taken = malloc(sizeof(uint8_t) * n);
-  uint32_t number_of_bins_by_size[BIN_LIMIT];
+  uint8_t *taken = malloc(sizeof(uint8_t) * b);
+  uint16_t number_of_bins_by_size[BIN_LIMIT];
   PyCustomSlots_Entry *entries_copy = malloc(sizeof(PyCustomSlots_Entry) * n);
-
-
-  if (b <= 0) {
-    printf("Error: Invalid number of bins, %d %d\n", b, table->b);
-    abort();
-  }
 
   if (!bins || !binsizes || !p || !taken || !entries_copy) {
     printf("Error: Unable to allocate memory\n");
@@ -195,7 +191,7 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
 
   /* Sanity check */
   for (i = 0; i < b; ++i) {
-    if (!(p[i] >= 0 && p[i] < b)) {
+    if (!(p[i] < b)) {
       printf("ERROR: p[%d]=%d\n", i, p[i]);
       abort();
     }

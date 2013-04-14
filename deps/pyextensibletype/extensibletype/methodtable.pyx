@@ -26,10 +26,11 @@ class HashingError(Exception):
 
 cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
     cdef PyCustomSlots_Table *table
-    cdef int nbins
+    cdef uint16_t nbins
 
     size = roundup(size)
-    nbins = size * 2
+    assert size * 4 <= 0xFFFF, hex(size)
+    nbins = size * 4
 
     table = <PyCustomSlots_Table *> stdlib.calloc(
         1, sizeof(PyCustomSlots_Table) + sizeof(uint16_t) * nbins +
@@ -44,8 +45,9 @@ cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
 
     assert table.b >= table.n, (table.b, table.n, nbins)
 
-    table.entries = <PyCustomSlots_Entry *> ((<char *> &table[1]) +
-                                             table.b * sizeof(uint16_t))
+    table.entries = <PyCustomSlots_Entry *> (
+        (<char *> table) + sizeof(PyCustomSlots_Table) +
+        nbins * sizeof(uint16_t))
 
     return table
 
