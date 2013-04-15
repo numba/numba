@@ -134,6 +134,8 @@ if build:
 else:
     extensibletype_extensions = []
 
+extensibletype_include = "numba/pyextensibletype/include"
+
 if sys.version_info[0] >= 3:
     run_2to3()
 
@@ -180,17 +182,18 @@ setup(
         Extension(
             name="numba.vectorize._internal",
             sources=["numba/vectorize/_internal.c",
-                       "numba/vectorize/_ufunc.c",
-                       "numba/vectorize/_gufunc.c"],
+                     "numba/vectorize/_ufunc.c",
+                     "numba/vectorize/_gufunc.c"],
             include_dirs=[numpy.get_include(), "numba/minivect/include/"],
             depends=["numba/vectorize/_internal.h",
-                       "numba/minivect/include/miniutils.h"]),
+                     "numba/minivect/include/miniutils.h"]),
 
         Extension(
             name="numba.external.utilities.utilities",
             sources=["numba/external/utilities/utilities.c"],
-            include_dirs=[numba_include_dir],
+            include_dirs=[numba_include_dir, extensibletype_include],
             depends=["numba/external/utilities/type_conversion.c",
+                     "numba/external/utilities/virtuallookup.c",
                      "numba/external/utilities/generated_conversions.c",
                      "numba/external/utilities/generated_conversions.h"]),
         CythonExtension(

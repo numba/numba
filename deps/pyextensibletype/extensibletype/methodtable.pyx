@@ -26,10 +26,11 @@ class HashingError(Exception):
 
 cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
     cdef PyCustomSlots_Table *table
-    cdef int nbins
+    cdef uint16_t nbins
 
     size = roundup(size)
-    nbins = size
+    assert size * 4 <= 0xFFFF, hex(size)
+    nbins = size * 4
 
     table = <PyCustomSlots_Table *> stdlib.calloc(
         1, sizeof(PyCustomSlots_Table) + sizeof(uint16_t) * nbins +
@@ -42,8 +43,11 @@ cdef PyCustomSlots_Table *allocate_hash_table(uint16_t size) except NULL:
     table.b = nbins
     table.flags = 0
 
-    table.entries = <PyCustomSlots_Entry *> ((<char *> &table[1]) +
-                                             table.b * sizeof(uint16_t))
+    assert table.b >= table.n, (table.b, table.n, nbins)
+
+    table.entries = <PyCustomSlots_Entry *> (
+        (<char *> table) + sizeof(PyCustomSlots_Table) +
+        nbins * sizeof(uint16_t))
 
     return table
 
@@ -108,13 +112,17 @@ cdef class PerfectHashMethodTable(object):
             hashes[i] = id
             self.id_to_signature[id] = signature
 
+
         hashes[n:self.table.n] = extensibletype.draw_hashes(np.random,
                                                             self.table.n - n)
+        # print "n", n, "table.n", self.table.n, "table.b", self.table.b
         assert len(np.unique(hashes)) == len(hashes)
 
         # print "-----------------------"
         # print self
         # print "-----------------------"
+
+        assert self.table.b >= self.table.n, (self.table.b, self.table.n)
 
         # Perfect hash our table
         if PyCustomSlots_PerfectHash(self.table, &hashes[0]) < 0:
@@ -123,7 +131,7 @@ cdef class PerfectHashMethodTable(object):
                 "Unable to create perfect hash table for table: %s" % self)
 
         for i, signature in enumerate(ids):
-            assert self.find_method(signature), (i, signature)
+            assert self.find_method(signature) is not None, (i, signature)
 
         # For debugging
         self.signatures = ids
@@ -135,10 +143,11 @@ cdef class PerfectHashMethodTable(object):
         """
         cdef uint64_t prehash = intern.global_intern(make_bytes(signature))
 
+        assert 0 <= self.displacements[prehash & self.table.m_g] < self.table.b
         cdef uint64_t idx = (((prehash >> self.table.r) & self.table.m_f) ^
                              self.displacements[prehash & self.table.m_g])
 
-        assert 0 <= idx < self.size
+        assert 0 <= idx < self.size, (idx, self.size)
 
         if self.table.entries[idx].id != prehash:
             return None

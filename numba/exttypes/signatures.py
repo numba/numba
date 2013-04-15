@@ -246,7 +246,7 @@ class MethodSignatureProcessor(object):
         """
         methods = []
 
-        for method_name, method in self.class_dict.iteritems():
+        for method_name, method in sorted(self.class_dict.iteritems()):
             method = process_signature(method, method_name)
             if method is None:
                 continue

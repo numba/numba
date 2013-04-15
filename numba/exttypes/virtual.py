@@ -121,7 +121,7 @@ PyCustomSlots_Table = numba.struct([
     ('r', uint8),
     ('reserved', uint8),
     # actually: uint16[b], 'b' trailing displacements
-    ('d', minitypes.CArrayType(uint16, 0)), #0xffff)),
+    # ('d', minitypes.CArrayType(uint16, 0)), #0xffff)),
     # ('entries_mem', PyCustomSlot_Entry[n]), # 'n' trailing customslot entries
 ])
 

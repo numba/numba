@@ -75,6 +75,11 @@ intern_create_table(intern_table_t *table)
         table->secrets[i + 0] = ((char *) &randval)[0];
         table->secrets[i + 1] = ((char *) &randval)[1];
     }
+    /* Amend this! */
+    memset(&table->secrets[16*0], 0, 16);
+    memset(&table->secrets[16*1], 1, 16);
+    memset(&table->secrets[16*2], 2, 16);
+    memset(&table->secrets[16*3], 3, 16);
 
     /* _print_secrets(table); */
 
@@ -204,6 +209,7 @@ _intern_key(intern_table_t *table, PyObject *key_obj, const char *key)
 
     if (value == NULL) {
         /* Key not in dict */
+        Py_INCREF(key_obj);
         if (make_prehash(table, key_obj, key, &prehash) < 0)
             goto bad;
     } else {

@@ -1,3 +1,4 @@
+import time
 import itertools
 
 from nose.tools import eq_, ok_
@@ -7,10 +8,13 @@ from .. import extensibletype, methodtable
 
 def test_binsort():
     nbins = 64
+
     p = np.zeros(nbins, dtype=np.uint16)
     binsizes = np.random.randint(0, 7, size=nbins).astype(np.uint8)
-    num_by_size = np.zeros(8, dtype=np.uint8)
-    x = np.bincount(binsizes).astype(np.uint8)
+
+    num_by_size = np.zeros(8, dtype=np.uint16)
+    x = np.bincount(binsizes).astype(np.uint16)
+
     num_by_size[:x.shape[0]] = x
     extensibletype.bucket_argsort(p, binsizes, num_by_size)
     assert np.all(sorted(binsizes) == binsizes[p][::-1])
@@ -35,15 +39,10 @@ def make_signature(type_permutation):
 
 def make_ids():
     types = ['f', 'd', 'i', 'l', 'O']
-    power = 6
+    power = 5
     return map(make_signature, itertools.product(*(types,) * power))
 
-def test_methodtable():
-    # ids = ["ff->f", "dd->d", "ii->i", "ll->l", "OO->O"]
-    ids = make_ids()[:500]
-    flags = range(1, len(ids) + 1)
-    funcs = range(len(ids))
-
+def build_and_verify_methodtable(ids, flags, funcs):
     table = methodtable.PerfectHashMethodTable(methodtable.Hasher())
     table.generate_table(len(ids), ids, flags, funcs)
 
@@ -54,3 +53,22 @@ def test_methodtable():
         got_func, got_flag = result
         assert func == got_func, (func, got_func)
         # assert flag == got_flag, (flag, got_flag)
+
+def test_methodtable():
+    # ids = ["ff->f", "dd->d", "ii->i", "ll->l", "OO->O"]
+
+    ids = make_ids()
+    flags = range(1, len(ids) + 1)
+    funcs = range(len(ids))
+
+    step = 100
+
+    i = len(ids)
+    for i in range(1, len(ids), step):
+        t = time.time()
+        build_and_verify_methodtable(ids[:i], flags[:i], funcs[:i])
+        t = time.time() - t
+        print i, "table building took", t, "seconds."
+
+if __name__ == '__main__':
+    test_methodtable()
