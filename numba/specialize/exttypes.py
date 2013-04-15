@@ -194,7 +194,7 @@ class DynamicExtensionHandler(object):
 
         args = [vtab_struct_pp, prehash_node]
 
-        if always_present:
+        if always_present and False:
             lookup = virtuallookup.lookup_method
         else:
             lookup = virtuallookup.lookup_and_assert_method
