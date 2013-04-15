@@ -35,7 +35,7 @@ function)::
 
     from numbapro import vectorize, float32
     
-    @vectorize(float32(float32, float32), target='cpu')
+    @vectorize([float32(float32, float32)], target='cpu')
     def sum(a, b):
         return a + b
 
@@ -44,7 +44,7 @@ function)::
 Similarly, one can instead target the GPU for execution of the same python function by
 modifying a single line in the above example::
 
-    @vectorize(float32(float32, float32), target='gpu')
+    @vectorize([float32(float32, float32)], target='gpu')
 
 Targeting the GPU for execution introduces the potential for numerous GPU-specific
 optimizations so as a starting point for more complex scenarios, one can also target
