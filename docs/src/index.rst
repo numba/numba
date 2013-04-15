@@ -90,6 +90,7 @@ CUDA support for GPU execution and a multi-threaded parallel range.
 .. toctree::
    :maxdepth: 1
 
+   install
    ufuncs
    generalizedufuncs
    prange
