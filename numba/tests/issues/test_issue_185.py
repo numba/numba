@@ -18,8 +18,6 @@ def log_exp_sum2 (a, b):
     ## return max (a, b) + log1p (exp (-abs (a - b)))
 
 
-print log_exp_sum2(np.arange(1, 10, dtype=np.double), np.arange(2, 11, dtype=np.double))
-
 #@autojit
 @jit(f8[:,:] (f8[:,:]))
 def log_exp_sum (u):
