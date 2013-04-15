@@ -2,7 +2,8 @@
 
 static PyObject*
 memoryview_get_buffer(PyObject *self, PyObject *args){
-    PyObject *mv;
+    PyObject *mv = NULL;
+    
     if (!PyArg_ParseTuple(args, "O", &mv))
         return NULL;
 
@@ -23,6 +24,7 @@ memoryview_from_pointer(PyObject *self, PyObject *args){
     Py_buffer* buf = malloc(sizeof(Py_buffer));
 
     if(-1 == PyBuffer_FillInfo(buf, NULL, (void*)ptr, size, readonly, flags)){
+        free(buf);
         return NULL;
     }
 
@@ -31,25 +33,17 @@ memoryview_from_pointer(PyObject *self, PyObject *args){
 
 /** 
  * Gets a half-open range [start, end) which contains the array data
- * Modified from numpy https://github.com/numpy/numpy/blob/master/numpy/core/src/multiarray/array_assign.c
+ * Modified from numpy/core/src/multiarray/array_assign.c
  */
 static PyObject*
-memoryview_get_extents(PyObject *self, PyObject *args)
+get_extents(Py_ssize_t *shape, Py_ssize_t *strides, int ndim,
+            Py_ssize_t itemsize, Py_ssize_t ptr)
 {
-    PyObject *mv;
-    if (!PyArg_ParseTuple(args, "O", &mv))
-        return NULL;
-
-    if (!PyMemoryView_Check(mv))
-        return NULL;
-
-    Py_buffer* buf = PyMemoryView_GET_BUFFER(mv);
-
     Py_ssize_t start, end;
-    int idim, ndim = buf->ndim;
-    Py_ssize_t *dimensions = buf->shape,
-               *strides = buf->strides;
-
+    int idim;
+    Py_ssize_t *dimensions = shape;
+    PyObject *ret = NULL;
+    
     if (ndim < 0 ){
         PyErr_SetString(PyExc_ValueError, "buffer ndim < 0");
         return NULL;
@@ -57,8 +51,8 @@ memoryview_get_extents(PyObject *self, PyObject *args)
 
     if (!dimensions) {
         if (ndim == 0) {
-            start = end = (Py_ssize_t) buf->buf;
-            end += buf->itemsize;
+            start = end = ptr;
+            end += itemsize;
             return Py_BuildValue("nn", start, end);
         }
         PyErr_SetString(PyExc_ValueError, "buffer shape is not defined");
@@ -70,14 +64,13 @@ memoryview_get_extents(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    PyObject *ret = NULL;
     /* Calculate with a closed range [start, end] */
-    start = end = (Py_ssize_t)buf->buf;
+    start = end = ptr;
     for (idim = 0; idim < ndim; ++idim) {
         Py_ssize_t stride = strides[idim], dim = dimensions[idim];
         /* If the array size is zero, return an empty range */
         if (dim == 0) {
-            start = end = (Py_ssize_t)buf->buf;
+            start = end = ptr;
             ret = Py_BuildValue("nn", start, end);
             break;
         }
@@ -95,12 +88,84 @@ memoryview_get_extents(PyObject *self, PyObject *args)
     if (!ret) {
         /* Return a half-open range */
         Py_ssize_t out_start = start;
-        Py_ssize_t out_end = end + buf->itemsize;
+        Py_ssize_t out_end = end + itemsize;
 
         ret = Py_BuildValue("nn", out_start, out_end);
     }
 
     return ret;
+}
+
+
+static PyObject*
+memoryview_get_extents(PyObject *self, PyObject *args)
+{
+    PyObject *mv;
+    if (!PyArg_ParseTuple(args, "O", &mv))
+        return NULL;
+
+    if (!PyMemoryView_Check(mv))
+        return NULL;
+
+    Py_buffer* b = PyMemoryView_GET_BUFFER(mv);
+    return get_extents(b->shape, b->strides, b->ndim, b->itemsize,
+                       (Py_ssize_t)b->buf);
+}
+
+static PyObject*
+memoryview_get_extents_info(PyObject *self, PyObject *args)
+{
+    int i;
+    Py_ssize_t *shape_ary = NULL;
+    Py_ssize_t *strides_ary = NULL;
+    PyObject *shape_tuple = NULL;
+    PyObject *strides_tuple = NULL;
+    PyObject *shape = NULL, *strides = NULL;
+    Py_ssize_t itemsize = 0;
+    int ndim = 0;
+    PyObject* res;
+
+    if (!PyArg_ParseTuple(args, "OOin", &shape, &strides, &ndim, &itemsize))
+        goto cleanup;
+
+    if (ndim < 0) {
+        PyErr_SetString(PyExc_ValueError, "ndim is negative");
+        goto cleanup;
+    }
+
+    if (itemsize <= 0) {
+        PyErr_SetString(PyExc_ValueError, "ndim <= 0");
+        goto cleanup;
+    }
+
+    shape_ary = malloc(sizeof(Py_ssize_t) * ndim + 1);
+    strides_ary = malloc(sizeof(Py_ssize_t) * ndim + 1);
+
+    shape_tuple = PySequence_Fast(shape, "shape is not a sequence");
+    if (!shape_tuple) goto cleanup;
+
+    for (i = 0; i < ndim; ++i) {
+        shape_ary[i] = PyNumber_AsSsize_t(
+                           PySequence_Fast_GET_ITEM(shape_tuple, i),
+                           PyExc_OverflowError);
+    }
+
+    strides_tuple = PySequence_Fast(strides, "strides is not a sequence");
+    if (!strides_tuple) goto cleanup;
+    
+    for (i = 0; i < ndim; ++i) {
+        strides_ary[i] = PyNumber_AsSsize_t(
+                           PySequence_Fast_GET_ITEM(strides_tuple, i),
+                           PyExc_OverflowError);
+    }
+
+    res = get_extents(shape_ary, strides_ary, ndim, itemsize, 0);
+cleanup:
+    free(shape_ary);
+    free(strides_ary);
+    Py_XDECREF(shape_tuple);
+    Py_XDECREF(strides_tuple);
+    return res;
 }
 
 
@@ -114,29 +179,40 @@ typedef struct {
 static int
 get_bufinfo(PyObject *self, Py_ssize_t *psize, void **pptr)
 {
-    PyObject *buflen = PyObject_GetAttrString(self, "_buflen_");
-    if (!buflen) return -1;
+    PyObject *buflen = NULL;
+    PyObject *bufptr = NULL;
+    Py_ssize_t size = 0;
+    void* ptr = NULL;
+    int ret = -1;
 
-    PyObject *bufptr = PyObject_GetAttrString(self, "_bufptr_");
-    if (!bufptr) return -1;
+    buflen = PyObject_GetAttrString(self, "_buflen_");
+    if (!buflen) goto cleanup;
 
-    Py_ssize_t size = PyNumber_AsSsize_t(buflen, PyExc_OverflowError);
-    if (size == -1 && PyErr_Occurred()) return -1;
+    bufptr = PyObject_GetAttrString(self, "_bufptr_");
+    if (!bufptr) goto cleanup;
+
+    size = PyNumber_AsSsize_t(buflen, PyExc_OverflowError);
+    if (size == -1 && PyErr_Occurred()) goto cleanup;
     else if (size < 0) {
         PyErr_SetString(PyExc_ValueError, "negative buffer size");
-        return -1;
+        goto cleanup;
     }
 
-    void* ptr = (void*)PyNumber_AsSsize_t(bufptr, PyExc_OverflowError);
-    if (PyErr_Occurred()) return -1;
+    ptr = (void*)PyNumber_AsSsize_t(bufptr, PyExc_OverflowError);
+    if (PyErr_Occurred())
+        goto cleanup;
     else if (!ptr) {
         PyErr_SetString(PyExc_ValueError, "null buffer pointer");
+        goto cleanup;
     }
 
     *psize = size;
     *pptr = ptr;
-
-    return 0;
+    ret = 0;
+cleanup:
+    Py_XDECREF(buflen);
+    Py_XDECREF(bufptr);
+    return ret;
 }
 
 static int
@@ -144,10 +220,12 @@ MemAllocObject_getbufferproc(PyObject *self, Py_buffer *view, int flags)
 {
     Py_ssize_t size = 0;
     void *ptr = 0;
+    int readonly;
+    
     if(-1 == get_bufinfo(self, &size, &ptr))
         return -1;
 
-    int readonly = (PyBUF_WRITABLE & flags) == PyBUF_WRITABLE;
+    readonly = (PyBUF_WRITABLE & flags) == PyBUF_WRITABLE;
 
     // fill buffer
     if (-1 == PyBuffer_FillInfo(view, self, (void*)ptr, size, readonly, flags))
@@ -160,12 +238,12 @@ static Py_ssize_t
 MemAllocObject_writebufferproc(PyObject *self, Py_ssize_t segment,
                                void **ptrptr)
 {
+    Py_ssize_t size = 0;
     if (segment != 0) {
         PyErr_SetString(PyExc_ValueError, "invalid segment");
         return -1;
     }
 
-    Py_ssize_t size = 0;
     if(-1 == get_bufinfo(self, &size, ptrptr))
         return -1;
     return size;
@@ -281,6 +359,7 @@ static PyMethodDef core_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
     declmethod(memoryview_get_buffer),
     declmethod(memoryview_get_extents),
+    declmethod(memoryview_get_extents_info),
     declmethod(memoryview_from_pointer),
     { NULL },
 #undef declmethod
