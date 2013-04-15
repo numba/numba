@@ -28,7 +28,15 @@ def test_interning():
 def test_intern_many():
     table = intern.InternTable()
 
+    itoid = {}
     for i in range(1000000):
-        table.intern("my randrom string %d" % i)
-        table.intern("my randrom string %d" % (i // 2))
-        table.intern("my randrom string %d" % (i // 4))
+        id = table.intern("my randrom string %d" % i)
+        itoid[i] = id
+
+        id1 = table.intern("my randrom string %d" % (i // 2))
+        id2 = table.intern("my randrom string %d" % (i // 4))
+
+        assert id1 == itoid[i//2]
+        assert id2 == itoid[i//4]
+
+test_intern_many()
