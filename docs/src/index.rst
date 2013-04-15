@@ -80,8 +80,8 @@ As a starting example::
         cu.close()
         return result
 
-Features
---------
+User's Guide Topics
+-------------------
 
 Major features of NumbaPro include support for (parallel) NumPy ufuncs and gufuncs,
 CUDA support for GPU execution and a multi-threaded parallel range.
@@ -99,6 +99,18 @@ CUDA support for GPU execution and a multi-threaded parallel range.
    CUDADevice
    CUDASupport
    cu
+
+Requirements
+------------
+
+* python 2.6 or 2.7 (support is not yet available for 3.x)
+* LLVM (>= 3.2)
+* nVidia CUDA and NVVM libraries (>= 5.0)
+
+Python modules
+
+* llvmpy (>= 0.11.0)
+* bitarray (>= 0.8.1)
 
 Release Notes
 -------------
