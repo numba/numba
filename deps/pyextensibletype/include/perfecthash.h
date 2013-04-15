@@ -71,6 +71,7 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
                                      PyCustomSlots_Entry *entries_copy) {
   uint16_t *d = (void*)((char*)table + sizeof(PyCustomSlots_Table));
   uint16_t nbins = table->b;
+  uint16_t n = table->n;
   uint64_t m_f = table->m_f;
   uint8_t r = table->r;
   uint16_t i, j, bin;
@@ -91,7 +92,7 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
 
   /* Step 2: Attempt to assign displacements d[bin], starting with
      the largest bin */
-  for (i = 0; i != nbins; ++i) {
+  for (i = 0; i != n; ++i) {
     taken[i] = 0;
   }
 
@@ -101,7 +102,7 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
     if (binsizes[bin] == 0) {
       d[bin] = 0;
     } else {
-      for (dval = 0; dval != nbins; ++dval) {
+      for (dval = 0; dval != n; ++dval) {
         int k;
         int collides = 0;
         for (k = 0; k != binsizes[bin]; ++k) {
@@ -114,7 +115,7 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
         }
         if (!collides) break;
       }
-      if (dval == nbins) {
+      if (dval == n) {
         /* no appropriate dval found */
         return -1;
       } else {
@@ -144,7 +145,7 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
   uint16_t *bins = malloc(sizeof(uint16_t) * b * BIN_LIMIT);
   uint8_t *binsizes = malloc(sizeof(uint8_t) * b);
   uint16_t *p = malloc(sizeof(uint16_t) * b);
-  uint8_t *taken = malloc(sizeof(uint8_t) * b);
+  uint8_t *taken = malloc(sizeof(uint8_t) * n);
   uint16_t number_of_bins_by_size[BIN_LIMIT];
   PyCustomSlots_Entry *entries_copy = malloc(sizeof(PyCustomSlots_Entry) * n);
 

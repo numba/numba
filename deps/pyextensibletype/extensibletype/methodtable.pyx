@@ -130,7 +130,7 @@ cdef class PerfectHashMethodTable(object):
             raise HashingError("Unable to create perfect hash table")
 
         for i, signature in enumerate(ids):
-            assert self.find_method(signature), (i, signature)
+            assert self.find_method(signature) is not None, (i, signature)
 
         # For debugging
         self.signatures = ids
@@ -146,7 +146,7 @@ cdef class PerfectHashMethodTable(object):
         cdef uint64_t idx = (((prehash >> self.table.r) & self.table.m_f) ^
                              self.displacements[prehash & self.table.m_g])
 
-        assert 0 <= idx < self.size
+        assert 0 <= idx < self.size, (idx, self.size)
 
         if self.table.entries[idx].id != prehash:
             return None
