@@ -39,4 +39,5 @@ def test_intern_many():
         assert id1 == itoid[i//2]
         assert id2 == itoid[i//4]
 
-test_intern_many()
+if __name__ == '__main__':
+    test_intern_many()

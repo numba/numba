@@ -70,4 +70,5 @@ def test_methodtable():
         t = time.time() - t
         print i, "table building took", t, "seconds."
 
-test_methodtable()
+if __name__ == '__main__':
+    test_methodtable()
