@@ -93,9 +93,9 @@ def lookup_and_assert_method(table_pp, prehash, method_name):
     if result == numba.NULL:
         # printf("Error: expected method %s to be available\n", method_name)
         # print "Error: expected method", method_name,  "to be available"
-        printf("Error: expected method ")
+        printf("NumbaError: expected method ")
         printf(method_name)
-        printf("to be available\n")
+        printf(" to be available\n")
         abort()
 
     return result
