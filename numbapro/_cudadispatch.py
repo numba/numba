@@ -6,7 +6,6 @@ from ctypes import *
 from numbapro.cudapipeline import driver as _cuda
 from numbapro.cudapipeline.devicearray import DeviceArrayBase
 from numbapro import cuda
-from numbapro._utils.ndarray import ndarray_datasize
 import math
 import re
 
@@ -214,7 +213,7 @@ class CudaUFuncDispatcher(object):
             out = self.__reduce(mem, gpu_mems, stream)
             # use a small buffer to store the result element
             buf = np.array((1,), dtype=arg.dtype)
-            out.copy_to_host(buf, ndarray_datasize(buf), stream=stream)
+            out.copy_to_host(buf, _cuda.host_memory_size(buf), stream=stream)
 
         return buf[0]
 

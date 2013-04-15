@@ -14,7 +14,8 @@ class TestCudaMemory(unittest.TestCase):
         driver.require_device_memory(obj)
         self.assertTrue(obj.driver is self.driver)
         self.assertTrue(obj.device is self.device)
-        self.assertTrue(isinstance(obj.device_pointer, (int, long)))
+        self.assertTrue(isinstance(obj.device_ctypes_pointer,
+                                   driver.cu_device_ptr))
 
     def test_device_memory(self):
         devmem = driver.DeviceMemory(1024)
@@ -25,7 +26,7 @@ class TestCudaMemory(unittest.TestCase):
         self._template(driver.DeviceView(devmem, 10))
 
     def test_host_alloc(self):
-        devmem = driver.HostAllocMemory(1024, map=True)
+        devmem = driver.HostAllocMemory(1024, mapped=True)
         self._template(devmem)
 
     def test_pinned_memory(self):

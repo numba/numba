@@ -1,7 +1,6 @@
 import numpy as np
 from .ndarray import *
 from . import driver as _driver
-from numbapro._utils.ndarray import ndarray_datasize_raw
 
 assert not hasattr(np.ndarray, 'device_allocate')
 assert not hasattr(np.ndarray, 'to_device')
@@ -29,8 +28,7 @@ class DeviceArrayBase(object):
     def copy_to_host(self, array, size=-1, stream=0):
         if size < 0:
             size = self.device_raw.bytesize
-        self.device_raw.from_device_raw(array.ctypes.data, size,
-                                           stream=stream)
+        _driver.device_to_host(array, self.device_raw, size, stream=stream)
 
     def copy_to_device(self, array, stream=0):
         ndarray_device_transfer_data(array, self.device_raw, stream=stream)
@@ -46,8 +44,8 @@ class DeviceArray(DeviceArrayBase):
         self.__strides = strides
         self.__dtype = dtype
         self.__device_memory = ndarray_device_allocate_struct(ndim)
-        size = ndarray_datasize_raw(shape, strides, dtype, order)
-        self.__device_data = _driver.AllocatedDeviceMemory(size)
+        size = _driver.memory_size_from_info(shape, strides, dtype.itemsize)
+        self.__device_data = _driver.DeviceMemory(size)
         ndarray_populate_struct(self.__device_memory, self.__device_data,
                                 shape, strides, stream=stream)
 
@@ -97,7 +95,8 @@ class DeviceNDArray(DeviceArrayBase, np.ndarray):
         self.__device_data = ndarray_device_allocate_data(self)
         ndarray_populate_struct(self.__device_memory, self.__device_data,
                                 self.shape, self.strides, stream=stream)
-        self.__gpu_readback = self.ctypes.data, ndarray_datasize(self)
+        s, e = _driver.host_memory_extents(self)
+        self.__gpu_readback = s, e - s
 
     @_driver.require_context
     def to_device(self, stream=0):
@@ -114,7 +113,8 @@ class DeviceNDArray(DeviceArrayBase, np.ndarray):
 
     def to_host(self, stream=0):
         dataptr, datasize = self.__gpu_readback
-        self.__device_data.from_device_raw(dataptr, datasize, stream=stream)
+        _driver.device_to_host(dataptr, self.__device_data, datasize,
+                               stream=stream)
 
     def free_device(self):
         '''
@@ -144,7 +144,7 @@ class DeviceNDArray(DeviceArrayBase, np.ndarray):
         left.__from_custom_data(self.__device_data, (leftn,), self.strides,
                                 stream=stream)
 
-        offsetted = self.__device_data.offset(offset)
+        offsetted = _driver.DeviceView(self.__device_data, offset)
         right.__from_custom_data(offsetted, (rightn,), self.strides,
                                  stream=stream)
 
@@ -163,7 +163,8 @@ class DeviceNDArray(DeviceArrayBase, np.ndarray):
         assert self.flags['C_CONTIGUOUS']
         size = shape[0] * strides[0]
 
-        self.__gpu_readback = self.ctypes.data, size
+        s, e = _driver.host_memory_extents(self)
+        self.__gpu_readback = s, e - s
         return self
 
     @property

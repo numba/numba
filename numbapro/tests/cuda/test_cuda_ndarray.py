@@ -36,7 +36,6 @@ class TestCudaNDArray(support.CudaTestCase):
         self.assertTrue((left == original[:N/2]).all())
         self.assertTrue(right.sum()==0)
 
-
         right.to_host()
         self.assertTrue((left == original[:N/2]).all())
         self.assertTrue((right == original[N/2:]).all())

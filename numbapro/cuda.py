@@ -70,17 +70,17 @@ def pinned(*arylist):
 @contextlib.contextmanager
 def mapped(*arylist, **kws):
     assert not kws or 'stream' in kws, "Only accept 'stream' as keyword."
-    from numbapro._utils.ndarray import ndarray_datasize
-    from numbapro.cudapipeline.driver import PinnedMemory
+    from numbapro.cudapipeline.driver import PinnedMemory, host_memory_size, host_pointer, device_pointer
     pmlist = []
     stream = kws.get('stream', 0)
     for ary in arylist:
-        pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary), mapped=True)
+        pm = PinnedMemory(ary, host_pointer(ary), host_memory_size(ary),
+                          mapped=True)
         pmlist.append(pm)
 
     devarylist = []
     for pm in pmlist:
-        dptr = pm.get_device_pointer()
+        dptr = device_pointer(pm)
         devary = ary.view(type=DeviceNDArray)
         devary.device_mapped(dptr, stream=stream)
         devarylist.append(devary)
