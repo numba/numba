@@ -5,6 +5,7 @@ import llvm.core
 from numba import *
 from numba.external import external
 from numba.external.utilities import utilities
+from numba.exttypes.virtual import PyCustomSlots_Table
 
 class UtilityFunction(external.ExternalFunction):
     """
@@ -53,7 +54,13 @@ object_to_numeric = {
     ulonglong  : load2("__Numba_PyInt_AsUnsignedLongLong", ulonglong(object_)),
 }
 
-utility_funcs = object_to_numeric
+void_p = void.pointer()
+void_pp = void_p.pointer()
+
+utility_funcs = list(object_to_numeric.itervalues()) + [
+    UtilityFunction.load(
+        "lookup_method", void_p(void_pp, uint64, char.pointer())),
+]
 
 def default_utility_library(context):
     """
@@ -61,7 +68,7 @@ def default_utility_library(context):
     """
     extlib = external.ExternalLibrary(context)
 
-    for utility_func in utility_funcs.values():
+    for utility_func in utility_funcs:
         extlib.add(utility_func)
 
     return extlib
