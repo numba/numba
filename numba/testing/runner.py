@@ -171,7 +171,7 @@ class TestRunner(object):
     def run(self, modname):
         self.ran += 1
         if not self.print_failures_only:
-            sys.stdout.write("running %-61s" % (modname,))
+            sys.stdout.write("%-69s" % (modname,))
 
         process = subprocess.Popen([sys.executable, '-m', modname],
                                    stdout=subprocess.PIPE,
@@ -180,13 +180,13 @@ class TestRunner(object):
 
         if process.returncode == 0:
             if not self.print_failures_only:
-                sys.stdout.write("SUCCESS\n")
+                sys.stdout.write(" SUCCESS\n")
         else:
             if self.print_failures_only:
-                sys.stdout.write("running %-61s" % (modname,))
+                sys.stdout.write("%-69s" % (modname,))
 
-            sys.stdout.write("FAILED: %s\n" % map_returncode_to_message(
-                                            process.returncode))
+            sys.stdout.write(" FAILED:\n%79s\n" % map_returncode_to_message(
+                                                        process.returncode))
             if PY3:
                 out = str(out, encoding='UTF-8')
                 err = str(err, encoding='UTF-8')
