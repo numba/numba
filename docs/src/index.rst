@@ -100,6 +100,9 @@ CUDA support for GPU execution and a multi-threaded parallel range.
    CUDASupport
    cu
 
+Additional examples:
+`GitHub repo of NumbaPro examples <https://github.com/ContinuumIO/numbapro-examples>`_
+
 Requirements
 ------------
 
