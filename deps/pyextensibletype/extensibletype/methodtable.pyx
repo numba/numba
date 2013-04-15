@@ -142,6 +142,7 @@ cdef class PerfectHashMethodTable(object):
         """
         cdef uint64_t prehash = intern.global_intern(make_bytes(signature))
 
+        assert 0 <= self.displacements[prehash & self.table.m_g] < self.table.b
         cdef uint64_t idx = (((prehash >> self.table.r) & self.table.m_f) ^
                              self.displacements[prehash & self.table.m_g])
 
