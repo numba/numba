@@ -54,7 +54,7 @@ class CUDAComputeUnit(CU):
     def __typemap(self, values):
         typemapper = self.__env.context.typemapper.from_python
         for val in values:
-            if isinstance(val, DeviceArray):
+            if devicearray.is_cuda_ndarray(val):
                 shape = tuple(1 for _ in val.shape)
                 fakearray = numpy.empty(shape, dtype=val.dtype)
                 yield typemapper(fakearray)
