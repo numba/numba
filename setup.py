@@ -7,10 +7,9 @@ import subprocess
 from fnmatch import fnmatchcase
 from distutils.util import convert_path
 
-try:
-    from setuptools import setup, Extension
-except ImportError:
-    from distutils.core import setup, Extension
+# Do not EVER use setuptools, it makes cythonization fail
+# Distribute fixes that
+from distutils.core import setup, Extension
 
 import numpy
 
