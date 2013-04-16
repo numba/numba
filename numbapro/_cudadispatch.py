@@ -117,8 +117,13 @@ class CudaUFuncDispatcher(object):
             blockdim = (ntid,)
 
             if 'out' not in kws:
-                out = self._allocate_output(args, result_dtype) #np.empty(args[0].shape[0], dtype=result_dtype)
-                device_out = cuda.to_device(out, stream, copy=False)
+                #out = self._allocate_output(args, result_dtype)
+                #np.empty(args[0].shape[0], dtype=result_dtype)
+                #device_out = cuda.to_device(out, stream, copy=False)
+                out_shape = self._determine_output_shape(args)
+                device_out = cuda.device_array(shape=out_shape,
+                                               dtype=result_dtype,
+                                               stream=stream)
             else:
                 device_out = kws['out']
                 assert devicearray.is_cuda_ndarray(device_out)
@@ -126,9 +131,9 @@ class CudaUFuncDispatcher(object):
 
             cuda_func[griddim, blockdim, stream](*kernel_args)
 
-            for ary, conv in zip(args, argconv):
-                if conv:
-                    ary.to_host()
+#            for ary, conv in zip(args, argconv):
+#                if conv:
+#                    ary.to_host()
             return device_out
 
         else:
@@ -166,6 +171,10 @@ class CudaUFuncDispatcher(object):
             device_out.to_host(stream) # only retrive the last one
             # Revert the shape of the array if it has been modified earlier
             return out.reshape(reshape)
+
+
+    def _determine_output_shape(self, broadcast_arrays):
+        return broadcast_arrays[0].shape
 
     def _get_function_by_dtype(self, dtypes):
         try:

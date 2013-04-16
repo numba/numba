@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 import math
 from .ndarray import *
 from . import driver as _driver
@@ -69,14 +70,19 @@ class DeviceNDArray(object):
             sz = min(_driver.host_memory_size(ary), self.alloc_size)
             _driver.host_to_device(self, ary, sz, stream=stream)
 
-    def copy_to_host(self, ary, stream=0):
-        """Copy `self` to `ary`.
+    def copy_to_host(self, ary=None, stream=0):
+        """Copy `self` to `ary` or create an numpy ndarray is ary is None.
         """
+        if ary is None:
+            ary = np.empty(shape=self.shape, dtype=self.dtype)
         _driver.device_to_host(ary, self, self.alloc_size, stream=stream)
+        return ary
 
     def to_host(self, stream=0):
-        # Should deprecate this
-        assert self.__writeback is not None
+        warnings.warn("to_host() is deprecated and will be removed",
+                      DeprecationWarning)
+        if self.__writeback is None:
+            raise ValueError("no associated writeback array")
         self.copy_to_host(self.__writeback, stream=stream)
 
     def split(self, section, stream=0):
