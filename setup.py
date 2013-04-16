@@ -123,7 +123,8 @@ def register_pyextensibletype():
 # Generate code for build
 #------------------------------------------------------------------------
 
-build = set(sys.argv) & set(['build', 'build_ext', 'install'])
+build = set(sys.argv) & set(['build', 'build_ext', 'install', 
+                             'bdist_wininst'])
 cleanup_pyextensibletype()
 
 if build:
@@ -160,7 +161,7 @@ setup(
         "Topic :: Utilities",
     ],
     description="compiling Python code using LLVM",
-    packages=find_packages(),
+    packages=find_packages(exclude=('*deps*',)),
     entry_points = {
         'console_scripts': [
             'pycc = numba.pycc:main',

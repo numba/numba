@@ -171,7 +171,7 @@ class TestRunner(object):
     def run(self, modname):
         self.ran += 1
         if not self.print_failures_only:
-            sys.stdout.write("%-69s" % (modname,))
+            sys.stdout.write("%-70s" % (modname,))
 
         process = subprocess.Popen([sys.executable, '-m', modname],
                                    stdout=subprocess.PIPE,

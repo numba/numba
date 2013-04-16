@@ -173,7 +173,7 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
         abort();
     binsize = ++binsizes[bin];
     if (binsize == BIN_LIMIT) {
-      printf("ERROR 1\n");
+      printf("Error: Bin limit reached\n");
       goto error;
     }
     bins[BIN_LIMIT * bin + binsize - 1] = i;
@@ -211,7 +211,7 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
   }
 
   if (retcode != 0) {
-     printf("no suitable table found\n");
+     printf("Error: No suitable table found\n");
      goto error;
   }
 
