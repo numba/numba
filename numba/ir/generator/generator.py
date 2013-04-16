@@ -19,18 +19,24 @@ from numba.asdl.asdl import pyasdl
 # Entry Points
 #------------------------------------------------------------------------
 
-def generate(schema_name, schema_def, codegen_classes, file_allocator):
+def parse(schema_name, schema_def):
     """
-    schema: ASDL schema (str)
+    Parse a schema given a schema name and schema string (ASDL string).
     """
     asdl_tree = get_asdl(schema_name, schema_def)
     schema_instance = schema.build_schema(asdl_tree)
+    return asdl_tree, schema_instance
 
-    print(schema_instance)
+def generate(schema_name, schema_str, codegens, file_allocator):
+    """
+    schema: ASDL schema (str)
+    """
+    asdl_tree, schema_instance = parse(schema_name, schema_str)
 
-    for codegen_class in codegen_classes:
-        codegen = codegen_class(schema_name, schema_def, file_allocator)
-        codegen.generate(emit_code, asdl_tree, schema_instance)
+    for codegen in codegens:
+        outfile = file_allocator.open_sourcefile(codegen.out_filename)
+        emitter = CodeEmitter(outfile)
+        codegen.generate(emitter, asdl_tree, schema_instance)
 
 def generate_from_file(schema_filename, codegens, output_dir):
     schema_name = os.path.basename(schema_filename)
@@ -45,9 +51,6 @@ def get_asdl(schema_name, schema):
     parser, loader = asdl.load(schema_name, schema, pyasdl)
     asdl_tree = loader.load()
     return asdl_tree
-
-def emit_code(file, obj):
-    file.write(str(obj))
 
 def is_simple(sum):
     """
@@ -97,20 +100,24 @@ class MemoryFileAllocator(FileAllocator):
 # Code Generator Interface
 #------------------------------------------------------------------------
 
+class CodeEmitter(object):
+
+    def __init__(self, outfile):
+        self.outfile = outfile
+
+    def emit(self, s):
+        self.outfile.write(str(s))
+
+
 class Codegen(object):
     """
     Interface for code generators.
     """
 
-    def __init__(self, schema_name, schema, file_allocator):
-        self.schema_name = schema_name
-        self.schema = schema
-        self.file_allocator = file_allocator
+    def __init__(self, out_filename):
+        self.out_filename = out_filename
 
-    def open_sourcefile(self, name):
-        return self.file_allocator.open_sourcefile(name)
-
-    def generate(self, emit_code, asdl_tree, schema_instance):
+    def generate(self, asdl_tree, schema_instance):
         """
         Generate code for the given asdl tree. The ASDL tree is accompanied
         by a corresponding schema.Schema, which is easier to deal with.
