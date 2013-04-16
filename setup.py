@@ -161,7 +161,7 @@ setup(
         "Topic :: Utilities",
     ],
     description="compiling Python code using LLVM",
-    packages=find_packages(),
+    packages=find_packages(exclude=('*deps*',)),
     entry_points = {
         'console_scripts': [
             'pycc = numba.pycc:main',
