@@ -1,7 +1,7 @@
 import numpy as np
 from ctypes import *
 
-from numbapro.cudapipeline.driver import cu_stream
+from numbapro.cudapipeline.driver import cu_stream, device_pointer
 from numbapro.cudalib.libutils import Lib, ctype_function
 from numbapro._utils import finalizer
 
@@ -260,7 +260,7 @@ class Generator(finalizer.OwnerMixin):
     def generate_poisson(self, devout, num, lmbd):
         if devout.dtype not in (np.dtype(np.uint32), np.dtype(np.int32)):
             raise ValueError("Only accept int32 or uint32 arrays")
-        dptr = devout.device_raw_ptr.value
+        dptr = device_pointer(devout)
         ptr = cast(c_void_p(dptr), POINTER(c_uint))
         return self._api.curandGeneratePoisson(self._handle, ptr, num, lmbd)
 
@@ -273,7 +273,7 @@ class Generator(finalizer.OwnerMixin):
             fty = c_double
         else:
             raise ValueError("Only accept float or double arrays.")
-        dptr = devary.device_raw_ptr.value
+        dptr = device_pointer(devary)
         ptr = cast(c_void_p(dptr), POINTER(fty))
         return fn, ptr
 
@@ -287,6 +287,6 @@ class Generator(finalizer.OwnerMixin):
         else:
             raise ValueError("Only accept int32, int64, "
                              "uint32 or uint64 arrays")
-        dptr = devary.device_raw_ptr.value
+        dptr = device_pointer(devary)
         ptr = cast(c_void_p(dptr), POINTER(ity))
         return fn, ptr

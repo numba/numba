@@ -5,7 +5,7 @@ from weakref import WeakValueDictionary
 from numbapro import cuda
 from numba.wrapping.compiler import resolve_argtypes
 from numbapro.cudapipeline.environment import CudaEnvironment
-from numbapro.cudapipeline.devicearray import DeviceArray
+from numbapro.cudapipeline import devicearray
 from numbapro.cudapipeline.error import CudaDriverError
 from ..cu import CU
 

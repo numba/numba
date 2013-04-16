@@ -3,7 +3,7 @@ import numpy as np
 from ctypes import *
 
 from numbapro.cudalib.libutils import Lib, ctype_function
-from numbapro.cudapipeline.driver import cu_stream
+from numbapro.cudapipeline.driver import cu_stream, device_pointer
 from numbapro._utils import finalizer
 from numbapro import cuda
 
@@ -249,7 +249,7 @@ def _Tnrm2(fmt, cty):
     def nrm2(self, n, x, incx):
         result = cty()
         fn = getattr(self._api, 'cublas%snrm2_v2' % fmt)
-        fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
+        fn(self._handle, int(n), device_pointer(x), int(incx),
            byref(result))
         return _return_scalar(result)
     return nrm2
@@ -258,8 +258,8 @@ def _Tdot(fmt, cty, postfix=''):
     def dot(self, n, x, incx, y, incy):
         result = cty()
         fn = getattr(self._api, 'cublas%sdot%s_v2' % (fmt, postfix))
-        fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
-           y.device_raw_ptr.value, int(incy), byref(result))
+        fn(self._handle, int(n), device_pointer(x), int(incx),
+           device_pointer(y), int(incy), byref(result))
         return _return_scalar(result)
     return dot
 
@@ -268,7 +268,7 @@ def _Tscal(fmt, cty):
         "Stores result to x"
         c_alpha = cty(alpha)
         fn = getattr(self._api, 'cublas%sscal_v2' % fmt)
-        fn(self._handle, int(n), byref(c_alpha), x.device_raw_ptr.value,
+        fn(self._handle, int(n), byref(c_alpha), device_pointer(x),
            int(incx))
     return scal
 
@@ -277,15 +277,15 @@ def _Taxpy(fmt, cty):
         "Stores result to y"
         c_alpha = cty(alpha)
         fn = getattr(self._api, 'cublas%saxpy_v2' % fmt)
-        fn(self._handle, int(n), byref(c_alpha), x.device_raw_ptr.value,
-           int(incx), y.device_raw_ptr.value, int(incy))
+        fn(self._handle, int(n), byref(c_alpha), device_pointer(x),
+           int(incx), device_pointer(y), int(incy))
     return axpy
 
 def _Itamax(fmt, cty):
     def amax(self, n, x, incx):
         result = c_int()
         fn = getattr(self._api, 'cublasI%samax_v2' % fmt)
-        fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
+        fn(self._handle, int(n), device_pointer(x), int(incx),
            byref(result))
         return result.value
     return amax
@@ -294,7 +294,7 @@ def _Itamin(fmt, cty):
     def amin(self, n, x, incx):
         result = c_int()
         fn = getattr(self._api, 'cublasI%samin_v2' % fmt)
-        fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
+        fn(self._handle, int(n), device_pointer(x), int(incx),
            byref(result))
         return result.value
     return amin
@@ -303,7 +303,7 @@ def _Tasum(fmt, cty):
     def asum(self, n, x, incx):
         result = cty()
         fn = getattr(self._api, 'cublas%sasum_v2' % fmt)
-        fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
+        fn(self._handle, int(n), device_pointer(x), int(incx),
            byref(result))
         return _return_scalar(result)
     return asum
@@ -314,8 +314,8 @@ def _Trot(fmt, cty, sty):
         c_c = cty(c)
         c_s = sty(s)
         fn = getattr(self._api, 'cublas%srot_v2' % fmt)
-        fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
-           y.device_raw_ptr.value, int(incy), byref(c_c), byref(c_s))
+        fn(self._handle, int(n), device_pointer(x), int(incx),
+           device_pointer(y), int(incy), byref(c_c), byref(c_s))
     return rot
 
 def _Trotg(fmt, ty, cty):
@@ -337,8 +337,8 @@ def _Trotm(fmt, dtype):
         assert len(param.shape) == 1
         assert param.size >= 5
         assert param.dtype == np.dtype(dtype)
-        fn(self._handle, int(n), x.device_raw_ptr.value, int(incx),
-           y.device_raw_ptr.value, int(incy), param.ctypes.data)
+        fn(self._handle, int(n), device_pointer(x), int(incx),
+           device_pointer(y), int(incy), param.ctypes.data)
     return rotm
 
 def _Trotmg(fmt, cty, dtype):

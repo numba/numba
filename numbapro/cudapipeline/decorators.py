@@ -3,7 +3,7 @@ import numba
 from numba import numbawrapper, jit as _numba_jit, autojit as _numba_autojit
 from numba.decorators import compile_function
 from .environment import CudaEnvironment
-from .devicearray import DeviceArray
+from . import devicearray
 
 def cuda_jit(restype=None, argtypes=None, nopython=False,
              _llvm_module=None, env_name=None, env=None,
@@ -191,7 +191,7 @@ class CudaAutoJitNumbaFunction(CudaBaseFunction):
 
     def __trick_autojit(self, args):
         for val in args:
-            if isinstance(val, DeviceArray):
+            if devicearray.is_cuda_ndarray(val):
                 shape = tuple(1 for _ in val.shape)
                 yield numpy.empty(shape, dtype=val.dtype)
             else:

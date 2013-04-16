@@ -666,6 +666,19 @@ class Device(object):
         keys += ['COMPUTE_CAPABILITY']
         return dict((k, getattr(self, k)) for k in keys)
 
+    def __hash__(self):
+        return hash(self.id)
+
+    def __eq__(self, rhs):
+        try:
+            return self.id == rhs.id
+        except AttributeError:
+            return False
+
+    def __ne__(self, rhs):
+        return not (self == rhs)
+
+
 class _Context(finalizer.OwnerMixin):
     def __init__(self, device):
         self.device = device
@@ -817,10 +830,16 @@ class DeviceMemory(finalizer.OwnerMixin):
 
 class DeviceView(object):
     __cuda_memory__ = True
-    def __init__(self, owner, offset):
+    def __init__(self, owner, start, stop=None):
         self.device = self.driver.current_context().device
-        self._handle = cu_device_ptr(device_pointer(owner) + offset)
+        self._handle = cu_device_ptr(device_pointer(owner) + start)
         self._owner = owner
+        if stop is None:
+            sz = device_memory_size(owner) - start
+        else:
+            sz = stop - start
+        assert sz > 0
+        self._cuda_memsize_ = sz
 
     @property
     def device_ctypes_pointer(self):
@@ -831,8 +850,7 @@ class DeviceView(object):
         return Driver()
 
 class PinnedMemory(finalizer.OwnerMixin):
-    __cuda_memory__ = True
-    def __init__(self, owner, ptr, size, mapped):
+    def __init__(self, owner, ptr, size, mapped=False):
         self._owner = owner
         self.device = self.driver.current_context().device
         if mapped and not self.device.CAN_MAP_HOST_MEMORY:
@@ -849,8 +867,13 @@ class PinnedMemory(finalizer.OwnerMixin):
             flags |= CU_MEMHOSTREGISTER_DEVICEMAP
         error = self.driver.cuMemHostRegister(ptr, size, flags)
         self.driver.check_error(error, 'Failed to pin memory')
+
+        if mapped:
+            self._get_device_pointer()
+
+        self.__cuda_memory__ = mapped
+
         self._finalizer_track(self._pointer)
-        self._get_device_pointer()
 
     def _get_device_pointer(self):
         assert self._mapped
@@ -1161,6 +1184,15 @@ def device_extents(devmem):
     s, n = s.value, n.value
     return s, s + n
 
+def device_memory_size(devmem):
+    sz = getattr(devmem, '_cuda_memsize_', None)
+    if sz is None:
+        s, e = device_extents(devmem)
+        sz = e - s
+        devmem._cuda_memsize_ = sz
+    assert sz > 0
+    return sz
+
 def host_pointer(obj):
     """
     NOTE: The underlying data pointer from the host data buffer is used and
@@ -1213,7 +1245,7 @@ def require_device_memory(obj):
         raise Exception("Not a CUDA memory object.")
 
 def device_memory_depends(devmem, *objs):
-    depset = getattr(devmem, "_depends", [])
+    depset = getattr(devmem, "_depends_", [])
     depset.extend(objs)
     devmem = depset
 
