@@ -124,7 +124,8 @@ def register_pyextensibletype():
 # Generate code for build
 #------------------------------------------------------------------------
 
-build = set(sys.argv) & set(['build', 'build_ext', 'install'])
+build = set(sys.argv) & set(['build', 'build_ext', 'install', 
+                             'bdist_wininst'])
 cleanup_pyextensibletype()
 
 if build:
