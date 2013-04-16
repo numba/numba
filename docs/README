@@ -1,0 +1,3 @@
+To build the documentation:
+
+    $ pip install sphinxjp.themes.basicstrap
