@@ -29,6 +29,34 @@ What we want for 1.0 is:
     * parallel tasks (green threads, typed channels, scheduler)
     * generators on top of the green thread model
 
+We also like some minimal Cython support, in addition to the longer
+term goals of SEP 200. One idea from Zaur Shibzukhov is to provide
+support for Cython pxd overlays::
+
+    # foo.py
+
+    def my_function(a):
+        b = 2
+        return a ** b
+
+Such a module can be overlain with a Cython pxd file, e.g.
+
+.. code-block:: cython
+
+    # foo.pxd
+
+    cimport cython
+
+    @cython.locals(b=double)
+    cpdef my_function(double a)
+
+For some inspiration of what we can do with pxd overlays, see also:
+https://github.com/cython/cython/blob/master/Cython/Compiler/FlowControl.pxd
+
+We can now compile ``foo.py`` with Cython. We should be able to similarly
+compile ``foo.py`` with numba, using ``pycc`` as well as at runtime to produce
+a new module with annotated functions compiled in the right order.
+
 Thing we want
 =============
 We will order these from less involved to more involved,
