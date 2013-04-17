@@ -212,5 +212,5 @@ else:
     import test_prange as module
 
 import numba as nb
-nb.testmod(module, runit=True)
+nb.testmod(module)
 __test__ = {}
