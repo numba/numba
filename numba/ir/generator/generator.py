@@ -109,9 +109,18 @@ class FileAllocator(object):
     def open_sourcefile(self, name):
         "Allocate a file and save in in allocated_files"
 
+    def close(self):
+        for file in self.allocated_files.itervalues():
+            file.close()
+
+        self.allocated_files.clear()
+
 class DiskFileAllocator(FileAllocator):
 
     def open_sourcefile(self, name):
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+
         filename = os.path.join(self.output_dir, name)
         file = codecs.open(filename, 'w', encoding='UTF-8')
         self.allocated_files[name] = file

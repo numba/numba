@@ -25,6 +25,7 @@ testdir = os.path.join(root, "tests")
 
 py_preamble = """
 import types
+import cython
 
 class TypedProperty(object):
     '''Defines a class property that does a type check in the setter.'''
@@ -72,16 +73,15 @@ def format_field(classname, field):
         type = field.type
 
     format_dict = dict(name=field.name, type=type, classname=classname)
-    return ('%(name)s = TypedProperty(%(type)s, '
-            '"%(classname)s", "%(name)s")' % format_dict)
+    return ('%(classname)s.%(name)s = TypedProperty(%(type)s, '
+                '"%(classname)s", "%(name)s")' % format_dict)
 
 #------------------------------------------------------------------------
 # Class Generation
 #------------------------------------------------------------------------
 
 class Class(object):
-    def __init__(self, name, base, doc, fields=(),
-                 attributes=()):
+    def __init__(self, name, base, doc, fields=(), attributes=()):
         self.name = name
         self.base = base
         self.doc = doc
@@ -96,8 +96,10 @@ class PyClass(Class):
     def __str__(self):
         fieldnames = [str(field.name) for field in self.fields]
         fields = map(repr, fieldnames)
-        properties = [format_field(self.name, field) for field in self.fields]
+        properties = [format_field(self.name, field)
+                          for field in self.fields] or ["pass"]
         attributes = map(repr, self.attributes)
+
         if fieldnames:
             initialize = ["self.%s = %s" % (name, name) for name in fieldnames]
         else:
@@ -131,9 +133,6 @@ class PyClass(Class):
                     %(attributes)s
                 )
 
-                # Properties
-                %(properties)s
-
                 def __init__(self, %(params)s):
                     %(initialize)s
 
@@ -142,6 +141,10 @@ class PyClass(Class):
 
                 def __str__(self):
                     return "%(name)s(%(fmtstring)s)" %% %(fmtargs)s
+
+            if not cython.compiled:
+                # Properties
+                %(properties)s
 
         ''') % format_dict
 

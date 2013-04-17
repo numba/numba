@@ -56,6 +56,8 @@ visitor_class = '''
 from interface import GenericVisitor, iter_fields
 from nodes import AST
 
+__all__ = ['Visitor']
+
 class Visitor(GenericVisitor):
 
     def generic_visit(self, node):
@@ -72,6 +74,8 @@ class Visitor(GenericVisitor):
 transformer_class = """
 from interface import GenericVisitor, iter_fields
 from nodes import AST
+
+__all__ = ['Transformer']
 
 class Transformer(GenericVisitor):
 
@@ -101,14 +105,14 @@ class Transformer(GenericVisitor):
 """
 
 pxd_visitor_class = """
-from interface import GenericVisitor
+from interface cimport GenericVisitor
 
 cdef class Visitor(GenericVisitor):
     pass
 """
 
 pxd_transformer_class = """
-from interface import GenericVisitor
+from interface cimport GenericVisitor
 
 cdef class Transformer(GenericVisitor):
     pass
