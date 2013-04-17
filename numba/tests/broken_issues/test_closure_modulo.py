@@ -1,15 +1,10 @@
 from numba import autojit
-import numpy as np
-print np.zeros(10).dtype
-
 
 @autojit
 def closure_modulo(a, b):
-    c = np.zeros(10)
-    @jit('f8[:]()')
+    @jit('int32()')
     def foo():
-        c[0] = a % b
-        return c
+        return a % b
     return foo()
 
 print closure_modulo(100, 48)
