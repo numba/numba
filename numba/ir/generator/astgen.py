@@ -34,20 +34,26 @@ class TypedProperty(object):
         cls.__init__(rv, ty, doc, default)
         return property(rv.getter, rv.setter, rv.deleter, doc)
 
-    def __init__(self, ty, doc, default=None):
+    def __init__(self, ty, typename, attrname, default=None):
         self.propname = '_property_%d' % (id(self),)
         self.default = default
+        if not isinstance(ty, tuple):
+            ty = (ty,)
         self.ty = ty
-        self.doc = doc
+        self.typename = typename
+        self.attrname = attrname
 
     def getter(self, obj):
         return getattr(obj, self.propname, self.default)
 
     def setter(self, obj, new_val):
         if not isinstance(new_val, self.ty):
+            ty = tuple(t.__name__ for t in self.ty)
             raise ValueError(
-                'Invalid property setting, expected instance of type(s) %r '
-                '(got %r).' % (self.ty, type(new_val)))
+                "Invalid type for attribute '%s.%s', "
+                "expected instance of type(s) %r "
+                "(got %r)." % (self.typename, self.attrname,
+                               ty, type(new_val).__name__))
         setattr(obj, self.propname, new_val)
 
     def deleter(self, obj):
@@ -59,14 +65,15 @@ cimport cython
 from interface cimport GenericVisitor
 """
 
-def format_field(field):
+def format_field(classname, field):
     if field.opt:
         type = "(%s, types.NoneType)" % field.type
     else:
         type = field.type
 
-    format_dict = dict(name=field.name, type=type)
-    return '%(name)s = TypedProperty(%(type)s, "%(name)s")' % format_dict
+    format_dict = dict(name=field.name, type=type, classname=classname)
+    return ('%(name)s = TypedProperty(%(type)s, '
+            '"%(classname)s", "%(name)s")' % format_dict)
 
 #------------------------------------------------------------------------
 # Class Generation
@@ -89,7 +96,7 @@ class PyClass(Class):
     def __str__(self):
         fieldnames = [str(field.name) for field in self.fields]
         fields = map(repr, fieldnames)
-        properties = map(format_field, self.fields)
+        properties = [format_field(self.name, field) for field in self.fields]
         attributes = map(repr, self.attributes)
         if fieldnames:
             initialize = ["self.%s = %s" % (name, name) for name in fieldnames]

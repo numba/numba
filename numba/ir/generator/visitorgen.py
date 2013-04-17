@@ -15,17 +15,32 @@ from .formatting import format_stats, get_fields
 # Code Formatting
 #------------------------------------------------------------------------
 
-# TODO: We can also make 'visitchildren' dispatch quickly
+interface_class = '''
 
-interface_class = """
+def iter_fields(node):
+    """
+    Yield a tuple of ``(fieldname, value)`` for each field in ``node._fields``
+    that is present on *node*.
+    """
+    result = []
+    for field in node._fields:
+        try:
+            result.append((field, getattr(node, field)))
+        except AttributeError:
+            pass
+
+    return result
+
 class GenericVisitor(object):
 
-    def generic_visit(self, node):
-        typename = type(node).__name__
-        m = getattr(self, typename)
-        m(self, node)
+    def visit(self, node):
+        return node.accept(self)
 
-"""
+    def generic_visit(self, node):
+        """Called explicitly by the user from an overridden visitor method"""
+        raise NotImplementedError
+
+'''
 
 pxd_interface_class = """\
 from nodes cimport *
@@ -34,16 +49,55 @@ cdef class GenericVisitor(object):
     cpdef generic_visit(self, node)
 """
 
-visitor_class = """
-from interface import GenericVisitor
+
+# TODO: We can also make 'visitchildren' dispatch quickly
+
+visitor_class = '''
+from interface import GenericVisitor, iter_fields
+from nodes import AST
 
 class Visitor(GenericVisitor):
-"""
+
+    def generic_visit(self, node):
+        for field, value in iter_fields(node):
+            if isinstance(value, list):
+                for item in value:
+                    if isinstance(item, AST):
+                        item.accept(self)
+            elif isinstance(value, AST):
+                value.accept(self)
+
+'''
 
 transformer_class = """
-from interface import GenericVisitor
+from interface import GenericVisitor, iter_fields
+from nodes import AST
 
 class Transformer(GenericVisitor):
+
+    def generic_visit(self, node):
+        for field, old_value in iter_fields(node):
+            old_value = getattr(node, field, None)
+            if isinstance(old_value, list):
+                new_values = []
+                for value in old_value:
+                    if isinstance(value, AST):
+                        value = value.accept(self)
+                        if value is None:
+                            continue
+                        elif not isinstance(value, AST):
+                            new_values.extend(value)
+                            continue
+                    new_values.append(value)
+                old_value[:] = new_values
+            elif isinstance(old_value, AST):
+                new_node = old_value.accept(self)
+                if new_node is None:
+                    delattr(node, field)
+                else:
+                    setattr(node, field, new_node)
+        return node
+
 """
 
 pxd_visitor_class = """
@@ -64,9 +118,14 @@ cdef class Transformer(GenericVisitor):
 # Code Formatting
 #------------------------------------------------------------------------
 
-def make_visit_stats(fields, inplace):
+def make_visit_stats(schema, fields, inplace):
     stats = []
     for field, field_access in zip(fields, get_fields(fields, obj="node")):
+        field_type = str(field.type)
+        if field_type not in schema.dfns and field_type not in schema.types:
+            # Not an AST node
+            continue
+
         s = "%s.accept(self)" % field_access
 
         if inplace:
@@ -79,14 +138,18 @@ def make_visit_stats(fields, inplace):
 
         stats.append(s)
 
-    return stats
+    if inplace:
+        stats.append("return node")
+
+    return stats or ["pass"]
 
 #------------------------------------------------------------------------
 # Method Generation
 #------------------------------------------------------------------------
 
 class Method(object):
-    def __init__(self, name, fields):
+    def __init__(self, schema, name, fields):
+        self.schema = schema
         self.name = name
         self.fields = fields
 
@@ -103,7 +166,7 @@ class PyMethod(Method):
     inplace = None
 
     def __str__(self):
-        stats = make_visit_stats(self.fields, self.inplace)
+        stats = make_visit_stats(self.schema, self.fields, self.inplace)
         return (
            "    def visit_%s(self, node):\n"
            "        %s\n"
@@ -147,7 +210,7 @@ class VisitorCodeGen(generator.Codegen):
 
     def emit_sum(self, emitter, schema, sumtype):
         fields = schema.types[sumtype]
-        emitter.emit(self.Method(sumtype, fields))
+        emitter.emit(self.Method(schema, sumtype, fields))
 
 #------------------------------------------------------------------------
 # Global Exports

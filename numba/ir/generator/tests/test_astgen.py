@@ -24,9 +24,9 @@ def test_ast_generation():
     # Terminals
     assert issubclass(m.Ham, m.root)
     assert issubclass(m.Foo, m.root)
-    assert issubclass(m.Bar, m.root)
 
     assert issubclass(m.SomeExpr, m.expr)
+    assert issubclass(m.Bar, m.expr)
 
 def test_valid_node_instantiation():
     """
