@@ -3,7 +3,7 @@ import numpy as np
 from ctypes import *
 
 from numbapro.cudalib.libutils import Lib, ctype_function
-from numbapro.cudapipeline.driver import cu_stream, device_pointer
+from numbapro.cudapipeline.driver import cu_stream, device_pointer, host_pointer
 from numbapro._utils import finalizer
 from numbapro import cuda
 
@@ -223,6 +223,48 @@ class libcublas(Lib):
 
     cublasDrotmg_v2 = cublasSrotmg_v2
 
+    #
+    # Level 2
+    #
+    cublasSgbmv_v2 = ctype_function(cublasStatus_t,
+                                 cublasHandle_t,    # handle,
+                                 cublasOperation_t, # trans,
+                                 c_int,             # m,
+                                 c_int,             # n,
+                                 c_int,             # kl,
+                                 c_int,             # ku,
+                                 c_void_p,          # *alpha,
+                                 c_void_p,          # *A,
+                                 c_int,             # lda,
+                                 c_void_p,          # *x,
+                                 c_int,             # incx,
+                                 c_void_p,          # *beta,
+                                 c_void_p,          # *y,
+                                 c_int)             # incy)
+
+    cublasDgbmv_v2 = cublasSgbmv_v2
+    cublasCgbmv_v2 = cublasSgbmv_v2
+    cublasZgbmv_v2 = cublasSgbmv_v2
+    
+    cublasSgemv_v2 = ctype_function(cublasStatus_t,
+                                 cublasHandle_t,        # handle,
+                                 cublasOperation_t,     # trans,
+                                 c_int,                 # m,
+                                 c_int,                 # n,
+                                 c_void_p,              # *alpha,
+                                 c_void_p,              # *A,
+                                 c_int,                 # lda,
+                                 c_void_p,              # *x,
+                                 c_int,                 # incx,
+                                 c_void_p,              # *beta,
+                                 c_void_p,              # *y,
+                                 c_int)                 # incy)
+
+    cublasDgemv_v2 = cublasSgemv_v2
+    cublasCgemv_v2 = cublasSgemv_v2
+    cublasZgemv_v2 = cublasSgemv_v2
+
+
 class c_complex(Structure):
     _fields_ = [('real', c_float), ('imag', c_float)]
 
@@ -338,7 +380,7 @@ def _Trotm(fmt, dtype):
         assert param.size >= 5
         assert param.dtype == np.dtype(dtype)
         fn(self._handle, int(n), device_pointer(x), int(incx),
-           device_pointer(y), int(incy), param.ctypes.data)
+           device_pointer(y), int(incy), host_pointer(param))
     return rotm
 
 def _Trotmg(fmt, cty, dtype):
@@ -350,10 +392,38 @@ def _Trotmg(fmt, cty, dtype):
         c_y1 = cty(y1)
         param = np.zeros(5, dtype=dtype)
         fn(self._handle, byref(c_d1), byref(c_d2), byref(c_x1), byref(c_y1),
-           param.ctypes.data)
+           host_pointer(param))
         return param
     return rotmg
 
+def _Tgbmv(fmt, cty, dtype):
+    def gbmv(self, trans, m, n, kl, ku, alpha, A, lda, x, incx, beta, y, incy):
+        '''This function performs the banded matrix-vector multiplication
+        '''
+        fn = getattr(self._api, 'cublas%sgbmv_v2' % fmt)
+        c_alpha = cty(alpha)
+        c_beta = cty(beta)
+        trans = { 'N': CUBLAS_OP_N,
+                  'T': CUBLAS_OP_T,
+                  'H': CUBLAS_OP_C, }[trans]
+        fn(self._handle, trans, m, n, kl, ku, byref(c_alpha), device_pointer(A),
+           lda, device_pointer(x), incx, byref(c_beta), device_pointer(y), incy)
+    return gbmv
+
+
+def _Tgemv(fmt, cty, dtype):
+    def gemv(self, trans, m, n, alpha, A, lda, x, incx, beta, y, incy):
+        '''This function performs the banded matrix-vector multiplication
+        '''
+        fn = getattr(self._api, 'cublas%sgemv_v2' % fmt)
+        c_alpha = cty(alpha)
+        c_beta = cty(beta)
+        trans = { 'N': CUBLAS_OP_N,
+                  'T': CUBLAS_OP_T,
+                  'H': CUBLAS_OP_C, }[trans]
+        fn(self._handle, trans, m, n, byref(c_alpha), device_pointer(A),
+           lda, device_pointer(x), incx, byref(c_beta), device_pointer(y), incy)
+    return gemv
 
 class cuBlas(finalizer.OwnerMixin):
     def __init__(self):
@@ -461,4 +531,15 @@ class cuBlas(finalizer.OwnerMixin):
 
     Srotmg = _Trotmg('S', c_float, np.float32)
     Drotmg = _Trotmg('D', c_double, np.float64)
+
+    Sgbmv = _Tgbmv('S', c_float, np.float32)
+    Dgbmv = _Tgbmv('D', c_double, np.float64)
+    Cgbmv = _Tgbmv('C', c_complex, np.complex64)
+    Zgbmv = _Tgbmv('Z', c_double_complex, np.complex128)
+
+
+    Sgemv = _Tgemv('S', c_float, np.float32)
+    Dgemv = _Tgemv('D', c_double, np.float64)
+    Cgemv = _Tgemv('C', c_complex, np.complex64)
+    Zgemv = _Tgemv('Z', c_double_complex, np.complex128)
 

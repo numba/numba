@@ -325,6 +325,74 @@ class TestCuBlasBinding(unittest.TestCase):
     def test_Drotmg(self):
         self.Trotmg('Drotmg', np.float64)
 
+    def Tgbmv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        blas = cuBlas()
+        kl = 0
+        ku = 0
+        alpha = 1.
+        beta = 0.
+        A = np.array([[1, 0, 0],
+                      [0, 2, 0],
+                      [0, 0, 3]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([1, 2, 3], dtype=dtype)
+        lda, n = A.shape
+        m = lda
+        y0 = y.copy()
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+        dy = cuda.to_device(y)
+        blas.Sgbmv('N', m, n, kl, ku, alpha, dA, lda, dx, 1, beta, dy, 1)
+        dy.copy_to_host(y)
+        self.assertFalse(all(y0 == y))
+
+    def test_Sgbmv(self):
+        self.Tgbmv('Sgbmv', np.float32)
+
+    def test_Dgbmv(self):
+        self.Tgbmv('Dgbmv', np.float64)
+
+    def test_Cgbmv(self):
+        self.Tgbmv('Cgbmv', np.complex64)
+
+    def test_Zgbmv(self):
+        self.Tgbmv('Zgbmv', np.complex128)
+
+    def Tgemv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        blas = cuBlas()
+        kl = 0
+        ku = 0
+        alpha = 1.
+        beta = 0.
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([1, 2, 3], dtype=dtype)
+        m, n = A.shape
+        lda = m
+        y0 = y.copy()
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+        dy = cuda.to_device(y)
+        blas.Sgemv('N', m, n, alpha, dA, lda, dx, 1, beta, dy, 1)
+        dy.copy_to_host(y)
+        self.assertFalse(all(y0 == y))
+
+    def test_Sgemv(self):
+        self.Tgemv('Sgemv', np.float32)
+
+    def test_Dgemv(self):
+        self.Tgbmv('Dgemv', np.float64)
+
+    def test_Cgemv(self):
+        self.Tgbmv('Cgemv', np.complex64)
+
+    def test_Zgemv(self):
+        self.Tgbmv('Zgemv', np.complex128)
+
 
 class TestCuBlasAPI(unittest.TestCase):
     def setUp(self):
