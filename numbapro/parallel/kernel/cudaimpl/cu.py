@@ -5,7 +5,7 @@ from weakref import WeakValueDictionary
 from numbapro import cuda
 from numba.wrapping.compiler import resolve_argtypes
 from numbapro.cudapipeline.environment import CudaEnvironment
-from numbapro.cudapipeline.devicearray import DeviceArray
+from numbapro.cudapipeline import devicearray
 from numbapro.cudapipeline.error import CudaDriverError
 from ..cu import CU
 
@@ -54,7 +54,7 @@ class CUDAComputeUnit(CU):
     def __typemap(self, values):
         typemapper = self.__env.context.typemapper.from_python
         for val in values:
-            if isinstance(val, DeviceArray):
+            if devicearray.is_cuda_ndarray(val):
                 shape = tuple(1 for _ in val.shape)
                 fakearray = numpy.empty(shape, dtype=val.dtype)
                 yield typemapper(fakearray)

@@ -77,13 +77,13 @@ class TestCudaDriver(support.CudaTestCase):
         function = Function(module, '_Z10helloworldPi')
 
         array = (c_int * 100)()
-        memory = AllocatedDeviceMemory(sizeof(array))
-        memory.to_device_raw(array, sizeof(array))
+        memory = DeviceMemory(sizeof(array))
+        host_to_device(memory, array, sizeof(array))
 
         function = function.configure((1,), (100,))
         function(memory)
 
-        memory.from_device_raw(array, sizeof(array))
+        device_to_host(array, memory, sizeof(array))
         for i, v in enumerate(array):
             self.assertEqual(i, v)
 
@@ -97,13 +97,13 @@ class TestCudaDriver(support.CudaTestCase):
         stream = Stream()
         with stream.auto_synchronize():
 
-            memory = AllocatedDeviceMemory(sizeof(array))
-            memory.to_device_raw(array, sizeof(array), stream)
+            memory = DeviceMemory(sizeof(array))
+            host_to_device(memory, array, sizeof(array), stream=stream)
 
             function = function.configure((1,), (100,), stream=stream)
             function(memory)
 
-            memory.from_device_raw(array, sizeof(array), stream)
+        device_to_host(array, memory, sizeof(array), stream=stream)
 
         for i, v in enumerate(array):
             self.assertEqual(i, v)

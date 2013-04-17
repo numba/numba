@@ -3,14 +3,31 @@ import numpy as np
 from numbapro.cudapipeline import driver
 
 class TestHostAlloc(unittest.TestCase):
-    def test_host_alloc_driver(self):
+    def setUp(self):
         driver.get_or_create_context()
-        mem = driver.HostAllocMemory(1024, map=True)
-        buffer = mem.get_host_buffer()
-        dtype = np.dtype('int32')
-        ary = np.ndarray(shape=1024/dtype.itemsize, dtype=dtype, buffer=buffer)
-        ary.fill(1234)
-        self.assertTrue(np.all(ary == [1234] * ary.shape[0]))
+
+    def test_host_alloc_driver(self):
+        n = 32
+        mem = driver.HostAllocMemory(n, mapped=True)
+
+        buf = memoryview(mem)
+
+        dtype = np.dtype(np.uint8)
+        ary = np.ndarray(shape=n / dtype.itemsize, dtype=dtype, buffer=mem)
+
+        magic = 0xab
+        driver.device_memset(mem, magic, n)
+
+        self.assertTrue(np.all(ary == magic))
+
+        ary.fill(n)
+
+        recv = np.empty_like(ary)
+
+        driver.device_to_host(recv, mem, ary.size)
+
+        self.assertTrue(np.all(ary == recv))
+        self.assertTrue(np.all(recv == n))
 
 if __name__ == '__main__':
     unittest.main()

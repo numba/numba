@@ -20,7 +20,8 @@ class TestCudaAutoContext(unittest.TestCase):
         orig = A.copy()
         foo[(1,), A.shape](dA)
         dA.to_host()
-        self.assertTrue(np.allclose(dA, orig * 2), (dA, orig * 2))
+
+        self.assertTrue(np.allclose(A, orig * 2), (A, orig * 2))
 
 if __name__ == '__main__':
     unittest.main()

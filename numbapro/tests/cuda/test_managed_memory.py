@@ -4,8 +4,7 @@ from numbapro.cudapipeline import driver
 
 class TestManagedMemory(unittest.TestCase):
     def test_smallmemorymanager(self):
-        device = driver.Driver().get_current_context().device
-        smm = SmallMemoryManager(device, nbytes=256)
+        smm = SmallMemoryManager(nbytes=256)
         val0 = 1, 2, 3
         mm0 = smm.obtain(val0)
         mm1 = smm.obtain(val0)

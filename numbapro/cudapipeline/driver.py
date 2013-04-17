@@ -7,7 +7,7 @@ import sys, os, warnings
 import contextlib
 from ctypes import *
 from .error import *
-from numbapro._utils import finalizer
+from numbapro._utils import finalizer, mviewbuf
 import threading
 from weakref import WeakValueDictionary
 
@@ -149,6 +149,26 @@ CU_EVENT_DISABLE_TIMING = 0x2
 # Event is suitable for interprocess use. CU_EVENT_DISABLE_TIMING must be set
 CU_EVENT_INTERPROCESS   = 0x4
 
+# The CUcontext on which a pointer was allocated or registered
+CU_POINTER_ATTRIBUTE_CONTEXT = 1,
+# The CUmemorytype describing the physical location of a pointer
+CU_POINTER_ATTRIBUTE_MEMORY_TYPE = 2
+# The address at which a pointer's memory may be accessed on the device
+CU_POINTER_ATTRIBUTE_DEVICE_POINTER = 3
+# The address at which a pointer's memory may be accessed on the host
+CU_POINTER_ATTRIBUTE_HOST_POINTER = 4
+# A pair of tokens for use with the nv-p2p.h Linux kernel interface
+CU_POINTER_ATTRIBUTE_P2P_TOKENS = 5
+
+# Host memory
+CU_MEMORYTYPE_HOST    = 0x01
+# Device memory
+CU_MEMORYTYPE_DEVICE  = 0x02
+# Array memory
+CU_MEMORYTYPE_ARRAY   = 0x03
+# Unified device or host memory
+CU_MEMORYTYPE_UNIFIED = 0x04
+
 
 def _build_reverse_error_map():
     import sys
@@ -156,11 +176,6 @@ def _build_reverse_error_map():
     module = sys.modules[__name__]
     return dict((getattr(module, i), i)
                 for i in filter(lambda x: x.startswith(prefix), globals()))
-
-# Expose bytearray creation
-bytearray_from = pythonapi.PyByteArray_FromStringAndSize
-bytearray_from.restype = py_object
-bytearray_from.argtypes = c_void_p, c_ssize_t
 
 class Driver(object):
     '''Facade to the CUDA Driver API.  A singleton class.  It is safe to
@@ -238,6 +253,16 @@ class Driver(object):
         #                            size_t ByteCount, CUstream hStream);
         'cuMemcpyHtoDAsync':    (c_int, cu_device_ptr, c_void_p, c_size_t,
                                 cu_stream),
+        
+        # CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost,
+        #                       size_t ByteCount);
+        'cuMemcpyDtoD':         (c_int, cu_device_ptr, cu_device_ptr, c_size_t),
+
+        # CUresult cuMemcpyHtoDAsync(CUdeviceptr dstDevice, const void *srcHost,
+        #                            size_t ByteCount, CUstream hStream);
+        'cuMemcpyDtoDAsync':    (c_int, cu_device_ptr, cu_device_ptr, c_size_t,
+                                cu_stream),
+
 
         # CUresult cuMemcpyDtoH(void *dstHost, CUdeviceptr srcDevice,
         #                       size_t ByteCount);
@@ -326,6 +351,24 @@ class Driver(object):
         #                                   CUevent         hEvent,
         #                                	unsigned int 	Flags )
         'cuStreamWaitEvent': (c_int, cu_stream, cu_event, c_uint),
+
+        # CUresult 	cuPointerGetAttribute (void *data, CUpointer_attribute attribute, CUdeviceptr ptr)
+        'cuPointerGetAttribute': (c_int, c_void_p, c_uint, cu_device_ptr),
+
+        #    CUresult cuMemGetAddressRange	(	CUdeviceptr * 	pbase,
+        #                                        size_t * 	psize,
+        #                                        CUdeviceptr 	dptr	 
+        #                                        )
+        'cuMemGetAddressRange': (c_int,
+                                 POINTER(cu_device_ptr),
+                                 POINTER(c_size_t),
+                                 cu_device_ptr),
+
+        #    CUresult cuMemHostGetFlags	(	unsigned int * 	pFlags,
+        #                                   void * 	p )
+        'cuMemHostGetFlags': (c_int,
+                              POINTER(c_uint),
+                              c_void_p),
     }
 
     OLD_API_PROTOTYPES = {
@@ -500,10 +543,10 @@ class Driver(object):
         try:
             handle = self._THREAD_LOCAL.context
         except AttributeError:
-            if noraise:
-                return None
-            else:
-                raise CudaDriverError("No context was created")
+            ctxt = self._get_current_context(noraise=noraise)
+            if ctxt:
+                self._cache_current_context(ctxt)
+            return ctxt
         else:
             return self._CONTEXTS[handle]
 
@@ -512,14 +555,17 @@ class Driver(object):
         '''
         self._THREAD_LOCAL.context = ctxt._handle.value
 
-    def get_current_context(self):
+    def _get_current_context(self, noraise=False):
         '''Uses CUDA driver API to get current context
         '''
         handle = cu_context()
         error = self.cuCtxGetCurrent(byref(handle))
         self.check_error(error, "Fail to get current context.")
         if handle.value is None:
-            raise CudaDriverError("No CUDA context was created.")
+            if noraise:
+                return None
+            else:
+                raise CudaDriverError("No CUDA context was created.")
         else:
             context = self._CONTEXTS[handle.value]
             return context
@@ -552,6 +598,7 @@ CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT = 40
 CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY = 19
 CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16
 CU_DEVICE_ATTRIBUTE_WARP_SIZE = 10
+CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING = 41
 
 class Device(object):
 
@@ -568,6 +615,7 @@ class Device(object):
       'CAN_MAP_HOST_MEMORY':   CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY,
       'MULTIPROCESSOR_COUNT':  CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT,
       'WARP_SIZE':             CU_DEVICE_ATTRIBUTE_WARP_SIZE,
+      'UNIFIED_ADDRESSING':    CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING,
     }
 
     def __init__(self, device_id):
@@ -618,6 +666,19 @@ class Device(object):
         keys += ['COMPUTE_CAPABILITY']
         return dict((k, getattr(self, k)) for k in keys)
 
+    def __hash__(self):
+        return hash(self.id)
+
+    def __eq__(self, rhs):
+        try:
+            return self.id == rhs.id
+        except AttributeError:
+            return False
+
+    def __ne__(self, rhs):
+        return not (self == rhs)
+
+
 class _Context(finalizer.OwnerMixin):
     def __init__(self, device):
         self.device = device
@@ -625,6 +686,8 @@ class _Context(finalizer.OwnerMixin):
         flags = 0
         if self.device.CAN_MAP_HOST_MEMORY:
             flags |= CU_CTX_MAP_HOST
+        else:
+            assert False
         error = self.driver.cuCtxCreate(byref(self._handle), flags,
                                         self.device.id)
         self.driver.check_error(error,
@@ -640,17 +703,17 @@ class _Context(finalizer.OwnerMixin):
 
     @property
     def driver(self):
-        return self.device.driver
+        return Driver()
 
     def __str__(self):
         return 'Context %s on %s' % (id(self), self.device)
 
 class Stream(finalizer.OwnerMixin):
     def __init__(self):
-        self.context = Driver().current_context()
+        self.device = self.driver.current_context().device
         self._handle = cu_stream()
         error = self.driver.cuStreamCreate(byref(self._handle), 0)
-        msg = 'Failed to create stream on %s' % self.context
+        msg = 'Failed to create stream on %s' % self.device
         self.driver.check_error(error, msg)
         self._finalizer_track(self._handle)
 
@@ -662,7 +725,7 @@ class Stream(finalizer.OwnerMixin):
                            exit=True)
 
     def __str__(self):
-        return 'Stream %d on %s' % (self, self.context)
+        return 'Stream %d on %s' % (self, self.device)
 
     def __int__(self):
         return self._handle.value
@@ -679,99 +742,62 @@ class Stream(finalizer.OwnerMixin):
 
     @property
     def driver(self):
-        return self.device.driver
-
-    @property
-    def device(self):
-        return self.context.device
+        return Driver()
 
 
-class DevicePointer(object):
-    '''Memory on the GPU deivce.
-
-    The lifetime of the object is tied to the GPU memory handle; that is the
-    memory is released when this object is released.
+class HostAllocMemory(mviewbuf.MemAlloc, finalizer.OwnerMixin):
+    '''A host allocation by the CUDA driver that is pagelocked.
+    This object exposes the buffer interface; thus, user can use
+    this as a buffer for ndarray.
     '''
-    def __init__(self, handle):
-        self._handle = handle
-        self._depends = []
-        self.context = Driver().current_context()
-
-    def to_device_raw(self, src, size, stream=None, offset=0):
-        ptr = cu_device_ptr(self._handle.value + offset)
-        if stream:
-            error = self.driver.cuMemcpyHtoDAsync(ptr, src, size,
-                                                  stream._handle)
-        else:
-            error = self.driver.cuMemcpyHtoD(ptr, src, size)
-        self.driver.check_error(error, "Failed to copy memory H->D")
-
-    def from_device_raw(self, dst, size, stream=None, offset=0):
-        ptr = cu_device_ptr(self._handle.value + offset)
-        if stream:
-            error = self.driver.cuMemcpyDtoHAsync(dst, ptr, size,
-                                                  stream._handle)
-        else:
-            error = self.driver.cuMemcpyDtoH(dst, ptr, size)
-        self.driver.check_error(error, "Failed to copy memory D->H")
-
-    def memset(self, val, size, stream=None):
-        if stream:
-            error = self.driver.cuMemsetD8Async(self._handle, val, size,
-                                                stream._handle)
-        else:
-            error = self.driver.cuMemsetD8(self._handle, val, size)
-        self.driver.check_error(error, "Failed to set memory")
-
-    def add_dependencies(self, *args):
-        self._depends.extend(args)
-
-    @property
-    def driver(self):
-        return self.device.driver
-
-    @property
-    def device(self):
-        return self.context.device
-
-class HostAllocMemory(finalizer.OwnerMixin):
-    def __init__(self, bytesize, map=False, portable=False, wc=False):
-        self.driver = Driver()
+    __cuda_memory__ = True
+    def __init__(self, bytesize, mapped=False, portable=False, wc=False):
+        self.device = self.driver.current_context().device
         self.bytesize = bytesize
-        self._handle = c_void_p()
+        self._handle = c_void_p(0)
         flags = 0
-        if map:
+        if mapped:
             flags |= CU_MEMHOSTALLOC_DEVICEMAP
         if portable:
             flags |= CU_MEMHOSTALLOC_PORTABLE
         if wc:
             flags |= CU_MEMHOSTALLOC_WRITECOMBINED
-        error = self.driver.cuMemHostAlloc(byref(self._handle),
-                                      bytesize, flags)
+
+        error = self.driver.cuMemHostAlloc(byref(self._handle), bytesize, flags)
         self.driver.check_error(error, 'Failed to host alloc')
         self._finalizer_track(self._handle)
 
-        self.devmem = cu_device_ptr()
+        self.devmem = cu_device_ptr(0)
 
-        error = self.driver.cuMemHostGetDevicePointer(byref(self.devmem),
-                                                      self._handle, 0)
-        self.driver.check_error(error, 'Failed to get device ptr from host ptr')
+        if mapped:
+            # get host device pointer
+            error = self.driver.cuMemHostGetDevicePointer(byref(self.devmem),
+                                                          self._handle, 0)
+            self.driver.check_error(error,
+                                    'Failed to get device ptr from host ptr')
+
+        self._buflen_ = self.bytesize
+        self._bufptr_ = self._handle.value
 
     @classmethod
     def _finalize(cls, handle):
         driver = Driver()
         driver.cuMemFreeHost(handle)
 
-    def get_host_buffer(self):
-        return bytearray_from(self._handle, self.bytesize)
+    @property
+    def device_ctypes_pointer(self):
+        return self.devmem
+
+    @property
+    def driver(self):
+        return Driver()
 
 
-class AllocatedDeviceMemory(DevicePointer, finalizer.OwnerMixin):
-    def __init__(self, bytesize=None):
-        self._depends = []
-        self.context = Driver().current_context()
-        if bytesize is not None:
-            self.allocate(bytesize)
+class DeviceMemory(finalizer.OwnerMixin):
+    __cuda_memory__ = True
+    def __init__(self, bytesize):
+        self.device = self.driver.current_context().device
+        self._allocate(bytesize)
 
     @classmethod
     def _finalize(cls, handle):
@@ -782,54 +808,52 @@ class AllocatedDeviceMemory(DevicePointer, finalizer.OwnerMixin):
             global debug_memory_free
             debug_memory_free += 1
 
-    def allocate(self, bytesize):
+    def _allocate(self, bytesize):
         assert not hasattr(self, '_handle')
         self._handle = cu_device_ptr()
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
         self.driver.check_error(error, 'Failed to allocate memory')
         self._finalizer_track(self._handle)
-        self._bytesize = bytesize
-        
+        self.bytesize = bytesize
+
         if debug_memory:
             global debug_memory_alloc
             debug_memory_alloc += 1
 
-    def offset(self, offset):
-        handle = cu_device_ptr(self._handle.value + offset)
-        # create new instance without allocation
-        devmem = type(self)()
-        devmem._handle = handle
-        devmem.add_dependencies(self) # avoid free the parent pointer
-        return devmem
+    @property
+    def device_ctypes_pointer(self):
+        return self._handle
 
     @property
-    def bytesize(self):
-        return self._bytesize
+    def driver(self):
+        return Driver()
 
+class DeviceView(object):
+    __cuda_memory__ = True
+    def __init__(self, owner, start, stop=None):
+        self.device = self.driver.current_context().device
+        self._handle = cu_device_ptr(device_pointer(owner) + start)
+        self._owner = owner
+        if stop is None:
+            sz = device_memory_size(owner) - start
+        else:
+            sz = stop - start
+        assert sz > 0
+        self._cuda_memsize_ = sz
+
+    @property
+    def device_ctypes_pointer(self):
+        return self._handle
+    
+    @property
+    def driver(self):
+        return Driver()
 
 class PinnedMemory(finalizer.OwnerMixin):
-
-    # Use a weak value dictionary to cache pointer-value -> PinnedMemory object.
-    __cache = WeakValueDictionary()
-
-    def __new__(cls, ptr, size, mapped=False):
-        if isinstance(ptr, int) or isinstance(ptr, long):
-            ptr_value = ptr
-        else:
-            ptr_value = ptr.value
-        if ptr_value in cls.__cache:
-            # If the memory is already pinned,
-            # return the existing object
-            return cls.__cache[ptr_value]
-
-        inst = object.__new__(PinnedMemory)
-        # Cache instance in the cache
-        cls.__cache[ptr_value] = inst
-        inst.__initialize(ptr, size, mapped=mapped)
-        return inst
-
-    def __initialize(self, ptr, size, mapped):
-        if mapped and not self.context.device.CAN_MAP_HOST_MEMORY:
+    def __init__(self, owner, ptr, size, mapped=False):
+        self._owner = owner
+        self.device = self.driver.current_context().device
+        if mapped and not self.device.CAN_MAP_HOST_MEMORY:
             raise CudaDriverError("Device %s cannot map host memory" %
                                   self.device)
 
@@ -843,25 +867,31 @@ class PinnedMemory(finalizer.OwnerMixin):
             flags |= CU_MEMHOSTREGISTER_DEVICEMAP
         error = self.driver.cuMemHostRegister(ptr, size, flags)
         self.driver.check_error(error, 'Failed to pin memory')
+
+        if mapped:
+            self._get_device_pointer()
+
+        self.__cuda_memory__ = mapped
+
         self._finalizer_track(self._pointer)
 
-    def get_device_pointer(self):
+    def _get_device_pointer(self):
         assert self._mapped
-        dptr = cu_device_ptr(0)
-        hptr=  self._pointer
+        self._devmem = cu_device_ptr(0)
         flags = 0 # must be zero for now
-        error = self.driver.cuMemHostGetDevicePointer(byref(dptr), hptr, flags)
-        return DevicePointer(dptr)
+        error = self.driver.cuMemHostGetDevicePointer(byref(self._devmem),
+                                                      self._pointer, flags)
+        self.driver.check_error(error, 'Failed to get device ptr from host ptr')
 
+    @property
+    def device_ctypes_pointer(self):
+        return self._devmem
+    
     @classmethod
     def _finalize(cls, pointer):
         driver = Driver()
         error = driver.cuMemHostUnregister(pointer)
         driver.check_error(error, 'Failed to unpin memory')
-
-    @property
-    def context(self):
-        return self.driver.current_context()
 
     @property
     def driver(self):
@@ -872,7 +902,7 @@ CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES = 4
 
 class Module(finalizer.OwnerMixin):
     def __init__(self, ptx):
-        self.context = Driver().current_context()
+        self.device = self.driver.current_context().device
         self.ptx = ptx
 
         self._handle = cu_module()
@@ -907,12 +937,7 @@ class Module(finalizer.OwnerMixin):
 
     @property
     def driver(self):
-        return self.device.driver
-
-    @property
-    def device(self):
-        return self.context.device
-
+        return Driver()
 
 class Function(finalizer.OwnerMixin):
 
@@ -922,6 +947,7 @@ class Function(finalizer.OwnerMixin):
     sharedmem = 0
 
     def __init__(self, module, name):
+        self.device = self.driver.current_context().device
         self.module = module
         self.name = name
         self._handle = cu_function()
@@ -932,11 +958,7 @@ class Function(finalizer.OwnerMixin):
     
     @property
     def driver(self):
-        return self.device.driver
-
-    @property
-    def device(self):
-        return self.context.device
+        return Driver()
 
     @property
     def context(self):
@@ -982,13 +1004,13 @@ class Function(finalizer.OwnerMixin):
         '''
         *args -- Must be either ctype objects of DevicePointer instances.
         '''
-        assert self.driver.current_context() is self.context
+        assert self.driver.current_context().device is self.device
         launch_kernel(self._handle, self.griddim, self.blockdim,
                       self.sharedmem, self.stream, args)
 
 class Event(finalizer.OwnerMixin):
     def __init__(self, timing=True):
-        self.context = Driver().current_context()
+        self.device = self.driver.current_context().device
         self._handle = cu_event()
         self.timing = timing
         flags = 0
@@ -1041,11 +1063,8 @@ class Event(finalizer.OwnerMixin):
 
     @property
     def driver(self):
-        return self.device.driver
+        return Driver()
 
-    @property
-    def device(self):
-        return self.context.device
 
 def event_elapsed_time(evtstart, evtend):
     driver = evtstart.driver
@@ -1067,8 +1086,8 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
         # count parameter byte size
         bytesize = 0
         for arg in args:
-            if isinstance(arg, AllocatedDeviceMemory):
-                size = sizeof(arg._handle)
+            if is_device_memory(arg):
+                size = sizeof(device_ctypes_pointer(arg))
             else:
                 size = sizeof(arg)
             bytesize += size
@@ -1078,11 +1097,10 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
 
         offset = 0
         for i, arg in enumerate(args):
-            if isinstance(arg, AllocatedDeviceMemory):
-                size = sizeof(arg._handle)
+            if is_device_memory(arg):
+                devptr = device_ctypes_pointer(arg)
                 error = driver.cuParamSetv(cufunc_handle, offset,
-                                           addressof(arg._handle),
-                                           size)
+                                           addressof(devptr), sizeof(devptr))
             else:
                 size = sizeof(arg)
                 error = driver.cuParamSetv(cufunc_handle, offset,
@@ -1101,8 +1119,8 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
 
         param_vals = []
         for arg in args:
-            if isinstance(arg, AllocatedDeviceMemory):
-                param_vals.append(addressof(arg._handle))
+            if is_device_memory(arg):
+                param_vals.append(addressof(device_ctypes_pointer(arg)))
             else:
                 param_vals.append(addressof(arg))
 
@@ -1122,19 +1140,215 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
 
 def get_or_create_context():
     "Get the current context if it exists or create one."
-    from .driver import Driver, Device
-    driver = Driver()
-    device_number = 0  # default device id
-    cxt = driver.current_context(noraise=True)
-    if cxt is None:
-        device = Device(device_number)
-        cxt = driver.create_context(device)
-    return cxt
+    drv = Driver()
+    context = drv.current_context(noraise=True)
+    if not context:
+        context = drv.create_context(Device(0))
+    return context
 
 def require_context(fn):
-    "Decorator"
+    "Decorator to ensure a context exists for the current thread."
     def _wrapper(*args, **kws):
         get_or_create_context()
         return fn(*args, **kws)
     return _wrapper
+
+#
+# CUDA memory functions
+#
+
+def _device_pointer_attr(devmem, attr, odata):
+    """Query attribute on the device pointer
+    """
+    driver = Driver()
+    attr = CU_POINTER_ATTRIBUTE_MEMORY_TYPE
+    error = driver.cuPointerGetAttribute(byref(odata), attr,
+                                         device_ctypes_pointer(devmem))
+    driver.check_error(error, "Failed to query pointer attribute")
+
+def device_pointer_type(devmem):
+    """Query the device pointer type: host, device, array, unified?
+    """
+    ptrtype = c_int(0)
+    _device_pointer_attr(devmem, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, ptrtype)
+    map = {
+        CU_MEMORYTYPE_HOST    : 'host',
+        CU_MEMORYTYPE_DEVICE  : 'device',
+        CU_MEMORYTYPE_ARRAY   : 'array',
+        CU_MEMORYTYPE_UNIFIED : 'unified',
+    }
+    return map[ptrtype.value]
+
+def device_extents(devmem):
+    """Find the extents (half open begin and end pointer) of the underlying
+    device memory allocation.
+    
+    NOTE: it always returns the extents of the allocation but the extents
+    of the device memory view that can be a subsection of the entire allocation.
+    """
+    driver = Driver()
+    s = cu_device_ptr()
+    n = c_size_t()
+    devptr = device_ctypes_pointer(devmem)
+    driver.cuMemGetAddressRange(byref(s), byref(n), devptr)
+    s, n = s.value, n.value
+    return s, s + n
+
+def device_memory_size(devmem):
+    """Check the memory size of the device memory.
+    The result is cached in the device memory object.
+    It may query the driver for the memory size of the device memory allocation.
+    """
+    sz = getattr(devmem, '_cuda_memsize_', None)
+    if sz is None:
+        s, e = device_extents(devmem)
+        sz = e - s
+        devmem._cuda_memsize_ = sz
+    assert sz > 0
+    return sz
+
+def host_pointer(obj):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous 
+    completes.
+    """
+    if isinstance(obj, (int, long)):
+        return obj
+    mv = memoryview(obj)
+    return mviewbuf.memoryview_get_buffer(mv)
+
+def host_memory_extents(obj):
+    "Returns (start, end) the start and end pointer of the array (half open)."
+    mv = memoryview(obj)
+    return mviewbuf.memoryview_get_extents(mv)
+
+def memory_size_from_info(shape, strides, itemsize):
+    """et the byte size of a contiguous memory buffer given the shape, strides
+    and itemsize.
+    """
+    assert len(shape) == len(strides)
+    ndim = len(shape)
+    s, e = mviewbuf.memoryview_get_extents_info(shape, strides, ndim, itemsize)
+    return e - s
+
+def host_memory_size(obj):
+    "Get the size of the memory"
+    s, e = host_memory_extents(obj)
+    assert e >= s
+    return e - s
+
+def device_pointer(obj):
+    "Get the device pointer as an integer"
+    return device_ctypes_pointer(obj).value
+
+def device_ctypes_pointer(obj):
+    "Get the ctypes object for the device pointer"
+    require_device_memory(obj)
+    return obj.device_ctypes_pointer
+
+def is_device_memory(obj):
+    """All CUDA memory object is recognized as an instance with the attribute
+    "__cuda_memory__" defined and its value evaluated to True.
+    
+    All CUDA memory object should also define an attribute named
+    "device_pointer" which value is an int(or long) object carrying the pointer
+    value of the device memory address.  This is not tested in this method.
+    """
+    return getattr(obj, '__cuda_memory__', False)
+
+def require_device_memory(obj):
+    """A sentry for methods that accept CUDA memory object.
+    """
+    if not is_device_memory(obj):
+        raise Exception("Not a CUDA memory object.")
+
+def device_memory_depends(devmem, *objs):
+    """Add dependencies to the device memory.
+    
+    Mainly used for creating structures that points to other device memory,
+    so that the referees are not GC and released.
+    """
+    depset = getattr(devmem, "_depends_", [])
+    depset.extend(objs)
+    devmem = depset
+
+def host_to_device(dst, src, size, stream=0):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous 
+    completes.
+    """
+    driver = Driver()
+    varargs = []
+
+    if stream:
+        fn = driver.cuMemcpyHtoDAsync
+        varargs.append(stream._handle)
+    else:
+        fn = driver.cuMemcpyHtoD
+
+    devptr = device_pointer(dst)
+    hostptr = host_pointer(src)
+    
+    error = fn(device_pointer(dst), host_pointer(src), size, *varargs)
+    driver.check_error(error, "Failed to copy memory H->D")
+
+def device_to_host(dst, src, size, stream=0):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous 
+    completes.
+    """
+    driver = Driver()
+    varargs = []
+
+    if stream:
+        fn = driver.cuMemcpyDtoHAsync
+        varargs.append(stream._handle)
+    else:
+        fn = driver.cuMemcpyDtoH
+
+    error = fn(host_pointer(dst), device_pointer(src), size, *varargs)
+    driver.check_error(error, "Failed to copy memory D->H")
+
+
+def device_to_device(dst, src, size, stream=0):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous 
+    completes.
+    """
+    driver = Driver()
+    varargs = []
+
+    if stream:
+        fn = driver.cuMemcpyDtoDAsync
+        varargs.append(stream._handle)
+    else:
+        fn = driver.cuMemcpyDtoD
+
+    error = fn(device_pointer(dst), device_pointer(src), size, *varargs)
+    driver.check_error(error, "Failed to copy memory D->H")
+
+def device_memset(dst, val, size, stream=0):
+    """Memset on the device.  
+    If stream is not zero, asynchronous mode is used.
+    
+    dst: device memory
+    val: byte value to be written
+    size: number of byte to be written
+    stream: a CUDA stream
+    """
+    driver = Driver()
+    varargs = []
+
+    if stream:
+        fn = driver.cuMemsetD8Async
+        varargs.append(stream._handle)
+    else:
+        fn = driver.cuMemsetD8
+
+    error = fn(device_pointer(dst), val, size, *varargs)
+    driver.check_error(error, "Failed to memset")
 

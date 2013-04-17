@@ -1,10 +1,8 @@
 import sys, bisect
 from ctypes import *
-import threading
 import numpy as np
 from numpy.ctypeslib import c_intp
 from numbapro.cudapipeline import driver as _driver
-from numbapro._utils.ndarray import *
 from bitarray import bitarray
 from numbapro._utils import finalizer
 
@@ -17,10 +15,10 @@ if hasattr(sys, 'getobjects'):
                               _pyobject_head_fields
 
 _numpy_fields = _pyobject_head_fields + \
-      [('data', c_void_p),                      # data
-       ('nd',   c_int),                         # nd
-       ('dimensions', POINTER(c_intp)),       # dimensions
-       ('strides', POINTER(c_intp)),          # strides
+      [('data',       c_void_p),       # data
+       ('nd',         c_int),          # nd
+       ('dimensions', c_void_p),       # dimensions
+       ('strides',    c_void_p),       # strides
         #  NOTE: The following fields are unused.
         #        Not sending to GPU to save transfer bandwidth.
         #       ('base', c_void_p),                      # base
@@ -36,26 +34,25 @@ _numpy_fields = _pyobject_head_fields + \
 class NumpyStructure(Structure):
     _fields_ = _numpy_fields
 
-def ndarray_device_allocate_struct(nd):
-    gpu_struct = _driver.AllocatedDeviceMemory(sizeof(NumpyStructure))
-    return gpu_struct
+def ndarray_device_allocate_head(nd):
+    "Allocate the metadata structure"
+    gpu_head = _driver.DeviceMemory(sizeof(NumpyStructure))
+    return gpu_head
 
 def ndarray_device_allocate_data(ary):
-    datasize = ndarray_datasize(ary)
+    datasize = _driver.host_memory_size(ary)
     # allocate
-    gpu_data = _driver.AllocatedDeviceMemory(datasize)
+    gpu_data = _driver.DeviceMemory(datasize)
     return gpu_data
 
 def ndarray_device_transfer_data(ary, gpu_data, stream=0):
-    datapointer = ary.ctypes.data
-    datasize = ndarray_datasize(ary)
+    size = _driver.host_memory_size(ary)
     # transfer data
-    gpu_data.to_device_raw(datapointer, datasize, stream=stream)
+    _driver.host_to_device(gpu_data, ary, size, stream=stream)
 
-def ndarray_populate_struct(gpu_struct, gpu_data, shape, strides, stream=0):
+def ndarray_populate_head(gpu_head, gpu_data, shape, strides, stream=0):
     nd = len(shape)
-
-    to_intp_p = lambda x: cast(c_void_p(x), POINTER(c_intp))
+    assert nd > 0
 
     smm = SmallMemoryManager.get()
 
@@ -66,15 +63,15 @@ def ndarray_populate_struct(gpu_struct, gpu_data, shape, strides, stream=0):
     struct = NumpyStructure()
 
     # Fill the ndarray structure
-    struct.nd = nd
-    struct.data = c_void_p(gpu_data._handle.value)
-    struct.dimensions = to_intp_p(gpu_shape._handle.value)
-    struct.strides = to_intp_p(gpu_strides._handle.value)
+    struct.nd         = nd
+    struct.data       = c_void_p(_driver.device_pointer(gpu_data))
+    struct.dimensions = c_void_p(_driver.device_pointer(gpu_shape))
+    struct.strides    = c_void_p(_driver.device_pointer(gpu_strides))
 
     # transfer the memory
-    gpu_struct.to_device_raw(addressof(struct), sizeof(struct), stream=stream)
-    # gpu_struct owns mm_shape and mm_strides
-    gpu_struct.add_dependencies(gpu_shape, gpu_strides)
+    _driver.host_to_device(gpu_head, struct, sizeof(struct), stream=stream)
+    # gpu_head owns mm_shape and mm_strides
+    _driver.device_memory_depends(gpu_head, gpu_shape, gpu_strides, gpu_data)
 
 
 class SMMBucket(object):
@@ -138,19 +135,20 @@ class SmallMemoryManager(object):
     '''
     NBYTES = 2**21
     BLOCKSZ = 32
+    __singleton = {}
 
     @classmethod
     def get(cls, **kws):
         '''One instance per thread.'''
         drv = _driver.Driver()
-        if not hasattr(drv._THREAD_LOCAL, 'smm'):
-            device = drv.get_current_context().device
-            cls.Driver = drv
-            cls.Driver._THREAD_LOCAL.smm = cls(device, **kws)
-        return cls.Driver._THREAD_LOCAL.smm
+        device = drv.current_context().device
+        if device not in cls.__singleton:
+            cls.__singleton[device] = obj = cls(**kws)
+            return obj
+        else:
+            return cls.__singleton[device]
 
-    def __init__(self, device, nbytes=NBYTES, blocksz=BLOCKSZ):
-        self.device = device
+    def __init__(self, nbytes=NBYTES, blocksz=BLOCKSZ):
         self.nbytes = nbytes
         self.blocksz = blocksz
         self.blockct = self.nbytes // self.blocksz
@@ -163,14 +161,12 @@ class SmallMemoryManager(object):
     def _lazy_init(self):
         # allocate host memory
         elemct = self.nbytes // self.itemsize
-        hm = self.hostmemory = np.empty(elemct, dtype=self.dtype)
         # pinned the memory for direct GPU access
-        mapped = self.device.CAN_MAP_HOST_MEMORY
-        self.pinnedmemory = _driver.PinnedMemory(hm.ctypes.data, self.nbytes,
-                                                 mapped=mapped)
-        # allocate gpu memory
-        self.devicememory = _driver.AllocatedDeviceMemory(self.nbytes)
-        self.devaddrbase = self.devicememory._handle.value
+        hm = _driver.HostAllocMemory(self.nbytes)
+        self.hostmemory = np.ndarray(shape=elemct, dtype=self.dtype,
+                                     buffer=hm)
+        self.devicememory = _driver.DeviceMemory(self.nbytes)
+        self.devaddrbase = _driver.device_pointer(self.devicememory)
         # initialize valuemap
         self.valuemap = {} # stores tuples -> bucket
         # initialize bucketmap
@@ -179,7 +175,6 @@ class SmallMemoryManager(object):
         self.usemap = bitarray(self.blockct)
         self.usemap[:] = False
         self.usemap_last = 0
-
 
     def calc_block_use(self, n):
         from math import ceil
@@ -223,13 +218,12 @@ class SmallMemoryManager(object):
                 self.usemap[blkstart:blkstop] = True
                 # H->D
                 offset = index * self.blocksz
-                src = self.hostmemory.ctypes.data + offset
+                src = self.hostmemory[start:stop]
                 size = nval * self.itemsize
-                if self.device.CAN_MAP_HOST_MEMORY:
-                    self.devicememory.to_device_raw(src, size, stream=stream,
-                                                    offset=offset)
                 ptr = self.devaddrbase + bucket.start * self.blocksz
-                return ManagedPointer(self, value, _driver.cu_device_ptr(ptr))
+                mp = ManagedPointer(self, value, _driver.cu_device_ptr(ptr))
+                _driver.host_to_device(mp, src, size, stream=stream)
+                return mp
         else:
             # already allocated, reuse
             bucket.refct += 1
@@ -244,9 +238,10 @@ class SmallMemoryManager(object):
         if bucket.refct == 0:
             self.usemap[bucket.start : bucket.stop] = False
 
-class ManagedPointer(_driver.DevicePointer, finalizer.OwnerMixin):
+class ManagedPointer(finalizer.OwnerMixin):
+    __cuda_memory__ = True
     def __init__(self, parent, value, handle):
-        _driver.DevicePointer.__init__(self, handle)
+        self._handle = handle
         self.parent = parent
         self.value = value
         self._finalizer_track((parent, value))
@@ -256,3 +251,10 @@ class ManagedPointer(_driver.DevicePointer, finalizer.OwnerMixin):
         parent, value = pair
         parent.release(value)
 
+    @property
+    def device_ctypes_pointer(self):
+        return self._handle
+
+    @property
+    def driver(self):
+        return _driver.Driver()

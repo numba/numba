@@ -4,15 +4,14 @@ import numpy as np
 from .cudapipeline import initialize as _initialize
 from .cudapipeline.special_values import *
 from .cudapipeline.driver import require_context
-from .cudapipeline.devicearray import DeviceArrayBase, DeviceNDArray, DeviceArray
+from .cudapipeline import devicearray
 from .cudapipeline.decorators import jit, autojit
 
 # NDarray device helper
 @require_context
 def to_device(ary, stream=0, copy=True, to=None):
     if to is None:
-        devarray = ary.view(type=DeviceNDArray)
-        devarray.device_allocate(stream=stream)
+        devarray = devicearray.from_array_like(ary, stream=stream)
     else:
         devarray = to
     if copy:
@@ -35,7 +34,7 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
             strides[0] = dtype.itemsize
             for d in range(1, nd):
                 strides[d] = strides[d - 1] * shape[d - 1]
-    return DeviceArray(shape, tuple(strides), dtype, order, stream)
+    return devicearray.DeviceNDArray(shape, strides, dtype, stream=stream)
 
 def device_array_like(ary, stream=0):
     order = ''
@@ -56,11 +55,11 @@ def stream():
 @require_context
 @contextlib.contextmanager
 def pinned(*arylist):
-    from numbapro._utils.ndarray import ndarray_datasize
-    from numbapro.cudapipeline.driver import PinnedMemory
+    from numbapro.cudapipeline.driver import PinnedMemory, host_memory_size, host_pointer
     pmlist = []
     for ary in arylist:
-        pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary), mapped=False)
+        pm = PinnedMemory(ary, host_pointer(ary), host_memory_size(ary),
+                          mapped=False)
         pmlist.append(pm)
     yield
     del pmlist
@@ -70,25 +69,24 @@ def pinned(*arylist):
 @contextlib.contextmanager
 def mapped(*arylist, **kws):
     assert not kws or 'stream' in kws, "Only accept 'stream' as keyword."
-    from numbapro._utils.ndarray import ndarray_datasize
-    from numbapro.cudapipeline.driver import PinnedMemory
+    from numbapro.cudapipeline.driver import PinnedMemory, host_memory_size, host_pointer, device_pointer
     pmlist = []
     stream = kws.get('stream', 0)
     for ary in arylist:
-        pm = PinnedMemory(ary.ctypes.data, ndarray_datasize(ary), mapped=True)
+        pm = PinnedMemory(ary, host_pointer(ary), host_memory_size(ary),
+                          mapped=True)
         pmlist.append(pm)
 
     devarylist = []
-    for pm in pmlist:
-        dptr = pm.get_device_pointer()
-        devary = ary.view(type=DeviceNDArray)
-        devary.device_mapped(dptr, stream=stream)
+    for ary, pm in zip(arylist, pmlist):
+        dptr = device_pointer(pm)
+        devary = devicearray.from_array_like(ary, gpu_data=pm, stream=stream)
         devarylist.append(devary)
     if len(devarylist) == 1:
         yield devarylist[0]
     else:
         yield devarylist
-    del pmlist
+
 
 def event(timing=True):
     from numbapro.cudapipeline.driver import Event
@@ -114,7 +112,7 @@ def get_current_device():
     "Get current device associated with the current thread"
     from numbapro.cudapipeline import driver
     driver = driver.Driver()
-    return driver.get_current_context().device
+    return driver.current_context().device
 
 def close():
     '''Explicitly closes the context.
@@ -126,7 +124,7 @@ def close():
     driver.release_context(driver.current_context())
 
 def _auto_device(ary, stream=0, copy=True):
-    if isinstance(ary, DeviceArrayBase):
+    if devicearray.is_cuda_ndarray(ary):
         return ary, False
     else:
         return to_device(ary, copy=copy, stream=stream), True

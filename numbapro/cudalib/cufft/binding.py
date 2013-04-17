@@ -3,7 +3,7 @@ import numpy as np
 from ctypes import *
 
 from numbapro.cudalib.libutils import Lib, ctype_function
-from numbapro.cudapipeline.driver import cu_stream
+from numbapro.cudapipeline.driver import cu_stream, device_pointer
 from numbapro._utils import finalizer
 
 STATUS = {
@@ -243,8 +243,8 @@ class Plan(finalizer.OwnerMixin):
     def exe(self, idata, odata, dir):
         postfix = cufft_dtype_to_name[self.dtype]
         meth = getattr(self._api, 'cufftExec' + postfix)
-        return meth(self._handle, idata.device_raw_ptr.value,
-                    odata.device_raw_ptr.value, int(dir))
+        return meth(self._handle, device_pointer(idata),
+                    device_pointer(odata), int(dir))
 
     def forward(self, idata, odata):
         return self.exe(idata, odata, dir=CUFFT_FORWARD)

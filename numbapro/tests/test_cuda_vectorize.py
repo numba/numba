@@ -61,8 +61,8 @@ def test_1d_async():
         ts = time()
         stream = cuda.stream()
         device_data = cuda.to_device(data, stream)
-        result = cuda_ufunc(device_data, device_data, stream=stream)
-        result.to_host()
+        dresult = cuda_ufunc(device_data, device_data, stream=stream)
+        result = dresult.copy_to_host()
         stream.synchronize()
         tnumba = time() - ts
 

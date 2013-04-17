@@ -88,12 +88,8 @@ class FFTPlan(object):
         do_host_copy = False
         if out is not None:
             h_out = out
-            if not isinstance(out, _cuda.DeviceArrayBase):
-                d_out = _cuda.to_device(out, copy=False,
-                                        stream=self.stream)
-                do_host_copy = True
-            else:
-                d_out = out
+            d_out, do_host_copy = _cuda._auto_device(out, copy=False,
+                                                     stream=self.stream)
         else:
             h_out = np.empty(shape=self.oshape, dtype=self.otype)
             d_out = _cuda.to_device(h_out, stream=self.stream)

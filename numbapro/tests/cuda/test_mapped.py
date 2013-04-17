@@ -18,9 +18,13 @@ class TestMapped(support.CudaTestCase):
         A0 = A.copy()
         blockdim = 1024, 1, 1
         griddim = A.size // 1024, 1
+        stream = cuda.stream()
         with cuda.mapped(A) as ptr:
             # Array A is mapped to GPU directly
-            sum[griddim, blockdim](ptr)
+            sum[griddim, blockdim, stream](ptr)
+
+        stream.synchronize()
+        
         self.assertTrue(np.allclose(A0 * 2, A))
 
 

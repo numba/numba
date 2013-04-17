@@ -4,9 +4,8 @@ from llvm import core as _lc
 import numpy as np
 from ctypes import *
 from numbapro.cudapipeline import driver as _cuda
-from numbapro.cudapipeline.devicearray import DeviceArrayBase
+from numbapro.cudapipeline import devicearray
 from numbapro import cuda
-from numbapro._utils.ndarray import ndarray_datasize
 import math
 import re
 
@@ -74,10 +73,12 @@ class CudaUFuncDispatcher(object):
 
         # convert arguments to ndarray if they are not
         args = list(args) # convert to list
-        has_device_array_arg = any(isinstance(v, DeviceArrayBase) for v in args)
+        has_device_array_arg = any(devicearray.is_cuda_ndarray(v)
+                                   for v in args)
 
         for i, arg in enumerate(args):
-            if not isinstance(arg, (np.ndarray, DeviceArrayBase)):
+            if not isinstance(arg, np.ndarray) and \
+                    not devicearray.is_cuda_ndarray(arg):
                 args[i] = ary = np.asarray(arg)
 
         # get the dtype for each argument
@@ -116,18 +117,23 @@ class CudaUFuncDispatcher(object):
             blockdim = (ntid,)
 
             if 'out' not in kws:
-                out = self._allocate_output(args, result_dtype) #np.empty(args[0].shape[0], dtype=result_dtype)
-                device_out = cuda.to_device(out, stream, copy=False)
+                #out = self._allocate_output(args, result_dtype)
+                #np.empty(args[0].shape[0], dtype=result_dtype)
+                #device_out = cuda.to_device(out, stream, copy=False)
+                out_shape = self._determine_output_shape(args)
+                device_out = cuda.device_array(shape=out_shape,
+                                               dtype=result_dtype,
+                                               stream=stream)
             else:
                 device_out = kws['out']
-                assert isinstance(device_out, DeviceArrayBase)
+                assert devicearray.is_cuda_ndarray(device_out)
             kernel_args = list(args) + [device_out, element_count]
 
             cuda_func[griddim, blockdim, stream](*kernel_args)
 
-            for ary, conv in zip(args, argconv):
-                if conv:
-                    ary.to_host()
+#            for ary, conv in zip(args, argconv):
+#                if conv:
+#                    ary.to_host()
             return device_out
 
         else:
@@ -138,7 +144,7 @@ class CudaUFuncDispatcher(object):
                 out = self._allocate_output(broadcast_arrays, result_dtype)
             else:
                 out = kws['out']
-                assert not isinstance(device_out, DeviceArrayBase)
+                assert not devicearray.is_cuda_ndarray(device_out)
                 assert out.shape[0] >= broadcast_arrays[0].shape[0]
 
             # Reshape the arrays if necessary.
@@ -165,6 +171,10 @@ class CudaUFuncDispatcher(object):
             device_out.to_host(stream) # only retrive the last one
             # Revert the shape of the array if it has been modified earlier
             return out.reshape(reshape)
+
+
+    def _determine_output_shape(self, broadcast_arrays):
+        return broadcast_arrays[0].shape
 
     def _get_function_by_dtype(self, dtypes):
         try:
@@ -206,7 +216,7 @@ class CudaUFuncDispatcher(object):
         stream = stream or cuda.stream()
         with stream.auto_synchronize():
             # transfer memory to device if necessary
-            if isinstance(arg, DeviceArrayBase):
+            if devicearray.is_cuda_ndarray(arg):
                 mem = arg
             else:
                 mem = cuda.to_device(arg, stream)
@@ -214,7 +224,7 @@ class CudaUFuncDispatcher(object):
             out = self.__reduce(mem, gpu_mems, stream)
             # use a small buffer to store the result element
             buf = np.array((1,), dtype=arg.dtype)
-            out.copy_to_host(buf, ndarray_datasize(buf), stream=stream)
+            out.copy_to_host(buf, stream=stream)
 
         return buf[0]
 
@@ -223,7 +233,7 @@ class CudaUFuncDispatcher(object):
         from math import log, floor
         n = mem.shape[0]
         if n % 2 != 0: # odd?
-            fatcut, thincut = mem.device_partition(n - 1)
+            fatcut, thincut = mem.split(n - 1)
             # prevent freeing during async mode
             gpu_mems.append(fatcut)
             gpu_mems.append(thincut)
@@ -232,7 +242,7 @@ class CudaUFuncDispatcher(object):
             gpu_mems.append(out)
             return self(out, thincut, out=out, stream=stream)
         else: # even?
-            left, right = mem.device_partition(n / 2)
+            left, right = mem.split(n / 2)
             # prevent freeing during async mode
             gpu_mems.append(left)
             gpu_mems.append(right)
@@ -368,13 +378,10 @@ class CudaNumbaFuncDispatcher(object):
 
         retrievers = []
         def ndarray_gpu(x):
-            if not isinstance(x, DeviceArrayBase):
-                # convert to DeviceArrayBase
-                x = cuda.to_device(x, stream=stream)
-                def retriever():
-                    x.to_host(stream=stream)
-                retrievers.append(retriever)
-            return x.device_memory
+            dx, conv = cuda._auto_device(x, stream=stream)
+            if conv:
+                retrievers.append(lambda: dx.copy_to_host(x, stream=stream))
+            return dx.as_cuda_arg()
 
         _typemapper = {'f': c_float,
                        'd': c_double,
