@@ -3,25 +3,26 @@
 static PyObject*
 memoryview_get_buffer(PyObject *self, PyObject *args){
     PyObject *mv = NULL;
-    
+    Py_buffer* buf = NULL;
     if (!PyArg_ParseTuple(args, "O", &mv))
         return NULL;
 
     if (!PyMemoryView_Check(mv))
         return NULL;
 
-    Py_buffer* buf = PyMemoryView_GET_BUFFER(mv);
+    buf = PyMemoryView_GET_BUFFER(mv);
     return PyLong_FromVoidPtr(buf->buf);
 }
 
 static PyObject*
 memoryview_from_pointer(PyObject *self, PyObject *args){
     Py_ssize_t ptr, size;
-    int readonly = 0; //writable
-    int flags = PyBUF_CONTIG; // c-contiguous
+    Py_buffer* buf = NULL;
+    int readonly = 0; /* writable */
+    int flags = PyBUF_CONTIG; /* c-contiguous */
     if (!PyArg_ParseTuple(args, "nn", &ptr, &size))
         return NULL;
-    Py_buffer* buf = malloc(sizeof(Py_buffer));
+    buf = malloc(sizeof(Py_buffer));
 
     if(-1 == PyBuffer_FillInfo(buf, NULL, (void*)ptr, size, readonly, flags)){
         free(buf);
@@ -100,14 +101,15 @@ get_extents(Py_ssize_t *shape, Py_ssize_t *strides, int ndim,
 static PyObject*
 memoryview_get_extents(PyObject *self, PyObject *args)
 {
-    PyObject *mv;
+    PyObject *mv = NULL;
+    Py_buffer* b = NULL;
     if (!PyArg_ParseTuple(args, "O", &mv))
         return NULL;
 
     if (!PyMemoryView_Check(mv))
         return NULL;
 
-    Py_buffer* b = PyMemoryView_GET_BUFFER(mv);
+    b = PyMemoryView_GET_BUFFER(mv);
     return get_extents(b->shape, b->strides, b->ndim, b->itemsize,
                        (Py_ssize_t)b->buf);
 }
@@ -169,7 +171,7 @@ cleanup:
 }
 
 
-// new type to expose buffer interface
+/* new type to expose buffer interface */
 typedef struct {
     PyObject_HEAD
     /* Type-specific fields go here. */
@@ -227,7 +229,7 @@ MemAllocObject_getbufferproc(PyObject *self, Py_buffer *view, int flags)
 
     readonly = (PyBUF_WRITABLE & flags) == PyBUF_WRITABLE;
 
-    // fill buffer
+    /* fill buffer */
     if (-1 == PyBuffer_FillInfo(view, self, (void*)ptr, size, readonly, flags))
         return -1;
 
@@ -279,7 +281,7 @@ static PyBufferProcs MemAlloc_as_buffer = {
     MemAllocObject_writebufferproc,     /*bf_getwritebuffer*/
     MemAllocObject_segcountproc,        /*bf_getsegcount*/
     MemAllocObject_charbufferproc,      /*bf_getcharbuffer*/
-    // new buffer protocol
+    /* new buffer protocol */
     MemAllocObject_getbufferproc,       /*bf_getbuffer*/
     NULL,                               /*bf_releasebuffer*/
 };
@@ -366,7 +368,7 @@ static PyMethodDef core_methods[] = {
 };
 
 
-// Module main function, hairy because of py3k port
+/* Module main function, hairy because of py3k port */
 
 #if (PY_MAJOR_VERSION >= 3)
     struct PyModuleDef module_def = {

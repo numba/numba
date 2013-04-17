@@ -42,6 +42,7 @@ ext_modules = [
     Extension(
         name = 'numbapro._utils.mviewbuf',
         sources = ['numbapro/_utils/mviewbuf.c'],
+        # extra_compile_args = ['-pedantic', '-ansi'], # for checking C90
     ),
 
 
