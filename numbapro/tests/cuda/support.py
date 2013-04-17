@@ -6,6 +6,7 @@ class CudaTestCase(unittest.TestCase):
 
     def setUp(self):
         from numbapro.cudapipeline import driver
+        driver.get_or_create_context()
         driver.debug_memory = True
         self._start_alloc = driver.debug_memory_alloc
         self._start_free = driver.debug_memory_free

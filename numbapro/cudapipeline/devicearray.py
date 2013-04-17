@@ -145,6 +145,17 @@ class DeviceNDArray(object):
         '''
         return self.gpu_head
 
+
+class MappedNDArray(DeviceNDArray, np.ndarray):
+    def device_setup(self, gpu_data, stream=0):
+        gpu_head = ndarray_device_allocate_head(self.ndim)
+
+        ndarray_populate_head(gpu_head, gpu_data, self.shape,
+                              self.strides, stream=stream)
+
+        self.gpu_data = gpu_data
+        self.gpu_head = gpu_head
+
 def from_array_like(ary, stream=0, gpu_head=None, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
     if ary.ndim == 0:

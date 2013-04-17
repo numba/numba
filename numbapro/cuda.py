@@ -4,12 +4,16 @@ import numpy as np
 from .cudapipeline import initialize as _initialize
 from .cudapipeline.special_values import *
 from .cudapipeline.driver import require_context
-from .cudapipeline import devicearray
+from .cudapipeline import devicearray, driver
 from .cudapipeline.decorators import jit, autojit
 
 # NDarray device helper
 @require_context
 def to_device(ary, stream=0, copy=True, to=None):
+    """Allocate and transfer a numpy ndarray to the device.
+    If `to` is not None, it is used for storing the data and no allocation will
+    occur.  The amount of byte transferred is min(sizeof(ary), sizeof(to)).
+    """
     if to is None:
         devarray = devicearray.from_array_like(ary, stream=stream)
     else:
@@ -20,46 +24,101 @@ def to_device(ary, stream=0, copy=True, to=None):
 
 @require_context
 def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
+    """Allocate a device ndarray like numpy.empty()
+    """
+    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
+                                                         order)
+    return devicearray.DeviceNDArray(shape=shape, strides=strides, dtype=dtype,
+                                     stream=stream)
+
+@require_context
+def pinned_array(shape, dtype=np.float, strides=None, order='C'):
+    """Allocate a numpy.ndarray with a buffer that is pinned (pagelocked).
+    Similar to numpy.empty().
+    """
+    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
+                                                         order)
+    bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
+    buffer = driver.HostAllocMemory(bytesize)
+    return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
+                      buffer=buffer)
+
+@require_context
+def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+                 portable=False, wc=False):
+    """Allocate a mapped ndarray with a buffer that is pinned and mapped on
+    to the device. Similar to numpy.empty()
+    
+    portable: a boolean flag to allow the allocated device memory to be 
+              usable in multiple devices.
+    wc: a boolean flag to enable writecombined allocation which is faster
+        to write by the host and to read by the device, but slower to 
+        write by the host and slower to write by the device.
+    """
+    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
+                                                         order)
+    bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
+    buffer = driver.HostAllocMemory(bytesize, mapped=True)
+    npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
+                       buffer=buffer)
+    mappedview = np.ndarray.view(npary, type=devicearray.MappedNDArray)
+    mappedview.device_setup(buffer, stream=stream)
+    return mappedview
+
+def synchronize():
+    "Synchronize current context"
+    drv = driver.Driver()
+    return drv.current_context().synchronize()
+
+def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     dtype = np.dtype(dtype)
     if isinstance(shape, (int, long)):
         shape = (shape,)
-    if not strides:
-        nd = len(shape)
-        strides = [0] * nd
-        if order == 'C':
-            strides[-1] = dtype.itemsize
-            for d in reversed(range(nd - 1)):
-                strides[d] = strides[d + 1] * shape[d + 1]
-        elif order == 'F':
-            strides[0] = dtype.itemsize
-            for d in range(1, nd):
-                strides[d] = strides[d - 1] * shape[d - 1]
-    return devicearray.DeviceNDArray(shape, strides, dtype, stream=stream)
+    if isinstance(strides, (int, long)):
+        strides = (strides,)
+    else:
+        strides = strides or _fill_stride_by_order(shape, dtype, order)
+    return shape, strides, dtype
+
+def _fill_stride_by_order(shape, dtype, order):
+    nd = len(shape)
+    strides = [0] * nd
+    if order == 'C':
+        strides[-1] = dtype.itemsize
+        for d in reversed(range(nd - 1)):
+            strides[d] = strides[d + 1] * shape[d + 1]
+    elif order == 'F':
+        strides[0] = dtype.itemsize
+        for d in range(1, nd):
+            strides[d] = strides[d - 1] * shape[d - 1]
+    else:
+        raise ValueError('must be either C/F order')
+    return tuple(strides)
+
 
 def device_array_like(ary, stream=0):
-    order = ''
-    if ary.flags['C_CONTIGUOUS']:
-        order = 'C'
-    elif ary.flags['F_CONTIGUOUS']:
-        order = 'F'
+    """Call cuda.devicearray() with information from the array.
+    """
     return device_array(shape=ary.shape, dtype=ary.dtype,
                         strides=ary.strides, stream=stream)
 
 # Stream helper
 @require_context
 def stream():
-    from numbapro.cudapipeline.driver import Stream
-    return Stream()
+    """Create a CUDA stream that represents a command queue for the device.
+    """
+    return driver.Stream()
 
 # Page lock
 @require_context
 @contextlib.contextmanager
 def pinned(*arylist):
-    from numbapro.cudapipeline.driver import PinnedMemory, host_memory_size, host_pointer
+    """A context manager for temporary pinning a sequence of host ndarrays.
+    """
     pmlist = []
     for ary in arylist:
-        pm = PinnedMemory(ary, host_pointer(ary), host_memory_size(ary),
-                          mapped=False)
+        pm = driver.PinnedMemory(ary, driver.host_pointer(ary),
+                                 driver.host_memory_size(ary), mapped=False)
         pmlist.append(pm)
     yield
     del pmlist
@@ -68,18 +127,19 @@ def pinned(*arylist):
 @require_context
 @contextlib.contextmanager
 def mapped(*arylist, **kws):
+    """A context manager for temporarily mapping a sequence of host ndarrays.
+    """
     assert not kws or 'stream' in kws, "Only accept 'stream' as keyword."
-    from numbapro.cudapipeline.driver import PinnedMemory, host_memory_size, host_pointer, device_pointer
     pmlist = []
     stream = kws.get('stream', 0)
     for ary in arylist:
-        pm = PinnedMemory(ary, host_pointer(ary), host_memory_size(ary),
-                          mapped=True)
+        pm = driver.PinnedMemory(ary, driver.host_pointer(ary),
+                                 driver.host_memory_size(ary), mapped=True)
         pmlist.append(pm)
 
     devarylist = []
     for ary, pm in zip(arylist, pmlist):
-        dptr = device_pointer(pm)
+        dptr = driver.device_pointer(pm)
         devary = devicearray.from_array_like(ary, gpu_data=pm, stream=stream)
         devarylist.append(devary)
     if len(devarylist) == 1:
@@ -89,8 +149,9 @@ def mapped(*arylist, **kws):
 
 
 def event(timing=True):
-    from numbapro.cudapipeline.driver import Event
-    evt = Event(timing=timing)
+    """Create a CUDA event.
+    """
+    evt = driver.Event(timing=timing)
     return evt
 
 # Device selection
@@ -98,30 +159,27 @@ def event(timing=True):
 def select_device(device_id):
     '''Call this before any CUDA feature is used in each thread.
 
-        Returns a device instance
+    Returns a device instance
 
-        Raises exception on error.
-        '''
-    from numbapro.cudapipeline import driver as cu
-    driver = cu.Driver()
-    device = cu.Device(device_id)
-    context = driver.create_context(device)
+    Raises exception on error.
+    '''
+    drv = driver.Driver()
+    device = driver.Device(device_id)
+    context = drv.create_context(device)
     return device
 
 def get_current_device():
     "Get current device associated with the current thread"
-    from numbapro.cudapipeline import driver
-    driver = driver.Driver()
-    return driver.current_context().device
+    drv = driver.Driver()
+    return drv.current_context().device
 
 def close():
     '''Explicitly closes the context.
 
         Destroy the current context of the current thread
         '''
-    from numbapro.cudapipeline import driver as cu
-    driver = cu.Driver()
-    driver.release_context(driver.current_context())
+    drv = driver.Driver()
+    drv.release_context(drv.current_context())
 
 def _auto_device(ary, stream=0, copy=True):
     if devicearray.is_cuda_ndarray(ary):

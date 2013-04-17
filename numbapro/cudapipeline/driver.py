@@ -369,6 +369,9 @@ class Driver(object):
         'cuMemHostGetFlags': (c_int,
                               POINTER(c_uint),
                               c_void_p),
+
+        #   CUresult cuCtxSynchronize ( void )
+        'cuCtxSynchronize' : (c_int,),
     }
 
     OLD_API_PROTOTYPES = {
@@ -705,6 +708,10 @@ class _Context(finalizer.OwnerMixin):
     def driver(self):
         return Driver()
 
+    def synchronize(self):
+        error = self.driver.cuCtxSynchronize()
+        self.driver.check_error(error, 'Failed to synchronize context')
+
     def __str__(self):
         return 'Context %s on %s' % (id(self), self.device)
 
@@ -769,8 +776,9 @@ class HostAllocMemory(mviewbuf.MemAlloc, finalizer.OwnerMixin):
 
         self.devmem = cu_device_ptr(0)
 
+        self.__cuda_memory__ = mapped
         if mapped:
-            # get host device pointer
+            # get device pointer
             error = self.driver.cuMemHostGetDevicePointer(byref(self.devmem),
                                                           self._handle, 0)
             self.driver.check_error(error,
