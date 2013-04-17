@@ -1147,7 +1147,7 @@ def get_or_create_context():
     return context
 
 def require_context(fn):
-    "Decorator"
+    "Decorator to ensure a context exists for the current thread."
     def _wrapper(*args, **kws):
         get_or_create_context()
         return fn(*args, **kws)
@@ -1158,6 +1158,8 @@ def require_context(fn):
 #
 
 def _device_pointer_attr(devmem, attr, odata):
+    """Query attribute on the device pointer
+    """
     driver = Driver()
     attr = CU_POINTER_ATTRIBUTE_MEMORY_TYPE
     error = driver.cuPointerGetAttribute(byref(odata), attr,
@@ -1165,6 +1167,8 @@ def _device_pointer_attr(devmem, attr, odata):
     driver.check_error(error, "Failed to query pointer attribute")
 
 def device_pointer_type(devmem):
+    """Query the device pointer type: host, device, array, unified?
+    """
     ptrtype = c_int(0)
     _device_pointer_attr(devmem, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, ptrtype)
     map = {
@@ -1176,6 +1180,12 @@ def device_pointer_type(devmem):
     return map[ptrtype.value]
 
 def device_extents(devmem):
+    """Find the extents (half open begin and end pointer) of the underlying
+    device memory allocation.
+    
+    NOTE: it always returns the extents of the allocation but the extents
+    of the device memory view that can be a subsection of the entire allocation.
+    """
     driver = Driver()
     s = cu_device_ptr()
     n = c_size_t()
@@ -1185,6 +1195,10 @@ def device_extents(devmem):
     return s, s + n
 
 def device_memory_size(devmem):
+    """Check the memory size of the device memory.
+    The result is cached in the device memory object.
+    It may query the driver for the memory size of the device memory allocation.
+    """
     sz = getattr(devmem, '_cuda_memsize_', None)
     if sz is None:
         s, e = device_extents(devmem)
@@ -1210,6 +1224,9 @@ def host_memory_extents(obj):
     return mviewbuf.memoryview_get_extents(mv)
 
 def memory_size_from_info(shape, strides, itemsize):
+    """et the byte size of a contiguous memory buffer given the shape, strides
+    and itemsize.
+    """
     assert len(shape) == len(strides)
     ndim = len(shape)
     s, e = mviewbuf.memoryview_get_extents_info(shape, strides, ndim, itemsize)
@@ -1222,9 +1239,11 @@ def host_memory_size(obj):
     return e - s
 
 def device_pointer(obj):
+    "Get the device pointer as an integer"
     return device_ctypes_pointer(obj).value
 
 def device_ctypes_pointer(obj):
+    "Get the ctypes object for the device pointer"
     require_device_memory(obj)
     return obj.device_ctypes_pointer
 
@@ -1245,6 +1264,11 @@ def require_device_memory(obj):
         raise Exception("Not a CUDA memory object.")
 
 def device_memory_depends(devmem, *objs):
+    """Add dependencies to the device memory.
+    
+    Mainly used for creating structures that points to other device memory,
+    so that the referees are not GC and released.
+    """
     depset = getattr(devmem, "_depends_", [])
     depset.extend(objs)
     devmem = depset
@@ -1308,6 +1332,14 @@ def device_to_device(dst, src, size, stream=0):
     driver.check_error(error, "Failed to copy memory D->H")
 
 def device_memset(dst, val, size, stream=0):
+    """Memset on the device.  
+    If stream is not zero, asynchronous mode is used.
+    
+    dst: device memory
+    val: byte value to be written
+    size: number of byte to be written
+    stream: a CUDA stream
+    """
     driver = Driver()
     varargs = []
 
