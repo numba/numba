@@ -145,12 +145,20 @@ class Codegen(object):
     def __init__(self, out_filename):
         self.out_filename = out_filename
 
-    def generate(self, asdl_tree, schema_instance):
+    def generate(self, emitter, asdl_tree, schema_instance):
         """
         Generate code for the given asdl tree. The ASDL tree is accompanied
         by a corresponding schema.Schema, which is easier to deal with.
         """
 
+class UtilityCodeGen(Codegen):
+
+    def __init__(self, out_filename, utility_code):
+        super(UtilityCodeGen, self).__init__(out_filename)
+        self.utility_code = utility_code
+
+    def generate(self, emitter, asdl_tree, schema_instance):
+        emitter.emit(self.utility_code)
 
 
 if __name__ == '__main__':

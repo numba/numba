@@ -13,8 +13,8 @@ import os
 from textwrap import dedent
 from functools import partial
 
-# from . import generator
-from numba.ir.generator import generator
+from . import generator
+from .formatting import format_stats, get_fields
 
 root = os.path.dirname(os.path.abspath(__file__))
 testdir = os.path.join(root, "tests")
@@ -56,9 +56,7 @@ class TypedProperty(object):
 
 cy_preamble = """
 cimport cython
-
-cdef class Visitor(object):
-    pass
+from interface cimport GenericVisitor
 """
 
 def format_field(field):
@@ -69,10 +67,6 @@ def format_field(field):
 
     format_dict = dict(name=field.name, type=type)
     return '%(name)s = TypedProperty(%(type)s, "%(name)s")' % format_dict
-
-def format_stats(pattern, indent, stats):
-    pattern = pattern + " " * indent
-    return pattern.join(stats)
 
 #------------------------------------------------------------------------
 # Class Generation
@@ -103,7 +97,7 @@ class PyClass(Class):
             initialize = ["pass"]
 
         fmtstring = ", ".join("%s=%%s" % name for name in fieldnames)
-        fmtargs = "(%s)" % ", ".join("self.%s" % name for name in fieldnames)
+        fmtargs = "(%s)" % ", ".join(get_fields(self.fields))
 
         format_dict = dict(
             name=self.name, base=self.base, doc=self.doc,
@@ -136,7 +130,7 @@ class PyClass(Class):
                 def __init__(self, %(params)s):
                     %(initialize)s
 
-                def visit(self, visitor):
+                def accept(self, visitor):
                     return visitor.visit_%(name)s(self)
 
                 def __str__(self):
@@ -161,7 +155,7 @@ class CyClass(Class):
         return dedent('''
             cdef class %(name)s(%(base)s):
                 %(fields)s
-                cdef visit(self, Visitor visitor)
+                cpdef accept(self, GenericVisitor visitor)
         ''') % fmtdict
 
 
