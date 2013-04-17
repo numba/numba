@@ -1,12 +1,26 @@
 import numpy as np
 import unittest 
 from numbapro.cudapipeline.driver import *
+from numbapro.cudapipeline import devicearray
 from numbapro import cuda
 from ctypes import *
 
 import support
 
 class TestCudaNDArray(support.CudaTestCase):
+    def test_device_array_interface(self):
+        dary = cuda.device_array(shape=100)
+        devicearray.verify_cuda_ndarray_interface(dary)
+
+        ary = np.empty(100)
+        dary = cuda.to_device(ary)
+        devicearray.verify_cuda_ndarray_interface(dary)
+
+        ary = np.asarray(1.234)
+        dary = cuda.to_device(ary)
+        self.assertTrue(dary.ndim == 1)
+        devicearray.verify_cuda_ndarray_interface(dary)
+
     def test_devicearray_no_copy(self):
         array = np.arange(100, dtype=np.float32)
         devarray = cuda.to_device(array, copy=False)

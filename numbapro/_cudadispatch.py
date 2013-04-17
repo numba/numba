@@ -381,7 +381,7 @@ class CudaNumbaFuncDispatcher(object):
             dx, conv = cuda._auto_device(x, stream=stream)
             if conv:
                 retrievers.append(lambda: dx.copy_to_host(x, stream=stream))
-            return devicearray.as_arg(dx)
+            return dx.as_cuda_arg()
 
         _typemapper = {'f': c_float,
                        'd': c_double,
