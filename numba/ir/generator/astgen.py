@@ -68,7 +68,7 @@ def format_field(field):
         type = field.type
 
     format_dict = dict(name=field.name, type=type)
-    return '%(name)s = TypedProperty("%(name)s", %(type)s)' % format_dict
+    return '%(name)s = TypedProperty(%(type)s, "%(name)s")' % format_dict
 
 def format_stats(pattern, indent, stats):
     pattern = pattern + " " * indent
@@ -189,11 +189,16 @@ class ASTNodeCodeGen(generator.Codegen):
         fields = schema.types[sumtype]
         emitter.emit(self.Class(sumtype, rulename, doc=sumtype, fields=fields))
 
+#------------------------------------------------------------------------
+# Global Exports
+#------------------------------------------------------------------------
+
+codegens = [
+    ASTNodeCodeGen("nodes.py", py_preamble, PyClass),
+    ASTNodeCodeGen("nodes.pxd", cy_preamble, CyClass),
+]
+
 
 if __name__ == '__main__':
-    schema_file = os.path.join(testdir, "testschema1.asdl")
-    codegens = [
-        ASTNodeCodeGen("nodes.py", py_preamble, PyClass),
-        ASTNodeCodeGen("nodes.pxd", cy_preamble, CyClass),
-    ]
-    generator.generate_from_file(schema_file, codegens, root)
+    schema_filename = os.path.join(testdir, "testschema1.asdl")
+    generator.generate_from_file(schema_filename, codegens, root)
