@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 
-import types
+import sys
 
-from .testutils import generate_in_memory, generate_module
+from .testutils import generate_in_memory
 from .. import generator, astgen
 
 def load_testschema1():
     file_allocator = generate_in_memory("testschema1.asdl", astgen.codegens)
-    m = generate_module(file_allocator, "nodes.py")
+    m = generator.generate_module(file_allocator, "nodes.py")
     return m
 
 def test_ast_generation():
@@ -31,6 +31,8 @@ def test_ast_generation():
 def test_valid_node_instantiation():
     """
     >>> test_valid_node_instantiation()
+    Foo(leaf=Bar(e1=SomeExpr(n=10), e2=SomeExpr(n=11)))
+    Bar(e1=SomeExpr(n=10), e2=None)
     """
     m = load_testschema1()
 
@@ -39,10 +41,10 @@ def test_valid_node_instantiation():
     e2 = m.SomeExpr(11)
 
     result = m.Foo(m.Bar(e1, e2))
-    # print(result)
+    print(result)
 
     result = m.Bar(e1, None)
-    # print(result)
+    print(result)
 
 def test_invalid_node_instantiation():
     """
@@ -61,4 +63,4 @@ def test_invalid_node_instantiation():
 
 if __name__ == '__main__':
     import doctest
-    doctest.testmod()
+    sys.exit(0 if doctest.testmod().failed == 0 else 1)

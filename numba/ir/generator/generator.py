@@ -7,6 +7,7 @@ Generate IR utilities from ASDL schemas.
 from __future__ import print_function, division, absolute_import
 
 import os
+import types
 import codecs
 import textwrap
 import cStringIO
@@ -39,9 +40,36 @@ def generate(schema_name, schema_str, codegens, file_allocator):
         codegen.generate(emitter, asdl_tree, schema_instance)
 
 def generate_from_file(schema_filename, codegens, output_dir):
+    """
+    Generate code files for the given schema, code generators and output
+    directory.
+
+    Returns a file allocator with the open disk files.
+    """
     schema_name = os.path.basename(schema_filename)
     schema_str = open(schema_filename).read()
-    generate(schema_name, schema_str, codegens, DiskFileAllocator(output_dir))
+    file_allocator = DiskFileAllocator(output_dir)
+    generate(schema_name, schema_str, codegens, file_allocator)
+    return file_allocator
+
+def generate_module(file_allocator, name):
+    """
+    Generate an in-memory module from a generated Python implementation.
+    """
+    assert name in file_allocator.allocated_files
+
+    f = file_allocator.allocated_files[name]
+    f.seek(0)
+    data = f.read()
+
+    modname, _ = os.path.splitext(name)
+
+    d = {}
+    eval(compile(data, name, "exec"), d, d)
+    m = types.ModuleType(modname)
+    vars(m).update(d)
+
+    return m
 
 #------------------------------------------------------------------------
 # Code Generator Utilities

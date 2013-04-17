@@ -2,7 +2,6 @@
 from __future__ import print_function, division, absolute_import
 
 import os
-import types
 
 from .. import generator
 
@@ -22,19 +21,3 @@ def generate_in_memory(schema_name, codegens):
     schema_name, schema_str = load_schema(schema_name)
     generator.generate(schema_name, schema_str, codegens, file_allocator)
     return file_allocator
-
-def generate_module(file_allocator, name):
-    assert name in file_allocator.allocated_files
-
-    f = file_allocator.allocated_files[name]
-    f.seek(0)
-    data = f.read()
-
-    modname, _ = os.path.splitext(name)
-
-    d = {}
-    eval(compile(data, name, "exec"), d, d)
-    m = types.ModuleType(modname)
-    vars(m).update(d)
-
-    return m

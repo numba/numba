@@ -102,6 +102,9 @@ class PyClass(Class):
         else:
             initialize = ["pass"]
 
+        fmtstring = ", ".join("%s=%%s" % name for name in fieldnames)
+        fmtargs = "(%s)" % ", ".join("self.%s" % name for name in fieldnames)
+
         format_dict = dict(
             name=self.name, base=self.base, doc=self.doc,
             fields      = format_stats(",\n", 8, fields),
@@ -109,6 +112,8 @@ class PyClass(Class):
             properties  = format_stats("\n", 4, properties),
             params      = ", ".join(fieldnames),
             initialize  = format_stats("\n", 8, initialize),
+            fmtstring   = fmtstring,
+            fmtargs     = fmtargs,
         )
 
         return dedent('''
@@ -133,6 +138,9 @@ class PyClass(Class):
 
                 def visit(self, visitor):
                     return visitor.visit_%(name)s(self)
+
+                def __str__(self):
+                    return "%(name)s(%(fmtstring)s)" %% %(fmtargs)s
 
         ''') % format_dict
 
