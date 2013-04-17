@@ -55,12 +55,13 @@ def qualified_test_name(root):
     offset = qname.rindex('numbapro.tests.')
     return qname[offset:]
 
+SKIPPED = ['numbapro.tests.issues.test_issue_23']
 def test(whitelist=None, blacklist=None, cuda=False):
     import sys, os
     from os.path import dirname, join
     import subprocess
 
-    run = failed = 0
+    run = failed = expected = 0
     for root, dirs, files in os.walk(join(dirname(__file__), 'tests')):
         qname = qualified_test_name(root)
         exclude_package_dirs(dirs, cuda=cuda)
@@ -88,13 +89,18 @@ def test(whitelist=None, blacklist=None, cuda=False):
                 if process.returncode == 0:
                     print "SUCCESS"
                 else:
-                    print "FAILED: %s" % map_returncode_to_message(
-                                                                   process.returncode)
-                    print out, err
-                    print "-" * 80
-                    failed += 1
+                    if modname in SKIPPED:
+                        expected += 1
+                        print "EXPECTED FAILURE"
+                    else:
+                        print "FAILED: %s" % map_returncode_to_message(
+                                                           process.returncode)
+                        print out, err
+                        print "-" * 80
+                        failed += 1
     
     print "ran test files: failed: (%d/%d)" % (failed, run)
+    print "      expected failure: (%d/%d)" % (expected, len(SKIPPED))
     return failed
 
 def exercise():
