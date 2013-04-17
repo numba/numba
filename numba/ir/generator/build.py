@@ -32,6 +32,8 @@ class Tool(object):
         self.flags = flags
         self.depends = depends
 
+    def __repr__(self):
+        return "Tool(codegens=[%s])" % ", ".join(map(str, self.codegens))
 
 def resolve_tools(tool_list, mask, tools=None, seen=None):
     if tools is None:
@@ -45,6 +47,16 @@ def resolve_tools(tool_list, mask, tools=None, seen=None):
             tools.append(tool)
 
     return tools
+
+def enumerate_tools(feature_names, mask):
+    tool_set = set(chain(*[features[name] for name in feature_names]))
+    tools = resolve_tools(tool_set, mask)
+    return tools
+
+def enumerate_codegens(feature_names, mask):
+    tools = enumerate_tools(feature_names, mask)
+    codegens = list(chain(*[tool.codegens for tool in tools]))
+    return codegens
 
 #------------------------------------------------------------------------
 # Tool Definitions
@@ -77,45 +89,49 @@ py_transformr_tool  = Tool([gens[naming.transformer + ".py"]],
 pxd_ast_tool.depends.extend([pxd_interface_tool, py_interface_tool])
 
 #------------------------------------------------------------------------
-# Feature Definitions
+# Feature Definitions & Entry Points
 #------------------------------------------------------------------------
 
 features = {
     'all': [py_ast_tool, py_visitor_tool, py_transformr_tool],
     'ast': [py_ast_tool],
     'visitor': [py_visitor_tool],
-    'transform': [py_transformr_tool],
+    'transformer': [py_transformr_tool],
 }
 
 def build_package(schema_filename, feature_names, output_dir, mask=0):
-    tool_set = set(chain(*[features[name] for name in feature_names]))
-    tools = resolve_tools(tool_set, mask)
-    codegens = list(chain(*[tool.codegens for tool in tools]))
+    """
+    Build a package from the given schema and feature names in output_dir.
+
+    :param mask: indicates which features to mask, e.g. specifying
+                 'mask=build.cython' disables Cython support.
+    """
+    codegens = enumerate_codegens(feature_names, mask)
     disk_allocator = generator.generate_from_file(
         schema_filename, codegens, output_dir)
 
     try:
-        make_package(disk_allocator, codegens)
+        _make_package(disk_allocator, codegens)
     finally:
         disk_allocator.close()
 
 #------------------------------------------------------------------------
-# Package building
+# Package Building Utilities
 #------------------------------------------------------------------------
 
 source_name = lambda fn: os.path.splitext(os.path.basename(fn))[0]
 
-def make_package(disk_allocator, codegens):
-    make_init(disk_allocator, codegens)
+def _make_package(disk_allocator, codegens):
+    _make_init(disk_allocator, codegens)
 
     # Make Cython dependency optional
     # disk_allocator.open_sourcefile("cython.py")
 
     fns = [c.out_filename for c in codegens if c.out_filename.endswith('.pxd')]
     if fns:
-        make_setup(disk_allocator, [source_name(fn) + '.py' for fn in fns])
+        _make_setup(disk_allocator, [source_name(fn) + '.py' for fn in fns])
 
-def make_init(disk_allocator, codegens):
+def _make_init(disk_allocator, codegens):
     init = disk_allocator.open_sourcefile("__init__.py")
     init.write(dedent("""
         # Horrid hack to make work around circular cimports
@@ -128,7 +144,7 @@ def make_init(disk_allocator, codegens):
             modname = source_name(c.out_filename)
             init.write("from %s import *\n" % modname)
 
-def make_setup(disk_allocator, filenames):
+def _make_setup(disk_allocator, filenames):
     setup = disk_allocator.open_sourcefile("setup.py")
 
     ext_modules = ["Extension('%s', ['%s'])" % (source_name(fn), fn)
@@ -149,10 +165,3 @@ def make_setup(disk_allocator, filenames):
             cmdclass={'build_ext': build_ext},
         )
     """) % formatting.format_stats(",\n", 4, ext_modules))
-
-if __name__ == '__main__':
-    root = os.path.dirname(os.path.abspath(__file__))
-    testdir = os.path.join(root, "tests")
-    schema_filename = os.path.join(testdir, "testschema1.asdl")
-    features_names = ['ast', 'visitor', 'transform']
-    build_package(schema_filename, features_names, os.path.join(root, "out"))
