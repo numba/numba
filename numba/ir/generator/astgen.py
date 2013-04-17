@@ -14,6 +14,7 @@ from textwrap import dedent
 from functools import partial
 
 from . import generator
+from . import naming
 from .formatting import format_stats, get_fields
 
 root = os.path.dirname(os.path.abspath(__file__))
@@ -63,8 +64,8 @@ class TypedProperty(object):
 
 cy_preamble = """
 cimport cython
-from interface cimport GenericVisitor
-"""
+from %s cimport GenericVisitor
+""" % (naming.interface,)
 
 def format_field(classname, field):
     if field.opt:
@@ -206,8 +207,8 @@ class ASTNodeCodeGen(generator.Codegen):
 #------------------------------------------------------------------------
 
 codegens = [
-    ASTNodeCodeGen("nodes.py", py_preamble, PyClass),
-    ASTNodeCodeGen("nodes.pxd", cy_preamble, CyClass),
+    ASTNodeCodeGen(naming.nodes + '.py', py_preamble, PyClass),
+    ASTNodeCodeGen(naming.nodes + '.pxd', cy_preamble, CyClass),
 ]
 
 

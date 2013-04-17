@@ -4,11 +4,11 @@ from __future__ import print_function, division, absolute_import
 import sys
 
 from .testutils import generate_in_memory
-from .. import generator, astgen
+from .. import generator, astgen, naming
 
 def load_testschema1():
     file_allocator = generate_in_memory("testschema1.asdl", astgen.codegens)
-    m = generator.generate_module(file_allocator, "nodes.py")
+    m = generator.generate_module(file_allocator, naming.nodes + '.py')
     return m
 
 def test_ast_generation():
@@ -57,7 +57,7 @@ def test_invalid_node_instantiation():
     >>> m.Bar(None, e2)
     Traceback (most recent call last):
       ...
-    ValueError: Invalid property setting, expected instance of type(s) <class 'expr'> (got <type 'NoneType'>).
+    ValueError: Invalid type for attribute 'Bar.e1', expected instance of type(s) ('expr',) (got 'NoneType').
     """
 
 

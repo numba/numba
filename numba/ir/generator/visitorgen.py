@@ -9,6 +9,7 @@ from __future__ import print_function, division, absolute_import
 import os
 
 from . import generator
+from . import naming
 from .formatting import format_stats, get_fields
 
 #------------------------------------------------------------------------
@@ -43,18 +44,18 @@ class GenericVisitor(object):
 '''
 
 pxd_interface_class = """\
-from nodes cimport *
+cimport %s
 
 cdef class GenericVisitor(object):
     cpdef generic_visit(self, node)
-"""
+""" % (naming.nodes,)
 
 
 # TODO: We can also make 'visitchildren' dispatch quickly
 
 visitor_class = '''
-from interface import GenericVisitor, iter_fields
-from nodes import AST
+from %s import GenericVisitor, iter_fields
+from %s import AST
 
 __all__ = ['Visitor']
 
@@ -69,11 +70,11 @@ class Visitor(GenericVisitor):
             elif isinstance(value, AST):
                 value.accept(self)
 
-'''
+''' % (naming.interface, naming.nodes)
 
 transformer_class = """
-from interface import GenericVisitor, iter_fields
-from nodes import AST
+from %s import GenericVisitor, iter_fields
+from %s import AST
 
 __all__ = ['Transformer']
 
@@ -102,21 +103,21 @@ class Transformer(GenericVisitor):
                     setattr(node, field, new_node)
         return node
 
-"""
+""" % (naming.interface, naming.nodes,)
 
 pxd_visitor_class = """
-from interface cimport GenericVisitor
+from %s cimport GenericVisitor
 
 cdef class Visitor(GenericVisitor):
     pass
-"""
+""" % (naming.interface,)
 
 pxd_transformer_class = """
-from interface cimport GenericVisitor
+from %s cimport GenericVisitor
 
 cdef class Transformer(GenericVisitor):
     pass
-"""
+""" % (naming.interface,)
 
 #------------------------------------------------------------------------
 # Code Formatting
@@ -185,7 +186,9 @@ class PyTransformMethod(PyVisitMethod):
 
 class PxdMethod(Method):
     def __str__(self):
-        return "    cpdef visit_%s(self, %s node)\n" % (self.name, self.name)
+        return "    cpdef visit_%s(self, %s.%s node)\n" % (self.name,
+                                                           naming.nodes,
+                                                           self.name)
 
 #------------------------------------------------------------------------
 # Code Generators
@@ -221,12 +224,12 @@ class VisitorCodeGen(generator.Codegen):
 #------------------------------------------------------------------------
 
 codegens = [
-    VisitorCodeGen("interface.py", interface_class, InterfaceMethod),
-    VisitorCodeGen("interface.pxd", pxd_interface_class, PxdMethod),
-    VisitorCodeGen("visitor.py", visitor_class, PyVisitMethod),
-    generator.UtilityCodeGen("visitor.pxd", pxd_visitor_class),
-    VisitorCodeGen("transformer.py", transformer_class, PyTransformMethod),
-    generator.UtilityCodeGen("transformer.pxd", pxd_transformer_class),
+    VisitorCodeGen(naming.interface + '.py', interface_class, InterfaceMethod),
+    VisitorCodeGen(naming.interface + '.pxd', pxd_interface_class, PxdMethod),
+    VisitorCodeGen(naming.visitor + '.py', visitor_class, PyVisitMethod),
+    generator.UtilityCodeGen(naming.visitor + '.pxd', pxd_visitor_class),
+    VisitorCodeGen(naming.transformer + '.py', transformer_class, PyTransformMethod),
+    generator.UtilityCodeGen(naming.transformer + '.pxd', pxd_transformer_class),
 ]
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 
 from .testutils import generate_in_memory
-from .. import generator, visitorgen, astgen
+from .. import generator, visitorgen, astgen, naming
 
 #------------------------------------------------------------------------
 # Load modules
@@ -14,14 +14,17 @@ def load_testschema1():
     codegens = astgen.codegens + visitorgen.codegens
     file_allocator = generate_in_memory("testschema1.asdl", codegens)
 
-    interface = generator.generate_module(file_allocator, "interface.py")
-    sys.modules['interface'] = interface
+    interface = generator.generate_module(file_allocator,
+                                          naming.interface + '.py')
+    sys.modules[naming.interface] = interface
 
-    nodes = generator.generate_module(file_allocator, "nodes.py")
-    sys.modules['nodes'] = nodes
+    nodes = generator.generate_module(file_allocator, naming.nodes + '.py')
+    sys.modules[naming.nodes] = nodes
 
-    visitor = generator.generate_module(file_allocator, "visitor.py")
-    transformer = generator.generate_module(file_allocator, "transformer.py")
+    visitor = generator.generate_module(file_allocator,
+                                        naming.visitor + '.py')
+    transformer = generator.generate_module(file_allocator,
+                                            naming.transformer + '.py')
 
     return nodes, visitor, transformer
 

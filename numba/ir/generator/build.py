@@ -14,6 +14,7 @@ from . import generator
 from . import formatting
 from . import astgen
 from . import visitorgen
+from . import naming
 
 #------------------------------------------------------------------------
 # Tools Flags
@@ -55,22 +56,22 @@ def make_codegen_dict(codegens):
 all_codegens = astgen.codegens + visitorgen.codegens
 gens = make_codegen_dict(all_codegens)
 
-pxd_ast_tool        = Tool([gens["nodes.pxd"]], flags=cython)
-py_ast_tool         = Tool([gens["nodes.py"]])
+pxd_ast_tool        = Tool([gens[naming.nodes + ".pxd"]], flags=cython)
+py_ast_tool         = Tool([gens[naming.nodes + ".py"]])
 
-pxd_interface_tool  = Tool([gens["interface.pxd"]], flags=cython,
+pxd_interface_tool  = Tool([gens[naming.interface + ".pxd"]], flags=cython,
                            depends=[pxd_ast_tool])
-py_interface_tool   = Tool([gens["interface.py"]],
+py_interface_tool   = Tool([gens[naming.interface + ".py"]],
                            depends=[py_ast_tool])
 
-pxd_visitor_tool    = Tool([gens["visitor.pxd"]], flags=cython,
+pxd_visitor_tool    = Tool([gens[naming.visitor + ".pxd"]], flags=cython,
                            depends=[pxd_interface_tool])
-py_visitor_tool     = Tool([gens["visitor.py"]],
+py_visitor_tool     = Tool([gens[naming.visitor + ".py"]],
                            depends=[py_interface_tool, pxd_visitor_tool])
 
-pxd_transform_tool  = Tool([gens["transformer.pxd"]], flags=cython,
+pxd_transform_tool  = Tool([gens[naming.transformer + ".pxd"]], flags=cython,
                            depends=[pxd_interface_tool])
-py_transformr_tool  = Tool([gens["transformer.py"]],
+py_transformr_tool  = Tool([gens[naming.transformer + ".py"]],
                            depends=[py_interface_tool, pxd_transform_tool])
 
 pxd_ast_tool.depends.extend([pxd_interface_tool, py_interface_tool])
@@ -105,15 +106,27 @@ def build_package(schema_filename, feature_names, output_dir, mask=0):
 source_name = lambda fn: os.path.splitext(os.path.basename(fn))[0]
 
 def make_package(disk_allocator, codegens):
-    init = disk_allocator.open_sourcefile("__init__.py")
-    # for c in codegens:
-    #     if c.out_filename.endswith('.py'):
-    #         modname = source_name(c.out_filename)
-    #         init.write("from .%s import *\n" % modname)
+    make_init(disk_allocator, codegens)
+
+    # Make Cython dependency optional
+    # disk_allocator.open_sourcefile("cython.py")
 
     fns = [c.out_filename for c in codegens if c.out_filename.endswith('.pxd')]
     if fns:
         make_setup(disk_allocator, [source_name(fn) + '.py' for fn in fns])
+
+def make_init(disk_allocator, codegens):
+    init = disk_allocator.open_sourcefile("__init__.py")
+    init.write(dedent("""
+        # Horrid hack to make work around circular cimports
+        import os, sys
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    """))
+
+    for c in codegens:
+        if c.out_filename.endswith('.py'):
+            modname = source_name(c.out_filename)
+            init.write("from %s import *\n" % modname)
 
 def make_setup(disk_allocator, filenames):
     setup = disk_allocator.open_sourcefile("setup.py")
