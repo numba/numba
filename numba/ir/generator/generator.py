@@ -180,9 +180,11 @@ class SimpleCodegen(Codegen):
 
     def generate(self, emitter, asdl_tree, schema):
         self.emit_preamble(emitter, schema)
+
         for rulename, rule in schema.dfns.iteritems():
             self.emit_rule(emitter, schema, rulename, rule)
 
+        for rulename, rule in schema.dfns.iteritems():
             if rule.is_sum:
                 for sumtype in rule.fields:
                     self.emit_sum(emitter, schema, rulename, rule, sumtype)

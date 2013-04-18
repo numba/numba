@@ -10,7 +10,7 @@ import os
 
 from . import generator
 from . import naming
-from .formatting import format_stats, get_fields
+from .formatting import py_formatter
 
 #------------------------------------------------------------------------
 # Code Formatting
@@ -125,7 +125,11 @@ cdef class Transformer(GenericVisitor):
 
 def make_visit_stats(schema, fields, inplace):
     stats = []
-    for field, field_access in zip(fields, get_fields(fields, obj="node")):
+
+    # ["self.attr_x"]
+    field_accessors = py_formatter.get_fields(fields, obj="node")
+
+    for field, field_access in zip(fields, field_accessors):
         field_type = str(field.type)
         if field_type not in schema.dfns and field_type not in schema.types:
             # Not an AST node
@@ -176,7 +180,7 @@ class PyMethod(Method):
            "    def visit_%s(self, node):\n"
            "        %s\n"
            "\n"
-       ) % (self.name, format_stats("\n", 8, stats))
+       ) % (self.name, py_formatter.format_stats("\n", 8, stats))
 
 class PyVisitMethod(PyMethod):
     inplace = False

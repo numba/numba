@@ -164,4 +164,4 @@ def _make_setup(disk_allocator, filenames):
             ext_modules=ext_modules,
             cmdclass={'build_ext': build_ext},
         )
-    """) % formatting.format_stats(",\n", 4, ext_modules))
+    """) % formatting.py_formatter.format_stats(",\n", 4, ext_modules))

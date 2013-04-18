@@ -16,7 +16,7 @@ from functools import partial
 from . import generator
 from . import naming
 from .classgen import Class, ClassCodegen
-from .formatting import format_stats, get_fields
+from .formatting import py_formatter, cy_formatter
 
 root = os.path.dirname(os.path.abspath(__file__))
 testdir = os.path.join(root, "tests")
@@ -28,6 +28,10 @@ testdir = os.path.join(root, "tests")
 py_preamble = """
 import types
 import cython
+
+# ASDL builtin types
+# identifier = str
+# string = basestring
 
 class TypedProperty(object):
     '''Defines a class property that does a type check in the setter.'''
@@ -66,13 +70,16 @@ class TypedProperty(object):
 cy_preamble = """
 cimport cython
 from %s cimport GenericVisitor
+
+# ctypedef str identifier
+# ctypedef str string
+# ctypedef bint bool
 """ % (naming.interface,)
 
 def format_field(classname, field):
+    type = py_formatter.format_type(field.type)
     if field.opt:
-        type = "(%s, types.NoneType)" % field.type
-    else:
-        type = field.type
+        type = "(%s, types.NoneType)" % (type,)
 
     format_dict = dict(name=field.name, type=type, classname=classname)
     return ('%(classname)s.%(name)s = TypedProperty(%(type)s, '
@@ -100,15 +107,15 @@ class PyClass(Class):
             initialize = ["pass"]
 
         fmtstring = ", ".join("%s=%%s" % name for name in fieldnames)
-        fmtargs = "(%s)" % ", ".join(get_fields(self.fields))
+        fmtargs = "(%s)" % ", ".join(py_formatter.get_fields(self.fields))
 
         format_dict = dict(
             name=self.name, base=self.base, doc=self.doc,
-            fields      = format_stats(",\n", 8, fields),
-            attributes  = format_stats(",\n", 8, attributes),
-            properties  = format_stats("\n", 4, properties),
+            fields      = py_formatter.format_stats(",\n", 8, fields),
+            attributes  = py_formatter.format_stats(",\n", 8, attributes),
+            properties  = py_formatter.format_stats("\n", 4, properties),
             params      = ", ".join(fieldnames),
-            initialize  = format_stats("\n", 8, initialize),
+            initialize  = py_formatter.format_stats("\n", 8, initialize),
             fmtstring   = fmtstring,
             fmtargs     = fmtargs,
         )
@@ -148,12 +155,13 @@ class CyClass(Class):
     """
 
     def __str__(self):
-        fields = ["cdef public %s %s" % (field.type, field.name)
+        f = cy_formatter
+        fields = ["cdef public %s %s" % (f.format_type(field.type), field.name)
                       for field in self.fields]
         fmtdict = {
             'name': self.name,
             'base': self.base,
-            'fields': format_stats("\n", 4, fields)
+            'fields': cy_formatter.format_stats("\n", 4, fields)
         }
 
         return dedent('''
