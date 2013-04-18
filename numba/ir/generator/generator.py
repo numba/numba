@@ -160,14 +160,41 @@ class Codegen(object):
         by a corresponding schema.Schema, which is easier to deal with.
         """
 
-class UtilityCodeGen(Codegen):
+
+class UtilityCodegen(Codegen):
+    """
+    Generate some utility code:
+
+        UtilityCode("foo.py", "my python code")
+    """
 
     def __init__(self, out_filename, utility_code):
-        super(UtilityCodeGen, self).__init__(out_filename)
+        super(UtilityCodegen, self).__init__(out_filename)
         self.utility_code = utility_code
 
     def generate(self, emitter, asdl_tree, schema_instance):
         emitter.emit(self.utility_code)
+
+
+class SimpleCodegen(Codegen):
+
+    def generate(self, emitter, asdl_tree, schema):
+        self.emit_preamble(emitter, schema)
+        for rulename, rule in schema.dfns.iteritems():
+            self.emit_rule(emitter, schema, rulename, rule)
+
+            if rule.is_sum:
+                for sumtype in rule.fields:
+                    self.emit_sum(emitter, schema, rulename, rule, sumtype)
+
+    def emit_preamble(self, emitter, schema):
+        pass
+
+    def emit_rule(self, emitter, schema, rulename, rule):
+        pass
+
+    def emit_sum(self, emitter, schema, rulename, rule, sumtype):
+        pass
 
 
 if __name__ == '__main__':

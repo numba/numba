@@ -194,28 +194,20 @@ class PxdMethod(Method):
 # Code Generators
 #------------------------------------------------------------------------
 
-class VisitorCodeGen(generator.Codegen):
+class VisitorCodegen(generator.SimpleCodegen):
     """
     Generate Python AST nodes.
     """
 
     def __init__(self, out_filename, preamble, Method):
-        super(VisitorCodeGen, self).__init__(out_filename)
+        super(VisitorCodegen, self).__init__(out_filename)
         self.preamble = preamble
         self.Method = Method
 
-    def generate(self, emitter, asdl_tree, schema):
+    def emit_preamble(self, emitter, schema):
         emitter.emit(self.preamble)
-        for rulename, rule in schema.dfns.iteritems():
-            self.emit_rule(emitter, schema, rulename, rule)
 
-    def emit_rule(self, emitter, schema, rulename, rule):
-        "Emit code for a rule (a nonterminal)"
-        if rule.is_sum:
-            for sumtype in rule.fields:
-                self.emit_sum(emitter, schema, sumtype)
-
-    def emit_sum(self, emitter, schema, sumtype):
+    def emit_sum(self, emitter, schema, rulename, rule, sumtype):
         fields = schema.types[sumtype]
         emitter.emit(self.Method(schema, sumtype, fields))
 
@@ -224,12 +216,12 @@ class VisitorCodeGen(generator.Codegen):
 #------------------------------------------------------------------------
 
 codegens = [
-    VisitorCodeGen(naming.interface + '.py', interface_class, InterfaceMethod),
-    VisitorCodeGen(naming.interface + '.pxd', pxd_interface_class, PxdMethod),
-    VisitorCodeGen(naming.visitor + '.py', visitor_class, PyVisitMethod),
-    generator.UtilityCodeGen(naming.visitor + '.pxd', pxd_visitor_class),
-    VisitorCodeGen(naming.transformer + '.py', transformer_class, PyTransformMethod),
-    generator.UtilityCodeGen(naming.transformer + '.pxd', pxd_transformer_class),
+    VisitorCodegen(naming.interface + '.py', interface_class, InterfaceMethod),
+    VisitorCodegen(naming.interface + '.pxd', pxd_interface_class, PxdMethod),
+    VisitorCodegen(naming.visitor + '.py', visitor_class, PyVisitMethod),
+    generator.UtilityCodegen(naming.visitor + '.pxd', pxd_visitor_class),
+    VisitorCodegen(naming.transformer + '.py', transformer_class, PyTransformMethod),
+    generator.UtilityCodegen(naming.transformer + '.pxd', pxd_transformer_class),
 ]
 
 if __name__ == '__main__':

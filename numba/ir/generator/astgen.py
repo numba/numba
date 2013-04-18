@@ -15,6 +15,7 @@ from functools import partial
 
 from . import generator
 from . import naming
+from .classgen import Class, ClassCodegen
 from .formatting import format_stats, get_fields
 
 root = os.path.dirname(os.path.abspath(__file__))
@@ -78,16 +79,8 @@ def format_field(classname, field):
                 '"%(classname)s", "%(name)s")' % format_dict)
 
 #------------------------------------------------------------------------
-# Class Generation
+# Class Formatting
 #------------------------------------------------------------------------
-
-class Class(object):
-    def __init__(self, name, base, doc, fields=(), attributes=()):
-        self.name = name
-        self.base = base
-        self.doc = doc
-        self.fields = fields
-        self.attributes = attributes
 
 class PyClass(Class):
     """
@@ -169,46 +162,18 @@ class CyClass(Class):
                 cpdef accept(self, GenericVisitor visitor)
         ''') % fmtdict
 
-
-#------------------------------------------------------------------------
-# Code Generators
-#------------------------------------------------------------------------
-
-class ASTNodeCodeGen(generator.Codegen):
-    """
-    Generate Python AST nodes.
-    """
-
-    def __init__(self, out_filename, preamble, Class):
-        super(ASTNodeCodeGen, self).__init__(out_filename)
-        self.preamble = preamble
-        self.Class = Class
-
-    def generate(self, emitter, asdl_tree, schema):
-        emitter.emit(self.preamble)
-        emitter.emit(self.Class("AST", "object", doc="AST root node."))
-        for rulename, rule in schema.dfns.iteritems():
-            self.emit_rule(emitter, schema, rulename, rule)
-
-    def emit_rule(self, emitter, schema, rulename, rule):
-        "Emit code for a rule (a nonterminal)"
-        emitter.emit(self.Class(rulename, "AST", doc=str(rule)))
-        # print(rulename, rule.fields)
-        if rule.is_sum:
-            for subtype in rule.fields:
-                self.emit_sum(emitter, schema, rulename, rule, subtype)
-
-    def emit_sum(self, emitter, schema, rulename, rule, sumtype):
-        fields = schema.types[sumtype]
-        emitter.emit(self.Class(sumtype, rulename, doc=sumtype, fields=fields))
-
 #------------------------------------------------------------------------
 # Global Exports
 #------------------------------------------------------------------------
 
+def make_root_class(Class):
+    return Class("AST", "object", doc="AST root node.")
+
 codegens = [
-    ASTNodeCodeGen(naming.nodes + '.py', py_preamble, PyClass),
-    ASTNodeCodeGen(naming.nodes + '.pxd', cy_preamble, CyClass),
+    ClassCodegen(naming.nodes + '.py', py_preamble,
+                 PyClass, make_root_class(PyClass)),
+    ClassCodegen(naming.nodes + '.pxd', cy_preamble,
+                 CyClass, make_root_class(CyClass)),
 ]
 
 
