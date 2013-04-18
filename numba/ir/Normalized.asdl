@@ -4,6 +4,7 @@
 --    * import, import from: Single import name
 --    * assignments: Single LHS
 --    * comparisons: Single operator, single RHS
+--    * boolean operations: single RHS
 --    * del: Single variable name
 
 module Normalized version "0.1"
@@ -49,22 +50,22 @@ module Normalized version "0.1"
 	      -- col_offset is the byte offset in the utf8 string the parser uses
 	      attributes (int lineno, int col_offset)
 
-	      -- BoolOp() can use left & right?
-	expr = BoolOp(boolop op, expr* values)
+	expr = BoolOp(expr left, boolop op, expr right)
 	     | BinOp(expr left, operator op, expr right)
 	     | UnaryOp(unaryop op, expr operand)
 	     | Lambda(arguments args, expr body)
 	     | IfExp(expr test, expr body, expr orelse)
 	     | Dict(expr* keys, expr* values)
 	     | Set(expr* elts)
+	     | List(expr* elts)
+	     | Tuple(expr* elts)
 	     | ListComp(expr elt, comprehension* generators)
 	     | SetComp(expr elt, comprehension* generators)
 	     | DictComp(expr key, expr value, comprehension* generators)
 	     | GeneratorExp(expr elt, comprehension* generators)
+
 	     -- the grammar constrains where yield expressions can occur
 	     | Yield(expr? value)
-	     -- need sequences for compare to distinguish between
-	     -- x < 4 < 3 and (x < 4) < 3
 	     | Compare(expr left, cmpop op, expr right)
 	     | Call(expr func, expr* args, keyword* keywords,
 			    expr? starargs, expr? kwargs)
@@ -78,8 +79,6 @@ module Normalized version "0.1"
 	     | Subscript(expr value, slice *slice, expr_context ctx)
 	     | Name(identifier id, expr_context ctx)
 	     | Starred(expr value, expr_context ctx)
-	     -- | List(expr* elts, expr_context ctx)
-	     -- | Tuple(expr* elts, expr_context ctx)
 
 	      -- col_offset is the byte offset in the utf8 string the parser uses
 	      attributes (int lineno, int col_offset)

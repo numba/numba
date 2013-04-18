@@ -205,6 +205,8 @@ if __name__ == '__main__':
         {
             mod = Module(object leaf1, object leaf2)
                 | Foo(object leaf)
+            foo = Add | Mul
+            expr = mod | foo
         }
     """)
     asdl_tree = get_asdl("MyASDL.asdl", schema_def)
