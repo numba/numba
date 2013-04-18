@@ -76,6 +76,7 @@ def run_pipeline2(env, func, func_ast, func_signature,
     assert pipeline is None
     assert kwargs.get('order', None) is None
     logger.debug(pprint.pformat(kwargs))
+    kwargs['llvm_module'] = lc.Module.new(module_name(func))
     with env.TranslationContext(env, func, func_ast, func_signature,
                                 **kwargs) as func_env:
         pipeline = env.get_pipeline(kwargs.get('pipeline_name', None))

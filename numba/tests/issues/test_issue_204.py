@@ -1,4 +1,4 @@
-from numba import autojit
+from numba import autojit, jit
 
 @autojit
 def closure_modulo(a, b):
