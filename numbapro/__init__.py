@@ -55,7 +55,7 @@ def qualified_test_name(root):
     offset = qname.rindex('numbapro.tests.')
     return qname[offset:]
 
-SKIPPED = ['numbapro.tests.issues.test_issue_23']
+SKIPPED = []
 def test(whitelist=None, blacklist=None, cuda=False):
     import sys, os
     from os.path import dirname, join
