@@ -14,17 +14,24 @@ import cStringIO
 
 from numba.asdl import asdl
 from numba.asdl import schema
+from numba.asdl import processor
 from numba.asdl.asdl import pyasdl
+
+root = os.path.dirname(os.path.abspath(__file__))
 
 #------------------------------------------------------------------------
 # Entry Points
 #------------------------------------------------------------------------
 
-def parse(schema_name, schema_def):
+# TODO: This needs to be parametrized when this is externalized
+asdl_import_path = [os.path.join(root, os.pardir)]
+import_processor = processor.ImportProcessor(pyasdl, asdl_import_path)
+
+def parse(schema_name, schema_def, asdl_processor=import_processor):
     """
     Parse a schema given a schema name and schema string (ASDL string).
     """
-    asdl_tree = get_asdl(schema_name, schema_def)
+    asdl_tree = get_asdl(schema_name, schema_def, asdl_processor)
     schema_instance = schema.build_schema(asdl_tree)
     return asdl_tree, schema_instance
 
@@ -75,8 +82,9 @@ def generate_module(file_allocator, name):
 # Code Generator Utilities
 #------------------------------------------------------------------------
 
-def get_asdl(schema_name, schema):
-    parser, loader = asdl.load(schema_name, schema, pyasdl)
+def get_asdl(schema_name, schema, asdl_processor=None):
+    parser, loader = asdl.load(schema_name, schema, pyasdl,
+                               asdl_processor=asdl_processor)
     asdl_tree = loader.load()
     return asdl_tree
 
@@ -211,5 +219,6 @@ if __name__ == '__main__':
     """)
     asdl_tree = get_asdl("MyASDL.asdl", schema_def)
     print(asdl_tree)
+    print ("-------------")
     s = schema.build_schema(asdl_tree)
     print(s)
