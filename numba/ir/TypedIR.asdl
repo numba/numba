@@ -8,10 +8,10 @@ module UnTyped version "0.1"
 {
 
     -- Import everything except 'expr'
-	from UnTypedIR import block, stmt, incoming
-	from UnTypedIR import boolop, operator, unaryop, cmpop, slice
-	from UnTypedIR import comprehension, excepthandler, arguments
-	from UnTypedIR import expr_context, keyword, alias
+	from UntypedIR import block, stmt, incoming
+	from UntypedIR import boolop, operator, unaryop, cmpop, slice
+	from UntypedIR import comprehension, excepthandler, arguments
+	from UntypedIR import expr_context, keyword, alias
 
 	expr = BoolOp(expr left, boolop op, expr right)
 	     | BinOp(expr left, operator op, expr right)
