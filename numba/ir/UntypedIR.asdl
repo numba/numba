@@ -27,14 +27,10 @@
 module UnTyped version "0.1"
 {
 
-	func = FunctionDef(identifier name, arguments args,
-                       block *entry, object *blocks, expr* decorator_list)
+	stmt  = FunctionDef(identifier name, arguments args,
+                        block *entry, object *blocks, expr* decorator_list)
 
-    block = Block(stmt *body)
-            attributes (object meta)
-
-    stmt  = Print(expr? dest, expr* values, bool nl)
-          | func
+          | Print(expr? dest, expr* values, bool nl)
 
           ---------- Basic Block Terminators ----------
 
@@ -66,7 +62,7 @@ module UnTyped version "0.1"
           | Raise(expr? type, expr? inst, expr? tback)
           | Assert(expr test, expr? msg)
 	      | Exec(expr body, expr? globals, expr? locals)
-	      | definition
+	      | Value(expr value)
 
 	      -- col_offset is the byte offset in the utf8 string the parser uses
 	      attributes (int lineno, int col_offset, object meta)
@@ -106,10 +102,17 @@ module UnTyped version "0.1"
 	      -- col_offset is the byte offset in the utf8 string the parser uses
 	      attributes (int lineno, int col_offset, object meta)
 
-    ---------- SSA ----------
+    ---------- SSA & Control Flow ----------
 
-	definition = Value(expr value)
-    incoming = (object predecessor, definition value)
+    block = Block(stmt *body)
+                attributes (object meta)
+
+    -- We want a definition to be derived from stmt, but that means we need
+    -- to wrap it...
+	-- definition = Value(expr value)
+
+	-- The second attribute must be a Value
+    incoming = (object predecessor, stmt value)
 
     ---------- Miscellaneous ----------
 
@@ -122,7 +125,7 @@ module UnTyped version "0.1"
 	boolop = And | Or
 
 	operator = Add | Sub | Mult | Div | Mod | Pow | LShift
-                   | RShift | BitOr | BitXor | BitAnd | FloorDiv
+             | RShift | BitOr | BitXor | BitAnd | FloorDiv
 
 	unaryop = Invert | Not | UAdd | USub
 

@@ -14,6 +14,13 @@ def build_untyped():
     outdir = os.path.join(root, "untyped")
     build.build_package(fn, features, outdir)
 
+def build_typed():
+    fn = os.path.join(root, "TypedIR.asdl")
+    outdir = os.path.join(root, "typed")
+    build.build_package(fn, features, outdir)
+
+
 if __name__ == '__main__':
     build_normalized()
     build_untyped()
+    build_typed()

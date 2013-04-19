@@ -7,49 +7,11 @@
 module UnTyped version "0.1"
 {
 
-	func = FunctionDef(identifier name, arguments args,
-                       block *entry, object *blocks, expr* decorator_list)
-
-    block = Block(stmt *body)
-            attributes (object meta)
-
-    stmt  = Print(expr? dest, expr* values, bool nl)
-          | func
-
-          ---------- Basic Block Terminators ----------
-
-          -- Basic Control Flow
-          | Branch(block bbdst)                           -- unconditional jump
-          | CBranch(expr cond, block bbif, block bbelse)  -- conditional jump
-          | Return(expr? value)
-
-          ---------- Basic Block Annotations ----------
-
-          -- First instruction in the 'condition' block (after any phis)
-          | SetupLoop(object bbbody, object bbexit)
-
-          -- First instruction in the 'try' block (after any phis)
-	      | SetupExcept(object bbexcept)
-	      | SetupFinally(stmt* body, stmt* finalbody)
-
-          ---------- Assignments and Scoping ----------
-
-          | Phi(incoming *incoming)
-          -- | Assign(expr target, expr value)
-          -- | Delete(expr target)              -- Def(NULL)
-
-	      | Global(identifier name)
-          | Nonlocal(identifier name)
-
-          ---------- Miscellaneous ----------
-
-          | Raise(expr? type, expr? inst, expr? tback)
-          | Assert(expr test, expr? msg)
-	      | Exec(expr body, expr? globals, expr? locals)
-	      | definition
-
-	      -- col_offset is the byte offset in the utf8 string the parser uses
-	      attributes (int lineno, int col_offset, object meta)
+    -- Import everything except 'expr'
+	from UnTypedIR import block, stmt, incoming
+	from UnTypedIR import boolop, operator, unaryop, cmpop, slice
+	from UnTypedIR import comprehension, excepthandler, arguments
+	from UnTypedIR import expr_context, keyword, alias
 
 	expr = BoolOp(expr left, boolop op, expr right)
 	     | BinOp(expr left, operator op, expr right)
@@ -80,40 +42,4 @@ module UnTyped version "0.1"
 	      -- col_offset is the byte offset in the utf8 string the parser uses
 	      attributes (int lineno, int col_offset, type type, object meta)
 
-    ---------- SSA ----------
-
-	definition = Value(expr value)
-	incoming = (object predecessor, definition value)
-
-    ---------- Miscellaneous ----------
-
-	expr_context = Load | Store | Del | AugLoad | AugStore | Param
-
-	slice = Ellipsis
-	      | Slice(expr? lower, expr? upper, expr? step)
-	      | Index(expr value)
-
-	boolop = And | Or
-
-	operator = Add | Sub | Mult | Div | Mod | Pow | LShift
-                   | RShift | BitOr | BitXor | BitAnd | FloorDiv
-
-	unaryop = Invert | Not | UAdd | USub
-
-	cmpop = Eq | NotEq | Lt | LtE | Gt | GtE | Is | IsNot | In | NotIn
-
-	comprehension = (expr target, expr iter, expr* ifs)
-
-	-- not sure what to call the first argument for raise and except
-	excepthandler = ExceptHandler(expr? type, expr? name, stmt* body)
-	                attributes (int lineno, int col_offset)
-
-	arguments = (expr* args, identifier? vararg,
-		         identifier? kwarg, expr* defaults)
-
-    -- keyword arguments supplied to call
-    keyword = (identifier arg, expr value)
-
-    -- import name with optional 'as' alias.
-    alias = (identifier name, identifier? asname)
 }
