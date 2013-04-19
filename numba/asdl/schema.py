@@ -2,6 +2,7 @@
 from __future__ import print_function, division, absolute_import
 
 import ast
+import keyword
 from collections import defaultdict, namedtuple
 import contextlib
 
@@ -335,3 +336,17 @@ def _is_iterable(value):
         return False
     else:
         return True
+
+def verify_names(names):
+    for name in names:
+        if keyword.iskeyword(name):
+            raise ValueError("%r is a keyword" % (name,))
+
+def verify_schema_keywords(schema):
+    """
+    Verify schema, checking for the use of any Python keywords.
+    """
+    verify_names(schema.dfns)
+    verify_names(schema.types)
+    verify_names([field.name for fields in schema.types.itervalues()
+                                 for field in fields])

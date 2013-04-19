@@ -7,6 +7,7 @@ Generate Python classes and Cython pxd files.
 from __future__ import print_function, division, absolute_import
 
 from . import generator
+from numba.asdl.schema import verify_schema_keywords
 
 
 class Class(object):
@@ -30,6 +31,7 @@ class ClassCodegen(generator.SimpleCodegen):
         self.Class = Class
 
     def emit_preamble(self, emitter, schema):
+        verify_schema_keywords(schema)
         emitter.emit(self.preamble)
         emitter.emit(self.rootclass)
 

@@ -9,5 +9,11 @@ def build_normalized():
     outdir = os.path.join(root, "normalized")
     build.build_package(fn, features, outdir)
 
+def build_untyped():
+    fn = os.path.join(root, "UntypedIR.asdl")
+    outdir = os.path.join(root, "untyped")
+    build.build_package(fn, features, outdir)
+
 if __name__ == '__main__':
     build_normalized()
+    build_untyped()

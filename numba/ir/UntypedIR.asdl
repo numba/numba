@@ -34,7 +34,7 @@ module UnTyped version "0.1"
     --    \ block.meta holds the metadata:
     --          { 'flags' : BLOCK_LOOP | BLOCK_EXCEPT | BLOCK_FINALLY }
 
-    block = Block(op *body)
+    block = Block(stmt *body)
             attributes (object meta)
 
     stmt  = Print(expr? dest, expr* values, bool nl)
@@ -43,8 +43,8 @@ module UnTyped version "0.1"
           ---------- Basic Block Terminators ----------
 
           -- Basic Control Flow
-          | Branch(block bbdst)                     -- unconditional jump
-          | CBranch(expr cond, block bbif, bbelse)  -- conditional jump
+          | Branch(block bbdst)                           -- unconditional jump
+          | CBranch(expr cond, block bbif, block bbelse)  -- conditional jump
           | Return(expr? value)
 
           ---------- Basic Block Annotations ----------
@@ -70,7 +70,7 @@ module UnTyped version "0.1"
           | Raise(expr? type, expr? inst, expr? tback)
           | Assert(expr test, expr? msg)
 	      | Exec(expr body, expr? globals, expr? locals)
-	      | def
+	      | definition
 
 	      -- col_offset is the byte offset in the utf8 string the parser uses
 	      attributes (int lineno, int col_offset, object meta)
@@ -112,8 +112,8 @@ module UnTyped version "0.1"
 
     ---------- SSA ----------
 
-	def = Value(expr value)
-	use = Use(object def)
+	definition = Value(expr value)
+	use = Use(object definition)
 	incoming = (object predecessor, object use)
 
     ---------- Miscellaneous ----------
