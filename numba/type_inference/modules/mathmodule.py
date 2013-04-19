@@ -61,6 +61,7 @@ unary_libc_math_funcs = [
     'log10',
     'fabs',
     'erfc',
+    'floor',
     'ceil',
     'exp',
     'exp2',
