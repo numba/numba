@@ -22,17 +22,13 @@
 --     TryFinally   -> Branch + SetupFinally
 --     TryExcept    -> Branch + SetupExcept
 --     With         -> Branch + SetupExcept + SetupFinally
+--     Name('True') -> Bool
 
 module UnTyped version "0.1"
 {
 
-    -- Function. blocks[0] is the entry block
 	func = FunctionDef(identifier name, arguments args,
                        block *entry, object *blocks, expr* decorator_list)
-
-    -- Basic Block
-    --    \ block.meta holds the metadata:
-    --          { 'flags' : BLOCK_LOOP | BLOCK_EXCEPT | BLOCK_FINALLY }
 
     block = Block(stmt *body)
             attributes (object meta)
@@ -95,7 +91,7 @@ module UnTyped version "0.1"
 	     | Repr(expr value)
 	     | Num(object n) -- a number as a PyObject.
 	     | Str(string s) -- need to specify raw, unicode, etc?
-	     -- other literals? bools?
+	     | Bool(bool b)
 
 	     -- the following expression can appear in assignment context
 	     | Attribute(expr value, identifier attr, expr_context ctx)
@@ -113,8 +109,7 @@ module UnTyped version "0.1"
     ---------- SSA ----------
 
 	definition = Value(expr value)
-	use = Use(object definition)
-	incoming = (object predecessor, object use)
+    incoming = (object predecessor, definition value)
 
     ---------- Miscellaneous ----------
 

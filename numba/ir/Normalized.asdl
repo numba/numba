@@ -6,6 +6,8 @@
 --    * comparisons: Single operator, single RHS
 --    * boolean operations: single RHS
 --    * del: Single variable name
+--    * repr (backticks): Call(Name('repr'), value)
+--
 
 module Normalized version "0.1"
 {
@@ -69,7 +71,6 @@ module Normalized version "0.1"
 	     | Compare(expr left, cmpop op, expr right)
 	     | Call(expr func, expr* args, keyword* keywords,
 			    expr? starargs, expr? kwargs)
-	     | Repr(expr value)
 	     | Num(object n) -- a number as a PyObject.
 	     | Str(string s) -- need to specify raw, unicode, etc?
 	     -- other literals? bools?
