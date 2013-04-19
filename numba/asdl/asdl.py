@@ -8,6 +8,22 @@ root = os.path.join(os.path.dirname(__file__))
 common_path = os.path.join(root, 'common')
 
 #------------------------------------------------------------------------
+# ASDL Processing
+#------------------------------------------------------------------------
+
+class ASDLProcessor(object):
+    """
+    Allow pre-processing of ASDL source (str) and post-processing of the
+    resulting ASDL tree.
+    """
+
+    def preprocess(self, asdl_source):
+        return asdl_source
+
+    def postprocess(self, asdl_tree):
+        return asdl_tree
+
+#------------------------------------------------------------------------
 # Parse ASDL Schemas
 #------------------------------------------------------------------------
 
@@ -17,24 +33,31 @@ class ASDLParser(object):
     implementation.
     """
 
-    def __init__(self, asdlmod):
+    def __init__(self, asdlmod, asdl_processor):
         self.asdlmod = asdlmod
+        self.asdl_processor = asdl_processor
 
     def parse(self, buf):
         """
         Parse an ASDL string.
         """
+        buf = self.asdl_processor.preprocess(buf)
+
         scanner = self.asdlmod.ASDLScanner()
         parser = self.asdlmod.ASDLParser()
 
         tokens = scanner.tokenize(buf)
         try:
-            return parser.parse(tokens)
+            asdl_tree = parser.parse(tokens)
         except self.asdlmod.ASDLSyntaxError as err:
             raise ValueError("Error while parsing schema: %s" % (err,))
             # print(err)
             # lines = buf.split("\n")
             # print((lines[err.lineno - 1])) # lines starts at 0, files at 1
+
+        asdl_tree = self.asdl_processor.postprocess(asdl_tree)
+        return asdl_tree
+
 
     def check(self, mod, schema_name):
         """
@@ -75,8 +98,9 @@ class ASDLLoader(object):
         return asdl
 
 
-def load(schema_name, schema_str, asdlmod):
-    parser = ASDLParser(asdlmod)
+def load(schema_name, schema_str, asdlmod, asdl_processor=None):
+    asdl_processor = asdl_processor or ASDLProcessor()
+    parser = ASDLParser(asdlmod, asdl_processor)
     loader = ASDLLoader(parser, schema_str, schema_name)
     return parser, loader
 
