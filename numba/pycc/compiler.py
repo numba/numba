@@ -140,7 +140,7 @@ class _Compiler(object):
         from numba.minivect import minitypes
 
         fname, ext = os.path.splitext(output)
-        with open(fname + '.h', 'wb') as fout:
+        with open(fname + '.h', 'w') as fout:
             fout.write(minitypes.get_utility())
             fout.write("\n/* Prototypes */\n")
             for signature in self.exported_signatures.values():
