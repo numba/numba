@@ -103,87 +103,71 @@ Numba Intermediate Representations
 Python AST IR
 =============
 
-This is the Python abstract syntax tree (AST) representation as
-defined in Python's ast_ module documentation.  Note that this
+Numba's initial intermediate representation is Python abstract syntax
+as defined in Python's ast_ module documentation.  Note that this
 definition is specific to the version of Python being compiled.
 
 .. _ast: http://docs.python.org/library/ast.html#abstract-grammar
 
+Numba must support `Python 2 abstract syntax`__ (specifically versions
+2.6, and 2.7) for the foreseeable future.
+
+.. _ast2: http://docs.python.org/2/library/ast.html#abstract-grammar
+.. _ast3: http://docs.python.org/3/library/ast.html#abstract-grammar
+
+__ ast2_
+
 Normalized IR
 =============
 
-Mark's Proposal
----------------
+The normalized IR starts with the latest ASDL definition for `Python
+3 abstract syntax`__, but makes the following changes:
 
-The initial, Python-like, IR is a subset of a Python AST, the
-syntax exludes:
+__ ast3_
 
-    * ``FunctionDef`` and ``ClassDef``, which are normalized
-      to ``Assign`` of the function and subsequent
-      decorator applications and assignments
-    * No list, dict, set or generators comprehensions, which are
-      normalized to ``For(...)`` etc + method calls to ``list.append``,
-      etc.
-    * Normalized comparisons
+    * Python's top-level module containers, defined in the ``mod`` sum
+      type, are abandoned.  The Numba normalization stage will return
+      one or more instances of the normalized ``stmt`` sum type.
+    * Constructs that modify the namespace may only reference a single
+      name or syntactic name container.  These constructs include:
+        - global, nonlocal
+        - import, import from
+        - assignments
+        - del
+    * Expressions are un-flattened.  Operators on more than two
+      sub-expressions are expanded into expression trees.  Comparison
+      expressions on more than two sub-expressions will use temporaries
+      and desugar into an expression tree.
 
-The initial IR is what numba decorators produce given a pure
-Python AST, function or class as input.
+Numba must translate Python 2 code into Python 3 constructs.
+Specifically, the following transformations should be made:
 
-Sample schema
+    * Repr (backticks): Call(Name('repr'), value)
+    * Print(...): Call(Name('print'), ...)
+    * Exec(...): Call(Name('exec'), ...)
+    * Subscript(..., slices, ...): Subscript(..., ExtSlice(slices), ...)
+    * Ellipsis (the slice): Ellipsis (the expression)
+    * With(...): ...
+    * Raise(...): ...
 
-.. code-block:: ocaml
+The formal ASDL definition of the normalized IR is given here:
+https://github.com/numba/numba/blob/asdl/numba/ir/Normalized.asdl
 
-    module initial {
+Issue: Desugaring comparisons
+-----------------------------
 
-        mod = NumbaModule(unit* stats)
+Do we introduce this as being a DAG already?  If not, we have a
+problem with desugarring comparisons.  We need assignment to bind
+temporaries, so we're going to have a hard time handling the
+following:
 
-        unit
-          = lambda
-          | class
+    Compare(e0, [Eq, Lt], [e1, e2])
 
-        -- functions --
-        lambda
-          = Lambda(posinfo pos, funcmeta meta, str name, arguments args,
-                   expr body)
+We'd want "e1" to be the same sub-expression in the normalized IR:
 
-        funcmeta
-          = FunctionMetaData(
-                -- locals={'foo': double}
-                str* names,     -- 'foo'
-                nbtype* types,  -- double
-                bool nopython,
-            )
+    BoolOp(Compare(e0, Eq, e1), And, Compare(e1, Lt, e2))
 
-        -- classes --
-        class
-          = ClassExpr(posinfo pos, bool is_jit, attrtable table, method* methods)
-
-        attrtable
-          = AttributeTable(str* attrnames, nbtype* attrtypes)
-
-        method
-          = Method(posinfo pos, methodsignature signature, stat* body)
-
-        -- Types --
-
-        type = nbtype
-        nbtype
-          = char | short | int_ | long_ | longlong
-          | uchar | ushort | uint | ulong | ulonglong
-          | ...
-          | functype
-          | methodtype
-
-        methodtype
-          = MethodSignature(functype signature,
-                            bool is_staticmethod,
-                            bool is_classmethod,
-                            bool is_jit, -- whether this is a jit or
-                                         -- autojit method
-                           )
-    }
-
-.. NOTE:: Numba would construct this before starting any pipeline stage.
+How do later stages detect this as being the same sub-expression, etc?
 
 Untyped IR in SSA form
 ======================
