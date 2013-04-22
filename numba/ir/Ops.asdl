@@ -1,0 +1,52 @@
+-- Medium-level operations, three-address (SSA) code.
+
+module Opcodes version "0.1"
+{
+
+    constant = const
+
+    alloc = new_list
+          | new_tuple
+          | new_string
+          | new_object
+          | new_ext_object
+          | new_struct
+
+    coerce = to_object
+           | to_native
+
+    convert = str_to_int
+            | int_to_str
+
+    arrays = getindex_array
+           | setindex_array
+           | getslice_array
+           | setslice_array
+
+    fields = getfield_struct
+           | setfield_struct
+           | getfield_obj
+           | setfield_obj
+           | etc
+
+    -- Math
+    math = sin | asin | sinh | asinh
+         | cos | acos | cosh | acosh
+         | tan | atan | atan2 | tanh | atanh
+         | log | log2 | log10 | log1p
+         | exp | exp2 | expm1
+         | floor | ceil
+         | abs
+         | erfc
+         | rint
+
+    binary_math = pow | round
+
+    -- Calls
+
+    calls = call_obj
+          | call_exttype
+          | call_extmethod
+          | call_pointer
+          | call_external
+}
