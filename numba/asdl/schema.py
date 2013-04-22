@@ -83,10 +83,15 @@ class Schema(object):
     def __init__(self, name):
         # name of the asdl module
         self.name = name
+
         # a dictionary of {type name -> fields}
         self.types = defaultdict(list)
+
         # a dictionary of {definition name -> _rule}
         self.dfns = {}
+
+        # { type name -> fields }
+        self.attributes = defaultdict(list)
 
     def verify(self, ast, context=None):
         '''Check against an AST raises SchemaError upon error.
@@ -98,10 +103,12 @@ class Schema(object):
         return SchemaVerifier(self, context).visit(ast)
 
     def __str__(self):
-        return "%s(name=%s, types=%s, rules=%s)" % (type(self).__name__,
-                                                    self.name,
-                                                    self.types,
-                                                    self.dfns)
+        return "%s(name=%s, types=%s, rules=%s, attributes=%s)" % (
+            type(self).__name__,
+            self.name,
+            self.types,
+            self.dfns,
+            self.attributes)
 
     def debug(self):
         print(("Schema %s" % self.name))
@@ -250,11 +257,12 @@ class SchemaVerifier(ast.NodeVisitor):
         name = (cls_or_name
                 if isinstance(cls_or_name, str)
                 else type(cls_or_name).__name__)
-        ret = self.schema.types.get(name)
-        if ret is None:
+        fields = self.schema.types.get(name)
+        attrs = self.schema.attributes.get(name)
+        if fields is None or attrs is None:
             raise SchemaError(self._debug_context,
                               "Unknown AST node type: %s" % name)
-        return ret
+        return fields + attrs
 
 class SchemaBuilder(pyasdl.VisitorBase):
     '''A single instance of SchemaBuilder can be used build different 
@@ -282,17 +290,15 @@ class SchemaBuilder(pyasdl.VisitorBase):
     def visitSum(self, sum, name):
         self.schema.dfns[str(name)] = _rule.sum([str(t.name)
                                                  for t in sum.types])
+        self.schema.attributes[name].extend(sum.attributes)
+
         for t in sum.types:
             self.visit(t, name, sum.attributes)
 
-    def visitConstructor(self, cons, name, attr=[]):
+    def visitConstructor(self, cons, name, attrs=[]):
         typename = str(cons.name)
-        fields = self.schema.types[typename]
-        for f in cons.fields:
-            fields.append(f)
-        for f in attr:
-            fields.append(f)
-
+        self.schema.types[typename].extend(cons.fields)
+        self.schema.attributes[typename].extend(attrs)
 
     def visitField(self, field, name):
         key = str(field.type)
