@@ -42,8 +42,7 @@ def generate(schema_name, schema_str, codegens, file_allocator):
     asdl_tree, schema_instance = parse(schema_name, schema_str)
 
     for codegen in codegens:
-        outfile = file_allocator.open_sourcefile(codegen.out_filename)
-        emitter = CodeEmitter(outfile)
+        emitter = codegen.make_code_emitter(file_allocator)
         codegen.generate(emitter, asdl_tree, schema_instance)
 
 def generate_from_file(schema_filename, codegens, output_dir):
@@ -162,6 +161,10 @@ class Codegen(object):
     def __init__(self, out_filename):
         self.out_filename = out_filename
 
+    def make_code_emitter(self, file_allocator):
+        outfile = file_allocator.open_sourcefile(self.out_filename)
+        return CodeEmitter(outfile)
+
     def generate(self, emitter, asdl_tree, schema_instance):
         """
         Generate code for the given asdl tree. The ASDL tree is accompanied
@@ -213,12 +216,14 @@ if __name__ == '__main__':
         {
             mod = Module(object leaf1, object leaf2)
                 | Foo(object leaf)
+
             foo = Add | Mul
-            expr = mod | foo
+            expr = X | Y
+                 attributes (int lineno)
         }
     """)
     asdl_tree = get_asdl("MyASDL.asdl", schema_def)
     print(asdl_tree)
     print ("-------------")
     s = schema.build_schema(asdl_tree)
-    print(s)
+    print(s.types)

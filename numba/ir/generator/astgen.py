@@ -10,6 +10,7 @@ project).
 from __future__ import print_function, division, absolute_import
 
 import os
+import ast
 from textwrap import dedent
 from functools import partial
 
@@ -99,7 +100,13 @@ class PyClass(Class):
         fields = map(repr, fieldnames)
         properties = [format_field(self.name, field)
                           for field in self.fields] or ["pass"]
-        attributes = map(repr, self.attributes)
+
+        if self.attributes is not None:
+            attributes = map(repr, self.attributes)
+            attributes = py_formatter.format_stats(",\n", 8, attributes)
+            attributes = "_attributes = (" + attributes + ")"
+        else:
+            attributes = "# inherit _attributes"
 
         if fieldnames:
             initialize = ["self.%s = %s" % (name, name) for name in fieldnames]
@@ -112,7 +119,7 @@ class PyClass(Class):
         format_dict = dict(
             name=self.name, base=self.base, doc=self.doc,
             fields      = py_formatter.format_stats(",\n", 8, fields),
-            attributes  = py_formatter.format_stats(",\n", 8, attributes),
+            attributes  = attributes,
             properties  = py_formatter.format_stats("\n", 4, properties),
             params      = ", ".join(fieldnames),
             initialize  = py_formatter.format_stats("\n", 8, initialize),
@@ -130,9 +137,7 @@ class PyClass(Class):
                     %(fields)s
                 )
 
-                _attributes = (
-                    %(attributes)s
-                )
+                %(attributes)s
 
                 def __init__(self, %(params)s):
                     %(initialize)s
@@ -175,7 +180,7 @@ class CyClass(Class):
 #------------------------------------------------------------------------
 
 def make_root_class(Class):
-    return Class("AST", "object", doc="AST root node.")
+    return Class("AST", "object", doc="AST root node.", attributes=())
 
 codegens = [
     ClassCodegen(naming.nodes + '.py', py_preamble,

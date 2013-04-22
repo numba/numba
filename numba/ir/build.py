@@ -21,6 +21,6 @@ def build_typed():
 
 
 if __name__ == '__main__':
-    build_normalized()
+    # build_normalized()
     build_untyped()
     build_typed()

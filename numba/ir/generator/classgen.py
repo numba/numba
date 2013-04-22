@@ -11,7 +11,7 @@ from numba.asdl.schema import verify_schema_keywords
 
 
 class Class(object):
-    def __init__(self, name, base, doc, fields=(), attributes=()):
+    def __init__(self, name, base, doc, fields=(), attributes=None):
         self.name = name
         self.base = base
         self.doc = doc
@@ -37,7 +37,17 @@ class ClassCodegen(generator.SimpleCodegen):
 
     def emit_rule(self, emitter, schema, rulename, rule):
         "Emit code for a rule (a nonterminal)"
-        emitter.emit(self.Class(rulename, self.rootclass.name, doc=str(rule)))
+        nonterminal_fields = schema.attributes[rulename]
+        attrs = tuple(map(repr, (field.name for field in nonterminal_fields)))
+
+        c = self.Class(
+            rulename,
+            self.rootclass.name,
+            doc=str(rule),
+            # Attributes: Use None instead of empty tuple to inherit from base
+            attributes=attrs or None,
+        )
+        emitter.emit(c)
 
     def emit_sum(self, emitter, schema, rulename, rule, sumtype):
         fields = schema.types[sumtype]

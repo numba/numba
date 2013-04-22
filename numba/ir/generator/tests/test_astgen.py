@@ -28,6 +28,14 @@ def test_ast_generation():
     assert issubclass(m.SomeExpr, m.expr)
     assert issubclass(m.Bar, m.expr)
 
+def test_ast_attributes():
+    """
+    >>> test_ast_attributes()
+    """
+    m = load_testschema1()
+
+    assert m.root._attributes == ('foo', 'bar')
+
 def test_valid_node_instantiation():
     """
     >>> test_valid_node_instantiation()
