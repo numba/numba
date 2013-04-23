@@ -325,6 +325,12 @@ class TestCuBlasBinding(unittest.TestCase):
     def test_Drotmg(self):
         self.Trotmg('Drotmg', np.float64)
 
+    #
+    # Level 2 tests
+    # They just simply test to see if the binding works; doesn't check for
+    # correct result.
+    #
+
     def Tgbmv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
         blas = cuBlas()
@@ -343,7 +349,7 @@ class TestCuBlasBinding(unittest.TestCase):
         dA = cuda.to_device(A)
         dx = cuda.to_device(x)
         dy = cuda.to_device(y)
-        blas.Sgbmv('N', m, n, kl, ku, alpha, dA, lda, dx, 1, beta, dy, 1)
+        getattr(blas, fn)('N', m, n, kl, ku, alpha, dA, lda, dx, 1, beta, dy, 1)
         dy.copy_to_host(y)
         self.assertFalse(all(y0 == y))
 
@@ -377,7 +383,7 @@ class TestCuBlasBinding(unittest.TestCase):
         dA = cuda.to_device(A)
         dx = cuda.to_device(x)
         dy = cuda.to_device(y)
-        blas.Sgemv('N', m, n, alpha, dA, lda, dx, 1, beta, dy, 1)
+        getattr(blas, fn)('N', m, n, alpha, dA, lda, dx, 1, beta, dy, 1)
         dy.copy_to_host(y)
         self.assertFalse(all(y0 == y))
 
@@ -385,20 +391,563 @@ class TestCuBlasBinding(unittest.TestCase):
         self.Tgemv('Sgemv', np.float32)
 
     def test_Dgemv(self):
-        self.Tgbmv('Dgemv', np.float64)
+        self.Tgemv('Dgemv', np.float64)
 
     def test_Cgemv(self):
-        self.Tgbmv('Cgemv', np.complex64)
+        self.Tgemv('Cgemv', np.complex64)
 
     def test_Zgemv(self):
-        self.Tgbmv('Zgemv', np.complex128)
+        self.Tgemv('Zgemv', np.complex128)
+
+    def Ttrmv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        blas = cuBlas()
+        uplo = 'U'
+        trans = 'N'
+        diag = True
+        n = 3
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        lda = n
+        x0 = x.copy()
+        inc = 1
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+        getattr(blas, fn)(uplo, trans, diag, n, dA, lda, dx, inc)
+        dx.copy_to_host(x)
+        self.assertFalse(all(x == x0))
+
+    def test_Strmv(self):
+        self.Ttrmv('Strmv', np.float32)
+
+    def test_Dtrmv(self):
+        self.Ttrmv('Dtrmv', np.float64)
+
+    def test_Ctrmv(self):
+        self.Ttrmv('Ctrmv', np.complex64)
+
+    def test_Ztrmv(self):
+        self.Ttrmv('Ztrmv', np.complex128)
+
+    def Ttbmv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+
+        blas = cuBlas()
+        uplo = 'U'
+        trans = 'N'
+        diag = False
+        n = 3
+        lda = n
+        x0 = x.copy()
+        inc = 1
+        k = 0
+        getattr(blas, fn)(uplo, trans, diag, n, k, dA, lda, dx, inc)
+        dx.copy_to_host(x)
+        
+        self.assertFalse(all(x == x0))
+
+    def test_Stbmv(self):
+        self.Ttbmv('Stbmv', np.float32)
+
+    def test_Dtbmv(self):
+        self.Ttbmv('Dtbmv', np.float64)
+
+    def test_Ctbmv(self):
+        self.Ttbmv('Ctbmv', np.complex64)
+
+    def test_Ztbmv(self):
+        self.Ttbmv('Ztbmv', np.complex128)
+
+    def Ttpmv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        AP = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        dAP = cuda.to_device(AP)
+        dx = cuda.to_device(x)
+
+        blas = cuBlas()
+        uplo = 'U'
+        trans = 'N'
+        diag = False
+        n = 3
+        x0 = x.copy()
+        inc = 1
+        getattr(blas, fn)(uplo, trans, diag, n, dAP, dx, inc)
+        dx.copy_to_host(x)
+        
+        self.assertFalse(all(x == x0))
+
+    def test_Stpmv(self):
+        self.Ttpmv('Stpmv', np.float32)
+
+    def test_Dtpmv(self):
+        self.Ttpmv('Dtpmv', np.float64)
+
+    def test_Ctpmv(self):
+        self.Ttpmv('Ctpmv', np.complex64)
+
+    def test_Ztpmv(self):
+        self.Ttpmv('Ztpmv', np.complex128)
+
+    def Ttrsv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+
+        blas = cuBlas()
+        uplo = 'U'
+        trans = 'N'
+        diag = False
+        lda = n = 3
+        x0 = x.copy()
+        inc = 1
+        getattr(blas, fn)(uplo, trans, diag, n, dA, lda, dx, inc)
+        dx.copy_to_host(x)
+        
+        self.assertFalse(all(x == x0))
+
+    def test_Strsv(self):
+        self.Ttrsv('Strsv', np.float32)
+
+    def test_Dtrsv(self):
+        self.Ttrsv('Dtrsv', np.float64)
+
+    def test_Ctrsv(self):
+        self.Ttrsv('Ctrsv', np.complex64)
+
+    def test_Ztrsv(self):
+        self.Ttrsv('Ztrsv', np.complex128)
+    
+    def _Ttpsv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+
+        blas = cuBlas()
+        uplo = 'U'
+        trans = 'N'
+        diag = False
+        n = 3
+        x0 = x.copy()
+        inc = 1
+        getattr(blas, fn)(uplo, trans, diag, n, dA, dx, inc)
+        dx.copy_to_host(x)
+        
+        self.assertFalse(all(x == x0))
+
+    def test_Stpsv(self):
+        self._Ttpsv('Stpsv', np.float32)
+
+    def test_Dtpsv(self):
+        self._Ttpsv('Dtpsv', np.float64)
+
+    def test_Ctpsv(self):
+        self._Ttpsv('Ctpsv', np.complex64)
+
+    def test_Ztpsv(self):
+        self._Ttpsv('Ztpsv', np.complex128)
+
+
+    def _Ttbsv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+
+        blas = cuBlas()
+        uplo = 'U'
+        trans = 'N'
+        diag = False
+        lda = n = 3
+        k = 0
+        x0 = x.copy()
+        inc = 1
+        getattr(blas, fn)(uplo, trans, diag, n, k, dA, lda, dx, inc)
+        dx.copy_to_host(x)
+        
+        self.assertFalse(all(x == x0))
+
+    def test_Stbsv(self):
+        self._Ttbsv('Stbsv', np.float32)
+
+    def test_Dtbsv(self):
+        self._Ttbsv('Dtbsv', np.float64)
+
+    def test_Ctbsv(self):
+        self._Ttbsv('Ctbsv', np.complex64)
+
+    def test_Ztbsv(self):
+        self._Ttbsv('Ztbsv', np.complex128)
+
+    def _Tsymv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+        dy = cuda.to_device(y)
+
+        alpha = 1.2
+        beta = .34
+        blas = cuBlas()
+        uplo = 'U'
+        lda = n = 3
+        k = 0
+        y0 = y.copy()
+        incx = incy = 1
+        getattr(blas, fn)(uplo, n, alpha, dA, lda, dx, incx, beta, dy, incy)
+        dy.copy_to_host(y)
+        
+        self.assertFalse(all(y == y0))
+
+    def test_Ssymv(self):
+        self._Tsymv('Ssymv', np.float32)
+
+    def test_Dsymv(self):
+        self._Tsymv('Dsymv', np.float32)
+
+    def test_Csymv(self):
+        self._Tsymv('Csymv', np.float32)
+
+    def test_Zsymv(self):
+        self._Tsymv('Zsymv', np.float32)
+
+    _Themv = _Tsymv
+
+    def test_Chemv(self):
+        self._Themv('Chemv', np.complex64)
+
+    def test_Zhemv(self):
+        self._Themv('Zhemv', np.complex128)
+
+    def _Tsbmv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+        dy = cuda.to_device(y)
+
+        alpha = 1.2
+        beta = .34
+        blas = cuBlas()
+        uplo = 'U'
+        lda = n = 3
+        k = 0
+        y0 = y.copy()
+        incx = incy = 1
+        getattr(blas, fn)(uplo, n, k, alpha, dA, lda, dx, incx, beta, dy, incy)
+        dy.copy_to_host(y)
+        
+        self.assertFalse(all(y == y0))
+
+    def test_Ssbmv(self):
+        self._Tsbmv('Ssbmv', np.float32)
+
+    def test_Dsymv(self):
+        self._Tsbmv('Dsbmv', np.float64)
+
+    _Thbmv = _Tsbmv
+
+    def test_Chbmv(self):
+        self._Thbmv('Chbmv', np.complex64)
+
+    def test_Zhbmv(self):
+        self._Thbmv('Zhbmv', np.complex128)
+
+    def _Tspmv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        AP = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+        dAP = cuda.to_device(AP)
+        dx = cuda.to_device(x)
+        dy = cuda.to_device(y)
+
+        alpha = 1.2
+        beta = .34
+        blas = cuBlas()
+        uplo = 'U'
+        lda = n = 3
+        k = 0
+        y0 = y.copy()
+        incx = incy = 1
+        getattr(blas, fn)(uplo, n, alpha, dAP, dx, incx, beta, dy, incy)
+        dy.copy_to_host(y)
+        
+        self.assertFalse(all(y == y0))
+
+    def test_Sspmv(self):
+        self._Tspmv('Sspmv', np.float32)
+
+    def test_Dspmv(self):
+        self._Tspmv('Dspmv', np.float64)
+
+    _Thpmv = _Tspmv
+
+    def test_Chpmv(self):
+        self._Thpmv('Chpmv', np.complex64)
+
+    def test_Dspmv(self):
+        self._Tspmv('Zhpmv', np.complex128)
+
+    def _Tger(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+        dy = cuda.to_device(y)
+
+        alpha = 1.2
+
+        blas = cuBlas()
+
+        lda = m = n = 3
+        A0 = A.copy()
+        incx = incy = 1
+        getattr(blas, fn)(m, n, alpha, dx, incx, dy, incy, dA, lda)
+        dA.copy_to_host(A)
+        
+        self.assertFalse(np.all(A == A0))
+
+    def test_Sger(self):
+        self._Tger('Sger', np.float32)
+
+    def test_Dger(self):
+        self._Tger('Dger', np.float64)
+
+    def test_Cger(self):
+        self._Tger('Cgeru', np.complex64)
+
+    def test_Cger(self):
+        self._Tger('Cgerc', np.complex64)
+
+    def test_Zger(self):
+        self._Tger('Zgeru', np.complex128)
+
+    def test_Zger(self):
+        self._Tger('Zgerc', np.complex128)
+
+
+    def _Tsyr(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+
+        alpha = 1.2
+        uplo = 'U'
+        blas = cuBlas()
+
+        lda = m = n = 3
+        A0 = A.copy()
+        incx = incy = 1
+        getattr(blas, fn)(uplo, n, alpha, dx, incx, dA, lda)
+        dA.copy_to_host(A)
+        
+        self.assertFalse(np.all(A == A0))
+
+    def test_Ssyr(self):
+        self._Tsyr('Ssyr', np.float32)
+
+    def test_Dsyr(self):
+        self._Tsyr('Dsyr', np.float64)
+
+    def test_Csyr(self):
+        self._Tsyr('Csyr', np.complex64)
+
+    def test_Ssyr(self):
+        self._Tsyr('Zsyr', np.complex128)
+
+    def _Ther(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+
+        alpha = 1.2
+        uplo = 'U'
+        blas = cuBlas()
+
+        lda = m = n = 3
+        A0 = A.copy()
+        incx = incy = 1
+        getattr(blas, fn)(uplo, n, alpha, dx, incx, dA, lda)
+        dA.copy_to_host(A)
+        
+        self.assertFalse(np.all(A == A0))
+
+    def test_Cher(self):
+        self._Ther('Cher', np.complex64)
+
+    def test_Zher(self):
+        self._Ther('Zher', np.complex128)
+
+    def _Tspr(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        AP = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+
+        dAP = cuda.to_device(AP)
+        dx = cuda.to_device(x)
+
+        alpha = 1.2
+        uplo = 'U'
+        blas = cuBlas()
+
+        lda = m = n = 3
+        AP0 = AP.copy()
+        incx = incy = 1
+        getattr(blas, fn)(uplo, n, alpha, dx, incx, dAP)
+        dAP.copy_to_host(AP)
+        
+        self.assertFalse(np.all(AP == AP0))
+
+    def test_Sspr(self):
+        self._Tspr('Sspr', np.float32)
+
+    def test_Dspr(self):
+        self._Tspr('Dspr', np.float64)
+
+    def test_Chpr(self):
+        self._Tspr('Chpr', np.complex64)
+
+    def test_Zhpr(self):
+        self._Tspr('Zhpr', np.complex128)
+
+    def _Tsyr2(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+        dy = cuda.to_device(y)
+
+        alpha = 1.2
+        uplo = 'U'
+        blas = cuBlas()
+
+        lda = m = n = 3
+        A0 = A.copy()
+        incx = incy = 1
+        getattr(blas, fn)(uplo, n, alpha, dx, incx, dy, incy, dA, lda)
+        dA.copy_to_host(A)
+        
+        self.assertFalse(np.all(A == A0))
+
+    _Ther2 = _Tsyr2
+
+    def test_Ssyr2(self):
+        self._Tsyr2('Ssyr2', np.float32)
+
+    def test_Dsyr2(self):
+        self._Tsyr2('Dsyr2', np.float64)
+
+    def test_Csyr2(self):
+        self._Tsyr2('Csyr2', np.complex64)
+
+    def test_Zspr2(self):
+        self._Tsyr2('Zsyr2', np.complex128)
+
+    def test_Cher2(self):
+        self._Ther2('Cher2', np.complex64)
+
+    def test_Zher2(self):
+        self._Ther2('Zher2', np.complex128)
+
+    def _Tspr2(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+        dy = cuda.to_device(y)
+
+        alpha = 1.2
+        uplo = 'U'
+        blas = cuBlas()
+
+        n = 3
+        A0 = A.copy()
+        incx = incy = 1
+        getattr(blas, fn)(uplo, n, alpha, dx, incx, dy, incy, dA)
+        dA.copy_to_host(A)
+        
+        self.assertFalse(np.all(A == A0))
+
+    _Thpr2 = _Tspr2
+
+    def test_Sspr2(self):
+        self._Tspr2('Sspr2', np.float32)
+
+    def test_Dspr2(self):
+        self._Tspr2('Sspr2', np.float64)
+
+    def test_Chpr2(self):
+        self._Thpr2('Chpr2', np.complex64)
+
+    def test_Zhpr2(self):
+        self._Thpr2('Zhpr2', np.complex128)
+
+
 
 
 class TestCuBlasAPI(unittest.TestCase):
     def setUp(self):
         from numbapro.cudalib.cublas import Blas
         self.blas = Blas()
-
+        
 
     def Tnrm2(self, fn, dtype):
         x = np.random.random(10).astype(dtype)
