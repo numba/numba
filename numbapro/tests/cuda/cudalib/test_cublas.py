@@ -940,6 +940,333 @@ class TestCuBlasBinding(unittest.TestCase):
     def test_Zhpr2(self):
         self._Thpr2('Zhpr2', np.complex128)
 
+    def _Tgemm(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+
+        dA = cuda.to_device(A)
+        dB = cuda.to_device(B)
+        dC = cuda.to_device(C)
+
+        alpha = 1.2
+        beta = .34
+
+        transa = 'N'
+        transb = 'N'
+        blas = cuBlas()
+
+        lda = ldb = ldc = m = n = k = 3
+        C0 = C.copy()
+        getattr(blas, fn)(transa, transb, m, n, k, alpha, dA, lda, dB, ldb,
+                          beta, dC, ldc)
+        dC.copy_to_host(C)
+        
+        self.assertFalse(np.all(C == C0))
+
+    def test_Sgemm(self):
+        self._Tgemm('Sgemm', np.float32)
+
+    def test_Dgemm(self):
+        self._Tgemm('Dgemm', np.float64)
+
+    def test_Cgemm(self):
+        self._Tgemm('Cgemm', np.complex64)
+
+
+    def test_Zgemm(self):
+        self._Tgemm('Zgemm', np.complex128)
+
+
+    def _Tsyrk(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+
+        dA = cuda.to_device(A)
+        dB = cuda.to_device(B)
+        dC = cuda.to_device(C)
+
+        alpha = 1.2
+        beta = .34
+
+        uplo = 'U'
+        trans = 'N'
+
+        blas = cuBlas()
+
+        lda = ldb = ldc = m = n = k = 3
+        C0 = C.copy()
+        getattr(blas, fn)(uplo, trans, n, k, alpha, dA, lda, beta, dC, ldc)
+        dC.copy_to_host(C)
+        
+        self.assertFalse(np.all(C == C0))
+
+    def test_Ssyrk(self):
+        self._Tsyrk('Ssyrk', np.float32)
+
+    def test_Dsyrk(self):
+        self._Tsyrk('Dsyrk', np.float64)
+
+    def test_Csyrk(self):
+        self._Tsyrk('Csyrk', np.complex64)
+
+    def test_Zsyrk(self):
+        self._Tsyrk('Zsyrk', np.complex128)
+
+    _Therk = _Tsyrk
+
+    def test_Cherk(self):
+        self._Therk('Cherk', np.complex64)
+
+    def test_Zherk(self):
+        self._Therk('Zherk', np.complex128)
+
+    def _Tsymm(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+
+        dA = cuda.to_device(A)
+        dB = cuda.to_device(B)
+        dC = cuda.to_device(C)
+
+        alpha = 1.2
+        beta = .34
+
+        side = 'L'
+        uplo =  'U'
+        trans = 'N'
+
+        blas = cuBlas()
+
+        lda = ldb = ldc = m = n = k = 3
+        C0 = C.copy()
+        getattr(blas, fn)(side, uplo, m, n, alpha, dA, lda, dB, ldb, beta, dC,
+                          ldc)
+        dC.copy_to_host(C)
+        
+        self.assertFalse(np.all(C == C0))
+
+    def test_Ssymm(self):
+        self._Tsymm('Ssymm', np.float32)
+
+    def test_Dsymm(self):
+        self._Tsymm('Dsymm', np.float64)
+
+    def test_Csymm(self):
+        self._Tsymm('Csymm', np.complex64)
+    
+    def test_Zsymm(self):
+        self._Tsymm('Zsymm', np.complex128)
+
+    _Themm = _Tsymm
+
+    def test_Chemm(self):
+        self._Themm('Chemm', np.complex64)
+    
+    def test_Zhemm(self):
+        self._Themm('Zhemm', np.complex128)
+
+    def _Ttrsm(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+        dA = cuda.to_device(A)
+        dB = cuda.to_device(B)
+
+        alpha = 1.2
+        beta = .34
+
+        side = 'L'
+        uplo =  'U'
+        trans = 'N'
+        diag = False
+
+        blas = cuBlas()
+
+        lda = ldb = ldc = m = n = k = 3
+        B0 = B.copy()
+        getattr(blas, fn)(side, uplo, trans, diag, m, n, alpha, dA, lda, dB,
+                          ldb)
+        dB.copy_to_host(B)
+        
+        self.assertFalse(np.all(B == B0))
+
+    def test_Strsm(self):
+        self._Ttrsm('Strsm', np.float32)
+    
+    def test_Dtrsm(self):
+        self._Ttrsm('Dtrsm', np.float64)
+
+    def test_Ctrsm(self):
+        self._Ttrsm('Ctrsm', np.complex64)
+    
+    def test_Ztrsm(self):
+        self._Ttrsm('Ztrsm', np.complex128)
+
+    def _Ttrmm(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+
+        dA = cuda.to_device(A)
+        dB = cuda.to_device(B)
+        dC = cuda.to_device(C)
+
+        alpha = 1.2
+        beta = .34
+
+        side = 'L'
+        uplo =  'U'
+        trans = 'N'
+        diag = False
+
+        blas = cuBlas()
+
+        lda = ldb = ldc = m = n = k = 3
+        C0 = C.copy()
+        getattr(blas, fn)(side, uplo, trans, diag, m, n, alpha, dA, lda, dB,
+                          ldb, dC, ldc)
+        dC.copy_to_host(C)
+        
+        self.assertFalse(np.all(C == C0))
+
+    def test_Strmm(self):
+        self._Ttrmm('Strmm', np.float32)
+
+    def test_Dtrmm(self):
+        self._Ttrmm('Dtrmm', np.float64)
+
+    def test_Ctrmm(self):
+        self._Ttrmm('Ctrmm', np.complex64)
+    
+    def test_Ztrmm(self):
+        self._Ttrmm('Ztrmm', np.complex128)
+
+
+    def _Tdgmm(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 2.4], dtype=dtype)
+
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+
+        dA = cuda.to_device(A)
+        dx = cuda.to_device(x)
+        dC = cuda.to_device(C)
+
+        side = 'L'
+        diag = False
+
+        blas = cuBlas()
+
+        lda = ldb = ldc = m = n = k = 3
+        C0 = C.copy()
+        incx = 1
+        getattr(blas, fn)(side, m, n, dA, lda, dx, incx, dC, ldc)
+        dC.copy_to_host(C)
+        
+        self.assertFalse(np.all(C == C0))
+
+    def test_Sdgmm(self):
+        self._Tdgmm('Sdgmm', np.float32)
+
+    def test_Ddgmm(self):
+        self._Tdgmm('Ddgmm', np.float64)
+
+    def test_Cdgmm(self):
+        self._Tdgmm('Cdgmm', np.complex64)
+    
+    def test_Zdgmm(self):
+        self._Tdgmm('Zdgmm', np.complex128)
+
+
+    def _Tgeam(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+
+        dA = cuda.to_device(A)
+        dB = cuda.to_device(B)
+        dC = cuda.to_device(C)
+
+        alpha = 1.2
+        beta = .34
+
+        transa = 'N'
+        transb = 'N'
+
+        blas = cuBlas()
+
+        lda = ldb = ldc = m = n = k = 3
+        C0 = C.copy()
+        getattr(blas, fn)(transa, transb, m, n, alpha, dA, lda, beta, dB,
+                          ldb, dC, ldc)
+        dC.copy_to_host(C)
+        
+        self.assertFalse(np.all(C == C0))
+
+    def test_Sgeam(self):
+        self._Tgeam('Sgeam', np.float32)
+
+    def test_Dgeam(self):
+        self._Tgeam('Dgeam', np.float64)
+
+    def test_Cgeam(self):
+        self._Tgeam('Cgeam', np.complex64)
+    
+    def test_Zgeam(self):
+        self._Tgeam('Zgeam', np.complex128)
+
 
 
 
