@@ -130,6 +130,7 @@ __ ast3_
       one or more instances of the normalized ``stmt`` sum type.
     * Constructs that modify the namespace may only reference a single
       name or syntactic name container.  These constructs include:
+
         - global, nonlocal
         - import, import from
         - assignments
@@ -151,7 +152,7 @@ Specifically, the following transformations should be made:
     * Raise(...): ...
 
 The formal ASDL definition of the normalized IR is given here:
-https://github.com/numba/numba/blob/asdl/numba/ir/Normalized.asdl
+https://github.com/numba/numba/blob/devel/numba/ir/Normalized.asdl
 
 Issue: Desugaring comparisons
 -----------------------------
@@ -159,18 +160,76 @@ Issue: Desugaring comparisons
 Do we introduce this as being a DAG already?  If not, we have a
 problem with desugarring comparisons.  We need assignment to bind
 temporaries, so we're going to have a hard time handling the
-following:
+following::
 
     Compare(e0, [Eq, Lt], [e1, e2])
 
-We'd want "e1" to be the same sub-expression in the normalized IR:
+We'd want "e1" to be the same sub-expression in the normalized IR::
 
     BoolOp(Compare(e0, Eq, e1), And, Compare(e1, Lt, e2))
 
 How do later stages detect this as being the same sub-expression, etc?
 
+Proposal
+^^^^^^^^
+
+We should add the following constructor to expr::
+
+    expr |= Let(identifier name, expr def, expr user)
+
+Semantically, this is sugar for the following::
+
+    Call(Lambda(name, user), [def])
+
+Later stages of the compiler should not bother to do this desugaring.
+They should instead prefer to just create a SSA definition::
+
+    $name = [| def |]
+    $0 = [| user |]
+
+In the case of a chained comparison, we can then make the following
+transformation::
+
+    Compare(e0, [cmp0, ...], [e1, ...])
+    ==>
+    Let(fresh0, e0,
+        Let(fresh1, e1,
+            BoolOp(Compare(fresh0, cmp0, fresh1), And, 
+                   Compare(fresh1, [...], [...]))
+
+Where ``fresh0`` and ``fresh1`` are fresh variable names.  The
+normalization transformer should recursively apply this rewrite until
+it reaches a case where the comparison is binary.
+
 Untyped IR in SSA form
 ======================
+
+Jon's Proposal
+--------------
+
+Given a normalized AST, we preserve the ``expr`` sum type, but perform
+control-flow analysis, data-flow analysis for phi-node injection,
+closure conversion, and lambda lifting.  These transformations result
+in the following intermediate representation::
+
+   mod = Module(unit* units)
+
+   unit = CodeObject(..., block* blocks)
+        | DataObject(identifier label, expr init)
+
+   block = Block(identifier id, defn* defns, tail tail_expr)
+
+   tail = Jump(identifier target)
+        | If(expr test, identifier true_target, identifier false_target)
+        | Raise(expr exn)
+        | Return(expr result)
+
+   defn = (identifier? def_id, expr value)
+
+   expr |= Phi(phi_source* incomming)
+
+   phi_source = (identifier in_block, expr in_val)
+
 
 Mark's Proposal
 ---------------
@@ -293,6 +352,9 @@ __ `LLVM IR`_
 ====
 Huh?
 ====
+
+Huh? Part 1
+===========
 
 Use of Schemas
 --------------
