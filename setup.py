@@ -175,6 +175,7 @@ setup(
     package_data={
         '': ['*.md'],
         'numba.minivect': ['include/*'],
+        'numba.ir.generator.tests': ['*.asdl'],
         'numba.asdl.common': ['*.asdl'],
         'numba.asdl.py2_7': ['*.asdl'],
         'numba.asdl.py3_2': ['*.asdl'],
