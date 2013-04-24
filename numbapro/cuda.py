@@ -173,6 +173,11 @@ def get_current_device():
     drv = driver.Driver()
     return drv.current_context().device
 
+def list_devices():
+    "List all CUDA devices"
+    drv = driver.Driver()
+    return [driver.Device(i) for i in range(drv.get_device_count())]
+
 def close():
     '''Explicitly closes the context.
 
