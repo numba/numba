@@ -860,11 +860,11 @@ def _Tgemv(fmt, cty, dtype):
     return gemv
 
 def _Ttrmv(fmt, dtype):
-    def trmv(self, uplo, trans, diag, n, A, lda, x, inc):
+    def trmv(self, uplo, trans, diag, n, A, lda, x, incx):
         fn = getattr(self._api, 'cublas%strmv_v2' % fmt)
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], CUBLAS_OP_MAP[trans],
            CUBLAS_DIAG_MAP[diag], n, device_pointer(A), lda, device_pointer(x),
-           inc)
+           incx)
     return trmv
 
 def _Ttbmv(fmt, dtype):

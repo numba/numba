@@ -565,7 +565,6 @@ class TestCuBlasBinding(unittest.TestCase):
     def test_Ztpsv(self):
         self._Ttpsv('Ztpsv', np.complex128)
 
-
     def _Ttbsv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
         A = np.array([[1, 2, 0],
@@ -749,16 +748,16 @@ class TestCuBlasBinding(unittest.TestCase):
     def test_Dger(self):
         self._Tger('Dger', np.float64)
 
-    def test_Cger(self):
+    def test_Cgeru(self):
         self._Tger('Cgeru', np.complex64)
 
-    def test_Cger(self):
+    def test_Cgerc(self):
         self._Tger('Cgerc', np.complex64)
 
-    def test_Zger(self):
+    def test_Zgeru(self):
         self._Tger('Zgeru', np.complex128)
 
-    def test_Zger(self):
+    def test_Zgerc(self):
         self._Tger('Zgerc', np.complex128)
 
 
@@ -793,7 +792,7 @@ class TestCuBlasBinding(unittest.TestCase):
     def test_Csyr(self):
         self._Tsyr('Csyr', np.complex64)
 
-    def test_Ssyr(self):
+    def test_Zsyr(self):
         self._Tsyr('Zsyr', np.complex128)
 
     def _Ther(self, fn, dtype):
@@ -893,7 +892,7 @@ class TestCuBlasBinding(unittest.TestCase):
     def test_Csyr2(self):
         self._Tsyr2('Csyr2', np.complex64)
 
-    def test_Zspr2(self):
+    def test_Zsyr2(self):
         self._Tsyr2('Zsyr2', np.complex128)
 
     def test_Cher2(self):
@@ -939,6 +938,8 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def test_Zhpr2(self):
         self._Thpr2('Zhpr2', np.complex128)
+
+    # Level 3
 
     def _Tgemm(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
@@ -1457,6 +1458,520 @@ class TestCuBlasAPI(unittest.TestCase):
     def test_rotmg(self):
         self.Trotmg(self.blas.rotmg, np.float32)
         self.Trotmg(self.blas.rotmg, np.float64)
+
+    # Level 2
+
+    def _test_all(self, test, fn):
+        dtypes = np.float32, np.float64, np.complex64, np.complex128
+        for dt in dtypes:
+            test(fn, dt)
+
+    def _test_float(self, test, fn):
+        dtypes = np.float32, np.float64
+        for dt in dtypes:
+            test(fn, dt)
+
+    def _test_complex(self, test, fn):
+        dtypes = np.complex64, np.complex128
+        for dt in dtypes:
+            test(fn, dt)
+    
+    def Tgbmv(self, fn, dtype):
+        kl = 0
+        ku = 0
+        alpha = 1.
+        beta = 0.
+        A = np.array([[1, 0, 0],
+                      [0, 2, 0],
+                      [0, 0, 3]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([1, 2, 3], dtype=dtype)
+        lda, n = A.shape
+        m = lda
+        y0 = y.copy()
+        fn('N', m, n, kl, ku, alpha, A, x, beta, y)
+        self.assertFalse(all(y0 == y))
+
+    def test_gbmv(self):
+        self._test_all(self.Tgbmv, self.blas.gbmv)
+    
+    def Tgemv(self, fn, dtype):
+        from numbapro.cudalib.cublas.binding import cuBlas
+        blas = cuBlas()
+        kl = 0
+        ku = 0
+        alpha = 1.
+        beta = 0.
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([1, 2, 3], dtype=dtype)
+        m, n = A.shape
+        y0 = y.copy()
+
+        fn('N', m, n, alpha, A, x, beta, y)
+        self.assertFalse(all(y0 == y))
+
+    def test_gemv(self):
+        self._test_all(self.Tgemv, self.blas.gemv)
+
+    def Ttrmv(self, fn, dtype):
+        uplo = 'U'
+        trans = 'N'
+        diag = True
+        n = 3
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        x0 = x.copy()
+        fn(uplo, trans, diag, n, A, x)
+        self.assertFalse(all(x == x0))
+
+    def test_trmv(self):
+        self._test_all(self.Ttrmv, self.blas.trmv)
+
+    def Ttbmv(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        uplo = 'U'
+        trans = 'N'
+        diag = False
+        n = 3
+        x0 = x.copy()
+        k = 0
+        fn(uplo, trans, diag, n, k, A, x)
+        self.assertFalse(all(x == x0))
+
+    def test_tbmv(self):
+        self._test_all(self.Ttbmv, self.blas.tbmv)
+
+
+    def Ttpmv(self, fn, dtype):
+        AP = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+
+        uplo = 'U'
+        trans = 'N'
+        diag = False
+        n = 3
+        x0 = x.copy()
+        fn(uplo, trans, diag, n, AP, x)
+        self.assertFalse(all(x == x0))
+
+    def test_tpmv(self):
+        self._test_all(self.Ttpmv, self.blas.tpmv)
+
+
+    def Ttrsv(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        uplo = 'U'
+        trans = 'N'
+        diag = False
+        n = 3
+        x0 = x.copy()
+        fn(uplo, trans, diag, n, A, x)
+        self.assertFalse(all(x == x0))
+
+    def test_trsv(self):
+        self._test_all(self.Ttrsv, self.blas.trsv)
+
+    def Ttpsv(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        uplo = 'U'
+        trans = 'N'
+        diag = False
+        n = 3
+        x0 = x.copy()
+        fn(uplo, trans, diag, n, A, x)
+        self.assertFalse(all(x == x0))
+
+    def test_tpsv(self):
+        self._test_all(self.Ttpsv, self.blas.tpsv)
+
+    def Ttbsv(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        uplo = 'U'
+        trans = 'N'
+        diag = False
+        n = 3
+        k = 0
+        x0 = x.copy()
+        fn(uplo, trans, diag, n, k, A, x)
+        self.assertFalse(all(x == x0))
+
+    def test_tbsv(self):
+        self._test_all(self.Ttbsv, self.blas.tbsv)
+
+
+    def Tsymv(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+        alpha = 1.2
+        beta = .34
+        uplo = 'U'
+        n = 3
+        k = 0
+        y0 = y.copy()
+        fn(uplo, n, alpha, A, x, beta, y)
+        self.assertFalse(all(y == y0))
+
+    def test_symv(self):
+        self._test_all(self.Tsymv, self.blas.symv)
+
+    Themv = Tsymv
+
+    def test_hemv(self):
+        self._test_complex(self.Themv, self.blas.hemv)
+
+
+    def Tsbmv(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+        alpha = 1.2
+        beta = .34
+        uplo = 'U'
+        n = 3
+        k = 0
+        y0 = y.copy()
+        fn(uplo, n, k, alpha, A, x, beta, y)
+        self.assertFalse(all(y == y0))
+
+    def test_sbmv(self):
+        self._test_float(self.Tsbmv, self.blas.sbmv)
+
+    Thbmv = Tsbmv
+
+    def test_hbmv(self):
+        self._test_complex(self.Thbmv, self.blas.hbmv)
+
+    def Tspmv(self, fn, dtype):
+        AP = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+        alpha = 1.2
+        beta = .34
+        uplo = 'U'
+        n = 3
+        k = 0
+        y0 = y.copy()
+        fn(uplo, n, alpha, AP, x, beta, y)
+        self.assertFalse(all(y == y0))
+
+    def test_spmv(self):
+        self._test_float(self.Tspmv, self.blas.spmv)
+
+    Thpmv = Tspmv
+
+    def test_hpmv(self):
+        self._test_complex(self.Thpmv, self.blas.hpmv)
+
+    def Tger(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+        alpha = 1.2
+        m = n = 3
+        A0 = A.copy()
+        fn(m, n, alpha, x, y, A)
+        self.assertFalse(np.all(A == A0))
+
+    def test_ger(self):
+        self._test_float(self.Tger, self.blas.ger)
+
+    def test_geru(self):
+        self._test_complex(self.Tger, self.blas.geru)
+
+    def test_gerc(self):
+        self._test_complex(self.Tger, self.blas.gerc)
+
+    def Tsyr(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+
+        alpha = 1.2
+        uplo = 'U'
+        m = n = 3
+        A0 = A.copy()
+        fn(uplo, n, alpha, x, A)
+        self.assertFalse(np.all(A == A0))
+
+    def test_syr(self):
+        self._test_all(self.Tsyr, self.blas.syr)
+
+    def Ther(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        alpha = 1.2
+        uplo = 'U'
+        m = n = 3
+        A0 = A.copy()
+        fn(uplo, n, alpha, x, A)
+        self.assertFalse(np.all(A == A0))
+
+    def test_her(self):
+        self._test_complex(self.Ther, self.blas.her)
+
+    def Tspr(self, fn, dtype):
+        AP = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        alpha = 1.2
+        uplo = 'U'
+        m = n = 3
+        AP0 = AP.copy()
+        fn(uplo, n, alpha, x, AP)
+        self.assertFalse(np.all(AP == AP0))
+
+    def test_spr(self):
+        self._test_float(self.Tspr, self.blas.spr)
+
+    Thpr = Tspr
+
+    def test_hpr(self):
+        self._test_complex(self.Thpr, self.blas.hpr)
+
+    def Tsyr2(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+        alpha = 1.2
+        uplo = 'U'
+        m = n = 3
+        A0 = A.copy()
+        fn(uplo, n, alpha, x, y, A)
+        self.assertFalse(np.all(A == A0))
+
+    Ther2 = Tsyr2
+
+    def test_syr2(self):
+        self._test_all(self.Tsyr2, self.blas.syr2)
+
+    def test_her2(self):
+        self._test_complex(self.Ther2, self.blas.her2)
+
+    def Tspr2(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 3], dtype=dtype)
+        y = np.array([8, 2, 3], dtype=dtype)
+        alpha = 1.2
+        uplo = 'U'
+        n = 3
+        A0 = A.copy()
+        fn(uplo, n, alpha, x, y, A)
+        self.assertFalse(np.all(A == A0))
+
+    Thpr2 = Tspr2
+
+    def test_spr2(self):
+        self._test_float(self.Tspr2, self.blas.spr2)
+
+    def test_hpr2(self):
+        self._test_complex(self.Thpr2, self.blas.hpr2)
+
+    # Level 3
+
+    def Tgemm(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+        alpha = 1.2
+        beta = .34
+        transa = 'N'
+        transb = 'N'
+        m = n = k = 3
+        C0 = C.copy()
+        fn(transa, transb, m, n, k, alpha, A, B, beta, C)
+        self.assertFalse(np.all(C == C0))
+
+    def test_gemm(self):
+        self._test_all(self.Tgemm, self.blas.gemm)
+
+
+    def Tsyrk(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+        alpha = 1.2
+        beta = .34
+        uplo = 'U'
+        trans = 'N'
+        m = n = k = 3
+        C0 = C.copy()
+        fn(uplo, trans, n, k, alpha, A, beta, C)
+        self.assertFalse(np.all(C == C0))
+
+    def test_syrk(self):
+        self._test_all(self.Tsyrk, self.blas.syrk)
+
+    Therk = Tsyrk
+
+    def test_herk(self):
+        self._test_complex(self.Therk, self.blas.herk)
+
+    def Tsymm(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+        alpha = 1.2
+        beta = .34
+        side = 'L'
+        uplo =  'U'
+        trans = 'N'
+        m = n = k = 3
+        C0 = C.copy()
+        fn(side, uplo, m, n, alpha, A, B, beta, C)
+        self.assertFalse(np.all(C == C0))
+
+    def test_symm(self):
+        self._test_all(self.Tsymm, self.blas.symm)
+
+    Themm = Tsymm
+
+    def test_hemm(self):
+        self._test_complex(self.Themm, self.blas.hemm)
+
+    def Ttrsm(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+        alpha = 1.2
+        beta = .34
+        side = 'L'
+        uplo =  'U'
+        trans = 'N'
+        diag = False
+        m = n = k = 3
+        B0 = B.copy()
+        fn(side, uplo, trans, diag, m, n, alpha, A, B)
+        self.assertFalse(np.all(B == B0))
+
+    def test_trsm(self):
+        self._test_all(self.Ttrsm, self.blas.trsm)
+
+    def Ttrmm(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+        alpha = 1.2
+        beta = .34
+        side = 'L'
+        uplo =  'U'
+        trans = 'N'
+        diag = False
+        m = n = k = 3
+        C0 = C.copy()
+        fn(side, uplo, trans, diag, m, n, alpha, A, B, C)
+        self.assertFalse(np.all(C == C0))
+
+    def test_trmm(self):
+        self._test_all(self.Ttrmm, self.blas.trmm)
+
+    def Tdgmm(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        x = np.array([1, 2, 2.4], dtype=dtype)
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+        side = 'L'
+        diag = False
+        m = n = k = 3
+        C0 = C.copy()
+        fn(side, m, n, A, x, C)
+        self.assertFalse(np.all(C == C0))
+
+    def test_dgmm(self):
+        self._test_all(self.Tdgmm, self.blas.dgmm)
+
+
+    def Tgeam(self, fn, dtype):
+        A = np.array([[1, 2, 0],
+                      [0, 3, 0],
+                      [1, 0, 1]], order='F', dtype=dtype)
+        B = np.array([[2, 2, 0],
+                      [7, 0, 0],
+                      [1, 4, 1]], order='F', dtype=dtype)
+
+        C = np.array([[0, 9, 0],
+                      [0, 1, 1],
+                      [0, 0, 1]], order='F', dtype=dtype)
+        alpha = 1.2
+        beta = .34
+        transa = 'N'
+        transb = 'N'
+        m = n = k = 3
+        C0 = C.copy()
+        fn(transa, transb, m, n, alpha, A, beta, B, C)
+        self.assertFalse(np.all(C == C0))
+
+    def test_geam(self):
+        self._test_all(self.Tgeam, self.blas.geam)
 
 if __name__ == '__main__':
     unittest.main()
