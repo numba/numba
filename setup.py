@@ -144,9 +144,9 @@ if sys.version_info[0] >= 3:
 # setup
 #------------------------------------------------------------------------
 
-exclude_packages = [
+exclude_packages = (
     '*deps*', 'numba.ir.normalized', 'numba.ir.untyped', 'numba.ir.typed',
-]
+)
 
 setup(
     name="numba",
