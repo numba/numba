@@ -58,7 +58,6 @@ class ExtensionTypeLowerer(visitors.NumbaTransformer):
         handler = self.get_handler(node.ext_type)
         return handler.handle_method_call(self.env, node, call_node)
 
-
 #------------------------------------------------------------------------
 # Handle Static VTable Attributes and Methods
 #------------------------------------------------------------------------
