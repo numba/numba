@@ -7,4 +7,8 @@ def closure_modulo(a, b):
         return a % b
     return foo()
 
-print closure_modulo(100, 48)
+def test_closure_modulo():
+    assert closure_modulo(100, 48) == 4
+
+if __name__ == '__main__':
+    test_closure_modulo()
