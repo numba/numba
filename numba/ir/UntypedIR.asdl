@@ -27,122 +27,91 @@
 module UnTyped version "0.1"
 {
 
-	stmt  = FunctionDef(identifier name, arguments args,
-                        block *entry, object *blocks, expr* decorator_list)
+    unit = CodeObject(identifier name, arguments args, block* blocks)
+         | DataObject(identifier label, expr init)
 
-          | Print(expr? dest, expr* values, bool nl)
+    block = Block(identifier id, defn* defns, tail tail_expr)
 
-          ---------- Basic Block Terminators ----------
+    tail = Jump(identifier target)
+         | If(expr test, identifier true_target, identifier false_target)
+         | Raise(expr exn)
+         | Return(expr result)
+         | Try(identifier nominal, identifier handler)
 
-          -- Basic Control Flow
-          | Branch(block bbdst)                           -- unconditional jump
-          | CBranch(expr cond, block bbif, block bbelse)  -- conditional jump
-          | Return(expr? value)
+    defn = (identifier? def_id, expr value)
 
-          ---------- Basic Block Annotations ----------
-
-          -- First instruction in the 'condition' block (after any phis)
-          | SetupLoop(object bbbody, object bbexit)
-
-          -- First instruction in the 'try' block (after any phis)
-	      | SetupExcept(object bbexcept)
-	      | SetupFinally(stmt* body, stmt* finalbody)
-
-          ---------- Assignments and Scoping ----------
-
-          | Phi(incoming *incoming)
-          -- | Assign(expr target, expr value)
-          -- | Delete(expr target)              -- Def(NULL)
-
-	      | Global(identifier name)
-          | Nonlocal(identifier name)
-
-          ---------- Miscellaneous ----------
-
-          | Raise(expr? type, expr? inst, expr? tback)
-          | Assert(expr test, expr? msg)
-	      | Exec(expr body, expr? globals, expr? locals)
-	      | Value(expr value)
-
-	      -- col_offset is the byte offset in the utf8 string the parser uses
-	      attributes (int lineno, int col_offset, object meta)
-
-	expr = BoolOp(expr left, boolop op, expr right)
-	     | BinOp(expr left, operator op, expr right)
-	     | UnaryOp(unaryop op, expr operand)
-
-	     | Dict(expr* keys, expr* values)
+    expr = BoolOp(expr left, boolop op, expr right)
+         | BinOp(expr left, operator op, expr right)
+         | UnaryOp(unaryop op, expr operand)
+         | Lambda(arguments args, expr body)
+         | IfExp(expr test, expr body, expr orelse)
+         | Dict(expr* keys, expr* values)
          | Set(expr* elts)
          | List(expr* elts)
          | Tuple(expr* elts)
+         | ListComp(expr elt, comprehension* generators)
+         | SetComp(expr elt, comprehension* generators)
+         | DictComp(expr key, expr value, comprehension* generators)
+         | GeneratorExp(expr elt, comprehension* generators)
 
-         -- Make imports expressions, the result of which are regular values!
+         -- the grammar constrains where yield expressions can occur
+         | Yield(expr? value)
+         | YieldFrom(expr? value)
+         | Compare(expr left, cmpop op, expr right)
+         | Call(expr func, expr* args, keyword* keywords,
+                expr? starargs, expr? kwargs)
+         | Num(object n) -- a number as a PyObject.
+         | Str(string s) -- need to specify raw, unicode, etc?
+         | Bytes(bytes s)
+         | Ellipsis
+         -- other literals? bools?
+
+         -- the following expression can appear in assignment context
+         | Attribute(expr value, identifier attr, expr_context ctx)
+         | Subscript(expr value, slice slice, expr_context ctx)
+         | Starred(expr value, expr_context ctx)
+         | Name(identifier id, expr_context ctx)
+
          | Import(alias name)
          | ImportFrom(identifier? module, alias name, int? level)
+         | Phi(phi_source* incomming)
 
-	     | Yield(expr? value)
-	     | Compare(expr left, cmpop op, expr right)
-	     | Call(expr func, expr* args, keyword* keywords,
-			    expr? starargs, expr? kwargs)
-	     | Repr(expr value)
-	     | Num(object n) -- a number as a PyObject.
-	     | Str(string s) -- need to specify raw, unicode, etc?
-	     | Bool(bool b)
+          -- col_offset is the byte offset in the utf8 string the parser uses
+          attributes (int lineno, int col_offset)
 
-	     -- the following expression can appear in assignment context
-	     | Attribute(expr value, identifier attr, expr_context ctx)
-	     | Subscript(expr value, slice *slice, expr_context ctx)
-	     | Name(identifier id, expr_context ctx)
-	     | Starred(expr value, expr_context ctx)
+    expr_context = Load | Store | Del | AugLoad | AugStore | Param
 
-	     -- For loop Iteration
-	     | Iter(expr iterable)
-	     | Next(expr iterator)
+    phi_source = (identifier in_block, expr in_val)
 
-	      -- col_offset is the byte offset in the utf8 string the parser uses
-	      attributes (int lineno, int col_offset, object meta)
+    slice = Slice(expr? lower, expr? upper, expr? step)
+          | ExtSlice(slice* dims)
+          | Index(expr value)
 
-    ---------- SSA & Control Flow ----------
+    boolop = And | Or
 
-    block = Block(stmt *body)
-                attributes (object meta)
-
-    -- We want a definition to be derived from stmt, but that means we need
-    -- to wrap it...
-	-- definition = Value(expr value)
-
-	-- The second attribute must be a Value
-    incoming = (object predecessor, stmt value)
-
-    ---------- Miscellaneous ----------
-
-	expr_context = Load | Store | Del | AugLoad | AugStore | Param
-
-	slice = Ellipsis
-	      | Slice(expr? lower, expr? upper, expr? step)
-	      | Index(expr value)
-
-	boolop = And | Or
-
-	operator = Add | Sub | Mult | Div | Mod | Pow | LShift
+    operator = Add | Sub | Mult | Div | Mod | Pow | LShift
              | RShift | BitOr | BitXor | BitAnd | FloorDiv
 
-	unaryop = Invert | Not | UAdd | USub
+    unaryop = Invert | Not | UAdd | USub
 
-	cmpop = Eq | NotEq | Lt | LtE | Gt | GtE | Is | IsNot | In | NotIn
+    cmpop = Eq | NotEq | Lt | LtE | Gt | GtE | Is | IsNot | In | NotIn
 
-	comprehension = (expr target, expr iter, expr* ifs)
+    comprehension = (expr target, expr iter, expr* ifs)
 
-	-- not sure what to call the first argument for raise and except
-	excepthandler = ExceptHandler(expr? type, expr? name, stmt* body)
-	                attributes (int lineno, int col_offset)
+    excepthandler = ExceptHandler(expr? type, identifier? name, stmt* body)
+                    attributes (int lineno, int col_offset)
 
-	arguments = (expr* args, identifier? vararg,
-		         identifier? kwarg, expr* defaults)
+    arguments = (arg* args, identifier? vararg, expr? varargannotation,
+                 arg* kwonlyargs, identifier? kwarg,
+                 expr? kwargannotation, expr* defaults,
+                 expr* kw_defaults)
+    arg = (identifier arg, expr? annotation)
 
     -- keyword arguments supplied to call
     keyword = (identifier arg, expr value)
 
     -- import name with optional 'as' alias.
     alias = (identifier name, identifier? asname)
+
+    withitem = (expr context_expr, expr? optional_vars)
 }
