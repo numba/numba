@@ -76,6 +76,7 @@ def find_packages(where='.', exclude=()):
 
     for pat in list(exclude) + ['ez_setup', 'distribute_setup']:
         out = [item for item in out if not fnmatchcase(item, pat)]
+
     return out
 
 #------------------------------------------------------------------------
@@ -143,6 +144,10 @@ if sys.version_info[0] >= 3:
 # setup
 #------------------------------------------------------------------------
 
+exclude_packages = [
+    '*deps*', 'numba.ir.normalized', 'numba.ir.untyped', 'numba.ir.typed',
+]
+
 setup(
     name="numba",
     version=versioneer.get_version(),
@@ -161,7 +166,7 @@ setup(
         "Topic :: Utilities",
     ],
     description="compiling Python code using LLVM",
-    packages=find_packages(exclude=('*deps*',)),
+    packages=find_packages(exclude=exclude_packages),
     entry_points = {
         'console_scripts': [
             'pycc = numba.pycc:main',

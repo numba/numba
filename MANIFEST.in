@@ -1,5 +1,0 @@
-include *.md *.py *.txt CHANGE_LOG AUTHORS
-recursive-include docs *.ipynb *.txt *.py Makefile *.rst
-recursive-include deps *
-prune docs/_build
-prune docs/gh-pages
