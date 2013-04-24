@@ -10,7 +10,9 @@ try:
     from nose.tools import nottest
 except ImportError:
     def nottest(fn):
-        raise Exception("nose not available")
+        def _nottest(*args, **kws):
+            raise Exception("nose not available")
+        return _nottest
 
 import numba
 from numba import *
