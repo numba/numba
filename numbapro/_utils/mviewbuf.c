@@ -1,35 +1,35 @@
 #include <Python.h>
 
-static PyObject*
-memoryview_get_buffer(PyObject *self, PyObject *args){
-    PyObject *mv = NULL;
-    Py_buffer* buf = NULL;
-    if (!PyArg_ParseTuple(args, "O", &mv))
-        return NULL;
+static int get_buffer(PyObject* obj, Py_buffer *buf)
+{
+    return PyObject_GetBuffer(obj, buf, PyBUF_WRITABLE|PyBUF_ND|PyBUF_STRIDES|PyBUF_FORMAT);
+}
 
-    if (!PyMemoryView_Check(mv))
-        return NULL;
-
-    buf = PyMemoryView_GET_BUFFER(mv);
-    return PyLong_FromVoidPtr(buf->buf);
+static void free_buffer(Py_buffer * buf)
+{
+    PyBuffer_Release(buf);
 }
 
 static PyObject*
-memoryview_from_pointer(PyObject *self, PyObject *args){
-    Py_ssize_t ptr, size;
-    Py_buffer* buf = NULL;
-    int readonly = 0; /* writable */
-    int flags = PyBUF_CONTIG; /* c-contiguous */
-    if (!PyArg_ParseTuple(args, "nn", &ptr, &size))
-        return NULL;
-    buf = malloc(sizeof(Py_buffer));
+memoryview_get_buffer(PyObject *self, PyObject *args){
+    PyObject *obj = NULL;
+    PyObject *ret = NULL;
+    void * ptr = NULL;
+    Py_ssize_t buflen;
+    Py_buffer buf;
 
-    if(-1 == PyBuffer_FillInfo(buf, NULL, (void*)ptr, size, readonly, flags)){
-        free(buf);
+    if (!PyArg_ParseTuple(args, "O", &obj))
         return NULL;
+    
+    if (!get_buffer(obj, &buf)) { /* new buffer api */
+        ret = PyLong_FromVoidPtr(buf.buf);
+        free_buffer(&buf);
+    } else { /* old buffer api */
+        PyErr_Clear();
+        if (-1 == PyObject_AsWriteBuffer(obj, &ptr, &buflen)) return NULL;
+        ret = PyLong_FromVoidPtr(ptr);
     }
-
-    return PyMemoryView_FromBuffer(buf);
+    return ret;
 }
 
 /** 
@@ -97,21 +97,28 @@ get_extents(Py_ssize_t *shape, Py_ssize_t *strides, int ndim,
     return ret;
 }
 
-
 static PyObject*
 memoryview_get_extents(PyObject *self, PyObject *args)
 {
-    PyObject *mv = NULL;
-    Py_buffer* b = NULL;
-    if (!PyArg_ParseTuple(args, "O", &mv))
+    PyObject *obj = NULL;
+    PyObject *ret = NULL;
+    Py_buffer b;
+    const void * ptr = NULL;
+    Py_ssize_t bufptr, buflen;
+    if (!PyArg_ParseTuple(args, "O", &obj))
         return NULL;
 
-    if (!PyMemoryView_Check(mv))
-        return NULL;
-
-    b = PyMemoryView_GET_BUFFER(mv);
-    return get_extents(b->shape, b->strides, b->ndim, b->itemsize,
-                       (Py_ssize_t)b->buf);
+    if (!get_buffer(obj, &b)) { /* new buffer api */
+        ret = get_extents(b.shape, b.strides, b.ndim, b.itemsize,
+                          (Py_ssize_t)b.buf);
+        free_buffer(&b);
+    } else { /* old buffer api */
+        PyErr_Clear();
+        if (-1 == PyObject_AsReadBuffer(obj, &ptr, &buflen)) return NULL;
+        bufptr = (Py_ssize_t)ptr;
+        ret = Py_BuildValue("nn", bufptr, bufptr + buflen);
+    }
+    return ret;
 }
 
 static PyObject*
@@ -362,7 +369,6 @@ static PyMethodDef core_methods[] = {
     declmethod(memoryview_get_buffer),
     declmethod(memoryview_get_extents),
     declmethod(memoryview_get_extents_info),
-    declmethod(memoryview_from_pointer),
     { NULL },
 #undef declmethod
 };

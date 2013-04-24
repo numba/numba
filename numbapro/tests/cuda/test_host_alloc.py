@@ -8,8 +8,6 @@ class TestHostAlloc(support.CudaTestCase):
         n = 32
         mem = driver.HostAllocMemory(n, mapped=True)
 
-        buf = memoryview(mem)
-
         dtype = np.dtype(np.uint8)
         ary = np.ndarray(shape=n / dtype.itemsize, dtype=dtype, buffer=mem)
 

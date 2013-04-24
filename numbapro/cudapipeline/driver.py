@@ -1223,13 +1223,11 @@ def host_pointer(obj):
     """
     if isinstance(obj, (int, long)):
         return obj
-    mv = memoryview(obj)
-    return mviewbuf.memoryview_get_buffer(mv)
+    return mviewbuf.memoryview_get_buffer(obj)
 
 def host_memory_extents(obj):
     "Returns (start, end) the start and end pointer of the array (half open)."
-    mv = memoryview(obj)
-    return mviewbuf.memoryview_get_extents(mv)
+    return mviewbuf.memoryview_get_extents(obj)
 
 def memory_size_from_info(shape, strides, itemsize):
     """et the byte size of a contiguous memory buffer given the shape, strides
