@@ -6,9 +6,11 @@ import sys
 import types
 import unittest
 import functools
+try:
+    from nose.tools import nottest
+except ImportError:
+    pass
 
-from nose.tools import nottest
-import nose.plugins.skip
 import numba
 from numba import *
 from numba.testing import doctest_support
