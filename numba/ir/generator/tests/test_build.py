@@ -60,7 +60,7 @@ def test_package_compilation():
     try:
         build.build_package(schema_filename, features, output_dir)
         p = subprocess.Popen([sys.executable, "setup.py",
-                              "build_ext", "--inplace"])
+                              "build_ext", "--inplace"], cwd=output_dir)
         assert p.wait() == 0, p.poll()
     finally:
         shutil.rmtree(output_dir)
