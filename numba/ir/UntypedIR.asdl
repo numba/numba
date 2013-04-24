@@ -49,10 +49,6 @@ module UnTyped version "0.1"
          | Set(expr* elts)
          | List(expr* elts)
          | Tuple(expr* elts)
-         | ListComp(expr elt, comprehension* generators)
-         | SetComp(expr elt, comprehension* generators)
-         | DictComp(expr key, expr value, comprehension* generators)
-         | GeneratorExp(expr elt, comprehension* generators)
 
          -- the grammar constrains where yield expressions can occur
          | Yield(expr? value)
