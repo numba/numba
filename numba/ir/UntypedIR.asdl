@@ -6,23 +6,6 @@
 -- blocks and (annotated) control flow.
 --
 -- Each basic blocks ends with a branch to a new basic block, or a return.
--- High-level constructs such as exception handling blocks or loops are
--- annotated through Setup annotations (SetupLoop, SetupExcept,
--- SetupFinally, SetupWith)
---
---
--- Some differences:
---
---     Break        -> Branch
---     Continue     -> Branch
---     Raise        -> [ Raise ; Branch ]
---     If           -> CBranch
---     While        -> CBranch + SetupLoop
---     For          -> CBranch + SetupLoop + Iter + Next
---     TryFinally   -> Branch + SetupFinally
---     TryExcept    -> Branch + SetupExcept
---     With         -> Branch + SetupExcept + SetupFinally
---     Name('True') -> Bool
 
 module UnTyped version "0.1"
 {
@@ -36,14 +19,17 @@ module UnTyped version "0.1"
          | If(expr test, identifier true_target, identifier false_target)
          | Raise(expr exn)
          | Return(expr result)
-         | Try(identifier nominal, identifier handler)
+         | Next(expr target, expr iter, identifier body, identifier orelse)
+         | Try(identifier body,
+               excepthandler* handlers,
+               identifier? orelse,
+               identifier? finalbody)
 
     defn = (identifier? def_id, expr value)
 
     expr = BoolOp(expr left, boolop op, expr right)
          | BinOp(expr left, operator op, expr right)
          | UnaryOp(unaryop op, expr operand)
-         | Lambda(arguments args, expr body)
          | IfExp(expr test, expr body, expr orelse)
          | Dict(expr* keys, expr* values)
          | Set(expr* elts)
@@ -56,11 +42,6 @@ module UnTyped version "0.1"
          | Compare(expr left, cmpop op, expr right)
          | Call(expr func, expr* args, keyword* keywords,
                 expr? starargs, expr? kwargs)
-         | Num(object n) -- a number as a PyObject.
-         | Str(string s) -- need to specify raw, unicode, etc?
-         | Bytes(bytes s)
-         | Ellipsis
-         -- other literals? bools?
 
          -- the following expression can appear in assignment context
          | Attribute(expr value, identifier attr, expr_context ctx)
@@ -71,6 +52,7 @@ module UnTyped version "0.1"
          | Import(alias name)
          | ImportFrom(identifier? module, alias name, int? level)
          | Phi(phi_source* incomming)
+         | Constant(object value)
 
           -- col_offset is the byte offset in the utf8 string the parser uses
           attributes (int lineno, int col_offset)
@@ -92,9 +74,9 @@ module UnTyped version "0.1"
 
     cmpop = Eq | NotEq | Lt | LtE | Gt | GtE | Is | IsNot | In | NotIn
 
-    comprehension = (expr target, expr iter, expr* ifs)
-
-    excepthandler = ExceptHandler(expr? type, identifier? name, stmt* body)
+    excepthandler = ExceptHandler(expr? type,
+                                  identifier? name,
+                                  identifier body)
                     attributes (int lineno, int col_offset)
 
     arguments = (arg* args, identifier? vararg, expr? varargannotation,
