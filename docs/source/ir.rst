@@ -425,11 +425,11 @@ Global and nonlocal variables
 
 Given::
 
-z = 42
-def foo():
-    global z
-    bar(z)
-    z = 99
+  z = 42
+  def foo():
+      global z
+      bar(z)
+      z = 99
 
 We could generate the following in untyped IR::
 
