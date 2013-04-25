@@ -14,7 +14,6 @@ def _sel_complex(real, imag):
             np.complex64: imag,
             np.complex128: imag,}
 
-
 def _auto_l2_functions(fname, tnames, argfmt, extras):
     writebacks = set()
     readonlys = set()
@@ -82,6 +81,10 @@ def _auto_l2_functions(fname, tnames, argfmt, extras):
     return _dispatch
 
 class Blas(object):
+    '''All BLAS subprograms are available under the Blas object.
+    
+    :param stream: Optional. A CUDA Stream.
+    '''
     @cuda.require_context
     def __init__(self, stream=0):
         self._cublas = cuBlas()
