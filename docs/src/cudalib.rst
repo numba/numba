@@ -54,69 +54,37 @@ cuFFT
 
 Provides FFT and inverse FFT for 1D, 2D and 3D arrays.
 
-All functionalities are provided under::
 
-    from numbapro.cudalib import cufft
-    
-    
-Supported types and operations
--------------------------------
-
-cuFFT only supports FFT operations on numpy.float32, numpy float64, 
-numpy.complex32, numpy.complex64 with C-contiguous datalayout.
+.. note::  cuFFT only supports FFT operations on numpy.float32, numpy float64,
+           numpy.complex32, numpy.complex64 with C-contiguous datalayout.
 
 
-fft, fft_inplace, ifft, ifft_inplace
-----------------------------------------
+Forward FFT
+------------
 
-::
+.. py:function:: numbapro.cudalib.cufft.fft(ary, out[, stream])
+.. py:function:: numbapro.cudalib.cufft.fft_inplace(ary[, stream])
 
-    fft(ary, out, stream=None)
-    fft_inplace(ary, stream=None)
-    ifft(ary, out, stream=None)
-    ifft_inplace(ary, stream=None)
-    
-The `fft` and `fft_inplace` functions compute the forward FFT.
-The `ifft` and `ifft_inplace` functions compute the inverse FFT.
-The output is stored in `out` or in `ary`
-with the inplace version is used.  Both `ary` and `out` can be numpy array
-or device array.
+    :param ary: The input array. The inplace version stores the result in here.
+    :param out: The output array for non-inplace versions.
+    :param stream: The CUDA stream in which all operations will take place.
 
-- `ary`: The input array. The inplace version stores the result in here.
-- `out`: The output array.
-- `stream`: The CUDA stream in which all operations will take place.
 
-class FFTPlan
----------------
+Inverse FFT
+------------
 
-Represents a cuFFT Plan.
+.. py:function:: numbapro.cudalib.cufft.ifft(ary, out[, stream])
+.. py:function:: numbapro.cudalib.cufft.ifft_inplace(ary[, stream])
 
-:: 
+    :param ary: The input array. The inplace version stores the result in here.
+    :param out: The output array for non-inplace versions.
+    :param stream: The CUDA stream in which all operations will take place.
 
-    FFTPlan(shape, itype, otype, batch=1, stream=0, mode=FFTPLAN.MODE_DEFAULT)
-    
-Instantiate a new FFTPlan object.
+FFTPlan
+--------
 
-- `shape`: Input array shape.
-- `itype`: Input array dtype.
-- `otype`: Output array dtype.
-- `batch`: Optional. Maximum number of operation the plan can perform.
-- `stream`: Optional. A CUDA stream for all the operations to put on.
-- `mode`: Optional. cuFFT compatability mode.  Default to use FFTW padding
-          datalayout.  Other possible values are: `FFTPLAN.MODE_NATIVE`,
-          `FFTPLAN.MODE_FFTW_PADDING`, `FFTPLAN.MODE_FFTW_ASYMMETRIC`,
-          `FFTPLAN.MODE_FFTW_ALL`, `FFTPLAN.MODE_FFTW_DEFAULT`.
-          
-The class provides two methods::
-    
-        forward(ary, out=None)
-        inverse(ary, out=None)
-            
-The `forward` method computes the forward FFT on ary and stores the result to
-`out`.  If `out` is None, an inplace operation is performed.
-
-The `inverse` method computes the inverse FFT on ary and stores the result to
-`out`.  If `out` is None, an inplace operation is performed.
+.. autoclass:: numbapro.cudalib.cufft.FFTPlan
+    :members:
 
 
 cuBLAS

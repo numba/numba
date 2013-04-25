@@ -8,6 +8,16 @@ def _prepare_types(pairs):
                 for k, v in pairs.iteritems())
 
 class FFTPlan(object):
+    '''
+    :param shape: Input array shape.
+    :param itype: Input data type.
+    :param otype: Output data type.
+    :param batch: Maximum number of operation to perform.
+    :param stream: A CUDA stream for all the operations to put on.
+    :param mode: Operation mode; e.g. MODE_NATIVE, MODE_FFTW_PADDING,
+                 MODE_FFTW_ASYMMETRIC, MODE_FFTW_ALL, MODE_DEFAULT.
+    '''
+
     MODE_NATIVE = _cufft.CUFFT_COMPATIBILITY_NATIVE
     MODE_FFTW_PADDING = _cufft.CUFFT_COMPATIBILITY_FFTW_PADDING
     MODE_FFTW_ASYMMETRIC = _cufft.CUFFT_COMPATIBILITY_FFTW_ASYMMETRIC
@@ -26,13 +36,6 @@ class FFTPlan(object):
     @_cuda.require_context
     def __init__(self, shape, itype, otype, batch=1, stream=0,
                  mode=MODE_DEFAULT):
-        '''
-        shape --- input array shape
-        itype --- input data type
-        otype --- output data type
-        batch --- maximum number of operation to perform.
-        stream --- a CUDA stream for all the operations to put on.
-        '''
         
         itype = np.dtype(itype)
         otype = np.dtype(otype)
@@ -104,12 +107,12 @@ class FFTPlan(object):
     def forward(self, ary, out=None):
         '''Perform forward FFT
         
-        ary --- input array
-        out --- optional. output array
+        :param ary: Input array
+        :param out: Optional output array
         
-        Returns the output array or a new numpy array is `out` is None.
+        :returns: The output array or a new numpy array is `out` is None.
         
-        Note: If `ary` is `out`, an inplace operation is performed.
+        .. note:: If `ary` is `out`, an inplace operation is performed.
         '''
         if self.direction not in ('both', 'forward'):
             raise TypeError("Invalid operation")
@@ -122,12 +125,12 @@ class FFTPlan(object):
     def inverse(self, ary, out=None):
         '''Perform inverse FFT
         
-        ary --- input array
-        out --- optional. output array
+        :param ary: Input array
+        :param out: Optional output array
         
-        Returns the output array or a new numpy array is `out` is None.
+        :returns: The output array or a new numpy array is `out` is None.
         
-        Note: If `ary` is `out`, an inplace operation is performed.
+        .. note: If `ary` is `out`, an inplace operation is performed.
         '''
         if self.direction not in ('both', 'inverse'):
             raise TypeError("Invalid operation")
