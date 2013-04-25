@@ -1,30 +1,42 @@
 -- Medium-level operations, three-address (SSA) code.
+--
+-- Note: Each operation has a type
 
 module Opcodes version "0.1"
 {
 
-    constant = const
+    -- expr = constant | alloc | coerce | ...
 
-    alloc = new_list
-          | new_tuple
-          | new_string
-          | new_object
-          | new_ext_object
-          | new_struct
+    constant = const        -- (object pyval)
 
-    coerce = to_object
-           | to_native
+    alloc = new_list        -- (expr *elems)
+          | new_tuple       -- (expr *elems)
+          | new_dict        -- (expr *keys, expr *values)
+          | new_set         -- (expr *elems)
+          | new_string      -- (expr *chars)
+          | new_bytes       -- (expr *char)
+          | new_object      -- (expr *args)
+          | new_ext_object  -- (expr *args)
+          | new_struct      -- (expr *initializers)
+          | new_data        -- (expr size)
 
-    convert = str_to_int
-            | int_to_str
+    coerce = box            -- (expr arg)
+           | unbox          -- (expr arg)
 
-    arrays = getindex_array
-           | setindex_array
-           | getslice_array
-           | setslice_array
+    convert = str_to_int    -- (expr arg)
+            | int_to_str    -- (expr arg)
+            | ptr_to_int    -- (expr arg)
+            | int_to_ptr    -- (expr arg)
 
-    fields = getfield_struct
-           | setfield_struct
+    indices = getindex_array
+            | setindex_array
+            | getslice_array
+            | setslice_array
+            | get
+
+
+    fields = getfield_struct    -- (expr arg, int field_idx)
+           | setfield_struct    -- (expr arg, int field_idx, expr value)
            | getfield_obj
            | setfield_obj
            | etc
