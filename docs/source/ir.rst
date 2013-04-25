@@ -1,4 +1,7 @@
-===============
+===============================================
+Numba Intermediate Representation Specification
+===============================================
+
 Numba IR Stages
 ===============
 
@@ -17,7 +20,6 @@ low-level, as follows:
 
         - Like a Python AST, but contains normalized structures
           (assignments, comparisons, list comprehensions, etc)
-        - *Unsure of the engineering need for this. -jriehl*
     * `Untyped IR in SSA form`_
 
         - Expanded control flow (with annotations)
@@ -96,12 +98,11 @@ Instead of::
 
     Assign(Name('c'), BinOp(Name('a'), Add, Name('b')))
 
-==================================
 Numba Intermediate Representations
 ==================================
 
 Python AST IR
-=============
+-------------
 
 Numba's initial intermediate representation is Python abstract syntax
 as defined in Python's ast_ module documentation.  Note that this
@@ -118,7 +119,7 @@ Numba must support `Python 2 abstract syntax`__ (specifically versions
 __ ast2_
 
 Normalized IR
-=============
+-------------
 
 The normalized IR starts with the latest ASDL definition for `Python
 3 abstract syntax`__, but makes the following changes:
@@ -155,7 +156,7 @@ The formal ASDL definition of the normalized IR is given here:
 https://github.com/numba/numba/blob/devel/numba/ir/Normalized.asdl
 
 Issue: Desugaring comparisons
------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Do we introduce this as being a DAG already?  If not, we have a
 problem with desugarring comparisons.  We need assignment to bind
@@ -171,7 +172,7 @@ We'd want "e1" to be the same sub-expression in the normalized IR::
 How do later stages detect this as being the same sub-expression, etc?
 
 Proposal
-^^^^^^^^
+~~~~~~~~
 
 We should add the following constructor to expr::
 
@@ -202,10 +203,10 @@ normalization transformer should recursively apply this rewrite until
 it reaches a case where the comparison is binary.
 
 Untyped IR in SSA form
-======================
+----------------------
 
 Jon's Proposal
---------------
+^^^^^^^^^^^^^^
 
 Given a normalized AST, we preserve the ``expr`` sum type, but perform
 control-flow analysis, data-flow analysis for phi-node injection,
@@ -232,7 +233,7 @@ in the following intermediate representation::
 
 
 Mark's Proposal
----------------
+^^^^^^^^^^^^^^^
 
 Untyped IR in SSA form would be constructed internally by numba during
 and after the CFA pass and before type inference. This adds to the
@@ -284,7 +285,7 @@ Furthermore:
     }
 
 Typed IR in SSA form
-====================
+--------------------
 
 The typed IR is similar to the untyped IR, except that every (sub-)expression
 is annotated with a type.
@@ -322,10 +323,10 @@ instantiated instead of generated ones. The code generator can still
 emit code for serialization.
 
 Low-level Portable IR
-=====================
+---------------------
 
 Mark's Proposal
----------------
+^^^^^^^^^^^^^^^
 
 The low-level portable IR is a low-level, platform agnostic, IR that:
 
@@ -334,13 +335,13 @@ The low-level portable IR is a low-level, platform agnostic, IR that:
       concepts such as arrays or objects is gone.
 
 Jon's Notes
------------
+^^^^^^^^^^^
 
 This is `LLVM IR`_, but may still contain abstract or opaque types,
 and make calls to the Numba run time library abstraction layer.
 
 Final LLVM IR
-=============
+-------------
 
 The final LLVM IR is `LLVM assembly code`__, with no opaque types, and
 specialized to a specific machine target.
@@ -349,15 +350,193 @@ specialized to a specific machine target.
 
 __ `LLVM IR`_
 
-====
-Huh?
-====
-
-Huh? Part 1
+Appendicies
 ===========
 
+Appendix: Design Notes
+----------------------
+
+This appendix looks at various features and discusses various options
+for representing these constructs across the compiler.
+
+Closures
+^^^^^^^^
+
+Variable and keyword arguments
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Iterators
+^^^^^^^^^
+
+Iterators in the untyped IR
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We considered two options for implementing iterators.  The first was
+to use exception handling constructs.  Given the following code::
+
+  for x in i:
+      if x == thingy: break
+  else:
+      bar()
+  baz()
+
+Translation to the untyped IR could result in something like the
+following::
+
+  bb0: ...
+       $0 = Call(Constant(numba.ct.iter), [Name("i", Load())])
+       Try(bb1, [ExceptHandler(Constant(StopIteration), None, bb2)],
+           None, None)
+
+  bb1: $1 = Call(Constant(numba.ct.next), [$0])
+       If(Compare($1, Eq(), Name("thingy", Load())), bb3, bb1)
+
+  bb2: Call(Name("bar", Load()), [])
+       Jump(bb3)
+
+  bb3: Call(name("baz", Load()), [])
+       ...
+
+Or, a ``Next()`` terminator could provide sugar for the special case
+where we are specifically waiting for a ``StopIteration`` exception::
+
+  bb0: ...
+       $0 = Call(Constant(numba.ct.iter), [Name("i", Load())])
+       Jump(bb1)
+
+  bb1: Next(Name("x", Store()), $0, bb2, bb3)
+
+  bb2: If(Compare(Name("x", Load()), Eq, Name("thingy", Load())), bb4, bb1)
+
+  bb3: Call(Name("bar", Load()), [])
+       Jump(bb4)
+
+  bb4: Call(Name("baz", Load()), [])
+       ...
+
+We loose SSA information, but provide opportunity for more readily
+recognizing for loops.
+
+Generators
+^^^^^^^^^^
+
+Global and nonlocal variables
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Given::
+
+z = 42
+def foo():
+    global z
+    bar(z)
+    z = 99
+
+We could generate the following in untyped IR::
+
+  [
+    DataObject("z", Constant(42)),
+    CodeObject("foo", ([], None, None, ...), [
+      Block("entry", [
+          (None, Call(Name("bar", Load()), [
+            Call(Constant(numba.ct.load), [Constant("z")])])),
+          (None, Call(Constant(numba.ct.store), [
+            Constant("z"), Constant(99)]))
+        ], Return(Constant(None)))])
+  ]
+
+
+Exceptions and exception handling
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Decorators
+^^^^^^^^^^
+
+
+Appendix: Language Cross Reference
+----------------------------------
+
+The following sections follow the `Python Language Reference`_, and
+provide notes as on how the various Numba intermediate representations
+support the Python language.
+
+.. _`Python Language Reference`: http://docs.python.org/3/reference/index.html
+
+
+Expressions
+^^^^^^^^^^^
+
+Simple statements
+^^^^^^^^^^^^^^^^^
+
+Expression statements
+~~~~~~~~~~~~~~~~~~~~~
+
+Assignment statements
+~~~~~~~~~~~~~~~~~~~~~
+
+The assert statement
+~~~~~~~~~~~~~~~~~~~~
+
+The pass statement
+~~~~~~~~~~~~~~~~~~
+
+The del statement
+~~~~~~~~~~~~~~~~~
+
+The return statement
+~~~~~~~~~~~~~~~~~~~~
+
+The yield statement
+~~~~~~~~~~~~~~~~~~~
+
+The raise statement
+~~~~~~~~~~~~~~~~~~~
+
+The break statement
+~~~~~~~~~~~~~~~~~~~
+
+The continue statement
+~~~~~~~~~~~~~~~~~~~~~~
+
+The import statement
+~~~~~~~~~~~~~~~~~~~~
+
+The global statement
+~~~~~~~~~~~~~~~~~~~~
+
+Compound statements
+^^^^^^^^^^^^^^^^^^^
+
+The if statement
+~~~~~~~~~~~~~~~~
+
+The while statement
+~~~~~~~~~~~~~~~~~~~
+
+The for statement
+~~~~~~~~~~~~~~~~~
+
+The try statement
+~~~~~~~~~~~~~~~~~
+
+The with statement
+~~~~~~~~~~~~~~~~~~
+
+Function definitions
+~~~~~~~~~~~~~~~~~~~~
+
+Class definitions
+~~~~~~~~~~~~~~~~~
+
+Top-level components
+^^^^^^^^^^^^^^^^^^^^
+
+Appendix: Other Design Notes
+----------------------------
+
 Use of Schemas
---------------
+^^^^^^^^^^^^^^
+
 We can use our schemas to:
 
     * Validate IR instances
@@ -382,7 +561,7 @@ We can use our schemas to:
 .. _llvm_ir:
 
 LLVM IR
-^^^^^^^
+~~~~~~~
 
 We can generate automatic mapping code to map schema instances to
 opaquely typed LLVM IR automatically, which is the abstract syntax
@@ -465,7 +644,7 @@ on this IR.
 .. _executable:
 
 Executable IR
-^^^^^^^^^^^^^
+~~~~~~~~~~~~~
 
 There are two ideas:
 
@@ -492,7 +671,7 @@ to, we can generate a simple AST or bytecode evaluator.
 .. _cfg:
 
 Control Flow
-============
+^^^^^^^^^^^^
 
 We can have a single abstraction that can create basic blocks and
 link blocks together. For instance we for the following structure::
@@ -528,7 +707,7 @@ We can use this single abstraction to:
                construct.
 
 IR Suitability
-==============
+^^^^^^^^^^^^^^
 An important consideration for an IR is how well transformations are
 defined over it, and how efficient those transformations are. For instance,
 a pass that combines instructions works far better on a simple three-address
@@ -543,7 +722,7 @@ representation than an AST. Design considerations ([#]_):
 To evaluate some of these metrics we will look at some concretions.
 
 Structure
----------
+~~~~~~~~~
 We can consider expanded or abstract control flow:
 
     * We want to compute an SSA graph. Clearly we need a control flow
@@ -590,7 +769,7 @@ Clearly, some transformations are easier to perform using expanded control flow,
     * and so forth
 
 Expressiveness
---------------
+~~~~~~~~~~~~~~
 Consider a high-level type system, that has:
 
     * Full or partial functions as first-class values
@@ -669,7 +848,7 @@ LLVM facilitates the latter point, but is in no way caters to
 the first. Yet what we want is the former, for the sake of expressiveness.
 
 Reusing LLVM Passes
-===================
+^^^^^^^^^^^^^^^^^^^
 Although LLVM IR does not cater well to some of the high-level
 transformations we want to make, it provides a useful infrastructure to
 do certain things. This includes:
@@ -683,7 +862,7 @@ do certain things. This includes:
 Below we will discuss a plan for resuability.
 
 SSA
----
+~~~
 We currently construct our own CFG and compute the SSA graph from the
 CFG containing abstract statements that represent definitions and uses
 (loads and stores).
@@ -724,7 +903,7 @@ with which basic block in our IR.
           representation automatically.
 
 Type Dependence Graph Construction
-----------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 From the SSA graph we compute a type graph by inferring all variable
 assignments. This graph often has cycles, due to the back-edge in
 the CFG for loops. For instance we may have the following code::
@@ -797,7 +976,7 @@ order on the transpose graph, doing the following:
       types.
 
 Building a Call Graph
----------------------
+~~~~~~~~~~~~~~~~~~~~~
 This will be useful to use LLVM for in order to:
 
     * Efficiently infer types of direct or indirect uses of recursion for autojit
@@ -806,7 +985,7 @@ This will be useful to use LLVM for in order to:
       resolving in an analogous and cooperative manner to how we resolve the type graph
 
 Writing LLVM Passes
--------------------
+~~~~~~~~~~~~~~~~~~~
 We have a few constructs that may be better written as LLVM passes over simpler
 (lower-level) constructs (with exapnded control flow, three-address code arithmetic
 instructions, etc). We showed one such example already, but one can think
@@ -817,7 +996,6 @@ and after lowering of high-level constructions an be performed on this IR. This 
 us to use the full power of LLVM where it is most adequate. Furthermore, we can likely
 do away with (most of) our code generator if we define our IR stages well.
 
-==========
 References
 ==========
 .. [#] Attribute Grammars in Haskell with UUAG, A. Loh, http://www.andres-loeh.de/AGee.pdf
