@@ -21,6 +21,7 @@ from .stream import StreamVectorize, StreamASTVectorize
 from numbapro.cudapipeline.error import CudaSupportError
 
 GUFuncVectorize = GUVectorize
+GUFuncASTVectorize = GUVectorize
 
 try:
     from .cuda import  CudaASTVectorize, CudaGUFuncASTVectorize
