@@ -5,10 +5,13 @@ __all__ = [
            'Vectorize',
            'BasicVectorize',
            'BasicASTVectorize',
+           'GUVectorize',
            ]
 
 
 from .basic import BasicVectorize, BasicASTVectorize
+from .gufunc import GUFuncVectorize as GUVectorize
+
 from numba.utils import process_sig
 import warnings
 
@@ -60,15 +63,13 @@ def Vectorize(func, backend='ast', target='cpu'):
         target: 'basic'
         Default: 'basic'
         """
-    assert backend in _vectorizers, tuple(backends)
+    assert backend in _vectorizers, tuple(_vectorizers)
     targets = _vectorizers[backend]
     assert target in targets, tuple(targets)
     if target in targets:
         return targets[target](func)
     else: # fall back
-        warnings.warn("fallback to bytecode vectorizer")
-        # Use the default bytecode backend
-        return _bytecode_vectorizers[target](func)
+        raise NotImplementedError
 
 def vectorize(signatures, backend='ast', target='cpu'):
     def _vectorize(fn):
