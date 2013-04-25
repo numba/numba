@@ -20,7 +20,7 @@ Basic generalized ufuncs are available in numba. In addition to the basic genera
 ufuncs, numbapro provides a CUDA-accelerated generalized ufunc.
 
 To see how generalized ufuncs work, we refer the reader to
-`numba gufuncs <http://numba.pydata.org/numba-doc/dev/arrays.html#generalized-ufunc-definition>`.
+`numba gufuncs <http://numba.pydata.org/numba-doc/dev/arrays.html#generalized-ufunc-definition>`_.
 
 Generalized CUDA ufuncs
 -----------------------
