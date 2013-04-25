@@ -54,6 +54,20 @@ module UnTyped version "0.1"
          | Phi(phi_source* incomming)
          | Constant(object value)
 
+         ----------- Scoping -----------
+         -- Lookup a lexically unbound variable, if not resolved through
+         -- the given global or builtin scope.
+         | LookupUnbound(identifier id)
+
+         ----------- Closures -----------
+         | MakeClosure(expr frame, expr func)
+
+         -- Dynamically bind the identifier in the frame
+         -- All the assignments to the variables are reflected immediately
+         -- in the frame (unless we can statically determine that the frame
+         -- is not in use)
+         | MakeFrame(identifier *ids)
+
           -- col_offset is the byte offset in the utf8 string the parser uses
           attributes (int lineno, int col_offset)
 
@@ -62,7 +76,6 @@ module UnTyped version "0.1"
     phi_source = (identifier in_block, expr in_val)
 
     slice = Slice(expr? lower, expr? upper, expr? step)
-          | ExtSlice(slice* dims)
           | Index(expr value)
 
     boolop = And | Or
@@ -74,7 +87,7 @@ module UnTyped version "0.1"
 
     cmpop = Eq | NotEq | Lt | LtE | Gt | GtE | Is | IsNot | In | NotIn
 
-    excepthandler = ExceptHandler(expr? type,
+    excepthandler = ExceptHandler(expr *types,
                                   identifier? name,
                                   identifier body)
                     attributes (int lineno, int col_offset)
