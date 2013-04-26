@@ -4,6 +4,7 @@ try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
+
 import math
 
 import numpy as np
@@ -12,8 +13,7 @@ import numpy as np
 import numba
 from numba import  error
 import numba.typesystem
-from numba.minivect.minitypes import *
-from numba.minivect.minitypes import map_dtype
+from numba.typesystem.minitypes import *
 from numba.minivect import minitypes
 
 #------------------------------------------------------------------------
