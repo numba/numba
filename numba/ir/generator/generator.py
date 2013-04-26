@@ -150,7 +150,7 @@ class CodeEmitter(object):
         self.outfile = outfile
 
     def emit(self, s):
-        self.outfile.write(str(s))
+        self.outfile.write(unicode(s))
 
 
 class Codegen(object):
