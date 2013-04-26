@@ -146,6 +146,18 @@ class NormalizeAST(visitors.NumbaTransformer):
         return self.visit(assignment)
 
 
+    ######## Sync with cf2 branch in validators.py ###########
+
+    def visit_With(self, node):
+        node.context_expr = self.visit(node.context_expr)
+        if node.optional_vars:
+            raise error.NumbaError(
+                node.context_expr,
+                "Only 'with python' and 'with nopython' is "
+                "supported at this moment")
+
+        self.visitlist(node.body)
+        return node
 #------------------------------------------------------------------------
 # Nodes
 #------------------------------------------------------------------------
