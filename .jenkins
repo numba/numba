@@ -21,7 +21,7 @@ fi
 # python version and containing the dependencies.
 export PYENV_PREFIX=${WORKSPACE}/build/pyenv
 rm -rf ${PYENV_PREFIX}
-~/anaconda/bin/conda create --yes -p ${PYENV_PREFIX} python=${PYTHON_VERSION} cython numpy llvmpy || exit 1
+~/anaconda/bin/conda create --yes -p ${PYENV_PREFIX} python=${PYTHON_VERSION} cython scipy llvmpy || exit 1
 export PATH=${PYENV_PREFIX}/bin:${PATH}
 
 if [ -f "${PYENV_PREFIX}/bin/python" ]; then
