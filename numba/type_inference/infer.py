@@ -534,7 +534,7 @@ class TypeInferer(visitors.NumbaTransformer):
             assmt = ast.Assign(targets=[target], value=value)
             result.append(self.visit(assmt))
 
-        return result
+        return ast.Suite(result)
 
     def visit_Assign(self, node):
         # Initialize inplace operator
