@@ -10,12 +10,19 @@ import os
 import types
 import codecs
 import textwrap
-import cStringIO
 
+from numba import PY3
 from numba.asdl import asdl
 from numba.asdl import schema
 from numba.asdl import processor
 from numba.asdl.asdl import pyasdl
+
+if PY3:
+    import io
+    BytesIO = io.BytesIO
+else:
+    import cStringIO
+    BytesIO = cStringIO.StringIO
 
 root = os.path.dirname(os.path.abspath(__file__))
 
@@ -136,7 +143,7 @@ class DiskFileAllocator(FileAllocator):
 class MemoryFileAllocator(FileAllocator):
 
     def open_sourcefile(self, name):
-        file = StreamWriter(cStringIO.StringIO())
+        file = StreamWriter(BytesIO())
         self.allocated_files[name] = file
         return file
 
