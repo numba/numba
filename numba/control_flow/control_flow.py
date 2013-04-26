@@ -1072,6 +1072,10 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         node.context_expr = self.visit(node.context_expr)
         if node.optional_vars:
             # TODO: Mark these as assignments!
+            raise error.NumbaError(
+                node.context_expr,
+                "Only 'with python' and 'with nopython' is "
+                "supported at this moment")
             node.optional_vars = self.visit(node.optional_vars)
 
         self.visitlist(node.body)
