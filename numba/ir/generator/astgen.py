@@ -27,7 +27,6 @@ testdir = os.path.join(root, "tests")
 #------------------------------------------------------------------------
 
 py_preamble = """
-import types
 import cython
 
 # ASDL builtin types
@@ -80,7 +79,9 @@ from %s cimport GenericVisitor
 def format_field(classname, field):
     type = py_formatter.format_type(field.type)
     if field.opt:
-        type = "(%s, types.NoneType)" % (type,)
+        # types.NoneType is not in Python 3, type(None) should work
+        # for both Python 2 and 3.
+        type = "(%s, type(None))" % (type,)
 
     format_dict = dict(name=field.name, type=type, classname=classname)
     return ('%(classname)s.%(name)s = TypedProperty(%(type)s, '
