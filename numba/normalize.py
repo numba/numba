@@ -158,6 +158,17 @@ class NormalizeAST(visitors.NumbaTransformer):
 
         self.visitlist(node.body)
         return node
+
+
+    def visit_For(self, node):
+        if not isinstance(node.target, (ast.Name, ast.Attribute)):
+            raise error.NumbaError(
+                node.target, "Only a single target iteration variable is "
+                             "supported at the moment")
+
+        self.visitchildren(node)
+        return node
+
 #------------------------------------------------------------------------
 # Nodes
 #------------------------------------------------------------------------
