@@ -371,7 +371,7 @@ Iterators
 Iterators in the untyped IR
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We considered two options for implementing iterators.  The first was
+We considered three options for implementing iterators.  The first was
 to use exception handling constructs.  Given the following code::
 
   for x in i:
@@ -397,8 +397,9 @@ following::
   bb3: Call(name("baz", Load()), [])
        ...
 
-Or, a ``Next()`` terminator could provide sugar for the special case
-where we are specifically waiting for a ``StopIteration`` exception::
+The second option was defining a ``Next()`` terminator.  ``Next()``
+could provide sugar for the special case where we are specifically
+waiting for a ``StopIteration`` exception::
 
   bb0: ...
        $0 = Call(Constant(numba.ct.iter), [Name("i", Load())])
@@ -416,6 +417,30 @@ where we are specifically waiting for a ``StopIteration`` exception::
 
 We loose SSA information, but provide opportunity for more readily
 recognizing for loops.
+
+The third option was to follow the CPython VM semantics of
+``FOR_ITER``, where we define ``Next()`` as an expression constructor
+which can either return a result or some sentinel (specific to
+CPython, this is the ``NULL`` pointer)::
+
+  bb0: ...
+       $0 = Iter(Name("i", Load()))
+       Jump(bb1)
+
+  bb1: $1 = Next($0)
+       If(Compare($1, Neq(), Constant(numba.ct.NULL)), bb2, bb3)
+
+  bb2: If(Compare($1, Eq(), Name("thingy", Load())), bb3, bb1)
+
+  bb3: Call(Name("bar", Load()), [])
+       Jump(bb4)
+
+  bb4: Call(name("baz", Load()), [])
+       ...
+
+This final output looks very similar to the output of the second
+option, but prevents us from having to use the ``Name()`` expression
+for anything other than global and parameter variables.
 
 Generators
 ^^^^^^^^^^
