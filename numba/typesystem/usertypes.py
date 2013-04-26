@@ -12,205 +12,130 @@ import struct as struct_
 import textwrap
 import ctypes
 
-from numba.typesystem.typesystem import Universe, MonoType, Conser, nbo
+from numba.typesystem.typesystem import (
+    Universe, Type, MonoType, PolyType, Conser, nbo)
+from numba.typesystem import typesystem
 
 import numpy as np
 import llvm.core
 
 
+atom_type_names = [
+    'Py_ssize_t', 'void', 'char', 'uchar', 'short', 'ushort',
+    'int_', 'uint', 'long_', 'ulong', 'longlong', 'ulonglong',
+    'size_t', 'npy_intp', 'c_string_type', 'bool_', 'object_',
+    'float_', 'double', 'longdouble', 'float32', 'float64', 'float128',
+    'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64',
+    'complex64', 'complex128', 'complex256', 'struct', 'Py_uintptr_t'
+]
 
-__all__ = ['Py_ssize_t', 'void', 'char', 'uchar', 'short', 'ushort',
-           'int_', 'uint', 'long_', 'ulong', 'longlong', 'ulonglong',
-           'size_t', 'npy_intp', 'c_string_type', 'bool_', 'object_',
-           'float_', 'double', 'longdouble', 'float32', 'float64', 'float128',
-           'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64',
-           'complex64', 'complex128', 'complex256', 'struct', 'Py_uintptr_t']
+__all__ = atom_type_names
 
 #------------------------------------------------------------------------
-# Type Constructors
+# User-facing type functionality
 #------------------------------------------------------------------------
 
-
-NONE_KIND = 0
-BOOL_KIND = 1
-INT_KIND = 2
-FLOAT_KIND = 3
-COMPLEX_KIND = 4
-
-class Type(miniutils.ComparableObjectMixin):
+def slice_type(ts, type, item):
     """
-    Base class for all types.
+    Support array type creation by slicing, e.g. double[:, :] specifies
+    a 2D strided array of doubles. The syntax is the same as for
+    Cython memoryviews.
+    """
+    assert isinstance(item, (tuple, slice))
 
-    .. attribute:: subtypes
+    def verify_slice(s):
+        if s.start or s.stop or s.step not in (None, 1):
+            raise ValueError(
+                "Only a step of 1 may be provided to indicate C or "
+                "Fortran contiguity")
 
-        The list of subtypes to allow comparing and hashing them recursively
+    if isinstance(item, tuple):
+        step_idx = None
+        for idx, s in enumerate(item):
+            verify_slice(s)
+            if s.step and (step_idx or idx not in (0, len(item) - 1)):
+                raise ValueError(
+                    "Step may only be provided once, and only in the "
+                    "first or last dimension.")
+
+            if s.step == 1:
+                step_idx = idx
+
+        return ts.array(type, len(item),
+                        is_c_contig=step_idx == len(item) - 1,
+                        is_f_contig=step_idx == 0)
+    else:
+        verify_slice(item)
+        return ts.array(type, 1, is_c_contig=bool(item.step))
+
+
+def call_type(ts, type, *args):
+    """
+    Return a new function type when called with type arguments.
+    """
+    if len(args) == 1 and not isinstance(args[0], Type):
+        # Cast in Python space
+        # TODO: Create proxy object
+        # TODO: Fully customizable type system (do this in Numba, not
+        #       minivect)
+        return args[0]
+
+    return ts.function(type, args)
+
+# ______________________________________________________________________
+# Type methods
+
+default_type_behaviour = {
+    "__getitem__":  lambda self, item: slice_type(self.ts, self, item),
+    "__call__":     lambda self, *args: call_type(self.ts, self, *args),
+    "pointer":      lambda self: self.ts.pointer(self),
+    # 'context' is for backwards compatibility
+    "to_llvm":      lambda self, context: self.ts.convert("llvm", self),
+    "to_ctypes":    lambda self: self.ts.convert("ctypes", self),
+    "get_dtype":    lambda self: self.ts.convert("numpy", self),
+}
+
+def annotate_type(cls):
+    for name, meth in default_type_behaviour.iteritems():
+        setattr(cls, name, meth)
+
+def make_polytype(typename, names):
+    """
+    Create a new polytype that has named attributes. E.g.
+
+        make_polytype("ArrayType", ["dtype", "ndim"])
+    """
+    # Create parameter accessors
+    typedict = dict([(name, lambda self, i=i: self.params[i])
+                        for i, name in enumerate(names)])
+    return type(typename, (PolyType,), typedict)
+
+
+@annotate_type
+class NumbaMonoType(MonoType):
+    """
+    MonoType with user-facing methods:
+
+        call: create a function type
+        slice: create an array type
+        conversion: to_llvm/to_ctypes/get_dtype
     """
 
-    is_array = False
-    is_pointer = False
-    is_typewrapper = False
+@annotate_type
+class NumbaPolyType(PolyType):
+    """
+    PolyType with user-facing methods:
 
-    is_bool = False
-    is_numeric = False
-    is_py_ssize_t = False
-    is_char = False
-    is_int = False
-    is_float = False
-    is_c_string = False
-    is_object = False
-    is_function = False
-    is_int_like = False
-    is_complex = False
-    is_void = False
+        call: create a function type
+        slice: create an array type
+        conversion: to_llvm/to_ctypes/get_dtype
+    """
 
-    kind = NONE_KIND
+#------------------------------------------------------------------------
+# Type constructors
+#------------------------------------------------------------------------
 
-    subtypes = []
-
-    mutated = True
-    _ctypes_type = None
-
-    def __init__(self, **kwds):
-        vars(self).update(kwds)
-        self.qualifiers = kwds.get('qualifiers', frozenset())
-
-    def qualify(self, *qualifiers):
-        "Qualify this type with a qualifier such as ``const`` or ``restrict``"
-        qualifiers = list(qualifiers)
-        qualifiers.extend(self.qualifiers)
-        attribs = dict(vars(self), qualifiers=qualifiers)
-        return type(self)(**attribs)
-
-    def unqualify(self, *unqualifiers):
-        "Remove the given qualifiers from the type"
-        unqualifiers = set(unqualifiers)
-        qualifiers = [q for q in self.qualifiers if q not in unqualifiers]
-        attribs = dict(vars(self), qualifiers=qualifiers)
-        return type(self)(**attribs)
-
-    def pointer(self):
-        "Get a pointer to this type"
-        return PointerType(self)
-
-    @property
-    def subtype_list(self):
-        return [getattr(self, subtype) for subtype in self.subtypes]
-
-    @property
-    def comparison_type_list(self):
-        return self.subtype_list
-
-    def _is_object(self, context):
-        return context.is_object(self)
-
-    def __eq__(self, other):
-        # Don't use isinstance here, compare on exact type to be consistent
-        # with __hash__. Override where sensible
-        cmps = self.comparison_type_list
-        if not cmps:
-            return id(self) == id(other)
-
-        return (isinstance(self, type(other)) and
-                cmps == other.comparison_type_list)
-
-    def __ne__(self, other):
-        return not self == other
-
-    def __hash__(self):
-        cmps = self.comparison_type_list
-        if not cmps:
-            return hash(id(self))
-
-        h = hash(type(self))
-        for subtype in cmps:
-            h = h ^ hash(subtype)
-
-        return h
-
-    def __getitem__(self, item):
-        """
-        Support array type creation by slicing, e.g. double[:, :] specifies
-        a 2D strided array of doubles. The syntax is the same as for
-        Cython memoryviews.
-        """
-        assert isinstance(item, (tuple, slice))
-
-        def verify_slice(s):
-            if s.start or s.stop or s.step not in (None, 1):
-                raise minierror.InvalidTypeSpecification(
-                    "Only a step of 1 may be provided to indicate C or "
-                    "Fortran contiguity")
-
-        if isinstance(item, tuple):
-            step_idx = None
-            for idx, s in enumerate(item):
-                verify_slice(s)
-                if s.step and (step_idx or idx not in (0, len(item) - 1)):
-                    raise minierror.InvalidTypeSpecification(
-                        "Step may only be provided once, and only in the "
-                        "first or last dimension.")
-
-                if s.step == 1:
-                    step_idx = idx
-
-            return ArrayType(self, len(item),
-                             is_c_contig=step_idx == len(item) - 1,
-                             is_f_contig=step_idx == 0)
-        else:
-            verify_slice(item)
-            return ArrayType(self, 1, is_c_contig=bool(item.step))
-
-    def declare(self):
-        return str(self)
-
-    def to_llvm(self, context):
-        "Get a corresponding llvm type from this type"
-        return context.to_llvm(self)
-
-    def to_ctypes(self):
-        """
-        Convert type to ctypes. The result may be cached!
-        """
-        if self._ctypes_type is None:
-            from . import ctypes_conversion
-            self._ctypes_type = ctypes_conversion.convert_to_ctypes(self)
-            self.mutated = False
-
-        assert not self.mutated
-        return self._ctypes_type
-
-    def get_dtype(self):
-        return map_minitype_to_dtype(self)
-
-    def is_string(self):
-        return self.is_c_string or self == char.pointer()
-
-    def __getattr__(self, attr):
-        if attr.startswith('is_'):
-            return False
-        return getattr(type(self), attr)
-
-    def __call__(self, *args):
-        """Return a FunctionType with return_type and args set
-        """
-        if len(args) == 1 and not isinstance(args[0], Type):
-            # Cast in Python space
-            # TODO: Create proxy object
-            # TODO: Fully customizable type system (do this in Numba, not
-            #       minivect)
-            return args[0]
-
-        return FunctionType(self, args)
-
-class KeyHashingType(Type):
-
-    def __hash__(self):
-        return hash(self.key)
-
-    def __eq__(self, other):
-        return hasattr(other, 'key') and self.key == other.key
-
-class ArrayType(Type):
+class ArrayType(NumbaPolyType):
     """
     An array type. ArrayType may be sliced to obtain a subtype:
 
@@ -226,34 +151,24 @@ class ArrayType(Type):
     """
 
     is_array = True
-    subtypes = ['dtype']
 
-    def __init__(self, dtype, ndim, is_c_contig=False, is_f_contig=False,
-                 inner_contig=False, broadcasting=None):
-        super(ArrayType, self).__init__()
+    def __init__(self, ts, kind, dtype, ndim,
+                 is_c_contig, is_f_contig, inner_contig):
+        super(ArrayType, self).__init__(ts, kind)
+
         assert dtype is not None
         self.dtype = dtype
         self.ndim = ndim
-        self.is_c_contig = is_c_contig
-        self.is_f_contig = is_f_contig
+
+        # Flags
         if ndim == 1 and (is_c_contig or is_f_contig):
             self.is_c_contig = True
             self.is_f_contig = True
-        self.inner_contig = inner_contig or is_c_contig or is_f_contig
-        self.broadcasting = broadcasting
 
-    @property
-    def comparison_type_list(self):
-        return [self.dtype, self.is_c_contig, self.is_f_contig,
-                self.inner_contig, self.ndim]
+        self.inner_contig = inner_contig or is_c_contig or is_f_contig
 
     def pointer(self):
         raise Exception("You probably want a pointer type to the dtype")
-
-    def to_llvm(self, context):
-        # raise Exception("Obtain a pointer to the dtype and convert that "
-        #                 "to an LLVM type")
-        return context.to_llvm(self)
 
     def __repr__(self):
         axes = [":"] * self.ndim
@@ -281,6 +196,7 @@ class ArrayType(Type):
         return type
 
     def __getitem__(self, index):
+        "Slicing an array slices the dimensions"
         assert isinstance(index, slice)
         assert index.step is None
         assert index.start is not None or index.stop is not None
@@ -310,128 +226,9 @@ class ArrayType(Type):
         return type
 
 
-class PointerType(Type):
-    is_pointer = True
-    subtypes = ['base_type']
+PointerType = make_polytype("PointerType", ["base_type"])
+CArrayType = make_polytype("CArrayType", ["base_type"])
 
-    def __init__(self, base_type, **kwds):
-        super(PointerType, self).__init__(**kwds)
-        self.base_type = base_type
-        self.itemsize = struct_.calcsize("P")
-
-    def __repr__(self):
-        return "%s *%s" % (self.base_type, " ".join(self.qualifiers))
-
-class CArrayType(Type):
-    is_carray = True
-    subtypes = ['base_type']
-
-    def __init__(self, base_type, size, **kwds):
-        super(CArrayType, self).__init__(**kwds)
-        self.base_type = base_type
-        self.size = size
-
-    def __repr__(self):
-        return "%s[%d]" % (self.base_type, self.size)
-
-    def to_llvm(self, context):
-        return llvm.core.Type.array(self.base_type.to_llvm(context), self.size)
-
-class TypeWrapper(Type):
-    is_typewrapper = True
-    subtypes = ['opaque_type']
-
-    def __init__(self, opaque_type, context, **kwds):
-        super(TypeWrapper, self).__init__(**kwds)
-        self.opaque_type = opaque_type
-        self.context = context
-
-    def __repr__(self):
-        return self.context.declare_type(self)
-
-    def __deepcopy__(self, memo):
-        return self
-
-class NamedType(Type):
-    name = None
-
-    def __eq__(self, other):
-        return isinstance(other, NamedType) and self.name == other.name
-
-    __hash__ = Type.__hash__ # !@#$ py3k
-
-    def __repr__(self):
-        if self.qualifiers:
-            return "%s %s" % (self.name, " ".join(self.qualifiers))
-        return str(self.name)
-
-class NumericType(NamedType):
-    """
-    Base class for numeric types.
-
-    .. attribute:: name
-
-        name of the type
-
-    .. attribute:: itemsize
-
-        sizeof(type)
-
-    .. attribute:: rank
-
-        ordering of numeric types
-    """
-    is_numeric = True
-
-class IntType(NumericType):
-    is_int = True
-    is_int_like = True
-    name = "int"
-    signed = True
-    rank = 4
-    itemsize = 4
-    typecode = None
-
-    kind = INT_KIND
-
-    def __init__(self, typecode=None, **kwds):
-        super(IntType, self).__init__(**kwds)
-        self.typecode = typecode
-        if typecode is not None:
-            self.itemsize = struct_.calcsize(typecode)
-
-    def to_llvm(self, context):
-        if self.itemsize == 1:
-            return lc.Type.int(8)
-        elif self.itemsize == 2:
-            return lc.Type.int(16)
-        elif self.itemsize == 4:
-            return lc.Type.int(32)
-        else:
-            assert self.itemsize == 8, self
-            return lc.Type.int(64)
-
-    def declare(self):
-        if self.name.endswith(('16', '32', '64')):
-            return self.name + "_t"
-        else:
-            return str(self)
-
-
-class BoolType(IntType):
-    is_bool = True
-    name = "bool"
-    kind = BOOL_KIND
-    rank = 0
-
-    def __repr__(self):
-        return ("int %s" % " ".join(self.qualifiers)).rstrip()
-
-    def __str__(self):
-        return ("bool %s" % " ".join(self.qualifiers)).rstrip()
-
-    def to_llvm(self, context):
-        return llvm.core.Type.int(1)
 
 
 class FloatType(NumericType):
@@ -456,21 +253,7 @@ class FloatType(NumericType):
 
     __hash__ = NumericType.__hash__
 
-    def to_llvm(self, context):
-        if self.itemsize == 4:
-            return lc.Type.float()
-        elif self.itemsize == 8:
-            return lc.Type.double()
-        else:
-            is_ppc, is_x86 = get_target_triple()
-            if self.itemsize == 16:
-                if is_ppc:
-                    return lc.Type.ppc_fp128()
-                else:
-                    return lc.Type.fp128()
-            else:
-                assert self.itemsize == 10 and is_x86
-                return lc.Type.x86_fp80()
+
 
 class ComplexType(NumericType):
     is_complex = True
@@ -563,7 +346,7 @@ class Function(object):
             def m(self):
                 ...
         """
-        raise minierror.Error("Not a callable function")
+        raise TypeError("Not a callable function")
 
 class FunctionType(Type):
     subtypes = ['return_type', 'args']
@@ -579,16 +362,6 @@ class FunctionType(Type):
         self.name = name
         self.is_vararg = is_vararg
 
-    def to_llvm(self, context):
-        assert self.return_type is not None
-        self = self.actual_signature
-        arg_types = [arg_type.pointer() if arg_type.is_function else arg_type
-                         for arg_type in self.args]
-        return lc.Type.function(self.return_type.to_llvm(context),
-                                [arg_type.to_llvm(context)
-                                     for arg_type in arg_types],
-                                self.is_vararg)
-
     def __repr__(self):
         args = [str(arg) for arg in self.args]
         if self.is_vararg:
@@ -597,6 +370,7 @@ class FunctionType(Type):
             namestr = self.name
         else:
             namestr = ''
+
         return "%s (*%s)(%s)" % (self.return_type, namestr, ", ".join(args))
 
     @property
@@ -636,39 +410,6 @@ class FunctionType(Type):
         func, = args
         return Function(self, func)
 
-class VectorType(Type):
-    subtypes = ['element_type']
-    is_vector = True
-    vector_size = None
-
-    def __init__(self, element_type, vector_size, **kwds):
-        super(VectorType, self).__init__(**kwds)
-        assert ((element_type.is_int or element_type.is_float) and
-                element_type.itemsize in (4, 8)), element_type
-        self.element_type = element_type
-        self.vector_size = vector_size
-        self.itemsize = element_type.itemsize * vector_size
-
-    def to_llvm(self, context):
-        return lc.Type.vector(self.element_type.to_llvm(context),
-                              self.vector_size)
-
-    @property
-    def comparison_type_list(self):
-        return self.subtype_list + [self.vector_size]
-
-    def __repr__(self):
-        itemsize = self.element_type.itemsize
-        if self.element_type.is_float:
-            if itemsize == 4:
-                return '__m128'
-            else:
-                return '__m128d'
-        else:
-            if itemsize == 4:
-                return '__m128i'
-            else:
-                raise NotImplementedError
 
 
 def _sort_types_key(field_type):
@@ -706,7 +447,7 @@ def sort_types(types_dict):
 
     return fields
 
-class struct(Type):
+class StructType(Type):
     """
     Create a struct type. Fields may be ordered or unordered. Unordered fields
     will be ordered from big types to small types (for better alignment).
@@ -728,11 +469,11 @@ class struct(Type):
 
     is_struct = True
 
-    def __init__(self, fields=(), name=None, readonly=False, packed=False, **kwargs):
-        super(struct, self).__init__()
+    def __init__(self, fields=(), name=None,
+                 readonly=False, packed=False, **kwargs):
+        super(StructType, self).__init__()
         if fields and kwargs:
-            raise minierror.InvalidTypeSpecification(
-                    "The struct must be either ordered or unordered")
+            raise TypeError("The struct must be either ordered or unordered")
 
         if kwargs:
             fields = sort_types(kwargs)
@@ -746,10 +487,7 @@ class struct(Type):
         self.update_mutated()
 
     def copy(self):
-        return struct(self.fields, self.name, self.readonly, self.packed)
-
-    def __eq__(self, other):
-        return other.is_struct and self.fields == other.fields
+        return self.ts.struct(self.fields, self.name, self.readonly, self.packed)
 
     def __repr__(self):
         if self.name:
@@ -760,22 +498,8 @@ class struct(Type):
                 name, ", ".join("%s %s" % (field_type, field_name)
                                     for field_name, field_type in self.fields))
 
-    def to_llvm(self, context):
-        if self.packed:
-            lstruct = llvm.core.Type.packed_struct
-        else:
-            lstruct = llvm.core.Type.struct
-
-        return lstruct([field_type.to_llvm(context)
-                           for field_name, field_type in self.fields])
-
-    @property
-    def comparison_type_list(self):
-        return self.fields
-
-    @property
-    def subtype_list(self):
-        return [field[1] for field in self.fields]
+    def __eq__(self, other):
+        return other.is_struct and self.fields == other.fields
 
     def __hash__(self):
         return hash(tuple(self.fields))
@@ -801,6 +525,7 @@ class struct(Type):
         """
         ctype = self.to_ctypes()
         return getattr(ctype, field_name).offset
+
 
 def getsize(ctypes_name, default):
     try:
@@ -952,6 +677,7 @@ class NumbaUniverse(Universe):
 
     # typename -> type
     ints = {}
+    uints = {}
     floats = {}
     complexes = {}
 
@@ -961,13 +687,20 @@ class NumbaUniverse(Universe):
     carrays = Conser()
 
     def init(self, ts):
-        names = ["int", "uint"]
+        for name in atom_type_names:
+            type = MonoType(ts, kind, name)
+            setattr(self, name, type)
+            self.monotypes[name] = type
 
-        for name in names:
-            setattr(self, name, MonoType(ts, name))
+    function = FunctionType
+    array = ArrayType
+    pointer = PointerType
+    carray = CArrayType
+    struct = struct
 
 
 class AtomUnification(object):
+
     def promote_numeric(self, type1, type2):
         "Promote two numeric types"
         type = max([type1, type2], key=lambda type: type.rank)
