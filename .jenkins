@@ -21,7 +21,7 @@ fi
 # python version and containing the dependencies.
 export PYENV_PREFIX=${WORKSPACE}/build/pyenv
 rm -rf ${PYENV_PREFIX}
-~/anaconda/bin/conda create --yes -p ${PYENV_PREFIX} python=${PYTHON_VERSION} cython scipy llvmpy meta cffi distribute nose || exit 1
+~/anaconda/bin/conda create --yes -p ${PYENV_PREFIX} python=${PYTHON_VERSION} cython scipy llvmpy cffi distribute nose || exit 1
 export PATH=${PYENV_PREFIX}/bin:${PATH}
 
 if [ -f "${PYENV_PREFIX}/bin/python" ]; then
@@ -34,6 +34,7 @@ else
 fi
 
 # Build/install Numba
+pip install -r requirements.txt --use-mirrors
 ${PYTHON_EXECUTABLE} setup.py install || exit 1
 
 # Run the tests
