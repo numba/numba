@@ -5,18 +5,18 @@ Inferface for our typesystems.
 
 Some requirements:
 
-1)  The typesystem must allow us to switch between low-level representations.
+  * The typesystem must allow us to switch between low-level representations.
     For instance, we may want to represent an array as a NumPy ndarray, a
     Py_buffer, or some other representation.
 
-2)  The sizes of atom types (e.g. int) must be easily customizable. This allows
+  * The sizes of atom types (e.g. int) must be easily customizable. This allows
     an interpreter to switch sizes to simulate different platforms.
 
-3)  Type representations and sizes, must be overridable without
+  * Type representations and sizes, must be overridable without
     reimplementing the type. E.g. an atom type can be sliced to create
     an array type, which should be separate from its low-level representation.
 
-4)  Types should map easily between type domains of the same level, e.g.
+  * Types should map easily between type domains of the same level, e.g.
     between the low-level numba and llvm types.
     Ideally this forms an isomorphism, which is precluded by ctypes and
     numpy type systems::
@@ -24,35 +24,39 @@ Some requirements:
        >>> ctypes.c_longlong
        <class 'ctypes.c_long'>
 
-6)  No type system but our own should be entrenched in any part of the
+  * No type system but our own should be entrenched in any part of the
     codebase, including the code generator.
 
-7)  Sets of type constructors (type universes) must be composable.
+  * Sets of type constructors (type universes) must be composable.
     For instance, we may want to extend a low-level type systems of ints
     and pointers with objects to yield a type universe supporting
     both constructs.
 
-8)  Universes must be re-usable across type-systems. Types of universes
+  * Universes must be re-usable across type-systems. Types of universes
     represent abstract type concepts, and the type-systems give meaning
     and representation to values of those types.
 
-9)  Types must be immutable and consed, i.e.
+  * Types must be immutable and consed, i.e.
     ts.pointer(base) is ts.pointer(base) must always be True
 
-10) The use of a certain typesystem must suggest at which level the
+  * The use of a certain typesystem must suggest at which level the
     corresponding terms operate.
 
-11) Conversion code should be written with minimal effort:
+  * Conversion code should be written with minimal effort:
 
         - monotypes should map immediately between domains of the same level
         - polytypes should naturally re-construct in domains of the same level
 
-    Converting a type to a lower-level domain constitutes a one-way
+  * Converting a type to a lower-level domain constitutes a one-way
     conversion. This should, where possible, constitute a lowering in the
     same domain followed by a conversion. E.g.:
 
         def numba_complex_to_llvm(type):
             return to_llvm(lower_complex(type))
+
+  * Type constructors must be substitutable. E.g. an external user may
+    want to construct a universe where type construction is logged, or
+    where special type checking is performed, disallowing certain compositions.
 """
 
 from __future__ import print_function, division, absolute_import
@@ -72,23 +76,24 @@ else:
     nbo = '>' # big endian
 
 
-@traits
 class TypeSystem(object):
 
-    def __init__(self, universe):
+    def __init__(self, universe, unifier=None,
+                 constant_typer=None, converters=None):
         self.universe = universe
 
         # Find the least general type that subsumes both given types
         # t1 -> t2 -> t3
-        self.unify_atoms = None
+        self.unify_atoms = unifier
 
         # Assign types to Python constants (arbitrary python values)
-        self.constant_typer = None
+        self.constant_typer = constant_typer
 
         # Convert between type domains
-        self.converters = {}
+        self.converters = converters or {}
 
     def typeof(self, value):
+        assert self.constant_typer, self
         return self.constant_typer.typeof(self, value)
 
     from_python = typeof # TODO: Remove
@@ -165,10 +170,8 @@ class Universe(object):
             raise NotImplementedError(type)
 
     def get_polyconstructor(self, kind):
-        # type_constructor = self.polytypes[kind]
-        # return type_constructor
         type_constructor = self.polytypes[kind]
-        return partial(type_constructor, self, kind)
+        return type_constructor
 
 #------------------------------------------------------------------------
 # Typing of Constants
@@ -176,11 +179,12 @@ class Universe(object):
 
 class ConstantTyper(object):
 
-    def init(self, ts):
-        "Initialize to the given typesystem"
+    def __init__(self, universe):
+        "Initialize to the given type universe"
+        self.universe = universe
 
-    def typeof(self, ts, value):
-        "Get a concrete type given a typesystem and a python value"
+    def typeof(self, value):
+        "Get a concrete type given a python value"
         raise NotImplementedError
 
 #------------------------------------------------------------------------
@@ -200,14 +204,10 @@ class TypeConverter(object):
 
     def convert(self, type):
         "Return an LLVM type for the given type."
-        assert type.ts is self.domain
-
-        if type.args:
-            return self.convert_polytype(type)
-        else:
-            # cotypes = self.codomain.monotypes[type.kind]
-            # return cotypes[type.name]
+        if type.is_mono:
             return getattr(self.codomain, type.name)
+        else:
+            return self.convert_polytype(type)
 
     def convert_polytype(self, type):
         if type in self.polytypes:
@@ -224,7 +224,7 @@ class TypeConverter(object):
         coparams = [c(t) if isinstance(t, Type) else t for t in params]
 
         # Construct type in codomain
-        result = constructor(*map(self.convert_polytype, params))
+        result = constructor(*coparams)
 
         self.polytypes[type] = result
         return result
@@ -235,11 +235,7 @@ class TypeConverter(object):
 
 class Type(object):
     """
-    Base type. Specialized to the typesystem it belongs to.
-
-    :param ty: Actual underlying type we are wrapping (e.g. an LLVM type)
-               This allows us to deal with foreign typesystems the same
-               way we deal with our own
+    Base of all types.
     """
 
     def __init__(self, kind, params, is_mono=False):
@@ -248,13 +244,6 @@ class Type(object):
         # don't call this 'args' since we already use that in FunctionType
         self.params = params
         self.is_mono = is_mono
-
-        # Build properties that access 'params'
-        # if argnames:
-        #     assert len(params) == len(argnames)
-        #     for i, argname in enumerate(argnames):
-        #         accessor = property(lambda self, i=i: self.params[i])
-        #         setattr(self, argname, accessor)
 
     # __________________________________________________________________
     # Type instantiation

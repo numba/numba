@@ -14,8 +14,9 @@ import textwrap
 from functools import partial
 
 from numba.typesystem.typesystem import (
-    Universe, Type, Conser, nbo)
+    Universe, Type, Conser, nbo, ConstantTyper, TypeConverter)
 from numba.typesystem import typesystem
+from numba.typesystem.kinds import *
 
 import numpy as np
 import llvm.core
@@ -28,72 +29,6 @@ misc_typenames = [
 # User-facing type functionality
 #------------------------------------------------------------------------
 
-def slice_type(universe, type, item):
-    """
-    Support array type creation by slicing, e.g. double[:, :] specifies
-    a 2D strided array of doubles. The syntax is the same as for
-    Cython memoryviews.
-    """
-    assert isinstance(item, (tuple, slice))
-
-    def verify_slice(s):
-        if s.start or s.stop or s.step not in (None, 1):
-            raise ValueError(
-                "Only a step of 1 may be provided to indicate C or "
-                "Fortran contiguity")
-
-    if isinstance(item, tuple):
-        step_idx = None
-        for idx, s in enumerate(item):
-            verify_slice(s)
-            if s.step and (step_idx or idx not in (0, len(item) - 1)):
-                raise ValueError(
-                    "Step may only be provided once, and only in the "
-                    "first or last dimension.")
-
-            if s.step == 1:
-                step_idx = idx
-
-        return universe.array(type, len(item),
-                        is_c_contig=step_idx == len(item) - 1,
-                        is_f_contig=step_idx == 0)
-    else:
-        verify_slice(item)
-        return universe.array(type, 1, is_c_contig=bool(item.step))
-
-
-def call_type(universe, type, *args):
-    """
-    Return a new function type when called with type arguments.
-    """
-    if len(args) == 1 and not isinstance(args[0], Type):
-        # Cast in Python space
-        # TODO: Create proxy object
-        # TODO: Fully customizable type system (do this in Numba, not
-        #       minivect)
-        return args[0]
-
-    return universe.function(type, args)
-
-# ______________________________________________________________________
-# Type methods
-
-default_type_behaviour = {
-    "__getitem__":  lambda self, item: slice_type(self.ts, self, item),
-    "__call__":     lambda self, *args: call_type(self.ts, self, *args),
-    "pointer":      lambda self: self.ts.pointer(self),
-    # 'context' is for backwards compatibility
-    "to_llvm":      lambda self, context: self.ts.convert("llvm", self),
-    "to_ctypes":    lambda self: self.ts.convert("ctypes", self),
-    "get_dtype":    lambda self: self.ts.convert("numpy", self),
-}
-
-def annotate_type(cls):
-    for name, meth in default_type_behaviour.iteritems():
-        setattr(cls, name, meth)
-    return cls
-
-@annotate_type
 class NumbaType(Type):
     """
     MonoType with user-facing methods:
@@ -103,15 +38,65 @@ class NumbaType(Type):
         conversion: to_llvm/to_ctypes/get_dtype
     """
 
+    # TODO: For methods pointer, __getitem__ and __call__ we need the type
+    # TODO: universe. Should each type instance hold the type universe it
+    # TODO: was constructed in?
+
+    def __getitem__(self, item):
+        """
+        Support array type creation by slicing, e.g. double[:, :] specifies
+        a 2D strided array of doubles. The syntax is the same as for
+        Cython memoryviews.
+        """
+        assert isinstance(item, (tuple, slice))
+
+        def verify_slice(s):
+            if s.start or s.stop or s.step not in (None, 1):
+                raise ValueError(
+                    "Only a step of 1 may be provided to indicate C or "
+                    "Fortran contiguity")
+
+        if isinstance(item, tuple):
+            step_idx = None
+            for idx, s in enumerate(item):
+                verify_slice(s)
+                if s.step and (step_idx or idx not in (0, len(item) - 1)):
+                    raise ValueError(
+                        "Step may only be provided once, and only in the "
+                        "first or last dimension.")
+
+                if s.step == 1:
+                    step_idx = idx
+
+            return type(self)(self.dtype, len(item),
+                              is_c_contig=step_idx == len(item) - 1,
+                              is_f_contig=step_idx == 0)
+        else:
+            verify_slice(item)
+            return ArrayType(type, 1, is_c_contig=bool(item.step))
+
+    def __call__(self, *args):
+        """
+        Return a new function type when called with type arguments.
+        """
+        if len(args) == 1 and not isinstance(args[0], Type):
+            # Cast in Python space
+            # TODO: Create proxy object
+            # TODO: Fully customizable type system (do this in Numba, not
+            #       minivect)
+            return args[0]
+
+        return FunctionType(self, args)
+
 def make_polytype(typename, names):
     """
     Create a new polytype that has named attributes. E.g.
 
         make_polytype("ArrayType", ["dtype", "ndim"])
     """
-    def __init__(self, ts, kind, params):
+    def __init__(self, kind, params):
         assert len(params) == len(names), polyctor
-        super(polyctor, self).__init__(ts, kind, params)
+        super(polyctor, self).__init__(kind, params)
 
     # Create parameter accessors
     typedict = dict([(name, lambda self, i=i: self.params[i])
@@ -143,9 +128,9 @@ class ArrayType(NumbaType):
     is_array = True
     argnames = ("dtype", "ndim", "is_c_contig", "is_f_contig", "inner_contig")
 
-    def __init__(self, ts, kind, *args, **kwargs):
+    def __init__(self, kind, *args, **kwargs):
         params = self._make_params(*args, **kwargs)
-        super(ArrayType, self).__init__(ts, kind, params,
+        super(ArrayType, self).__init__(universe.KIND_ARRAY, params,
                                         argnames=self.argnames)
 
     def _make_params(self, dtype, ndim,
@@ -312,41 +297,6 @@ class FunctionType(Type):
         func, = args
         return Function(self, func)
 
-def _sort_types_key(field_type):
-    if field_type.is_complex:
-        return field_type.base_type.rank * 2
-    elif field_type.is_numeric or field_type.is_struct:
-        return field_type.rank
-    elif field_type.is_vector:
-        return _sort_types_key(field_type.element_type) * field_type.vector_size
-    elif field_type.is_carray:
-        return _sort_types_key(field_type.base_type) * field_type.size
-    elif field_type.is_pointer or field_type.is_object or field_type.is_array:
-        return 8
-    else:
-        return 1
-
-def _sort_key(keyvalue):
-    field_name, field_type = keyvalue
-    return _sort_types_key(field_type)
-
-def sort_types(types_dict):
-    # reverse sort on rank, forward sort on name
-    d = {}
-    for field in types_dict.iteritems():
-        key = _sort_key(field)
-        d.setdefault(key, []).append(field)
-
-    def key(keyvalue):
-        field_name, field_type = keyvalue
-        return field_name
-
-    fields = []
-    for rank in sorted(d, reverse=True):
-        fields.extend(sorted(d[rank], key=key))
-
-    return fields
-
 _StructType = make_polytype(
     "_StructType", ["fields", "name", "readonly", "packed"])
 
@@ -372,23 +322,18 @@ class StructType(_StructType):
 
     is_struct = True
 
-    def __init__(self, ts, kind, fields=(), name=None,
+    def __init__(self, fields=(), name=None,
                  readonly=False, packed=False, **kwargs):
-        super(StructType, self).__init__(ts, kind)
-
         if fields and kwargs:
             raise TypeError("The struct must be either ordered or unordered")
-
-        if kwargs:
+        elif kwargs:
             fields = sort_types(kwargs)
+        super(StructType, self).__init__(universe.KIND_STRUCT, list(fields),
+                                         name, readonly, packed)
 
-        self.fields = list(fields)
-        self.name = name
-        self.readonly = readonly
-        self.fielddict = dict(self.fields)
-        self.packed = packed
-
-        self.update_mutated()
+    @property
+    def fielddict(self):
+        return dict(self.fields)
 
     def copy(self):
         return self.ts.struct(self.fields, self.name, self.readonly, self.packed)
@@ -460,99 +405,40 @@ complextypes = []
 
 
 
-def find_type_of_size(size, typelist):
-    for type in typelist:
-        if type.itemsize == size:
-            return type
+def _sort_types_key(field_type):
+    if field_type.is_complex:
+        return field_type.base_type.rank * 2
+    elif field_type.is_numeric or field_type.is_struct:
+        return field_type.rank
+    elif field_type.is_vector:
+        return _sort_types_key(field_type.element_type) * field_type.vector_size
+    elif field_type.is_carray:
+        return _sort_types_key(field_type.base_type) * field_type.size
+    elif field_type.is_pointer or field_type.is_object or field_type.is_array:
+        return 8
+    else:
+        return 1
 
-    assert False, "Type of size %d not found: %s" % (size, typelist)
+def _sort_key(keyvalue):
+    field_name, field_type = keyvalue
+    return _sort_types_key(field_type)
 
+def sort_types(types_dict):
+    # reverse sort on rank, forward sort on name
+    d = {}
+    for field in types_dict.iteritems():
+        key = _sort_key(field)
+        d.setdefault(key, []).append(field)
 
-class DefaultConstantTyper(object):
+    def key(keyvalue):
+        field_name, field_type = keyvalue
+        return field_name
 
-    def typeof(self, ts, value):
-        u = ts.universe
+    fields = []
+    for rank in sorted(d, reverse=True):
+        fields.extend(sorted(d[rank], key=key))
 
-        if isinstance(value, float):
-            return ts.universe.double
-        elif isinstance(value, bool):
-            return ts.universe.bool
-        elif isinstance(value, (int, long)):
-            if abs(value) < 1:
-                bits = 0
-            else:
-                bits = math.ceil(math.log(abs(value), 2))
-
-            if bits < 32:
-                return int_
-            elif bits < 64:
-                return int64
-            else:
-                raise ValueError("Cannot represent %s as int32 or int64", value)
-        elif isinstance(value, complex):
-            return complex128
-        elif isinstance(value, str):
-            return c_string_type
-        elif isinstance(value, np.ndarray):
-            dtype = map_dtype(value.dtype)
-            return ArrayType(dtype, value.ndim,
-                             is_c_contig=value.flags['C_CONTIGUOUS'],
-                             is_f_contig=value.flags['F_CONTIGUOUS'])
-        else:
-            return object_
-
-
-
-class AtomUnification(object):
-
-    def promote_numeric(self, type1, type2):
-        "Promote two numeric types"
-        type = max([type1, type2], key=lambda type: type.rank)
-        if type1.kind != type2.kind:
-            def itemsize(type):
-                return type.itemsize // 2 if type.is_complex else type.itemsize
-
-            size = max(itemsize(type1), itemsize(type2))
-            if type.is_complex:
-                type = find_type_of_size(size * 2, complextypes)
-            elif type.is_float:
-                type = find_type_of_size(size, floating)
-            else:
-                assert type.is_int
-                type = find_type_of_size(size, integral)
-
-        return type
-
-    def promote_arrays(self, type1, type2):
-        "Promote two array types in an expression to a new array type"
-        equal_ndim = type1.ndim == type2.ndim
-        return ArrayType(self.unify(type1.dtype, type2.dtype),
-                         ndim=max((type1.ndim, type2.ndim)),
-                         is_c_contig=(equal_ndim and type1.is_c_contig and
-                                      type2.is_c_contig),
-                         is_f_contig=(equal_ndim and type1.is_f_contig and
-                                      type2.is_f_contig))
-
-    def unify(self, type1, type2):
-        "Promote two arbitrary types"
-        string_types = c_string_type, char.pointer()
-        if type1.is_pointer and type2.is_int_like:
-            return type1
-        elif type2.is_pointer and type2.is_int_like:
-            return type2
-        elif type1.is_object or type2.is_object:
-            return object_
-        elif type1.is_numeric and type2.is_numeric:
-            return self.promote_numeric(type1, type2)
-        elif type1.is_array and type2.is_array:
-            return self.promote_arrays(type1, type2)
-        elif type1 in string_types and type2 in string_types:
-            return c_string_type
-        elif type1.is_bool and type2.is_bool:
-            return bool_
-        else:
-            raise TypeError((type1, type2))
-
+    return fields
 
 if __name__ == '__main__':
     import doctest

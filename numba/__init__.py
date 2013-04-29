@@ -13,9 +13,9 @@ import os
 import sys
 import logging
 
-from numba import utils, typesystem
-
 PY3 = sys.version_info[0] == 3
+
+from numba import utils, typesystem
 
 def get_include():
     numba_root = os.path.dirname(os.path.abspath(__file__))

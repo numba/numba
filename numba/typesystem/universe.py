@@ -17,7 +17,9 @@ from numba.typesystem.typesystem import (
     Universe, Type, Conser, nbo)
 from numba.typesystem import typesystem
 from numba.typesystem.usertypes import *
+from numba.typesystem.kinds import *
 from numba.typesystem import llvmtyping
+
 
 int_typenames = [
     'char', 'uchar', 'short', 'ushort', 'int', 'uint', 'long', 'ulong',
@@ -34,22 +36,6 @@ float_typenames = [
 complex_typenames = [
     'complex64', 'complex128', 'complex256',
 ]
-
-#------------------------------------------------------------------------
-# Type Kinds
-#------------------------------------------------------------------------
-
-KIND_VOID       = "void"
-KIND_INT        = "int"
-KIND_FLOAT      = "float"
-KIND_COMPLEX    = "complex"
-KIND_FUNCTION   = "function"
-KIND_ARRAY      = "array"
-KIND_POINTER    = "pointer"
-KIND_CARRAY     = "carray"
-KIND_STRUCT     = "struct"
-KIND_OBJECT     = "object"
-KIND_EXTTYPE    = "exttype"
 
 #------------------------------------------------------------------------
 # Default type sizes

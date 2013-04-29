@@ -1,8 +1,15 @@
+# -*- coding: utf-8 -*-
+
+from __future__ import print_function, division, absolute_import
+
+from numba.typesystem import *
+
+import numpy as np
+
 def map_dtype(dtype):
     """
     Map a NumPy dtype to a minitype.
 
-    >>> import numpy as np
     >>> map_dtype(np.dtype(np.int32))
     int32
     >>> map_dtype(np.dtype(np.int64))
@@ -14,8 +21,6 @@ def map_dtype(dtype):
     >>> map_dtype(np.dtype(np.complex128))
     complex128
     """
-    import numpy as np
-
     if dtype.byteorder not in ('=', nbo, '|') and dtype.kind in ('iufbc'):
         raise minierror.UnmappableTypeError(
                 "Only native byteorder is supported", dtype)
@@ -55,7 +60,7 @@ def map_dtype(dtype):
 def create_dtypes():
     import numpy as np
 
-    minitype2dtype = {
+    type2dtype = {
         int8     : np.int8,
         int16    : np.int16,
         int32    : np.int32,
@@ -86,16 +91,16 @@ def create_dtypes():
         object_  : np.object,
     }
 
-    return dict((k, np.dtype(v)) for k, v in minitype2dtype.iteritems())
+    return dict((k, np.dtype(v)) for k, v in type2dtype.iteritems())
 
 _dtypes = None
-def map_minitype_to_dtype(type):
+def map_type_to_dtype(type):
     global _dtypes
 
     if type.is_struct:
         import numpy as np
 
-        fields = [(field_name, map_minitype_to_dtype(field_type))
+        fields = [(field_name, map_type_to_dtype(field_type))
                       for field_name, field_type in type.fields]
         return np.dtype(fields, align=not type.packed)
 

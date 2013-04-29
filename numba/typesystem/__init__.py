@@ -19,8 +19,7 @@ from .shorthands import *
 from .typematch import *
 
 from .universe import *
-
-numba_typesystem = TypeSystem(NumbaUniverse())
+from .defaults import *
 
 # TODO: Remove
 from numba.minivect.minitypes import *
