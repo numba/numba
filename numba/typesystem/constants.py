@@ -10,9 +10,11 @@ import math
 import types
 import ctypes
 
+import numba.typesystem
 from numba.typesystem import typesystem
 from numba.support.ctypes_support import is_ctypes, from_ctypes_value
 from numba.support import cffi_support
+from numba import numbawrapper
 
 import numpy as np
 
@@ -30,7 +32,7 @@ def get_typing_defaults(u):
         float: u.double,
         bool: u.bool,
         complex: u.complex128,
-        str: u.c_string_type,
+        str: u.pointer(u.char),
     }
     return typing_defaults
 
@@ -113,6 +115,10 @@ def get_default_typing_rules(u, typeof, promote):
 def is_dtype_constructor(value):
     return isinstance(value, type) and issubclass(value, np.generic)
 
+def is_registered(value):
+    from numba.type_inference import module_type_inference
+    return module_type_inference.is_registered(value)
+
 def from_ctypes(value, u):
     result = from_ctypes_value(value)
     if result.is_function:
@@ -140,13 +146,11 @@ is_autojit_func = lambda value: isinstance(
     value, numbawrapper.NumbaSpecializingWrapper)
 
 def get_default_match_table(ts):
-    from numba.type_inference import module_type_inference
-
     u = ts.universe
 
     table = {
         is_dtype_constructor:
-            lambda value: from_numpy_dtype(np.dtype(value)),
+            lambda value: numba.typesystem.from_numpy_dtype(np.dtype(value)),
         is_ctypes:
             lambda value: from_ctypes(value, u),
         cffi_support.is_cffi_func:
@@ -157,7 +161,7 @@ def get_default_match_table(ts):
             lambda value: u.jitfunctype(value),
         is_autojit_func:
             lambda value: u.autojitfunctype(value),
-        module_type_inference.is_registered:
+        is_registered:
             lambda value: from_typefunc(value, u),
     }
 

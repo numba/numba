@@ -139,23 +139,23 @@ native_integral = []
 floating = []
 complextypes = []
 
-for typename in __all__:
-    minitype = globals()[typename]
-    if minitype is None:
-        continue
-
-    if minitype.is_int:
-        integral.append(minitype)
-    elif minitype.is_float:
-        floating.append(minitype)
-    elif minitype.is_complex:
-        complextypes.append(minitype)
-
-numeric = integral + floating + complextypes
-native_integral.extend((Py_ssize_t, size_t))
-
-integral.sort(key=_sort_types_key)
-native_integral = [minitype for minitype in integral
-                                if minitype.typecode is not None]
-floating.sort(key=_sort_types_key)
-complextypes.sort(key=_sort_types_key)
+# for typename in __all__:
+#     minitype = globals()[typename]
+#     if minitype is None:
+#         continue
+#
+#     if minitype.is_int:
+#         integral.append(minitype)
+#     elif minitype.is_float:
+#         floating.append(minitype)
+#     elif minitype.is_complex:
+#         complextypes.append(minitype)
+#
+# numeric = integral + floating + complextypes
+# native_integral.extend((Py_ssize_t, size_t))
+#
+# integral.sort(key=_sort_types_key)
+# native_integral = [minitype for minitype in integral
+#                                 if minitype.typecode is not None]
+# floating.sort(key=_sort_types_key)
+# complextypes.sort(key=_sort_types_key)

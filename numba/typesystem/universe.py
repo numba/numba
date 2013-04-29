@@ -159,18 +159,17 @@ lowlevel_universe = LowLevelUniverse()
 # LLVM Universe
 #------------------------------------------------------------------------
 
-def llvm_poly(PolyType, llvm_ctor):
-    def ctor(*args, **kwargs):
-        type = PolyType(*args, **kwargs)
-        return llvm_ctor(type)
+def llvm_poly(llvm_ctor):
+    def ctor(kind, params):
+        return llvm_ctor(*params)
     return ctor
 
 class LLVMUniverse(LowLevelUniverse):
 
     polytypes = {
-        KIND_STRUCT: llvm_poly(StructType, llvmtyping.struct),
-        KIND_POINTER: llvm_poly(PointerType, llvmtyping.pointer),
-        KIND_FUNCTION: llvm_poly(FunctionType, llvmtyping.function),
+        KIND_STRUCT: llvm_poly(llvmtyping.struct),
+        KIND_POINTER: llvm_poly(llvmtyping.pointer),
+        KIND_FUNCTION: llvm_poly(llvmtyping.function),
     }
 
     def __init__(self, kind_sorting=None, itemsizes=None):

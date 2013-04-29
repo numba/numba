@@ -171,7 +171,7 @@ class Universe(object):
 
     def get_polyconstructor(self, kind):
         type_constructor = self.polytypes[kind]
-        return type_constructor
+        return partial(type_constructor, kind)
 
 #------------------------------------------------------------------------
 # Typing of Constants
@@ -230,7 +230,7 @@ class TypeConverter(object):
         constructor = getattr(self.codomain, type.kind)
 
         # Map parameter into codomain
-        c = self.convert_polytype
+        c = self.convert
         coparams = [c(t) if isinstance(t, Type) else t for t in params]
 
         # Construct type in codomain
@@ -289,8 +289,7 @@ class Type(object):
         if self.is_mono:
             return self.name
         else:
-            return "%s(%s)" % (self.kind(self),
-                               ", ".join(map(str, self.params)))
+            return "%s(%s)" % (self.kind, ", ".join(map(str, self.params)))
 
     # Hash by identity
     __eq__ = object.__eq__
@@ -304,6 +303,18 @@ class Type(object):
 #------------------------------------------------------------------------
 # Type Memoization
 #------------------------------------------------------------------------
+class WeakrefTuple(object):
+    def __init__(self, args):
+        self.args = args
+
+    def __eq__(self, other):
+        return self.args == other
+
+    def __ne__(self, other):
+        return self.args != other
+
+    def __hash__(self):
+        return hash(self.args)
 
 class Conser(object):
     """
@@ -319,10 +330,11 @@ class Conser(object):
         self._entries = weakref.WeakKeyDictionary()
         self.constructor = constructor
 
-    def get(self, args):
-        result = self._entries.get(args)
+    def get(self, *args):
+        wargs = WeakrefTuple(args)
+        result = self._entries.get(WeakrefTuple(wargs))
         if result is None:
-            result = self.constructor(*args)
-            self._entries[args] = result
+            result = self.constructor(args)
+            self._entries[wargs] = result
 
         return result

@@ -7,13 +7,10 @@ def get_target_triple():
     return is_ppc, is_x86
 
 
-def llvm_pointer(ts, type):
-    base_type, = type.args
-    if base_type.is_void:
-        base_type = ts.int_
-
-    llvm_base_type = ts.llvm_type(base_type)
-    return llvm.core.Type.pointer(llvm_base_type)
+def pointer(base_type):
+    if base_type.kind == llvm.core.TYPE_VOID:
+        base_type = llvm.core.Type.int(1)
+    return llvm.core.Type.pointer(base_type)
 
 def llvm_float(ts, type):
     if type.itemsize == 4:
@@ -75,5 +72,4 @@ def struct(type):
     return lstruct([field_type.ty
                         for field_name, field_type in type.fields])
 
-pointer = llvm.core.Type.pointer
 function = llvm.core.Type.function
