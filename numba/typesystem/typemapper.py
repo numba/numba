@@ -21,28 +21,6 @@ import numba.typesystem
 def is_dtype_constructor(value):
     return isinstance(value, type) and issubclass(value, np.generic)
 
-def infer_container_type(typemapper, value):
-    assert isinstance(value, (tuple, list, dict))
-
-    if isinstance(value, tuple):
-        container_type = TupleType
-    elif isinstance(value, list):
-        container_type = ListType
-    else:
-        key_type = infer_container_type(typemapper, value.keys())
-        value_type = infer_container_type(typemapper, value.values())
-        return DictType(key_type, value_type, size=len(value))
-
-    if len(value) < 30:
-        # Figure out base type if the container is not too large
-        unify = typemapper.promote_types
-        base_type = reduce(unify, (typemapper.from_python(child)
-                                   for child in value))
-    else:
-        base_type = object_
-
-    return container_type(base_type, size=len(value))
-
 
 class NumbaTypeMapper(minitypes.TypeMapper):
     """
@@ -68,67 +46,6 @@ class NumbaTypeMapper(minitypes.TypeMapper):
             return llvm_types._pyobject_head_struct_p
 
         return super(NumbaTypeMapper, self).to_llvm(type)
-
-    def from_python(self, value):
-        from numba.type_inference import module_type_inference
-
-        if isinstance(value, np.ndarray):
-            dtype = map_dtype(value.dtype)
-            return minitypes.ArrayType(dtype, value.ndim) #,
-                                       #is_c_contig=value.flags['C_CONTIGUOUS'],
-                                       #is_f_contig=value.flags['F_CONTIGUOUS'])
-        elif isinstance(value, np.dtype):
-            return numba.typesystem.from_numpy_dtype(value)
-        elif is_dtype_constructor(value):
-            return numba.typesystem.from_numpy_dtype(np.dtype(value))
-        elif isinstance(value, (tuple, list, dict)):
-            return infer_container_type(self, value)
-        elif isinstance(value, types.ModuleType):
-            return ModuleType(value)
-        # elif isinstance(value, (self.ctypes_func_type, self.ctypes_func_type2)):
-        elif is_ctypes(value):
-            result = from_ctypes_value(value)
-            if result.is_function:
-                pointer = ctypes.cast(value, ctypes.c_void_p).value
-                return PointerFunctionType(value, pointer, result)
-            else:
-                return result
-        elif cffi_support.is_cffi_func(value):
-            signature = cffi_support.get_signature(value)
-            pointer = cffi_support.get_pointer(value)
-            return PointerFunctionType(value, pointer, signature)
-        elif isinstance(value, minitypes.Type):
-            return CastType(dst_type=value)
-        elif hasattr(type(value), '__numba_ext_type'):
-            return getattr(type(value), '__numba_ext_type')
-        elif value is numba.NULL:
-            return null_type
-        elif numbawrapper.is_numba_wrapper(value):
-            return JitType(value)
-        elif isinstance(value, numbawrapper.NumbaSpecializingWrapper):
-            return AutojitType(value)
-        elif hasattr(value, 'from_address') and hasattr(value, 'in_dll'):
-            # Try to detect ctypes pointers, or default to minivect
-            try:
-                ctypes.cast(value, ctypes.c_void_p)
-            except ctypes.ArgumentError:
-                pass
-            else:
-                pass
-                #type = convert_from_ctypes(value)
-                #value = ctypes.cast(value, ctypes.c_void_p).value
-                #return CTypesPointerType(type, valuee
-
-        result_type = super(NumbaTypeMapper, self).from_python(value)
-
-        if result_type == object_ and module_type_inference.is_registered(value):
-            result = module_type_inference.module_attribute_type(value)
-            if result is not None:
-                result_type = result
-            else:
-                result_type = KnownValueType(value)
-
-        return result_type
 
     def promote_types(self, type1, type2, assignment=False):
         have = lambda p1, p2: have_properties(type1, type2, p1, p2)

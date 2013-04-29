@@ -78,13 +78,13 @@ else:
 
 class TypeSystem(object):
 
-    def __init__(self, universe, unifier=None,
+    def __init__(self, universe, promoter=None,
                  constant_typer=None, converters=None):
         self.universe = universe
 
         # Find the least general type that subsumes both given types
         # t1 -> t2 -> t3
-        self.unify_atoms = unifier
+        self.promote = promoter
 
         # Assign types to Python constants (arbitrary python values)
         self.constant_typer = constant_typer
@@ -179,13 +179,23 @@ class Universe(object):
 
 class ConstantTyper(object):
 
-    def __init__(self, universe):
+    def __init__(self, universe, typetable, handler_table):
         "Initialize to the given type universe"
         self.universe = universe
+        self.typetable = typetable          # type(constant) -> type
+        self.handler_table = handler_table  # type(constant) -> handler
 
     def typeof(self, value):
-        "Get a concrete type given a python value"
-        raise NotImplementedError
+        """
+        Get a concrete type given a python value.
+        Return None f this ConstantTyper cannot type the constant
+        """
+        if type(value) in self.typetable:
+            return self.typetable[type(value)]
+        elif type(value) in self.handler_table:
+            return self.handler_table[type(value)](self.universe, value)
+        else:
+            return None
 
 #------------------------------------------------------------------------
 # Type Conversion between type domains
