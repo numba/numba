@@ -1,7 +1,58 @@
 # -*- coding: utf-8 -*-
 
 """
+Inferface for our typesystems.
 
+Some requirements:
+
+1)  The typesystem must allow us to switch between low-level representations.
+    For instance, we may want to represent an array as a NumPy ndarray, a
+    Py_buffer, or some other representation.
+
+2)  The sizes of atom types (e.g. int) must be easily customizable. This allows
+    an interpreter to switch sizes to simulate different platforms.
+
+3)  Type representations and sizes, must be overridable without
+    reimplementing the type. E.g. an atom type can be sliced to create
+    an array type, which should be separate from its low-level representation.
+
+4)  Types should map easily between type domains of the same level, e.g.
+    between the low-level numba and llvm types.
+    Ideally this forms an isomorphism, which is precluded by ctypes and
+    numpy type systems::
+
+       >>> ctypes.c_longlong
+       <class 'ctypes.c_long'>
+
+6)  No type system but our own should be entrenched in any part of the
+    codebase, including the code generator.
+
+7)  Sets of type constructors (type universes) must be composable.
+    For instance, we may want to extend a low-level type systems of ints
+    and pointers with objects to yield a type universe supporting
+    both constructs.
+
+8)  Universes must be re-usable across type-systems. Types of universes
+    represent abstract type concepts, and the type-systems give meaning
+    and representation to values of those types.
+
+9)  Types must be immutable and consed, i.e.
+    ts.pointer(base) is ts.pointer(base) must always be True
+
+10) The use of a certain typesystem must suggest at which level the
+    corresponding terms operate.
+
+11) Conversion code should be written with minimal effort:
+
+        - monotypes should map immediately between domains of the same level
+        - polytypes should naturally re-construct in domains of the same level
+
+    Converting a type to a lower-level domain constitutes a one-way
+    conversion. This should, where possible, constitute a lowering in the
+    same domain followed by a conversion. E.g.:
+
+        def numba_complex_to_llvm(type):
+            return to_llvm(lower_complex(type))
 """
 
 from __future__ import print_function, division, absolute_import
@@ -24,24 +75,18 @@ else:
 @traits
 class TypeSystem(object):
 
-    def __init__(self, universe, atom_unifier, constant_typer, converters):
+    def __init__(self, universe):
         self.universe = universe
 
         # Find the least general type that subsumes both given types
         # t1 -> t2 -> t3
-        self.unify_atoms = atom_unifier
+        self.unify_atoms = None
 
         # Assign types to Python constants (arbitrary python values)
-        self.constant_typer = constant_typer
+        self.constant_typer = None
 
         # Convert between type domains
-        self.converters = converters
-
-        # --- initialize
-        self.universe.init(self)
-        self.constant_typer.init(self)
-        for converter in converters.itervalues():
-            converter.init(self)
+        self.converters = {}
 
     def typeof(self, value):
         return self.constant_typer.typeof(self, value)
@@ -61,28 +106,38 @@ class TypeSystem(object):
 
 class Universe(object):
 
-    kind_sorting = {
-        # KIND -> rank
-    }
-
     polytypes = {
-        # TYPE_KIND -> TypeConstructor
+        # KIND -> TypeConstructor
     }
 
-    def init(self, ts):
-        "Initialize to the given typesystem"
-        # { type_name -> type }
-        monotypes = {}
-        self.construct_monotypes(monotypes)
+    def __init__(self, kind_sorting=None, itemsizes=None):
+        self.kind_sorting = kind_sorting    # KIND -> rank
+        self.itemsizes = itemsizes          # KIND -> itemsize (bytes)
 
-        for name, type in monotypes.iteritems():
+        self.monotypes = {}                 # { type_name -> type }
+        self.make_monotypes(self.monotypes)
+
+        for name, type in self.monotypes.iteritems():
             setattr(self, name, type)
+
+        self.make_polyctors()
 
         # Determine total type ordering
         # self.total_type_order = {}
         # sorted(monotypes.values(), key=lambda t: self.kind_sorting[self.kind(t)])
 
-    def construct_monotypes(self):
+    def make_monotypes(self, ts, monotypes):
+        pass
+
+    def make_polyctors(self):
+        # Create polytype constructors as methods, e.g. 'pointer(basetype)'
+        # Each constructor caches live types
+        for kind in self.polytypes:
+            ctor = self.get_polyconstructor(kind)
+            conser = Conser(ctor)
+            setattr(self, kind, conser.get)
+
+    def construct_monotypes(self, monotypes):
         raise NotImplementedError
 
     def kind(self, type):
@@ -101,33 +156,19 @@ class Universe(object):
         "Determine the rank of the type (for sorting)"
 
     def itemsize(self, type):
-        "Determine the size of the tye in bytes"
-
-    def function(self, restype, argtypes, name=None, is_vararg=False):
-        "Construct a function type"
-
-    def array(self, dtype, ndim,
-              is_c_contig=False,
-              is_f_contig=False,
-              inner_contig=False):
-        "Construct an array type"
-        return self.polytypes[KIND_ARRAY](self, )
-
-    def pointer(self, basetype):
-        "Construct a pointer type of the given base type"
-
-    def carray(self, base_type, size): # TODO: Remove this type
-        "Construct a 1D C array type"
-
-    def struct(self, fields):
-        "Construct a *mutable* struct type (to allow recursive types)"
-
-    def strtype(self, type):
-        "Return a type string representation"
-        if isinstance(type, MonoType):
-            return type.name
+        "Determine the size of the type in bytes"
+        if type.is_mono:
+            return self.itemsizes[type]
+        elif self.kind(type) in self.itemsizes:
+            pass
         else:
-            return "%s(%s)" % (type.kind, ", ".join(map(str, type.params)))
+            raise NotImplementedError(type)
+
+    def get_polyconstructor(self, kind):
+        # type_constructor = self.polytypes[kind]
+        # return type_constructor
+        type_constructor = self.polytypes[kind]
+        return partial(type_constructor, self, kind)
 
 #------------------------------------------------------------------------
 # Typing of Constants
@@ -155,20 +196,38 @@ class TypeConverter(object):
         self.domain = domain
         self.codomain = codomain
 
+        self.polytypes = weakref.WeakKeyDictionary()
+
     def convert(self, type):
         "Return an LLVM type for the given type."
         assert type.ts is self.domain
 
-        if isinstance(type, MonoType):
+        if type.args:
+            return self.convert_polytype(type)
+        else:
             # cotypes = self.codomain.monotypes[type.kind]
             # return cotypes[type.name]
             return getattr(self.codomain, type.name)
-        else:
-            # Deconstruct type from domain
-            params = type.params
-            # Construct type in codomain
-            constructor = getattr(self.codomain, type.kind)
-            return constructor(*params)
+
+    def convert_polytype(self, type):
+        if type in self.polytypes:
+            return self.polytypes[type]
+
+        # Deconstruct type from domain
+        params = type.params
+
+        # Get codomain constructor
+        constructor = getattr(self.codomain, type.kind)
+
+        # Map parameter into codomain
+        c = self.convert_polytype
+        coparams = [c(t) if isinstance(t, Type) else t for t in params]
+
+        # Construct type in codomain
+        result = constructor(*map(self.convert_polytype, params))
+
+        self.polytypes[type] = result
+        return result
 
 #------------------------------------------------------------------------
 # Type Classes
@@ -177,16 +236,62 @@ class TypeConverter(object):
 class Type(object):
     """
     Base type. Specialized to the typesystem it belongs to.
+
+    :param ty: Actual underlying type we are wrapping (e.g. an LLVM type)
+               This allows us to deal with foreign typesystems the same
+               way we deal with our own
     """
 
-    __slots__ = ("__weakref__", "ts", "kind")
+    def __init__(self, kind, params, is_mono=False):
+        self.kind = kind    # Type kind
 
-    def __init__(self, ts, kind):
-        self.ts = ts    # TypeSystem
-        self.kind = kind
+        # don't call this 'args' since we already use that in FunctionType
+        self.params = params
+        self.is_mono = is_mono
+
+        # Build properties that access 'params'
+        # if argnames:
+        #     assert len(params) == len(argnames)
+        #     for i, argname in enumerate(argnames):
+        #         accessor = property(lambda self, i=i: self.params[i])
+        #         setattr(self, argname, accessor)
+
+    # __________________________________________________________________
+    # Type instantiation
+
+    @classmethod
+    def mono(cls, kind, name, ty=None):
+        """
+        Nullary type constructor creating the most elementary of types.
+        Does not compose any other type (in this domain).
+        """
+        return Type(kind, (name, ty), is_mono=True)
+
+    @classmethod
+    def poly(cls, kind, *args):
+        """
+        A type that composes other types.
+        """
+        return Type(kind, args)
+
+    # __________________________________________________________________
+
+    @property
+    def name(self):
+        assert self.is_mono
+        return self.params[0]
+
+    @property
+    def ty(self):
+        assert self.is_mono
+        return self.params[1]
 
     def __repr__(self):
-        return self.ts.universe.strtype(self)
+        if self.is_mono:
+            return self.name
+        else:
+            return "%s(%s)" % (self.kind(self),
+                               ", ".join(map(str, self.params)))
 
     # Hash by identity
     __eq__ = object.__eq__
@@ -197,37 +302,19 @@ class Type(object):
             return self.kind == attr[3:]
         raise AttributeError(attr)
 
-class MonoType(Type):
-    """
-    Nullary type constructor creating the most elementary of types.
-    Does not compose any other type.
-    """
-
-    __slots__ = Type.__slots__ +  ("name",)
-
-    def __init__(self, ts, kind, name):
-        super(MonoType, self).__init__(ts, kind)
-        self.name = name    # Unique name
-
-class PolyType(Type):
-    """
-    A type that composes other types.
-    """
-
-    __slots__ = Type.__slots__ +  ("args",)
-
-    def __init__(self, ts, kind, args):
-        super(PolyType, self).__init__(ts, kind)
-        # don't call this 'args' since we already use that in FunctionType
-        self.params = args
-
 #------------------------------------------------------------------------
 # Type Memoization
 #------------------------------------------------------------------------
 
 class Conser(object):
+    """
+    Conser: constructs new objects only when not already available.
+    Objects are weakreffed to sanitize memory consumption.
 
-    __slots__ = ("type_constructor", "_entries")
+    This allows the objects to be compared by and hashed on identity.
+    """
+
+    __slots__ = ("constructor", "_entries")
 
     def __init__(self, constructor):
         self._entries = weakref.WeakKeyDictionary()
@@ -240,83 +327,3 @@ class Conser(object):
             self._entries[args] = result
 
         return result
-
-class TypeConser(Conser):
-    """
-    Type conser: constructs new types only when not already available.
-    Types are weakreffed to sanitize memory consumption.
-
-    This allows types to be compared by and hashed on identity.
-    """
-
-    def __init__(self, ts, kind, type_constructor):
-        super(TypeConser, self).__init__(partial(type_constructor, ts, kind))
-
-#------------------------------------------------------------------------
-# Type Kinds
-#------------------------------------------------------------------------
-
-KIND_VOID       = "void"
-KIND_INT        = "int"
-KIND_FLOAT      = "float"
-KIND_COMPLEX    = "complex"
-KIND_FUNCTION   = "function"
-KIND_ARRAY      = "array"
-KIND_POINTER    = "pointer"
-KIND_CARRAY     = "carray"
-KIND_STRUCT     = "struct"
-KIND_OBJECT     = "object"
-
-#------------------------------------------------------------------------
-# Default type sizes
-#------------------------------------------------------------------------
-
-# Type sizes in bytes
-default_type_sizes = {
-    # Int
-    "char":         1,
-    "int8":         1,
-    "int16":        2,
-    "int32":        4,
-    "int64":        8,
-    # Unsigned int
-    "uchar":        1,
-    "uint8":        1,
-    "uint16":       2,
-    "uint32":       4,
-    "uint64":       8,
-    # Float
-    "float16":      1,
-    "float32":      2,
-    "float64":      4,
-    "float":        4,
-    "double":       8,
-    # Complex
-    "complex64":    8,
-    "complex128":   16,
-    "complex256":   32,
-}
-
-native_sizes = {
-    # Int
-    "short":        struct.calsize("h"),
-    "int":          struct.calsize("i"),
-    "long":         struct.calsize("l"),
-    "longlong":     struct.calsize("Q"),
-    # Unsigned int
-    "short":        struct.calsize("H"),
-    "int":          struct.calsize("I"),
-    "long":         struct.calsize("L"),
-    "longlong":     struct.calsize("Q"),
-    # Float
-    "longdouble":   ctypes.sizeof(ctypes.c_longdouble),
-    # Pointer
-    "pointer":      ctypes.sizeof(ctypes.c_void_p),
-}
-
-#------------------------------------------------------------------------
-# Default type sizes
-#------------------------------------------------------------------------
-
-class DefaultUniverse(Universe):
-    pass

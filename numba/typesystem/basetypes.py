@@ -13,7 +13,7 @@ import numpy as np
 import numba
 from numba import  error
 import numba.typesystem
-from numba.typesystem.minitypes import *
+from numba.minivect.minitypes import *
 from numba.minivect import minitypes
 
 #------------------------------------------------------------------------

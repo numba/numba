@@ -1,5 +1,12 @@
 import llvm.core
 
+def get_target_triple():
+    target_machine = llvm.ee.TargetMachine.new()
+    is_ppc = target_machine.triple.startswith("ppc")
+    is_x86 = target_machine.triple.startswith("x86")
+    return is_ppc, is_x86
+
+
 def llvm_pointer(ts, type):
     base_type, = type.args
     if base_type.is_void:
@@ -39,49 +46,34 @@ def to_llvm(self, context):
 def to_llvm(self, context):
     return llvm.core.Type.array(self.base_type.to_llvm(context), self.size)
 
-#int
-def to_llvm(self, context):
-        if self.itemsize == 1:
-            return lc.Type.int(8)
-        elif self.itemsize == 2:
-            return lc.Type.int(16)
-        elif self.itemsize == 4:
-            return lc.Type.int(32)
-        else:
-            assert self.itemsize == 8, self
-            return lc.Type.int(64)
-
-    def declare(self):
-        if self.name.endswith(('16', '32', '64')):
-            return self.name + "_t"
-        else:
-            return str(self)
-
 class Universe:
     def bool(self, context):
         return llvm.core.Type.int(1)
 
-    def float(self, context):
-        if self.itemsize == 4:
-            return lc.Type.float()
-        elif self.itemsize == 8:
-            return lc.Type.double()
-        else:
-            is_ppc, is_x86 = get_target_triple()
-            if self.itemsize == 16:
-                if is_ppc:
-                    return lc.Type.ppc_fp128()
-                else:
-                    return lc.Type.fp128()
+def float(itemsize):
+    if itemsize == 4:
+        return llvm.core.Type.float()
+    elif itemsize == 8:
+        return llvm.core.Type.double()
+    else:
+        is_ppc, is_x86 = get_target_triple()
+        if itemsize == 16:
+            if is_ppc:
+                return llvm.core.Type.ppc_fp128()
             else:
-                assert self.itemsize == 10 and is_x86
-                return lc.Type.x86_fp80()
-
-    def struct(self, context):
-        if self.packed:
-            lstruct = llvm.core.Type.packed_struct
+                return llvm.core.Type.fp128()
         else:
-            lstruct = llvm.core.Type.struct
+            assert itemsize == 10 and is_x86, itemsize
+            return llvm.core.Type.x86_fp80()
 
-        return lstruct([field_type.to_llvm(context)
-                           for field_name, field_type in self.fields])
+def struct(type):
+    if type.packed:
+        lstruct = llvm.core.Type.packed_struct
+    else:
+        lstruct = llvm.core.Type.struct
+
+    return lstruct([field_type.ty
+                        for field_name, field_type in type.fields])
+
+pointer = llvm.core.Type.pointer
+function = llvm.core.Type.function

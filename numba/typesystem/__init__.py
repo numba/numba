@@ -4,6 +4,7 @@ from __future__ import print_function, division, absolute_import
 from numba.minivect.minitypes import *
 from numba.minivect.minitypes import (FunctionType)
 
+from .typesystem import *
 from .basetypes import *
 from .closuretypes import *
 from .ssatypes import *
@@ -16,6 +17,13 @@ from .shorthands import *
 
 # from typeset import *
 from .typematch import *
+
+from .universe import *
+
+numba_typesystem = TypeSystem(NumbaUniverse())
+
+# TODO: Remove
+from numba.minivect.minitypes import *
 
 __all__ = minitypes.__all__ + [
     'O', 'b1', 'i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8',

@@ -8,34 +8,27 @@ from __future__ import print_function, division, absolute_import
 
 import math
 import copy
-import struct as struct_
-import textwrap
+import struct
 import ctypes
+import textwrap
+from functools import partial
 
 from numba.typesystem.typesystem import (
-    Universe, Type, MonoType, PolyType, Conser, nbo)
+    Universe, Type, Conser, nbo)
 from numba.typesystem import typesystem
 
 import numpy as np
 import llvm.core
 
-
-atom_type_names = [
-    'Py_ssize_t', 'void', 'char', 'uchar', 'short', 'ushort',
-    'int_', 'uint', 'long_', 'ulong', 'longlong', 'ulonglong',
-    'size_t', 'npy_intp', 'c_string_type', 'bool_', 'object_',
-    'float_', 'double', 'longdouble', 'float32', 'float64', 'float128',
-    'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64',
-    'complex64', 'complex128', 'complex256', 'struct', 'Py_uintptr_t'
+misc_typenames = [
+    'c_string_type', 'object_', 'void', 'struct',
 ]
-
-__all__ = atom_type_names
 
 #------------------------------------------------------------------------
 # User-facing type functionality
 #------------------------------------------------------------------------
 
-def slice_type(ts, type, item):
+def slice_type(universe, type, item):
     """
     Support array type creation by slicing, e.g. double[:, :] specifies
     a 2D strided array of doubles. The syntax is the same as for
@@ -61,15 +54,15 @@ def slice_type(ts, type, item):
             if s.step == 1:
                 step_idx = idx
 
-        return ts.array(type, len(item),
+        return universe.array(type, len(item),
                         is_c_contig=step_idx == len(item) - 1,
                         is_f_contig=step_idx == 0)
     else:
         verify_slice(item)
-        return ts.array(type, 1, is_c_contig=bool(item.step))
+        return universe.array(type, 1, is_c_contig=bool(item.step))
 
 
-def call_type(ts, type, *args):
+def call_type(universe, type, *args):
     """
     Return a new function type when called with type arguments.
     """
@@ -80,7 +73,7 @@ def call_type(ts, type, *args):
         #       minivect)
         return args[0]
 
-    return ts.function(type, args)
+    return universe.function(type, args)
 
 # ______________________________________________________________________
 # Type methods
@@ -98,21 +91,10 @@ default_type_behaviour = {
 def annotate_type(cls):
     for name, meth in default_type_behaviour.iteritems():
         setattr(cls, name, meth)
-
-def make_polytype(typename, names):
-    """
-    Create a new polytype that has named attributes. E.g.
-
-        make_polytype("ArrayType", ["dtype", "ndim"])
-    """
-    # Create parameter accessors
-    typedict = dict([(name, lambda self, i=i: self.params[i])
-                        for i, name in enumerate(names)])
-    return type(typename, (PolyType,), typedict)
-
+    return cls
 
 @annotate_type
-class NumbaMonoType(MonoType):
+class NumbaType(Type):
     """
     MonoType with user-facing methods:
 
@@ -121,21 +103,29 @@ class NumbaMonoType(MonoType):
         conversion: to_llvm/to_ctypes/get_dtype
     """
 
-@annotate_type
-class NumbaPolyType(PolyType):
+def make_polytype(typename, names):
     """
-    PolyType with user-facing methods:
+    Create a new polytype that has named attributes. E.g.
 
-        call: create a function type
-        slice: create an array type
-        conversion: to_llvm/to_ctypes/get_dtype
+        make_polytype("ArrayType", ["dtype", "ndim"])
     """
+    def __init__(self, ts, kind, params):
+        assert len(params) == len(names), polyctor
+        super(polyctor, self).__init__(ts, kind, params)
+
+    # Create parameter accessors
+    typedict = dict([(name, lambda self, i=i: self.params[i])
+                     for i, name in enumerate(names)])
+    typedict["__init__"] = __init__
+
+    polyctor = type(typename, (NumbaType,), typedict)
+    return polyctor
 
 #------------------------------------------------------------------------
 # Type constructors
 #------------------------------------------------------------------------
 
-class ArrayType(NumbaPolyType):
+class ArrayType(NumbaType):
     """
     An array type. ArrayType may be sliced to obtain a subtype:
 
@@ -151,21 +141,23 @@ class ArrayType(NumbaPolyType):
     """
 
     is_array = True
+    argnames = ("dtype", "ndim", "is_c_contig", "is_f_contig", "inner_contig")
 
-    def __init__(self, ts, kind, dtype, ndim,
-                 is_c_contig, is_f_contig, inner_contig):
-        super(ArrayType, self).__init__(ts, kind)
+    def __init__(self, ts, kind, *args, **kwargs):
+        params = self._make_params(*args, **kwargs)
+        super(ArrayType, self).__init__(ts, kind, params,
+                                        argnames=self.argnames)
 
+    def _make_params(self, dtype, ndim,
+                     is_c_contig=False, is_f_contig=False, inner_contig=False):
         assert dtype is not None
-        self.dtype = dtype
-        self.ndim = ndim
 
-        # Flags
         if ndim == 1 and (is_c_contig or is_f_contig):
-            self.is_c_contig = True
-            self.is_f_contig = True
+            is_c_contig = True
+            is_f_contig = True
 
-        self.inner_contig = inner_contig or is_c_contig or is_f_contig
+        inner_contig = inner_contig or is_c_contig or is_f_contig
+        return (dtype, ndim, is_c_contig, is_f_contig, inner_contig)
 
     def pointer(self):
         raise Exception("You probably want a pointer type to the dtype")
@@ -229,96 +221,6 @@ class ArrayType(NumbaPolyType):
 PointerType = make_polytype("PointerType", ["base_type"])
 CArrayType = make_polytype("CArrayType", ["base_type"])
 
-
-
-class FloatType(NumericType):
-    is_float = True
-
-    kind = FLOAT_KIND
-
-    def declare(self):
-        if self.itemsize == 4:
-            return "float"
-        elif self.itemsize == 8:
-            return "double"
-        else:
-            return str(self)
-
-    @property
-    def comparison_type_list(self):
-        return self.subtype_list + [self.itemsize]
-
-    def __eq__(self, other):
-        return isinstance(other, FloatType) and self.itemsize == other.itemsize
-
-    __hash__ = NumericType.__hash__
-
-
-
-class ComplexType(NumericType):
-    is_complex = True
-    subtypes = ['base_type']
-
-    kind = COMPLEX_KIND
-
-class Py_ssize_t_Type(IntType):
-    is_py_ssize_t = True
-    name = "Py_ssize_t"
-    rank = 9
-    signed = True
-
-    def __init__(self, **kwds):
-        super(Py_ssize_t_Type, self).__init__(**kwds)
-        if have_ctypes:
-            if hasattr(ctypes, 'c_ssize_t'):
-                self.itemsize = ctypes.sizeof(ctypes.c_ssize_t)
-            else:
-                self.itemsize = size_t.itemsize
-        else:
-            self.itemsize = _plat_bits // 8
-
-
-class NPyIntp(IntType):
-    is_numpy_intp = True
-    name = "npy_intp"
-    rank = 10
-
-    def __init__(self, **kwds):
-        super(NPyIntp, self).__init__(**kwds)
-        ctypes_array = np.empty(0).ctypes.strides
-        self.itemsize = ctypes.sizeof(ctypes_array._type_)
-
-class CharType(IntType):
-    is_char = True
-    name = "char"
-    rank = 1
-    signed = True
-
-    def to_llvm(self, context):
-        return lc.Type.int(8)
-
-class CStringType(Type):
-    is_c_string = True
-
-    def __repr__(self):
-        return "const char *"
-
-    def to_llvm(self, context):
-        return char.pointer().to_llvm(context)
-
-class VoidType(NamedType):
-    is_void = True
-    name = "void"
-
-    def to_llvm(self, context):
-        return lc.Type.void()
-
-class ObjectType(Type):
-    is_object = True
-    itemsize = VoidType().pointer().itemsize
-
-    def __repr__(self):
-        return "PyObject *"
 
 def pass_by_ref(type):
     return type.is_struct or type.is_complex
@@ -410,8 +312,6 @@ class FunctionType(Type):
         func, = args
         return Function(self, func)
 
-
-
 def _sort_types_key(field_type):
     if field_type.is_complex:
         return field_type.base_type.rank * 2
@@ -447,7 +347,10 @@ def sort_types(types_dict):
 
     return fields
 
-class StructType(Type):
+_StructType = make_polytype(
+    "_StructType", ["fields", "name", "readonly", "packed"])
+
+class StructType(_StructType):
     """
     Create a struct type. Fields may be ordered or unordered. Unordered fields
     will be ordered from big types to small types (for better alignment).
@@ -469,9 +372,10 @@ class StructType(Type):
 
     is_struct = True
 
-    def __init__(self, fields=(), name=None,
+    def __init__(self, ts, kind, fields=(), name=None,
                  readonly=False, packed=False, **kwargs):
-        super(StructType, self).__init__()
+        super(StructType, self).__init__(ts, kind)
+
         if fields and kwargs:
             raise TypeError("The struct must be either ordered or unordered")
 
@@ -527,107 +431,32 @@ class StructType(Type):
         return getattr(ctype, field_name).offset
 
 
-def getsize(ctypes_name, default):
-    try:
-        return ctypes.sizeof(getattr(ctypes, ctypes_name))
-    except ImportError:
-        return default
-
-def get_target_triple():
-    target_machine = llvm.ee.TargetMachine.new()
-    is_ppc = target_machine.triple.startswith("ppc")
-    is_x86 = target_machine.triple.startswith("x86")
-    return is_ppc, is_x86
-
-#
-### Internal types
-#
-c_string_type = CStringType()
-void = VoidType()
-
-#
-### Public types
-#
-try:
-    npy_intp = NPyIntp()
-except ImportError:
-    npy_intp = None
-
-size_t = IntType(name="size_t", rank=8.5,
-                 itemsize=getsize('c_size_t', _plat_bits // 8), signed=False)
-Py_ssize_t = Py_ssize_t_Type()
-Py_uintptr_t = IntType(name='Py_uintptr_t',
-                       itemsize=getsize('c_void_p', Py_ssize_t.itemsize),
-                       rank=8.5)
-
-char = CharType(name="char", typecode='b')
-short = IntType(name="short", rank=2, typecode='h')
-int_ = IntType(name="int", rank=4, typecode='i')
-long_ = IntType(name="long", rank=5, typecode='l')
-longlong = IntType(name="PY_LONG_LONG", rank=8, typecode='q')
-
-uchar = CharType(name="unsigned char", signed=False, typecode='B')
-ushort = IntType(name="unsigned short", rank=2.5,
-                 typecode='H', signed=False)
-uint = IntType(name="unsigned int", rank=4.5, typecode='I', signed=False)
-ulong = IntType(name="unsigned long", rank=5.5, typecode='L', signed=False)
-ulonglong = IntType(name="unsigned PY_LONG_LONG", rank=8.5,
-                    typecode='Q', signed=False)
-
-float_ = FloatType(name="float", rank=20, itemsize=4)
-double = FloatType(name="double", rank=21, itemsize=8)
-longdouble = FloatType(name="long double", rank=22,
-                       itemsize=ctypes.sizeof(ctypes.c_longdouble))
-
-bool_ = BoolType()
-object_ = ObjectType()
-
-int8 = IntType(name="int8", rank=1, itemsize=1)
-int16 = IntType(name="int16", rank=2, itemsize=2)
-int32 = IntType(name="int32", rank=4, itemsize=4)
-int64 = IntType(name="int64", rank=8, itemsize=8)
-
-uint8 = IntType(name="uint8", rank=1.5, signed=False, itemsize=1)
-uint16 = IntType(name="uint16", rank=2.5, signed=False, itemsize=2)
-uint32 = IntType(name="uint32", rank=4.5, signed=False, itemsize=4)
-uint64 = IntType(name="uint64", rank=8.5, signed=False, itemsize=8)
-
-float32 = FloatType(name="float32", rank=20, itemsize=4)
-float64 = FloatType(name="float64", rank=21, itemsize=8)
-float128 = FloatType(name="float128", rank=22, itemsize=16)
-
-complex64 = ComplexType(name="complex64", base_type=float32,
-                        rank=30, itemsize=8)
-complex128 = ComplexType(name="complex128", base_type=float64,
-                         rank=31, itemsize=16)
-complex256 = ComplexType(name="complex256", base_type=float128,
-                         rank=32, itemsize=32)
 
 integral = []
 native_integral = []
 floating = []
 complextypes = []
 
-for typename in __all__:
-    minitype = globals()[typename]
-    if minitype is None:
-        continue
-
-    if minitype.is_int:
-        integral.append(minitype)
-    elif minitype.is_float:
-        floating.append(minitype)
-    elif minitype.is_complex:
-        complextypes.append(minitype)
-
-numeric = integral + floating + complextypes
-native_integral.extend((Py_ssize_t, size_t))
-
-integral.sort(key=_sort_types_key)
-native_integral = [minitype for minitype in integral
-                                if minitype.typecode is not None]
-floating.sort(key=_sort_types_key)
-complextypes.sort(key=_sort_types_key)
+# for typename in __all__:
+#     minitype = globals()[typename]
+#     if minitype is None:
+#         continue
+#
+#     if minitype.is_int:
+#         integral.append(minitype)
+#     elif minitype.is_float:
+#         floating.append(minitype)
+#     elif minitype.is_complex:
+#         complextypes.append(minitype)
+#
+# numeric = integral + floating + complextypes
+# native_integral.extend((Py_ssize_t, size_t))
+#
+# integral.sort(key=_sort_types_key)
+# native_integral = [minitype for minitype in integral
+#                                 if minitype.typecode is not None]
+# floating.sort(key=_sort_types_key)
+# complextypes.sort(key=_sort_types_key)
 
 
 
@@ -672,31 +501,6 @@ class DefaultConstantTyper(object):
         else:
             return object_
 
-
-class NumbaUniverse(Universe):
-
-    # typename -> type
-    ints = {}
-    uints = {}
-    floats = {}
-    complexes = {}
-
-    functions = Conser()
-    arrays = Conser()
-    pointers = Conser()
-    carrays = Conser()
-
-    def init(self, ts):
-        for name in atom_type_names:
-            type = MonoType(ts, kind, name)
-            setattr(self, name, type)
-            self.monotypes[name] = type
-
-    function = FunctionType
-    array = ArrayType
-    pointer = PointerType
-    carray = CArrayType
-    struct = struct
 
 
 class AtomUnification(object):
@@ -747,42 +551,8 @@ class AtomUnification(object):
         elif type1.is_bool and type2.is_bool:
             return bool_
         else:
-            raise minierror.UnpromotableTypeError((type1, type2))
+            raise TypeError((type1, type2))
 
-
-def get_utility():
-    import numpy
-
-    return textwrap.dedent("""\
-    #include <stdint.h>
-
-    #ifndef HAVE_LONGDOUBLE
-        #define HAVE_LONGDOUBLE %d
-    #endif
-
-    typedef struct {
-        float real;
-        float imag;
-    } complex64;
-
-    typedef struct {
-        double real;
-        double imag;
-    } complex128;
-
-    #if HAVE_LONGDOUBLE
-    typedef struct {
-        long double real;
-        long double imag;
-    } complex256;
-    #endif
-
-    typedef float float32;
-    typedef double float64;
-    #if HAVE_LONGDOUBLE
-    typedef long double float128;
-    #endif
-    """ % hasattr(numpy, 'complex256'))
 
 if __name__ == '__main__':
     import doctest
