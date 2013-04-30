@@ -8,7 +8,7 @@ from __future__ import print_function, division, absolute_import
 
 from functools import partial
 
-from numba.typesystem.typesystem import TypeConverter, convert_mono, convert_poly
+from numba.typesystem import typesystem
 from numba.typesystem.kinds import *
 
 def create_type_lowerer(table, domain, codomain):
@@ -16,14 +16,14 @@ def create_type_lowerer(table, domain, codomain):
     Create a type lowerer from a domain to a codomain given a lowering table.
     """
     def convert_mono(domain, codomain, type):
-        ctor = table.get(type.name, convert_mono)
+        ctor = table.get(type.name, typesystem.convert_mono)
         return ctor(domain, codomain, type)
 
     def convert_poly(domain, codomain, type, params):
-        ctor = table.get(type.kind, convert_poly)
+        ctor = table.get(type.kind, typesystem.convert_poly)
         return ctor(domain, codomain, type, params)
 
-    return TypeConverter(domain, codomain, convert_mono, convert_poly)
+    return typesystem.TypeConverter(domain, codomain, convert_mono, convert_poly)
 
 #------------------------------------------------------------------------
 # Lowering functions
@@ -31,7 +31,7 @@ def create_type_lowerer(table, domain, codomain):
 
 def lower_complex(domain, codomain, type, params):
     base_type, = params
-    return codomain.struct([base_type, base_type])
+    return codomain.struct([('real', base_type), ('imag', base_type)])
 
 #------------------------------------------------------------------------
 # Default Lowering Table

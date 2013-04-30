@@ -39,8 +39,16 @@ def test_arrays():
     assert A is not C
     assert A is not D
 
+def test_complex():
+    assert ts.complex(ts.float) is ts.complex64
+    assert ts.complex(ts.double) is ts.complex128
+    assert ts.complex(ts.longdouble) is ts.complex256
+
+    assert str(ts.complex128) == "complex(double)"
+
 if __name__ == "__main__":
     test_pointers()
     test_functions()
     test_struct()
     test_arrays()
+    test_complex()

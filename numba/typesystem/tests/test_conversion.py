@@ -40,7 +40,16 @@ def test_functions():
     lfunctype = lts.function(lts.int, (lts.float,))
     assert llvmt(functype) == lfunctype
 
+def test_complex():
+    c1 = llvmt(ts.complex128)
+    c2 = lts.struct([('real', lts.double), ('imag', lts.double)])
+    c3 = lts.struct([('real', lts.double), ('imag', lts.double)])
+    assert c1 == c2
+    # assert c1 is c2
+    assert c2 is c3
+
 if __name__ == "__main__":
     test_numeric_conversion()
     test_pointers()
     test_functions()
+    test_complex()

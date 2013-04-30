@@ -203,11 +203,16 @@ class NumbaUniverse(Universe):
 
     polytypes = {
         KIND_ARRAY: ArrayType,
+        KIND_COMPLEX: ComplexType,
     }
 
     def __init__(self, *args, **kwargs):
         self.polytypes.update(self.lowlevel_universe.polytypes)
         super(NumbaUniverse, self).__init__(*args, **kwargs)
+
+        self.complex64 = self.complex(self.float)
+        self.complex128 = self.complex(self.double)
+        self.complex256 = self.complex(self.longdouble)
 
     def make_monotypes(self, monotypes):
         monotypes.update(self.lowlevel_universe.monotypes)

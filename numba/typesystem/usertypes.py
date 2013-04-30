@@ -176,9 +176,8 @@ class PointerType(make_polytype(KIND_POINTER, ["base_type"])):
         space = " " * (not self.base_type.is_pointer)
         return "%s%s*" % (self.base_type, space)
 
-class CArrayType(make_polytype(KIND_CARRAY, ["base_type", "size"])):
-    def __repr__(self):
-        return "%s[%d]" % (self.base_type, self.size)
+CArrayType = make_polytype(KIND_CARRAY, ["base_type", "size"])
+ComplexType = make_polytype(KIND_COMPLEX, ["base_type"])
 
 # ______________________________________________________________________
 # Function

@@ -13,6 +13,7 @@ from numba.typesystem.typesystem import (
     Universe, Type, Conser, nbo, ConstantTyper, TypeConverter, TypeSystem)
 from numba.typesystem.usertypes import *
 from numba.typesystem import constants
+from numba.typesystem import lowering
 
 import numpy as np
 
@@ -93,7 +94,7 @@ class DefaultPromoter(object):
                        is_f_contig=(equal_ndim and type1.is_f_contig and
                                     type2.is_f_contig))
 
-    def unify(self, type1, type2):
+    def promote(self, type1, type2):
         "Promote two arbitrary types"
         u = self.universe
 
@@ -116,23 +117,46 @@ class DefaultPromoter(object):
         else:
             raise TypeError((type1, type2))
 
+#------------------------------------------------------------------------
+# Defaults initialization
+#------------------------------------------------------------------------
+
+def compose(f, g):
+    return lambda x: f(g(x))
+
+# ______________________________________________________________________
+# Universes
 
 numba_universe = universe.NumbaUniverse()
 llvm_universe = universe.LLVMUniverse()
 
+# ______________________________________________________________________
+# Converters
+
+default_type_lowerer = lowering.create_type_lowerer(
+    lowering.default_lowering_table, numba_universe, numba_universe)
+to_llvm_converter = TypeConverter(numba_universe, llvm_universe)
+
+lower = default_type_lowerer.convert
+to_llvm = to_llvm_converter.convert
+
 default_converters = {
-    "llvm": TypeConverter(numba_universe, llvm_universe),
+    "llvm": compose(to_llvm, lower),
 }
+
+# ______________________________________________________________________
+# Typesystems
 
 numba_typesystem = TypeSystem(
     numba_universe,
-    DefaultPromoter(numba_universe),
+    DefaultPromoter(numba_universe).promote,
     None,
     default_converters)
 
-numba_typesystem.constant_typer = DefaultConstantTyper(numba_universe)
-
+numba_typesystem.typeof = DefaultConstantTyper(numba_universe).typeof
 llvm_typesystem = TypeSystem(llvm_universe)
+
+# ______________________________________________________________________
 
 integral = []
 native_integral = []

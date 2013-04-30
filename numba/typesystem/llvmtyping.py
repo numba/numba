@@ -32,14 +32,13 @@ def lfloat(name, itemsize):
             assert itemsize == 10 and is_x86, itemsize
             return llvm.core.Type.x86_fp80()
 
-def lstruct(type):
-    if type.packed:
-        lstruct = llvm.core.Type.packed_struct
+def lstruct(fields, name=None, readonly=False, packed=False):
+    if packed:
+        struct = llvm.core.Type.packed_struct
     else:
-        lstruct = llvm.core.Type.struct
+        struct = llvm.core.Type.struct
 
-    return lstruct([field_type.ty
-                        for field_name, field_type in type.fields])
+    return struct([field_type for field_name, field_type in fields])
 
 def lpointer(base_type):
     if base_type.kind == llvm.core.TYPE_VOID:

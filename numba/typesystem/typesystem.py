@@ -93,8 +93,8 @@ class TypeSystem(object):
         self.converters = converters or {}
 
     def convert(self, codomain_name, type):
-        converter = self.converters[codomain_name]
-        return converter.convert(type)
+        convert = self.converters[codomain_name]
+        return convert(type)
 
     def __getattr__(self, attr):
         return getattr(self.universe, attr)
@@ -193,18 +193,6 @@ class ConstantTyper(object):
 # Type Conversion between type domains
 #------------------------------------------------------------------------
 
-def convert_params(convert, params):
-    coparams = []
-    for t in params:
-        if isinstance(t, Type):
-            coparams.append(convert(t))
-        elif isinstance(t, (tuple, list)):
-            coparams.append(tuple(map(convert, t)))
-        else:
-            coparams.append(t)
-
-    return coparams
-
 def convert_mono(domain, codomain, type):
     return getattr(codomain, type.name)
 
@@ -227,7 +215,11 @@ class TypeConverter(object):
 
     def convert(self, type):
         "Return an LLVM type for the given type."
-        if type.is_mono:
+        if isinstance(type, (tuple, list)):
+            return tuple(map(self.convert, type))
+        elif not isinstance(type, Type):
+            return type
+        elif type.is_mono:
             return self.convert_mono(type)
         else:
             return self.convert_polytype(type)
@@ -236,11 +228,8 @@ class TypeConverter(object):
         if type in self.polytypes:
             return self.polytypes[type]
 
-        # Map parameters into codomain
-        coparams = convert_params(self.convert, type.params)
-
         # Construct polytype in codomain
-        result = self.convert_poly(type, coparams)
+        result = self.convert_poly(type, map(self.convert, type.params))
 
         self.polytypes[type] = result
         return result
