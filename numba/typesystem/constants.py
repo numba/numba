@@ -9,6 +9,7 @@ from __future__ import print_function, division, absolute_import
 import math
 import types
 import ctypes
+from functools import partial
 
 import numba.typesystem
 from numba.typesystem import typesystem
@@ -46,6 +47,8 @@ def get_default_typing_rules(u, typeof, promote):
 
     :param u: The type universe
     """
+    from numba.support import numpy_support
+
     table = {}
     def register(*classes):
         def dec(func):
@@ -71,7 +74,6 @@ def get_default_typing_rules(u, typeof, promote):
     @register(np.ndarray)
     def type_ndarray(value):
         if isinstance(value, np.ndarray):
-            from numba.support import numpy_support
             dtype = numpy_support.map_dtype(value.dtype)
             return u.array(dtype, value.ndim)
                            #is_c_contig=value.flags['C_CONTIGUOUS'],
@@ -99,11 +101,19 @@ def get_default_typing_rules(u, typeof, promote):
 
         return container_type(base_type, size=len(value))
 
-    table[np.dtype] = lambda value: from_numpy_dtype(value)
+    table[np.dtype] = lambda value: numpy_support.map_dtype(value)
     table[types.ModuleType] = lambda value: u.module(value)
     table[typesystem.Type] = lambda value: u.metatype(value)
 
     return table
+
+def get_constant_typer(universe, typeof, promote):
+    """
+    Get a function mapping values to types, which returns None if unsuccessful.
+    """
+    typetable = get_typing_defaults(universe)
+    handler_table = get_default_typing_rules(universe, typeof, promote)
+    return typesystem.ConstantTyper(universe, typetable, handler_table).typeof
 
 #------------------------------------------------------------------------
 # Constant matching ({ pyval -> bool : pyval -> Type })
@@ -145,9 +155,10 @@ is_NULL = lambda value: value is numba.NULL
 is_autojit_func = lambda value: isinstance(
     value, numbawrapper.NumbaSpecializingWrapper)
 
-def get_default_match_table(ts):
-    u = ts.universe
-
+def get_default_match_table(u):
+    """
+    Get a matcher table: { (type -> bool) : (value -> type) }
+    """
     table = {
         is_dtype_constructor:
             lambda value: numba.typesystem.from_numpy_dtype(np.dtype(value)),
@@ -167,8 +178,32 @@ def get_default_match_table(ts):
 
     return table
 
+def find_match(matchtable, value):
+    for matcher, typefunc in matchtable.iteritems():
+        if matcher(value):
+            result = typefunc(value)
+            assert result is not None
+            return result
 
-def get_constant_typer(universe, typeof, promote):
-    typetable = get_typing_defaults(universe)
-    handler_table = get_default_typing_rules(universe, typeof, promote)
-    return typesystem.ConstantTyper(universe, typetable, handler_table)
+    return None
+
+#------------------------------------------------------------------------
+# Typeof
+#------------------------------------------------------------------------
+
+def object_typer(universe):
+    return universe.object
+
+def find_first(callables, value):
+    for callable in callables:
+        result = callable(value)
+        if result is not None:
+            return result
+
+    assert False, (callables, value)
+
+def get_default_typeof(universe, promote):
+    typeof1 = get_constant_typer(universe, get_default_typeof, promote)
+    typeof2 = partial(find_match, get_default_match_table(universe))
+    typeof3 = partial(object_typer, universe)
+    return partial(find_first, [typeof1, typeof2, typeof3])

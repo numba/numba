@@ -8,26 +8,9 @@ except ImportError:
 import math
 
 import numpy as np
-# from numpy.ctypeslib import _typecodes
 
-import numba
-from numba import  error
-import numba.typesystem
-from numba.minivect.minitypes import *
-from numba.minivect import minitypes
+from numba.typesystem.universe import NumbaUniverse, NumbaType
 
-#------------------------------------------------------------------------
-# Numba's extension of the minivect type system
-#------------------------------------------------------------------------
-
-# Patch repr of objects to print "object_" instead of "PyObject *"
-minitypes.ObjectType.__repr__ = lambda self: "object_"
-
-class NumbaType(minitypes.Type):
-    is_numba_type = True
-
-class NumbaKeyHashingType(minitypes.KeyHashingType):
-    is_numba_type = True
 
 #------------------------------------------------------------------------
 # Python Types
