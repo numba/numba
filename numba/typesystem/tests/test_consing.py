@@ -2,10 +2,7 @@
 
 from __future__ import print_function, division, absolute_import
 
-from functools import partial
-
-from numba.typesystem import typesystem, universe
-from numba.typesystem import numba_typesystem as ts, llvm_typesystem as lts
+from numba.typesystem import numba_typesystem as ts
 
 def test_pointers():
     assert ts.pointer(ts.int) is ts.pointer(ts.int)
@@ -27,6 +24,23 @@ def test_functions():
     assert functype4 is functype5
     assert functype4 is not functype6
 
+def test_struct():
+    s1 = ts.struct([('a', ts.int), ('b', ts.float)])
+    s2 = ts.struct([('a', ts.int), ('b', ts.float)])
+    assert s1 is not s2
+
+def test_arrays():
+    A = ts.array(ts.double, 1)
+    B = ts.array(ts.double, 1)
+    C = ts.array(ts.float, 1)
+    D = ts.array(ts.double, 2)
+
+    assert A is B
+    assert A is not C
+    assert A is not D
+
 if __name__ == "__main__":
     test_pointers()
     test_functions()
+    test_struct()
+    test_arrays()

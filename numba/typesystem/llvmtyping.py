@@ -72,4 +72,5 @@ def struct(type):
     return lstruct([field_type.ty
                         for field_name, field_type in type.fields])
 
-function = llvm.core.Type.function
+def function(rettype, argtypes, name=None, is_vararg=False):
+    return llvm.core.Type.function(rettype, argtypes, is_vararg)

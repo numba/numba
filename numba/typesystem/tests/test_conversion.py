@@ -7,8 +7,6 @@ from functools import partial
 from numba.typesystem import typesystem, universe
 from numba.typesystem import numba_typesystem as ts, llvm_typesystem as lts
 
-import llvm.core
-
 llvmt = partial(ts.convert, "llvm")
 
 typenames = universe.int_typenames + universe.float_typenames + ["void"]
@@ -36,9 +34,8 @@ def test_pointers():
 
 def test_functions():
     functype = ts.function(ts.int, (ts.float,))
-    assert str(functype) == "int (*)(float)", functype
-    functype = ts.function(ts.int, (ts.float,), "hello")
-    assert str(functype) == "int (*hello)(float)", functype
+    lfunctype = lts.function(lts.int, (lts.float,))
+    assert llvmt(functype) == lfunctype
 
 if __name__ == "__main__":
     test_numeric_conversion()

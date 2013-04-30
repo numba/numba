@@ -6,20 +6,11 @@
 
 from __future__ import print_function, division, absolute_import
 
-import math
-import copy
 import struct
-import ctypes
-import textwrap
-from functools import partial
 
 from numba.typesystem.typesystem import (
     Universe, Type, Conser, nbo, ConstantTyper, TypeConverter)
-from numba.typesystem import typesystem
 from numba.typesystem.kinds import *
-
-import numpy as np
-import llvm.core
 
 misc_typenames = [
     'c_string_type', 'object_', 'void', 'struct',
@@ -95,11 +86,6 @@ def make_polytype(kind, names, defaults=()):
         make_polytype("array", ["dtype", "ndim"])
     """
     def __init__(self, *params):
-        params = list(params)
-        for name in names[len(params):]:
-            if name not in defaults:
-                raise TypeError("Constructor '%s' requires %d arguments (got %d)" % (len(params)))
-            defaults[name]
         assert len(params) == len(names), polyctor
         super(polyctor, self).__init__(kind, params)
 

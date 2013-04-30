@@ -111,14 +111,10 @@ class TypeSystem(object):
 
 class Universe(object):
 
-    polytypes = {
-        # KIND -> TypeConstructor
-    }
+    polytypes = None # KIND -> TypeConstructor
 
-    def __init__(self, kind_sorting=None, itemsizes=None):
-        self.kind_sorting = kind_sorting    # KIND -> rank
+    def __init__(self, itemsizes=None):
         self.itemsizes = itemsizes          # KIND -> itemsize (bytes)
-
         self.monotypes = {}                 # { type_name -> type }
         self.make_monotypes(self.monotypes)
 
@@ -231,9 +227,16 @@ class TypeConverter(object):
         # Get codomain constructor
         constructor = getattr(self.codomain, type.kind)
 
-        # Map parameter into codomain
+        # Map parameters into codomain
         c = self.convert
-        coparams = [c(t) if isinstance(t, Type) else t for t in params]
+        coparams = []
+        for t in params:
+            if isinstance(t, Type):
+                coparams.append(c(t))
+            elif isinstance(t, (tuple, list)):
+                coparams.append(tuple(map(c, t)))
+            else:
+                coparams.append(t)
 
         # Construct type in codomain
         result = constructor(*coparams)

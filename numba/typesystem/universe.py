@@ -1,25 +1,21 @@
 # -*- coding: utf-8 -*-
 
 """
-
+Universes of type constructors for numba.
 """
 
 from __future__ import print_function, division, absolute_import
 
-import math
-import copy
 import struct
 import ctypes
-import textwrap
-from functools import partial
 
-from numba.typesystem.typesystem import (
-    Universe, Type, Conser, nbo)
-from numba.typesystem import typesystem
+from numba.typesystem.typesystem import Universe
 from numba.typesystem.usertypes import *
-from numba.typesystem.kinds import *
 from numba.typesystem import llvmtyping
 
+import llvm.core
+
+import numpy as np
 
 int_typenames = [
     'char', 'uchar', 'short', 'ushort', 'int', 'uint', 'long', 'ulong',
@@ -130,14 +126,16 @@ class LowLevelUniverse(Universe):
         KIND_FUNCTION: FunctionType, # method 'function'
     }
 
-    def __init__(self, kind_sorting=None, itemsizes=None):
-        super(LowLevelUniverse, self).__init__(kind_sorting,
-                                               itemsizes or default_type_sizes)
+    def __init__(self, itemsizes=None):
+        super(LowLevelUniverse, self).__init__(itemsizes or default_type_sizes)
 
     def make_monotypes(self, monotypes):
         for kind, typenames in self.monokind_to_typenames.iteritems():
             for typename in typenames:
                 monotypes[typename] = mono(kind, typename)
+
+    def rank(self, type):
+        return 0 # TODO: implement
 
     def struct(self, fields=(), name=None, readonly=False, packed=False, **kwargs):
         if fields and kwargs:
@@ -180,19 +178,19 @@ class LLVMUniverse(Universe):
         KIND_FUNCTION: llvm_poly(llvmtyping.function),
     }
 
-    def __init__(self, kind_sorting=None, itemsizes=None):
+    def __init__(self, itemsizes=None):
         itemsizes = itemsizes or default_type_sizes
-        self.lluniverse = LowLevelUniverse(kind_sorting, itemsizes=itemsizes)
-        super(LLVMUniverse, self).__init__(kind_sorting, itemsizes)
+        super(LLVMUniverse, self).__init__(itemsizes)
 
     def make_monotypes(self, monotypes):
-        itemsize = lambda name: self.lluniverse.itemsize(
-            getattr(self.lluniverse, name))
+        lluniverse = LowLevelUniverse(itemsizes=self.itemsizes)
+        itemsize = lambda name: lluniverse.itemsize(getattr(lluniverse, name))
 
         for typename in int_typenames:
             monotypes[typename] = llvm.core.Type.int(itemsize(typename) * 8)
         for typename in float_typenames:
             monotypes[typename] = llvmtyping.float(itemsize(typename))
+
         monotypes["void"] = llvm.core.Type.void()
 
 #------------------------------------------------------------------------
@@ -203,14 +201,21 @@ class NumbaUniverse(Universe):
 
     lowlevel_universe = lowlevel_universe
 
+    polytypes = {
+        KIND_ARRAY: ArrayType,
+    }
+
     def __init__(self, *args, **kwargs):
-        super(NumbaUniverse, self).__init__(*args, **kwargs)
         self.polytypes.update(self.lowlevel_universe.polytypes)
+        super(NumbaUniverse, self).__init__(*args, **kwargs)
 
     def make_monotypes(self, monotypes):
         monotypes.update(self.lowlevel_universe.monotypes)
         for name in complex_typenames:
             setattr(self, name, mono(KIND_COMPLEX, name))
 
-    def __getattr__(self, attr):
-        return getattr(self.lowlevel_universe, attr)
+    def struct(self, *args, **kwargs):
+        return self.lowlevel_universe.struct(*args, **kwargs)
+
+    # def __getattr__(self, attr):
+    #     return getattr(self.lowlevel_universe, attr)
