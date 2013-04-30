@@ -32,6 +32,15 @@ def test_pointers():
     p = ts.pointer(ts.pointer(ts.int))
     assert llvmt(p) == lts.pointer(lts.pointer(lts.int))
 
+    assert str(p) == "int **"
+
+def test_functions():
+    functype = ts.function(ts.int, (ts.float,))
+    assert str(functype) == "int (*)(float)", functype
+    functype = ts.function(ts.int, (ts.float,), "hello")
+    assert str(functype) == "int (*hello)(float)", functype
+
 if __name__ == "__main__":
     test_numeric_conversion()
     test_pointers()
+    test_functions()

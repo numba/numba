@@ -139,7 +139,10 @@ class Universe(object):
         # Each constructor caches live types
         for kind in self.polytypes:
             ctor = self.get_polyconstructor(kind)
-            conser = Conser(ctor)
+            if isinstance(ctor, type) and issubclass(ctor, Type):
+                conser = TypeConser(ctor) # Use a conser that tracks defaults
+            else:
+                conser = Conser(ctor)
             setattr(self, kind, conser.get)
 
     def construct_monotypes(self, monotypes):
@@ -170,8 +173,7 @@ class Universe(object):
             raise NotImplementedError(type)
 
     def get_polyconstructor(self, kind):
-        type_constructor = self.polytypes[kind]
-        return partial(type_constructor, kind)
+        return self.polytypes[kind]
 
 #------------------------------------------------------------------------
 # Typing of Constants
@@ -273,6 +275,11 @@ class Type(object):
         """
         return Type(kind, args)
 
+    @classmethod
+    def default_args(cls, args, kwargs):
+        "Add defaults to a given args tuple for type construction"
+        return args
+
     # __________________________________________________________________
 
     @property
@@ -303,18 +310,6 @@ class Type(object):
 #------------------------------------------------------------------------
 # Type Memoization
 #------------------------------------------------------------------------
-class WeakrefTuple(object):
-    def __init__(self, args):
-        self.args = args
-
-    def __eq__(self, other):
-        return self.args == other
-
-    def __ne__(self, other):
-        return self.args != other
-
-    def __hash__(self):
-        return hash(self.args)
 
 class Conser(object):
     """
@@ -327,14 +322,29 @@ class Conser(object):
     __slots__ = ("constructor", "_entries")
 
     def __init__(self, constructor):
-        self._entries = weakref.WeakKeyDictionary()
+        self._entries = weakref.WeakValueDictionary()
         self.constructor = constructor
 
     def get(self, *args):
-        wargs = WeakrefTuple(args)
-        result = self._entries.get(WeakrefTuple(wargs))
+        args = tuple(tuple(arg) if isinstance(arg, list) else arg
+                         for arg in args)
+        # wargs = WeakrefTuple(args)
+        result = self._entries.get(args)
         if result is None:
-            result = self.constructor(args)
-            self._entries[wargs] = result
+            result = self.constructor(*args)
+            self._entries[args] = result
 
         return result
+
+class TypeConser(object):
+
+    def __init__(self, polytype):
+        assert isinstance(polytype, type), polytype
+        assert issubclass(polytype, Type), polytype.__mro__
+        self.polytype = polytype
+        self.conser = Conser(polytype)
+
+    def get(self, *args, **kwargs):
+        # Add defaults to the arguments to ensure consing correctness
+        args = self.polytype.default_args(args, kwargs)
+        return self.conser.get(*args)

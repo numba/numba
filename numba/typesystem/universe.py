@@ -125,7 +125,7 @@ class LowLevelUniverse(Universe):
     }
 
     polytypes = {
-        KIND_STRUCT: StructType,     # method 'struct'
+        # KIND_STRUCT: StructType,   # This is a mutable type, don't cons
         KIND_POINTER: PointerType,   # method 'pointer'
         KIND_FUNCTION: FunctionType, # method 'function'
     }
@@ -138,6 +138,14 @@ class LowLevelUniverse(Universe):
         for kind, typenames in self.monokind_to_typenames.iteritems():
             for typename in typenames:
                 monotypes[typename] = mono(kind, typename)
+
+    def struct(self, fields=(), name=None, readonly=False, packed=False, **kwargs):
+        if fields and kwargs:
+            raise TypeError("The struct must be either ordered or unordered")
+        elif kwargs:
+            fields = sort_types(kwargs)
+
+        return StructType(fields, name, readonly, packed)
 
     def itemsize(self, type):
         if type.is_mono:
@@ -160,11 +168,11 @@ lowlevel_universe = LowLevelUniverse()
 #------------------------------------------------------------------------
 
 def llvm_poly(llvm_ctor):
-    def ctor(kind, params):
+    def ctor(*params):
         return llvm_ctor(*params)
     return ctor
 
-class LLVMUniverse(LowLevelUniverse):
+class LLVMUniverse(Universe):
 
     polytypes = {
         KIND_STRUCT: llvm_poly(llvmtyping.struct),

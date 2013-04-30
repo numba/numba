@@ -88,29 +88,54 @@ class NumbaType(Type):
 
         return FunctionType(self, args)
 
-def make_polytype(typename, names):
+def make_polytype(kind, names, defaults=()):
     """
     Create a new polytype that has named attributes. E.g.
 
-        make_polytype("ArrayType", ["dtype", "ndim"])
+        make_polytype("array", ["dtype", "ndim"])
     """
-    def __init__(self, kind, params):
+    def __init__(self, *params):
+        params = list(params)
+        for name in names[len(params):]:
+            if name not in defaults:
+                raise TypeError("Constructor '%s' requires %d arguments (got %d)" % (len(params)))
+            defaults[name]
         assert len(params) == len(names), polyctor
         super(polyctor, self).__init__(kind, params)
 
-    # Create parameter accessors
-    typedict = dict([(name, lambda self, i=i: self.params[i])
-                     for i, name in enumerate(names)])
-    typedict["__init__"] = __init__
+    @classmethod
+    def default_args(cls, args, kwargs):
+        if len(args) == len(names):
+            return args
 
-    polyctor = type(typename, (NumbaType,), typedict)
+        # Insert defaults in args tuple
+        args = list(args)
+        for name in names[len(args):]:
+            if name in kwargs:
+                args.append(kwargs[name])
+            elif name in defaults:
+                args.append(defaults[name])
+            else:
+                raise TypeError(
+                    "Constructor '%s' requires %d arguments (got %d)" % (
+                                            kind, len(names), len(args)))
+
+        return tuple(args)
+
+    # Create parameter accessors
+    typedict = dict([(name, property(lambda self, i=i: self.params[i]))
+                         for i, name in enumerate(names)])
+    typedict["__init__"] = __init__
+    typedict["default_args"] = default_args
+
+    polyctor = type(kind, (NumbaType,), typedict)
     return polyctor
 
 #------------------------------------------------------------------------
 # Type constructors
 #------------------------------------------------------------------------
 
-class ArrayType(NumbaType):
+class ArrayType(make_polytype(KIND_ARRAY, ["dtype", "ndim"])):
     """
     An array type. ArrayType may be sliced to obtain a subtype:
 
@@ -125,25 +150,6 @@ class ArrayType(NumbaType):
     double[:, :]
     """
 
-    is_array = True
-    argnames = ("dtype", "ndim", "is_c_contig", "is_f_contig", "inner_contig")
-
-    def __init__(self, kind, *args, **kwargs):
-        params = self._make_params(*args, **kwargs)
-        super(ArrayType, self).__init__(universe.KIND_ARRAY, params,
-                                        argnames=self.argnames)
-
-    def _make_params(self, dtype, ndim,
-                     is_c_contig=False, is_f_contig=False, inner_contig=False):
-        assert dtype is not None
-
-        if ndim == 1 and (is_c_contig or is_f_contig):
-            is_c_contig = True
-            is_f_contig = True
-
-        inner_contig = inner_contig or is_c_contig or is_f_contig
-        return (dtype, ndim, is_c_contig, is_f_contig, inner_contig)
-
     def pointer(self):
         raise Exception("You probably want a pointer type to the dtype")
 
@@ -155,22 +161,6 @@ class ArrayType(NumbaType):
             axes[0] = "::1"
 
         return "%s[%s]" % (self.dtype, ", ".join(axes))
-
-    def copy(self, **kwargs):
-        if 'dtype' in kwargs:
-            assert kwargs['dtype'] is not None
-        array_type = copy.copy(self)
-        vars(array_type).update(kwargs)
-        return array_type
-
-    @property
-    def strided(self):
-        type = self.copy()
-        type.is_c_contig = False
-        type.is_f_contig = False
-        type.inner_contig = False
-        type.broadcasting = None
-        return type
 
     def __getitem__(self, index):
         "Slicing an array slices the dimensions"
@@ -188,24 +178,24 @@ class ArrayType(NumbaType):
         ndim = len(range(self.ndim)[start:stop])
 
         if ndim == 0:
-            type = self.dtype
+            return self.dtype
         elif ndim > 0:
-            type = self.strided
-            type.ndim = ndim
-            type.is_c_contig = self.is_c_contig and stop == self.ndim
-            type.is_f_contig = self.is_f_contig and start == 0
-            type.inner_contig = type.is_c_contig or type.is_f_contig
-            if type.broadcasting:
-                type.broadcasting = self.broadcasting[start:stop]
+            return type(self)(self.dtype, ndim)
         else:
             raise IndexError(index, ndim)
 
-        return type
 
+class PointerType(make_polytype(KIND_POINTER, ["base_type"])):
+    def __repr__(self):
+        space = " " * (not self.base_type.is_pointer)
+        return "%s%s*" % (self.base_type, space)
 
-PointerType = make_polytype("PointerType", ["base_type"])
-CArrayType = make_polytype("CArrayType", ["base_type"])
+class CArrayType(make_polytype(KIND_CARRAY, ["base_type", "size"])):
+    def __repr__(self):
+        return "%s[%d]" % (self.base_type, self.size)
 
+# ______________________________________________________________________
+# Function
 
 def pass_by_ref(type):
     return type.is_struct or type.is_complex
@@ -219,6 +209,7 @@ class Function(object):
     def myfunc(...):
        ...
     """
+
     def __init__(self, signature, py_func):
         self.signature = signature
         self.py_func = py_func
@@ -235,19 +226,15 @@ class Function(object):
         """
         raise TypeError("Not a callable function")
 
-class FunctionType(Type):
-    subtypes = ['return_type', 'args']
-    is_function = True
-    is_vararg = False
+_FunctionType = make_polytype(
+    KIND_FUNCTION,
+    ['return_type', 'args', 'name', 'is_vararg'],
+    defaults={"name": None, "is_vararg": False},
+)
+
+class FunctionType(_FunctionType):
 
     struct_by_reference = False
-
-    def __init__(self, return_type, args, name=None, is_vararg=False, **kwds):
-        super(FunctionType, self).__init__(**kwds)
-        self.return_type = return_type
-        self.args = tuple(args)
-        self.name = name
-        self.is_vararg = is_vararg
 
     def __repr__(self):
         args = [str(arg) for arg in self.args]
@@ -260,28 +247,28 @@ class FunctionType(Type):
 
         return "%s (*%s)(%s)" % (self.return_type, namestr, ", ".join(args))
 
-    @property
-    def actual_signature(self):
-        """
-        Passing structs by value is not properly supported for different
-        calling conventions in LLVM, so we take an extra argument
-        pointing to a caller-allocated struct value.
-        """
-        if self.struct_by_reference:
-            args = []
-            for arg in self.args:
-                if pass_by_ref(arg):
-                    arg = arg.pointer()
-                args.append(arg)
-
-            return_type = self.return_type
-            if pass_by_ref(self.return_type):
-                return_type = void
-                args.append(self.return_type.pointer())
-
-            self = FunctionType(return_type, args)
-
-        return self
+    # @property
+    # def actual_signature(self):
+    #     """
+    #     Passing structs by value is not properly supported for different
+    #     calling conventions in LLVM, so we take an extra argument
+    #     pointing to a caller-allocated struct value.
+    #     """
+    #     if self.struct_by_reference:
+    #         args = []
+    #         for arg in self.args:
+    #             if pass_by_ref(arg):
+    #                 arg = arg.pointer()
+    #             args.append(arg)
+    #
+    #         return_type = self.return_type
+    #         if pass_by_ref(self.return_type):
+    #             return_type = void
+    #             args.append(self.return_type.pointer())
+    #
+    #         self = FunctionType(return_type, args)
+    #
+    #     return self
 
     @property
     def struct_return_type(self):
@@ -297,8 +284,13 @@ class FunctionType(Type):
         func, = args
         return Function(self, func)
 
+# ______________________________________________________________________
+# Structs
+
 _StructType = make_polytype(
-    "_StructType", ["fields", "name", "readonly", "packed"])
+    KIND_STRUCT,
+    ["fields", "name", "readonly", "packed"],
+    defaults={"name": None, "readonly": False, "packed": False})
 
 class StructType(_StructType):
     """
@@ -319,17 +311,6 @@ class StructType(_StructType):
     >>> S.offsetof('a')
     24
     """
-
-    is_struct = True
-
-    def __init__(self, fields=(), name=None,
-                 readonly=False, packed=False, **kwargs):
-        if fields and kwargs:
-            raise TypeError("The struct must be either ordered or unordered")
-        elif kwargs:
-            fields = sort_types(kwargs)
-        super(StructType, self).__init__(universe.KIND_STRUCT, list(fields),
-                                         name, readonly, packed)
 
     @property
     def fielddict(self):
@@ -375,7 +356,9 @@ class StructType(_StructType):
         ctype = self.to_ctypes()
         return getattr(ctype, field_name).offset
 
-
+#------------------------------------------------------------------------
+# Type Ordering
+#------------------------------------------------------------------------
 
 def _sort_types_key(field_type):
     if field_type.is_complex:
@@ -411,6 +394,7 @@ def sort_types(types_dict):
         fields.extend(sorted(d[rank], key=key))
 
     return fields
+
 
 if __name__ == '__main__':
     import doctest
