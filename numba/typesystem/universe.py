@@ -113,6 +113,8 @@ class LowLevelUniverse(Universe):
         ints, floats, structs, pointers, functions, void
     """
 
+    name = "low-level"
+
     monokind_to_typenames = {
         # KIND -> [typename]
         KIND_INT: int_typenames,
@@ -172,6 +174,8 @@ def llvm_poly(llvm_ctor):
 
 class LLVMUniverse(Universe):
 
+    name = "llvm"
+
     polytypes = {
         KIND_STRUCT: llvm_poly(llvmtyping.lstruct),
         KIND_POINTER: llvm_poly(llvmtyping.lpointer),
@@ -200,6 +204,7 @@ class LLVMUniverse(Universe):
 class NumbaUniverse(Universe):
 
     lowlevel_universe = lowlevel_universe
+    name = "numba"
 
     polytypes = {
         KIND_ARRAY: ArrayType,
@@ -216,8 +221,9 @@ class NumbaUniverse(Universe):
 
     def make_monotypes(self, monotypes):
         monotypes.update(self.lowlevel_universe.monotypes)
+        monotypes["object"] = mono(KIND_OBJECT, "object")
         for name in complex_typenames:
-            setattr(self, name, mono(KIND_COMPLEX, name))
+            monotypes[name] = mono(KIND_COMPLEX, name)
 
     def struct(self, *args, **kwargs):
         return self.lowlevel_universe.struct(*args, **kwargs)

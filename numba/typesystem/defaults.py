@@ -134,7 +134,7 @@ llvm_universe = universe.LLVMUniverse()
 # Converters
 
 default_type_lowerer = lowering.create_type_lowerer(
-    lowering.default_lowering_table, numba_universe, numba_universe)
+    lowering.default_numba_lowering_table, numba_universe, numba_universe)
 to_llvm_converter = TypeConverter(numba_universe, llvm_universe)
 
 lower = default_type_lowerer.convert

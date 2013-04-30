@@ -23,7 +23,8 @@ from numba.wrapping import compiler
 
 logger = logging.getLogger(__name__)
 
-environment.NumbaEnvironment.get_environment().link_cbuilder_utilities()
+# TODO: Re-enable
+# environment.NumbaEnvironment.get_environment().link_cbuilder_utilities()
 
 if PY3:
     CLASS_TYPES = type

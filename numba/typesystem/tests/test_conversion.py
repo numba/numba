@@ -4,6 +4,7 @@ from __future__ import print_function, division, absolute_import
 
 from functools import partial
 
+# from numba import llvm_types
 from numba.typesystem import typesystem, universe
 from numba.typesystem import numba_typesystem as ts, llvm_typesystem as lts
 
@@ -47,6 +48,14 @@ def test_complex():
     assert c1 == c2
     # assert c1 is c2
     assert c2 is c3
+
+def test_object():
+    assert llvmt(ts.object) == llvm_types._pyobject_head_struct_p
+
+def test_array():
+    assert llvmt(ts.array(ts.double, 1), llvm_types._numpy_array)
+    assert llvmt(ts.array(ts.int, 2), llvm_types._numpy_array)
+    assert llvmt(ts.array(ts.object, 3), llvm_types._numpy_array)
 
 if __name__ == "__main__":
     test_numeric_conversion()

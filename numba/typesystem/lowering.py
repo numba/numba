@@ -6,8 +6,6 @@ Type lowering from a higher-level domain to a lower-level domain.
 
 from __future__ import print_function, division, absolute_import
 
-from functools import partial
-
 from numba.typesystem import typesystem
 from numba.typesystem.kinds import *
 
@@ -29,6 +27,22 @@ def create_type_lowerer(table, domain, codomain):
 # Lowering functions
 #------------------------------------------------------------------------
 
+# ______________________________________________________________________
+# mono types
+
+def numba_lower_object(domain, codomain, type):
+    assert domain.name == "numba" # These only work in the numba domain
+    from numba import typedefs # hurr
+    return codomain.pointer(typedefs.PyObject_HEAD)
+
+def numba_lower_array(domain, codomain, type):
+    assert domain.name == "numba"
+    from numba import typedefs
+    return codomain.pointer(typedefs.PyArray)
+
+# ______________________________________________________________________
+# poly types
+
 def lower_complex(domain, codomain, type, params):
     base_type, = params
     return codomain.struct([('real', base_type), ('imag', base_type)])
@@ -37,8 +51,10 @@ def lower_complex(domain, codomain, type, params):
 # Default Lowering Table
 #------------------------------------------------------------------------
 
-default_lowering_table = {
+default_numba_lowering_table = {
     KIND_COMPLEX: lower_complex,
+    KIND_OBJECT: numba_lower_object,
+    KIND_ARRAY: numba_lower_array,
 }
 
 # default_lowerer = create_type_lowerer(

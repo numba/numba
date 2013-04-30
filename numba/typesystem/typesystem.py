@@ -105,6 +105,7 @@ class TypeSystem(object):
 
 class Universe(object):
 
+    name = None
     polytypes = None # KIND -> TypeConstructor
 
     def __init__(self, itemsizes=None):
