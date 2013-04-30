@@ -362,8 +362,76 @@ for representing these constructs across the compiler.
 Closures
 ^^^^^^^^
 
-Variable and keyword arguments
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+A key step in the transition from the normalized AST IR to the untyped
+SSA IR is closure conversion.  For example, given the following code::
+
+  def closure_test(foo):
+      foo += 3
+      def bar(baz):
+          return foo + (lambda x: x - global_z * foo)(baz)
+      foo += 2
+      return bar
+
+Numba should generate SSA code equivalent to the following::
+
+  def __anonymous(af, x):
+      return x - global_z * af.foo
+
+  def __bar(af, baz):
+      return af.foo + make_closure(__anonymous,
+                                   make_activation_frame(af, []))(baz)
+
+  def closure_test(foo):
+      af = make_activation_frame(None, ['foo'])
+      af.foo = foo
+      af.foo += 3
+      bar = make_closure(__bar, af)
+      af.foo += 2
+      return bar
+
+Parent frames
+~~~~~~~~~~~~~
+
+The above convention implies the following ASDL definition of the
+``MakeFrame`` constructor (XXX cross reference discussion of IR expr
+language)::
+
+  MakeFrame(expr parent, identifier* ids)
+
+The parent frame provides a name space for identifiers unresolved in
+the current frame.  If we employ this constructor, we diverge slightly
+from CPython.  CPython manages each unbound variable within a cell,
+and these cells are copied into a new frame object (which is a tuple
+in CPython) for every child closure constructed.
+
+Alternative: Explicit parameterization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Another method for doing closure conversion involves parameterizing
+over all free variables, and is closer to CPython's approach::
+
+  def __anonymous(foo, x):
+      return x - global_z * foo.load()
+
+  def __bar(foo, baz):
+      return foo.load() + partial(__anonymous, [foo])(baz)
+
+  def closure_test(foo):
+      foo = make_cell(foo)
+      foo += 3
+      bar = partial(__bar, [foo])
+      foo += 2
+      return bar
+
+This approach uses partial function application to build closures.
+The resulting representation affords opportunities for optimizations
+such as rewriting ``partial(fn, [x])(y)`` to ``fn(x, y)``.
+
+Default, variable, and keyword arguments
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+XXX Do we need a MakeFunction() expression constructor for supplying
+default arguments?  This follows from discussion of closures, above.
 
 Iterators
 ^^^^^^^^^
@@ -445,6 +513,19 @@ for anything other than global and parameter variables.
 Generators
 ^^^^^^^^^^
 
+.. _`generator discussion`:
+   https://groups.google.com/a/continuum.io/forum/#!topic/numba-users/gaVgArRrXqw
+
+The Numba Google group's `generator discussion`_ identified two
+methods for implementing generators in Numba.  These can roughly be
+summarized as "enclosing everything in a big C-like switch statement",
+and "use goroutines".  The following web pages elaborate on these
+techniques:
+
+* http://www.chiark.greenend.org.uk/~sgtatham/coroutines.html
+* https://code.google.com/p/try-catch-finally/wiki/GoInternals
+
+
 Global and nonlocal variables
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -462,18 +543,85 @@ We could generate the following in untyped IR::
     DataObject("z", Constant(42)),
     CodeObject("foo", ([], None, None, ...), [
       Block("entry", [
-          (None, Call(Name("bar", Load()), [
-            Call(Constant(numba.ct.load), [Constant("z")])])),
-          (None, Call(Constant(numba.ct.store), [
-            Constant("z"), Constant(99)]))
+          (None, Call(Name("bar", Load()), [LoadGlobal("z")])),
+          (None, StoreGlobal("z", Constant(99)))
         ], Return(Constant(None)))])
   ]
 
 
+.. XXX Globals as static data.
+
 Exceptions and exception handling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Both the raise and try-except-finally language constructs map into the
+untyped SSA IR as basic-block terminators::
+
+  tail = ...
+       | Raise(expr exn)
+       | Try(identifier body,
+             excepthandler* handlers,
+             identifier? orelse,
+             identifier? finalbody)
+
+  ...
+
+  excepthandler = ExceptHandler(expr *types,
+                                identifier? name,
+                                identifier body)
+                  attributes (int lineno, int col_offset)
+
+.. XXX Is there a better way to present this?  Maybe as a table?
+
+In the low-level IR, these constructs lower into Numba run-time calls::
+
+  bb0:  ...
+        Try('bb1', [ExceptHandler([ty0,...], 'name0', 'bb2'),
+                    ...
+                    ExceptHandler([tyn,...], 'namen', 'bbn0')],
+            'bbn1', 'bbn2')
+  bb1:  ...
+        Jump('bbn2')
+  bb2:  ...
+        Jump('bbn2')
+  ...
+  bbn0: ...
+        Jump('bbn2')
+  bbn1: ...
+        Jump('bbn2')
+  bbn2: ...
+
+Goes to::
+
+  bb0:  ...
+        $0 = SetupTry()
+        If($0, 'bb1', 'bb2')
+  bb1:  ...
+        Jump('bbn2')
+  bb2:  $1 = TestExn([ty0, ...])
+        If($1, 'bbx2', 'bb3')
+  bbx2: $name0 = GetExn()
+        ...
+        Jump('bbn2')
+  ...
+  bbn0: $2 = TestExn([tyn, ...])
+        If($2, 'bbxn', 'bbn1')
+  bbxn: $namen = GetExn()
+        ...
+        Jump('bbn2')
+  bbn1: GetExn()
+        ...
+        Jump('bbn2')
+  bbn2: ...
+
+
 Decorators
+^^^^^^^^^^
+
+Classes and objects
+^^^^^^^^^^^^^^^^^^^
+
+Namespaces
 ^^^^^^^^^^
 
 
