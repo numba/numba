@@ -28,9 +28,12 @@ def test_pointers():
         assert llvmt(ts.pointer(ty)) == lts.pointer(lty)
 
     p = ts.pointer(ts.pointer(ts.int))
-    assert llvmt(p) == lts.pointer(lts.pointer(lts.int))
+    lp = lts.pointer(lts.pointer(lts.int))
 
-    assert str(p) == "int **"
+    # See if the conversion works
+    assert llvmt(p) == lp
+    # See if the consing works
+    assert llvmt(p) is lp
 
 def test_functions():
     functype = ts.function(ts.int, (ts.float,))

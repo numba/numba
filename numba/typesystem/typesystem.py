@@ -78,25 +78,19 @@ else:
 
 class TypeSystem(object):
 
-    def __init__(self, universe, promoter=None,
-                 constant_typer=None, converters=None):
+    def __init__(self, universe, promote=None, typeof=None, converters=None):
         self.universe = universe
 
         # Find the least general type that subsumes both given types
         # t1 -> t2 -> t3
-        self.promote = promoter
+        self.promote = promote
 
         # Assign types to Python constants (arbitrary python values)
-        self.constant_typer = constant_typer
+        self.typeof = typeof
+        self.from_python = typeof # TODO: Remove
 
         # Convert between type domains
         self.converters = converters or {}
-
-    def typeof(self, value):
-        assert self.constant_typer, self
-        return self.constant_typer.typeof(self, value)
-
-    from_python = typeof # TODO: Remove
 
     def convert(self, codomain_name, type):
         converter = self.converters[codomain_name]

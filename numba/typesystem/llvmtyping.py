@@ -7,47 +7,16 @@ def get_target_triple():
     return is_ppc, is_x86
 
 
-def pointer(base_type):
-    if base_type.kind == llvm.core.TYPE_VOID:
-        base_type = llvm.core.Type.int(1)
-    return llvm.core.Type.pointer(base_type)
+def lbool():
+    return llvm.core.Type.int(1)
 
-def llvm_float(ts, type):
-    if type.itemsize == 4:
-        return llvm.core.Type.float()
-    elif type.itemsize == 8:
-        return lvm.core.Type.double()
-    else:
-        is_ppc, is_x86 = get_target_triple()
-        if self.itemsize == 16:
-            if is_ppc:
-                return lc.Type.ppc_fp128()
-            else:
-                return lc.Type.fp128()
-        else:
-            assert self.itemsize == 10 and is_x86
-            return lc.Type.x86_fp80()
+def lint(name, itemsize):
+    if name == "bool":
+        return lbool()
 
-#func
-def to_llvm(self, context):
-    assert self.return_type is not None
-    self = self.actual_signature
-    arg_types = [arg_type.pointer() if arg_type.is_function else arg_type
-                     for arg_type in self.args]
-    return llvm.core.Type.function(self.return_type.to_llvm(context),
-                            [arg_type.to_llvm(context)
-                                 for arg_type in arg_types],
-                            self.is_vararg)
+    return llvm.core.Type.int(itemsize * 8)
 
-#carray
-def to_llvm(self, context):
-    return llvm.core.Type.array(self.base_type.to_llvm(context), self.size)
-
-class Universe:
-    def bool(self, context):
-        return llvm.core.Type.int(1)
-
-def float(itemsize):
+def lfloat(name, itemsize):
     if itemsize == 4:
         return llvm.core.Type.float()
     elif itemsize == 8:
@@ -63,7 +32,7 @@ def float(itemsize):
             assert itemsize == 10 and is_x86, itemsize
             return llvm.core.Type.x86_fp80()
 
-def struct(type):
+def lstruct(type):
     if type.packed:
         lstruct = llvm.core.Type.packed_struct
     else:
@@ -72,5 +41,10 @@ def struct(type):
     return lstruct([field_type.ty
                         for field_name, field_type in type.fields])
 
-def function(rettype, argtypes, name=None, is_vararg=False):
+def lpointer(base_type):
+    if base_type.kind == llvm.core.TYPE_VOID:
+        base_type = llvm.core.Type.int(1)
+    return llvm.core.Type.pointer(base_type)
+
+def lfunction(rettype, argtypes, name=None, is_vararg=False):
     return llvm.core.Type.function(rettype, argtypes, is_vararg)

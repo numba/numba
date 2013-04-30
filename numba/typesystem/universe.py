@@ -173,9 +173,9 @@ def llvm_poly(llvm_ctor):
 class LLVMUniverse(Universe):
 
     polytypes = {
-        KIND_STRUCT: llvm_poly(llvmtyping.struct),
-        KIND_POINTER: llvm_poly(llvmtyping.pointer),
-        KIND_FUNCTION: llvm_poly(llvmtyping.function),
+        KIND_STRUCT: llvm_poly(llvmtyping.lstruct),
+        KIND_POINTER: llvm_poly(llvmtyping.lpointer),
+        KIND_FUNCTION: llvm_poly(llvmtyping.lfunction),
     }
 
     def __init__(self, itemsizes=None):
@@ -184,12 +184,12 @@ class LLVMUniverse(Universe):
 
     def make_monotypes(self, monotypes):
         lluniverse = LowLevelUniverse(itemsizes=self.itemsizes)
-        itemsize = lambda name: lluniverse.itemsize(getattr(lluniverse, name))
+        size = lambda name: lluniverse.itemsize(getattr(lluniverse, name))
 
         for typename in int_typenames:
-            monotypes[typename] = llvm.core.Type.int(itemsize(typename) * 8)
+            monotypes[typename] = llvmtyping.lint(typename, size(typename))
         for typename in float_typenames:
-            monotypes[typename] = llvmtyping.float(itemsize(typename))
+            monotypes[typename] = llvmtyping.lfloat(typename, size(typename))
 
         monotypes["void"] = llvm.core.Type.void()
 
