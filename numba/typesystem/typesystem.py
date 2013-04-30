@@ -193,21 +193,42 @@ class ConstantTyper(object):
 # Type Conversion between type domains
 #------------------------------------------------------------------------
 
+def convert_params(convert, params):
+    coparams = []
+    for t in params:
+        if isinstance(t, Type):
+            coparams.append(convert(t))
+        elif isinstance(t, (tuple, list)):
+            coparams.append(tuple(map(convert, t)))
+        else:
+            coparams.append(t)
+
+    return coparams
+
+def convert_mono(domain, codomain, type):
+    return getattr(codomain, type.name)
+
+def convert_poly(domain, codomain, type, coparams):
+    # Get codomain constructor
+    constructor = getattr(codomain, type.kind)
+    # Construct type in codomain
+    return constructor(*coparams)
+
 class TypeConverter(object):
     """
     Map types between type universes.
     """
 
-    def __init__(self, domain, codomain):
-        self.domain = domain
-        self.codomain = codomain
-
+    def __init__(self, domain, codomain,
+                 convert_mono=convert_mono, convert_poly=convert_poly):
+        self.convert_mono = partial(convert_mono, domain, codomain)
+        self.convert_poly = partial(convert_poly, domain, codomain)
         self.polytypes = weakref.WeakKeyDictionary()
 
     def convert(self, type):
         "Return an LLVM type for the given type."
         if type.is_mono:
-            return getattr(self.codomain, type.name)
+            return self.convert_mono(type)
         else:
             return self.convert_polytype(type)
 
@@ -215,25 +236,11 @@ class TypeConverter(object):
         if type in self.polytypes:
             return self.polytypes[type]
 
-        # Deconstruct type from domain
-        params = type.params
-
-        # Get codomain constructor
-        constructor = getattr(self.codomain, type.kind)
-
         # Map parameters into codomain
-        c = self.convert
-        coparams = []
-        for t in params:
-            if isinstance(t, Type):
-                coparams.append(c(t))
-            elif isinstance(t, (tuple, list)):
-                coparams.append(tuple(map(c, t)))
-            else:
-                coparams.append(t)
+        coparams = convert_params(self.convert, type.params)
 
-        # Construct type in codomain
-        result = constructor(*coparams)
+        # Construct polytype in codomain
+        result = self.convert_poly(type, coparams)
 
         self.polytypes[type] = result
         return result
