@@ -22,7 +22,7 @@ def compose(f, g):
 # ______________________________________________________________________
 # Universes
 
-numba_universe = universe.NumbaUniverse()
+numba_universe = universe.NumbaUniverse(itemsizes=universe.default_type_sizes)
 llvm_universe = universe.LLVMUniverse()
 
 # ______________________________________________________________________

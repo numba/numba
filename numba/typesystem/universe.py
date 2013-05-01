@@ -24,6 +24,12 @@ int_typenames = [
     'bool', # hmm
 ]
 
+signed = frozenset([
+    'char', 'short', 'int', 'long', 'longlong',
+    'int8', 'int16', 'int32', 'int64',
+    'Py_ssize_t',
+])
+
 float_typenames = [
     'float', 'double', 'longdouble', 'float32', 'float64', 'float128',
 ]
@@ -137,6 +143,9 @@ class LowLevelUniverse(Universe):
 
     def make_monotypes(self, monotypes):
         make_monotypes(self.kind_to_typenames, monotypes)
+        for typename in int_typenames:
+            is_signed = typename in signed
+            monotypes[typename] = mono(kinds.KIND_INT, typename, signed=is_signed)
 
     def rank(self, type):
         return 0 # TODO: implement

@@ -7,7 +7,6 @@ from .closuretypes import *
 from .ssatypes import *
 from .templatetypes import *
 from .containertypes import *
-from .typeutils import *
 
 from .shorthands import *
 
@@ -16,6 +15,7 @@ from .typematch import *
 
 from .universe import *
 from .defaults import *
+from .typeutils import *
 
 from . import shorthands
 

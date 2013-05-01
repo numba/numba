@@ -167,7 +167,7 @@ class Universe(object):
     def itemsize(self, type):
         "Determine the size of the type in bytes"
         if type.is_mono:
-            return self.itemsizes[type]
+            return self.itemsizes[type.typename]
         elif self.kind(type) in self.itemsizes:
             pass
         else:
@@ -264,23 +264,28 @@ class Type(object):
     Base of all types.
     """
 
-    def __init__(self, kind, params, is_mono=False):
+    def __init__(self, kind, params, is_mono=False, metadata=frozenset()):
         self.kind = kind    # Type kind
 
         # don't call this 'args' since we already use that in FunctionType
         self.params = params
         self.is_mono = is_mono
 
+        # Immutable metadata
+        self.metadata = metadata
+        self._metadata = metadata and dict(metadata)
+
     # __________________________________________________________________
     # Type instantiation
 
     @classmethod
-    def mono(cls, kind, name, ty=None):
+    def mono(cls, kind, name, ty=None, **kwds):
         """
         Nullary type constructor creating the most elementary of types.
         Does not compose any other type (in this domain).
         """
-        return cls(kind, (name, ty), is_mono=True)
+        return cls(kind, (name, ty), is_mono=True,
+                   metadata=frozenset(kwds.iteritems()))
 
     @classmethod
     def poly(cls, kind, *args):
@@ -319,6 +324,8 @@ class Type(object):
     def __getattr__(self, attr):
         if attr.startswith("is_"):
             return self.kind == attr[3:]
+        elif self.metadata and attr in self._metadata:
+            return self._metadata[attr]
         raise AttributeError(attr)
 
 #------------------------------------------------------------------------

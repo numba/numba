@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+
+from numba import error
 from numba.typesystem import *
 
 #------------------------------------------------------------------------
 # Utilities
 #------------------------------------------------------------------------
 
+ts = numba_typesystem
+
 def is_obj(type):
     return type.is_object or type.is_array
 
 native_type_dict = {}
-for native_type in minitypes.native_integral:
-    native_type_dict[(native_type.itemsize, native_type.signed)] = native_type
+for native_type in native_integral:
+    native_type_dict[(ts.itemsize(native_type), native_type.signed)] = native_type
 
 def promote_to_native(int_type):
     return native_type_dict[int_type.itemsize, int_type.signed]

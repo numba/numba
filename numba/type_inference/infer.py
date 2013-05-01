@@ -734,7 +734,7 @@ class TypeInferer(visitors.NumbaTransformer):
                 type = typesystem.ModuleType(globals.get(global_name))
             else:
                 value = lookup_global(self.env, global_name, name_node)
-                type = typesystem.GlobalType(global_name, value)
+                type = typesystem.known_value(value)
 
         variable = Variable(type, name=global_name, is_constant=True,
                             is_global=is_global, is_builtin=is_builtin,
