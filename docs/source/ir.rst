@@ -325,20 +325,15 @@ emit code for serialization.
 Low-level Portable IR
 ---------------------
 
-Mark's Proposal
-^^^^^^^^^^^^^^^
-
 The low-level portable IR is a low-level, platform agnostic, IR that:
 
     * The IR contains only low-level, native types such as ``int_``,
       ``long_``, pointers, structs, etc. The notion of high-level
       concepts such as arrays or objects is gone.
 
-Jon's Notes
-^^^^^^^^^^^
-
-This is `LLVM IR`_, but may still contain abstract or opaque types,
-and make calls to the Numba run time library abstraction layer.
+This portable IR could be `LLVM IR`_ , which may still contain
+abstract or opaque types, and make calls to the Numba runtime
+library abstraction layer.
 
 Final LLVM IR
 -------------
@@ -427,6 +422,9 @@ This approach uses partial function application to build closures.
 The resulting representation affords opportunities for optimizations
 such as rewriting ``partial(fn, [x])(y)`` to ``fn(x, y)``.
 
+.. NOTE:: This binds values lexically at closure definition time,
+          but we want to bind them dynamically at "closure call time".
+          It will also not work with the ``nonlocal`` declaration.
 Default, variable, and keyword arguments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -728,7 +726,7 @@ We can use our schemas to:
                   build up the IR using in-memory data structures for
                   the IR most suitable to their needs.
 
-    * Generate definitions for use in Attribute Grammars ([#]_)
+    * Generate definitions for use in Attribute Grammars
     * Executable IR (:ref:`executable`)
 
 .. _llvm_ir:
