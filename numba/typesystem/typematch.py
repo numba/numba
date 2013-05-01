@@ -2,8 +2,6 @@
 from __future__ import print_function, division, absolute_import
 import fnmatch
 
-from numba.typesystem.basetypes import *
-
 def _typematch(pattern, typerepr):
     return fnmatch.fnmatch(typerepr, pattern)
 

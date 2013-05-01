@@ -7,8 +7,9 @@ from numba.minivect import minitypes
 # Container Types
 #------------------------------------------------------------------------
 
-class ContainerListType(NumbaKeyHashingType, minitypes.ObjectType):
+class ContainerListType(NumbaType):
 
+    is_object = True
     is_container = True
     subtypes = ['base_type']
 
@@ -62,10 +63,12 @@ class DictType(MapContainerType, minitypes.ObjectType):
 class TypedContainerListType(ContainerListType):
 
     is_typed_container = True
+    is_object = True
 
 class TypedMapContainerType(MapContainerType):
 
     is_typed_map = True
+    is_object = True
 
 class TypedTupleType(TypedContainerListType):
 
@@ -87,7 +90,7 @@ class TypedFrozenSetType(TypedContainerListType):
     is_typed_frozenset = True
     name = "typedfrozenset"
 
-class TypedDictType(TypedMapContainerType, minitypes.ObjectType):
+class TypedDictType(TypedMapContainerType):
 
     is_typed_dict = True
     name = "typeddict"
@@ -116,6 +119,6 @@ def typeddict(base_type, size=-1):
 # Shorthands
 #------------------------------------------------------------------------
 
-tuple_ = TupleType(object_)
-list_ = ListType(object_)
-dict_ = DictType(object_, object_)
+# tuple_ = TupleType(object_)
+# list_ = ListType(object_)
+# dict_ = DictType(object_, object_)

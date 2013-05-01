@@ -19,10 +19,13 @@ KIND_COMPLEX    = "complex"
 KIND_FUNCTION   = "function"
 KIND_ARRAY      = "array"
 KIND_POINTER    = "pointer"
+KIND_NULL       = "null"
 KIND_CARRAY     = "carray"
 KIND_STRUCT     = "struct"
 
 # High-level Numba kinds
 
+KIND_BOOL       = "bool"
 KIND_OBJECT     = "object"
 KIND_EXTTYPE    = "exttype"
+KIND_NONE       = "none"

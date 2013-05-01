@@ -1,20 +1,19 @@
 # -*- coding: utf-8 -*-
 
 """
-
+User-facing numba types.
 """
 
 from __future__ import print_function, division, absolute_import
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
 
 import struct
 
-from numba.typesystem.typesystem import (
-    Universe, Type, Conser, nbo, ConstantTyper, TypeConverter)
+from numba.typesystem.typesystem import Type
 from numba.typesystem.kinds import *
-
-misc_typenames = [
-    'c_string_type', 'object_', 'void', 'struct',
-]
 
 #------------------------------------------------------------------------
 # User-facing type functionality
@@ -32,6 +31,11 @@ class NumbaType(Type):
     # TODO: For methods pointer, __getitem__ and __call__ we need the type
     # TODO: universe. Should each type instance hold the type universe it
     # TODO: was constructed in?
+
+    @property
+    def universe(self):
+        from numba.typesystem import defaults
+        return defaults.numba_universe
 
     def __getitem__(self, item):
         """
@@ -77,7 +81,11 @@ class NumbaType(Type):
             #       minivect)
             return args[0]
 
-        return FunctionType(self, args)
+        return self.universe.function(self, args)
+
+    def pointer(self):
+        return self.universe.pointer(self)
+
 
 def make_polytype(kind, names, defaults=()):
     """
@@ -171,16 +179,12 @@ class ArrayType(make_polytype(KIND_ARRAY, ["dtype", "ndim"])):
             raise IndexError(index, ndim)
 
 
-class PointerType(make_polytype(KIND_POINTER, ["base_type"])):
-    def __repr__(self):
-        space = " " * (not self.base_type.is_pointer)
-        return "%s%s*" % (self.base_type, space)
-
 CArrayType = make_polytype(KIND_CARRAY, ["base_type", "size"])
 ComplexType = make_polytype(KIND_COMPLEX, ["base_type"])
 
-# ______________________________________________________________________
-# Function
+#------------------------------------------------------------------------
+# Function Types
+#------------------------------------------------------------------------
 
 def pass_by_ref(type):
     return type.is_struct or type.is_complex
@@ -269,8 +273,67 @@ class FunctionType(_FunctionType):
         func, = args
         return Function(self, func)
 
-# ______________________________________________________________________
-# Structs
+# class PointerFunctionType(make_polytype("constant_function_pointer",
+#                                         ["obj", "pointer", "signature"])):
+#     """
+#     Pointer to a function at a known address represented by some Python
+#     object (e.g. a ctypes or CFFI function).
+#     """
+#
+#     is_pointer_to_function = True
+
+class AutojitType(make_polytype("autojit_function", ["autojit_func"])):
+    """
+    Type for autojit functions.
+    """
+    is_object = True
+
+class JitType(make_polytype("jit_function", ["jit_func"])):
+    """
+    Type for jit functions.
+    """
+    is_object = True
+
+#------------------------------------------------------------------------
+# Pointer Types
+#------------------------------------------------------------------------
+
+class PointerType(make_polytype(KIND_POINTER, ["base_type"])):
+    def __repr__(self):
+        space = " " * (not self.base_type.is_pointer)
+        return "%s%s*" % (self.base_type, space)
+
+# class KnownPointerType(PointerType):
+#
+#     is_known_pointer = True
+#
+#     def __init__(self, base_type, address, **kwds):
+#         super(KnownPointerType, self).__init__(base_type, **kwds)
+#         self.address = address
+
+class SizedPointerType(make_polytype("sized_pointer", ["base_type", "size"])):
+    """
+    A pointer with knowledge of its range.
+
+    E.g. an array's 'shape' or 'strides' attribute.
+    This also allow tuple unpacking.
+    """
+
+    is_pointer = True
+
+    def __eq__(self, other):
+        if other.is_sized_pointer:
+            return (self.base_type == other.base_type and
+                    self.size == other.size)
+        return other.is_pointer and self.base_type == other.base_type
+
+    def __hash__(self):
+        return hash(self.base_type.pointer())
+
+
+#------------------------------------------------------------------------
+# Struct Types
+#------------------------------------------------------------------------
 
 _StructType = make_polytype(
     KIND_STRUCT,
@@ -340,6 +403,92 @@ class StructType(_StructType):
         """
         ctype = self.to_ctypes()
         return getattr(ctype, field_name).offset
+
+
+class KnownValueType(make_polytype("known_value", ["value"])):
+    """
+    Type which is associated with a known value or well-defined symbolic
+    expression:
+
+        np.add          => np.add
+        np.add.reduce   => (np.add, "reduce")
+
+    (Remember that unbound methods like np.add.reduce are transient, i.e.
+     np.add.reduce is not np.add.reduce).
+    """
+
+    # TODO: allow kind derivation?
+    is_object = True
+
+class ModuleType(KnownValueType):
+    """
+    Represents a type for modules.
+
+    Attributes:
+        is_numpy_module: whether the module is the numpy module
+        module: in case of numpy, the numpy module or a submodule
+    """
+
+    is_module = True
+    is_object = True
+
+    # TODO: Get rid of these
+    is_numpy_module = property(lambda self: self.module is np)
+    is_numba_module = property(lambda self: self.module is np)
+    is_math_module = property(lambda self: self.module is np)
+
+    @property
+    def module(self):
+        return self.value
+
+# # TODO: Do we really need this type?
+# class MethodType(make_polytype("method", ["base_type", "attr_name"])):
+#     """
+#     Method of something.
+#
+#         base_type: the object type the attribute was accessed on
+#     """
+
+NumpyDtypeType = make_polytype("numpy_dtype", ["dtype"])
+
+class ReferenceType(make_polytype("reference", ["referenced_type"])):
+    """
+    A reference to an (primitive or Python) object. This is passed as a
+    pointer and dereferences automatically.
+
+    Currently only supported for structs.
+    """
+
+    # TODO: Do we really need this type?
+
+#------------------------------------------------------------------------
+# Type of Type
+#------------------------------------------------------------------------
+
+class MetaType(make_polytype("meta", ["dst_type"])):
+    """
+    A type instance in user code. e.g. double(value). The Name node will have
+    a cast-type with dst_type 'double'.
+    """
+
+    is_cast = True
+
+#------------------------------------------------------------------------
+# Builtins
+#------------------------------------------------------------------------
+
+class BuiltinType(KnownValueType):
+    is_builtin = True
+
+    def __init__(self, name, **kwds):
+        value = getattr(builtins, name)
+        super(BuiltinType, self).__init__(value, **kwds)
+
+        self.name = name
+        self.func = self.value
+
+    def __repr__(self):
+        return "builtin(%s)" % self.name
 
 #------------------------------------------------------------------------
 # Type Ordering

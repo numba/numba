@@ -10,7 +10,7 @@ import struct
 import ctypes
 
 from numba.typesystem.typesystem import Universe
-from numba.typesystem.usertypes import *
+from numba.typesystem.types import *
 from numba.typesystem import llvmtyping
 
 import llvm.core
@@ -102,6 +102,11 @@ default_type_sizes = dict(type_sizes, **native_sizes)
 mono = NumbaType.mono
 poly = NumbaType.poly
 
+def make_monotypes(kind_to_typename, monotypes):
+    for kind, typenames in kind_to_typename.iteritems():
+        for typename in typenames:
+            monotypes[typename] = mono(kind, typename)
+
 #------------------------------------------------------------------------
 # Low-level universe
 #------------------------------------------------------------------------
@@ -115,7 +120,7 @@ class LowLevelUniverse(Universe):
 
     name = "low-level"
 
-    monokind_to_typenames = {
+    kind_to_typenames = {
         # KIND -> [typename]
         KIND_INT: int_typenames,
         KIND_FLOAT: float_typenames,
@@ -132,9 +137,7 @@ class LowLevelUniverse(Universe):
         super(LowLevelUniverse, self).__init__(itemsizes or default_type_sizes)
 
     def make_monotypes(self, monotypes):
-        for kind, typenames in self.monokind_to_typenames.iteritems():
-            for typename in typenames:
-                monotypes[typename] = mono(kind, typename)
+        make_monotypes(self.kind_to_typenames, monotypes)
 
     def rank(self, type):
         return 0 # TODO: implement
@@ -201,6 +204,10 @@ class LLVMUniverse(Universe):
 # Numba User-level Universe
 #------------------------------------------------------------------------
 
+numba_types = [
+    "object", "null", "none", "ellipsis", "slice", "newaxis", "range",
+]
+
 class NumbaUniverse(Universe):
 
     lowlevel_universe = lowlevel_universe
@@ -221,9 +228,7 @@ class NumbaUniverse(Universe):
 
     def make_monotypes(self, monotypes):
         monotypes.update(self.lowlevel_universe.monotypes)
-        monotypes["object"] = mono(KIND_OBJECT, "object")
-        for name in complex_typenames:
-            monotypes[name] = mono(KIND_COMPLEX, name)
+        make_monotypes(dict(zip(numba_types, numba_types)), monotypes)
 
     def struct(self, *args, **kwargs):
         return self.lowlevel_universe.struct(*args, **kwargs)

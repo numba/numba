@@ -5,7 +5,7 @@ Types for closures and inner functions.
 from __future__ import print_function, division, absolute_import
 
 from numba.minivect import minitypes
-from numba.typesystem.basetypes import NumbaType
+from numba.typesystem import NumbaType
 from numba.exttypes.types.extensiontype import ExtensionType
 
 class ClosureType(NumbaType, minitypes.ObjectType):

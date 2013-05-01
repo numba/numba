@@ -12,7 +12,7 @@ from numba.typesystem import *
 # Extension Method Types
 #------------------------------------------------------------------------
 
-class ExtMethodType(NumbaType, minitypes.FunctionType):
+class ExtMethodType(FunctionType):
     """
     Extension method type, a FunctionType plus the following fields:
 
