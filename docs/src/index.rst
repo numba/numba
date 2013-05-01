@@ -80,8 +80,8 @@ As a starting example::
         cu.close()
         return result
 
-User's Guide Topics
--------------------
+User Guide
+----------
 
 Major features of NumbaPro include support for (parallel) NumPy ufuncs and gufuncs,
 CUDA support for GPU execution and a multi-threaded parallel range.
@@ -104,6 +104,9 @@ CUDA support for GPU execution and a multi-threaded parallel range.
 Additional examples:
 `GitHub repo of NumbaPro examples <https://github.com/ContinuumIO/numbapro-examples>`_
 
+.. Developer Guide
+   ---------------
+
 Requirements
 ------------
 
@@ -111,7 +114,7 @@ Requirements
 * LLVM (>= 3.2)
 * nVidia CUDA and NVVM libraries (>= 5.0)
 
-Python modules
+Python modules:
 
 * llvmpy (>= 0.11.0)
 * bitarray (>= 0.8.1)
@@ -119,12 +122,15 @@ Python modules
 Release Notes
 -------------
 
-See `release notes <releases.html>`_ for a summary of changes in each release.
+.. toctree::
+    :maxdepth: 1
+    
+    releases
 
-Indices and tables
--------------------
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+.. Indices and tables
+   -------------------
+   
+   * :ref:`genindex`
+   * :ref:`modindex`
+   * :ref:`search`
 
