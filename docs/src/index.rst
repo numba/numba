@@ -127,6 +127,14 @@ Release Notes
     
     releases
 
+License Agreement
+-----------------
+
+.. toctree::
+    :maxdepth: 1
+    
+    eula_numbapro
+
 .. Indices and tables
    -------------------
    
