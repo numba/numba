@@ -18,8 +18,7 @@ __all__ = []
 
 # Set numba universe types as globals
 d = globals()
-for name in chain(u.monotypes, u.polytypes, ["struct"], universe.complex_typenames):
-    ty = getattr(u, name)
+for name, ty in u.iter_types():
     name = name + "_" if is_builtin(name) else name
     __all__.append(name)
     d[name] = ty

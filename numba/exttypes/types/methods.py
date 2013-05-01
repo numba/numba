@@ -6,7 +6,7 @@ Extension method types.
 
 from __future__ import print_function, division, absolute_import
 
-from numba.typesystem.types import NumbaType, make_polytype
+from numba.typesystem.types import make_polytype, register, make_numbatype
 
 #------------------------------------------------------------------------
 # Extension Method Types
@@ -14,7 +14,7 @@ from numba.typesystem.types import NumbaType, make_polytype
 
 extra = ["name", "is_class_method", "is_static_method"]
 _ExtMethodType = make_polytype(
-    "extension_method", ["return_type", "args"] + extra,
+    "extmethod", ["return_type", "args"] + extra,
     defaults=dict.fromkeys(extra))
 
 class ExtMethodType(_ExtMethodType):
@@ -23,8 +23,8 @@ class ExtMethodType(_ExtMethodType):
     def is_bound_method(self):
         return not (self.is_class_method or self.is_static_method)
 
-class AutojitMethodType(NumbaType):
-    is_autojit_method = True
+register("extmethod", ExtMethodType)
+make_numbatype("autojit_extmethod", [])
 
 #------------------------------------------------------------------------
 # Method Signature Comparison

@@ -27,7 +27,8 @@ class Registry(object):
 #------------------------------------------------------------------------
 
 numba_registry = Registry()
-register = numba_registry.register
+register = lambda name, ctor: numba_registry.register(name, (ctor, False))
+register_mutable = lambda name, ctor: numba_registry.register(name, (ctor, True))
 
 class NumbaType(Type):
     """

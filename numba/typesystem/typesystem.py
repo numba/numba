@@ -64,6 +64,7 @@ from __future__ import print_function, division, absolute_import
 import ctypes
 import struct as struct_
 import weakref
+from itertools import chain
 from functools import partial
 
 from numba.traits import traits, Delegate
@@ -106,7 +107,8 @@ class TypeSystem(object):
 class Universe(object):
 
     name = None
-    polytypes = None # KIND -> TypeConstructor
+    polytypes = None            # KIND -> TypeConstructor (consed)
+    mutable_polytypes = None    # KIND -> TypeConstructor (not consed)
 
     def __init__(self, itemsizes=None):
         self.itemsizes = itemsizes          # KIND -> itemsize (bytes)
@@ -136,8 +138,16 @@ class Universe(object):
                 conser = Conser(ctor)
             setattr(self, kind, conser.get)
 
-    def construct_monotypes(self, monotypes):
-        raise NotImplementedError
+        if self.mutable_polytypes:
+            for kind, ctor in self.mutable_polytypes.iteritems():
+                setattr(self, kind, ctor)
+
+    def typenames(self):
+        return list(chain(self.monotypes, self.polytypes, self.mutable_polytypes))
+
+    def iter_types(self):
+        for name in self.typenames():
+            yield name, getattr(self, name)
 
     def kind(self, type):
         """
@@ -168,8 +178,12 @@ class Universe(object):
 
     @classmethod
     def register(cls, name, type):
-        assert name not in cls.polytypes, (name, cls.polytypes)
         cls.polytypes[name] = type
+        return type
+
+    @classmethod
+    def register_mutable(cls, name, type):
+        cls.mutable_polytypes[name] = type
         return type
 
 #------------------------------------------------------------------------
@@ -201,7 +215,7 @@ class ConstantTyper(object):
 #------------------------------------------------------------------------
 
 def convert_mono(domain, codomain, type):
-    return getattr(codomain, type.name)
+    return getattr(codomain, type.typename)
 
 def convert_poly(domain, codomain, type, coparams):
     # Get codomain constructor
@@ -283,7 +297,7 @@ class Type(object):
     # __________________________________________________________________
 
     @property
-    def name(self):
+    def typename(self):
         assert self.is_mono
         return self.params[0]
 
@@ -294,7 +308,7 @@ class Type(object):
 
     def __repr__(self):
         if self.is_mono:
-            return self.name
+            return self.typename
         else:
             return "%s(%s)" % (self.kind, ", ".join(map(str, self.params)))
 

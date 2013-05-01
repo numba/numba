@@ -94,7 +94,8 @@ def create_extension(env, py_class, flags):
     """
     flags.pop('llvm_module', None)
 
-    ext_type = etypes.JitExtensionType(py_class)
+    # ext_type = etypes.JitExtensionType(py_class)
+    ext_type = typesystem.jit_exttype(py_class)
 
     extension_compiler = JitExtensionCompiler(
         env, py_class, dict(vars(py_class)), ext_type, flags,

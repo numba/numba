@@ -70,6 +70,6 @@ def _sort_types_key(ty):
     return 0 # TODO: implement
 
 integral.sort(key=_sort_types_key)
-native_integral = [ty for ty in integral if ty.name in universe.native_sizes]
+native_integral = [ty for ty in integral if ty.typename in universe.native_sizes]
 floating.sort(key=_sort_types_key)
 complextypes.sort(key=_sort_types_key)

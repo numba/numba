@@ -4,13 +4,13 @@
 Extension type types.
 """
 
-from numba.minivect import minitypes
+from functools import partial
 
 from numba.traits import traits, Delegate
-from numba.typesystem import NumbaType
+from numba.typesystem import NumbaType, register_mutable
 
 @traits
-class ExtensionType(NumbaType, minitypes.ObjectType):
+class ExtensionType(NumbaType):
     """
     Extension type Numba type.
 
@@ -19,6 +19,7 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
     """
 
     is_extension = True
+    is_object = True
     is_final = False
 
     methoddict = Delegate('vtab_type')
@@ -30,8 +31,8 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
     attributedict = Delegate('attribute_table')
     attributes = Delegate('attribute_table')
 
-    def __init__(self, py_class, **kwds):
-        super(ExtensionType, self).__init__(**kwds)
+    def __init__(self, kind, py_class):
+        super(ExtensionType, self).__init__(kind, (py_class,))
         assert isinstance(py_class, type), ("Must be a new-style class "
                                             "(inherit from 'object')")
         self.name = py_class.__name__
@@ -54,7 +55,6 @@ class ExtensionType(NumbaType, minitypes.ObjectType):
 
         self.vtab_offset = extension_types.compute_vtab_offset(py_class)
         self.attr_offset = extension_types.compute_attrs_offset(py_class)
-
 
 # ______________________________________________________________________
 # @jit
@@ -90,3 +90,12 @@ class AutojitExtensionType(ExtensionType):
                     self.name, self.attribute_table.strtable())
         return repr(self)
 
+# ______________________________________________________________________
+# Register types
+
+# Bind type name
+register = lambda name, ctor: register_mutable(name, partial(ctor, name))
+
+register("exttype", ExtensionType)
+register("jit_exttype", JitExtensionType)
+register("autojit_exttype", AutojitExtensionType)

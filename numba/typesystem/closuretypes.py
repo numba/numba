@@ -17,7 +17,7 @@ class ClosureType(NumbaType):
     is_closure = True
 
     def __init__(self, signature):
-        super(ClosureType, self).__init__(**kwds)
+        super(ClosureType, self).__init__()
         self.signature = signature
         self.closure = None
 
@@ -36,8 +36,8 @@ class ClosureScopeType(ExtensionType):
     is_closure_scope = True
     is_final = True
 
-    def __init__(self, py_class, parent_scope, **kwds):
-        super(ClosureScopeType, self).__init__(py_class, **kwds)
+    def __init__(self, py_class, parent_scope):
+        super(ClosureScopeType, self).__init__(py_class)
         self.parent_scope = parent_scope
         self.unmangled_symtab = None
 

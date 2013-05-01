@@ -144,7 +144,7 @@ class LowLevelUniverse(Universe):
     def itemsize(self, type):
         if type.is_mono:
             assert type != self.void, "Void type has no itemsize"
-            return self.itemsizes[type.name]
+            return self.itemsizes[type.typename]
         elif self.kind(type) in self.itemsizes:
             assert not type.is_mono
             return self.itemsizes[self.kind(type)]
@@ -199,6 +199,18 @@ numba_types = [
     "object", "null", "none", "ellipsis", "slice", "newaxis", "range",
 ]
 
+def _struct(fields=(), name=None, readonly=False, packed=False, **kwargs):
+    "Create a *mutable* struct type"
+    if fields and kwargs:
+        raise TypeError("The struct must be either ordered or unordered")
+    elif kwargs:
+        # fields = sort_types(kwargs)
+        fields = list(kwargs.iteritems())
+
+    return types.MutableStructType(fields, name, readonly, packed)
+
+_ts = types.numba_registry.registry.items()
+
 class NumbaUniverse(Universe):
     """
     Universe of numba types. Extends the types of the low-level universe.
@@ -214,7 +226,14 @@ class NumbaUniverse(Universe):
         kinds.KIND_FUNCTION: types.FunctionType,
         # ...
     }
-    polytypes.update(types.numba_registry.registry)
+    polytypes.update(
+        [(name, ty) for name, (ty, mutable) in _ts if not mutable])
+
+    mutable_polytypes = {
+        kinds.KIND_STRUCT: _struct,
+    }
+    mutable_polytypes.update(
+        [(name, ty) for name, (ty, mutable) in _ts if mutable])
 
     def __init__(self, *args, **kwargs):
         super(NumbaUniverse, self).__init__(*args, **kwargs)
@@ -228,16 +247,9 @@ class NumbaUniverse(Universe):
         for typename in numba_types:
             monotypes[typename] = mono(typename, typename)
 
-    def struct(self, fields=(), name=None, readonly=False,
-               packed=False, **kwargs):
-        "Create a *mutable* struct type"
-        if fields and kwargs:
-            raise TypeError("The struct must be either ordered or unordered")
-        elif kwargs:
-            # fields = sort_types(kwargs)
-            fields = list(kwargs.iteritems())
-
-        return types.MutableStructType(fields, name, readonly, packed)
+    def typenames(self):
+        return super(NumbaUniverse, self).typenames() + [
+                 "complex64", "complex128", "complex256"]
 
     # def __getattr__(self, attr):
     #     return getattr(self.lowlevel_universe, attr)

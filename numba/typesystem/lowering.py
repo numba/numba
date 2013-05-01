@@ -14,7 +14,7 @@ def create_type_lowerer(table, domain, codomain):
     Create a type lowerer from a domain to a codomain given a lowering table.
     """
     def convert_mono(domain, codomain, type):
-        ctor = table.get(type.name, typesystem.convert_mono)
+        ctor = table.get(type.typename, typesystem.convert_mono)
         return ctor(domain, codomain, type)
 
     def convert_poly(domain, codomain, type, params):
