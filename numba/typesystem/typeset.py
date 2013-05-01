@@ -10,8 +10,8 @@ from itertools import starmap
 
 from itertools import izip
 
-from numba.typesystem import basetypes
-from numba.minivect import minitypes
+from numba import typesystem
+from numba.typesystem import types
 
 __all__ = [ 'typeset', 'numeric', 'integral', 'floating', 'complextypes' ]
 
@@ -83,7 +83,7 @@ def match(context, signature, argtypes):
 # Type sets
 #----------------------------------------------------------------------------
 
-class typeset(minitypes.Type):
+class typeset(types.NumbaType):
     """
     Holds a set of types that can be used to specify signatures for
     type inference.
@@ -92,10 +92,8 @@ class typeset(minitypes.Type):
     is_typeset = True
 
     def __init__(self, types, name=None):
-        super(typeset, self).__init__()
-
         self.types = frozenset(types)
-        self.name = name
+        # self.name = name
         self.first_type = types[0]
 
         self._from_argtypes = {}
@@ -125,7 +123,7 @@ class typeset(minitypes.Type):
         return hash(id(self))
 
 
-numeric = typeset(minitypes.numeric)
-integral = typeset(minitypes.integral)
-floating = typeset(minitypes.floating)
-complextypes = typeset(minitypes.complextypes)
+numeric = typeset(typesystem.numeric)
+integral = typeset(typesystem.integral)
+floating = typeset(typesystem.floating)
+complextypes = typeset(typesystem.complextypes)

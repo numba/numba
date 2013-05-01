@@ -5,19 +5,29 @@ User-facing numba types.
 """
 
 from __future__ import print_function, division, absolute_import
+
 try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
 
-import struct
-
 from numba.typesystem.typesystem import Type
 from numba.typesystem.kinds import *
+
+class Registry(object):
+    def __init__(self):
+        self.registry = {}
+
+    def register(self, name, obj):
+        assert name not in self.registry
+        self.registry[name] = obj
 
 #------------------------------------------------------------------------
 # User-facing type functionality
 #------------------------------------------------------------------------
+
+numba_registry = Registry()
+register = numba_registry.register
 
 class NumbaType(Type):
     """
@@ -34,8 +44,15 @@ class NumbaType(Type):
 
     @property
     def universe(self):
-        from numba.typesystem import defaults
+        from . import defaults
         return defaults.numba_universe
+
+    @property
+    def typesystem(self):
+        from . import defaults
+        return defaults.numba_typesystem
+
+    ### END
 
     def __getitem__(self, item):
         """
@@ -63,12 +80,10 @@ class NumbaType(Type):
                 if s.step == 1:
                     step_idx = idx
 
-            return type(self)(self.dtype, len(item),
-                              is_c_contig=step_idx == len(item) - 1,
-                              is_f_contig=step_idx == 0)
+            return type(self)(self.dtype, len(item))
         else:
             verify_slice(item)
-            return ArrayType(type, 1, is_c_contig=bool(item.step))
+            return ArrayType(self, 1)
 
     def __call__(self, *args):
         """
@@ -89,8 +104,10 @@ class NumbaType(Type):
     def qualify(self, *qualifiers):
         return self # TODO: implement
 
+    def to_llvm(self, context):
+        return self.typesystem.convert("llvm", self)
 
-def make_polytype(kind, names, defaults=()):
+def make_polytype(kind, names, defaults=(), doc=None):
     """
     Create a new polytype that has named attributes. E.g.
 
@@ -122,71 +139,18 @@ def make_polytype(kind, names, defaults=()):
     # Create parameter accessors
     typedict = dict([(name, property(lambda self, i=i: self.params[i]))
                          for i, name in enumerate(names)])
-    typedict["__init__"] = __init__
-    typedict["default_args"] = default_args
+    typedict.update(__init__=__init__, __doc__=doc, default_args=default_args)
 
     polyctor = type(kind, (NumbaType,), typedict)
     return polyctor
 
-#------------------------------------------------------------------------
-# Type constructors
-#------------------------------------------------------------------------
-
-class ArrayType(make_polytype(KIND_ARRAY, ["dtype", "ndim"])):
-    """
-    An array type. ArrayType may be sliced to obtain a subtype:
-
-    >>> double[:, :, ::1][1:]
-    double[:, ::1]
-    >>> double[:, :, ::1][:-1]
-    double[:, :]
-
-    >>> double[::1, :, :][:-1]
-    double[::1, :]
-    >>> double[::1, :, :][1:]
-    double[:, :]
-    """
-
-    def pointer(self):
-        raise Exception("You probably want a pointer type to the dtype")
-
-    def __repr__(self):
-        axes = [":"] * self.ndim
-        if self.is_c_contig and self.ndim > 0:
-            axes[-1] = "::1"
-        elif self.is_f_contig and self.ndim > 0:
-            axes[0] = "::1"
-
-        return "%s[%s]" % (self.dtype, ", ".join(axes))
-
-    def __getitem__(self, index):
-        "Slicing an array slices the dimensions"
-        assert isinstance(index, slice)
-        assert index.step is None
-        assert index.start is not None or index.stop is not None
-
-        start = 0
-        stop = self.ndim
-        if index.start is not None:
-            start = index.start
-        if index.stop is not None:
-            stop = index.stop
-
-        ndim = len(range(self.ndim)[start:stop])
-
-        if ndim == 0:
-            return self.dtype
-        elif ndim > 0:
-            return type(self)(self.dtype, ndim)
-        else:
-            raise IndexError(index, ndim)
-
-
-CArrayType = make_polytype(KIND_CARRAY, ["base_type", "size"])
-ComplexType = make_polytype(KIND_COMPLEX, ["base_type"])
+def make_numbatype(name, names, defaults=(), doc=None):
+    cls = make_polytype(name, names, defaults, doc)
+    register(name, cls)
+    return cls
 
 #------------------------------------------------------------------------
-# Function Types
+# Low-level polytypes
 #------------------------------------------------------------------------
 
 def pass_by_ref(type):
@@ -276,43 +240,14 @@ class FunctionType(_FunctionType):
         func, = args
         return Function(self, func)
 
-# class PointerFunctionType(make_polytype("constant_function_pointer",
-#                                         ["obj", "pointer", "signature"])):
-#     """
-#     Pointer to a function at a known address represented by some Python
-#     object (e.g. a ctypes or CFFI function).
-#     """
-#
-#     is_pointer_to_function = True
-
-class AutojitType(make_polytype("autojit_function", ["autojit_func"])):
-    """
-    Type for autojit functions.
-    """
-    is_object = True
-
-class JitType(make_polytype("jit_function", ["jit_func"])):
-    """
-    Type for jit functions.
-    """
-    is_object = True
-
-#------------------------------------------------------------------------
-# Pointer Types
-#------------------------------------------------------------------------
+# ______________________________________________________________________
+# Pointers
 
 class PointerType(make_polytype(KIND_POINTER, ["base_type"])):
+
     def __repr__(self):
         space = " " * (not self.base_type.is_pointer)
         return "%s%s*" % (self.base_type, space)
-
-# class KnownPointerType(PointerType):
-#
-#     is_known_pointer = True
-#
-#     def __init__(self, base_type, address, **kwds):
-#         super(KnownPointerType, self).__init__(base_type, **kwds)
-#         self.address = address
 
 class SizedPointerType(make_polytype("sized_pointer", ["base_type", "size"])):
     """
@@ -333,42 +268,19 @@ class SizedPointerType(make_polytype("sized_pointer", ["base_type", "size"])):
     def __hash__(self):
         return hash(self.base_type.pointer())
 
+CArrayType = make_polytype(KIND_CARRAY, ["base_type", "size"])
 
-#------------------------------------------------------------------------
-# Struct Types
-#------------------------------------------------------------------------
+# ______________________________________________________________________
+# Structs
 
-_StructType = make_polytype(
-    KIND_STRUCT,
-    ["fields", "name", "readonly", "packed"],
-    defaults={"name": None, "readonly": False, "packed": False})
+attrs = ["name", "readonly", "packed"]
+defaults = dict.fromkeys(attrs)
 
-class StructType(_StructType):
-    """
-    Create a struct type. Fields may be ordered or unordered. Unordered fields
-    will be ordered from big types to small types (for better alignment).
-
-    >>> struct([('a', int_), ('b', float_)], name='Foo') # ordered struct
-    struct Foo { int a, float b }
-    >>> struct(a=int_, b=float_, name='Foo') # unordered struct
-    struct Foo { float b, int a }
-    >>> struct(a=int32, b=int32, name='Foo') # unordered struct
-    struct Foo { int32 a, int32 b }
-
-    >>> S = struct(a=complex128, b=complex64, c=struct(f1=double, f2=double, f3=int32))
-    >>> S
-    struct { struct { double f1, double f2, int32 f3 } c, complex128 a, complex64 b }
-
-    >>> S.offsetof('a')
-    24
-    """
+class StructType(make_polytype(KIND_STRUCT, ["fields"] + attrs, defaults)):
 
     @property
     def fielddict(self):
         return dict(self.fields)
-
-    def copy(self):
-        return self.ts.struct(self.fields, self.name, self.readonly, self.packed)
 
     def __repr__(self):
         if self.name:
@@ -389,16 +301,6 @@ class StructType(_StructType):
         other_fields = other_struct.fields[:len(self.fields)]
         return self.fields == other_fields
 
-    def add_field(self, name, type):
-        assert name not in self.fielddict
-        self.fielddict[name] = type
-        self.fields.append((name, type))
-        self.mutated = True
-
-    def update_mutated(self):
-        self.rank = sum([_sort_key(field) for field in self.fields])
-        self.mutated = False
-
     def offsetof(self, field_name):
         """
         Compute the offset of a field. Must be used only after mutation has
@@ -407,9 +309,78 @@ class StructType(_StructType):
         ctype = self.to_ctypes()
         return getattr(ctype, field_name).offset
 
+#------------------------------------------------------------------------
+# High-level types
+#------------------------------------------------------------------------
 
-class KnownValueType(make_polytype("known_value", ["value"])):
+class ArrayType(make_polytype(KIND_ARRAY, ["dtype", "ndim"])):
     """
+    An array type. ArrayType may be sliced to obtain a subtype:
+
+    >>> double[:, :, ::1][1:]
+    double[:, ::1]
+    >>> double[:, :, ::1][:-1]
+    double[:, :]
+
+    >>> double[::1, :, :][:-1]
+    double[::1, :]
+    >>> double[::1, :, :][1:]
+    double[:, :]
+    """
+
+    def pointer(self):
+        raise Exception("You probably want a pointer type to the dtype")
+
+    def __repr__(self):
+        axes = [":"] * self.ndim
+        if self.is_c_contig and self.ndim > 0:
+            axes[-1] = "::1"
+        elif self.is_f_contig and self.ndim > 0:
+            axes[0] = "::1"
+
+        return "%s[%s]" % (self.dtype, ", ".join(axes))
+
+    def __getitem__(self, index):
+        "Slicing an array slices the dimensions"
+        assert isinstance(index, slice)
+        assert index.step is None
+        assert index.start is not None or index.stop is not None
+
+        start = 0
+        stop = self.ndim
+        if index.start is not None:
+            start = index.start
+        if index.stop is not None:
+            stop = index.stop
+
+        ndim = len(range(self.ndim)[start:stop])
+
+        if ndim == 0:
+            return self.dtype
+        elif ndim > 0:
+            return type(self)(self.dtype, ndim)
+        else:
+            raise IndexError(index, ndim)
+
+class MutableStructType(StructType):
+    """
+    Create a struct type. Fields may be ordered or unordered. Unordered fields
+    will be ordered from big types to small types (for better alignment).
+    """
+
+    def copy(self):
+        return self.ts.struct(self.fields, self.name, self.readonly, self.packed)
+
+    def add_field(self, name, type):
+        assert name not in self.fielddict
+        self.fields.append((name, type))
+        self.mutated = True
+
+    def update_mutated(self):
+        self.rank = sum([_sort_key(field) for field in self.fields])
+        self.mutated = False
+
+KnownValueType = make_numbatype("known_value", ["value"], doc="""\
     Type which is associated with a known value or well-defined symbolic
     expression:
 
@@ -418,10 +389,7 @@ class KnownValueType(make_polytype("known_value", ["value"])):
 
     (Remember that unbound methods like np.add.reduce are transient, i.e.
      np.add.reduce is not np.add.reduce).
-    """
-
-    # TODO: allow kind derivation?
-    is_object = True
+    """)
 
 class ModuleType(KnownValueType):
     """
@@ -444,37 +412,28 @@ class ModuleType(KnownValueType):
     def module(self):
         return self.value
 
-# # TODO: Do we really need this type?
-# class MethodType(make_polytype("method", ["base_type", "attr_name"])):
-#     """
-#     Method of something.
-#
-#         base_type: the object type the attribute was accessed on
-#     """
+register("module", ModuleType)
 
-NumpyDtypeType = make_polytype("numpy_dtype", ["dtype"])
 
-class ReferenceType(make_polytype("reference", ["referenced_type"])):
-    """
+make_numbatype("autojit_function", ["autojit_func"],
+               doc="Type for autojit functions")
+make_numbatype("jit_function", ["jit_func"],
+               doc="Type for jit functions")
+
+NumpyDtypeType = make_numbatype("numpy_dtype", ["dtype"])
+ComplexType = make_numbatype(KIND_COMPLEX, ["base_type"])
+
+ReferenceType = make_numbatype("reference", ["referenced_type"], doc="""\
     A reference to an (primitive or Python) object. This is passed as a
     pointer and dereferences automatically.
 
     Currently only supported for structs.
-    """
+    """)
 
-    # TODO: Do we really need this type?
-
-#------------------------------------------------------------------------
-# Type of Type
-#------------------------------------------------------------------------
-
-class MetaType(make_polytype("meta", ["dst_type"])):
-    """
+MetaType = make_numbatype("meta", ["dst_type"], doc="""\
     A type instance in user code. e.g. double(value). The Name node will have
     a cast-type with dst_type 'double'.
-    """
-
-    is_cast = True
+    """)
 
 #------------------------------------------------------------------------
 # Builtins
@@ -531,8 +490,3 @@ def sort_types(types_dict):
         fields.extend(sorted(d[rank], key=key))
 
     return fields
-
-
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod()

@@ -6,16 +6,11 @@ Type defaults
 
 from __future__ import print_function, division, absolute_import
 
-import math
-
 from numba.typesystem import universe
-from numba.typesystem.typesystem import (
-    Universe, Type, Conser, nbo, ConstantTyper, TypeConverter, TypeSystem)
+from numba.typesystem.typesystem import TypeConverter, TypeSystem
 from numba.typesystem import promotion
 from numba.typesystem import constants
 from numba.typesystem import lowering
-
-import numpy as np
 
 #------------------------------------------------------------------------
 # Defaults initialization
@@ -55,28 +50,26 @@ llvm_typesystem = TypeSystem(llvm_universe, typeof=compose(lower, typeof))
 
 # ______________________________________________________________________
 
+u = numba_universe
+
 integral = []
 native_integral = []
 floating = []
-complextypes = []
+complextypes = [u.complex64, u.complex128, u.complex256]
 
-# for typename in __all__:
-#     minitype = globals()[typename]
-#     if minitype is None:
-#         continue
-#
-#     if minitype.is_int:
-#         integral.append(minitype)
-#     elif minitype.is_float:
-#         floating.append(minitype)
-#     elif minitype.is_complex:
-#         complextypes.append(minitype)
-#
-# numeric = integral + floating + complextypes
-# native_integral.extend((Py_ssize_t, size_t))
-#
-# integral.sort(key=_sort_types_key)
-# native_integral = [minitype for minitype in integral
-#                                 if minitype.typecode is not None]
-# floating.sort(key=_sort_types_key)
-# complextypes.sort(key=_sort_types_key)
+for typename, ty in u.monotypes.iteritems():
+    if ty.is_int:
+        integral.append(ty)
+    elif ty.is_float:
+        floating.append(ty)
+
+numeric = integral + floating + complextypes
+native_integral.extend((u.Py_ssize_t, u.size_t))
+
+def _sort_types_key(ty):
+    return 0 # TODO: implement
+
+integral.sort(key=_sort_types_key)
+native_integral = [ty for ty in integral if ty.name in universe.native_sizes]
+floating.sort(key=_sort_types_key)
+complextypes.sort(key=_sort_types_key)

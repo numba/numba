@@ -38,7 +38,7 @@ class ObjectCoercer(object):
 
         object_: "O",
         bool_: "b", # ?
-        c_string_type: "s",
+        char.pointer(): "s",
         char.pointer() : "s",
     }
 

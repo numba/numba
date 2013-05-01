@@ -5,6 +5,8 @@ from numba import PY3
 from numba.typesystem import *
 from .external import ExternalFunction
 
+c_string_type = char.pointer()
+
 class ofunc(ExternalFunction):
     arg_types = [object_]
     return_type = object_

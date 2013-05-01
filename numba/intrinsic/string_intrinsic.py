@@ -7,6 +7,8 @@ from llpython.byte_translator import LLVMTranslator
 __all__ = ['CStringSlice2',
            'CStringSlice2Len']
 
+c_string_type = char.pointer()
+
 class CStringSlice2 (Intrinsic):
     arg_types = [c_string_type, c_string_type, size_t, Py_ssize_t, Py_ssize_t]
     return_type = void

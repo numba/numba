@@ -62,15 +62,15 @@ Some requirements:
 from __future__ import print_function, division, absolute_import
 
 import ctypes
-import struct
+import struct as struct_
 import weakref
 from functools import partial
 
 from numba.traits import traits, Delegate
 
-native_pointer_size = struct.calcsize('@P')
+native_pointer_size = struct_.calcsize('@P')
 
-if struct.pack('i', 1)[0] == '\1':
+if struct_.pack('i', 1)[0] == '\1':
     nbo = '<' # little endian
 else:
     nbo = '>' # big endian
@@ -165,6 +165,12 @@ class Universe(object):
 
     def get_polyconstructor(self, kind):
         return self.polytypes[kind]
+
+    @classmethod
+    def register(cls, name, type):
+        assert name not in cls.polytypes, (name, cls.polytypes)
+        cls.polytypes[name] = type
+        return type
 
 #------------------------------------------------------------------------
 # Typing of Constants

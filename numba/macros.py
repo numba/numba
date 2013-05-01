@@ -28,12 +28,12 @@ def c_string_slice_2 (context, builder, c_string, lb, ub = None):
     return ret_val
 
 c_string_slice_2.__signature__ = minitypes.FunctionType(
-    return_type = c_string_type,
-    args = (c_string_type, Py_ssize_t, Py_ssize_t))
+    return_type = char.pointer(),
+    args = (char.pointer(), Py_ssize_t, Py_ssize_t))
 
 def c_string_slice_1 (context, builder, c_string, lb):
     return c_string_slice_2(context, builder, c_string, lb)
 
 c_string_slice_1.__signature__ = minitypes.FunctionType(
-    return_type = c_string_type,
-    args = (c_string_type, Py_ssize_t))
+    return_type = char.pointer(),
+    args = (char.pointer(), Py_ssize_t))

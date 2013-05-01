@@ -6,12 +6,11 @@ Universes of type constructors for numba.
 
 from __future__ import print_function, division, absolute_import
 
-import struct
+import struct as struct_
 import ctypes
 
 from numba.typesystem.typesystem import Universe
-from numba.typesystem.types import *
-from numba.typesystem import llvmtyping
+from numba.typesystem import kinds, types, llvmtyping
 
 import llvm.core
 
@@ -37,7 +36,7 @@ complex_typenames = [
 # Default type sizes
 #------------------------------------------------------------------------
 
-_plat_bits = struct.calcsize('@P') * 8
+_plat_bits = struct_.calcsize('@P') * 8
 
 def getsize(ctypes_name, default):
     try:
@@ -77,17 +76,17 @@ ctypes_npy_intp = np.empty(0).ctypes.strides._type_
 
 native_sizes = {
     # Int
-    "short":        struct.calcsize("h"),
-    "int":          struct.calcsize("i"),
-    "long":         struct.calcsize("l"),
-    "longlong":     struct.calcsize("Q"),
+    "short":        struct_.calcsize("h"),
+    "int":          struct_.calcsize("i"),
+    "long":         struct_.calcsize("l"),
+    "longlong":     struct_.calcsize("Q"),
     "Py_ssize_t":   getsize('c_size_t', _plat_bits // 8),
     "npy_intp":     ctypes.sizeof(ctypes_npy_intp),
     # Unsigned int
-    "ushort":       struct.calcsize("H"),
-    "uint":         struct.calcsize("I"),
-    "ulong":        struct.calcsize("L"),
-    "ulonglong":    struct.calcsize("Q"),
+    "ushort":       struct_.calcsize("H"),
+    "uint":         struct_.calcsize("I"),
+    "ulong":        struct_.calcsize("L"),
+    "ulonglong":    struct_.calcsize("Q"),
     "size_t":       getsize('c_size_t', _plat_bits // 8),
     "Py_uintptr_t": ctypes.sizeof(ctypes.c_void_p),
     # Float
@@ -99,8 +98,8 @@ native_sizes = {
 default_type_sizes = dict(type_sizes, **native_sizes)
 
 # ctors
-mono = NumbaType.mono
-poly = NumbaType.poly
+mono = types.NumbaType.mono
+poly = types.NumbaType.poly
 
 def make_monotypes(kind_to_typename, monotypes):
     for kind, typenames in kind_to_typename.iteritems():
@@ -122,15 +121,15 @@ class LowLevelUniverse(Universe):
 
     kind_to_typenames = {
         # KIND -> [typename]
-        KIND_INT: int_typenames,
-        KIND_FLOAT: float_typenames,
-        KIND_VOID: ["void"],
+        kinds.KIND_INT: int_typenames,
+        kinds.KIND_FLOAT: float_typenames,
+        kinds.KIND_VOID: ["void"],
     }
 
     polytypes = {
-        # KIND_STRUCT: StructType,   # This is a mutable type, don't cons
-        KIND_POINTER: PointerType,   # method 'pointer'
-        KIND_FUNCTION: FunctionType, # method 'function'
+        kinds.KIND_STRUCT: types.StructType,     # method 'struct'
+        kinds.KIND_POINTER: types.PointerType,   # method 'pointer'
+        kinds.KIND_FUNCTION: types.FunctionType, # method 'function'
     }
 
     def __init__(self, itemsizes=None):
@@ -141,14 +140,6 @@ class LowLevelUniverse(Universe):
 
     def rank(self, type):
         return 0 # TODO: implement
-
-    def struct(self, fields=(), name=None, readonly=False, packed=False, **kwargs):
-        if fields and kwargs:
-            raise TypeError("The struct must be either ordered or unordered")
-        elif kwargs:
-            fields = sort_types(kwargs)
-
-        return StructType(fields, name, readonly, packed)
 
     def itemsize(self, type):
         if type.is_mono:
@@ -180,9 +171,9 @@ class LLVMUniverse(Universe):
     name = "llvm"
 
     polytypes = {
-        KIND_STRUCT: llvm_poly(llvmtyping.lstruct),
-        KIND_POINTER: llvm_poly(llvmtyping.lpointer),
-        KIND_FUNCTION: llvm_poly(llvmtyping.lfunction),
+        kinds.KIND_STRUCT: llvm_poly(llvmtyping.lstruct),
+        kinds.KIND_POINTER: llvm_poly(llvmtyping.lpointer),
+        kinds.KIND_FUNCTION: llvm_poly(llvmtyping.lfunction),
     }
 
     def __init__(self, itemsizes=None):
@@ -217,10 +208,13 @@ class NumbaUniverse(Universe):
     name = "numba"
 
     polytypes = {
-        KIND_ARRAY: ArrayType,
-        KIND_COMPLEX: ComplexType,
+        kinds.KIND_ARRAY: types.ArrayType,
+        kinds.KIND_COMPLEX: types.ComplexType,
+        kinds.KIND_POINTER: types.PointerType,
+        kinds.KIND_FUNCTION: types.FunctionType,
+        # ...
     }
-    polytypes.update(lowlevel_universe.polytypes)
+    polytypes.update(types.numba_registry.registry)
 
     def __init__(self, *args, **kwargs):
         super(NumbaUniverse, self).__init__(*args, **kwargs)
@@ -234,8 +228,16 @@ class NumbaUniverse(Universe):
         for typename in numba_types:
             monotypes[typename] = mono(typename, typename)
 
-    def struct(self, *args, **kwargs):
-        return self.lowlevel_universe.struct(*args, **kwargs)
+    def struct(self, fields=(), name=None, readonly=False,
+               packed=False, **kwargs):
+        "Create a *mutable* struct type"
+        if fields and kwargs:
+            raise TypeError("The struct must be either ordered or unordered")
+        elif kwargs:
+            # fields = sort_types(kwargs)
+            fields = list(kwargs.iteritems())
+
+        return types.MutableStructType(fields, name, readonly, packed)
 
     # def __getattr__(self, attr):
     #     return getattr(self.lowlevel_universe, attr)

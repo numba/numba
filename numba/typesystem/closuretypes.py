@@ -1,21 +1,22 @@
 # -*- coding: utf-8 -*-
+
 """
 Types for closures and inner functions.
 """
+
 from __future__ import print_function, division, absolute_import
 
-from numba.minivect import minitypes
 from numba.typesystem import NumbaType
 from numba.exttypes.types.extensiontype import ExtensionType
 
-class ClosureType(NumbaType, minitypes.ObjectType):
+class ClosureType(NumbaType):
     """
     Type of closures and inner functions.
     """
 
     is_closure = True
 
-    def __init__(self, signature, **kwds):
+    def __init__(self, signature):
         super(ClosureType, self).__init__(**kwds)
         self.signature = signature
         self.closure = None

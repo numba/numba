@@ -4,9 +4,13 @@ Shorthands for type constructing, promotions, etc.
 """
 from __future__ import print_function, division, absolute_import
 
+from itertools import chain
+
 from numba.utils import is_builtin
-from numba.typesystem import numpy_support, types
+from numba.typesystem import numpy_support, types, universe
 from numba.typesystem.defaults import numba_universe as u
+
+__all__ = []
 
 #------------------------------------------------------------------------
 # Type shorthands
@@ -14,11 +18,14 @@ from numba.typesystem.defaults import numba_universe as u
 
 # Set numba universe types as globals
 d = globals()
-for name, ty in u.monotypes.iteritems():
+for name in chain(u.monotypes, u.polytypes, ["struct"], universe.complex_typenames):
+    ty = getattr(u, name)
     name = name + "_" if is_builtin(name) else name
+    __all__.append(name)
     d[name] = ty
 
-complex64, complex128, complex256 = u.complex64, u.complex128, u.complex256
+# print(struct([('a', int_)]))
+# print(function(int_, (float_, double, complex128)))
 
 # ______________________________________________________________________
 
@@ -86,6 +93,3 @@ def list_(base_type, size=-1):
     :return: a tuple type representation
     """
     return u.list(base_type, size)
-
-def function(return_type, argtypes):
-    return u.function(return_type, argtypes)
