@@ -209,6 +209,9 @@ numba_types = [
 ]
 
 class NumbaUniverse(Universe):
+    """
+    Universe of numba types. Extends the types of the low-level universe.
+    """
 
     lowlevel_universe = lowlevel_universe
     name = "numba"
@@ -217,9 +220,9 @@ class NumbaUniverse(Universe):
         KIND_ARRAY: ArrayType,
         KIND_COMPLEX: ComplexType,
     }
+    polytypes.update(lowlevel_universe.polytypes)
 
     def __init__(self, *args, **kwargs):
-        self.polytypes.update(self.lowlevel_universe.polytypes)
         super(NumbaUniverse, self).__init__(*args, **kwargs)
 
         self.complex64 = self.complex(self.float)
@@ -228,7 +231,8 @@ class NumbaUniverse(Universe):
 
     def make_monotypes(self, monotypes):
         monotypes.update(self.lowlevel_universe.monotypes)
-        make_monotypes(dict(zip(numba_types, numba_types)), monotypes)
+        for typename in numba_types:
+            monotypes[typename] = mono(typename, typename)
 
     def struct(self, *args, **kwargs):
         return self.lowlevel_universe.struct(*args, **kwargs)

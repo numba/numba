@@ -260,14 +260,14 @@ class Type(object):
         Nullary type constructor creating the most elementary of types.
         Does not compose any other type (in this domain).
         """
-        return Type(kind, (name, ty), is_mono=True)
+        return cls(kind, (name, ty), is_mono=True)
 
     @classmethod
     def poly(cls, kind, *args):
         """
         A type that composes other types.
         """
-        return Type(kind, args)
+        return cls(kind, args)
 
     @classmethod
     def default_args(cls, args, kwargs):

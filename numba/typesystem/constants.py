@@ -47,7 +47,7 @@ def get_default_typing_rules(u, typeof, promote):
 
     :param u: The type universe
     """
-    from numba.support import numpy_support
+    from numba.typesystem import numpy_support
 
     table = {}
     def register(*classes):

@@ -43,7 +43,7 @@ class NoneNode(ExprNode):
     Return None.
     """
 
-    type = typesystem.NoneType()
+    type = typesystem.none
     variable = Variable(type)
 
 class ObjectTempRefNode(ExprNode):

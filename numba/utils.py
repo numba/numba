@@ -5,10 +5,17 @@ import opcode
 import ast
 import pprint
 
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
+
 import numba
 from .minivect.complex_support import Complex64, Complex128, Complex256
 from .minivect import miniast, minitypes
-from numba.typesystem.typemapper import NumbaTypeMapper
+
+def is_builtin(name):
+    return hasattr(builtins, name)
 
 def itercode(code):
     """Return a generator of byte-offset, opcode, and argument
@@ -82,7 +89,7 @@ class NumbaContext(miniast.LLVMContext):
 
     def init(self):
         self.astbuilder = self.astbuilder_cls(self)
-        self.typemapper = NumbaTypeMapper(self)
+        self.typemapper = None
 
     def is_object(self, type):
         return super(NumbaContext, self).is_object(type) or type.is_array

@@ -67,7 +67,7 @@ from numba.error import *
 
 from numba.containers.typedlist import typedlist
 from numba.containers.typedtuple import typedtuple
-from numba.typesystem import map_dtype
+from numba.typesystem.numpy_support import map_dtype
 from numba.type_inference.module_type_inference import (is_registered,
                                                         register,
                                                         register_inferer,

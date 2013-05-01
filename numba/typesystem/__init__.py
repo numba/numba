@@ -19,6 +19,7 @@ from .typematch import *
 
 from .universe import *
 from .defaults import *
+from .tbaa import *
 
 # TODO: Remove
 from numba.minivect.minitypes import *

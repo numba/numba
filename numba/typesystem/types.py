@@ -86,6 +86,9 @@ class NumbaType(Type):
     def pointer(self):
         return self.universe.pointer(self)
 
+    def qualify(self, *qualifiers):
+        return self # TODO: implement
+
 
 def make_polytype(kind, names, defaults=()):
     """
