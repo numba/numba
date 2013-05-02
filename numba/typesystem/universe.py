@@ -125,13 +125,6 @@ class LowLevelUniverse(Universe):
 
     name = "low-level"
 
-    kind_to_typenames = {
-        # KIND -> [typename]
-        kinds.KIND_INT: int_typenames,
-        kinds.KIND_FLOAT: float_typenames,
-        kinds.KIND_VOID: ["void"],
-    }
-
     polytypes = {
         kinds.KIND_STRUCT: types.StructType,     # method 'struct'
         kinds.KIND_POINTER: types.PointerType,   # method 'pointer'
@@ -142,10 +135,18 @@ class LowLevelUniverse(Universe):
         super(LowLevelUniverse, self).__init__(itemsizes or default_type_sizes)
 
     def make_monotypes(self, monotypes):
-        make_monotypes(self.kind_to_typenames, monotypes)
+        monotypes[kinds.KIND_VOID] = mono(kinds.KIND_VOID, "void")
         for typename in int_typenames:
-            is_signed = typename in signed
-            monotypes[typename] = mono(kinds.KIND_INT, typename, signed=is_signed)
+            monotypes[typename] = mono(kinds.KIND_INT, typename,
+                                       itemsize=self.itemsizes[typename],
+                                       signed=typename in signed)
+
+        floats = "float", "double", "longdouble"
+        aliases = "float32", "float64", "float128"
+        for typename, alias in zip(floats, aliases):
+            ty = mono(kinds.KIND_FLOAT, typename,
+                      itemsize=self.itemsizes[typename])
+            monotypes[typename] = monotypes[alias] = ty
 
     def rank(self, type):
         return 0 # TODO: implement
@@ -158,7 +159,7 @@ class LowLevelUniverse(Universe):
             assert not type.is_mono
             return self.itemsizes[self.kind(type)]
         elif type.is_function:
-            return self.itemsizes[KIND_POINTER]
+            return self.itemsizes[kinds.KIND_POINTER]
         elif type.is_struct:
             return sum([self.itemsize(t) for n, t in type.fields])
         else:

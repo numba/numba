@@ -39,21 +39,7 @@ class NumbaType(Type):
         conversion: to_llvm/to_ctypes/get_dtype
     """
 
-    # TODO: For methods pointer, __getitem__ and __call__ we need the type
-    # TODO: universe. Should each type instance hold the type universe it
-    # TODO: was constructed in?
-
-    @property
-    def universe(self):
-        from . import defaults
-        return defaults.numba_universe
-
-    @property
-    def typesystem(self):
-        from . import defaults
-        return defaults.numba_typesystem
-
-    ### END
+    mutable = False
 
     def __getitem__(self, item):
         """
@@ -81,10 +67,12 @@ class NumbaType(Type):
                 if s.step == 1:
                     step_idx = idx
 
-            return type(self)(self.dtype, len(item))
+            return ArrayType(self.dtype, len(item),
+                             is_c_contig=step_idx == len(item) - 1,
+                             is_f_contig=step_idx == 0)
         else:
             verify_slice(item)
-            return ArrayType(self, 1)
+            return ArrayType(self, 1, is_c_contig=bool(item.step))
 
     def __call__(self, *args):
         """
@@ -97,15 +85,16 @@ class NumbaType(Type):
             #       minivect)
             return args[0]
 
-        return self.universe.function(self, args)
+        return FunctionType(self, args)
 
     def pointer(self):
-        return self.universe.pointer(self)
+        return PointerType(self)
 
     def qualify(self, *qualifiers):
         return self # TODO: implement
 
     def to_llvm(self, context):
+        raise NotImplementedError("use typesystem.llvm(type) instead")
         return self.typesystem.convert("llvm", self)
 
 def make_polytype(kind, names, defaults=(), doc=None):
@@ -183,13 +172,13 @@ class Function(object):
         """
         raise TypeError("Not a callable function")
 
-_FunctionType = make_polytype(
-    KIND_FUNCTION,
-    ['return_type', 'args', 'name', 'is_vararg'],
-    defaults={"name": None, "is_vararg": False},
-)
+conser = object()
 
-class FunctionType(_FunctionType):
+class FunctionType(NumbaType):
+    typename = "function"
+    args = ['return_type', 'args', 'name', 'is_vararg']
+    defaults = {"name": None, "is_vararg": False}
+    __new__ = conser
 
     struct_by_reference = False
 
@@ -244,21 +233,25 @@ class FunctionType(_FunctionType):
 # ______________________________________________________________________
 # Pointers
 
-class PointerType(make_polytype(KIND_POINTER, ["base_type"])):
+class PointerType(NumbaType):
+    typename = "pointer"
+    args = ['base_type']
+    __new__ = conser
 
     def __repr__(self):
         space = " " * (not self.base_type.is_pointer)
         return "%s%s*" % (self.base_type, space)
 
-class SizedPointerType(make_polytype("sized_pointer", ["base_type", "size"])):
+class SizedPointerType(CachedType):
     """
     A pointer with knowledge of its range.
 
     E.g. an array's 'shape' or 'strides' attribute.
     This also allow tuple unpacking.
     """
-
-    is_pointer = True
+    typename = "sized_pointer"
+    args = ["base_type", "size"]
+    flags = ["pointer"]
 
     def __eq__(self, other):
         if other.is_sized_pointer:
@@ -274,10 +267,11 @@ CArrayType = make_polytype(KIND_CARRAY, ["base_type", "size"])
 # ______________________________________________________________________
 # Structs
 
-attrs = ["name", "readonly", "packed"]
-defaults = dict.fromkeys(attrs)
+class StructType(NumbaType):
 
-class StructType(make_polytype(KIND_STRUCT, ["fields"] + attrs, defaults)):
+    typename = "struct"
+    args = ["fields", "name", "readonly", "packed"]
+    defaults = dict.fromkeys(args[1:])
 
     @property
     def fielddict(self):
@@ -310,11 +304,29 @@ class StructType(make_polytype(KIND_STRUCT, ["fields"] + attrs, defaults)):
         ctype = self.to_ctypes()
         return getattr(ctype, field_name).offset
 
+class MutableStructType(StructType):
+    """
+    Create a struct type. Fields may be ordered or unordered. Unordered fields
+    will be ordered from big types to small types (for better alignment).
+    """
+
+    def copy(self):
+        return type(self)(self.fields, self.name, self.readonly, self.packed)
+
+    def add_field(self, name, type):
+        assert name not in self.fielddict
+        self.fields.append((name, type))
+        self.mutated = True
+
+    def update_mutated(self):
+        self.rank = sum([_sort_key(field) for field in self.fields])
+        self.mutated = False
+
 #------------------------------------------------------------------------
 # High-level types
 #------------------------------------------------------------------------
 
-class ArrayType(make_polytype(KIND_ARRAY, ["dtype", "ndim"])):
+class ArrayType(NumbaType):
     """
     An array type. ArrayType may be sliced to obtain a subtype:
 
@@ -328,6 +340,10 @@ class ArrayType(make_polytype(KIND_ARRAY, ["dtype", "ndim"])):
     >>> double[::1, :, :][1:]
     double[:, :]
     """
+
+    typename = "array"
+    args = ["dtype", "ndim"]
+    flags = ["object"]
 
     def pointer(self):
         raise Exception("You probably want a pointer type to the dtype")
@@ -363,25 +379,9 @@ class ArrayType(make_polytype(KIND_ARRAY, ["dtype", "ndim"])):
         else:
             raise IndexError(index, ndim)
 
-class MutableStructType(StructType):
+
+class KnownValueType(NumbaType):
     """
-    Create a struct type. Fields may be ordered or unordered. Unordered fields
-    will be ordered from big types to small types (for better alignment).
-    """
-
-    def copy(self):
-        return self.ts.struct(self.fields, self.name, self.readonly, self.packed)
-
-    def add_field(self, name, type):
-        assert name not in self.fielddict
-        self.fields.append((name, type))
-        self.mutated = True
-
-    def update_mutated(self):
-        self.rank = sum([_sort_key(field) for field in self.fields])
-        self.mutated = False
-
-KnownValueType = make_numbatype("known_value", ["value"], doc="""\
     Type which is associated with a known value or well-defined symbolic
     expression:
 
@@ -390,7 +390,9 @@ KnownValueType = make_numbatype("known_value", ["value"], doc="""\
 
     (Remember that unbound methods like np.add.reduce are transient, i.e.
      np.add.reduce is not np.add.reduce).
-    """)
+    """
+    typename = "known_value"
+    attrs = ["value"]
 
 class ModuleType(KnownValueType):
     """
@@ -400,9 +402,8 @@ class ModuleType(KnownValueType):
         is_numpy_module: whether the module is the numpy module
         module: in case of numpy, the numpy module or a submodule
     """
-
-    is_module = True
-    is_object = True
+    typename = "module"
+    flags = ["object"]
 
     # TODO: Get rid of these
     is_numpy_module = property(lambda self: self.module is np)
@@ -413,28 +414,46 @@ class ModuleType(KnownValueType):
     def module(self):
         return self.value
 
-register("module", ModuleType)
+class AutojitFunctionType(NumbaType):
+    "Type for autojit functions"
+    typename = "autojit_func"
+    args = ["autojit_func"]
+    flags = ["object"]
 
+class JitFunctionType(NumbaType):
+    "Type for jit functions"
+    typename = "jit_function"
+    args = ["jit_func"]
+    flags = ["object"]
 
-make_numbatype("autojit_function", ["autojit_func"],
-               doc="Type for autojit functions")
-make_numbatype("jit_function", ["jit_func"],
-               doc="Type for jit functions")
+class NumpyDtypeType(NumbaType):
+    "Type of numpy dtypes"
+    typename = "numpy_dtype"
+    args = ["dtype"]
 
-NumpyDtypeType = make_numbatype("numpy_dtype", ["dtype"])
-ComplexType = make_numbatype(KIND_COMPLEX, ["base_type"])
+class ComplexType(NumbaType):
+    typename = "complex"
+    args = ["base_type"]
 
-ReferenceType = make_numbatype("reference", ["referenced_type"], doc="""\
+class ReferenceType(NumbaType):
+    """
     A reference to an (primitive or Python) object. This is passed as a
     pointer and dereferences automatically.
 
     Currently only supported for structs.
-    """)
+    """
+    # TODO: remove this type?
+    typename = "reference"
+    args = ["referenced_type"]
 
-MetaType = make_numbatype("meta", ["dst_type"], doc="""\
+class MetaType(NumbaType):
+    """
     A type instance in user code. e.g. double(value). The Name node will have
     a cast-type with dst_type 'double'.
-    """)
+    """
+    typename = "meta"
+    args = ["dst_type"]
+    flags = ["object"]
 
 #------------------------------------------------------------------------
 # Builtins
