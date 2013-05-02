@@ -107,18 +107,17 @@ class TypeSystem(object):
 class Universe(object):
 
     name = None
-    polytypes = None            # KIND -> TypeConstructor (consed)
-    mutable_polytypes = None    # KIND -> TypeConstructor (not consed)
+    polytypes = {}              # KIND -> TypeConstructor (consed)
+    mutable_polytypes = {}      # KIND -> TypeConstructor (not consed)
 
     def __init__(self, itemsizes=None):
         self.itemsizes = itemsizes          # KIND -> itemsize (bytes)
         self.monotypes = {}                 # { type_name -> type }
-        self.make_monotypes(self.monotypes)
-
-        for name, type in self.monotypes.iteritems():
-            setattr(self, name, type)
 
         self.make_polyctors()
+        self.make_monotypes(self.monotypes)
+        for name, type in self.monotypes.iteritems():
+            setattr(self, name, type)
 
         # Determine total type ordering
         # self.total_type_order = {}
@@ -264,12 +263,17 @@ class Type(object):
     Base of all types.
     """
 
+    slots = ("kind", "params", "is_mono", "metadata", "_metadata")
+    __slots__ = slots + ("__weakref__", "typename")
+
     def __init__(self, kind, params, is_mono=False, metadata=frozenset()):
         self.kind = kind    # Type kind
 
         # don't call this 'args' since we already use that in FunctionType
         self.params = params
         self.is_mono = is_mono
+        if is_mono:
+            self.typename = params[0]
 
         # Immutable metadata
         self.metadata = metadata
@@ -300,16 +304,6 @@ class Type(object):
         return args
 
     # __________________________________________________________________
-
-    @property
-    def typename(self):
-        assert self.is_mono
-        return self.params[0]
-
-    @property
-    def ty(self):
-        assert self.is_mono
-        return self.params[1]
 
     def __repr__(self):
         if self.is_mono:

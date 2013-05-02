@@ -52,10 +52,7 @@ def lower_complex(domain, codomain, type, params):
 #------------------------------------------------------------------------
 
 default_numba_lowering_table = {
-    KIND_COMPLEX: lower_complex,
-    KIND_OBJECT: numba_lower_object,
-    KIND_ARRAY: numba_lower_array,
+    "complex": lower_complex,
+    "object": numba_lower_object,
+    "array": numba_lower_array,
 }
-
-# default_lowerer = create_type_lowerer(
-#     default_lowering_table, numba_universe, numba_universe)

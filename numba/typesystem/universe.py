@@ -10,7 +10,7 @@ import struct as struct_
 import ctypes
 
 from numba.typesystem.typesystem import Universe
-from numba.typesystem import kinds, types, llvmtyping
+from numba.typesystem import kinds, types, llvmtyping, Type
 
 import llvm.core
 
@@ -103,9 +103,7 @@ native_sizes = {
 
 default_type_sizes = dict(type_sizes, **native_sizes)
 
-# ctors
-mono = types.NumbaType.mono
-poly = types.NumbaType.poly
+mono, poly = NumbaType.mono, NumbaType.poly
 
 def make_monotypes(kind_to_typename, monotypes):
     for kind, typenames in kind_to_typename.iteritems():
@@ -147,23 +145,6 @@ class LowLevelUniverse(Universe):
             ty = mono(kinds.KIND_FLOAT, typename,
                       itemsize=self.itemsizes[typename])
             monotypes[typename] = monotypes[alias] = ty
-
-    def rank(self, type):
-        return 0 # TODO: implement
-
-    def itemsize(self, type):
-        if type.is_mono:
-            assert type != self.void, "Void type has no itemsize"
-            return self.itemsizes[type.typename]
-        elif self.kind(type) in self.itemsizes:
-            assert not type.is_mono
-            return self.itemsizes[self.kind(type)]
-        elif type.is_function:
-            return self.itemsizes[kinds.KIND_POINTER]
-        elif type.is_struct:
-            return sum([self.itemsize(t) for n, t in type.fields])
-        else:
-            raise ValueError("Type %s has no itemsize" % (type,))
 
 lowlevel_universe = LowLevelUniverse()
 
@@ -209,17 +190,7 @@ numba_types = [
     "object", "null", "none", "ellipsis", "slice", "newaxis", "range",
 ]
 
-def _struct(fields=(), name=None, readonly=False, packed=False, **kwargs):
-    "Create a *mutable* struct type"
-    if fields and kwargs:
-        raise TypeError("The struct must be either ordered or unordered")
-    elif kwargs:
-        # fields = sort_types(kwargs)
-        fields = list(kwargs.iteritems())
-
-    return types.MutableStructType(fields, name, readonly, packed)
-
-_ts = types.numba_registry.registry.items()
+_types = types.numba_type_registry.registry.items()
 
 class NumbaUniverse(Universe):
     """
@@ -229,37 +200,18 @@ class NumbaUniverse(Universe):
     lowlevel_universe = lowlevel_universe
     name = "numba"
 
-    polytypes = {
-        kinds.KIND_ARRAY: types.ArrayType,
-        kinds.KIND_COMPLEX: types.ComplexType,
-        kinds.KIND_POINTER: types.PointerType,
-        kinds.KIND_FUNCTION: types.FunctionType,
-        # ...
-    }
-    polytypes.update(
-        [(name, ty) for name, (ty, mutable) in _ts if not mutable])
-
-    mutable_polytypes = {
-        kinds.KIND_STRUCT: _struct,
-    }
-    mutable_polytypes.update(
-        [(name, ty) for name, (ty, mutable) in _ts if mutable])
-
-    def __init__(self, *args, **kwargs):
-        super(NumbaUniverse, self).__init__(*args, **kwargs)
-
-        self.complex64 = self.complex(self.float)
-        self.complex128 = self.complex(self.double)
-        self.complex256 = self.complex(self.longdouble)
+    #polytypes = dict((t.typename, t) for t in _types if t.mutable)
+    # Let the types themselves do the consing?
+    mutable_polytypes = dict((n, t) for n, t in _types) # if not t.mutable)
 
     def make_monotypes(self, monotypes):
-        monotypes.update(self.lowlevel_universe.monotypes)
+        for name, type in _types:
+            setattr(self, name, type)
+
+        u = self.lowlevel_universe
+        monotypes.update(u.monotypes)
+        monotypes.update(complex64=self.complex(u.float),
+                         complex128=self.complex(u.double),
+                         complex256=self.complex(u.longdouble))
         for typename in numba_types:
             monotypes[typename] = mono(typename, typename)
-
-    def typenames(self):
-        return super(NumbaUniverse, self).typenames() + [
-                 "complex64", "complex128", "complex256"]
-
-    # def __getattr__(self, attr):
-    #     return getattr(self.lowlevel_universe, attr)

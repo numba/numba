@@ -11,6 +11,7 @@ from numba.typesystem.typesystem import TypeConverter, TypeSystem
 from numba.typesystem import promotion
 from numba.typesystem import constants
 from numba.typesystem import lowering
+from numba.typesystem import types
 
 #------------------------------------------------------------------------
 # Defaults initialization
@@ -22,15 +23,16 @@ def compose(f, g):
 # ______________________________________________________________________
 # Universes
 
-numba_universe = universe.NumbaUniverse(itemsizes=universe.default_type_sizes)
+lowlevel_universe = universe.LowLevelUniverse()
+numba_universe = universe.NumbaUniverse()
 llvm_universe = universe.LLVMUniverse()
 
 # ______________________________________________________________________
 # Converters
 
 default_type_lowerer = lowering.create_type_lowerer(
-    lowering.default_numba_lowering_table, numba_universe, numba_universe)
-to_llvm_converter = TypeConverter(numba_universe, llvm_universe)
+    lowering.default_numba_lowering_table, numba_universe, lowlevel_universe)
+to_llvm_converter = TypeConverter(lowlevel_universe, llvm_universe)
 
 lower = default_type_lowerer.convert
 to_llvm = to_llvm_converter.convert
@@ -66,10 +68,7 @@ for typename, ty in u.monotypes.iteritems():
 numeric = integral + floating + complextypes
 native_integral.extend((u.Py_ssize_t, u.size_t))
 
-def _sort_types_key(ty):
-    return 0 # TODO: implement
-
-integral.sort(key=_sort_types_key)
-native_integral = [ty for ty in integral if ty.typename in universe.native_sizes]
-floating.sort(key=_sort_types_key)
-complextypes.sort(key=_sort_types_key)
+# integral.sort(key=types.sort_types_key)
+# native_integral = [ty for ty in integral if ty.typename in universe.native_sizes]
+# floating.sort(key=types.sort_types_key)
+# complextypes.sort(key=types.sort_types_key)

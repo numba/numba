@@ -94,7 +94,6 @@ class DefaultPromoter(object):
     def promote(self, type1, type2):
         "Promote two arbitrary types"
         u = self.universe
-        string_types = u.c_string_type, u.char.pointer()
         args = u, self.promote, type1, type2
         result = promote_from_table(self.promotion_table, *args)
 
@@ -106,7 +105,7 @@ class DefaultPromoter(object):
             return promote_arrays(*args)
         elif type1.is_array or type2.is_array:
             return promote_array_and_other(*args)
-        elif type1 in string_types and type2 in string_types:
+        elif type1 == char.pointer():
             return u.c_string_type
         elif type1.is_object or type2.is_object:
             return u.object_

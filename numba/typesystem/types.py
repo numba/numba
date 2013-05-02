@@ -6,29 +6,73 @@ User-facing numba types.
 
 from __future__ import print_function, division, absolute_import
 
+from functools import partial
 try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
 
-from numba.typesystem.typesystem import Type
+from numba.typesystem.typesystem import Type, Conser, TypeConser
 from numba.typesystem.kinds import *
+from numba.typesystem import numpy_support
+
+#------------------------------------------------------------------------
+# Type metaclass
+#------------------------------------------------------------------------
 
 class Registry(object):
     def __init__(self):
         self.registry = {}
 
     def register(self, name, obj):
-        assert name not in self.registry
+        assert name not in self.registry, name
         self.registry[name] = obj
 
-#------------------------------------------------------------------------
-# User-facing type functionality
-#------------------------------------------------------------------------
+numba_type_registry = Registry()
 
-numba_registry = Registry()
-register = lambda name, ctor: numba_registry.register(name, (ctor, False))
-register_mutable = lambda name, ctor: numba_registry.register(name, (ctor, True))
+class Accessor(object):
+    def __init__(self, idx, mutable):
+        self.idx = idx
+        self.mutable = mutable
+
+    def __get__(self, obj, type=None):
+        return obj.params[self.idx]
+
+    def __set__(self, obj, value):
+        if not self.mutable:
+            raise AttributeError("Cannot set attribute '%s' of type '%s'" %
+                                            (obj.attrs[self.idx], type(obj)))
+        obj.params[self.idx] = value
+
+class TypeMetaClass(type):
+    "Metaclass for numba types, conses immutable types."
+
+    registry = numba_type_registry
+
+    def __new__(cls, name, bases, dict):
+        mutable = dict.get("mutable",
+                           any(getattr(b, "mutable", False) for b in bases))
+        if not mutable:
+            dict["__slots__"] = Type.slots
+        for i, arg in enumerate(dict.get("args", ())):
+            dict[arg] = Accessor(i, mutable)
+        return super(TypeMetaClass, cls).__new__(cls, name, bases, dict)
+
+    def __init__(self, name, bases, dict):
+        if self.typename is not None:
+            self.registry.register(self.typename, self)
+        if not self.mutable:
+            self.conser = Conser(partial(type.__call__, self)) # TypeConser(self)
+
+    def __call__(self, *args, **kwargs):
+        args = self.default_args(args, kwargs)
+        if not self.mutable:
+            return self.conser.get(*args)
+        return super(TypeMetaClass, self).__call__(*args)
+
+#------------------------------------------------------------------------
+# Type Implementations
+#------------------------------------------------------------------------
 
 class NumbaType(Type):
     """
@@ -39,7 +83,38 @@ class NumbaType(Type):
         conversion: to_llvm/to_ctypes/get_dtype
     """
 
-    mutable = False
+    __slots__ = Type.__slots__
+    __metaclass__ = TypeMetaClass
+
+    typename = None
+    args = []
+    flags = []
+    defaults = {}
+    mutable = False # Whether to cons type instances
+
+    def __init__(self, *params):
+        super(NumbaType, self).__init__(self.typename, params)
+
+    @classmethod
+    def default_args(cls, args, kwargs):
+        names = cls.args
+
+        if len(args) == len(names):
+            return args
+
+        # Insert defaults in args tuple
+        args = list(args)
+        for name in names[len(args):]:
+            if name in kwargs:
+                args.append(kwargs[name])
+            elif name in cls.defaults:
+                args.append(cls.defaults[name])
+            else:
+                raise TypeError(
+                    "Constructor '%s' requires %d arguments (got %d)" % (
+                                        cls.typename, len(names), len(args)))
+
+        return tuple(args)
 
     def __getitem__(self, item):
         """
@@ -96,48 +171,6 @@ class NumbaType(Type):
     def to_llvm(self, context):
         raise NotImplementedError("use typesystem.llvm(type) instead")
         return self.typesystem.convert("llvm", self)
-
-def make_polytype(kind, names, defaults=(), doc=None):
-    """
-    Create a new polytype that has named attributes. E.g.
-
-        make_polytype("array", ["dtype", "ndim"])
-    """
-    def __init__(self, *params):
-        assert len(params) == len(names), polyctor
-        super(polyctor, self).__init__(kind, params)
-
-    @classmethod
-    def default_args(cls, args, kwargs):
-        if len(args) == len(names):
-            return args
-
-        # Insert defaults in args tuple
-        args = list(args)
-        for name in names[len(args):]:
-            if name in kwargs:
-                args.append(kwargs[name])
-            elif name in defaults:
-                args.append(defaults[name])
-            else:
-                raise TypeError(
-                    "Constructor '%s' requires %d arguments (got %d)" % (
-                                            kind, len(names), len(args)))
-
-        return tuple(args)
-
-    # Create parameter accessors
-    typedict = dict([(name, property(lambda self, i=i: self.params[i]))
-                         for i, name in enumerate(names)])
-    typedict.update(__init__=__init__, __doc__=doc, default_args=default_args)
-
-    polyctor = type(kind, (NumbaType,), typedict)
-    return polyctor
-
-def make_numbatype(name, names, defaults=(), doc=None):
-    cls = make_polytype(name, names, defaults, doc)
-    register(name, cls)
-    return cls
 
 #------------------------------------------------------------------------
 # Low-level polytypes
@@ -236,13 +269,12 @@ class FunctionType(NumbaType):
 class PointerType(NumbaType):
     typename = "pointer"
     args = ['base_type']
-    __new__ = conser
 
     def __repr__(self):
         space = " " * (not self.base_type.is_pointer)
         return "%s%s*" % (self.base_type, space)
 
-class SizedPointerType(CachedType):
+class SizedPointerType(NumbaType):
     """
     A pointer with knowledge of its range.
 
@@ -262,14 +294,16 @@ class SizedPointerType(CachedType):
     def __hash__(self):
         return hash(self.base_type.pointer())
 
-CArrayType = make_polytype(KIND_CARRAY, ["base_type", "size"])
+class CArrayType(NumbaType):
+    typename = "carray"
+    args = ["base_type", "size"]
 
 # ______________________________________________________________________
 # Structs
 
 class StructType(NumbaType):
 
-    typename = "struct"
+    typename = "istruct"
     args = ["fields", "name", "readonly", "packed"]
     defaults = dict.fromkeys(args[1:])
 
@@ -309,6 +343,7 @@ class MutableStructType(StructType):
     Create a struct type. Fields may be ordered or unordered. Unordered fields
     will be ordered from big types to small types (for better alignment).
     """
+    typename = "struct"
 
     def copy(self):
         return type(self)(self.fields, self.name, self.readonly, self.packed)
@@ -319,7 +354,7 @@ class MutableStructType(StructType):
         self.mutated = True
 
     def update_mutated(self):
-        self.rank = sum([_sort_key(field) for field in self.fields])
+        self.rank = sum([sort_key(field) for field in self.fields])
         self.mutated = False
 
 #------------------------------------------------------------------------
@@ -378,7 +413,6 @@ class ArrayType(NumbaType):
             return type(self)(self.dtype, ndim)
         else:
             raise IndexError(index, ndim)
-
 
 class KnownValueType(NumbaType):
     """
@@ -455,12 +489,9 @@ class MetaType(NumbaType):
     args = ["dst_type"]
     flags = ["object"]
 
-#------------------------------------------------------------------------
-# Builtins
-#------------------------------------------------------------------------
 
 class BuiltinType(KnownValueType):
-    is_builtin = True
+    typename = "builtin"
 
     def __init__(self, name, **kwds):
         value = getattr(builtins, name)
@@ -469,36 +500,63 @@ class BuiltinType(KnownValueType):
         self.name = name
         self.func = self.value
 
-    def __repr__(self):
-        return "builtin(%s)" % self.name
+#------------------------------------------------------------------------
+# Container Types
+#------------------------------------------------------------------------
+
+class ContainerListType(NumbaType):
+    """
+    :param base_type: the element type of the tuple
+    :param size: set to a value >= 0 is the size is known
+    :return: a tuple type representation
+    """
+
+    args = ["base_type", "size"]
+    flags = ["object"]
+
+    def is_sized(self):
+        return self.size >= 0
+
+class TupleType(ContainerListType):
+    typename = "tuple"
+
+class ListType(ContainerListType):
+    typename = "list"
+
+class MapContainerType(NumbaType):
+    args = ["key_type", "value_type", "size"]
+    flags = ["object"]
+
+class DictType(MapContainerType):
+    typename = "dict"
 
 #------------------------------------------------------------------------
 # Type Ordering
 #------------------------------------------------------------------------
 
-def _sort_types_key(field_type):
+def sort_types_key(field_type):
     if field_type.is_complex:
         return field_type.base_type.rank * 2
     elif field_type.is_numeric or field_type.is_struct:
         return field_type.rank
     elif field_type.is_vector:
-        return _sort_types_key(field_type.element_type) * field_type.vector_size
+        return sort_types_key(field_type.element_type) * field_type.vector_size
     elif field_type.is_carray:
-        return _sort_types_key(field_type.base_type) * field_type.size
+        return sort_types_key(field_type.base_type) * field_type.size
     elif field_type.is_pointer or field_type.is_object or field_type.is_array:
         return 8
     else:
         return 1
 
-def _sort_key(keyvalue):
+def sort_key(keyvalue):
     field_name, field_type = keyvalue
-    return _sort_types_key(field_type)
+    return sort_types_key(field_type)
 
 def sort_types(types_dict):
     # reverse sort on rank, forward sort on name
     d = {}
     for field in types_dict.iteritems():
-        key = _sort_key(field)
+        key = sort_key(field)
         d.setdefault(key, []).append(field)
 
     def key(keyvalue):

@@ -7,7 +7,7 @@ Extension type types.
 from functools import partial
 
 from numba.traits import traits, Delegate
-from numba.typesystem import NumbaType, register_mutable
+from numba.typesystem import NumbaType
 
 @traits
 class ExtensionType(NumbaType):
@@ -18,8 +18,9 @@ class ExtensionType(NumbaType):
     numba.typeof(MyExtensionType).
     """
 
-    is_extension = True
-    is_object = True
+    typename = "extension"
+    flags = ["object"]
+    mutable = True
     is_final = False
 
     methoddict = Delegate('vtab_type')
@@ -31,8 +32,8 @@ class ExtensionType(NumbaType):
     attributedict = Delegate('attribute_table')
     attributes = Delegate('attribute_table')
 
-    def __init__(self, kind, py_class):
-        super(ExtensionType, self).__init__(kind, (py_class,))
+    def __init__(self, py_class):
+        super(ExtensionType, self).__init__()
         assert isinstance(py_class, type), ("Must be a new-style class "
                                             "(inherit from 'object')")
         self.name = py_class.__name__
@@ -62,7 +63,7 @@ class ExtensionType(NumbaType):
 class JitExtensionType(ExtensionType):
     "Type for @jit extension types"
 
-    is_jit_extension = True
+    typename = "jit_extension"
 
     def __repr__(self):
         return "<JitExtension %s>" % self.name
@@ -79,7 +80,7 @@ class JitExtensionType(ExtensionType):
 class AutojitExtensionType(ExtensionType):
     "Type for @autojit extension types"
 
-    is_autojit_extension = True
+    typename = "autojit_extension"
 
     def __repr__(self):
         return "<AutojitExtension %s>" % self.name
@@ -89,13 +90,3 @@ class AutojitExtensionType(ExtensionType):
             return "<AutojitExtension %s(%s)>" % (
                     self.name, self.attribute_table.strtable())
         return repr(self)
-
-# ______________________________________________________________________
-# Register types
-
-# Bind type name
-register = lambda name, ctor: register_mutable(name, partial(ctor, name))
-
-register("exttype", ExtensionType)
-register("jit_exttype", JitExtensionType)
-register("autojit_exttype", AutojitExtensionType)

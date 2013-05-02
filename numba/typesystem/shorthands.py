@@ -9,8 +9,45 @@ from itertools import chain
 from numba.utils import is_builtin
 from numba.typesystem import numpy_support, types, universe
 from numba.typesystem.defaults import numba_universe as u
+from numba.typesystem.types import *
 
 __all__ = []
+
+#------------------------------------------------------------------------
+# Public Type Constructors
+#------------------------------------------------------------------------
+
+complex_ = ComplexType
+tuple_ = TupleType
+list_ = ListType
+type_ = MetaType
+
+def from_numpy_dtype(np_dtype):
+    """
+    :param np_dtype: the NumPy dtype (e.g. np.dtype(np.double))
+    :return: a dtype type representation
+    """
+    return dtype(numpy_support.map_dtype(np_dtype))
+
+def array(dtype, ndim):
+    """
+    :param dtype: the Numba dtype type (e.g. double)
+    :param ndim: the array dimensionality (int)
+    :return: an array type representation
+    """
+    if ndim == 0:
+        return dtype
+    return ArrayType(dtype, ndim)
+
+def struct_(fields=(), name=None, readonly=False, packed=False, **kwargs):
+    "Create a mutable struct type"
+    if fields and kwargs:
+        raise TypeError("The struct must be either ordered or unordered")
+    elif kwargs:
+        # fields = sort_types(kwargs)
+        fields = list(kwargs.iteritems())
+
+    return MutableStructType(fields, name, readonly, packed)
 
 #------------------------------------------------------------------------
 # Type shorthands
@@ -23,10 +60,11 @@ for name, ty in u.iter_types():
     __all__.append(name)
     d[name] = ty
 
-# print(struct([('a', int_)]))
-# print(function(int_, (float_, double, complex128)))
-
 # ______________________________________________________________________
+
+complex64 = complex_(float_)
+complex128 = complex_(double)
+complex256 = complex_(longdouble)
 
 O = object_
 b1 = bool_
@@ -46,49 +84,3 @@ f16 = float128
 c8 = complex64
 c16 = complex128
 c32 = complex256
-
-#------------------------------------------------------------------------
-# Type Constructor Shorthands
-#------------------------------------------------------------------------
-
-def from_numpy_dtype(np_dtype):
-    """
-    :param np_dtype: the NumPy dtype (e.g. np.dtype(np.double))
-    :return: a dtype type representation
-    """
-    return dtype(numpy_support.map_dtype(np_dtype))
-
-def dtype(dtype_type):
-    """
-
-    :param dtype: the Numba dtype type (e.g. double)
-    :return: a dtype type representation
-    """
-    assert isinstance(dtype_type, types.Type)
-    return u.dtype(dtype_type)
-
-def array(dtype, ndim):
-    """
-    :param dtype: the Numba dtype type (e.g. double)
-    :param ndim: the array dimensionality (int)
-    :return: an array type representation
-    """
-    if ndim == 0:
-        return dtype
-    return u.array(dtype, ndim)
-
-def tuple_(base_type, size=-1):
-    """
-    :param base_type: the element type of the tuple
-    :param size: set to a value >= 0 is the size is known
-    :return: a tuple type representation
-    """
-    return u.tuple(base_type, size)
-
-def list_(base_type, size=-1):
-    """
-    :param base_type: the element type of the tuple
-    :param size: set to a value >= 0 is the size is known
-    :return: a tuple type representation
-    """
-    return u.list(base_type, size)
