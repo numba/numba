@@ -10,9 +10,9 @@ library. Below is an example::
     def mult(a, b):
         return a * b
 
-    export('mult f8(f8, f8)'))(mult)
-    export(['multf f4(f4, f4)', 'multi i4(i4, i4)'])(mult)
-    export('multc c16(c16, c16)'))(mult)
+    export('mult f8(f8, f8)')(mult)
+    exportmany(['multf f4(f4, f4)', 'multi i4(i4, i4)'])(mult)
+    export('multc c16(c16, c16)')(mult)
 
 This defines a trivial function and exports four specializations under
 different names. The code can be compiled as follows::
