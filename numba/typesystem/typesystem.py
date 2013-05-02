@@ -64,10 +64,7 @@ from __future__ import print_function, division, absolute_import
 import ctypes
 import struct as struct_
 import weakref
-from itertools import chain
 from functools import partial
-
-from numba.traits import traits, Delegate
 
 native_pointer_size = struct_.calcsize('@P')
 
@@ -99,91 +96,6 @@ class TypeSystem(object):
 
     def __getattr__(self, attr):
         return getattr(self.universe, attr)
-
-#------------------------------------------------------------------------
-# Type Universe
-#------------------------------------------------------------------------
-
-class Universe(object):
-
-    name = None
-    polytypes = {}              # KIND -> TypeConstructor (consed)
-    mutable_polytypes = {}      # KIND -> TypeConstructor (not consed)
-
-    def __init__(self, itemsizes=None):
-        self.itemsizes = itemsizes          # KIND -> itemsize (bytes)
-        self.monotypes = {}                 # { type_name -> type }
-
-        self.make_polyctors()
-        self.make_monotypes(self.monotypes)
-        for name, type in self.monotypes.iteritems():
-            setattr(self, name, type)
-
-        # Determine total type ordering
-        # self.total_type_order = {}
-        # sorted(monotypes.values(), key=lambda t: self.kind_sorting[self.kind(t)])
-
-    def make_monotypes(self, ts, monotypes):
-        pass
-
-    def make_polyctors(self):
-        # Create polytype constructors as methods, e.g. 'pointer(basetype)'
-        # Each constructor caches live types
-        for kind in self.polytypes:
-            ctor = self.get_polyconstructor(kind)
-            if isinstance(ctor, type) and issubclass(ctor, Type):
-                conser = TypeConser(ctor) # Use a conser that tracks defaults
-            else:
-                conser = Conser(ctor)
-            setattr(self, kind, conser.get)
-
-        if self.mutable_polytypes:
-            for kind, ctor in self.mutable_polytypes.iteritems():
-                setattr(self, kind, ctor)
-
-    def typenames(self):
-        return list(chain(self.monotypes, self.polytypes, self.mutable_polytypes))
-
-    def iter_types(self):
-        for name in self.typenames():
-            yield name, getattr(self, name)
-
-    def kind(self, type):
-        """
-        Return the kind of the type. Default available kinds are:
-
-            int, float, complex, function, array, pointer, carray,
-            struct, object
-        """
-        return type.kind
-
-    def byteorder(self, type):
-        return nbo
-
-    def rank(self, type):
-        "Determine the rank of the type (for sorting)"
-
-    def itemsize(self, type):
-        "Determine the size of the type in bytes"
-        if type.is_mono:
-            return self.itemsizes[type.typename]
-        elif self.kind(type) in self.itemsizes:
-            pass
-        else:
-            raise NotImplementedError(type)
-
-    def get_polyconstructor(self, kind):
-        return self.polytypes[kind]
-
-    @classmethod
-    def register(cls, name, type):
-        cls.polytypes[name] = type
-        return type
-
-    @classmethod
-    def register_mutable(cls, name, type):
-        cls.mutable_polytypes[name] = type
-        return type
 
 #------------------------------------------------------------------------
 # Typing of Constants
@@ -264,7 +176,7 @@ class Type(object):
     """
 
     slots = ("kind", "params", "is_mono", "metadata", "_metadata")
-    __slots__ = slots + ("__weakref__", "typename")
+    __slots__ = slots + ("__weakref__",)
 
     def __init__(self, kind, params, is_mono=False, metadata=frozenset()):
         self.kind = kind    # Type kind
@@ -272,8 +184,6 @@ class Type(object):
         # don't call this 'args' since we already use that in FunctionType
         self.params = params
         self.is_mono = is_mono
-        if is_mono:
-            self.typename = params[0]
 
         # Immutable metadata
         self.metadata = metadata
@@ -283,12 +193,12 @@ class Type(object):
     # Type instantiation
 
     @classmethod
-    def mono(cls, kind, name, ty=None, **kwds):
+    def mono(cls, kind, name, **kwds):
         """
         Nullary type constructor creating the most elementary of types.
         Does not compose any other type (in this domain).
         """
-        return cls(kind, (name, ty), is_mono=True,
+        return cls(kind, (name,), is_mono=True,
                    metadata=frozenset(kwds.iteritems()))
 
     @classmethod
@@ -307,7 +217,7 @@ class Type(object):
 
     def __repr__(self):
         if self.is_mono:
-            return self.typename
+            return self.params[0]
         else:
             return "%s(%s)" % (self.kind, ", ".join(map(str, self.params)))
 
@@ -320,7 +230,7 @@ class Type(object):
             return self.kind == attr[3:]
         elif self.metadata and attr in self._metadata:
             return self._metadata[attr]
-        raise AttributeError(attr)
+        raise AttributeError(self, attr)
 
 #------------------------------------------------------------------------
 # Type Memoization
@@ -363,3 +273,12 @@ class TypeConser(object):
         # Add defaults to the arguments to ensure consing correctness
         args = self.polytype.default_args(args, kwargs)
         return self.conser.get(*args)
+
+def get_conser(ctor):
+    if isinstance(ctor, type) and issubclass(ctor, Type):
+        return TypeConser(ctor) # Use a conser that tracks defaults
+    else:
+        return Conser(ctor)
+
+def consing(ctor):
+    return get_conser(ctor).get

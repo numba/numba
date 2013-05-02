@@ -13,8 +13,6 @@ except ImportError:
     import builtins
 
 from numba.typesystem.typesystem import Type, Conser, TypeConser
-from numba.typesystem.kinds import *
-from numba.typesystem import numpy_support
 
 #------------------------------------------------------------------------
 # Type metaclass
@@ -27,6 +25,9 @@ class Registry(object):
     def register(self, name, obj):
         assert name not in self.registry, name
         self.registry[name] = obj
+
+    def items(self):
+        return self.registry.items()
 
 numba_type_registry = Registry()
 
@@ -50,31 +51,49 @@ class TypeMetaClass(type):
     registry = numba_type_registry
 
     def __new__(cls, name, bases, dict):
-        mutable = dict.get("mutable",
-                           any(getattr(b, "mutable", False) for b in bases))
-        if not mutable:
-            dict["__slots__"] = Type.slots
-        for i, arg in enumerate(dict.get("args", ())):
-            dict[arg] = Accessor(i, mutable)
+        if not any(getattr(b, "mutable", 0) for b in bases):
+            base_attrs = getattr(bases[0], "attrs", ())
+            dict["__slots__"] = Type.slots + tuple(dict.get("atts", base_attrs))
         return super(TypeMetaClass, cls).__new__(cls, name, bases, dict)
 
     def __init__(self, name, bases, dict):
         if self.typename is not None:
             self.registry.register(self.typename, self)
-        if not self.mutable:
-            self.conser = Conser(partial(type.__call__, self)) # TypeConser(self)
 
-    def __call__(self, *args, **kwargs):
-        args = self.default_args(args, kwargs)
+        # Create accessors
+        for i, arg in enumerate(dict.get("args", ())):
+            setattr(self, arg, Accessor(i, self.mutable))
+
+        # Process flags
+        for flag in self.flags:
+            setattr(self, "is_" + flag, True)
+
+        if not self.mutable:
+            self.conser = Conser(partial(type.__call__, self))
+
+    def __call__(self, *args, **kwds):
+        args = self.default_args(args, kwds)
         if not self.mutable:
             return self.conser.get(*args)
-        return super(TypeMetaClass, self).__call__(*args)
+        return super(TypeMetaClass, self).__call__(*args, **kwds)
+
+#------------------------------------------------------------------------
+# Type Decorators
+#------------------------------------------------------------------------
+
+def consing(cls):
+    """
+    Decorator that conses calls when the class is called. A potential problem
+    is that we need default_args() to get the arguments for the consing, and
+    subsequently for user constructors (or we need to decorate all types, even
+    when not consing...)
+    """
 
 #------------------------------------------------------------------------
 # Type Implementations
 #------------------------------------------------------------------------
 
-class NumbaType(Type):
+class UserType(Type):
     """
     MonoType with user-facing methods:
 
@@ -83,38 +102,7 @@ class NumbaType(Type):
         conversion: to_llvm/to_ctypes/get_dtype
     """
 
-    __slots__ = Type.__slots__
-    __metaclass__ = TypeMetaClass
-
-    typename = None
-    args = []
-    flags = []
-    defaults = {}
-    mutable = False # Whether to cons type instances
-
-    def __init__(self, *params):
-        super(NumbaType, self).__init__(self.typename, params)
-
-    @classmethod
-    def default_args(cls, args, kwargs):
-        names = cls.args
-
-        if len(args) == len(names):
-            return args
-
-        # Insert defaults in args tuple
-        args = list(args)
-        for name in names[len(args):]:
-            if name in kwargs:
-                args.append(kwargs[name])
-            elif name in cls.defaults:
-                args.append(cls.defaults[name])
-            else:
-                raise TypeError(
-                    "Constructor '%s' requires %d arguments (got %d)" % (
-                                        cls.typename, len(names), len(args)))
-
-        return tuple(args)
+    __slots__ = Type.slots
 
     def __getitem__(self, item):
         """
@@ -171,6 +159,44 @@ class NumbaType(Type):
     def to_llvm(self, context):
         raise NotImplementedError("use typesystem.llvm(type) instead")
         return self.typesystem.convert("llvm", self)
+
+
+class NumbaType(UserType):
+
+    __metaclass__ = TypeMetaClass
+    __slots__ = UserType.__slots__
+
+    typename = None
+    args = []
+    flags = []
+    defaults = {}
+    mutable = True # Whether to cons type instances
+
+    def __init__(self, *params, **kwds):
+        super(NumbaType, self).__init__(self.typename, params, **kwds)
+
+    @classmethod
+    def default_args(cls, args, kwargs):
+        names = cls.args
+
+        if len(args) == len(names):
+            return args
+
+        # Insert defaults in args tuple
+        args = list(args)
+        for name in names[len(args):]:
+            if name in kwargs:
+                args.append(kwargs[name])
+            elif name in cls.defaults:
+                args.append(cls.defaults[name])
+            else:
+                raise TypeError(
+                    "Constructor '%s' requires %d arguments (got %d)" % (
+                                        cls.typename, len(names), len(args)))
+
+        return tuple(args)
+
+mono, poly = UserType.mono, UserType.poly
 
 #------------------------------------------------------------------------
 # Low-level polytypes
@@ -377,7 +403,8 @@ class ArrayType(NumbaType):
     """
 
     typename = "array"
-    args = ["dtype", "ndim"]
+    args = ["dtype", "ndim", "is_c_contig", "is_f_contig", "inner_contig"]
+    defaults = dict.fromkeys(args[-3:], False)
     flags = ["object"]
 
     def pointer(self):
@@ -568,3 +595,13 @@ def sort_types(types_dict):
         fields.extend(sorted(d[rank], key=key))
 
     return fields
+
+integral = []
+native_integral = []
+floating = []
+complextypes = []
+
+# integral.sort(key=types.sort_types_key)
+# native_integral = [ty for ty in integral if ty.typename in universe.native_sizes]
+# floating.sort(key=types.sort_types_key)
+# complextypes.sort(key=types.sort_types_key)

@@ -7,7 +7,6 @@ Type lowering from a higher-level domain to a lower-level domain.
 from __future__ import print_function, division, absolute_import
 
 from numba.typesystem import typesystem
-from numba.typesystem.kinds import *
 
 def create_type_lowerer(table, domain, codomain):
     """
