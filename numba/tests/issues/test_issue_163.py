@@ -22,7 +22,7 @@ def test_valid_compare():
     a = np.random.rand(1e6)
     assert np.allclose(array(a), array_nb(a))
 
-@autojit
+@autojit(warnstyle="simple")
 def invalid_compare(a):
     return 1 < a < 2
 

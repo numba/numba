@@ -12,7 +12,7 @@ from __future__ import print_function, division, absolute_import
 import numba
 from numba.testing import testmod
 
-@numba.autojit()
+@numba.autojit(warnstyle="simple")
 def with_stat(fn, msg):
     with open(fn, 'w') as fp:
         fp.write(msg)

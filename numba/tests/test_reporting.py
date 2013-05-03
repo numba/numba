@@ -16,12 +16,12 @@ def compile_func1():
 
 __doc__ = """
 >>> compile_func1()
+exception: (see below)
 --------------------- Numba Encountered Errors or Warnings ---------------------
     if x:
 -------^
 Error 6:7: No global named 'x'
 --------------------------------------------------------------------------------
-exception: 6:7: No global named 'x'
 """
 
 #@autojit
@@ -35,12 +35,12 @@ def compile_func2():
         print("exception: %s" % e)
 
 __doc__ += """>>> compile_func2()
+exception: (see below)
 --------------------- Numba Encountered Errors or Warnings ---------------------
     print(10[20])
 ----------^
 Error 29:10: object of type int cannot be indexed
 --------------------------------------------------------------------------------
-exception: 29:10: object of type int cannot be indexed
 """
 
 @autojit # this often messes up line numbers
@@ -55,12 +55,44 @@ def compile_func3():
 
 __doc__ += """
 >>> compile_func3()
+exception: (see below)
 --------------------- Numba Encountered Errors or Warnings ---------------------
     print(10[20])
 ----------^
 Error 48:10: object of type int cannot be indexed
 --------------------------------------------------------------------------------
-exception: 48:10: object of type int cannot be indexed
+"""
+
+def warn_and_error(a, b):
+    print(a)
+    1[2]
+
+__doc__ += """
+>>> autojit(warn_and_error)(1, 2)
+Traceback (most recent call last):
+    ...
+NumbaError: (see below)
+--------------------- Numba Encountered Errors or Warnings ---------------------
+    1[2]
+----^
+Error 68:4: object of type int cannot be indexed
+<BLANKLINE>
+def warn_and_error(a, b):
+----------------------^
+Warning 66:22: Unused argument 'b'
+--------------------------------------------------------------------------------
+
+>>> autojit(warnstyle='simple')(warn_and_error)(1, 2)
+Traceback (most recent call last):
+    ...
+NumbaError: (see below)
+Error 68:4: object of type int cannot be indexed
+Warning 66:22: Unused argument 'b'
+
+>>> autojit(func_decorated.py_func, warnstyle='simple')()
+Traceback (most recent call last):
+    ...
+NumbaError: 48:10: object of type int cannot be indexed
 """
 
 if __name__ == '__main__':

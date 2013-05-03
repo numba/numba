@@ -3,7 +3,7 @@ from numba.testing.test_support import autojit_py3doc
 
 
 
-@autojit_py3doc(warnstyle='simple')
+@autojit_py3doc(warnstyle='simple', warn=False)
 def test_circular_error():
     """
     >>> test_circular_error()
@@ -340,7 +340,7 @@ def test_delayed_string_indexing2():
 
     return s, x
 
-@autojit_py3doc(warn=False)
+@autojit_py3doc(warn=False, warnstyle='simple')
 def test_string_indexing_error():
     """
     >>> test_string_indexing_error()
@@ -357,7 +357,7 @@ def test_string_indexing_error():
         elif i < 5:
             s = s[i:]
 
-@autojit_py3doc(warn=False)
+@autojit_py3doc(warn=False, warnstyle='simple')
 def test_string_indexing_error2():
     """
     >>> chr(test_string_indexing_error2())
@@ -372,7 +372,7 @@ def test_string_indexing_error2():
 
     return s
 
-@autojit(warn=False)
+@autojit(warn=False, warnstyle='simple')
 def test_string_indexing_valid():
     """
     >>> chr(test_string_indexing_valid())
@@ -393,7 +393,7 @@ def simple_func(x):
     y = x * x + 4
     return y
 
-@autojit_py3doc(warn=False)
+@autojit_py3doc(warn=False, warnstyle='simple')
 def test_simple_call():
     """
     >>> test_simple_call()
@@ -433,7 +433,7 @@ def func_with_promotion2(x):
     y = x * x + 4.0
     return np.sqrt(y) + 1j
 
-@autojit(warn=False)
+@autojit(warn=False, warnstyle='simple')
 def test_simple_call_promotion2():
     """
     >>> result =test_simple_call_promotion2()
