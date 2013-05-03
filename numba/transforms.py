@@ -214,7 +214,6 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
     def _resolve_long(self, func, node, argtype, dst_type=int_):
         return self._resolve_int_number(func, node, argtype, long_, 'PyLong_FromString')
 
-
 class ResolveCoercions(visitors.NumbaTransformer):
 
     def visit_CoercionNode(self, node):
@@ -864,10 +863,12 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
     def visit_ArrayNewEmptyNode(self, node):
         ndim = nodes.const(node.type.ndim, int_)
-        dtype = nodes.const(node.type.dtype.get_dtype(), object_)
+        dtype = nodes.const(node.type.dtype.get_dtype(), object_).cloneable
         is_fortran = nodes.const(node.is_fortran, int_)
         result = nodes.PyArray_Empty([ndim, node.shape, dtype, is_fortran])
-        return self.visit(result)
+        result = nodes.ObjectTempNode(result)
+        incref_descr = nodes.IncrefNode(dtype)
+        return self.visit(nodes.ExpressionNode([incref_descr], result))
 
     def visit_Name(self, node):
         if node.variable.is_constant:
