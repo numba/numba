@@ -74,7 +74,7 @@ def test_type_matching(array, func, struct, pointer):
 
 def test_type_attributes(array, func, struct, pointer):
     """
-    >>> locals = dict(dtype=T1.dtype, arg=T2.args[0], field_a=T3.fielddict['a'],
+    >>> locals = dict(dtype=T1.dtype, arg=T2.argnames[0], field_a=T3.fielddict['a'],
     ...               field_b=T3.fielddict['b'], scalar=T4.base_type)
     >>> pprint(infer(test_type_attributes, template_signature=void(T1, T2, T3, T4),
     ...              type_context=type_context2, locals=locals))

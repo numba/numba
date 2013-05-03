@@ -12,16 +12,16 @@ from numba.typesystem import types
 #------------------------------------------------------------------------
 
 class ExtMethodType(types.NumbaType):
-    name = "extmethod"
-    args = ["return_type", "args", "name", "is_class_method", "is_static_method"]
-    defaults=dict.fromkeys(args[2:])
+    typename = "extmethod"
+    argnames = ["return_type", "args", "name", "is_class_method", "is_static_method"]
+    defaults=dict.fromkeys(argnames[2:])
 
     @property
     def is_bound_method(self):
         return not (self.is_class_method or self.is_static_method)
 
 class AutojitMethodType(types.NumbaType):
-    name = "autojit_extmethod"
+    typename = "autojit_extmethod"
 
 #------------------------------------------------------------------------
 # Method Signature Comparison

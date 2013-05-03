@@ -66,6 +66,11 @@ import struct as struct_
 import weakref
 from functools import partial
 
+__all__ = [
+    "TypeSystem", "Type", "ConstantTyper", "Conser", "TypeConser",
+    "get_conser", "consing",
+]
+
 native_pointer_size = struct_.calcsize('@P')
 
 if struct_.pack('i', 1)[0] == '\1':
@@ -175,8 +180,8 @@ class Type(object):
     Base of all types.
     """
 
-    slots = ("kind", "params", "is_mono", "metadata", "_metadata")
-    __slots__ = slots + ("__weakref__",)
+    # slots = ("kind", "params", "is_mono", "metadata", "_metadata", "typename")
+    # __slots__ = slots + ("__weakref__",)
 
     def __init__(self, kind, *params, **kwds):
         self.kind = kind    # Type kind
@@ -184,6 +189,10 @@ class Type(object):
         # don't call this 'args' since we already use that in FunctionType
         self.params = params
         self.is_mono = kwds.get("is_mono", False)
+        if self.is_mono:
+            self.typename = params[0]
+        else:
+            self.typename = kind
 
         # Immutable metadata
         self.metadata = kwds.get("metadata", frozenset())

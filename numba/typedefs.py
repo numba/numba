@@ -23,8 +23,8 @@ def define(u):
         ('ob_type', void_star),
     ]
 
-    PyObject_HEAD = u.struct(pyobject_head_fields, 'PyObject_HEAD')
-    PyArray = u.struct(pyobject_head_fields + [
+    PyObject_HEAD = u.struct_(pyobject_head_fields, 'PyObject_HEAD')
+    PyArray = u.struct_(pyobject_head_fields + [
          void_star,          # data
          u.int32,            # nd
          intp_star,          # dimensions
@@ -35,7 +35,7 @@ def define(u):
          void_star,          # weakreflist
       ])
 
-    PyCFunctionObject = u.struct([
+    PyCFunctionObject = u.struct_([
         ('head', PyObject_HEAD),
         ('m_ml', void_star),
         ('m_self', u.object_),
@@ -43,7 +43,7 @@ def define(u):
     ])
 
     # TODO: Parse C and Cython header files...
-    NumbaFunctionObject = u.struct([
+    NumbaFunctionObject = u.struct_([
         ('pycfunction',         PyCFunctionObject),
         ('flags',               u.int_),
         ('func_dict',           u.object_),

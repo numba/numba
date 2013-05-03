@@ -15,7 +15,7 @@ class ClosureType(NumbaType):
     """
 
     typename = "closure"
-    args = ["signature", "closure"]
+    argnames = ["signature", "closure"]
     default = { "closure": None}
     flags = ["object"]
     mutable = True

@@ -62,6 +62,7 @@ _config_logger()
 
 from . import special
 from numba.typesystem import *
+from numba.typesystem import struct_ as struct # don't export this in __all__
 from numba.minivect.minitypes import FunctionType
 from numba.error import *
 

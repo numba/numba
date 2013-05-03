@@ -11,7 +11,7 @@ from numba.typesystem import object_, npy_intp
 
 class TBAAType(NumbaType):
     typename = "tbaa"
-    args = ["name", "root"]
+    argnames = ["name", "root"]
 
 numpy_array = TBAAType("numpy array", object_)
 numpy_shape = TBAAType("numpy shape", npy_intp.pointer())
