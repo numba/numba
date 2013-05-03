@@ -11,8 +11,8 @@ from numba.typesystem.typesystem import TypeConverter, TypeSystem
 from numba.typesystem import promotion
 from numba.typesystem import constants
 from numba.typesystem import lowering
-from numba.typesystem import shorthands as numba_domain
-from numba.typesystem import llvmtyping as llvm_domain
+from numba.typesystem import numbatypes as numba_domain
+from numba.typesystem import llvmtypes as llvm_domain
 from numba.typesystem import types
 
 #------------------------------------------------------------------------

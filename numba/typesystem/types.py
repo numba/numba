@@ -93,7 +93,7 @@ def consing(cls):
 # Type Implementations
 #------------------------------------------------------------------------
 
-class UserType(Type):
+class NumbaType(Type):
     """
     MonoType with user-facing methods:
 
@@ -102,7 +102,39 @@ class UserType(Type):
         conversion: to_llvm/to_ctypes/get_dtype
     """
 
+    __metaclass__ = TypeMetaClass
     __slots__ = Type.slots
+
+    typename = None
+    args = []
+    flags = []
+    defaults = {}
+    mutable = True # Whether to cons type instances
+
+    def __init__(self, *args, **kwds):
+        super(NumbaType, self).__init__(self.typename, *args, **kwds)
+
+    @classmethod
+    def default_args(cls, args, kwargs):
+        names = cls.args
+
+        if len(args) == len(names):
+            return args
+
+        # Insert defaults in args tuple
+        args = list(args)
+        for name in names[len(args):]:
+            if name in kwargs:
+                args.append(kwargs[name])
+            elif name in cls.defaults:
+                args.append(cls.defaults[name])
+            else:
+                raise TypeError(
+                    "Constructor '%s' requires %d arguments (got %d)" % (
+                        cls.typename, len(names), len(args)))
+
+        return tuple(args)
+
 
     def __getitem__(self, item):
         """
@@ -161,42 +193,7 @@ class UserType(Type):
         return self.typesystem.convert("llvm", self)
 
 
-class NumbaType(UserType):
-
-    __metaclass__ = TypeMetaClass
-    __slots__ = UserType.__slots__
-
-    typename = None
-    args = []
-    flags = []
-    defaults = {}
-    mutable = True # Whether to cons type instances
-
-    def __init__(self, *params, **kwds):
-        super(NumbaType, self).__init__(self.typename, params, **kwds)
-
-    @classmethod
-    def default_args(cls, args, kwargs):
-        names = cls.args
-
-        if len(args) == len(names):
-            return args
-
-        # Insert defaults in args tuple
-        args = list(args)
-        for name in names[len(args):]:
-            if name in kwargs:
-                args.append(kwargs[name])
-            elif name in cls.defaults:
-                args.append(cls.defaults[name])
-            else:
-                raise TypeError(
-                    "Constructor '%s' requires %d arguments (got %d)" % (
-                                        cls.typename, len(names), len(args)))
-
-        return tuple(args)
-
-mono, poly = UserType.mono, UserType.poly
+mono, poly = NumbaType.mono, NumbaType.poly
 
 #------------------------------------------------------------------------
 # Low-level polytypes

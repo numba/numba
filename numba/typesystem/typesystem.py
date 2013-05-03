@@ -178,16 +178,16 @@ class Type(object):
     slots = ("kind", "params", "is_mono", "metadata", "_metadata")
     __slots__ = slots + ("__weakref__",)
 
-    def __init__(self, kind, params, is_mono=False, metadata=frozenset()):
+    def __init__(self, kind, *params, **kwds):
         self.kind = kind    # Type kind
 
         # don't call this 'args' since we already use that in FunctionType
         self.params = params
-        self.is_mono = is_mono
+        self.is_mono = kwds.get("is_mono", False)
 
         # Immutable metadata
-        self.metadata = metadata
-        self._metadata = metadata and dict(metadata)
+        self.metadata = kwds.get("metadata", frozenset())
+        self._metadata = self.metadata and dict(self.metadata)
 
     # __________________________________________________________________
     # Type instantiation
@@ -198,7 +198,7 @@ class Type(object):
         Nullary type constructor creating the most elementary of types.
         Does not compose any other type (in this domain).
         """
-        return cls(kind, (name,), is_mono=True,
+        return cls(kind, name, is_mono=True,
                    metadata=frozenset(kwds.iteritems()))
 
     @classmethod

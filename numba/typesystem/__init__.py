@@ -6,7 +6,7 @@ from .typesystem import *
 from .closuretypes import *
 from .ssatypes import *
 from .templatetypes import *
-from .shorthands import *
+from .numbatypes import *
 
 # from typeset import *
 from .typematch import *
@@ -15,6 +15,6 @@ from .universe import *
 from .defaults import *
 from .typeutils import *
 
-from . import shorthands
+from . import numbatypes
 
-__all__ = list(shorthands.__all__)
+__all__ = list(numbatypes.__all__)

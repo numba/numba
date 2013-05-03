@@ -6,10 +6,12 @@ Some types to aid in type-based alias analysis. See numba/metadata.py.
 
 from __future__ import print_function, division, absolute_import
 
-from numba.typesystem.types import make_polytype
+from numba.typesystem.types import NumbaType
 from numba.typesystem import object_, npy_intp
 
-TBAAType = make_polytype("tbaa", ["name", "root"])
+class TBAAType(NumbaType):
+    typename = "tbaa"
+    args = ["name", "root"]
 
 numpy_array = TBAAType("numpy array", object_)
 numpy_shape = TBAAType("numpy shape", npy_intp.pointer())

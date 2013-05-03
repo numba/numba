@@ -38,22 +38,22 @@ def define(u):
     PyCFunctionObject = u.struct([
         ('head', PyObject_HEAD),
         ('m_ml', void_star),
-        ('m_self', u.object),
-        ('m_module', u.object),
+        ('m_self', u.object_),
+        ('m_module', u.object_),
     ])
 
     # TODO: Parse C and Cython header files...
     NumbaFunctionObject = u.struct([
         ('pycfunction',         PyCFunctionObject),
-        ('flags',               u.int),
-        ('func_dict',           u.object),
-        ('func_weakreflist',    u.object),
-        ('func_name',           u.object),
-        ('func_doc',            u.object),
-        ('func_code',           u.object),
-        ('func_closure',        u.object),
+        ('flags',               u.int_),
+        ('func_dict',           u.object_),
+        ('func_weakreflist',    u.object_),
+        ('func_name',           u.object_),
+        ('func_doc',            u.object_),
+        ('func_code',           u.object_),
+        ('func_closure',        u.object_),
     ])
 
     return locals()
 
-globals().update(define(defaults.numba_universe))
+globals().update(define(defaults.numba_typesystem))
