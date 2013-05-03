@@ -214,3 +214,80 @@ An alternative syntax is available through the use of the `vectorize` decorator:
             return math.sin(x*pi)/(pi*x)
 
 The `vectorize` decorator takes a list of function signature and an optional `target` keyword argument (default to 'cpu').  The example above generate a `sinc` ufunc that is overloaded to accept float and double.  This syntax replaces calls to `Vectorize.add` and `Vectorize.build_ufunc`.
+
+
+Generalized Ufuncs
+==================
+
+The ``numba.vectorize`` module also provides support for generalized ufuncs.
+Traditional ufuncs perfom element-wise operations, whereas generalized ufuncs operate on entire
+sub-arrays. Unlike other Numba Vectorize classes, the GUVectorize constructor takes
+an additional signature which specifies the shapes of the inner arrays we want to operate on.
+
+Imports
+-------
+
+::
+
+    from numba import float32, float64, int32
+    from numba.vectorize import GUVectorize
+    import numpy as np
+
+Generalized ufunc Definition
+----------------------------
+
+GUVectorize ufunc arguments are vectors of a NumPy array.  Function definitions can be arbitrary
+expressions.
+
+::
+
+    def matmulcore(A, B, C):
+        m, n = A.shape
+        n, p = B.shape
+        for i in range(m):
+            for j in range(p):
+                C[i, j] = 0
+                for k in range(n):
+                    C[i, j] += A[i, k] * B[k, j]
+
+Compilation requires type information. Numba assumes no knowledge of type when building native
+ufuncs. We must therefore define argument and return dtypes for the defined ufunc. We can add
+as many dtypes as we need, which do not need to be uniform, i.e. we can specify a gufunc
+taking an array of ints and an array of doubles while producing an array of complex numbers.
+The ``gufunc`` will dispatch to the right implementation depending on the argument types.
+
+We can define our gufunc as follows:
+
+::
+
+    gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)')
+    gufunc.add(argtypes=[float32[:,:], float32[:,:], float32[:,:]])
+    gufunc.add(argtypes=[float64[:,:], float64[:,:], float64[:,:]])
+    gufunc.add(argtypes=[int32[:,:], int32[:,:], int32[:,:]])
+
+Above we are using a float **float32**, a double **float64**, and a signed **32-bit int**.  The
+GUVectorize calls `PyDynUFunc_FromFuncAndDataAndSignature
+<http://scipy-lectures.github.com/advanced/advanced_numpy/index.html#generalized-ufuncs>`_ which
+requires a the signature: *(m,n),(n,p)->(m,p)* in the constructor.  This signature defines the *"core
+dimensions"* of the generalized ufunc.
+
+We can compile the ufunc as follows:
+
+::
+
+    gufunc = gufunc.build_ufunc()
+
+We can now use the gufunc with two NumPy matrices:
+
+::
+
+    matrix_ct = 10
+    A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
+    B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
+    C = gufunc(A, B)
+
+
+Notice that we don't have a third argument in the gufunc call but the generalized ufunc definition
+above has three arguments. The last argument of the generalized ufunc is the output, which is
+automatically allocated with the shape specified in the signature.
+
