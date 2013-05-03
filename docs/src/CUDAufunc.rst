@@ -22,7 +22,7 @@ capacity of your GPU.  For example::
 
     from numbapro import vectorize, cuda, float32, float64
     import numpy as np
-    
+
     # the ufunc kernel
     def discriminant(a, b, c):
         return math.sqrt(b ** 2 - 4 * a * c)
@@ -100,10 +100,10 @@ Generalized ufuncs may be executed on the GPU using CUDA, analogous to
 the CUDA ufunc functionality.  This may be accomplished as follows::
 
     from numbapro.vectorize import GUVectorize
-    
+
     def matmulcore(A, B, C):
         ...
-    
+
     gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', target='gpu')
 
 Or, through the one line decorator syntax::
@@ -119,15 +119,15 @@ Or, through the one line decorator syntax::
 There are times when the gufunc kernel uses too many of a GPU's
 resources, which can cause the kernel launch to fail.  The user can
 explicitly control the maximum size of the thread block by setting
-the `max_blocksize` attribute on the compiled gufunc object.  
+the `max_blocksize` attribute on the compiled gufunc object.
 
 ::
 
     from numbapro import guvectorize
-    
+
     @guvectorize(..., target='gpu')
     def very_complex_kernel(A, B, C):
         ...
-        
+
     very_complex_kernel.max_blocksize = 32  # limits to 32 threads per block
 

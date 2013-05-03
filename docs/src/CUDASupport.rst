@@ -8,7 +8,7 @@ NumbaPro tries to locate the CUDA driver automatically.  Users can override the 
 
 For the NVVM shared library, NumbaPro will try to find it in the current directory.  Users can override the location by providing the environment variable NUMBAPRO_NVVM that points to the path of the NVVM shared library.
 
-All CUDA features are experimental. Computation speeds may have unexpected results.  
+All CUDA features are experimental. Computation speeds may have unexpected results.
 
 **Supported**: Linux, Windows and Mac OSX 32/64-bit with CUDA 5 and NVVM.  Only support CUDA devices with compute capability 2.0 and above.
 

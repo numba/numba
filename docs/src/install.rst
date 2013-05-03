@@ -7,7 +7,7 @@ for instructions on downloading and installation.
 
 Purchase
 --------
-Licenses can be purchased through the 
+Licenses can be purchased through the
 `online store <https://store.continuum.io/cshop/accelerate>`_.  Your
 purchased license will be emailed to you with further instructions.
 

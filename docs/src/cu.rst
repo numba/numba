@@ -5,9 +5,9 @@ Compute Unit (Experimental) API
 The compute unit (CU) API provides a portable interface for heterogeneous
 (CPU+GPU) parallel programming.  This API is similar to OpenCL.  Users write
 data parallel compute kernels which are executed in parallel with
-no guarantee of execution order of each thread of the kernel.  The kernels are 
-executed asynchronously and, therefore, it must be synchronized to ensure the 
-execution of the kernels are completed and the outputs of the kernels are 
+no guarantee of execution order of each thread of the kernel.  The kernels are
+executed asynchronously and, therefore, it must be synchronized to ensure the
+execution of the kernels are completed and the outputs of the kernels are
 observable to the launching thread.
 
 Kernels must be written in a restricted subset of Python that can be translated
@@ -28,12 +28,12 @@ A kernel function is a python function with the following signature::
 
     def an_example_kernel(tid, arg0, arg1, ..., argN):
         pass
-        
-A kernel never returns any value (except None).  The first argument is the 
-id of the current logical thread.  The id always starts with 0 and ends at 
+
+A kernel never returns any value (except None).  The first argument is the
+id of the current logical thread.  The id always starts with 0 and ends at
 `ntid - 1`, where `ntid` is passed to `cu.enqueue` (which is described in the next
-session).  The remaining arguments are passed into the kernel through 
-`cu.enqueue`.  A kernel can have no additional argument but it will not be 
+session).  The remaining arguments are passed into the kernel through
+`cu.enqueue`.  A kernel can have no additional argument but it will not be
 useful, because the only way for the kernel to have side-effect is to store
 output data to an array passed in as an argument.
 
@@ -42,8 +42,8 @@ Logically the execution is similar to::
     for tid in range(ntid):
         an_example_kernel(tid, arg0, arg1, ..., argN)
 
-Except for the fact that there is no guarantee for the execution order of the 
-loop body.  The kernel should be data parallel so that we executes correctly 
+Except for the fact that there is no guarantee for the execution order of the
+loop body.  The kernel should be data parallel so that we executes correctly
 when running in parallel or sequentially.
 
 The CU Object
@@ -58,7 +58,7 @@ A CU object represents a compute unit on the machine.
 
 where target is a string name of target; either 'cpu' or 'gpu'.
 
-The 'cpu' target uses multiple OS threads.  The 'gpu' target uses the CUDA card 
+The 'cpu' target uses multiple OS threads.  The 'gpu' target uses the CUDA card
 on the machine.
 
 cu.enqueue(kernel, ntid, args=())
@@ -69,26 +69,26 @@ Enqueue a kernel as an asynchronous task to the CU object.
 Parameters:
 
     **kernel**
-    
+
         `function`
-        
+
         A python function representing the kernel
-        
+
     **ntid**
-        
+
         `int`
-        
+
         Number of logical threads to launch.  A logical thread does not imply
         a hardware thread or a OS thread.  The kernel will receive tid from
 
-        
+
     **args**
-    
+
         `sequence, optional`
-        
+
         A sequence (usually tuple) of arguments for the kernel.  Does not
         include the first (`tid`) argument.
-        
+
 
 cu.wait()
 =========
@@ -99,13 +99,13 @@ cu.close()
 ==========
 
 Release the resources of the CU object.  This is especially important for
-CPU target to terminate cleanly.  The best practive is to use 
+CPU target to terminate cleanly.  The best practive is to use
 `contextlib.closing`.
 
 ::
 
     from contextlib import closing
-    
+
     cu = CU('cpu')
     with closing(cu):
         ...
@@ -113,9 +113,9 @@ CPU target to terminate cleanly.  The best practive is to use
 
 Tagging Data Arrays
 --------------------
-The CU API is tightly integrated with the numpy array.  To pass arrays to 
+The CU API is tightly integrated with the numpy array.  To pass arrays to
 the CU object, use the `input`, `output`, `inout`, `scratch` and `scratch_like`
-methods of the CU object.  
+methods of the CU object.
 
 For example::
 
@@ -129,14 +129,14 @@ For example::
     d_scratch1 = cu.scratch(5, dtype=numpy.double)  # scratchpad memory of double type
     d_scratch2 = cu.scratch_like(outary) # scratchpad memory with shape, strides and dtype of outary.
 
-Except for `scratch` these methods take a numpy 
+Except for `scratch` these methods take a numpy
 array object as argument.  The `scratch` method is similar to `numpy.empty`.
 It has the following signature::
 
     scratch(shape, dtype=numpy.float, order='C')
-    
-User should treat the return value of these methods as an opaque handle to 
-the memory buffer on the CU.  Only use these handles as arguments to kernel 
+
+User should treat the return value of these methods as an opaque handle to
+the memory buffer on the CU.  Only use these handles as arguments to kernel
 calls.
 
 User can consider these method as tagging the memory buffer on the host.  The
@@ -165,7 +165,7 @@ The following math functions are supported on all targets:
     math.sqrt(x)
 
     abs(x)
-    
+
 The following math functions are *only* supported on CPU target:
 ::
 
@@ -179,7 +179,7 @@ The following math functions are *only* supported on CPU target:
 Builtins Kernels
 ----------------
 
-There are a few builtin kernels supplied under the namespace 
+There are a few builtin kernels supplied under the namespace
 `numbapro.parallel.kernel.builtins`.
 
 Currently, NumbaPro only contains builtin random number generator kernels for
@@ -206,15 +206,15 @@ builtins.random.uniform
 
 *Not available for CPU yet*
 
-The `builtins.random.uniform` kernel generates uniformly distributed random 
+The `builtins.random.uniform` kernel generates uniformly distributed random
 number in the half open internal [0, 1) and writing to `out[:ntid]`.
 
 Uses cuRAND internally for GPU target.
 
 Arguments:
 
-    **out** 
-        `array, output` 
+    **out**
+        `array, output`
 
         A 1-D contiguous array of 32-bit or 64-bit float only.
 
@@ -226,7 +226,7 @@ Example::
     cu.enqueue(builtins.random.uniform,
                ntid = d_rnd.size,       # ntid controls the # of elements
                args = (d_rnd,))
-               
+
 
 builtins.random.normal
 =======================
@@ -240,7 +240,7 @@ Uses cuRAND internally for GPU target.
 
 Arguments:
 
-    **out**     
+    **out**
         `array, output`
 
         A 1-D contiguous array of 32-bit or 64-bit float only.
@@ -249,12 +249,12 @@ Arguments:
         `number, optional`
 
         Center of the distribution.
-    
-    **sigma = 1**   
-        `number, optional` 
-        
+
+    **sigma = 1**
+        `number, optional`
+
         Standard deviation of the distribution.
-        
+
 
 Example::
 
@@ -264,7 +264,7 @@ Example::
     cu.enqueue(builtins.random.normal,
                ntid = d_rnd.size,       # ntid controls the # of elements
                args = (d_rnd,))
-               
+
 
 
 Examples
@@ -298,7 +298,7 @@ Implement Saxpy in two kernels.
 
         # output arrays
         D = np.empty(n)
-        
+
         # tag the arrays
         dA = cu.input(A)
         dB = cu.input(B)

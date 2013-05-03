@@ -3,7 +3,7 @@ CUDA JIT
 
 CUDA JIT translates Python functions into PTX code which execute as CUDA
 kernels.  More specifically, it uses translated code from Numba and
-converts it to 
+converts it to
 `PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_.
 NumbaPro interacts with the CUDA Driver Libraries to load the PTX onto
 the CUDA device and execute.

@@ -16,7 +16,7 @@ class PRNG
 
 .. autoclass:: numbapro.cudalib.curand.PRNG
    :members:
-   
+
 
 class QRNG
 ------------
@@ -28,7 +28,7 @@ class QRNG
 Top Level PRNG Functions
 --------------------------
 
-Simple interface to the PRNG methods.  
+Simple interface to the PRNG methods.
 
 .. note:: This methods automatically create a PRNG object.
 
@@ -43,7 +43,7 @@ Simple interface to the PRNG methods.
 Top Level QRNG Functions
 --------------------------
 
-Simple interface to the QRNG methods.  
+Simple interface to the QRNG methods.
 
 .. note:: This methods automatically create a QRNG object.
 
@@ -97,11 +97,11 @@ See `NVIDIA cuBLAS <http://docs.nvidia.com/cuda/cublas/index.html>`_.
 
 The cuBlas binding provides a simpler interface to use numpy arrays and device
 arrays.  We don't need special naming convention to identify the array types.
-Type information are inferred from the given arguments.  
+Type information are inferred from the given arguments.
 Arguments for array storage information in cuBLAS C-API are not
 necessary since numpy arrays and device arrays already contain the information.
 Whenever an array is required in an argument, user can pass in numpy arrays
-or device arrays.  The binding will automatically transfer any numpy arrays 
+or device arrays.  The binding will automatically transfer any numpy arrays
 to the device as needed.
 
 .. autoclass:: numbapro.cudalib.cublas.Blas
@@ -112,13 +112,13 @@ BLAS Level 1
 .. py:method:: numbapro.cudalib.cublas.Blas.norm2(x)
 
     Computes the L2 norm for array `x`. Same as `numpy.linalg.norm(x)`.
-    
+
     :param x: input vector
     :type x: array
     :returns: resulting norm.
-    
+
 .. py:method:: numbapro.cudalib.cublas.Blas.dot(x, y)
-    
+
     Compute the dot product of array `x` and array `y`.  Same as `np.dot(x, y)`.
 
     :param x: vector
@@ -131,7 +131,7 @@ BLAS Level 1
 
     Compute the dot product of array `x` and array `y` for complex dtype only.
     Same as `np.dot(x, y)`.
-    
+
     :param x: vector
     :type x: array
     :param y: vector
@@ -140,9 +140,9 @@ BLAS Level 1
 
 .. py:method:: numbapro.cudalib.cublas.Blas.dotc(x, y)
 
-    Uses the conjugate of the element of the vectors to compute the dot product 
+    Uses the conjugate of the element of the vectors to compute the dot product
     of array `x` and array `y` for complex dtype only.  Same as `np.vdot(x, y)`.
-    
+
     :param x: vector
     :type x: array
     :param y: vector
@@ -153,7 +153,7 @@ BLAS Level 1
 .. py:method:: numbapro.cudalib.cublas.Blas.scal(alpha, x)
 
     Scale `x` inplace by alpha.  Same as `x = alpha * x`
-    
+
     :param alpha: scalar
     :param x: vector
     :type x: array
@@ -161,18 +161,18 @@ BLAS Level 1
 .. py:method:: numbapro.cudalib.cublas.Blas.axpy(alpha, x)
 
     Compute `y = alpha * x + y` inplace.
-    
+
     :param alpha: scalar
     :param x: vector
     :type x: array
-    
+
 
 .. py:method:: numbapro.cudalib.cublas.Blas.amax(x)
 
-    
-    Find the index of the first largest element in array `x`.  
+
+    Find the index of the first largest element in array `x`.
     Same as `np.argmax(x)`
-    
+
     :param x: vector
     :type x: array
     :returns: index (start from 0).
@@ -180,7 +180,7 @@ BLAS Level 1
 
 .. py:method:: numbapro.cudalib.cublas.Blas.amin(x)
 
-    Find the index of the first largest element in array `x`.  
+    Find the index of the first largest element in array `x`.
     Same as `np.argmin(x)`
 
     :param x: vector
@@ -202,7 +202,7 @@ BLAS Level 1
     sine element `s` inplace on vector element `x` and `y`.
 
     Same as `x, y = c * x + s * y, -s * x + c * y`
-    
+
     :param x: vector
     :type x: array
     :param y: vector
@@ -221,16 +221,16 @@ BLAS Level 1
 
         r -- `r = a**2 + b**2`
 
-        z -- Use to reconstruct `c` and `s`. 
+        z -- Use to reconstruct `c` and `s`.
              Refer to cuBLAS documentation for detail.
 
         c -- The consine element.
 
         s -- The sine element.
-        
+
 
 .. py:method:: numbapro.cudalib.cublas.Blas.rotm(x, y, param)
-    
+
     Applies the modified Givens transformation inplace.
 
     Same as::
@@ -240,7 +240,7 @@ BLAS Level 1
         y[i] = h21 * x[i] + h22 * y[i]
 
     Refer to the cuBLAS documentation for the use of `flag`.
-    
+
     :param x: vector
     :type x: array
     :param y: vector
@@ -248,11 +248,11 @@ BLAS Level 1
 
 
 .. py:method:: numbapro.cudalib.cublas.Blas.rotmg(d1, d2, x1, y1)
-    
+
     Constructs the modified Givens transformation `H` that zeros out the second
     entry of a column vector `(d1 * x1, d2 * y1)`.
 
-    :param d1: 
+    :param d1:
     :type d1: scalar
     :param d2:
     :type d2: scalar
@@ -261,8 +261,8 @@ BLAS Level 1
     :param y1:
     :type y1: scalar
 
-    :returns: A 1D array that is usable in `rotm`.  
-              The first element is the flag for `rotm`.  
+    :returns: A 1D array that is usable in `rotm`.
+              The first element is the flag for `rotm`.
               The rest of the elements corresponds to the `h11, h21, h12, h22`
               elements of `H`.
 
@@ -273,13 +273,13 @@ All level 2 routines follow the following naming convention for all arguments:
 
 * A, B, C, AP -- (2D array) Matrix argument.
                  `AP` implies packed storage for banded matrix.
-* x, y, z -- (1D arrays)  Vector argument. 
+* x, y, z -- (1D arrays)  Vector argument.
 * alpha, beta -- (scalar) Can be floats or complex numbers depending.
 * m -- (scalar)  Number of rows of matrix `A`.
 * n -- (scalar)  Number of columns of matrix `A`.  If `m` is not needed,
                  `n` also means the number of rows of the matrix `A`; thus,
                  implying a square matrix.
-* trans, transa, transb -- (string) 
+* trans, transa, transb -- (string)
                 'N' means the non-transpose operation is selected;
                 'T' means the transpose operation is selected;
                 'C' means the conjugate transpose operation is selected.
@@ -306,7 +306,7 @@ All level 2 routines follow the following naming convention for all arguments:
 .. py:method:: numbapro.cudalib.cublas.Blas.trmv(uplo, trans, diag, n, A, x)
 
     triangular matrix-vector multiplication `x = op(A) * x`
-    
+
 .. py:method:: numbapro.cudalib.cublas.Blas.tbmv(uplo, trans, diag, n, k, A, x)
 
     triangular banded matrix-vector `x = op(A) * x`
@@ -375,7 +375,7 @@ All level 2 routines follow the following naming convention for all arguments:
     hermitian rank 1 operation  `A := alpha * x * x ** H + A`
 
 .. py:method:: numbapro.cudalib.cublas.Blas.spr(uplo, n, alpha, x, AP)
- 
+
     the symmetric rank 1 operation `A := alpha * x * x ** T + A`
 
 .. py:method:: numbapro.cudalib.cublas.Blas.hpr(uplo, n, alpha, x, AP)
@@ -383,7 +383,7 @@ All level 2 routines follow the following naming convention for all arguments:
     hermitian rank 1 operation `A := alpha * x * x ** H + A`
 
 .. py:method:: numbapro.cudalib.cublas.Blas.syr2(uplo, n, alpha, x, y, A)
-    
+
     symmetric rank-2 update `A = alpha * x * y ** T + y * x ** T + A`
 
 .. py:method:: numbapro.cudalib.cublas.Blas.her2(uplo, n, alpha, x, y, A)
@@ -415,7 +415,7 @@ level 2 routines.
 .. py:method:: numbapro.cudalib.cublas.Blas.herk(uplo, trans, n, k, alpha, A, beta, C)
 
     Hermitian rank- k update `C = alpha * op(A) * op(A) ** H + beta * C`
-    
+
 .. py:method:: numbapro.cudalib.cublas.Blas.symm(side, uplo, m, n, alpha, A, B, beta, C)
 
     symmetric matrix-matrix multiplication::
@@ -439,10 +439,10 @@ level 2 routines.
     Solves the triangular linear system with multiple right-hand-sides::
 
         if  side == 'L':
-            op(A) * X = alpha * B 
+            op(A) * X = alpha * B
         else:       # side == 'R'
             X * op(A) = alpha * B
-        
+
 
 .. py:method:: numbapro.cudalib.cublas.Blas.trmm(side, uplo, trans, diag, m, n, alpha, A, B, C)
 
@@ -466,4 +466,4 @@ level 2 routines.
 .. py:method:: numbapro.cudalib.cublas.Blas.geam(transa, transb, m, n, alpha, A, beta, B, C)
 
     matrix-matrix addition/transposition `C = alpha * op(A) + beta * op(B)`
-    
+

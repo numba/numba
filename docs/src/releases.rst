@@ -7,7 +7,7 @@ v0.11.0
 
 * Add cuBlas binding
 * Improve CUDA ndarray and memory managment
-* Add CUDA mapped host memory 
+* Add CUDA mapped host memory
 * Add CUDA event
 
 v0.10.1

@@ -34,7 +34,7 @@ on the CPU is as simple as adding a single line of code (invoked via a decorator
 function)::
 
     from numbapro import vectorize, float32
-    
+
     @vectorize([float32(float32, float32)], target='cpu')
     def sum(a, b):
         return a + b
@@ -51,7 +51,7 @@ optimizations so as a starting point for more complex scenarios, one can also ta
 the GPU with NumbaPro via its Just-In-Time (JIT) compiler::
 
     from numbapro import cuda, float32
-    
+
     @cuda.jit(argtypes=[float32[:], float32[:], float32[:]])
     def sum(a, b, result):
         i = cuda.grid(1)
@@ -66,7 +66,7 @@ As a starting example::
 
     from numbapro import CU
     import numpy as np
-    
+
     def sum(tid, a, b, result):
         result[tid] = a[tid] + b[tid]
 
@@ -124,7 +124,7 @@ Release Notes
 
 .. toctree::
     :maxdepth: 1
-    
+
     releases
 
 License Agreement
@@ -132,12 +132,12 @@ License Agreement
 
 .. toctree::
     :maxdepth: 1
-    
+
     eula_numbapro
 
 .. Indices and tables
    -------------------
-   
+
    * :ref:`genindex`
    * :ref:`modindex`
    * :ref:`search`
