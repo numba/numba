@@ -18,8 +18,10 @@ from numba.vectorize import install_vectorizer, _prepare_sig
 
 from .parallel import ParallelVectorize, ParallelASTVectorize
 from .stream import StreamVectorize, StreamASTVectorize
-from .gufunc import GUFuncVectorize, GUFuncASTVectorize
 from numbapro.cudapipeline.error import CudaSupportError
+
+GUFuncVectorize = GUVectorize
+GUFuncASTVectorize = GUVectorize
 
 try:
     from .cuda import  CudaASTVectorize, CudaGUFuncASTVectorize
@@ -27,7 +29,7 @@ except CudaSupportError, e:
     logging.warning("Cuda vectorizers not available, using fallbacks")
     CudaVectorize = BasicVectorize
     CUDAGUFuncVectorize = GUFuncVectorize
-    CudaGUFuncASTVectorize = GUFuncASTVectorize
+    CudaGUFuncASTVectorize = GUFuncVectorize
     CudaASTVectorize = BasicVectorize
 
 from .minivectorize import MiniVectorize, ParallelMiniVectorize
@@ -47,7 +49,7 @@ install_vectorizer('mini', 'parallel', ParallelMiniVectorize)
 #}
 
 _ast_guvectorizers = {
-    'cpu': GUFuncASTVectorize,
+    'cpu': GUFuncVectorize,
     'gpu': CudaGUFuncASTVectorize,
 }
 
