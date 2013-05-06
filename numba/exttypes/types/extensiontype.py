@@ -19,8 +19,8 @@ class ExtensionType(NumbaType):
     """
 
     typename = "extension"
+    argnames = ["py_class"]
     flags = ["object"]
-    mutable = True
     is_final = False
 
     methoddict = Delegate('vtab_type')
@@ -33,7 +33,7 @@ class ExtensionType(NumbaType):
     attributes = Delegate('attribute_table')
 
     def __init__(self, py_class):
-        super(ExtensionType, self).__init__()
+        super(ExtensionType, self).__init__(py_class)
         assert isinstance(py_class, type), ("Must be a new-style class "
                                             "(inherit from 'object')")
         self.name = py_class.__name__
@@ -63,7 +63,7 @@ class ExtensionType(NumbaType):
 class JitExtensionType(ExtensionType):
     "Type for @jit extension types"
 
-    typename = "jit_extension"
+    typename = "jit_exttype"
 
     def __repr__(self):
         return "<JitExtension %s>" % self.name
@@ -80,7 +80,7 @@ class JitExtensionType(ExtensionType):
 class AutojitExtensionType(ExtensionType):
     "Type for @autojit extension types"
 
-    typename = "autojit_extension"
+    typename = "autojit_exttype"
 
     def __repr__(self):
         return "<AutojitExtension %s>" % self.name

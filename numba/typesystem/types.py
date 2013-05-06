@@ -42,7 +42,7 @@ class Accessor(object):
     def __set__(self, obj, value):
         if not self.mutable:
             raise AttributeError("Cannot set attribute '%s' of type '%s'" %
-                                            (obj.attrs[self.idx], type(obj)))
+                                            (obj.argnames[self.idx], type(obj)))
         obj.params[self.idx] = value
 
 class TypeMetaClass(type):
@@ -66,7 +66,7 @@ class TypeMetaClass(type):
             setattr(self, arg, Accessor(i, self.mutable))
 
         # Process flags
-        for flag in self.flags:
+        for flag in self.flags + ([self.typename] if self.typename else []):
             setattr(self, "is_" + flag, True)
 
         self.conser = Conser(partial(type.__call__, self))
@@ -89,7 +89,7 @@ def consing(cls):
     return cls
 
 def notconsing(cls):
-    cls.mutable = False
+    cls.mutable = True
     return cls
 
 #------------------------------------------------------------------------
@@ -154,6 +154,9 @@ class _NumbaType(Type):
     def pointer(self):
         return PointerType(self)
 
+    def ref(self):
+        return ReferenceType(self)
+
     def qualify(self, *qualifiers):
         return self # TODO: implement
 
@@ -164,6 +167,7 @@ class _NumbaType(Type):
 
 mono, poly = _NumbaType.mono, _NumbaType.poly
 
+@notconsing
 class NumbaType(_NumbaType):
     """
     Base for numba types.
@@ -176,10 +180,10 @@ class NumbaType(_NumbaType):
     argnames = []
     flags = []
     defaults = {}
-    mutable = True # Whether to cons type instances
 
     def __init__(self, *args, **kwds):
         super(NumbaType, self).__init__(self.typename, *args, **kwds)
+        assert len(args) == len(self.argnames), (self.typename, args)
 
     @classmethod
     def default_args(cls, args, kwargs):
@@ -201,7 +205,6 @@ class NumbaType(_NumbaType):
                         cls.typename, len(names), len(args)))
 
         return tuple(args)
-
 
 #------------------------------------------------------------------------
 # Low-level polytypes
@@ -464,7 +467,7 @@ class KnownValueType(NumbaType):
      np.add.reduce is not np.add.reduce).
     """
     typename = "known_value"
-    attrs = ["value"]
+    argnames = ["value"]
 
 @consing
 class ModuleType(KnownValueType):

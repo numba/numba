@@ -135,6 +135,9 @@ def convert_mono(domain, codomain, type):
 
 def convert_poly(domain, codomain, type, coparams):
     # Get codomain constructor
+    if not hasattr(codomain, type.kind):
+        raise AttributeError(
+            "Codomain %s has no type %s" % (codomain.__name__, type.kind))
     constructor = getattr(codomain, type.kind)
     # Construct type in codomain
     return constructor(*coparams)
@@ -187,7 +190,7 @@ class Type(object):
         self.kind = kind    # Type kind
 
         # don't call this 'args' since we already use that in FunctionType
-        self.params = params
+        self.params = list(params)
         self.is_mono = kwds.get("is_mono", False)
         if self.is_mono:
             self.typename = params[0]

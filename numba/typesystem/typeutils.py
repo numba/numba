@@ -82,6 +82,4 @@ def require(ast_nodes, properties):
 
 def pyfunc_signature(nargs):
     "Signature of a python function with N arguments"
-    signature = minitypes.FunctionType(args=(object_,) * nargs,
-                                       return_type=object_)
-    return signature
+    return function(args=(object_,) * nargs, return_type=object_)
