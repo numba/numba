@@ -44,8 +44,6 @@ def test_complex():
     assert ts.complex_(ts.double) is ts.complex128
     assert ts.complex_(ts.longdouble) is ts.complex256
 
-    assert str(ts.complex128) == "complex_(double)"
-
 if __name__ == "__main__":
     test_pointers()
     test_functions()

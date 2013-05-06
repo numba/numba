@@ -38,6 +38,7 @@ def create_type_lowerer(table, domain, codomain):
 
     def convert_poly(domain, codomain, type, params):
         ctor = table.get(type.kind, typesystem.convert_poly)
+        # print("lowering...", type, ctor)
         return ctor(domain, codomain, type, params)
 
     return typesystem.TypeConverter(domain, codomain, convert_mono, convert_poly)
@@ -66,6 +67,10 @@ def lower_function(domain, codomain, type, params):
                 arg = codomain.pointer(arg)
             newargs.append(arg)
 
+    if restype.is_struct:
+        newargs.append(codomain.pointer(restype))
+        restype = codomain.void
+
     return codomain.function(restype, newargs, name, is_vararg)
 
 def lower_complex(domain, codomain, type, params):
@@ -81,11 +86,12 @@ def numba_lower_array(domain, codomain, type, params):
 #------------------------------------------------------------------------
 
 default_numba_lowering_table = {
+    "object":           numba_lower_object,
+    # polytypes
     "function":         lower_function,
     "complex":          lower_complex,
-    "object":           numba_lower_object,
-    "tuple_":           numba_lower_object,
-    "list_":            numba_lower_object,
+    "tuple":            numba_lower_object,
+    "list":             numba_lower_object,
     "extension":        numba_lower_object,
     "jit_exttype":      numba_lower_object,
     "autojit_exttype":  numba_lower_object,

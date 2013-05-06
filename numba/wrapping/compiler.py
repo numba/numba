@@ -32,7 +32,7 @@ def resolve_argtypes(env, py_func, template_signature,
 
     return_type = None
     argnames = inspect.getargspec(py_func).args
-    argtypes = [env.context.typemapper.from_python(x) for x in args]
+    argtypes = [typesystem.numba_typesystem.typeof(x) for x in args]
 
     if template_signature is not None:
         template_context, signature = typesystem.resolve_templates(

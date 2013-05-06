@@ -11,7 +11,7 @@ import ctypes
 
 import numpy as np
 
-names = lambda *names: list(names) #map(tyname, names))
+names = lambda *names: list(names) #list(map(tyname, names))
 
 int_typenames = names(
     'char', 'uchar', 'short', 'ushort', 'int', 'uint', 'long', 'ulong',

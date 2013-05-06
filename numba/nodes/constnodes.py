@@ -29,7 +29,7 @@ class ConstNode(ExprNode):
 
     def __init__(self, pyval, type=None):
         if type is None:
-            type = context.typemapper.from_python(pyval)
+            type = numba.typeof(pyval)
 
         # if pyval is not _NULL:
         #     assert not type.is_object

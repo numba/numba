@@ -234,7 +234,7 @@ class Type(object):
 
     def __repr__(self):
         if self.is_mono:
-            return self.params[0]
+            return self.params[0].rstrip("_")
         else:
             return "%s(%s)" % (self.kind, ", ".join(map(str, self.params)))
 

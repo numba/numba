@@ -5,6 +5,7 @@ from __future__ import print_function, division, absolute_import
 from functools import partial
 
 # from numba import llvm_types
+from numba.typesystem.typesystem import tyname
 from numba.typesystem import typesystem, universe
 from numba.typesystem import numba_typesystem as ts, llvm_typesystem as lts
 
@@ -14,8 +15,8 @@ typenames = universe.int_typenames + universe.float_typenames + ["void"]
 
 def convert(ts1, ts2, conversion_type, typenames):
     for typename in typenames:
-        t1 = getattr(ts1, typename)
-        t2 = getattr(ts2, typename)
+        t1 = getattr(ts1, tyname(typename))
+        t2 = getattr(ts2, tyname(typename))
         assert ts.convert(conversion_type, t1) == t2, (t1, t2)
 
 def test_numeric_conversion():
@@ -24,8 +25,8 @@ def test_numeric_conversion():
 def test_pointers():
     # Test pointer conversion
     for typename in typenames:
-        ty = getattr(ts, typename)
-        lty = getattr(lts, typename)
+        ty = getattr(ts, tyname(typename))
+        lty = getattr(lts, tyname(typename))
         assert llvmt(ts.pointer(ty)) == lts.pointer(lty)
 
     p = ts.pointer(ts.pointer(ts.int_))

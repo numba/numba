@@ -53,8 +53,8 @@ def get_default_typing_rules(u, typeof, promote):
     def register(*classes):
         def dec(func):
             for cls in classes:
-                table[cls] = func
-            return lambda u, value: func(value)
+                table[cls] = lambda u, value: func(value)
+            return func
         return dec
 
     @register(int, long)
@@ -65,7 +65,7 @@ def get_default_typing_rules(u, typeof, promote):
             bits = math.ceil(math.log(abs(value), 2))
 
         if bits < 32:
-            return u.int
+            return u.int_
         elif bits < 64:
             return u.int64
         else:
@@ -191,8 +191,8 @@ def find_match(matchtable, value):
 # Typeof
 #------------------------------------------------------------------------
 
-def object_typer(universe):
-    return universe.object
+def object_typer(universe, value):
+    return universe.object_
 
 def find_first(callables, value):
     for callable in callables:

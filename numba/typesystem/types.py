@@ -21,10 +21,12 @@ from numba.typesystem.typesystem import Type, Conser, TypeConser
 class Registry(object):
     def __init__(self):
         self.registry = {}
+        self.order = []
 
     def register(self, name, obj):
         assert name not in self.registry, name
         self.registry[name] = obj
+        self.order.append(name)
 
     def items(self):
         return self.registry.items()
@@ -273,28 +275,30 @@ class FunctionType(NumbaType):
 
         return "%s (*%s)(%s)" % (self.return_type, namestr, ", ".join(args))
 
-    # @property
-    # def actual_signature(self):
-    #     """
-    #     Passing structs by value is not properly supported for different
-    #     calling conventions in LLVM, so we take an extra argument
-    #     pointing to a caller-allocated struct value.
-    #     """
-    #     if self.struct_by_reference:
-    #         args = []
-    #         for arg in self.args:
-    #             if pass_by_ref(arg):
-    #                 arg = arg.pointer()
-    #             args.append(arg)
-    #
-    #         return_type = self.return_type
-    #         if pass_by_ref(self.return_type):
-    #             return_type = void
-    #             args.append(self.return_type.pointer())
-    #
-    #         self = FunctionType(return_type, args)
-    #
-    #     return self
+    @property
+    def actual_signature(self):
+        """
+        Passing structs by value is not properly supported for different
+        calling conventions in LLVM, so we take an extra argument
+        pointing to a caller-allocated struct value.
+        """
+        from numba import typesystem as ts
+
+        if self.struct_by_reference:
+            args = []
+            for arg in self.args:
+                if pass_by_ref(arg):
+                    arg = arg.pointer()
+                args.append(arg)
+
+            return_type = self.return_type
+            if pass_by_ref(self.return_type):
+                return_type = ts.void
+                args.append(self.return_type.pointer())
+
+            self = FunctionType(return_type, args)
+
+        return self
 
     @property
     def struct_return_type(self):
@@ -531,8 +535,15 @@ class NumpyDtypeType(NumbaType):
 
 @consing
 class ComplexType(NumbaType):
-    typename = "complex_"
+    typename = "complex"
     argnames = ["base_type"]
+
+    @property
+    def itemsize(self):
+        return self.base_type.itemsize * 2
+
+    def __repr__(self):
+        return "complex%d" % (self.itemsize * 8,)
 
 @consing
 class ReferenceType(NumbaType):
@@ -555,6 +566,10 @@ class MetaType(NumbaType):
     typename = "meta"
     argnames = ["dst_type"]
     flags = ["object"]
+
+@consing
+class GlobalType(KnownValueType): # TODO: Remove
+    typename = "global_"
 
 @consing
 class BuiltinType(KnownValueType):
@@ -587,11 +602,11 @@ class ContainerListType(NumbaType):
 
 @consing
 class TupleType(ContainerListType):
-    typename = "tuple_"
+    typename = "tuple"
 
 @consing
 class ListType(ContainerListType):
-    typename = "list_"
+    typename = "list"
 
 @consing
 class MapContainerType(NumbaType):
@@ -600,4 +615,4 @@ class MapContainerType(NumbaType):
 
 @consing
 class DictType(MapContainerType):
-    typename = "dict_"
+    typename = "dict"

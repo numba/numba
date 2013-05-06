@@ -11,8 +11,8 @@ import llvm.core
 from numba import pipeline, naming, error, reporting, PY3
 from numba.control_flow.control_flow import ControlFlow
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
-from numba.typesystem import FunctionType
 from numba import functions, symtab
+from numba.typesystem import TypeSystem, numba_typesystem, FunctionType
 from numba.utility.cbuilder import library
 from numba.nodes import metadata
 from numba.codegen import translate
@@ -269,9 +269,11 @@ class FunctionEnvironment(object):
         '({ "local_var_name" : local_var_type } for @autojit(locals=...))')
 
     template_signature = TypedProperty(
-        object, # FIXME
+        (FunctionType, NoneType),
         'Template signature for @autojit.  E.g. T(T[:, :]).  See '
         'numba.typesystem.templatetypes.')
+
+    typesystem = TypedProperty(TypeSystem, "Typesystem for this compilation")
 
     ast_metadata = TypedProperty(
         object,
@@ -355,6 +357,7 @@ class FunctionEnvironment(object):
              is_closure=False, closures=None, closure_scope=None,
              refcount_args=True,
              ast_metadata=None, warn=True, warnstyle='fancy',
+             typesystem=None,
              **kws):
 
         self.parent = parent
@@ -405,6 +408,7 @@ class FunctionEnvironment(object):
         self.closure_scope = closure_scope
 
         self.refcount_args = refcount_args
+        self.typesystem = typesystem or numba_typesystem
 
         if ast_metadata is not None:
             self.ast_metadata = ast_metadata

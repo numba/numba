@@ -8,9 +8,11 @@ from numba.utils import is_builtin
 from numba.typesystem import numpy_support, types, universe
 from numba.typesystem.types import *
 
-__all__ = ["integral", "floating", "complextypes", "numeric", "native_integral"]
+__all__ = ["integral", "unsigned_integral", "native_integral",
+           "floating", "complextypes", "numeric"]
 
 integral = []
+unsigned_integral = []
 floating = []
 complextypes = []
 numeric = []
@@ -37,18 +39,19 @@ for typename, ty in types.numba_type_registry.items():
 # Add ints...
 add_type("void", mono("void", "void"))
 for typename in universe.int_typenames:
-    ty = mono("int", typename,
-              itemsize=universe.default_type_sizes[typename],
+    ty = mono("int", typename, itemsize=universe.default_type_sizes[typename],
               signed=typename in universe.signed)
     add_type(typename, ty)
 
     integral.append(ty)
+    if not ty.signed:
+        unsigned_integral.append(ty)
     if universe.is_native_int(typename):
         native_integral.append(ty)
 
 # Add floats...
-floats = "float", "double", "longdouble"
-aliases = "float32", "float64", "float128"
+aliases = "float", "double", "longdouble"
+floats = "float32", "float64", "float128"
 for typename, alias in zip(floats, aliases):
     ty = mono("float", typename, itemsize=universe.default_type_sizes[typename])
     add_type(typename, ty)
@@ -94,6 +97,9 @@ for ty in integral:
     if ty.typename in universe.native_sizes:
         native_integral.append(ty)
 
+for ty in numeric:
+    ty.is_numeric = True
+
 #------------------------------------------------------------------------
 # Public Type Constructors
 #------------------------------------------------------------------------
@@ -105,7 +111,7 @@ def from_numpy_dtype(np_dtype):
     """
     return dtype(numpy_support.map_dtype(np_dtype))
 
-def array(dtype, ndim):
+def array(dtype, ndim, is_c_contig=False, is_f_contig=False, inner_contig=False):
     """
     :param dtype: the Numba dtype type (e.g. double)
     :param ndim: the array dimensionality (int)
@@ -113,7 +119,7 @@ def array(dtype, ndim):
     """
     if ndim == 0:
         return dtype
-    return ArrayType(dtype, ndim)
+    return ArrayType(dtype, ndim, is_c_contig, is_f_contig, inner_contig)
 
 def struct_(fields=(), name=None, readonly=False, packed=False, **kwargs):
     "Create a mutable struct type"

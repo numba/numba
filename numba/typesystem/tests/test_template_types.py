@@ -172,6 +172,5 @@ def specialize(T, context):
 
 
 if __name__ == '__main__':
-    infer(test_type_matching, template_signature=void(A, F, S, P),
-           type_context=type_context1)
+    test_template_with_concretes2(1+0j, 2+0j)
     # testmod()

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 
+from numba import error
+from numba.typesystem import integral, floating, complextypes, unsigned_integral
 from numba.typesystem.kinds import *
 
 #------------------------------------------------------------------------
@@ -35,19 +37,19 @@ def find_type_of_size(size, typelist):
 
 def promote_numeric(u, promote, type1, type2):
     "Promote two numeric types"
-    type = max([type1, type2], key=lambda type: type.rank)
-    if type1.kind != type2.kind:
-        def itemsize(type):
-            size = u.itemsize(type)
-            return size // 2 if type.is_complex else size
+    ranks = ["bool", "int", "float", "complex"]
+    type = max([type1, type2], key=lambda type: ranks.index(type.kind))
+    size = max(type1.itemsize, type2.itemsize)
 
-        size = max(itemsize(type1), itemsize(type2))
-        if type.is_complex:
-            type = find_type_of_size(size * 2, complextypes)
-        elif type.is_float:
-            type = find_type_of_size(size, floating)
+    if type.is_complex:
+        type = find_type_of_size(size, complextypes)
+    elif type.is_float:
+        type = find_type_of_size(size, floating)
+    else:
+        assert type.is_int
+        if not type1.signed or not type2.signed:
+            type = find_type_of_size(size, unsigned_integral)
         else:
-            assert type.is_int
             type = find_type_of_size(size, integral)
 
     return type
@@ -105,12 +107,12 @@ class DefaultPromoter(object):
             return promote_arrays(*args)
         elif type1.is_array or type2.is_array:
             return promote_array_and_other(*args)
-        elif type1 == char.pointer():
+        elif type1 == u.char.pointer():
             return u.c_string_type
         elif type1.is_object or type2.is_object:
             return u.object_
         else:
-            raise TypeError((type1, type2))
+            raise error.UnpromotableTypeError((type1, type2))
 
 def have_properties(type1, type2, property1, property2):
     """

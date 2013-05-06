@@ -43,7 +43,7 @@ def unellipsify(node, slices, subscript_node):
     n_indices = len(slices) - len(newaxes)
 
     full_slice = ast.Slice(lower=None, upper=None, step=None)
-    full_slice.variable = Variable(typesystem.SliceType())
+    full_slice.variable = Variable(typesystem.slice_)
     ast.copy_location(full_slice, slices[0])
 
     # process ellipses and count integer indices
