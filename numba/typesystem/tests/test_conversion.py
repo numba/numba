@@ -28,8 +28,8 @@ def test_pointers():
         lty = getattr(lts, typename)
         assert llvmt(ts.pointer(ty)) == lts.pointer(lty)
 
-    p = ts.pointer(ts.pointer(ts.int))
-    lp = lts.pointer(lts.pointer(lts.int))
+    p = ts.pointer(ts.pointer(ts.int_))
+    lp = lts.pointer(lts.pointer(lts.int_))
 
     # See if the conversion works
     assert llvmt(p) == lp
@@ -37,14 +37,14 @@ def test_pointers():
     assert llvmt(p) is lp
 
 def test_functions():
-    functype = ts.function(ts.int, (ts.float,))
-    lfunctype = lts.function(lts.int, (lts.float,))
+    functype = ts.function(ts.int_, (ts.float_,))
+    lfunctype = lts.function(lts.int_, (lts.float_,))
     assert llvmt(functype) == lfunctype
 
 def test_complex():
     c1 = llvmt(ts.complex128)
-    c2 = lts.struct([('real', lts.double), ('imag', lts.double)])
-    c3 = lts.struct([('real', lts.double), ('imag', lts.double)])
+    c2 = lts.struct_([('real', lts.double), ('imag', lts.double)])
+    c3 = lts.struct_([('real', lts.double), ('imag', lts.double)])
     assert c1 == c2
     # assert c1 is c2
     assert c2 is c3
@@ -54,8 +54,8 @@ def test_object():
 
 def test_array():
     assert llvmt(ts.array(ts.double, 1), llvm_types._numpy_array)
-    assert llvmt(ts.array(ts.int, 2), llvm_types._numpy_array)
-    assert llvmt(ts.array(ts.object, 3), llvm_types._numpy_array)
+    assert llvmt(ts.array(ts.int_, 2), llvm_types._numpy_array)
+    assert llvmt(ts.array(ts.object_, 3), llvm_types._numpy_array)
 
 if __name__ == "__main__":
     test_numeric_conversion()

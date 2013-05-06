@@ -3,8 +3,8 @@ from __future__ import print_function, division, absolute_import
 from numba.typesystem import numba_typesystem as ts
 
 def test_pointers():
-    p = ts.pointer(ts.pointer(ts.int))
-    assert str(p) == "int **"
+    p = ts.pointer(ts.pointer(ts.int_))
+    assert str(p) == "int_ **", str(p)
 
 def test_arrays():
     A = ts.array(ts.double, 1)
@@ -19,10 +19,10 @@ def test_arrays():
     assert str(B[-2:10]) == "double[:, :]"
 
 def test_functions():
-    functype = ts.function(ts.int, (ts.float,))
-    assert str(functype) == "int (*)(float)", functype
-    functype = ts.function(ts.int, (ts.float,), "hello")
-    assert str(functype) == "int (*hello)(float)", functype
+    functype = ts.function(ts.int_, (ts.float_,))
+    assert str(functype) == "int_ (*)(float_)", functype
+    functype = ts.function(ts.int_, (ts.float_,), "hello")
+    assert str(functype) == "int_ (*hello)(float_)", functype
 
 if __name__ == "__main__":
     test_pointers()

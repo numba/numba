@@ -44,14 +44,14 @@ def numba_lower_array(domain, codomain, type):
 
 def lower_complex(domain, codomain, type, params):
     base_type, = params
-    return codomain.struct([('real', base_type), ('imag', base_type)])
+    return codomain.struct_([('real', base_type), ('imag', base_type)])
 
 #------------------------------------------------------------------------
 # Default Lowering Table
 #------------------------------------------------------------------------
 
 default_numba_lowering_table = {
-    "complex": lower_complex,
-    "object": numba_lower_object,
-    "array": numba_lower_array,
+    "complex_": lower_complex,
+    "object_":  numba_lower_object,
+    "array":    numba_lower_array,
 }

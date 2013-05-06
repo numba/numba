@@ -69,8 +69,7 @@ class TypeMetaClass(type):
         for flag in self.flags:
             setattr(self, "is_" + flag, True)
 
-        if not self.mutable:
-            self.conser = Conser(partial(type.__call__, self))
+        self.conser = Conser(partial(type.__call__, self))
 
     def __call__(self, *args, **kwds):
         args = self.default_args(args, kwds)
@@ -84,11 +83,14 @@ class TypeMetaClass(type):
 
 def consing(cls):
     """
-    Decorator that conses calls when the class is called. A potential problem
-    is that we need default_args() to get the arguments for the consing, and
-    subsequently for user constructors (or we need to decorate all types, even
-    when not consing...)
+    Cons calls to the constructor.
     """
+    cls.mutable = False
+    return cls
+
+def notconsing(cls):
+    cls.mutable = False
+    return cls
 
 #------------------------------------------------------------------------
 # Type Implementations
@@ -156,8 +158,9 @@ class _NumbaType(Type):
         return self # TODO: implement
 
     def to_llvm(self, context):
-        raise NotImplementedError("use typesystem.llvm(type) instead")
-        return self.typesystem.convert("llvm", self)
+        # raise NotImplementedError("use typesystem.llvm(type) instead")
+        from . import defaults
+        return defaults.numba_typesystem.convert("llvm", self)
 
 mono, poly = _NumbaType.mono, _NumbaType.poly
 
@@ -233,18 +236,16 @@ class Function(object):
         """
         raise TypeError("Not a callable function")
 
-conser = object()
-
+@consing
 class FunctionType(NumbaType):
     typename = "function"
     argnames = ['return_type', 'args', 'name', 'is_vararg']
     defaults = {"name": None, "is_vararg": False}
-    __new__ = conser
 
     struct_by_reference = False
 
     def __repr__(self):
-        args = [str(arg) for arg in self.argnames]
+        args = [str(arg) for arg in self.args]
         if self.is_vararg:
             args.append("...")
         if self.name:
@@ -294,6 +295,7 @@ class FunctionType(NumbaType):
 # ______________________________________________________________________
 # Pointers
 
+@consing
 class PointerType(NumbaType):
     typename = "pointer"
     argnames = ['base_type']
@@ -302,6 +304,7 @@ class PointerType(NumbaType):
         space = " " * (not self.base_type.is_pointer)
         return "%s%s*" % (self.base_type, space)
 
+@consing
 class SizedPointerType(NumbaType):
     """
     A pointer with knowledge of its range.
@@ -322,6 +325,7 @@ class SizedPointerType(NumbaType):
     def __hash__(self):
         return hash(self.base_type.pointer())
 
+@consing
 class CArrayType(NumbaType):
     typename = "carray"
     argnames = ["base_type", "size"]
@@ -329,6 +333,7 @@ class CArrayType(NumbaType):
 # ______________________________________________________________________
 # Structs
 
+@consing
 class StructType(NumbaType):
 
     typename = "istruct"
@@ -366,6 +371,7 @@ class StructType(NumbaType):
         ctype = self.to_ctypes()
         return getattr(ctype, field_name).offset
 
+@notconsing
 class MutableStructType(StructType):
     """
     Create a struct type. Fields may be ordered or unordered. Unordered fields
@@ -390,6 +396,7 @@ class MutableStructType(StructType):
 # High-level types
 #------------------------------------------------------------------------
 
+@consing
 class ArrayType(NumbaType):
     """
     An array type. ArrayType may be sliced to obtain a subtype:
@@ -444,6 +451,7 @@ class ArrayType(NumbaType):
         else:
             raise IndexError(index, ndim)
 
+@consing
 class KnownValueType(NumbaType):
     """
     Type which is associated with a known value or well-defined symbolic
@@ -458,6 +466,7 @@ class KnownValueType(NumbaType):
     typename = "known_value"
     attrs = ["value"]
 
+@consing
 class ModuleType(KnownValueType):
     """
     Represents a type for modules.
@@ -478,27 +487,32 @@ class ModuleType(KnownValueType):
     def module(self):
         return self.value
 
+@consing
 class AutojitFunctionType(NumbaType):
     "Type for autojit functions"
     typename = "autojit_func"
     argnames = ["autojit_func"]
     flags = ["object"]
 
+@consing
 class JitFunctionType(NumbaType):
     "Type for jit functions"
     typename = "jit_function"
     argnames = ["jit_func"]
     flags = ["object"]
 
+@consing
 class NumpyDtypeType(NumbaType):
     "Type of numpy dtypes"
     typename = "numpy_dtype"
     argnames = ["dtype"]
 
+@consing
 class ComplexType(NumbaType):
     typename = "complex_"
     argnames = ["base_type"]
 
+@consing
 class ReferenceType(NumbaType):
     """
     A reference to an (primitive or Python) object. This is passed as a
@@ -510,6 +524,7 @@ class ReferenceType(NumbaType):
     typename = "reference"
     argnames = ["referenced_type"]
 
+@consing
 class MetaType(NumbaType):
     """
     A type instance in user code. e.g. double(value). The Name node will have
@@ -519,7 +534,7 @@ class MetaType(NumbaType):
     argnames = ["dst_type"]
     flags = ["object"]
 
-
+@consing
 class BuiltinType(KnownValueType):
     typename = "builtin"
 
@@ -534,6 +549,7 @@ class BuiltinType(KnownValueType):
 # Container Types
 #------------------------------------------------------------------------
 
+@consing
 class ContainerListType(NumbaType):
     """
     :param base_type: the element type of the tuple
@@ -547,15 +563,19 @@ class ContainerListType(NumbaType):
     def is_sized(self):
         return self.size >= 0
 
+@consing
 class TupleType(ContainerListType):
     typename = "tuple_"
 
+@consing
 class ListType(ContainerListType):
     typename = "list_"
 
+@consing
 class MapContainerType(NumbaType):
     argnames = ["key_type", "value_type", "size"]
     flags = ["object"]
 
+@consing
 class DictType(MapContainerType):
     typename = "dict_"
