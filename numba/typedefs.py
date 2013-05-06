@@ -25,14 +25,14 @@ def define(u):
 
     PyObject_HEAD = u.struct_(pyobject_head_fields, 'PyObject_HEAD')
     PyArray = u.struct_(pyobject_head_fields + [
-         void_star,          # data
-         u.int32,            # nd
-         intp_star,          # dimensions
-         intp_star,          # strides
-         void_star,          # base
-         void_star,          # descr
-         u.int32,            # flags
-         void_star,          # weakreflist
+        ("data", void_star),
+        ("nd", u.int32),
+        ("dimensions", intp_star),
+        ("strides", intp_star),
+        ("base", void_star),
+        ("descr", void_star),
+        ("flags", u.int32),
+        ("weakreflist", void_star),
       ])
 
     PyCFunctionObject = u.struct_([

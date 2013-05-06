@@ -1,6 +1,6 @@
 import llvm.core
 
-from numba.typesystem.typesystem import consing
+from numba.typesystem.typesystem import consing, tyname
 from numba.typesystem import universe
 
 #------------------------------------------------------------------------
@@ -40,12 +40,14 @@ def lfloat(name, itemsize):
 
 size = universe.default_type_sizes.__getitem__
 
-monotypes = globals()
+monotypes = {}
 for typename in universe.int_typenames:
     monotypes[typename] = lint(typename, size(typename))
 for typename in universe.float_typenames:
     monotypes[typename] = lfloat(typename, size(typename))
 monotypes["void"] = llvm.core.Type.void()
+
+globals().update((tyname(name), ty) for name, ty in monotypes.iteritems())
 
 #------------------------------------------------------------------------
 # Exposed types

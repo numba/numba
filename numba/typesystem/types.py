@@ -66,7 +66,10 @@ class TypeMetaClass(type):
             setattr(self, arg, Accessor(i, self.mutable))
 
         # Process flags
-        for flag in self.flags + ([self.typename] if self.typename else []):
+        flags = list(self.flags)
+        if self.typename:
+            flags.append(self.typename.strip("_"))
+        for flag in flags:
             setattr(self, "is_" + flag, True)
 
         self.conser = Conser(partial(type.__call__, self))
@@ -105,6 +108,12 @@ class _NumbaType(Type):
         conversion: to_llvm/to_ctypes/get_dtype
     """
 
+    argnames = []
+    flags = []
+    defaults = {}
+
+    qualifiers = frozenset()
+
     def __getitem__(self, item):
         """
         Support array type creation by slicing, e.g. double[:, :] specifies
@@ -131,7 +140,7 @@ class _NumbaType(Type):
                 if s.step == 1:
                     step_idx = idx
 
-            return ArrayType(self.dtype, len(item),
+            return ArrayType(self, len(item),
                              is_c_contig=step_idx == len(item) - 1,
                              is_f_contig=step_idx == 0)
         else:
@@ -160,6 +169,15 @@ class _NumbaType(Type):
     def qualify(self, *qualifiers):
         return self # TODO: implement
 
+    @property
+    def subtypes(self):
+        subtypes = []
+        for p in self.params:
+            if isinstance(p, (Type, list, tuple)):
+                subtypes.append(p)
+
+        return subtypes
+
     def to_llvm(self, context):
         # raise NotImplementedError("use typesystem.llvm(type) instead")
         from . import defaults
@@ -177,9 +195,6 @@ class NumbaType(_NumbaType):
     # __slots__ = Type.slots
 
     typename = None
-    argnames = []
-    flags = []
-    defaults = {}
 
     def __init__(self, *args, **kwds):
         super(NumbaType, self).__init__(self.typename, *args, **kwds)
@@ -245,7 +260,7 @@ class FunctionType(NumbaType):
     argnames = ['return_type', 'args', 'name', 'is_vararg']
     defaults = {"name": None, "is_vararg": False}
 
-    struct_by_reference = False
+    struct_by_reference = True
 
     def __repr__(self):
         args = [str(arg) for arg in self.args]
@@ -344,6 +359,10 @@ class StructType(NumbaType):
     defaults = dict.fromkeys(argnames[1:])
 
     @property
+    def subtypes(self):
+        return [f[1] for f in self.fields]
+
+    @property
     def fielddict(self):
         return dict(self.fields)
 
@@ -353,14 +372,8 @@ class StructType(NumbaType):
         else:
             name = ''
         return 'struct %s{ %s }' % (
-                name, ", ".join("%s %s" % (field_type, field_name)
-                                    for field_name, field_type in self.fields))
-
-    def __eq__(self, other):
-        return other.is_struct and self.fields == other.fields
-
-    def __hash__(self):
-        return hash(tuple(self.fields))
+                name, ", ".join(["%s %s" % (field_type, field_name)
+                                    for field_name, field_type in self.fields]))
 
     def is_prefix(self, other_struct):
         other_fields = other_struct.fields[:len(self.fields)]
@@ -382,6 +395,12 @@ class MutableStructType(StructType):
     """
     typename = "struct_"
     mutable = True
+
+    def __eq__(self, other):
+        return other.is_struct and self.fields == other.fields
+
+    def __hash__(self):
+        return hash(tuple(self.fields))
 
     def copy(self):
         return type(self)(self.fields, self.name, self.readonly, self.packed)

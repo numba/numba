@@ -11,7 +11,7 @@ import llvm.core
 from numba import pipeline, naming, error, reporting, PY3
 from numba.control_flow.control_flow import ControlFlow
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
-from numba.minivect.minitypes import FunctionType
+from numba.typesystem import FunctionType
 from numba import functions, symtab
 from numba.utility.cbuilder import library
 from numba.nodes import metadata

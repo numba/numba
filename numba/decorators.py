@@ -23,8 +23,7 @@ from numba.wrapping import compiler
 
 logger = logging.getLogger(__name__)
 
-# TODO: Re-enable
-# environment.NumbaEnvironment.get_environment().link_cbuilder_utilities()
+environment.NumbaEnvironment.get_environment().link_cbuilder_utilities()
 
 if PY3:
     CLASS_TYPES = type
@@ -178,7 +177,7 @@ def autojit(template_signature=None, backend='ast', target='cpu',
     function exists for a set of input argument types, the dispatcher
     creates and caches a new specialized function at call time.
     """
-    if template_signature and not isinstance(template_signature, minitypes.Type):
+    if template_signature and not isinstance(template_signature, typesystem.Type):
         if callable(template_signature):
             func = template_signature
             return autojit(backend='ast', target=target,

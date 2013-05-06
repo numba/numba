@@ -9,14 +9,9 @@ from __future__ import print_function, division, absolute_import
 import struct as struct_module
 import ctypes
 
-from numba.utils import is_builtin
-
 import numpy as np
 
-def tyname(name):
-    return name + "_" if is_builtin(name) else name
-
-names = lambda *names: list(map(tyname, names))
+names = lambda *names: list(names) #map(tyname, names))
 
 int_typenames = names(
     'char', 'uchar', 'short', 'ushort', 'int', 'uint', 'long', 'ulong',
@@ -58,7 +53,7 @@ def getsize(ctypes_name, default):
 
 # Type sizes in bytes
 type_sizes = {
-    "bool_":        1,
+    "bool":         1,
     # Int
     "char":         1,
     "int8":         1,
@@ -76,7 +71,7 @@ type_sizes = {
     "float32":      4,
     "float64":      8,
     "float128":     16,
-    "float_":       4,
+    "float":        4,
     "double":       8,
     # Complex
     "complex64":    8,
@@ -89,8 +84,8 @@ ctypes_npy_intp = np.empty(0).ctypes.strides._type_
 native_sizes = {
     # Int
     "short":        struct_module.calcsize("h"),
-    "int_":         struct_module.calcsize("i"),
-    "long_":        struct_module.calcsize("l"),
+    "int":          struct_module.calcsize("i"),
+    "long":         struct_module.calcsize("l"),
     "longlong":     struct_module.calcsize("Q"),
     "Py_ssize_t":   getsize('c_size_t', _plat_bits // 8),
     "npy_intp":     ctypes.sizeof(ctypes_npy_intp),

@@ -66,6 +66,11 @@ import struct as struct_
 import weakref
 from functools import partial
 
+from numba.utils import is_builtin
+
+def tyname(name):
+    return name + "_" if is_builtin(name) else name
+
 __all__ = [
     "TypeSystem", "Type", "ConstantTyper", "Conser", "TypeConser",
     "get_conser", "consing",
@@ -131,7 +136,7 @@ class ConstantTyper(object):
 #------------------------------------------------------------------------
 
 def convert_mono(domain, codomain, type):
-    return getattr(codomain, type.typename)
+    return getattr(codomain, tyname(type.typename))
 
 def convert_poly(domain, codomain, type, coparams):
     # Get codomain constructor

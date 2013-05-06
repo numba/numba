@@ -574,6 +574,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             assert tbaa_type is not None
             tbaa_node = self.tbaa.get_metadata(tbaa_type)
 
+        assert tbaa_node
         self.tbaa.set_metadata(instr, tbaa_node)
 
     def preload_attributes(self, var, value):

@@ -17,37 +17,6 @@ numeric = []
 native_integral = []
 
 #------------------------------------------------------------------------
-# Public Type Constructors
-#------------------------------------------------------------------------
-
-def from_numpy_dtype(np_dtype):
-    """
-    :param np_dtype: the NumPy dtype (e.g. np.dtype(np.double))
-    :return: a dtype type representation
-    """
-    return dtype(numpy_support.map_dtype(np_dtype))
-
-def array(dtype, ndim):
-    """
-    :param dtype: the Numba dtype type (e.g. double)
-    :param ndim: the array dimensionality (int)
-    :return: an array type representation
-    """
-    if ndim == 0:
-        return dtype
-    return ArrayType(dtype, ndim)
-
-def struct_(fields=(), name=None, readonly=False, packed=False, **kwargs):
-    "Create a mutable struct type"
-    if fields and kwargs:
-        raise TypeError("The struct must be either ordered or unordered")
-    elif kwargs:
-        # fields = sort_types(kwargs)
-        fields = list(kwargs.iteritems())
-
-    return MutableStructType(fields, name, readonly, packed)
-
-#------------------------------------------------------------------------
 # Type shorthands
 #------------------------------------------------------------------------
 
@@ -78,7 +47,7 @@ for typename in universe.int_typenames:
         native_integral.append(ty)
 
 # Add floats...
-floats = "float_", "double", "longdouble"
+floats = "float", "double", "longdouble"
 aliases = "float32", "float64", "float128"
 for typename, alias in zip(floats, aliases):
     ty = mono("float", typename, itemsize=universe.default_type_sizes[typename])
@@ -124,3 +93,34 @@ numeric.extend(integral + floating + complextypes)
 for ty in integral:
     if ty.typename in universe.native_sizes:
         native_integral.append(ty)
+
+#------------------------------------------------------------------------
+# Public Type Constructors
+#------------------------------------------------------------------------
+
+def from_numpy_dtype(np_dtype):
+    """
+    :param np_dtype: the NumPy dtype (e.g. np.dtype(np.double))
+    :return: a dtype type representation
+    """
+    return dtype(numpy_support.map_dtype(np_dtype))
+
+def array(dtype, ndim):
+    """
+    :param dtype: the Numba dtype type (e.g. double)
+    :param ndim: the array dimensionality (int)
+    :return: an array type representation
+    """
+    if ndim == 0:
+        return dtype
+    return ArrayType(dtype, ndim)
+
+def struct_(fields=(), name=None, readonly=False, packed=False, **kwargs):
+    "Create a mutable struct type"
+    if fields and kwargs:
+        raise TypeError("The struct must be either ordered or unordered")
+    elif kwargs:
+        # fields = sort_types(kwargs)
+        fields = list(kwargs.iteritems())
+
+    return MutableStructType(fields, name, readonly, packed)

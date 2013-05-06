@@ -6,7 +6,7 @@ import textwrap
 from collections import defaultdict
 
 from numba import *
-from numba.minivect import minitypes
+from numba import typesystem
 from numba import numbawrapper
 
 import llvm.core
@@ -166,7 +166,7 @@ class FunctionCache(object):
         )
 
         # Sanity check
-        assert isinstance(func_env.func_signature, minitypes.FunctionType)
+        assert isinstance(func_env.func_signature, typesystem.FunctionType)
         assert isinstance(func_env.lfunc, llvm.core.Function)
 
         argtypes_flags = tuple(argtypes), None
