@@ -85,11 +85,42 @@ def compile_typedlist(item_type, _list_cache=_list_cache):
 
         @void(Py_ssize_t, item_type)
         def insert(self, index, value):
-            notimplemented("insert")
+            size = self.size
+
+            if size >= self.buf.shape[0]:
+                self.buf.resize(int(size * GROW), refcheck=False)
+
+            if index > size:
+                self.append(value)
+            else:
+                current = self.buf[index]
+                self.buf[index] = value
+                for i in range(index+1, size+1):
+                    next = self.buf[i]
+                    self.buf[i] = current
+                    current = next
+            self.size = size + 1
 
         @void(item_type)
         def remove(self, value):
-            notimplemented("remove")
+            size = self.size
+            position = 0
+            found = False
+           
+            if INITIAL_BUFSIZE < size < self.buf.shape[0]/2:
+                self.buf.resize(int(SHRINK * size), refcheck=False)
+
+            while position < size and not found:
+                if self.buf[position] == value:
+                    found = True
+                else:
+                    position += 1
+                    
+            if found is True:
+                for i in range(position, size):
+                    self.buf[i] = self.buf[i+1]
+                self.size = size -1
+                # raise ValueError 'not in list'
 
         @void()
         def reverse(self):

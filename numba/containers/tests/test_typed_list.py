@@ -137,6 +137,37 @@ def from_iterable(type, iterable):
     return nb.typedlist(type, iterable)
 
 @autojit_py3doc
+def test_insert(type):
+    """
+    >>> test_insert(int_)
+    [0, 1, 2, 3, 4, 5]
+    """
+    tlist = nb.typedlist(type, [1,3])
+    tlist.insert(0,0)
+    tlist.insert(2,2)
+    tlist.insert(4,4)
+    tlist.insert(8,5)
+    return tlist
+
+@autojit_py3doc
+def test_remove(type):
+    """
+    >>> test_remove(int_)
+    4
+    3
+    2
+    [1, 3]
+    """
+    tlist = nb.typedlist(type, range(5))
+    tlist.remove(0)
+    print len(tlist)
+    tlist.remove(2)
+    print len(tlist)
+    tlist.remove(4)
+    print len(tlist)
+    return tlist
+
+@autojit_py3doc
 def test_count(type, L):
     """
     >>> test_count(int_, [1, 2, 3, 4, 5, 1, 2])
