@@ -51,4 +51,11 @@ def test_typeof_numba3(arg):
     """
     return numba.typeof(arg)
 
+@autojit
+def test_typeof_type(arg):
+    """
+    >>> test_typeof_type(int_)
+    meta(int)
+    """
+
 numba.testing.testmod()

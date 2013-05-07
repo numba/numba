@@ -6,7 +6,6 @@ import ctypes
 import unittest
 
 import numpy as np
-from numba.minivect import minitypes
 from numba import *
 
 @autojit(backend='ast')
@@ -70,7 +69,7 @@ class TestConversion(unittest.TestCase):
                 expected = 2.5
 
             result = convert_numeric(value, dst_type)
-            assert result == expected, (result, dst_type)
+            assert result == expected, (result, expected, dst_type)
 
     def test_pointer_conversion(self):
         type = double.pointer()
@@ -80,6 +79,5 @@ class TestConversion(unittest.TestCase):
         assert ctypes.cast(result, ctypes.c_void_p).value == array.ctypes.data
 
 if __name__ == "__main__":
-#    TestConversion("test_pointer_conversion").test_pointer_conversion()
     from numba.testing import test_support
     test_support.main()

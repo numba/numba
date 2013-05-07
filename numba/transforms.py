@@ -196,7 +196,7 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
         assert len(node.args) == 2
 
         arg1, arg2 = node.args
-        if arg1.variable.type.is_c_string:
+        if arg1.variable.type.is_string:
             return nodes.CoercionNode(
                 nodes.ObjectTempNode(
                     function_util.external_call(
@@ -252,7 +252,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                   [nodes.const(0, node_type)])
             to_bool = nodes.typednode(to_bool, bool_)
             result = self.visit(to_bool)
-        elif node_type.is_c_string and dst_type.is_numeric:
+        elif node_type.is_string and dst_type.is_numeric:
             # TODO: int <-> string conversions are explicit, this should not
             # TODO: be a coercion
             if self.nopython:
@@ -338,7 +338,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                        self.llvm_module,
                                                        cls.__name__,
                                                        args=args)
-        elif node_type.is_pointer and not node_type.is_string():
+        elif node_type.is_pointer and not node_type == char.pointer():
             # Create ctypes pointer object
             ctypes_pointer_type = node_type.to_ctypes()
             args = [nodes.CoercionNode(node.node, int64),
@@ -359,7 +359,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
         version).
         """
         dst_type = promote_to_native(dst_type)
-        assert dst_type in utility.object_to_numeric
+        assert dst_type in utility.object_to_numeric, (dst_type, utility.object_to_numeric)
         utility_func = utility.object_to_numeric[dst_type]
         result = function_util.external_call_func(self.context,
                                                   self.llvm_module,
@@ -419,13 +419,13 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                        self.llvm_module,
                                                        cls.__name__,
                                                        args=[node.node])
-        elif node_type.is_pointer:
+        elif node_type.is_pointer and not node_type.is_string:
             if from_type.is_jit_function and node_type.base_type.is_function:
                 new_node = self.coerce_to_function_pointer(
                     node, from_type, node_type)
             else:
                 raise error.NumbaError(node, "Obtaining pointers from objects "
-                                             "is not yet supported")
+                                             "is not yet supported (%s)" % node_type)
         elif node_type.is_void:
             raise error.NumbaError(node, "Cannot coerce %s to void" %
                                    (from_type,))
@@ -683,8 +683,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
         # Short-circuit visiting a Slice child if this is a nopython
         # string slice.
-        if (self.nopython and node.value.type.is_c_string and
-                node.type.is_c_string):
+        if (self.nopython and node.value.type.is_string and
+                node.type.is_string):
             return self.visit(self._c_string_slice(node))
 
         # logging.debug(ast.dump(node))
@@ -710,7 +710,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
                   node.slice.type.is_int):
             # Array index with integer indices
             node = nodes.DataPointerNode(node.value, node.slice, node.ctx)
-        elif node.value.type.is_c_string and node.type.is_c_string:
+        elif node.value.type.is_string and node.type.is_string:
             node.value = nodes.CoercionNode(node.value, dst_type = object_)
             node.type = object_
             node = nodes.CoercionNode(nodes.ObjectTempNode(node),

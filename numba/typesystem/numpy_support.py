@@ -2,7 +2,10 @@
 
 from __future__ import print_function, division, absolute_import
 
+import math
+
 from numba.typesystem import *
+from numba.typesystem.typesystem import nbo
 
 import numpy as np
 

@@ -5,7 +5,7 @@ Shorthands for type constructing, promotions, etc.
 from __future__ import print_function, division, absolute_import
 
 from numba.utils import is_builtin
-from numba.typesystem import numpy_support, types, universe
+from numba.typesystem import types, universe
 from numba.typesystem.types import *
 
 __all__ = ["integral", "unsigned_integral", "native_integral",
@@ -111,6 +111,7 @@ def from_numpy_dtype(np_dtype):
     :param np_dtype: the NumPy dtype (e.g. np.dtype(np.double))
     :return: a dtype type representation
     """
+    from numba.typesystem import numpy_support
     return dtype(numpy_support.map_dtype(np_dtype))
 
 def array(dtype, ndim, is_c_contig=False, is_f_contig=False, inner_contig=False):

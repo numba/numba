@@ -725,7 +725,7 @@ class TypeInferer(visitors.NumbaTransformer):
         # Determine the type of the global, i.e. a builtin, global
         # or (numpy) module
         if is_builtin:
-            type = typesystem.BuiltinType(name=global_name)
+            type = typesystem.BuiltinType(global_name)
         else:
             # FIXME: analyse the bytecode of the entire module, to determine
             # overriding of builtins
@@ -907,7 +907,7 @@ class TypeInferer(visitors.NumbaTransformer):
         slice_type = node.slice.variable.type
 
         if not isinstance(node.slice, ast.Index) or not (
-                slice_type.is_int or slice_type.is_c_string):
+                slice_type.is_int or slice_type.is_string):
             raise error.NumbaError(node.slice,
                                    "Struct index must be a single string "
                                    "or integer")
@@ -1022,7 +1022,7 @@ class TypeInferer(visitors.NumbaTransformer):
         elif value_type.is_object:
             result_type = object_
 
-        elif value_type.is_c_string:
+        elif value_type.is_string:
             # Handle string indexing
             if slice_type.is_int:
                 result_type = char
@@ -1059,11 +1059,11 @@ class TypeInferer(visitors.NumbaTransformer):
         return node
 
     def visit_Ellipsis(self, node):
-        return nodes.ConstNode(Ellipsis, typesystem.EllipsisType())
+        return nodes.ConstNode(Ellipsis, typesystem.ellipsis)
 
     def visit_Slice(self, node):
         self.generic_visit(node)
-        type = typesystem.SliceType()
+        type = typesystem.slice_
 
         is_constant = False
         const = None
@@ -1645,7 +1645,7 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
         self.generic_visit(node)
         types = [n.type for n in node.dims]
         if all(type.is_int for type in types):
-            node.type = reduce(self.context.promote_types, types)
+            node.type = reduce(self.env.crnt.typesystem.promote, types)
         else:
             node.type = object_
 

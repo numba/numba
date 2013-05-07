@@ -107,9 +107,9 @@ def get_default_typing_rules(u, typeof, promote):
 
         return container_type(base_type, size=len(value))
 
-    table[np.dtype] = lambda value: numpy_support.map_dtype(value)
-    table[types.ModuleType] = lambda value: u.module(value)
-    table[typesystem.Type] = lambda value: u.metatype(value)
+    register(np.dtype)(         lambda value: numpy_support.map_dtype(value))
+    register(types.ModuleType)( lambda value: u.module(value))
+    register(typesystem.Type)(  lambda value: u.meta(value))
 
     return table
 

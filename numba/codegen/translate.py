@@ -913,7 +913,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
     def visit_Subscript(self, node):
         value_type = node.value.type
-        if not (value_type.is_carray or value_type.is_c_string or
+        if not (value_type.is_carray or value_type.is_string or
                     value_type.is_pointer):
             raise error.InternalError(node, "Unsupported type:", node.value.type)
 
@@ -1740,7 +1740,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 lvalue = llvm.core.Constant.int_signextend(ltype, constant)
             else:
                 lvalue = llvm.core.Constant.int(ltype, constant)
-        elif type.is_c_string or type == char.pointer():
+        elif type.is_string:
             lvalue = self.env.constants_manager.get_string_constant(constant)
             type_char_p = lts.pointer(lts.char)
             lvalue = self.builder.bitcast(lvalue, type_char_p)

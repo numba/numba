@@ -14,6 +14,8 @@ except ImportError:
 
 from numba.typesystem.typesystem import Type, Conser, TypeConser
 
+import numpy as np
+
 #------------------------------------------------------------------------
 # Type metaclass
 #------------------------------------------------------------------------
@@ -189,6 +191,10 @@ class _NumbaType(Type):
         from . import defaults
         return defaults.numba_typesystem.convert("ctypes", self)
 
+    def get_dtype(self):
+        from numba.typesystem import numpy_support
+        return numpy_support.map_type_to_dtype(self)
+
 mono, poly = _NumbaType.mono, _NumbaType.poly
 
 @notconsing
@@ -329,6 +335,11 @@ class FunctionType(NumbaType):
 class PointerType(NumbaType):
     typename = "pointer"
     argnames = ['base_type']
+
+    @property
+    def is_string(self): # HACK
+        import numba
+        return self.base_type == numba.char
 
     def __repr__(self):
         space = " " * (not self.base_type.is_pointer)
@@ -546,6 +557,12 @@ class NumpyDtypeType(NumbaType):
     "Type of numpy dtypes"
     typename = "numpy_dtype"
     argnames = ["dtype"]
+    flags = ["object"]
+
+class NumpyAttributeType(NumbaType): # TODO: Remove
+    typename = "numpy_attribute"
+    argnames = ["module", "attr"]
+    flags = ["object"]
 
 @consing
 class ComplexType(NumbaType):
@@ -579,7 +596,10 @@ class MetaType(NumbaType):
     """
     typename = "meta"
     argnames = ["dst_type"]
-    flags = ["object"]
+    flags = [
+        "object",
+        "cast",     # backwards compat
+    ]
 
 @consing
 class GlobalType(KnownValueType): # TODO: Remove

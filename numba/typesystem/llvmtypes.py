@@ -65,7 +65,7 @@ def struct_(fields, name=None, readonly=False, packed=False):
 @consing
 def pointer(base_type):
     if base_type.kind == llvm.core.TYPE_VOID:
-        base_type = llvm.core.Type.int(1)
+        base_type = llvm.core.Type.int(8)
     return llvm.core.Type.pointer(base_type)
 
 @consing

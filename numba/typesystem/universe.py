@@ -36,7 +36,8 @@ complex_typenames = names(
 )
 
 numba_unit_types = names(
-    "object", "null", "none", "ellipsis", "slice", "newaxis", "range",
+    "object", "string", "unicode", "null", "none",
+    "ellipsis", "slice", "newaxis", "range",
 )
 
 #------------------------------------------------------------------------

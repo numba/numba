@@ -52,7 +52,7 @@ class ConstNode(ExprNode):
         try:
             self.pyval = caster(self.pyval)
         except ValueError:
-            if dst_type.is_int and self.type.is_c_string:
+            if dst_type.is_int and self.type.is_string:
                 raise
             raise minierror.UnpromotableTypeError((dst_type, self.type))
 

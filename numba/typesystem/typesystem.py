@@ -129,6 +129,10 @@ class ConstantTyper(object):
         elif type(value) in self.handler_table:
             return self.handler_table[type(value)](self.universe, value)
         else:
+            for cls in self.handler_table:
+                if isinstance(value, cls):
+                    return self.handler_table[cls](self.universe, value)
+
             return None
 
 #------------------------------------------------------------------------

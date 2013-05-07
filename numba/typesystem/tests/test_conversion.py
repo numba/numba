@@ -62,10 +62,10 @@ def test_llvm_complex():
 def test_llvm_object():
     assert llvmt(ts.object_) == llvm_types._pyobject_head_struct_p
 
-# def test_llvm_array():
-#     assert llvmt(ts.array(ts.double, 1)) == llvm_types._numpy_array
-#     assert llvmt(ts.array(ts.int_, 2)) == llvm_types._numpy_array
-#     assert llvmt(ts.array(ts.object_, 3)) == llvm_types._numpy_array
+def test_llvm_array():
+    assert llvmt(ts.array(ts.double, 1)) == llvm_types._numpy_array
+    assert llvmt(ts.array(ts.int_, 2)) == llvm_types._numpy_array
+    assert llvmt(ts.array(ts.object_, 3)) == llvm_types._numpy_array
 
 #-------------------------------------------------------------------
 # Numba -> ctypes

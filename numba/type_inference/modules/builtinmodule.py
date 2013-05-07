@@ -36,7 +36,7 @@ def cast(node, dst_type):
 
 @register_builtin((1, 2, 3), can_handle_deferred_types=True)
 def range_(context, node, start, stop, step):
-    node.variable = Variable(typesystem.RangeType())
+    node.variable = Variable(typesystem.range_)
     node.args = nodes.CoercionNode.coerce(node.args, dst_type=Py_ssize_t)
     return node
 

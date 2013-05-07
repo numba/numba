@@ -195,7 +195,7 @@ class ArrayAttributeNode(ExprNode):
         if attribute_name == 'ndim':
             type = minitypes.int_
         elif attribute_name in ('shape', 'strides'):
-            type = typesystem.SizedPointerType(typesystem.intp,
+            type = typesystem.SizedPointerType(typesystem.npy_intp,
                                                 size=self.array_type.ndim)
         elif attribute_name == 'data':
             type = self.array_type.dtype.pointer()

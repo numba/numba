@@ -5,7 +5,7 @@ Type lowering from a higher-level domain to a lower-level domain.
 """
 
 from __future__ import print_function, division, absolute_import
-
+import ctypes
 from numba.typesystem import typesystem
 
 def find_matches(table, flags):
@@ -64,9 +64,12 @@ def create_type_lowerer(table, domain, codomain):
 # ______________________________________________________________________
 # mono types
 
-def numba_lower_object(domain, codomain, type, params):
+def lower_object(domain, codomain, type, params):
     from numba import typedefs # hurr
     return codomain.pointer(typedefs.PyObject_HEAD)
+
+def lower_string(domain, codomain, type, params):
+    return codomain.pointer(codomain.char)
 
 # ______________________________________________________________________
 # poly types
@@ -92,7 +95,7 @@ def lower_complex(domain, codomain, type, params):
     base_type, = params
     return codomain.struct_([('real', base_type), ('imag', base_type)])
 
-def numba_lower_array(domain, codomain, type, params):
+def lower_array(domain, codomain, type, params):
     from numba import typedefs
     return codomain.pointer(typedefs.PyArray)
 
@@ -104,11 +107,12 @@ object_types = ["tuple", "list", "extension",
                 "jit_exttype", "autojit_exttype"]
 
 default_numba_lowering_table = {
-    "object":           numba_lower_object,
+    "object":           lower_object,
     # polytypes
     "function":         lower_function,
     "complex":          lower_complex,
-    "array":            numba_lower_array,
+    "array":            lower_array,
+    "string":           lower_string,
 }
 default_numba_lowering_table.update(dict.fromkeys(object_types, "object"))
 
@@ -116,5 +120,6 @@ ctypes_lowering_table = {
     "object":       lambda dom, cod, type, params: cod.object_,
     "complex":      lower_complex,
     "array":        "object",
+    "string":       lambda dom, cod, type, params: ctypes.c_char_p,
 }
 ctypes_lowering_table.update(dict.fromkeys(object_types, "object"))
