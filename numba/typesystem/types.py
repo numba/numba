@@ -335,6 +335,12 @@ class PointerType(NumbaType):
         return "%s%s*" % (self.base_type, space)
 
 @consing
+class KnownPointerType(PointerType): # TODO: remove
+    typename = "known_pointer"
+    argnames = ["base_type", "address"]
+
+
+@consing
 class SizedPointerType(NumbaType):
     """
     A pointer with knowledge of its range.

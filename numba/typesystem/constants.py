@@ -13,9 +13,10 @@ from functools import partial
 
 import numba.typesystem
 from numba.typesystem import typesystem
+from numba import numbawrapper
+
 from numba.support.ctypes_support import is_ctypes, from_ctypes_value
 from numba.support import cffi_support
-from numba import numbawrapper
 
 import numpy as np
 

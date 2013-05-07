@@ -8,7 +8,8 @@ from __future__ import print_function, division, absolute_import
 
 from numba.typesystem import typesystem
 
-def find_matches(flags, table):
+def find_matches(table, flags):
+    "Find a lowering function from the flags of the type"
     matches = []
     for flag in flags:
         if flag in table:
@@ -21,23 +22,36 @@ def find_matches(flags, table):
     else:
         return None
 
+def find_func(table, kind, flags, default=None):
+    "Get a function form the table by resolving any indirections"
+    if kind in table:
+        flag = kind
+    else:
+        flag = find_matches(table, flags)
+        if flag is None:
+            return default
+
+    while flag in table:
+        if isinstance(table[flag], basestring):
+            flag = table[flag]
+        else:
+            return table[flag]
+
+    return default
+
 def create_type_lowerer(table, domain, codomain):
     """
     Create a type lowerer from a domain to a codomain given a lowering table.
     """
     def convert_mono(domain, codomain, type):
-        if type.typename in table:
-            return table[type.typename](domain, codomain, type, ())
+        func = find_func(table, type.typename, type.flags)
+        if func:
+            return func(domain, codomain, type, ())
         else:
-            flags = [type.typename] + type.flags
-            match = find_matches(flags, table)
-            if match:
-                return table[type.typename](domain, codomain, type, ())
-
             return typesystem.convert_mono(domain, codomain, type)
 
     def convert_poly(domain, codomain, type, params):
-        ctor = table.get(type.kind, typesystem.convert_poly)
+        ctor = find_func(table, type.kind, type.flags, typesystem.convert_poly)
         # print("lowering...", type, ctor)
         return ctor(domain, codomain, type, params)
 
@@ -86,15 +100,21 @@ def numba_lower_array(domain, codomain, type, params):
 # Default Lowering Table
 #------------------------------------------------------------------------
 
+object_types = ["tuple", "list", "extension",
+                "jit_exttype", "autojit_exttype"]
+
 default_numba_lowering_table = {
     "object":           numba_lower_object,
     # polytypes
     "function":         lower_function,
     "complex":          lower_complex,
-    "tuple":            numba_lower_object,
-    "list":             numba_lower_object,
-    "extension":        numba_lower_object,
-    "jit_exttype":      numba_lower_object,
-    "autojit_exttype":  numba_lower_object,
     "array":            numba_lower_array,
 }
+default_numba_lowering_table.update(dict.fromkeys(object_types, "object"))
+
+ctypes_lowering_table = {
+    "object":       lambda dom, cod, type, params: cod.object_,
+    "complex":      lower_complex,
+    "array":        "object",
+}
+ctypes_lowering_table.update(dict.fromkeys(object_types, "object"))
