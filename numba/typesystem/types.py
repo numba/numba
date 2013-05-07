@@ -185,6 +185,10 @@ class _NumbaType(Type):
         from . import defaults
         return defaults.numba_typesystem.convert("llvm", self)
 
+    def to_ctypes(self):
+        from . import defaults
+        return defaults.numba_typesystem.convert("ctypes", self)
+
 mono, poly = _NumbaType.mono, _NumbaType.poly
 
 @notconsing
@@ -262,7 +266,11 @@ class FunctionType(NumbaType):
     argnames = ['return_type', 'args', 'name', 'is_vararg']
     defaults = {"name": None, "is_vararg": False}
 
-    struct_by_reference = True
+    struct_by_reference = False
+
+    def __init__(self, rt, args, name, is_vararg):
+        self.struct_by_reference = rt and (rt.is_struct or rt.is_complex)
+        super(FunctionType, self).__init__(rt, args, name, is_vararg)
 
     def __repr__(self):
         args = [str(arg) for arg in self.args]

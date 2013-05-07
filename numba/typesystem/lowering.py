@@ -61,17 +61,18 @@ def lower_function(domain, codomain, type, params):
     restype, args, name, is_vararg = params
     newargs = []
 
-    if type.struct_by_reference:
-        for arg in args:
-            if arg.is_struct or arg.is_function:
-                arg = codomain.pointer(arg)
-            newargs.append(arg)
+    for arg in args:
+        if arg.is_struct or arg.is_function:
+            arg = codomain.pointer(arg)
+        newargs.append(arg)
 
     if restype.is_struct:
         newargs.append(codomain.pointer(restype))
         restype = codomain.void
 
-    return codomain.function(restype, newargs, name, is_vararg)
+    result = codomain.function(restype, newargs, name, is_vararg)
+    # print("lowered", type, result)
+    return result
 
 def lower_complex(domain, codomain, type, params):
     base_type, = params

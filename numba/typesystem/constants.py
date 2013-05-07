@@ -171,7 +171,7 @@ def get_default_match_table(u):
         numbawrapper.is_numba_wrapper:
             lambda value: u.jitfunctype(value),
         is_autojit_func:
-            lambda value: u.autojitfunctype(value),
+            lambda value: u.autojit_func(value),
         is_registered:
             lambda value: from_typefunc(value, u),
     }

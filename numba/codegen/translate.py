@@ -27,6 +27,7 @@ from numba import metadata
 from numba.control_flow import ssa
 from numba.support.numpy_support import sliceutils
 from numba.nodes import constnodes
+from numba.typesystem import llvm_typesystem as lts
 
 from llvm_cbuilder import shortnames as C
 
@@ -1739,9 +1740,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 lvalue = llvm.core.Constant.int_signextend(ltype, constant)
             else:
                 lvalue = llvm.core.Constant.int(ltype, constant)
-        elif type.is_c_string:
+        elif type.is_c_string or type == char.pointer():
             lvalue = self.env.constants_manager.get_string_constant(constant)
-            type_char_p = typesystem.c_string_type.to_llvm(self.context)
+            type_char_p = lts.pointer(lts.char)
             lvalue = self.builder.bitcast(lvalue, type_char_p)
         elif type.is_bool:
             return self._bool_constants[constant]

@@ -87,7 +87,7 @@ class ObjectCoercer(object):
                   callback=lambda b, *args: b.branch(self.translator.error_label))
 
     def _create_llvm_string(self, str):
-        return self.translator.visit(nodes.ConstNode(str, c_string_type))
+        return self.translator.visit(nodes.ConstNode(str, char.pointer()))
 
     def lstr(self, types, fmt=None):
         "Get an llvm format string for the given types"
