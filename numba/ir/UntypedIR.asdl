@@ -30,7 +30,6 @@ module UnTyped version "0.1"
     expr = BoolOp(expr left, boolop op, expr right)
          | BinOp(expr left, operator op, expr right)
          | UnaryOp(unaryop op, expr operand)
-         | IfExp(expr test, expr body, expr orelse)
          | Dict(expr* keys, expr* values)
          | Set(expr* elts)
          | List(expr* elts)
@@ -43,30 +42,21 @@ module UnTyped version "0.1"
          | Call(expr func, expr* args, keyword* keywords,
                 expr? starargs, expr? kwargs)
 
-         -- the following expression can appear in assignment context
+         -- the following expression can appear in LHS of StoreExp
          | Attribute(expr value, identifier attr, expr_context ctx)
          | Subscript(expr value, slice slice, expr_context ctx)
          | Starred(expr value, expr_context ctx)
          | Name(identifier id, expr_context ctx)
 
+         -- Numba-specific extensions to expr (from the normalized IR)
          | Import(alias name)
          | ImportFrom(identifier? module, alias name, int? level)
          | Phi(phi_source* incomming)
          | Constant(object value)
-
-         ----------- Scoping -----------
-         -- Lookup a lexically unbound variable, if not resolved through
-         -- the given global or builtin scope.
-         | LookupUnbound(identifier id)
-
-         ----------- Closures -----------
          | MakeClosure(expr frame, expr func)
-
-         -- Dynamically bind the identifier in the frame
-         -- All the assignments to the variables are reflected immediately
-         -- in the frame (unless we can statically determine that the frame
-         -- is not in use)
-         | MakeFrame(identifier *ids)
+         | MakeFrame(expr? parent, identifier *ids)
+         | Use(identifier defn)
+         | StoreExp(expr target, expr source)
 
           -- col_offset is the byte offset in the utf8 string the parser uses
           attributes (int lineno, int col_offset)
