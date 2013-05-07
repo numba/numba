@@ -1,19 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 import ast
-import ctypes
 
-import numba
-import numba.functions
-from numba import function_util
 from numba import *
+from numba import function_util
 from numba.symtab import Variable
 from numba import typesystem
-from numba import utils, error
-from numba import typesystem
-from numba.minivect import minitypes, minierror
-
-import llvm.core
+from numba import utils
 
 context = utils.get_minivect_context()
 

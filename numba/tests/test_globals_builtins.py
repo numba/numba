@@ -1,6 +1,5 @@
 import unittest
 
-from numba.minivect import minitypes
 from numba import *
 
 some_global = "hello"

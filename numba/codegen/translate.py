@@ -436,7 +436,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         self.is_void_return = \
                 self.func_signature.actual_signature.return_type.is_void
         if self.func_signature.struct_by_reference:
+            print("...", self.func_signature, self.func_signature.struct_by_reference)
             self.return_value = self.lfunc.args[-1]
+            assert self.return_value.type.kind == llvm.core.TYPE_POINTER
         elif not self.is_void_return:
             llvm_ret_type = self.func_signature.return_type.to_llvm(self.context)
             self.return_value = self.builder.alloca(llvm_ret_type,

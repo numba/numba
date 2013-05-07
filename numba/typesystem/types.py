@@ -173,6 +173,9 @@ class _NumbaType(Type):
     def qualify(self, *qualifiers):
         return self # TODO: implement
 
+    def unqualify(self, *qualifiers):
+        return self # TODO: implement
+
     @property
     def subtypes(self):
         subtypes = []
@@ -272,12 +275,6 @@ class FunctionType(NumbaType):
     argnames = ['return_type', 'args', 'name', 'is_vararg']
     defaults = {"name": None, "is_vararg": False}
 
-    struct_by_reference = False
-
-    def __init__(self, rt, args, name, is_vararg):
-        self.struct_by_reference = rt and (rt.is_struct or rt.is_complex)
-        super(FunctionType, self).__init__(rt, args, name, is_vararg)
-
     def __repr__(self):
         args = [str(arg) for arg in self.args]
         if self.is_vararg:
@@ -288,6 +285,11 @@ class FunctionType(NumbaType):
             namestr = ''
 
         return "%s (*%s)(%s)" % (self.return_type, namestr, ", ".join(args))
+
+    @property
+    def struct_by_reference(self):
+        rt = self.return_type
+        return rt and (rt.is_struct or rt.is_complex)
 
     @property
     def actual_signature(self):
@@ -562,7 +564,11 @@ class NumpyDtypeType(NumbaType):
 class NumpyAttributeType(NumbaType): # TODO: Remove
     typename = "numpy_attribute"
     argnames = ["module", "attr"]
-    flags = ["object"]
+    flags = ["object", "known_value"]
+
+    @property
+    def value(self):
+        return getattr(self.module, self.attr)
 
 @consing
 class ComplexType(NumbaType):

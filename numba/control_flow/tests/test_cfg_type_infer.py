@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba.testing.test_support import *
-from numba.minivect import minitypes
+from numba import typesystem
 from numba import pipeline, environment, functions, error
 
 def construct_infer_pipeline():
@@ -10,7 +10,7 @@ def construct_infer_pipeline():
     return pipeline.ComposedPipelineStage(order[:dump_cfg_index+1])
 
 def functype(restype=None, argtypes=()):
-    return minitypes.FunctionType(return_type=restype, args=list(argtypes))
+    return typesystem.function(return_type=restype, args=list(argtypes))
 
 def lookup(block, var_name):
     var = None

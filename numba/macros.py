@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 from numba import *
-from .minivect import minitypes
+from numba import typesystem
 from . import llvm_types
 
 import logging
@@ -27,13 +27,13 @@ def c_string_slice_2 (context, builder, c_string, lb, ub = None):
     builder.call(CStringSlice2, [ret_val, c_string, c_str_len, lb, ub])
     return ret_val
 
-c_string_slice_2.__signature__ = minitypes.FunctionType(
+c_string_slice_2.__signature__ = typesystem.function(
     return_type = char.pointer(),
     args = (char.pointer(), Py_ssize_t, Py_ssize_t))
 
 def c_string_slice_1 (context, builder, c_string, lb):
     return c_string_slice_2(context, builder, c_string, lb)
 
-c_string_slice_1.__signature__ = minitypes.FunctionType(
+c_string_slice_1.__signature__ = typesystem.function(
     return_type = char.pointer(),
     args = (char.pointer(), Py_ssize_t))

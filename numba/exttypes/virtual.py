@@ -21,7 +21,6 @@ import ctypes
 
 import numba
 from numba.typesystem import *
-from numba.minivect import minitypes
 from numba.exttypes import ordering
 from numba.exttypes import extension_types
 
@@ -121,7 +120,7 @@ PyCustomSlots_Table = numba.struct([
     ('r', uint8),
     ('reserved', uint8),
     # actually: uint16[b], 'b' trailing displacements
-    # ('d', minitypes.CArrayType(uint16, 0)), #0xffff)),
+    # ('d', numba.carray(uint16, 0)), #0xffff)),
     # ('entries_mem', PyCustomSlot_Entry[n]), # 'n' trailing customslot entries
 ])
 
@@ -133,7 +132,7 @@ def initialize_interner():
     intern.global_intern_initialize()
 
 def sep201_signature_string(functype, name):
-    functype = minitypes.FunctionType(functype.return_type, functype.args, name)
+    functype = numba.function(functype.return_type, functype.args, name)
     return str(functype)
 
 def hash_signature(functype, name):

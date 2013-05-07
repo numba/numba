@@ -15,7 +15,8 @@ def is_obj(type):
 
 native_type_dict = {}
 for native_type in native_integral:
-    native_type_dict[(native_type.itemsize, native_type.signed)] = native_type
+    if native_type not in (Py_ssize_t, npy_intp): # TODO: do this better
+        native_type_dict[(native_type.itemsize, native_type.signed)] = native_type
 
 def promote_to_native(int_type):
     return native_type_dict[int_type.itemsize, int_type.signed]

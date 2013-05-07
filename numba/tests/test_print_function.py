@@ -4,7 +4,6 @@ import sys
 import unittest
 import StringIO
 
-from numba.minivect import minitypes
 from numba import *
 
 @autojit(backend='ast')

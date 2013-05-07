@@ -136,19 +136,9 @@ class ObjectCoercer(object):
         return result
 
     def npy_intp_to_py_ssize_t(self, llvm_result, type):
-    #        if type == minitypes.npy_intp:
-    #            lpy_ssize_t = minitypes.Py_ssize_t.to_llvm(self.context)
-    #            llvm_result = self.translator.caster.cast(llvm_result, lpy_ssize_t)
-    #            type = minitypes.Py_ssize_t
-
         return llvm_result, type
 
     def py_ssize_t_to_npy_intp(self, llvm_result, type):
-    #        if type == minitypes.npy_intp:
-    #            lnpy_intp = minitypes.npy_intp.to_llvm(self.context)
-    #            llvm_result = self.translator.caster.cast(llvm_result, lnpy_intp)
-    #            type = minitypes.Py_ssize_t
-
         return llvm_result, type
 
     def convert_single_struct(self, llvm_result, type):

@@ -5,9 +5,9 @@ obtaining the pointer and numba signature.
 """
 from __future__ import print_function, division, absolute_import
 
+import numba
 from numba import *
-from numba.minivect.minitypes import *
-from numba.minivect import minitypes, minierror
+from numba import error
 
 try:
     import cffi
@@ -44,13 +44,13 @@ def map_type(cffi_type):
     elif cffi_type.kind == 'function':
         restype = map_type(cffi_type.result)
         argtypes = [map_type(arg) for arg in cffi_type.args]
-        result = minitypes.FunctionType(restype, argtypes,
-                                        is_vararg=cffi_type.ellipsis).pointer()
+        result = numba.function(restype, argtypes,
+                                is_vararg=cffi_type.ellipsis).pointer()
     else:
         result = type_map.get(cffi_type)
 
     if result is None:
-        raise minierror.UnmappableTypeError(cffi_type)
+        raise TypeError(cffi_type)
 
     return result
 

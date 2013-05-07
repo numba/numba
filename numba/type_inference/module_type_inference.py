@@ -11,9 +11,8 @@ import inspect
 
 import numba
 from numba import *
-from numba.minivect import minitypes
 from numba import typesystem, error, nodes
-from numba.typesystem import get_type, typeset
+from numba.typesystem import get_type, typeset, Type
 
 import logging
 
@@ -260,7 +259,7 @@ def resolve_call(context, call_node, obj_call_node, func_type):
     result = dispatch_on_value(context, call_node, func_type)
 
     if result is not None and not isinstance(result, ast.AST):
-        assert isinstance(result, minitypes.Type)
+        assert isinstance(result, Type)
         type = result
         result = obj_call_node
         # result.variable = symtab.Variable(type)
@@ -310,7 +309,7 @@ def register_callable(signature):
     def my_function(...):
         ...
     """
-    assert isinstance(signature, (typeset.typeset, minitypes.Type))
+    assert isinstance(signature, (typeset.typeset, Type))
 
     # convert void return type to object_ (None)
     def convert_void_to_object(sig):
@@ -325,7 +324,7 @@ def register_callable(signature):
                                      for x in signature.types],
                                     name=signature.name)
     else:
-        assert isinstance(signature, minitypes.Type)
+        assert isinstance(signature, Type)
         signature = convert_void_to_object(signature)
 
 

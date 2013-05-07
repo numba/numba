@@ -4,7 +4,7 @@ import ast
 
 from numba import templating
 from numba import error, pipeline, nodes, ufunc_builder
-from numba.minivect import specializers, miniast, miniutils
+from numba.minivect import specializers, miniast, miniutils, minitypes
 from numba import utils, functions
 from numba import typesystem
 from numba import visitors
@@ -168,12 +168,24 @@ class ArrayExpressionRewriteUfunc(ArrayExpressionRewrite):
         return nodes.ObjectTempNode(call_ufunc)
 
 
-class NumbaproStaticArgsContext(utils.NumbaContext):
+class NumbaStaticArgsContext(utils.NumbaContext):
     "Use a static argument list: shape, data1, strides1, data2, strides2, ..."
 
     astbuilder_cls = miniast.ASTBuilder
     # debug = True
     # debug_elements = True
+
+    def init(self):
+        self.astbuilder = self.astbuilder_cls(self)
+        self.typemapper = minitypes.TypeMapper(self)
+
+    # def promote_types(self, t1, t2):
+    #     return typesystem.promote(t1, t2)
+    #
+    def to_llvm(self, type):
+        if type.is_object:
+            return typesystem.object_.to_llvm(self)
+        return NotImplementedError("to_llvm", type)
 
 
 class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
@@ -228,7 +240,6 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
 
         # Create ufunc scalar kernel
         ufunc_ast, signature, ufunc_builder = self.get_py_ufunc_ast(lhs, node)
-        signature.struct_by_reference = True
 
         # Compile ufunc scalar kernel with numba
         ast.fix_missing_locations(ufunc_ast)
@@ -266,8 +277,9 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
                                           lhs_type.is_f_contig).cloneable
 
         # Build minivect wrapper kernel
-        context = NumbaproStaticArgsContext()
+        context = NumbaStaticArgsContext()
         context.llvm_module = self.env.llvm_context.module
+
         # context.debug = True
         context.optimize_broadcasting = False
         b = context.astbuilder

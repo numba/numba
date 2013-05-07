@@ -4,7 +4,7 @@ from __future__ import print_function, division, absolute_import
 
 from numba import pipeline
 from numba import symtab
-from numba.minivect import minitypes
+from numba import typesystem
 
 from numba.exttypes import signatures
 from numba.exttypes import utils
@@ -318,7 +318,7 @@ def process_class_attribute_types(ext_type, class_dict):
     """
     table = ext_type.attribute_table
     for name, value in class_dict.iteritems():
-        if isinstance(value, minitypes.Type):
+        if isinstance(value, typesystem.Type):
             table.attributedict[name] = value
 
 def build_extension_symtab(ext_type):

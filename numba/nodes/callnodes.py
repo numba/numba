@@ -133,8 +133,7 @@ class ObjectCallNode(FunctionCallNode):
         if py_func and not kw.get('name', None):
             kw['name'] = py_func.__name__
         if signature is None:
-            signature = minitypes.FunctionType(return_type=object_,
-                                               args=[object_] * len(args))
+            signature = numba.function(object_, [object_] * len(args))
             if keywords:
                 signature.args.extend([object_] * len(keywords))
 
@@ -151,7 +150,7 @@ class ObjectCallNode(FunctionCallNode):
             keywords = [(ConstNode(k.arg), k.value) for k in keywords]
             keys, values = zip(*keywords)
             self.kwargs_dict = ast.Dict(list(keys), list(values))
-            self.kwargs_dict.variable = Variable(minitypes.object_)
+            self.kwargs_dict.variable = Variable(object_)
         else:
             self.kwargs_dict = NULL_obj
 

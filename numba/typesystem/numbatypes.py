@@ -9,7 +9,7 @@ from numba.typesystem import types, universe
 from numba.typesystem.types import *
 
 __all__ = ["integral", "unsigned_integral", "native_integral",
-           "floating", "complextypes", "numeric"]
+           "floating", "complextypes", "numeric", "from_numpy_dtype"]
 
 integral = []
 unsigned_integral = []
@@ -112,7 +112,7 @@ def from_numpy_dtype(np_dtype):
     :return: a dtype type representation
     """
     from numba.typesystem import numpy_support
-    return dtype(numpy_support.map_dtype(np_dtype))
+    return numpy_dtype(numpy_support.map_dtype(np_dtype))
 
 def array(dtype, ndim, is_c_contig=False, is_f_contig=False, inner_contig=False):
     """

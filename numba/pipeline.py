@@ -255,7 +255,6 @@ def update_signature(tree, env):
         # signatures taking a pointer argument to a complex number
         # or struct
         func_signature = func_signature.return_type(*func_signature.args)
-        func_signature.struct_by_reference = True
         func_env.func_signature = func_signature
 
     return tree
