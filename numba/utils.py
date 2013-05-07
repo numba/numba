@@ -114,6 +114,33 @@ def ast2tree (node, include_attrs = True):
         raise TypeError('expected AST, got %r' % node.__class__.__name__)
     return _transform(node)
 
+def tree2ast(node, namespace):
+    '''Given an AST represented as tuples and lists, attempt to
+    reconstruct the AST object, given a namespace that defines the
+    node constructors.'''
+    def _construct(node):
+        if isinstance(node, tuple):
+            node_len = len(node)
+            if node_len in (2, 3) and hasattr(namespace, node[0]):
+                ctor = getattr(namespace, node[0])
+                assert dict == type(node[1])
+                kwargs = dict((k, _construct(v))
+                              for k, v in node[1].items())
+                if node_len == 3:
+                    kwargs.update((k, _construct(v))
+                                  for k, v in node[2].items())
+                try:
+                    node = ctor(**kwargs)
+                except Exception as exn:
+                    raise Exception('Could not construct %s given %r: %r' %
+                                    (node[0], kwargs, exn))
+            else:
+                node = tuple(_construct(x) for x in node)
+        elif isinstance(node, list):
+            node = [_construct(x) for x in node]
+        return node
+    return _construct(node)
+
 def pformat_ast (node, include_attrs = True, **kws):
     '''Transform a Python AST object into nested tuples and lists, and
     return as a string formatted using pprint.pformat().'''
