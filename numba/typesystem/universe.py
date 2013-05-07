@@ -82,6 +82,8 @@ type_sizes = {
 ctypes_npy_intp = np.empty(0).ctypes.strides._type_
 
 native_sizes = {
+    "char":         1,
+    "uchar":        1,
     # Int
     "short":        struct_module.calcsize("h"),
     "int":          struct_module.calcsize("i"),

@@ -21,8 +21,8 @@ def typematch(pattern, ty):
     >>> typematch("object_", type)
     True
     """
-    return any(_typematch(pattern, cls.__repr__(ty))
-                   for cls in type(ty).__mro__)
+    return (_typematch(pattern, repr(ty)) or
+            any(_typematch(pattern, flag) for flag in ty.flags))
 
 if __name__ == '__main__':
     import doctest

@@ -49,6 +49,8 @@ for typename in universe.int_typenames:
     if universe.is_native_int(typename):
         native_integral.append(ty)
 
+bool_.is_bool = True
+
 # Add floats...
 aliases = "float", "double", "longdouble"
 floats = "float32", "float64", "float128"

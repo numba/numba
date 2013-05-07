@@ -4,9 +4,9 @@ from __future__ import print_function, division, absolute_import
 from .types import *
 from .typesystem import *
 from .closuretypes import *
-from .ssatypes import *
 from .templatetypes import *
 from .numbatypes import *
+from .ssatypes import *
 
 # from typeset import *
 from .typematch import *

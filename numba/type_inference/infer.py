@@ -669,7 +669,7 @@ class TypeInferer(visitors.NumbaTransformer):
             # When returning None, set the return type to void.
             # That way, we don't have to deal with the PyObject reference.
             if self.return_variable.type is None:
-                self.return_variable.type = typesystem.VoidType()
+                self.return_variable.type = typesystem.void
             value = None
         elif self.return_variable.type is None:
             self.return_variable.type = type
@@ -888,7 +888,7 @@ class TypeInferer(visitors.NumbaTransformer):
         result_type = bool_
 
         if len(set(types)) != 1:
-            type = reduce(self.context.promote_types, types)
+            type = reduce(self.promote_types, types)
             if type.is_array:
                 result_type = typesystem.array(bool_, type.ndim)
             else:

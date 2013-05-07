@@ -90,15 +90,20 @@ def get_default_typing_rules(u, typeof, promote):
             return u.dict(key_type, value_type, size=len(value))
 
         if isinstance(value, tuple):
-            container_type = u.tuple
+            container_type = u.tuple_
         else:
-            container_type = u.list
+            container_type = u.list_
 
-        if len(value) < 30:
+        if 0 < len(value) < 30:
             # Figure out base type if the container is not too large
-            base_type = reduce(promote, (typeof(child) for child in value))
+            # base_type = reduce(promote, (typeof(child) for child in value))
+            ty = typeof(value[0])
+            if all(typeof(child) == ty for child in value):
+                base_type = ty
+            else:
+                base_type = u.object_
         else:
-            base_type = u.object
+            base_type = u.object_
 
         return container_type(base_type, size=len(value))
 
@@ -204,7 +209,8 @@ def find_first(callables, value):
     assert False, (callables, value)
 
 def get_default_typeof(universe, promote):
-    typeof1 = get_constant_typer(universe, get_default_typeof, promote)
+    typeof1 = get_constant_typer(universe, lambda value: typeof(value), promote)
     typeof2 = partial(find_match, get_default_match_table(universe))
     typeof3 = partial(object_typer, universe)
-    return partial(find_first, [typeof1, typeof2, typeof3])
+    typeof = partial(find_first, [typeof1, typeof2, typeof3])
+    return typeof
