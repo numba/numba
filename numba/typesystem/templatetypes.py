@@ -67,7 +67,7 @@ class TemplateAttributeType(_TemplateType):
 
     typename = "template_attribute"
     argnames = ["template_type", "attribute_name"]
-    flags = ["object"]
+    flags = ["object", "template"]
 
     def __init__(self, template_type, attribute_name, **kwds):
         super(TemplateAttributeType, self).__init__(template_type, attribute_name)
@@ -95,7 +95,7 @@ class TemplateIndexType(_TemplateType):
 
     typename = "template_index"
     argnames = ["template_type", "index"]
-    flags = ["object"]
+    flags = ["object", "template"]
 
     def resolve_template(self, template_context):
         attrib = self.template_type.resolve_template(template_context)

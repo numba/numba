@@ -2,7 +2,10 @@
 from __future__ import print_function, division, absolute_import
 import collections
 
+import llvm.core
+
 from numba import typesystem
+from numba.typesystem import tbaa
 from numba.nodes import *
 import numba.nodes
 from numba.ndarray_helpers import PyArrayAccessor
@@ -31,9 +34,9 @@ def is_ellipsis(node):
 def _const_int(X):
     return llvm.core.Constant.int(llvm.core.Type.int(), X)
 
-def get_shape(builder, tbaa, shape_pointer, ndim):
+def get_shape(builder, tbaa_metadata, shape_pointer, ndim):
     "Load the shape values from an ndarray"
-    shape_metadata = tbaa.get_metadata(typesystem.numpy_shape)
+    shape_metadata = tbaa_metadata.get_metadata(tbaa_metadata.numpy_shape)
 
     for i in range(ndim):
         shape_ptr = builder.gep(shape_pointer, [_const_int(i)])
@@ -41,9 +44,9 @@ def get_shape(builder, tbaa, shape_pointer, ndim):
         extent.set_metadata("tbaa", shape_metadata)
         yield extent
 
-def get_strides(builder, tbaa, strides_pointer, ndim):
+def get_strides(builder, tbaa_metadata, strides_pointer, ndim):
     "Load the stride values from an ndarray"
-    stride_metadata = tbaa.get_metadata(typesystem.numpy_strides)
+    stride_metadata = tbaa_metadata.get_metadata(tbaa.numpy_strides)
 
     for i in range(ndim):
         stride_ptr = builder.gep(strides_pointer, [_const_int(i)])

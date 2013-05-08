@@ -4,6 +4,8 @@ Shorthands for type constructing, promotions, etc.
 """
 from __future__ import print_function, division, absolute_import
 
+import ctypes
+
 from numba.utils import is_builtin
 from numba.typesystem import types, universe
 from numba.typesystem.types import *
@@ -124,12 +126,16 @@ def array(dtype, ndim, is_c_contig=False, is_f_contig=False, inner_contig=False)
         return dtype
     return ArrayType(dtype, ndim, is_c_contig, is_f_contig, inner_contig)
 
+sort_key = lambda (n, ty): ctypes.sizeof(ty.to_ctypes())
+
 def struct_(fields=(), name=None, readonly=False, packed=False, **kwargs):
     "Create a mutable struct type"
     if fields and kwargs:
         raise TypeError("The struct must be either ordered or unordered")
     elif kwargs:
+        import ctypes
+        fields = sorted(kwargs.iteritems(), key=sort_key, reverse=True)
         # fields = sort_types(kwargs)
-        fields = list(kwargs.iteritems())
+        # fields = list(kwargs.iteritems())
 
     return MutableStructType(fields, name, readonly, packed)

@@ -692,8 +692,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         self.generic_visit(node)
 
         node_type = node.value.type
-        if node_type.is_object or (node_type.is_array and
-                                   node.slice.type.is_object):
+        if ((node_type.is_object and not node_type.is_array) or
+            (node_type.is_array and node.slice.type.is_object)):
             # Array or object slicing
             if isinstance(node.ctx, ast.Load):
                 result = function_util.external_call(self.context,

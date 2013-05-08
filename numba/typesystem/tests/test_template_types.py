@@ -25,22 +25,22 @@ def test_simple_template(array):
     #------------------------------------------------------------------------
     # Test type resolving
     #------------------------------------------------------------------------
-    >>> infer(test_simple_template.py_func, double(double[:, :]), T(T[:, :]),
+    >>> infer(test_simple_template.py_func, float64(float64[:, :]), T(T[:, :]),
     ...       locals=dict(scalar=T))
-    [('array', double[:, :]), ('scalar', double)]
+    [('array', float64[:, :]), ('scalar', float64)]
 
-    >>> infer(test_simple_template.py_func, double(double[:, :]), T(T[:, :]),
+    >>> infer(test_simple_template.py_func, float64(float64[:, :]), T(T[:, :]),
     ...       locals=dict(scalar=T.pointer()))
     Traceback (most recent call last):
         ...
-    UnpromotableTypeError: (double *, double)
+    UnpromotableTypeError: (float64 *, float64)
 
     #------------------------------------------------------------------------
     # Test type attributes
     #------------------------------------------------------------------------
-    >>> infer(test_simple_template.py_func, double(double[:, :]), T.dtype(T),
+    >>> infer(test_simple_template.py_func, float64(float64[:, :]), T.dtype(T),
     ...       locals=dict(scalar=T.dtype))
-    [('array', double[:, :]), ('scalar', double)]
+    [('array', float64[:, :]), ('scalar', float64)]
     """
     scalar = array[0, 0]
     return scalar
@@ -56,36 +56,36 @@ T4 = numba.template("T4")
 
 A = T1[:, :]
 F = void(T1)
-S = numba.struct(a=T1, b=T2.pointer(), c=T3[:], d=void(T4))
+S = numba.struct([('a', T1), ('b', T2.pointer()), ('c', T3[:]), ('d', void(T4))])
 P = T2.pointer()
 
-type_context1 = { T1: int_, T2: float_, T3: double, T4: short, }
-type_context2 = { T1: int_[:, :], T2: void(float_),
-                  T3: numba.struct(a=double, b=float_), T4: short.pointer(), }
+type_context1 = { T1: int_, T2: float_, T3: float64, T4: short, }
+type_context2 = { T1: int_[:, :], T2: void(float32),
+                  T3: numba.struct(a=float64, b=float_), T4: short.pointer(), }
 
 def test_type_matching(array, func, struct, pointer):
     """
     >>> infer(test_type_matching, template_signature=void(A, F, S, P),
     ...       type_context=type_context1)
-    [('array', int[:, :]), ('func', void (*)(int)), ('pointer', float *), ('struct', struct { float * b, double[:] c, int a, void (*)(short) d })]
+    [('array', int[:, :]), ('func', void (*)(int)), ('pointer', float32 *), ('struct', struct { int a, float32 * b, float64[:] c, void (*)(short) d })]
     """
     func(array[0, 0])
     struct.b = pointer
 
 def test_type_attributes(array, func, struct, pointer):
     """
-    >>> locals = dict(dtype=T1.dtype, arg=T2.argnames[0], field_a=T3.fielddict['a'],
+    >>> locals = dict(dtype=T1.dtype, arg=T2.args[0], field_a=T3.fielddict['a'],
     ...               field_b=T3.fielddict['b'], scalar=T4.base_type)
     >>> pprint(infer(test_type_attributes, template_signature=void(T1, T2, T3, T4),
     ...              type_context=type_context2, locals=locals))
     [('array', int[:, :]),
-     ('func', void (*)(float)),
+     ('func', void (*)(float32)),
      ('pointer', short *),
-     ('struct', struct { double a, float b }),
-     ('arg', float),
+     ('struct', struct { float64 a, float32 b }),
+     ('arg', float32),
      ('dtype', int),
-     ('field_a', double),
-     ('field_b', float),
+     ('field_a', float64),
+     ('field_b', float32),
      ('scalar', short)]
     """
     dtype = array[0, 0]
@@ -94,7 +94,7 @@ def test_type_attributes(array, func, struct, pointer):
     field_b = 0
     scalar = 0
 
-@autojit_py3doc(T(T, double), locals=None)
+@autojit_py3doc(T(T, float64), locals=None)
 def test_template_with_concretes(a, b):
     """
     >>> test_template_with_concretes(1, 2)
@@ -102,7 +102,7 @@ def test_template_with_concretes(a, b):
     """
     return a + b
 
-@autojit(complex128(T, double), locals=None)
+@autojit(complex128(T, float64), locals=None)
 def test_template_with_concretes2(a, b):
     """
     >>> test_template_with_concretes2(1, 2)
@@ -120,7 +120,7 @@ def test_template_with_concretes2(a, b):
     return a + b
 
 
-@autojit_py3doc(T2(T1, double), locals=None)
+@autojit_py3doc(T2(T1, float64), locals=None)
 def test_unknown_template_error(a, b):
     """
     >>> test_unknown_template_error(1, 2)
@@ -138,7 +138,7 @@ def test_template_inconsistent_types_error(a, b):
     >>> test_template_inconsistent_types_error(1, 2.0)
     Traceback (most recent call last):
         ...
-    InvalidTemplateError: Inconsistent types found for template: int and double
+    InvalidTemplateError: Inconsistent types found for template: int and float64
     """
     return a + b
 
@@ -172,5 +172,4 @@ def specialize(T, context):
 
 
 if __name__ == '__main__':
-    test_template_with_concretes2(1+0j, 2+0j)
-    # testmod()
+    testmod()
