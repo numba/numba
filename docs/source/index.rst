@@ -69,7 +69,7 @@ Developer Documentation
    architecture.rst
    ir.rst
    roadmap.rst
-   reference.rst
+   modules/modules.rst
 
 
 Indices and tables

@@ -4,6 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
+SPHINXAPI     = sphinx-apidoc
 PAPER         =
 BUILDDIR      = _build
 SRCDIR        = source
@@ -42,7 +43,20 @@ help:
 clean:
 	-rm -rf $(BUILDDIR)/*
 
+api:
+	-rm -rf source/modules
+	$(SPHINXAPI) --no-toc -o source/modules ../numba
+	-rm -rf source/modules/*.tests.*
+	-rm -rf source/modules/numba.minivect.*
+	-rm -rf source/modules/numba.ir.*
+	-rm -rf source/modules/numba.asdl.*
+	-rm -rf source/modules/numba.pyextensibletype.*
+	python make_toc.py
+
 html:
+	@echo "RUN 'make api' first!"
+	@echo
+	@echo
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
