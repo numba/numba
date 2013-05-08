@@ -116,7 +116,7 @@ def compile_typedlist(item_type, _list_cache=_list_cache):
                 else:
                     position += 1
                     
-            if found is True:
+            if found:
                 for i in range(position, size):
                     self.buf[i] = self.buf[i+1]
                 self.size = size -1
