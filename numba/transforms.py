@@ -550,7 +550,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
     def visit_Print(self, node):
         if self.nopython:
             printfunc = self._print_nopython
-            dst_type = c_string_type
+            dst_type = string_
         else:
             printfunc = self._print
             dst_type = object_
@@ -1003,7 +1003,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             imag = nodes.ConstNode(constant.imag, node.type.base_type)
             node = nodes.ComplexNode(real, imag)
 
-        elif node.type.is_pointer:
+        elif node.type.is_pointer and not node.type.is_string:
             addr_int = constnodes.get_pointer_address(constant, node.type)
             node = nodes.ptrfromint(addr_int, node.type)
 

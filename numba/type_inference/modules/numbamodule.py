@@ -12,5 +12,5 @@ from numba.type_inference.module_type_inference import register, register_infere
 def typeof(expr_type):
     from numba import nodes
 
-    type = typesystem.CastType(expr_type)
+    type = typesystem.meta(expr_type)
     return nodes.const(expr_type, type)

@@ -14,6 +14,7 @@ from numba.typesystem import types
 class ExtMethodType(types.NumbaType):
     typename = "extmethod"
     argnames = ["return_type", "args", "name", "is_class_method", "is_static_method"]
+    flags = ["object"]
     defaults=dict.fromkeys(argnames[2:])
 
     @property
@@ -22,6 +23,7 @@ class ExtMethodType(types.NumbaType):
 
 class AutojitMethodType(types.NumbaType):
     typename = "autojit_extmethod"
+    flags = ["object"]
 
 #------------------------------------------------------------------------
 # Method Signature Comparison

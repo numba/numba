@@ -103,9 +103,6 @@ def lower_array(domain, codomain, type, params):
 # Default Lowering Table
 #------------------------------------------------------------------------
 
-object_types = ["tuple", "list", "extension",
-                "jit_exttype", "autojit_exttype"]
-
 default_numba_lowering_table = {
     "object":           lower_object,
     # polytypes
@@ -114,7 +111,6 @@ default_numba_lowering_table = {
     "array":            lower_array,
     "string":           lower_string,
 }
-default_numba_lowering_table.update(dict.fromkeys(object_types, "object"))
 
 ctypes_lowering_table = {
     "object":       lambda dom, cod, type, params: cod.object_,
@@ -122,4 +118,3 @@ ctypes_lowering_table = {
     "array":        "object",
     "string":       lambda dom, cod, type, params: ctypes.c_char_p,
 }
-ctypes_lowering_table.update(dict.fromkeys(object_types, "object"))

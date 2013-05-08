@@ -13,9 +13,9 @@ def test_typeof_pure(arg):
     >>> test_typeof_pure(10)
     int
     >>> test_typeof_pure(10.0)
-    double
+    float64
     >>> print(test_typeof_pure(Foo(10)))
-    <JitExtension Foo({'arg': double})>
+    <JitExtension Foo({'arg': float64})>
     """
     return numba.typeof(arg)
 
@@ -47,7 +47,7 @@ def test_typeof_numba3(arg):
     >>> print(test_typeof_numba3(10))
     int
     >>> print(test_typeof_numba3(Foo(10)))
-    <JitExtension Foo({'arg': double})>
+    <JitExtension Foo({'arg': float64})>
     """
     return numba.typeof(arg)
 
@@ -57,5 +57,6 @@ def test_typeof_type(arg):
     >>> test_typeof_type(int_)
     meta(int)
     """
+    return numba.typeof(arg)
 
 numba.testing.testmod()

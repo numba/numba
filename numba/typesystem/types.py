@@ -570,6 +570,15 @@ class NumpyAttributeType(NumbaType): # TODO: Remove
     def value(self):
         return getattr(self.module, self.attr)
 
+class ModuleAttributeType(NumbaType): # TODO: Remove
+    typename = "module_attribute"
+    argnames = ["module", "attr"]
+    flags = ["object", "known_value"]
+
+    @property
+    def value(self):
+        return getattr(self.module, self.attr)
+
 @consing
 class ComplexType(NumbaType):
     typename = "complex"

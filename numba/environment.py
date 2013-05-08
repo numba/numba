@@ -52,7 +52,7 @@ default_pipeline_order = [
     'create_lfunc3',
     'TransformFor',
     'Specialize',
-    'RewriteArrayExpressions',
+    # 'RewriteArrayExpressions',
     'SpecializeComparisons',
     'SpecializeSSA',
     'SpecializeClosures',
