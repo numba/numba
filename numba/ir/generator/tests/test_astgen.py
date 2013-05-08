@@ -21,6 +21,9 @@ def test_ast_generation():
     assert issubclass(m.root, m.AST)
     assert issubclass(m.expr, m.AST)
 
+    # Products
+    assert issubclass(m.myproduct, m.AST)
+
     # Terminals
     assert issubclass(m.Ham, m.root)
     assert issubclass(m.Foo, m.root)
@@ -41,6 +44,7 @@ def test_valid_node_instantiation():
     >>> test_valid_node_instantiation()
     Foo(leaf=Bar(e1=SomeExpr(n=10), e2=SomeExpr(n=11)))
     Bar(e1=SomeExpr(n=10), e2=None)
+    Product(p=myproduct(foo=SomeExpr(n=10), bar=12))
     """
     m = load_testschema1()
 
@@ -48,11 +52,12 @@ def test_valid_node_instantiation():
     e1 = m.SomeExpr(10)
     e2 = m.SomeExpr(11)
 
-    result = m.Foo(m.Bar(e1, e2))
-    print(result)
+    # Sum
+    print(m.Foo(m.Bar(e1, e2)))
+    print(m.Bar(e1, None))
 
-    result = m.Bar(e1, None)
-    print(result)
+    # Product
+    print(m.Product(m.myproduct(e1, 12)))
 
 def test_invalid_node_instantiation():
     """
@@ -66,6 +71,10 @@ def test_invalid_node_instantiation():
     Traceback (most recent call last):
       ...
     ValueError: Invalid type for attribute 'Bar.e1', expected instance of type(s) ('expr',) (got 'NoneType').
+    >>> m.Product(e2)
+    Traceback (most recent call last):
+        ...
+    ValueError: Invalid type for attribute 'Product.p', expected instance of type(s) ('myproduct',) (got 'SomeExpr').
     """
 
 
