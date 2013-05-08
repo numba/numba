@@ -146,7 +146,7 @@ class PyClass(Class):
                 def accept(self, visitor):
                     return visitor.visit_%(name)s(self)
 
-                def __str__(self):
+                def __repr__(self):
                     return "%(name)s(%(fmtstring)s)" %% %(fmtargs)s
 
             if not cython.compiled:
