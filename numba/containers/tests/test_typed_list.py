@@ -160,11 +160,11 @@ def test_remove(type):
     """
     tlist = nb.typedlist(type, range(5))
     tlist.remove(0)
-    print len(tlist)
+    print (len(tlist))
     tlist.remove(2)
-    print len(tlist)
+    print (len(tlist))
     tlist.remove(4)
-    print len(tlist)
+    print (len(tlist))
     return tlist
 
 @autojit_py3doc
