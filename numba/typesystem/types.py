@@ -12,7 +12,7 @@ try:
 except ImportError:
     import builtins
 
-from numba.typesystem.typesystem import Type, Conser, TypeConser
+from numba.typesystem.typesystem import Type, Conser, TypeConser, add_flags
 
 import numpy as np
 
@@ -73,8 +73,8 @@ class TypeMetaClass(type):
         flags = list(self.flags)
         if self.typename:
             flags.append(self.typename.strip("_"))
-        for flag in flags:
-            setattr(self, "is_" + flag, True)
+
+        add_flags(self, flags)
 
         self.conser = Conser(partial(type.__call__, self))
 
@@ -623,13 +623,12 @@ class GlobalType(KnownValueType): # TODO: Remove
 @consing
 class BuiltinType(KnownValueType):
     typename = "builtin"
+    argnames = ["name", "value"]
+    flags = ["object"]
 
-    def __init__(self, name, **kwds):
-        value = getattr(builtins, name)
-        super(BuiltinType, self).__init__(value, **kwds)
-
-        self.name = name
-        self.func = self.value
+    @property
+    def func(self):
+        return self.value
 
 #------------------------------------------------------------------------
 # Container Types

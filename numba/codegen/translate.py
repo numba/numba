@@ -1011,7 +1011,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         operand_ltype = operand.type
         op = node.op
         if isinstance(op, ast.Not) and (operand_type.is_bool or
-                                        operand_type.is_int_like):
+                                        operand_type.is_int):
             bb_false = self.builder.basic_block
             bb_true = self.append_basic_block('not.true')
             bb_done = self.append_basic_block('not.done')
@@ -1030,12 +1030,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             if operand_type.is_float:
                 return self.builder.fsub(lc.Constant.null(operand_ltype),
                                          operand)
-            elif operand_type.is_int_like and operand_type.signed:
+            elif operand_type.is_int and operand_type.signed:
                 return self.builder.sub(lc.Constant.null(operand_ltype),
                                         operand)
         elif isinstance(op, ast.UAdd) and operand_type.is_numeric:
             return operand
-        elif isinstance(op, ast.Invert) and operand_type.is_int_like:
+        elif isinstance(op, ast.Invert) and operand_type.is_int:
             return self.builder.xor(lc.Constant.int(operand_ltype, -1), operand)
         raise error.NumbaError(node, "Unary operator %s" % node.op)
 

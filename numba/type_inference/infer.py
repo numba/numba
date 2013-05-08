@@ -27,8 +27,7 @@ import numba.wrapping.compiler
 from numba.support import numpy_support
 from numba.exttypes.variable import ExtensionAttributeVariable
 
-from numba.typesystem import is_obj, promote_closest, get_type
-from numba.utils import dump
+from numba.typesystem import get_type
 
 import llvm.core
 import numpy
@@ -237,7 +236,7 @@ class TypeInferer(visitors.NumbaTransformer):
         incoming_types = [v.type for v in incoming]
         if len(incoming_types) > 1:
             promoted_type = typesystem.PromotionType(
-                node.variable, self.env.crnt.typesystem,
+                node.variable, partial(ssatypes.promote, self.env.crnt.typesystem),
                 incoming_types, assignment=True)
             promoted_type.simplify()
             node.variable.type = promoted_type.resolve()
@@ -727,7 +726,7 @@ class TypeInferer(visitors.NumbaTransformer):
         # Determine the type of the global, i.e. a builtin, global
         # or (numpy) module
         if is_builtin:
-            type = typesystem.BuiltinType(global_name)
+            type = typesystem.BuiltinType(global_name, getattr(builtins, global_name))
         else:
             # FIXME: analyse the bytecode of the entire module, to determine
             # overriding of builtins

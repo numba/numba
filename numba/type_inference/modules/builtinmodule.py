@@ -11,7 +11,7 @@ from numba import error
 # from numba.specialize.mathcalls import is_math_function
 from numba.symtab import Variable
 from numba import typesystem
-from numba.typesystem import is_obj, promote_closest, get_type
+from numba.typesystem import get_type
 
 from numba.type_inference.modules import utils
 

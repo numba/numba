@@ -187,6 +187,10 @@ class TypeConverter(object):
 # Type Classes
 #------------------------------------------------------------------------
 
+def add_flags(obj, flags):
+    for flag in flags:
+        setattr(self, "is_" + flag, True)
+
 class Type(object):
     """
     Base of all types.
@@ -214,13 +218,15 @@ class Type(object):
     # Type instantiation
 
     @classmethod
-    def mono(cls, kind, name, **kwds):
+    def mono(cls, kind, name, flags=(), **kwds):
         """
         Nullary type constructor creating the most elementary of types.
         Does not compose any other type (in this domain).
         """
-        return cls(kind, name, is_mono=True,
+        type = cls(kind, name, is_mono=True,
                    metadata=frozenset(kwds.iteritems()))
+        add_flags(type, flags)
+        return type
 
     @classmethod
     def poly(cls, kind, *args):
@@ -303,3 +309,7 @@ def get_conser(ctor):
 
 def consing(ctor):
     return get_conser(ctor).get
+
+x = 0
+for i in range(N):
+    x = f(x)

@@ -54,5 +54,5 @@ if __name__ == "__main__":
     #(https://github.com/numba/numba/issues/147).
 
     #print_nopython(10)
-
+    TestPrint('test_print_stream').debug()
     unittest.main()

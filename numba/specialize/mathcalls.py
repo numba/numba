@@ -6,10 +6,9 @@ import ctypes
 import llvm.core
 import numpy as np
 
-from numba import *
 from numba import nodes
 from numba.type_inference.modules import mathmodule
-from numba.typesystem import is_obj, promote_closest, get_type
+from numba.typesystem import get_type
 
 is_win32 = sys.platform == 'win32'
 

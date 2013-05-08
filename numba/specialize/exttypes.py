@@ -9,7 +9,6 @@ from numba import nodes
 from numba import function_util
 from numba.exttypes import virtual
 from numba.traits import traits, Delegate
-from numba.typesystem import is_obj, promote_closest, promote_to_native
 
 class ExtensionTypeLowerer(visitors.NumbaTransformer):
     """

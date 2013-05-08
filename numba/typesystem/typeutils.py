@@ -21,12 +21,12 @@ for native_type in native_integral:
 def promote_to_native(int_type):
     return native_type_dict[int_type.itemsize, int_type.signed]
 
-def promote_closest(context, int_type, candidates):
+def promote_closest(ts, int_type, candidates):
     """
     promote_closest(Py_ssize_t, [int_, long_, longlong]) -> longlong
     """
     for candidate in candidates:
-        promoted = context.promote_types(int_type, candidate)
+        promoted = ts.promote(int_type, candidate)
         if promoted.itemsize == candidate.itemsize and promoted.signed == candidate.signed:
             return candidate
 

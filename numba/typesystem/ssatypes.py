@@ -769,7 +769,7 @@ def promote_for_assignment(promote, types, unresolved_types, var_name):
             # resolved_types = obj_types
             return object_, []
 
-    partial_result_type = promote_for_arithmetic(typesystem, types,
+    partial_result_type = promote_for_arithmetic(promote, types,
                                                  assignment=True)
     return partial_result_type, unresolved_types
 

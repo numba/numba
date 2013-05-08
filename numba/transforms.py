@@ -169,7 +169,8 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
             return resolve_math_call(node, abs)
         elif is_math and argtype.is_int:
             if argtype.signed:
-                type = promote_closest(self.context, argtype, [long_, longlong])
+                type = promote_closest(self.env.crnt.typesystem,
+                                       argtype, [long_, longlong])
                 funcs = {long_: 'labs', longlong: 'llabs'}
                 return function_util.external_call(
                                             self.context,
