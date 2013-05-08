@@ -11,7 +11,8 @@ from numba.typesystem import types, universe
 from numba.typesystem.types import *
 
 __all__ = ["integral", "unsigned_integral", "native_integral",
-           "floating", "complextypes", "numeric", "from_numpy_dtype"]
+           "floating", "complextypes", "numeric", "from_numpy_dtype",
+           "c_string_type"]
 
 integral = []
 unsigned_integral = []
@@ -67,6 +68,10 @@ add_type("complex64", complex_(float_))
 add_type("complex128", complex_(double))
 add_type("complex256", complex_(longdouble))
 complextypes.extend([complex64, complex128, complex256])
+
+c_string_type = string_
+c_string_type.is_string = True
+c_string_type.is_c_string = True
 
 # ______________________________________________________________________
 

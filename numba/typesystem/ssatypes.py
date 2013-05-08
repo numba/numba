@@ -38,6 +38,8 @@ haven't been processed yet, or circular dependences.
 """
 from __future__ import print_function, division, absolute_import
 
+from functools import partial
+
 from numba import oset
 from numba.minivect import minierror
 from numba.typesystem import *
@@ -131,9 +133,9 @@ class PromotionType(UnresolvedType):
 
     count = 0 # for debugging
 
-    def __init__(self, variable, context, types, assignment=False, **kwds):
+    def __init__(self, variable, promote, types, assignment=False, **kwds):
         super(PromotionType, self).__init__(variable, **kwds)
-        self.context = context
+        self.promote = promote
         self.types = oset.OrderedSet(types)
         self.assignment = assignment
         variable.type = self
@@ -232,10 +234,10 @@ class PromotionType(UnresolvedType):
             # Simplify as much as possible
             if self.assignment:
                 result_type, unresolved_types = promote_for_assignment(
-                        self.context, resolved_types, unresolved_types,
-                        self.variable.name)
+                    self.promote, resolved_types, unresolved_types,
+                    self.variable.name)
             else:
-                result_type = promote_for_arithmetic(self.context, resolved_types)
+                result_type = promote_for_arithmetic(self.promote, resolved_types)
 
             self.resolved_type = result_type
             if len(resolved_types) == len(types) or not unresolved_types:
@@ -713,10 +715,10 @@ def _validate_array_types(array_types):
                             "%s and %s" % (first_array_type.dtype,
                                            array_type.dtype))
 
-def promote_for_arithmetic(context, types, assignment=False):
+def promote_for_arithmetic(promote, types, assignment=False):
     result_type = types[0]
     for type in types[1:]:
-        result_type = context.promote_types(result_type, type, assignment)
+        result_type = promote(result_type, type, assignment)
 
     return result_type
 
@@ -748,7 +750,7 @@ def promote_arrays(array_types, non_array_types, types,
 
     return result_type, []
 
-def promote_for_assignment(context, types, unresolved_types, var_name):
+def promote_for_assignment(promote, types, unresolved_types, var_name):
     """
     Promote a list of types for assignment (e.g. in a phi node).
 
@@ -767,6 +769,26 @@ def promote_for_assignment(context, types, unresolved_types, var_name):
             # resolved_types = obj_types
             return object_, []
 
-    partial_result_type = promote_for_arithmetic(context, types,
+    partial_result_type = promote_for_arithmetic(typesystem, types,
                                                  assignment=True)
     return partial_result_type, unresolved_types
+
+def promote(typesystem, type1, type2, assignment=False):
+    promote_ = partial(promote, typesystem)
+
+    if type1.is_unresolved or type2.is_unresolved:
+        if type1.is_unresolved:
+            type1 = type1.resolve()
+        if type2.is_unresolved:
+            type2 = type2.resolve()
+
+        if type1.is_unresolved or type2.is_unresolved:
+            # The Variable is really only important for ast.Name, fabricate
+            # one
+            from numba import symtab
+            var = symtab.Variable(None)
+            return PromotionType(var, promote_, [type1, type2])
+        else:
+            return typesystem.promote(type1, type2)
+
+    return typesystem.promote(type1, type2)

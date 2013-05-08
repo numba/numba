@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import llvm
 
 from numba import *
+from numba import string_ as c_string_type
 from numba import nodes
 from numba.typesystem import is_obj, promote_to_native
 from numba.codegen.codeutils import llvm_alloca, if_badval
@@ -40,6 +41,7 @@ class ObjectCoercer(object):
         bool_: "b", # ?
         char.pointer(): "s",
         char.pointer() : "s",
+        c_string_type: "s",
     }
 
     def __init__(self, translator):

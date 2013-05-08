@@ -9,7 +9,7 @@ try:
 except ImportError:
     import builtins
 
-from functools import reduce
+from functools import reduce, partial
 
 import numba
 from numba import *
@@ -19,6 +19,7 @@ from numba.specialize.mathcalls import is_math_function
 from numba.type_inference import module_type_inference, infer_call, deferred
 from numba import utils, typesystem
 from numba.control_flow import ssa
+from numba.typesystem import ssatypes
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
 from numba import closures as closures
@@ -182,8 +183,8 @@ class TypeInferer(visitors.NumbaTransformer):
     def is_object(self, type):
         return type.is_object or type.is_array
 
-    def promote_types(self, t1, t2):
-        return self.env.crnt.typesystem.promote(t1, t2)
+    def promote_types(self, type1, type2):
+        return ssatypes.promote(self.env.crnt.typesystem, type1, type2)
 
     def promote_types_numeric(self, t1, t2):
         "Type promotion but demote objects to numeric types"
@@ -236,7 +237,8 @@ class TypeInferer(visitors.NumbaTransformer):
         incoming_types = [v.type for v in incoming]
         if len(incoming_types) > 1:
             promoted_type = typesystem.PromotionType(
-                node.variable, self.context,incoming_types, assignment=True)
+                node.variable, self.env.crnt.typesystem,
+                incoming_types, assignment=True)
             promoted_type.simplify()
             node.variable.type = promoted_type.resolve()
         else:

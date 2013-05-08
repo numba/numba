@@ -2,7 +2,7 @@
 # ______________________________________________________________________
 
 from numba import *
-from numba import c_string_type as cstring, int_
+from numba import string_ as cstring, int_
 
 from nose.tools import nottest
 from numba.testing import test_support

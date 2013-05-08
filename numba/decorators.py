@@ -203,16 +203,20 @@ def _jit(restype=None, argtypes=None, nopython=False,
             return jit_extension_class(cls, kwargs, env)
 
         argtys = argtypes
-        if func.__code__.co_argcount == 0 and argtys is None:
-            argtys = []
+        if argtys is None:
+            assert restype.is_function
+            return_type = restype.return_type
+            argtys = restype.args
+        else:
+            return_type = restype
 
         assert argtys is not None
         env.specializations.register(func)
 
         assert kwargs.get('llvm_module') is None # TODO link to user module
         assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
-        sig, lfunc, wrapper = compile_function(env, func, argtys, restype=restype,
-                                    nopython=nopython, **kwargs)
+        sig, lfunc, wrapper = compile_function(
+            env, func, argtys, restype=return_type, nopython=nopython, **kwargs)
         return numbawrapper.create_numba_wrapper(func, wrapper, sig, lfunc)
 
     return _jit_decorator

@@ -109,12 +109,12 @@ default_numba_lowering_table = {
     "function":         lower_function,
     "complex":          lower_complex,
     "array":            lower_array,
-    "string":           lower_string,
+    "string_":          lower_string,
 }
 
 ctypes_lowering_table = {
     "object":       lambda dom, cod, type, params: cod.object_,
     "complex":      lower_complex,
     "array":        "object",
-    "string":       lambda dom, cod, type, params: ctypes.c_char_p,
+    "string_":      lambda dom, cod, type, params: ctypes.c_char_p,
 }

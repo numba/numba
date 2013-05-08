@@ -55,8 +55,8 @@ def map_dtype(dtype):
         fields = [(name, map_dtype(dtype.fields[name][0]))
                       for name in dtype.names]
         is_aligned = dtype.alignment != 1
-        return struct(fields, packed=not getattr(dtype, 'isalignedstruct',
-                                                 is_aligned))
+        return struct_(fields, packed=not getattr(dtype, 'isalignedstruct',
+                                                  is_aligned))
     elif dtype.kind == 'O':
         return object_
 
