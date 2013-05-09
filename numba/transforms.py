@@ -91,7 +91,7 @@ if __debug__:
 import numba
 from numba import *
 from numba import error, closures
-from .minivect import minierror, minitypes, codegen
+from .minivect import codegen
 from numba import macros, utils, typesystem
 from numba.symtab import Variable
 from numba import visitors, nodes, error, functions
@@ -594,7 +594,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         sig, lfunc = self.context.external_library.declare(self.llvm_module,
                                                            'PyTuple_Pack')
         objs = self.visitlist(nodes.CoercionNode.coerce(node.elts, object_))
-        n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
+        n = nodes.ConstNode(len(node.elts), Py_ssize_t)
         args = [n] + objs
         new_node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
         # TODO: determine element type of node.elts

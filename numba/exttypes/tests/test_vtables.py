@@ -10,7 +10,7 @@ import itertools
 
 import numba as nb
 from numba import *
-from numba.minivect.minitypes import FunctionType
+from numba import typesystem
 from numba.exttypes import virtual
 from numba.exttypes import methodtable
 from numba.exttypes.signatures import Method
@@ -44,11 +44,11 @@ def method(func, name, sig):
     return Method(func, name, sig, False, False)
 
 make_methods1 = lambda: [
-    method(myfunc1, 'method', FunctionType(argtype, [argtype]))
+    method(myfunc1, 'method', typesystem.function(argtype, [argtype]))
         for argtype in all_types]
 
 make_methods2 = lambda: [
-    method(myfunc2, 'method', FunctionType(argtype1, [argtype1, argtype2]))
+    method(myfunc2, 'method', typesystem.function(argtype1, [argtype1, argtype2]))
         for argtype1, argtype2 in itertools.product(all_types, all_types)]
 
 #------------------------------------------------------------------------

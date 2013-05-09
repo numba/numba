@@ -14,7 +14,6 @@ import inspect
 from numba import *
 from numba import typesystem, numbawrapper
 from numba import  functions
-from .minivect import minitypes
 from numba.utils import  process_signature
 from numba.codegen import llvmwrapper
 from numba import environment
@@ -203,10 +202,14 @@ def _jit(restype=None, argtypes=None, nopython=False,
             return jit_extension_class(cls, kwargs, env)
 
         argtys = argtypes
-        if argtys is None:
+        if argtys is None and restype:
             assert restype.is_function
             return_type = restype.return_type
             argtys = restype.args
+        elif argtys is None:
+            assert func.func_code.co_argcount == 0, func
+            return_type = None
+            argtys = []
         else:
             return_type = restype
 
@@ -267,7 +270,7 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
         return jit_extension_class(cls, kws, env)
 
     # Called with f8(f8) syntax which returns a dictionary of argtypes and restype
-    if isinstance(restype, minitypes.FunctionType):
+    if isinstance(restype, typesystem.FunctionType):
         if argtypes is not None:
             raise TypeError("Cannot use both calling syntax and argtypes keyword")
         argtypes = restype.args

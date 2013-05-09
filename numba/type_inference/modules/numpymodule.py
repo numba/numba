@@ -17,7 +17,6 @@ from functools import reduce
 import numpy as np
 
 from numba import *
-from numba.minivect import minitypes
 from numba import typesystem, error
 from numba.type_inference.module_type_inference import (register,
                                                         register_inferer,
@@ -75,7 +74,7 @@ def get_dtype(dtype_arg, default_dtype=None):
 def promote_to_array(dtype):
     "Promote scalar to 0d array type"
     if not dtype.is_array:
-        dtype = minitypes.ArrayType(dtype, 0)
+        dtype = typesystem.array(dtype, 0)
     return dtype
 
 def demote_to_scalar(type):
@@ -102,7 +101,7 @@ def array_from_type(type):
             type.ndim += 1
             return type
     elif not type.is_object:
-        return minitypes.ArrayType(dtype=type, ndim=0)
+        return typesystem.array(dtype=type, ndim=0)
 
     return object_
 

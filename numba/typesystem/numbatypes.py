@@ -5,14 +5,12 @@ Shorthands for type constructing, promotions, etc.
 from __future__ import print_function, division, absolute_import
 
 import ctypes
+import inspect
 
 from numba.typesystem import types, universe, itypesystem
 from numba.typesystem.types import *
 
-__all__ = ["integral", "unsigned_integral", "floating", "complextypes",
-           "numeric", "native_integral", "from_numpy_dtype",
-           "float_", "double", "longdouble",    # aliases
-           "complex64", "complex128", "complex256"]
+__all__ = [] # set below
 
 integral = []
 unsigned_integral = []
@@ -29,8 +27,6 @@ native_integral = []
 for name, ty in types.numba_type_registry.items():
     name = itypesystem.tyname(ty.typename)
     globals()[name] = ty
-    __all__.append(name)
-
 
 def mono(*args, **kwargs):
     ty = types.mono(*args, **kwargs)
@@ -53,7 +49,6 @@ def mono(*args, **kwargs):
     if ty.is_numeric:
         numeric.append(ty)
 
-    __all__.append(itypesystem.tyname(ty.typename))
     return ty
 
 # Numeric types
@@ -107,6 +102,10 @@ string_      = mono("string", "string", flags=["object", "c_string"])
 c_string_type = string_
 
 complextypes.extend([complex64, complex128, complex256])
+
+tuple_       = tuple_type(object_, -1)
+list_        = list_type(object_, -1)
+dict_        = dict_type(object_, object_, -1)
 
 # ______________________________________________________________________
 
@@ -164,3 +163,9 @@ def struct_(fields=(), name=None, readonly=False, packed=False, **kwargs):
         # fields = list(kwargs.iteritems())
 
     return MutableStructType(fields, name, readonly, packed)
+
+# ______________________________________________________________________
+# Update __all__
+for name, value in globals().items():
+    if not inspect.ismodule(value) and not name.startswith("_"):
+        __all__.append(name)

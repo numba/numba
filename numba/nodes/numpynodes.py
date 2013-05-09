@@ -7,7 +7,6 @@ import llvm.core
 from numba import typesystem
 from numba.typesystem import tbaa
 from numba.nodes import *
-import numba.nodes
 from numba.ndarray_helpers import PyArrayAccessor
 
 #----------------------------------------------------------------------------
@@ -196,7 +195,7 @@ class ArrayAttributeNode(ExprNode):
 
         self.array_type = array.variable.type
         if attribute_name == 'ndim':
-            type = minitypes.int_
+            type = int_
         elif attribute_name in ('shape', 'strides'):
             type = typesystem.SizedPointerType(typesystem.npy_intp,
                                                 size=self.array_type.ndim)
@@ -219,8 +218,8 @@ class ShapeAttributeNode(ArrayAttributeNode):
         super(ShapeAttributeNode, self).__init__('shape', array)
         self.array = array
         self.element_type = typesystem.intp
-        self.type = minitypes.CArrayType(self.element_type,
-                                         array.variable.type.ndim)
+        self.type = typesystem.carray(self.element_type,
+                                      array.variable.type.ndim)
 
 #----------------------------------------------------------------------------
 # NumPy Array Creation
@@ -295,7 +294,7 @@ def PyArray_UpdateFlags(args):
 
 def PyArray_Empty(args, name='PyArray_Empty'):
     nd, shape, dtype, fortran = args
-    return_type = minitypes.ArrayType(dtype, nd)
+    return_type = typesystem.array(dtype, nd)
     signature = return_type(
                 int_,                   # nd
                 npy_intp.pointer(),     # shape

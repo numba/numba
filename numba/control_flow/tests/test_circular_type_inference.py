@@ -460,12 +460,4 @@ def infer_simple(numba_func, *varnames):
     sig, syms = infer(numba_func.py_func, functype(None, []), warn=False)
     return types(syms, *varnames)
 
-#from numba.minivect import minitypes
-#sig = minitypes.FunctionType(None, [])
-#func = jit(sig)(test_delayed_string_indexing_simple.py_func)
-#print vars(func)
-#test_delayed_string_indexing_simple()
-#test_delayed_array_slicing2()
-#test_simple_circular()
-#test_circular_error()
 testmod()

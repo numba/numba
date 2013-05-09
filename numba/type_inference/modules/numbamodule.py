@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-import numpy as np
 
 import numba
-from numba.minivect import minitypes
 from numba import typesystem
-from numba.type_inference.module_type_inference import register, register_inferer
+from numba.type_inference.module_type_inference import register
 
 
 @register(numba)

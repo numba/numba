@@ -1,6 +1,3 @@
-import inspect
-
-from numba.minivect import minitypes
 from numba import error
 import numba
 from numba import *
@@ -65,7 +62,7 @@ def test_math_funcs():
         # func_name = 'sqrt'
         func = functions[func_name]
         for dest_type in dest_types:
-            signature = minitypes.FunctionType(None, [dest_type, dest_type])
+            signature = numba.FunctionType(None, [dest_type, dest_type])
             print(("executing...", func_name, signature))
 
             try:

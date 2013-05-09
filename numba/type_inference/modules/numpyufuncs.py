@@ -7,7 +7,6 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 
 from numba import *
-from numba.minivect import minitypes
 from numba import typesystem
 from numba.type_inference.module_type_inference import (module_registry,
                                                         register,
@@ -55,7 +54,7 @@ def numba_type_from_sig(ufunc_signature):
     Convert ufunc type signature string (e.g. 'dd->d') to a FunctionType
     """
     args, ret = ufunc_signature.split('->')
-    to_numba = lambda c: minitypes.map_dtype(np.dtype(c))
+    to_numba = lambda c: typesystem.map_dtype(np.dtype(c))
 
     signature = to_numba(ret)(*map(to_numba, args))
     return signature

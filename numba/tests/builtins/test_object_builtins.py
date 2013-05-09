@@ -51,5 +51,6 @@ def min_(x):
     return min(1, 2.0, x, 14)
 
 if __name__ == '__main__':
+    get_globals()
     import numba
     numba.testing.testmod()

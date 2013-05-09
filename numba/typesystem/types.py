@@ -621,11 +621,13 @@ class ContainerListType(NumbaType):
 
 @consing
 class TupleType(ContainerListType):
-    typename = "tuple"
+    typename = "tuple_type"
+    flags = ["tuple", "object"]
 
 @consing
 class ListType(ContainerListType):
-    typename = "list"
+    typename = "list_type"
+    flags = ["list", "object"]
 
 @consing
 class MapContainerType(NumbaType):
@@ -634,7 +636,8 @@ class MapContainerType(NumbaType):
 
 @consing
 class DictType(MapContainerType):
-    typename = "dict"
+    typename = "dict_type"
+    flags = ["dict", "object"]
 
 #------------------------------------------------------------------------
 # Types to be removed

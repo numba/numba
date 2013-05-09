@@ -93,8 +93,6 @@ def infer_unary_math_call(context, call_node, arg, default_result_type=double):
     elif type.is_array and type.dtype.is_int:
         type = type.copy(dtype=double)
 
-    # signature = minitypes.FunctionType(return_type=type, args=[type])
-    # result = nodes.MathNode(py_func, signature, call_node.args[0])
     nodes.annotate(context.env, call_node, is_math=True)
     call_node.variable = Variable(type)
     return call_node
