@@ -6,7 +6,7 @@ import ctypes
 import llvm.core
 import numpy as np
 
-from numba import nodes
+from numba import nodes, double
 from numba.type_inference.modules import mathmodule
 from numba.typesystem import get_type
 

@@ -259,7 +259,7 @@ def resolve_call(context, call_node, obj_call_node, func_type):
     result = dispatch_on_value(context, call_node, func_type)
 
     if result is not None and not isinstance(result, ast.AST):
-        assert isinstance(result, Type)
+        assert isinstance(result, Type), result
         type = result
         result = obj_call_node
         # result.variable = symtab.Variable(type)

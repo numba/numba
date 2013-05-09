@@ -67,6 +67,9 @@ def test_llvm_array():
     assert llvmt(ts.array(ts.int_, 2)) == llvm_types._numpy_array
     assert llvmt(ts.array(ts.object_, 3)) == llvm_types._numpy_array
 
+def test_llvm_range():
+    assert llvmt(ts.range_) == llvm_types._pyobject_head_struct_p
+
 #-------------------------------------------------------------------
 # Numba -> ctypes
 #-------------------------------------------------------------------

@@ -561,24 +561,6 @@ class NumpyDtypeType(NumbaType):
     argnames = ["dtype"]
     flags = ["object"]
 
-class NumpyAttributeType(NumbaType): # TODO: Remove
-    typename = "numpy_attribute"
-    argnames = ["module", "attr"]
-    flags = ["object", "known_value"]
-
-    @property
-    def value(self):
-        return getattr(self.module, self.attr)
-
-class ModuleAttributeType(NumbaType): # TODO: Remove
-    typename = "module_attribute"
-    argnames = ["module", "attr"]
-    flags = ["object", "known_value"]
-
-    @property
-    def value(self):
-        return getattr(self.module, self.attr)
-
 @consing
 class ComplexType(NumbaType):
     typename = "complex"
@@ -591,18 +573,6 @@ class ComplexType(NumbaType):
 
     def __repr__(self):
         return "complex%d" % (self.itemsize * 8,)
-
-@consing
-class ReferenceType(NumbaType):
-    """
-    A reference to an (primitive or Python) object. This is passed as a
-    pointer and dereferences automatically.
-
-    Currently only supported for structs.
-    """
-    # TODO: remove this type?
-    typename = "reference"
-    argnames = ["referenced_type"]
 
 @consing
 class MetaType(NumbaType):
@@ -665,3 +635,50 @@ class MapContainerType(NumbaType):
 @consing
 class DictType(MapContainerType):
     typename = "dict"
+
+#------------------------------------------------------------------------
+# Types to be removed
+#------------------------------------------------------------------------
+
+
+class NumpyAttributeType(NumbaType):
+    typename = "numpy_attribute"
+    argnames = ["module", "attr"]
+    flags = ["object", "known_value"]
+
+    @property
+    def value(self):
+        return getattr(self.module, self.attr)
+
+class ModuleAttributeType(NumbaType):
+    typename = "module_attribute"
+    argnames = ["module", "attr"]
+    flags = ["object", "known_value"]
+
+    @property
+    def value(self):
+        return getattr(self.module, self.attr)
+
+@consing
+class ReferenceType(NumbaType):
+    """
+    A reference to an (primitive or Python) object. This is passed as a
+    pointer and dereferences automatically.
+
+    Currently only supported for structs.
+    """
+    typename = "reference"
+    argnames = ["referenced_type"]
+
+@consing
+class MethodType(NumbaType):
+    """
+    Method of something.
+
+        base_type: the object type the attribute was accessed on
+    """
+    typename = "method"
+    argnames = ["base_type", "attr_name"]
+    flags = ["object"]
+
+
