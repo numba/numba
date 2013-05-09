@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 
-from numba import error
 from numba import traits
-from numba import reporting
 from numba.control_flow.cfstats import (
     NameReference, NameAssignment, Uninitialized)
-from numba.reporting import MessageCollection
 
 def allow_null(node):
     return False

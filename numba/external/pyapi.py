@@ -2,8 +2,9 @@
 from __future__ import print_function, division, absolute_import
 
 from numba import PY3
-from numba.typesystem import *
+
 from .external import ExternalFunction
+from numba.typesystem import *
 
 c_string_type = char.pointer()
 

@@ -6,7 +6,7 @@ Type lowering from a higher-level domain to a lower-level domain.
 
 from __future__ import print_function, division, absolute_import
 import ctypes
-from numba.typesystem import typesystem
+from numba.typesystem import itypesystem
 
 def find_matches(table, flags):
     "Find a lowering function from the flags of the type"
@@ -48,14 +48,14 @@ def create_type_lowerer(table, domain, codomain):
         if func:
             return func(domain, codomain, type, ())
         else:
-            return typesystem.convert_mono(domain, codomain, type)
+            return itypesystem.convert_mono(domain, codomain, type)
 
     def convert_poly(domain, codomain, type, params):
-        ctor = find_func(table, type.kind, type.flags, typesystem.convert_poly)
+        ctor = find_func(table, type.kind, type.flags, itypesystem.convert_poly)
         # print("lowering...", type, ctor)
         return ctor(domain, codomain, type, params)
 
-    return typesystem.TypeConverter(domain, codomain, convert_mono, convert_poly)
+    return itypesystem.TypeConverter(domain, codomain, convert_mono, convert_poly)
 
 #------------------------------------------------------------------------
 # Lowering functions

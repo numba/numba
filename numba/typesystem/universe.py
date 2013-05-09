@@ -35,11 +35,6 @@ complex_typenames = names(
     'complex64', 'complex128', 'complex256',
 )
 
-numba_unit_types = names(
-    "object", "string_", "unicode", "null", "none",
-    "ellipsis", "slice", "newaxis", "range",
-)
-
 #------------------------------------------------------------------------
 # Default type sizes
 #------------------------------------------------------------------------

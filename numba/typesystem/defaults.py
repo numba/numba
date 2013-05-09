@@ -7,7 +7,7 @@ Type defaults
 from __future__ import print_function, division, absolute_import
 
 from numba.typesystem import universe
-from numba.typesystem.typesystem import TypeConverter, TypeSystem
+from numba.typesystem.itypesystem import TypeConverter, TypeSystem
 from numba.typesystem import promotion
 from numba.typesystem import constants
 from numba.typesystem import lowering

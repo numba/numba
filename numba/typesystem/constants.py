@@ -12,7 +12,7 @@ import ctypes
 from functools import partial
 
 import numba.typesystem
-from numba.typesystem import typesystem
+from numba.typesystem import itypesystem
 from numba import numbawrapper
 
 from numba.support.ctypes_support import is_ctypes, from_ctypes_value
@@ -109,7 +109,7 @@ def get_default_typing_rules(u, typeof, promote):
 
     register(np.dtype)(         lambda value: numpy_support.map_dtype(value))
     register(types.ModuleType)( lambda value: u.module(value))
-    register(typesystem.Type)(  lambda value: u.meta(value))
+    register(itypesystem.Type)(  lambda value: u.meta(value))
 
     return table
 
@@ -119,7 +119,7 @@ def get_constant_typer(universe, typeof, promote):
     """
     typetable = get_typing_defaults(universe)
     handler_table = get_default_typing_rules(universe, typeof, promote)
-    return typesystem.ConstantTyper(universe, typetable, handler_table).typeof
+    return itypesystem.ConstantTyper(universe, typetable, handler_table).typeof
 
 #------------------------------------------------------------------------
 # Constant matching ({ pyval -> bool : pyval -> Type })

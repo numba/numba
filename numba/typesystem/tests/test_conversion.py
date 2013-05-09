@@ -7,9 +7,9 @@ import inspect
 from functools import partial
 
 # from numba import llvm_types
-from numba.typesystem.typesystem import tyname
+from numba.typesystem.itypesystem import tyname
 from numba import llvm_types
-from numba.typesystem import typesystem, universe
+from numba.typesystem import itypesystem, universe
 from numba.typesystem import (numba_typesystem as ts,
                               llvm_typesystem as lts,
                               ctypes_typesystem as cts)

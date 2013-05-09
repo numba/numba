@@ -10,7 +10,8 @@ from numba.typesystem.types import NumbaType
 from numba.typesystem import object_, npy_intp
 
 class TBAAType(NumbaType):
-    typename = "tbaa"
+    is_tbaa = True
+    typename = "tbaa_type"
     argnames = ["name", "root"]
 
 numpy_array = TBAAType("numpy array", object_)

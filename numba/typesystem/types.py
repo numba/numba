@@ -12,7 +12,7 @@ try:
 except ImportError:
     import builtins
 
-from numba.typesystem.typesystem import Type, Conser, TypeConser, add_flags
+from numba.typesystem.itypesystem import Type, Conser, TypeConser, add_flags
 
 import numpy as np
 
@@ -583,6 +583,7 @@ class ModuleAttributeType(NumbaType): # TODO: Remove
 class ComplexType(NumbaType):
     typename = "complex"
     argnames = ["base_type"]
+    flags = ["numeric"]
 
     @property
     def itemsize(self):

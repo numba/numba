@@ -1,6 +1,6 @@
 import llvm.core
 
-from numba.typesystem.typesystem import consing, tyname
+from numba.typesystem.itypesystem import consing, tyname
 from numba.typesystem import universe
 
 #------------------------------------------------------------------------
