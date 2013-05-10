@@ -12,8 +12,6 @@ import numba
 from numba import *
 from numba import error
 from numba import typesystem
-from numba.typesystem import types as numbatypes
-from numba.exttypes import types as etypes
 
 #------------------------------------------------------------------------
 # Parse method signatures
@@ -110,7 +108,7 @@ class MethodMaker(object):
         "Create a method type for the given Method and declared signature"
         restype = method.signature.return_type
         argtypes = method.signature.args
-        signature = typesystem.extmethod(
+        signature = typesystem.ExtMethodType(
                     return_type=restype, args=argtypes, name=method.name,
                     is_class_method=method.is_class, is_static_method=method.is_static)
         return signature
@@ -194,7 +192,7 @@ def process_signature(method, method_name, method_maker=MethodMaker()):
                             is_class, is_static)
             return method
 
-        elif isinstance(method, numbatypes.Function):
+        elif isinstance(method, typesystem.Function):
             # @double(...)
             # def func(self, ...): ...
             signature = method.signature

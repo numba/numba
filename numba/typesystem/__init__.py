@@ -5,6 +5,7 @@ from .types import *
 from .itypesystem import *
 from .closuretypes import *
 from .templatetypes import *
+from numba.exttypes.types.methods import *
 from .numbatypes import *
 from .ssatypes import *
 

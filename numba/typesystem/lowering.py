@@ -91,6 +91,9 @@ def lower_function(domain, codomain, type, params):
     # print("lowered", type, result)
     return result
 
+def lower_extmethod(domain, codomain, type, params):
+    return lower_function(domain, codomain, type, params[:4])
+
 def lower_complex(domain, codomain, type, params):
     base_type, = params
     return codomain.struct_([('real', base_type), ('imag', base_type)])
@@ -116,6 +119,7 @@ default_numba_lowering_table = {
     "carray":           lower_to_pointer,
     "sized_pointer":    lower_to_pointer,
     "reference":        lower_to_pointer,
+    "extmethod":        lower_extmethod,
 }
 
 ctypes_lowering_table = {
@@ -125,4 +129,5 @@ ctypes_lowering_table = {
     # "string":           lambda dom, cod, type, params: ctypes.c_char_p,
     "sized_pointer":    lower_to_pointer,
     "reference":        lower_to_pointer,
+    "extmethod":        lower_extmethod,
 }

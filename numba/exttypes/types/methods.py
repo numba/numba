@@ -5,17 +5,18 @@ Extension method types.
 """
 
 from __future__ import print_function, division, absolute_import
-from numba.typesystem import types
+from numba.typesystem import types, numbatypes
 
 #------------------------------------------------------------------------
 # Extension Method Types
 #------------------------------------------------------------------------
 
-class ExtMethodType(types.NumbaType):
+class ExtMethodType(types.FunctionType):
     typename = "extmethod"
-    argnames = ["return_type", "args", "name", "is_class_method", "is_static_method"]
-    flags = ["object"]
-    defaults=dict.fromkeys(argnames[2:])
+    argnames = ["return_type", "args", "name",
+                "is_vararg", "is_class_method", "is_static_method"]
+    flags = ["function", "object"]
+    defaults = dict({'name': None}, **dict.fromkeys(argnames[3:], False))
 
     @property
     def is_bound_method(self):
@@ -50,3 +51,6 @@ def equal_signature_args(t1, t2):
 def equal_signatures(t1, t2):
     return (equal_signature_args(t1, t2) and
             t1.return_type == t2.return_type)
+
+def extmethod_to_function(ty):
+    return numbatypes.function(ty.return_type, ty.args, ty.name)
