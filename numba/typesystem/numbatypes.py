@@ -98,7 +98,8 @@ ellipsis     = obj_type("ellipsis")
 slice_       = obj_type("slice")
 newaxis      = obj_type("newaxis")
 range_       = obj_type("range")
-string_      = mono("string", "string", flags=["object", "c_string"])
+string_      = mono("string", "string", flags=[#"object",
+                                               "c_string"])
 c_string_type = string_
 
 complextypes.extend([complex64, complex128, complex256])

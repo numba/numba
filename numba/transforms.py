@@ -230,11 +230,12 @@ class ResolveCoercions(visitors.NumbaTransformer):
             logger.debug('coercion: %s --> %s\n%s',
                          node_type, dst_type, utils.pformat_ast(node))
 
-        if self.nopython and (is_obj(node_type) ^ is_obj(dst_type)):
+        if node_type.is_string and dst_type.is_numeric:
+            result = self.str_to_int(dst_type, node)
+        elif self.nopython and (is_obj(node_type) ^ is_obj(dst_type)):
             raise error.NumbaError(node, "Cannot coerce to or from object in "
                                          "nopython context")
-
-        if is_obj(node.dst_type) and not is_obj(node_type):
+        elif is_obj(node.dst_type) and not is_obj(node_type):
             node = nodes.ObjectTempNode(nodes.CoerceToObject(
                     node.node, node.dst_type, name=node.name))
             result = self.visit(node)
@@ -253,35 +254,6 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                   [nodes.const(0, node_type)])
             to_bool = nodes.typednode(to_bool, bool_)
             result = self.visit(to_bool)
-        elif node_type.is_string and dst_type.is_numeric:
-            # TODO: int <-> string conversions are explicit, this should not
-            # TODO: be a coercion
-            if self.nopython:
-                node = nodes.CoercionNode(
-                    function_util.external_call(
-                                self.context,
-                                self.llvm_module,
-                                ('atol' if dst_type.is_int else 'atof'),
-                                args=[node.node]),
-                    dst_type, name=node.name,)
-            else:
-                if dst_type.is_int:
-                    cvtobj = function_util.external_call(
-                                              self.context,
-                                              self.llvm_module,
-                                              'PyInt_FromString' if not PY3 else 'PyLong_FromString',
-                                              args=[node.node, nodes.NULL,
-                                                    nodes.const(10, int_)])
-                else:
-                    cvtobj = function_util.external_call(
-                                          self.context,
-                                          self.llvm_module,
-                                          'PyFloat_FromString',
-                                          args=[node.node,
-                                                nodes.const(0, Py_ssize_t)])
-                node = nodes.CoerceToNative(nodes.ObjectTempNode(cvtobj),
-                                            dst_type, name=node.name)
-            result = self.visit(node)
         else:
             self.generic_visit(node)
 
@@ -293,6 +265,37 @@ class ResolveCoercions(visitors.NumbaTransformer):
         if __debug__ and self.env and self.env.debug_coercions:
             logger.debug('result = %s', utils.pformat_ast(result))
 
+        return result
+
+    def str_to_int(self, dst_type, node):
+        # TODO: int <-> string conversions are explicit, this should not
+        # TODO: be a coercion
+        if self.nopython:
+            node = nodes.CoercionNode(
+                function_util.external_call(
+                    self.context,
+                    self.llvm_module,
+                    ('atol' if dst_type.is_int else 'atof'),
+                    args=[node.node]),
+                dst_type, name=node.name, )
+        else:
+            if dst_type.is_int:
+                cvtobj = function_util.external_call(
+                    self.context,
+                    self.llvm_module,
+                    'PyInt_FromString' if not PY3 else 'PyLong_FromString',
+                    args=[node.node, nodes.NULL,
+                          nodes.const(10, int_)])
+            else:
+                cvtobj = function_util.external_call(
+                    self.context,
+                    self.llvm_module,
+                    'PyFloat_FromString',
+                    args=[node.node,
+                          nodes.const(0, Py_ssize_t)])
+            node = nodes.CoerceToNative(nodes.ObjectTempNode(cvtobj),
+                                        dst_type, name=node.name)
+        result = self.visit(node)
         return result
 
     def _get_int_conversion_func(self, type, funcs_dict):
