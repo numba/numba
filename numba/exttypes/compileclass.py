@@ -127,8 +127,8 @@ class ExtensionCompiler(object):
             method.signature.return_type,
             method.signature.args,
             method.name,
-            is_class=method.is_class,
-            is_static=method.is_static)
+            is_class_method=method.is_class,
+            is_static_method=method.is_static)
 
         self.ext_type.add_method(method)
 

@@ -320,7 +320,7 @@ def make_delegations(py_class):
     """
     class_dict = vars(py_class)
     for name, func in class_dict.iteritems():
-        if isinstance(func, (typesystem.FunctionType, staticmethod, classmethod)):
+        if isinstance(func, (typesystem.Function, staticmethod, classmethod)):
             method = signatures.process_signature(func, name)
             if method.is_class or method.is_static:
                 # Class or static method: use the pure Python function wrapped

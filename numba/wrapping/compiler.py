@@ -3,7 +3,6 @@ import inspect
 from numba import typesystem
 import numba.pipeline
 from numba.exttypes import virtual
-from numba.exttypes import signatures
 import numba.exttypes.entrypoints
 
 import numba.decorators
@@ -88,7 +87,8 @@ class ClassCompiler(Compiler):
 
     def resolve_argtypes(self, args, kwargs):
         assert not kwargs
-        argtypes = map(self.env.context.typemapper.from_python, args)
+        # argtypes = map(self.env.crnt.typesystem.typeof, args)
+        argtypes = map(numba.typeof, args) # TODO: allow registering a type system and using it here
         signature = typesystem.function(None, argtypes)
         return signature
 

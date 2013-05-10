@@ -34,7 +34,7 @@ def drop_self(type):
     if type.is_static_method or type.is_class_method:
         return type.args
 
-    assert len(type.args) >= 1 and type.args[0].is_extension
+    assert len(type.args) >= 1 and type.args[0].is_extension, type
     return type.args[1:]
 
 def equal_signature_args(t1, t2):

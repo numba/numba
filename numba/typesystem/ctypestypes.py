@@ -16,8 +16,8 @@ from numba.typesystem import numbatypes as ts
 
 ctypes_map = {
     ts.float32:    ctypes.c_float,
-    ts.float64:    ctypes.c_float,
-    ts.float128:   ctypes.c_float,
+    ts.float64:    ctypes.c_double,
+    ts.float128:   ctypes.c_longdouble,
     ts.object_:    ctypes.py_object,
     ts.void:       None,
     ts.string_:    ctypes.c_char_p,

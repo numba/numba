@@ -214,6 +214,8 @@ class NumbaType(_NumbaType):
     def __init__(self, *args, **kwds):
         super(NumbaType, self).__init__(self.typename, *args, **kwds)
         assert len(args) == len(self.argnames), (self.typename, args)
+        for name in kwds:
+            assert name in self.argnames, (self.typename, kwds, self.argnames)
 
     @classmethod
     def default_args(cls, args, kwargs):
