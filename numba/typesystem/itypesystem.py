@@ -64,12 +64,16 @@ from __future__ import print_function, division, absolute_import
 import ctypes
 import struct as struct_
 import weakref
+import keyword
 from functools import partial
 
 from numba.utils import is_builtin
 
+def reserved(name):
+    return is_builtin(name) or keyword.iskeyword(name) or name in ('string',)
+
 def tyname(name):
-    return name + "_" if is_builtin(name) else name
+    return name + "_" if reserved(name) else name
 
 __all__ = [
     "TypeSystem", "Type", "ConstantTyper", "Conser", "TypeConser",
@@ -140,7 +144,10 @@ class ConstantTyper(object):
 #------------------------------------------------------------------------
 
 def convert_mono(domain, codomain, type):
-    return getattr(codomain, tyname(type.typename))
+    name = tyname(type.typename)
+    if not hasattr(codomain, name):
+        raise AttributeError("Codomain '%s' has no attribute '%s'" % (codomain, name))
+    return getattr(codomain, name)
 
 def convert_poly(domain, codomain, type, coparams):
     # Get codomain constructor
@@ -226,6 +233,7 @@ class Type(object):
         type = cls(kind, name, is_mono=True,
                    metadata=frozenset(kwds.iteritems()))
         add_flags(type, flags)
+        type.flags = flags
         return type
 
     @classmethod

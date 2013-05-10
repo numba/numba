@@ -113,6 +113,9 @@ def test_ctypes_array():
     assert ct(ts.array(ts.int_, 2)) == ctypes.py_object
     assert ct(ts.array(ts.object_, 3)) == ctypes.py_object
 
+def test_ctypes_string():
+    assert ct(ts.string_) == ctypes.c_char_p
+    assert ct(ts.char.pointer()) == ctypes.c_char_p
 
 if __name__ == "__main__":
     # print(ct(ts.array(ts.double, 1)))

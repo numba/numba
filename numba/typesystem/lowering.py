@@ -122,7 +122,7 @@ ctypes_lowering_table = {
     "object":           lambda dom, cod, type, params: cod.object_,
     "complex":          lower_complex,
     "array":            "object",
-    "string":           lambda dom, cod, type, params: ctypes.c_char_p,
+    # "string":           lambda dom, cod, type, params: ctypes.c_char_p,
     "sized_pointer":    lower_to_pointer,
     "reference":        lower_to_pointer,
 }

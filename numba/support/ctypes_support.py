@@ -11,6 +11,7 @@ import numba.utils
 # CTypes Types for Type Checking
 #-------------------------------------------------------------------
 
+_ctypes_scalar_type = type(ctypes.c_int)
 _ctypes_func_type = type(ctypes.CFUNCTYPE(ctypes.c_int))
 _ctypes_pointer_type = type(ctypes.POINTER(ctypes.c_int))
 _ctypes_array_type = type(ctypes.c_int * 2)
@@ -33,7 +34,7 @@ def is_ctypes_struct_type(ctypes_type):
 
 def is_ctypes_type(ctypes_type):
     return (
-       (numba.utils.hashable(ctypes_type) and ctypes_type in ctypes_map) or
+       (isinstance(ctypes_type, _ctypes_scalar_type)) or
        is_ctypes_struct_type(ctypes_type)
     )
 
