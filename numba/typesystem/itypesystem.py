@@ -189,7 +189,7 @@ class TypeConverter(object):
 
 def add_flags(obj, flags):
     for flag in flags:
-        setattr(self, "is_" + flag, True)
+        setattr(obj, "is_" + flag, True)
 
 class Type(object):
     """
@@ -309,7 +309,3 @@ def get_conser(ctor):
 
 def consing(ctor):
     return get_conser(ctor).get
-
-x = 0
-for i in range(N):
-    x = f(x)
