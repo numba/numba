@@ -475,6 +475,10 @@ class ArrayType(NumbaType):
     def pointer(self):
         raise Exception("You probably want a pointer type to the dtype")
 
+    @property
+    def strided(self):
+        return ArrayType(self.dtype, self.ndim)
+
     def __repr__(self):
         axes = [":"] * self.ndim
         if self.is_c_contig and self.ndim > 0:
