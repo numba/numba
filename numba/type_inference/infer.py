@@ -1348,7 +1348,7 @@ class TypeInferer(visitors.NumbaTransformer):
             assert isinstance(node.func, nodes.ExtensionMethod)
             new_node = self._resolve_autojit_method_call(
                 node, node.func.ext_type, node.func.attr)
-        if func_type.is_function:
+        if func_type.is_function or func_type.is_extmethod:
             # Native function call
             no_keywords(node)
             new_node = nodes.NativeFunctionCallNode(

@@ -543,7 +543,7 @@ class ModuleType(KnownValueType):
 @consing
 class AutojitFunctionType(NumbaType):
     "Type for autojit functions"
-    typename = "autojit_func"
+    typename = "autojit_function"
     argnames = ["autojit_func"]
     flags = ["object"]
 
