@@ -1344,7 +1344,7 @@ class TypeInferer(visitors.NumbaTransformer):
         # TODO: Resolve variable types based on how they are used as arguments
         # TODO: in calls with known signatures
         new_node = None
-        if func_type.is_autojit_method:
+        if func_type.is_autojit_extmethod:
             assert isinstance(node.func, nodes.ExtensionMethod)
             new_node = self._resolve_autojit_method_call(
                 node, node.func.ext_type, node.func.attr)
