@@ -87,12 +87,12 @@ def get_default_typing_rules(u, typeof, promote):
         if isinstance(value, dict):
             key_type = type_container(value.keys(), promote, typeof)
             value_type = type_container(value.values(), promote, typeof)
-            return u.dict(key_type, value_type, size=len(value))
+            return u.dict_type(key_type, value_type, size=len(value))
 
         if isinstance(value, tuple):
-            container_type = u.tuple_
+            container_type = u.tuple_type
         else:
-            container_type = u.list_
+            container_type = u.list_type
 
         if 0 < len(value) < 30:
             # Figure out base type if the container is not too large

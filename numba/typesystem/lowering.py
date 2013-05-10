@@ -99,6 +99,9 @@ def lower_array(domain, codomain, type, params):
     from numba import typedefs
     return codomain.pointer(typedefs.PyArray)
 
+def lower_carray(domain, codomain, type, params):
+    return codomain.pointer(params[0])
+
 #------------------------------------------------------------------------
 # Default Lowering Table
 #------------------------------------------------------------------------
@@ -109,12 +112,15 @@ default_numba_lowering_table = {
     "function":         lower_function,
     "complex":          lower_complex,
     "array":            lower_array,
-    "string_":          lower_string,
+    "string":           lower_string,
+    "carray":           lower_carray,
+    "sized_pointer":    lower_carray,
 }
 
 ctypes_lowering_table = {
-    "object":       lambda dom, cod, type, params: cod.object_,
-    "complex":      lower_complex,
-    "array":        "object",
-    "string_":      lambda dom, cod, type, params: ctypes.c_char_p,
+    "object":           lambda dom, cod, type, params: cod.object_,
+    "complex":          lower_complex,
+    "array":            "object",
+    "string":           lambda dom, cod, type, params: ctypes.c_char_p,
+    "sized_pointer":    lower_carray,
 }
