@@ -16,10 +16,10 @@ class ExtensionTypeLowerer(visitors.NumbaTransformer):
     """
 
     def get_handler(self, ext_type):
-        if ext_type.is_jit_exttype:
+        if ext_type.is_extension and not ext_type.is_autojit_exttype:
             return StaticExtensionHandler()
         else:
-            assert ext_type.is_autojit_exttype
+            assert ext_type.is_autojit_exttype, ext_type
             return DynamicExtensionHandler()
 
     # ______________________________________________________________________

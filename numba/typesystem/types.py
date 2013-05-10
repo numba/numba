@@ -512,7 +512,7 @@ class ArrayType(NumbaType):
         else:
             raise IndexError(index, ndim)
 
-@consing
+@consing # TODO: remove this type
 class KnownValueType(NumbaType):
     """
     Type which is associated with a known value or well-defined symbolic

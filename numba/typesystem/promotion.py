@@ -107,8 +107,9 @@ class DefaultPromoter(object):
             return promote_arrays(*args)
         elif type1.is_array or type2.is_array:
             return promote_array_and_other(*args)
-        elif type1 == u.char.pointer():
-            return u.c_string_type
+        elif (type1, type2) in [(u.string_, u.char.pointer()),
+                                (u.char.pointer(), u.string_)]:
+            return u.string_
         elif type1.is_object or type2.is_object:
             return u.object_
         else:

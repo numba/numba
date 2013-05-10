@@ -1752,7 +1752,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         elif type.is_function:
             # lvalue = map_to_function(constant, type, self.mod)
             raise NotImplementedError
-        elif type.is_object and not constnodes.is_null_constant(pyval):
+        elif type.is_object and not constnodes.is_null_constant(constant):
             raise NotImplementedError("Use ObjectInjectNode")
         else:
             raise NotImplementedError("Constant %s of type %s" %

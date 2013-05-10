@@ -850,18 +850,18 @@ class TypeInferer(visitors.NumbaTransformer):
                 ["is_int", 'is_object', 'is_bool'])
 
         v1, v2 = node.left.variable, node.right.variable
-        promotion_type = self.promote(v1, v2)
+        promoted_type = self.promote(v1, v2)
 
-        if (v1.type.is_pointer or v2.type.is_pointer):
+        if promoted_type.is_pointer:
             self._verify_pointer_type(node, v1, v2)
         elif not ((v1.type.is_array and v2.type.is_array) or
                   (v1.type.is_unresolved or v2.type.is_unresolved)):
             # Don't coerce arrays to lesser or higher dimensionality
             # Broadcasting transforms should take care of this
             node.left, node.right = nodes.CoercionNode.coerce(
-                                [node.left, node.right], promotion_type)
+                                [node.left, node.right], promoted_type)
 
-        node.variable = Variable(promotion_type)
+        node.variable = Variable(promoted_type)
         if isinstance(node.op, ast.FloorDiv):
             node = self._handle_floordiv(node)
 

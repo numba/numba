@@ -67,7 +67,7 @@ def get_dtype(dtype_arg, default_dtype=None):
         if default_dtype is None:
             return None
 
-        return typesystem.dtype(default_dtype)
+        return typesystem.numpy_dtype(default_dtype)
     else:
         return resolve_attribute_dtype(dtype_arg)
 

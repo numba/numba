@@ -1001,6 +1001,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
     def visit_ConstNode(self, node):
         constant = node.pyval
+        if node.type.is_known_value:
+            node.type = object_ # TODO: Get rid of KnownValueType
 
         if node.type.is_complex:
             real = nodes.ConstNode(constant.real, node.type.base_type)

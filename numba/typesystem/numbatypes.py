@@ -23,10 +23,16 @@ native_integral = []
 # All unit types
 #------------------------------------------------------------------------
 
-# Add type constructors
-for name, ty in types.numba_type_registry.items():
-    name = itypesystem.tyname(ty.typename)
-    globals()[name] = ty
+def register_constructors(): # TODO: Do this better
+    # Add type constructors
+    for name, ty in types.numba_type_registry.items():
+        name = itypesystem.tyname(ty.typename)
+        if name not in globals():
+            globals()[name] = ty
+
+    for name, value in globals().items():
+        if not inspect.ismodule(value) and not name.startswith("_"):
+            __all__.append(name)
 
 def mono(*args, **kwargs):
     ty = types.mono(*args, **kwargs)
@@ -80,9 +86,9 @@ float64      = mono("float", "float64",    flags=["numeric"])
 float128     = mono("float", "float128",   flags=["numeric"])
 float_, double, longdouble = float32, float64, float128
 
-complex64    = complex_(float32)
-complex128   = complex_(float64)
-complex256   = complex_(float128)
+complex64    = ComplexType(float32)
+complex128   = ComplexType(float64)
+complex256   = ComplexType(float128)
 
 bool_        = mono("bool", "bool", flags=["int", "numeric"])
 null         = mono("null", "null", flags=["pointer"])
@@ -104,9 +110,9 @@ c_string_type = string_
 
 complextypes.extend([complex64, complex128, complex256])
 
-tuple_       = tuple_type(object_, -1)
-list_        = list_type(object_, -1)
-dict_        = dict_type(object_, object_, -1)
+tuple_       = TupleType(object_, -1)
+list_        = ListType(object_, -1)
+dict_        = DictType(object_, object_, -1)
 
 # ______________________________________________________________________
 
@@ -164,9 +170,3 @@ def struct_(fields=(), name=None, readonly=False, packed=False, **kwargs):
         # fields = list(kwargs.iteritems())
 
     return MutableStructType(fields, name, readonly, packed)
-
-# ______________________________________________________________________
-# Update __all__
-for name, value in globals().items():
-    if not inspect.ismodule(value) and not name.startswith("_"):
-        __all__.append(name)

@@ -8,6 +8,7 @@ import numpy as np
 
 from numba import *
 from numba import typesystem
+from numba.typesystem import numpy_support
 from numba.type_inference.module_type_inference import (module_registry,
                                                         register,
                                                         register_inferer,
@@ -54,7 +55,7 @@ def numba_type_from_sig(ufunc_signature):
     Convert ufunc type signature string (e.g. 'dd->d') to a FunctionType
     """
     args, ret = ufunc_signature.split('->')
-    to_numba = lambda c: typesystem.map_dtype(np.dtype(c))
+    to_numba = lambda c: numpy_support.map_dtype(np.dtype(c))
 
     signature = to_numba(ret)(*map(to_numba, args))
     return signature

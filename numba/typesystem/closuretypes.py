@@ -16,7 +16,7 @@ class ClosureType(NumbaType):
 
     typename = "closure"
     argnames = ["signature", "closure"]
-    default = { "closure": None}
+    defaults = { "closure": None}
     flags = ["object"]
     mutable = True
 
@@ -37,11 +37,11 @@ class ClosureScopeType(ExtensionType):
     is_final = True
 
     def __init__(self, py_class, parent_scope):
-        super(ClosureScopeType, self).__init__()
+        super(ClosureScopeType, self).__init__(py_class)
         self.parent_scope = parent_scope
         self.unmangled_symtab = None
 
-        if self.parent_scope is not None:
+        if self.parent_scope is None:
             self.scope_prefix = ""
         else:
             self.scope_prefix = self.parent_scope.scope_prefix + "0"

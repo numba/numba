@@ -6,16 +6,17 @@ from .itypesystem import *
 from .closuretypes import *
 from .templatetypes import *
 from numba.exttypes.types.methods import *
-from .numbatypes import *
-from .ssatypes import *
 
+from . import numbatypes
+numbatypes.register_constructors()
+from .numbatypes import *
+
+from .ssatypes import *
 # from typeset import *
 from .typematch import *
 
 from .universe import *
 from .defaults import *
 from .typeutils import *
-
-from . import numbatypes
 
 __all__ = numbatypes.__all__
