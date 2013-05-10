@@ -5,7 +5,6 @@ Type lowering from a higher-level domain to a lower-level domain.
 """
 
 from __future__ import print_function, division, absolute_import
-import ctypes
 from numba.typesystem import itypesystem
 
 def find_matches(table, flags):

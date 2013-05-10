@@ -435,7 +435,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # Assign to this value which will be returned
         self.is_void_return = \
                 self.func_signature.actual_signature.return_type.is_void
-        if self.func_signature.struct_by_reference:
+        ret_by_ref = minitypes.pass_by_ref(self.func_signature.return_type)
+        if self.func_signature.struct_by_reference and ret_by_ref:
             self.return_value = self.lfunc.args[-1]
             assert self.return_value.type.kind == llvm.core.TYPE_POINTER
         elif not self.is_void_return:
@@ -1391,6 +1392,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_ComplexAttributeNode(self, node):
         result = self.visit(node.value)
         if node.value.type.is_complex:
+            assert result.type.kind == llvm.core.TYPE_STRUCT, result.type
             if node.attr == 'real':
                 return self.builder.extract_value(result, 0)
             elif node.attr == 'imag':

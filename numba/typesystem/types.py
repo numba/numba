@@ -6,6 +6,7 @@ User-facing numba types.
 
 from __future__ import print_function, division, absolute_import
 
+from itertools import imap
 from functools import partial
 try:
     import __builtin__ as builtins
@@ -291,7 +292,8 @@ class FunctionType(NumbaType):
     @property
     def struct_by_reference(self):
         rt = self.return_type
-        return rt and (rt.is_struct or rt.is_complex)
+        byref = lambda t: t.is_struct or t.is_complex
+        return rt and byref(rt) or any(imap(byref, self.args))
 
     @property
     def actual_signature(self):

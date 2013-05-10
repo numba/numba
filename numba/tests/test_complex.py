@@ -205,10 +205,15 @@ class TestASTComplex(test_support.ASTTestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    m, n = .12, .32
-#    print autojit(add)(m, n)
-#    print autojit(cosh)(m, n), cosh(m, n)
-    unittest.main()
+    # m, n = .12, .32
+    # print autojit(add)(m, n)
+    # print autojit(cosh)(m, n), cosh(m, n)
+    # print(autojit(sqrt)(m, n))
+    # num0 = 0 - 2j
+    # num1 = numpy.complex128(num0)
+    # compiled_get_imag_fn = jit(argtypes = [complex128])(get_imag_fn)
+    # compiled_get_imag_fn(num0)
+    unittest.main(verbosity=3)
 
 # ______________________________________________________________________
 # End of test_complex.py
