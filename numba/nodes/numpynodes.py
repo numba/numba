@@ -217,7 +217,7 @@ class ShapeAttributeNode(ArrayAttributeNode):
     def __init__(self, array):
         super(ShapeAttributeNode, self).__init__('shape', array)
         self.array = array
-        self.element_type = typesystem.intp
+        self.element_type = typesystem.npy_intp
         self.type = typesystem.carray(self.element_type,
                                       array.variable.type.ndim)
 

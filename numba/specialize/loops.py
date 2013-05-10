@@ -5,11 +5,10 @@ import textwrap
 
 import numba
 from numba import *
-from numba import error, closures, function_util
-from numba import macros, utils, typesystem
-from numba.symtab import Variable
-from numba import visitors, nodes, error, functions
-from numba.typesystem import get_type, is_obj, typematch
+from numba import error
+from numba import typesystem
+from numba import visitors, nodes
+from numba.typesystem import get_type
 from numba.specialize import loopimpl
 
 logger = logging.getLogger(__name__)
@@ -205,7 +204,7 @@ class TransformForIterable(visitors.NumbaTransformer):
         #--------------------------------------------------------------------
 
         call_func = ast.Name(id='range', ctx=ast.Load())
-        nodes.typednode(call_func, typesystem.RangeType())
+        nodes.typednode(call_func, typesystem.range_)
 
         shape_index = ast.Index(nodes.ConstNode(0, typesystem.Py_ssize_t))
         shape_index.type = typesystem.npy_intp

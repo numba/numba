@@ -48,10 +48,7 @@ def error_index(type):
 def index_type(type):
     "Result of indexing a value of the given type with an integer index"
     if type.is_array:
-        result = type.copy()
-        result.ndim -= 1
-        if result.ndim == 0:
-            result = result.dtype
+        result = array(type.dtype, type.ndim - 1)
     elif type.is_container or type.is_pointer:
         result = type.base_type
     elif type.is_dict:
