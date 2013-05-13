@@ -35,18 +35,18 @@ def cast(node, dst_type):
 # TODO: don't rewrite AST here
 
 @register_builtin((1, 2, 3), can_handle_deferred_types=True)
-def range_(context, node, start, stop, step):
+def range_(typesystem, node, start, stop, step):
     node.variable = Variable(typesystem.range_)
     node.args = nodes.CoercionNode.coerce(node.args, dst_type=Py_ssize_t)
     return node
 
 if not PY3:
     @register_builtin((1, 2, 3), can_handle_deferred_types=True)
-    def xrange_(context, node, start, stop, step):
-        return range_(context, node, start, stop, step)
+    def xrange_(typesystem, node, start, stop, step):
+        return range_(typesystem, node, start, stop, step)
 
 @register_builtin(1)
-def len_(context, node, obj):
+def len_(typesystem, node, obj):
     # Simplify len(array) to ndarray.shape[0]
     argtype = get_type(obj)
     if argtype.is_array:
@@ -57,7 +57,7 @@ def len_(context, node, obj):
     return Py_ssize_t
 
 @register_builtin((0, 1, 2), can_handle_deferred_types=True)
-def _int(context, node, x, base, dst_type=int_):
+def _int(typesystem, node, x, base, dst_type=int_):
     # Resolve int(x) and float(x) to an equivalent cast
 
     if len(node.args) < 2:
@@ -68,15 +68,15 @@ def _int(context, node, x, base, dst_type=int_):
 
 if not PY3:
     @register_builtin((0, 1, 2), can_handle_deferred_types=True)
-    def _long(context, node, x, base):
-        return _int(context, node, x, base)
+    def _long(typesystem, node, x, base):
+        return _int(typesystem, node, x, base)
 
 @register_builtin((0, 1), can_handle_deferred_types=True)
-def _float(context, node, x):
+def _float(typesystem, node, x):
     return cast(node, double)
 
 @register_builtin((0, 1, 2), can_handle_deferred_types=True)
-def complex_(context, node, a, b):
+def complex_(typesystem, node, a, b):
     if len(node.args) == 2:
         args = nodes.CoercionNode.coerce(node.args, double)
         return nodes.ComplexNode(real=args[0], imag=args[1])
@@ -94,17 +94,17 @@ def abstype(argtype):
     return result_type
 
 @register_builtin(1)
-def abs_(context, node, x):
+def abs_(typesystem, node, x):
     node.variable = Variable(abstype(get_type(x)))
     return node
 
 @register_builtin((2, 3))
-def pow_(context, node, base, exponent, mod):
+def pow_(typesystem, node, base, exponent, mod):
     from . import mathmodule
-    return mathmodule.pow_(context, node, base, exponent)
+    return mathmodule.pow_(typesystem, node, base, exponent)
 
 @register_builtin((1, 2))
-def round_(context, node, number, ndigits):
+def round_(typesystem, node, number, ndigits):
     # is_math = is_math_function(node.args, round)
     argtype = get_type(number)
 
@@ -122,10 +122,10 @@ def round_(context, node, number, ndigits):
     return node # nodes.CoercionNode(node, double)
 
 @register_builtin(0)
-def globals_(context, node):
+def globals_(typesystem, node):
     return typesystem.dict_
     # return nodes.ObjectInjectNode(func.__globals__)
 
 @register_builtin(0)
-def locals_(context, node):
+def locals_(typesystem, node):
     raise error.NumbaError("locals() is not supported in numba functions")

@@ -161,8 +161,7 @@ class TypeInferer(visitors.NumbaTransformer):
         self.initialize_argtypes(arg_types)
         self.initialize_ssa()
 
-        self.func_signature.args = tuple(arg_types)
-
+        self.func_signature = self.func_signature.add('args', arg_types)
         self.have_cfg = hasattr(self.ast, 'flow')
         if self.have_cfg:
             self.deferred_types = []
@@ -1054,7 +1053,7 @@ class TypeInferer(visitors.NumbaTransformer):
         type = variable.type
         if (type.is_object and variable.is_constant and
                 variable.constant_value is None):
-            type = typesystem.NewAxisType()
+            type = typesystem.newaxis
 
         node.variable = Variable(type)
         return node
@@ -1421,7 +1420,7 @@ class TypeInferer(visitors.NumbaTransformer):
 
         result_type = None
         if attribute is numpy.newaxis:
-            result_type = typesystem.NewAxisType()
+            result_type = typesystem.newaxis
         elif attribute is numba.NULL:
             return typesystem.null_type
         elif type.is_numpy_module or type.is_numpy_attribute:
@@ -1535,7 +1534,7 @@ class TypeInferer(visitors.NumbaTransformer):
             return nodes.ArrayAttributeNode(node.attr, node.value)
         elif type.is_array and node.attr == "dtype":
             # TODO: resolve as constant at compile time?
-            result_type = typesystem.dtype(type.dtype)
+            result_type = typesystem.numpy_dtype(type.dtype)
         elif type.is_extension:
             return self._resolve_extension_attribute(node, type)
         else:

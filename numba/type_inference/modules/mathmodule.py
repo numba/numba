@@ -20,7 +20,7 @@ import numpy as np
 from numba import *
 from numba import nodes
 from numba.symtab import Variable
-from numba.typesystem import get_type
+from numba.typesystem import get_type, rank
 from numba.type_inference.modules import utils
 
 
@@ -30,11 +30,11 @@ from numba.type_inference.modules import utils
 
 register_math_typefunc = utils.register_with_argchecking
 
-def binop_type(context, x, y):
+def binop_type(typesystem, x, y):
     "Binary result type for math operations"
     x_type = get_type(x)
     y_type = get_type(y)
-    return context.promote_types(x_type, y_type)
+    return typesystem.promote_types(x_type, y_type)
 
 #----------------------------------------------------------------------------
 # Determine math functions
@@ -83,31 +83,31 @@ all_libc_math_funcs = unary_libc_math_funcs + n_ary_libc_math_funcs
 
 # TODO: Move any rewriting parts to lowering phases
 
-def infer_unary_math_call(context, call_node, arg, default_result_type=double):
+def infer_unary_math_call(typesystem, call_node, arg, default_result_type=double):
     "Resolve calls to math functions to llvm.log.f32() etc"
     # signature is a generic signature, build a correct one
     type = get_type(call_node.args[0])
 
-    if type.is_numeric and type.kind < default_result_type.kind:
+    if type.is_numeric and rank(type) < rank(default_result_type):
         type = default_result_type
     elif type.is_array and type.dtype.is_int:
-        type = type.copy(dtype=double)
-
-    nodes.annotate(context.env, call_node, is_math=True)
+        type = typesystem.array(double, type.ndim)
+    # TODO: Remove the abuse below
+    nodes.annotate(typesystem.env, call_node, is_math=True)
     call_node.variable = Variable(type)
     return call_node
 
-def infer_unary_cmath_call(context, call_node, arg):
-    result = infer_unary_math_call(context, call_node, arg,
+def infer_unary_cmath_call(typesystem, call_node, arg):
+    result = infer_unary_math_call(typesystem, call_node, arg,
                                    default_result_type=complex128)
-    nodes.annotate(context.env, call_node, is_cmath=True)
+    nodes.annotate(typesystem.env, call_node, is_cmath=True)
     return result
 
 # ______________________________________________________________________
 # pow()
 
-def pow_(context, call_node, node, power, mod=None):
-    dst_type = binop_type(context, node, power)
+def pow_(typesystem, call_node, node, power, mod=None):
+    dst_type = binop_type(typesystem, node, power)
     call_node.variable = Variable(dst_type)
     return call_node
 
@@ -117,7 +117,7 @@ register_math_typefunc(2, np.power)
 # ______________________________________________________________________
 # abs()
 
-def abs_(context, node, x):
+def abs_(typesystem, node, x):
     import builtinmodule
 
     argtype = get_type(x)
@@ -125,11 +125,11 @@ def abs_(context, node, x):
     if argtype.is_array and argtype.is_numeric:
         # Handle np.abs() on arrays
         dtype = builtinmodule.abstype(argtype.dtype)
-        result_type = argtype.copy(dtype=dtype)
+        result_type = argtype.add('dtype', dtype)
         node.variable = Variable(result_type)
         return node
 
-    return builtinmodule.abs_(context, node, x)
+    return builtinmodule.abs_(typesystem, node, x)
 
 register_math_typefunc(1, np.abs)
 
