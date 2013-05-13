@@ -96,7 +96,7 @@ class NumbaVisitorMixin(CooperativeBase):
 
                 recurse_co_consts(f_code)
 
-            self.argnames = self.varnames[:f_code.co_argcount]
+            self.argnames = tuple(self.varnames[:f_code.co_argcount])
 
             if f_code.co_cellvars:
                 self.varnames.extend(

@@ -44,7 +44,7 @@ def test_register_callable():
     assert use_typeset_function_binding(double, double) == double
     assert use_typeset_function_binding(float_, double) == double
     assert use_typeset_function_binding(int_, float_) == float_
-    assert use_typeset_function_binding(int_, long_) == long_
+    assert use_typeset_function_binding(int_, long_).itemsize == long_.itemsize
 
 if __name__ == '__main__':
     test_register_callable()

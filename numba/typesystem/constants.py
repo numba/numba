@@ -34,7 +34,7 @@ def get_typing_defaults(u):
         float: u.double,
         bool: u.bool_,
         complex: u.complex128,
-        str: u.pointer(u.char),
+        str: u.string_,
     }
     return typing_defaults
 

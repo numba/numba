@@ -46,3 +46,5 @@ class InvalidTemplateError(Exception):
 
 class UnpromotableTypeError(TypeError):
     "Raised when we can't promote two given types"
+    def __str__(self):
+        return "Cannot promote types %s and %s" % self.args[0]

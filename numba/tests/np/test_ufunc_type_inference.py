@@ -68,8 +68,7 @@ def outer(ufunc, a):
 #------------------------------------------------------------------------
 
 def equals(a, b):
-    assert a == b, (a, b, type(a), type(b),
-                    a.comparison_type_list, b.comparison_type_list)
+    assert a == b, (a, b, type(a), type(b))
 
 def test_binary_ufunc():
     equals(binary_ufunc(np.add, a, b), int64[:, :])

@@ -181,7 +181,7 @@ def _build_arg(pass_in_types, node):
         return get_type(node)
     return node
 
-def dispatch_on_value(context, call_node, func_type):
+def dispatch_on_value(context, call_node, func_type): # TODO: Pass in typesystem here
     """
     Dispatch a call of a module attribute by value.
 
@@ -202,9 +202,11 @@ def dispatch_on_value(context, call_node, func_type):
 
     # Pass in additional arguments (context and call_node)
     argnames = argspec.args
-    if argnames and argnames[0] == "context":
+    if argnames and argnames[0] in ("context", "typesystem"):
         argnames.pop(0)
-        args = [context]
+        # TODO: Remove this and reference in mathmodule.infer_unary_math_call
+        context.env.crnt.typesystem.env = context.env
+        args = [context.env.crnt.typesystem]
     else:
         args = []
 
@@ -313,10 +315,8 @@ def register_callable(signature):
 
     # convert void return type to object_ (None)
     def convert_void_to_object(sig):
-        from copy import copy
         if sig.return_type == void:
-            sig = copy(sig)
-            sig.return_type = object_
+            sig = sig.add('return_type', object_)
         return sig
 
     if isinstance(signature, typeset.typeset):
@@ -329,11 +329,11 @@ def register_callable(signature):
 
 
     def decorator(function):
-        def infer(context, *args):
+        def infer(typesystem, *args):
             if signature.is_typeset:
-                specialization = signature.find_match(context, args)
+                specialization = signature.find_match(typesystem.promote, args)
             else:
-                specialization = typeset.match(context, signature, args)
+                specialization = typeset.match(typesystem.promote, signature, args)
 
             if specialization is None:
                 raise UnmatchedTypeError(

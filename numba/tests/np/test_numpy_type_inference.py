@@ -3,8 +3,7 @@ import numpy as np
 import numba
 from numba import *
 from numba import typesystem
-
-tup_t = typesystem.TupleType
+from numba.typesystem import tuple_type
 
 #------------------------------------------------------------------------
 # Test functions
@@ -84,8 +83,7 @@ def sum_out(a, out):
 #------------------------------------------------------------------------
 
 def equals(a, b):
-    assert a == b, (a, b, type(a), type(b),
-                    a.comparison_type_list, b.comparison_type_list)
+    assert a == b, (a, b, type(a), type(b))
 
 def test_array():
     equals(array(np.array([1, 2, 3], dtype=np.double)), float64[:])
@@ -95,15 +93,15 @@ def test_array():
 
 def test_nonzero():
     equals(nonzero(np.array([1, 2, 3], dtype=np.double)),
-           tup_t(npy_intp[:], 1))
+           tuple_type(npy_intp[:], 1))
     equals(nonzero(np.array([[1, 2, 3]], dtype=np.double)),
-           tup_t(npy_intp[:], 2))
+           tuple_type(npy_intp[:], 2))
     equals(nonzero(np.array((((1, 2, 3),),), dtype=np.double)),
-           tup_t(npy_intp[:], 3))
+           tuple_type(npy_intp[:], 3))
 
 def test_where():
     equals(where(np.array([1, 2, 3], dtype=np.double)),
-           tup_t(npy_intp[:], 1))
+           tuple_type(npy_intp[:], 1))
 
     equals(where3(np.array([True, False, True]),
                   np.array([1, 2, 3], dtype=np.double),
@@ -137,7 +135,7 @@ def test_numba_dot():
             if i + j - 2 > 0:
                 assert result.ndim == result_type.ndim
             else:
-                assert result_type == dtype
+                assert result_type == dtype, (result_type, dtype)
 
 def test_numba_vdot():
     for a, b in ((np.array([1+2j,3+4j]),

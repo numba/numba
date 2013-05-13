@@ -51,7 +51,7 @@ def test_simple_circular3():
     >>> sig, syms = infer(test_simple_circular3.py_func,
     ...                   functype(None, []))
     >>> types(syms, 'x', 'y')
-    (object_, object_)
+    (object, object)
     """
     x = values[5]
     y = 2.0
@@ -115,7 +115,7 @@ def test_circular_binop():
     >>> sig, syms = infer(test_circular_binop.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 'x', 'y', 'z', 'a')
-    (double, double, double, int)
+    (float64, float64, float64, int)
     """
     x = 1
     y = 2
@@ -138,7 +138,7 @@ def test_circular_compare():
     >>> sig, syms = infer(test_circular_compare.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 'x', 'y')
-    (double, double)
+    (float64, float64)
     """
     x = 1
     for i in range(10):
@@ -157,7 +157,7 @@ def test_circular_compare2():
     >>> sig, syms = infer(test_circular_compare.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 'x', 'y')
-    (double, double)
+    (float64, float64)
     """
     x = 1
     for i in range(10):
@@ -179,8 +179,10 @@ def test_circular_compare3():
     (False, 10L)
     >>> sig, syms = infer(test_circular_compare3.py_func,
     ...                   functype(None, []), warn=False)
-    >>> [str(x) for x in types(syms, 'cond', 'x')]
-    ['bool', 'Py_ssize_t']
+    >>> types(syms, 'cond')
+    (bool,)
+    >>> t, = types(syms, 'x'); assert t.is_int
+    >>> assert t.itemsize == Py_ssize_t.itemsize
     """
     x = 1
     cond = True
@@ -212,7 +214,7 @@ def test_delayed_array_indexing():
     >>> types(syms, 'array', 'var', 'x')
     (float64[:], float64, int)
     """
-    array = np.ones(10, dtype=np.double)
+    array = np.ones(10, dtype=np.float64)
     x = 0
     for i in range(11):
         var = array[x]
@@ -234,7 +236,7 @@ def test_delayed_array_slicing():
     >>> types(syms, 'array', 'row')
     (float64[:, :], float64[:])
     """
-    array = np.ones((8, 10), dtype=np.double)
+    array = np.ones((8, 10), dtype=np.float64)
     for i in range(8):
         row = array[i, :]
         array[i, i] = row[i] * i
@@ -258,7 +260,7 @@ def test_delayed_array_slicing2():
     """
     for i in range(8):
         if i == 0:
-            array = np.ones((8, 10), dtype=np.double)
+            array = np.ones((8, 10), dtype=np.float64)
 
         row = array[i, :]
         array[i, i] = row[i] * i
@@ -274,7 +276,7 @@ def test_delayed_string_indexing_simple():
     >>> sig, syms = infer(test_delayed_string_indexing_simple.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 's', 'x')
-    (const char *, Py_ssize_t)
+    (string, Py_ssize_t)
     """
     s = "spam ham eggs"
     for i in range(4):
@@ -294,7 +296,7 @@ def test_delayed_string_indexing():
     >>> sig, syms = infer(test_delayed_string_indexing.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 's', 'x')
-    (const char *, Py_ssize_t)
+    (string, Py_ssize_t)
     """
     s = "spam ham eggs"
     for i in range(4):
@@ -320,7 +322,7 @@ def test_delayed_string_indexing2():
     >>> sig, syms = infer(test_delayed_string_indexing2.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 's', 'x')
-    (const char *, Py_ssize_t)
+    (string, Py_ssize_t)
     """
     for i in range(4):
         if i == 0:
@@ -343,10 +345,9 @@ def test_delayed_string_indexing2():
 @autojit_py3doc(warn=False)
 def test_string_indexing_error():
     """
-    >>> test_string_indexing_error()
-    Traceback (most recent call last):
-        ...
-    NumbaError: Cannot promote types (char, const char *) for variable s
+    >>> try: test_string_indexing_error()
+    ... except Exception, e: print(e)
+    Cannot promote types string and char
     """
     for i in range(4):
         if i == 0:
@@ -360,10 +361,9 @@ def test_string_indexing_error():
 @autojit_py3doc(warn=False)
 def test_string_indexing_error2():
     """
-    >>> chr(test_string_indexing_error2())
-    Traceback (most recent call last):
-        ...
-    NumbaError: Cannot promote types (char, const char *) for variable s
+    >>> try: chr(test_string_indexing_error2())
+    ... except Exception, e: print(e)
+    Cannot promote types string and char
     """
     for i in range(4):
         if i == 0:
@@ -418,7 +418,7 @@ def test_simple_call_promotion():
     >>> test_simple_call_promotion()
     26640768404.0
     >>> infer_simple(test_simple_call_promotion, 'x')
-    (double,)
+    (float64,)
     """
     x = 0
     for i in range(5):

@@ -16,12 +16,12 @@ class ClosureType(NumbaType):
 
     typename = "closure"
     argnames = ["signature", "closure"]
-    defaults = { "closure": None}
+    defaults = { "closure": None }
     flags = ["object"]
     mutable = True
 
     def add_scope_arg(self, scope_type):
-        self.signature.args = (scope_type,) + self.signature.args
+        self.signature = self.signature.add_arg(0, scope_type)
 
     def __repr__(self):
         return "<closure(%s)>" % self.signature
