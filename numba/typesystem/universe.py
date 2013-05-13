@@ -24,7 +24,7 @@ int_typenames = names(
 signed = frozenset(names(
     'char', 'short', 'int', 'long', 'longlong',
     'int8', 'int16', 'int32', 'int64',
-    'Py_ssize_t',
+    'Py_ssize_t', 'npy_intp',
 ))
 
 float_typenames = names(

@@ -37,15 +37,14 @@ class Registry(object):
 numba_type_registry = Registry()
 
 class Accessor(object):
-    def __init__(self, idx, mutable):
+    def __init__(self, idx):
         self.idx = idx
-        self.mutable = mutable
 
     def __get__(self, obj, type=None):
         return obj.params[self.idx]
 
     def __set__(self, obj, value):
-        if not self.mutable:
+        if not obj.mutable:
             raise AttributeError("Cannot set attribute '%s' of type '%s'" %
                                             (obj.argnames[self.idx], type(obj)))
         obj.params[self.idx] = value
@@ -64,30 +63,31 @@ class TypeMetaClass(type):
     def __init__(self, name, bases, dict):
         if self.typename is not None:
             self.registry.register(self.typename, self)
-
-        # Create accessors
-        for i, arg in enumerate(dict.get("argnames", ())):
-            assert not getattr(self, arg, False), (self, arg)
-            setattr(self, arg, Accessor(i, self.mutable))
-
-        # Process flags
-        flags = list(self.flags)
-        if self.typename:
-            flags.append(self.typename.strip("_"))
-
-        add_flags(self, flags)
-
+        _update_class(self)
         self.conser = Conser(partial(type.__call__, self))
 
     def __call__(self, *args, **kwds):
         args = self.default_args(args, kwds)
         if not self.mutable:
             return self.conser.get(*args)
-        return super(TypeMetaClass, self).__call__(*args, **kwds)
+        return super(TypeMetaClass, self).__call__(*args)
 
 #------------------------------------------------------------------------
 # Type Decorators
 #------------------------------------------------------------------------
+
+def _update_class(cls):
+    # Create accessors
+    for i, arg in enumerate(vars(cls).get("argnames", ())):
+        assert not getattr(cls, arg, False), (cls, arg)
+        setattr(cls, arg, Accessor(i))
+
+    # Process flags
+    flags = list(cls.flags)
+    if cls.typename:
+        flags.append(cls.typename.strip("_"))
+
+    add_flags(cls, flags)
 
 def consing(cls):
     """

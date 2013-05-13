@@ -4,6 +4,19 @@ from __future__ import print_function, division, absolute_import
 
 from numba.typesystem import numba_typesystem as ts
 
+# ______________________________________________________________________
+def test_mutability():
+    ty = ts.function(ts.int_, (ts.float_,))
+    ty.args
+    try:
+        ty.args = [1, 2]
+    except AttributeError, e:
+        pass
+    else:
+        raise Exception(
+            "Expected: AttributeError: Cannot set attribute 'args' of type ...")
+# ______________________________________________________________________
+
 def test_pointers():
     assert ts.pointer(ts.int_) is ts.pointer(ts.int_)
 
@@ -45,6 +58,7 @@ def test_complex():
     assert ts.complex_(ts.longdouble) is ts.complex256
 
 if __name__ == "__main__":
+    test_mutability()
     test_pointers()
     test_functions()
     # test_struct()
