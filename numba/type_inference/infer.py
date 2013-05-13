@@ -1370,8 +1370,7 @@ class TypeInferer(visitors.NumbaTransformer):
             new_node = nodes.PointerCallNode(
                     func_type.signature,
                     node.args,
-                    func_type.ptr,
-                    py_func=func_type.obj)
+                    func_type.ptr)
 
         elif func_type.is_cast:
             # Call of a numba type

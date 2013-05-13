@@ -104,10 +104,6 @@ def lower_array(domain, codomain, type, params):
 def lower_to_pointer(domain, codomain, type, params):
     return codomain.pointer(params[0])
 
-def lower_pointer_to_function(domain, codomain, type, params):
-    obj, ptr, sig = params
-    return sig
-
 #------------------------------------------------------------------------
 # Default Lowering Table
 #------------------------------------------------------------------------
@@ -123,7 +119,7 @@ default_numba_lowering_table = {
     "sized_pointer":    lower_to_pointer,
     "reference":        lower_to_pointer,
     "extmethod":        lower_extmethod,
-    "pointer_to_function": lower_pointer_to_function,
+    "known_pointer":    lower_to_pointer,
 }
 
 ctypes_lowering_table = {
