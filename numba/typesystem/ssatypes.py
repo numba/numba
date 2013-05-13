@@ -372,6 +372,7 @@ class ReanalyzeCircularType(UnresolvedType):
 
     Here the type would change on each iteration. Arrays do not demote to
     object, but other types do. The same goes for a call:
+            error_circular(result_type.variable)
 
         for i in range(n):
             f = f(i)

@@ -34,7 +34,7 @@ def binop_type(typesystem, x, y):
     "Binary result type for math operations"
     x_type = get_type(x)
     y_type = get_type(y)
-    return typesystem.promote_types(x_type, y_type)
+    return typesystem.promote(x_type, y_type)
 
 #----------------------------------------------------------------------------
 # Determine math functions

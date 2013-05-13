@@ -16,7 +16,7 @@ domain_name = "ctypes"
 
 # ______________________________________________________________________
 
-ctypes_map = {
+nb2ctypes = {
     ts.float32:    ctypes.c_float,
     ts.float64:    ctypes.c_double,
     ts.float128:   ctypes.c_longdouble,
@@ -28,13 +28,15 @@ ctypes_map = {
 def cint(name):
     ty = getattr(ts, name)
     cname = "c_int" if ty.signed else "c_uint"
-    ctypes_map[ty] = getattr(ctypes, cname + str(ty.itemsize * 8))
+    nb2ctypes[ty] = getattr(ctypes, cname + str(ty.itemsize * 8))
 
 for name in map(tyname, universe.int_typenames):
     cint(name)
 
-globals().update((tyname(ty.typename), cty) for ty, cty in ctypes_map.iteritems())
+globals().update((tyname(ty.typename), cty) for ty, cty in nb2ctypes.iteritems())
 float_, double, longdouble = float32, float64, float128
+
+ctypes_map = dict((cty, ty) for ty, cty in nb2ctypes.iteritems())
 
 # ______________________________________________________________________
 

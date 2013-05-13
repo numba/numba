@@ -139,14 +139,14 @@ def from_ctypes(value, u):
     result = from_ctypes_value(value)
     if result.is_function:
         pointer = ctypes.cast(value, ctypes.c_void_p).value
-        return u.constfuncptr(value, pointer, result)
+        return u.pointer_to_function(value, pointer, result)
     else:
         return result
 
 def from_cffi(value, u):
     signature = cffi_support.get_signature(value)
     pointer = cffi_support.get_pointer(value)
-    return u.constfuncptr(value, pointer, signature)
+    return u.pointer_to_function(value, pointer, signature)
 
 def from_typefunc(value, u):
     from numba.type_inference import module_type_inference
@@ -166,6 +166,8 @@ def get_default_match_table(u):
     Get a matcher table: { (type -> bool) : (value -> type) }
     """
     table = {
+        is_NULL:
+            lambda value: numba.typesystem.null,
         is_dtype_constructor:
             lambda value: numba.typesystem.from_numpy_dtype(np.dtype(value)),
         is_ctypes:

@@ -674,7 +674,6 @@ class DictType(MapContainerType):
 # Types to be removed
 #------------------------------------------------------------------------
 
-
 class NumpyAttributeType(NumbaType):
     typename = "numpy_attribute"
     argnames = ["module", "attr"]
@@ -715,4 +714,11 @@ class MethodType(NumbaType):
     argnames = ["base_type", "attr_name"]
     flags = ["object"]
 
-
+class PointerFunctionType(NumbaType):
+    """
+    Pointer to a function at a known address represented by some Python
+        object (e.g. a ctypes or CFFI function).
+    """
+    typename = "pointer_to_function"
+    argnames = ["obj", "ptr", "signature"]
+    flags = ["object"]

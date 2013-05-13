@@ -231,7 +231,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
                          node_type, dst_type, utils.pformat_ast(node))
 
         # TODO: the below is a problem due to implicit string <-> int coercions!
-        if node_type.is_string and dst_type.is_numeric and not node_type.is_pointer:
+        if (node_type.is_string and dst_type.is_numeric and not
+            (node_type.is_pointer or node_type.is_null)):
             result = self.str_to_int(dst_type, node)
         elif self.nopython and (is_obj(node_type) ^ is_obj(dst_type)):
             raise error.NumbaError(node, "Cannot coerce to or from object in "

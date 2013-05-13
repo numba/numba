@@ -63,8 +63,8 @@ def preload_phi_cycle2(A):
     return sum
 
 if __name__ == "__main__":
-#    a = np.arange(10, dtype=np.double)
-#    preload_arg(a)
-#    preload_phi(a)
-    import numba
-    numba.testing.testmod()
+   a = np.arange(10, dtype=np.double)
+   preload_arg(a)
+   preload_phi(a)
+    # import numba
+    # numba.testing.testmod()

@@ -1370,7 +1370,7 @@ class TypeInferer(visitors.NumbaTransformer):
             new_node = nodes.PointerCallNode(
                     func_type.signature,
                     node.args,
-                    func_type.pointer,
+                    func_type.ptr,
                     py_func=func_type.obj)
 
         elif func_type.is_cast:
@@ -1422,7 +1422,7 @@ class TypeInferer(visitors.NumbaTransformer):
         if attribute is numpy.newaxis:
             result_type = typesystem.newaxis
         elif attribute is numba.NULL:
-            return typesystem.null_type
+            return typesystem.null
         elif type.is_numpy_module or type.is_numpy_attribute:
             result_type = typesystem.NumpyAttributeType(module=type.module,
                                                          attr=node.attr)

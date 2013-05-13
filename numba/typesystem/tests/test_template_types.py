@@ -33,7 +33,7 @@ def test_simple_template(array):
     ...       locals=dict(scalar=T.pointer()))
     Traceback (most recent call last):
         ...
-    UnpromotableTypeError: (float64 *, float64)
+    UnpromotableTypeError: Cannot promote types float64 * and float64
 
     #------------------------------------------------------------------------
     # Test type attributes
