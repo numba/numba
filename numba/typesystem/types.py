@@ -119,6 +119,56 @@ class _NumbaType(Type):
 
     qualifiers = frozenset()
 
+    # ______________________________________________________________________
+    # Internal
+
+    def add(self, attr, value):
+        "Construct new type with attr=value (e.g. functype.add('args', []))"
+        assert not self.mutable
+        params = list(self.params)
+        params[self.argnames.index(attr)] = value
+        return type(self)(*params)
+
+    @property
+    def subtypes(self):
+        subtypes = []
+        for p in self.params:
+            if isinstance(p, (Type, list, tuple)):
+                subtypes.append(p)
+
+        return subtypes
+
+    # ______________________________________________________________________
+    # User functionality
+
+    def pointer(self):
+        return PointerType(self)
+
+    def ref(self):
+        return ReferenceType(self)
+
+    def qualify(self, *qualifiers):
+        return self # TODO: implement
+
+    def unqualify(self, *qualifiers):
+        return self # TODO: implement
+
+    def to_llvm(self, context):
+        # raise NotImplementedError("use typesystem.llvm(type) instead")
+        from . import defaults
+        return defaults.numba_typesystem.convert("llvm", self)
+
+    def to_ctypes(self):
+        from . import defaults
+        return defaults.numba_typesystem.convert("ctypes", self)
+
+    def get_dtype(self):
+        from numba.typesystem import numpy_support
+        return numpy_support.to_dtype(self)
+
+    # ______________________________________________________________________
+    # Special methods (user functionality)
+
     def __getitem__(self, item):
         """
         Support array type creation by slicing, e.g. double[:, :] specifies
@@ -165,39 +215,6 @@ class _NumbaType(Type):
 
         return FunctionType(self, args)
 
-    def pointer(self):
-        return PointerType(self)
-
-    def ref(self):
-        return ReferenceType(self)
-
-    def qualify(self, *qualifiers):
-        return self # TODO: implement
-
-    def unqualify(self, *qualifiers):
-        return self # TODO: implement
-
-    @property
-    def subtypes(self):
-        subtypes = []
-        for p in self.params:
-            if isinstance(p, (Type, list, tuple)):
-                subtypes.append(p)
-
-        return subtypes
-
-    def to_llvm(self, context):
-        # raise NotImplementedError("use typesystem.llvm(type) instead")
-        from . import defaults
-        return defaults.numba_typesystem.convert("llvm", self)
-
-    def to_ctypes(self):
-        from . import defaults
-        return defaults.numba_typesystem.convert("ctypes", self)
-
-    def get_dtype(self):
-        from numba.typesystem import numpy_support
-        return numpy_support.map_type_to_dtype(self)
 
 mono, poly = _NumbaType.mono, _NumbaType.poly
 
@@ -221,7 +238,6 @@ class NumbaType(_NumbaType):
     @classmethod
     def default_args(cls, args, kwargs):
         names = cls.argnames
-
         if len(args) == len(names):
             return args
 
@@ -278,16 +294,12 @@ class FunctionType(NumbaType):
     argnames = ['return_type', 'args', 'name', 'is_vararg']
     defaults = {"name": None, "is_vararg": False}
 
-    def __repr__(self):
-        args = [str(arg) for arg in self.args]
-        if self.is_vararg:
-            args.append("...")
-        if self.name:
-            namestr = self.name
-        else:
-            namestr = ''
+    def add_arg(self, i, arg):
+        args = list(self.args)
+        args.insert(i, arg)
+        return self.add('args', args)
 
-        return "%s (*%s)(%s)" % (self.return_type, namestr, ", ".join(args))
+    # ______________________________________________________________________
 
     @property
     def struct_by_reference(self):
@@ -324,6 +336,17 @@ class FunctionType(NumbaType):
     def struct_return_type(self):
         # Function returns a struct.
         return self.return_type.pointer()
+    # ______________________________________________________________________
+    def __repr__(self):
+        args = [str(arg) for arg in self.args]
+        if self.is_vararg:
+            args.append("...")
+        if self.name:
+            namestr = self.name
+        else:
+            namestr = ''
+
+        return "%s (*%s)(%s)" % (self.return_type, namestr, ", ".join(args))
 
     def __call__(self, *args):
         if len(args) != 1 or isinstance(args[0], Type):
