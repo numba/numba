@@ -87,7 +87,7 @@ def lower_function(domain, codomain, type, params):
         restype = codomain.void
 
     result = codomain.function(restype, newargs, name, is_vararg)
-    # print("lowered", type, result)
+    # print("lowered", type, result, params)
     return result
 
 def lower_extmethod(domain, codomain, type, params):

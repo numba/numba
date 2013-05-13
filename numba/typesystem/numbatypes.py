@@ -19,6 +19,13 @@ complextypes = []
 numeric = []
 native_integral = []
 
+domain_name = "numba"
+
+ranking = ["bool", "int", "float", "complex", "object"]
+
+def rank(type):
+    return ranking.index(type.kind)
+
 #------------------------------------------------------------------------
 # All unit types
 #------------------------------------------------------------------------

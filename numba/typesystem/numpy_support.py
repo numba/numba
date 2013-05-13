@@ -60,59 +60,49 @@ def map_dtype(dtype):
     elif dtype.kind == 'O':
         return object_
 
-def create_dtypes():
-    import numpy as np
+typemap = {
+    int8     : np.int8,
+    int16    : np.int16,
+    int32    : np.int32,
+    int64    : np.int64,
+    uint8    : np.uint8,
+    uint16   : np.uint16,
+    uint32   : np.uint32,
+    uint64   : np.uint64,
 
-    type2dtype = {
-        int8     : np.int8,
-        int16    : np.int16,
-        int32    : np.int32,
-        int64    : np.int64,
-        uint8    : np.uint8,
-        uint16   : np.uint16,
-        uint32   : np.uint32,
-        uint64   : np.uint64,
+    float_   : np.float32,
+    double   : np.float64,
+    longdouble: np.longdouble,
 
-        float_   : np.float32,
-        double   : np.float64,
-        longdouble: np.longdouble,
+    short    : np.dtype('h'),
+    int_     : np.dtype('i'),
+    long_    : np.dtype('l'),
+    longlong : np.longlong,
+    ushort   : np.dtype('H'),
+    uint     : np.dtype('I'),
+    ulong    : np.dtype('L'),
+    ulonglong: np.ulonglong,
 
-        short    : np.dtype('h'),
-        int_     : np.dtype('i'),
-        long_    : np.dtype('l'),
-        longlong : np.longlong,
-        ushort   : np.dtype('H'),
-        uint     : np.dtype('I'),
-        ulong    : np.dtype('L'),
-        ulonglong: np.ulonglong,
+    complex64: np.complex64,
+    complex128: np.complex128,
+    complex256: getattr(np, 'complex256', None),
 
-        complex64: np.complex64,
-        complex128: np.complex128,
-        complex256: getattr(np, 'complex256', None),
+    bool_    : np.bool,
+    object_  : np.object,
+}
+typemap = dict((k, np.dtype(v)) for k, v in typemap.iteritems())
 
-        bool_    : np.bool,
-        object_  : np.object,
-    }
-
-    return dict((k, np.dtype(v)) for k, v in type2dtype.iteritems())
-
-_dtypes = None
-def map_type_to_dtype(type):
-    global _dtypes
-
+def to_dtype(type):
     if type.is_struct:
-        import numpy as np
-
-        fields = [(field_name, map_type_to_dtype(field_type))
+        fields = [(field_name, to_dtype(field_type))
                       for field_name, field_type in type.fields]
         return np.dtype(fields, align=not type.packed)
-
-    if _dtypes is None:
-        _dtypes = create_dtypes()
-
-    if type.is_array:
-        type = type.dtype
-
-    dtype = _dtypes[type]
-    assert dtype is not None, "dtype not supported in this numpy build"
-    return dtype
+    elif type.is_array and type.ndim == 1:
+        return to_dtype(type.dtype)
+    elif type in typemap:
+        return typemap[type]
+    elif type.is_int:
+        name = 'int' if type.signed else 'uint'
+        return np.dtype(getattr(np, name + str(type.itemsize * 8)))
+    else:
+        raise ValueError("Cannot convert '%s' to numpy type" % (type,))

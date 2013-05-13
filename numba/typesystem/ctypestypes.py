@@ -12,6 +12,8 @@ from numba.typesystem.itypesystem import consing, tyname
 from numba.typesystem import universe
 from numba.typesystem import numbatypes as ts
 
+domain_name = "ctypes"
+
 # ______________________________________________________________________
 
 ctypes_map = {

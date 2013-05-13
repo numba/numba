@@ -111,6 +111,11 @@ class TypeSystem(object):
     def __getattr__(self, attr):
         return getattr(self.universe, attr)
 
+    def __repr__(self):
+        return "TypeSystem(%s, %s, %s, %s)" % (self.universe.domain_name,
+                                               self.promote, self.typeof,
+                                               self.converters)
+
 #------------------------------------------------------------------------
 # Typing of Constants
 #------------------------------------------------------------------------
@@ -165,6 +170,7 @@ class TypeConverter(object):
 
     def __init__(self, domain, codomain,
                  convert_mono=convert_mono, convert_poly=convert_poly):
+        self.domain, self.codomain = domain, codomain
         self.convert_mono = partial(convert_mono, domain, codomain)
         self.convert_poly = partial(convert_poly, domain, codomain)
         self.polytypes = weakref.WeakKeyDictionary()
@@ -187,8 +193,12 @@ class TypeConverter(object):
         # Construct polytype in codomain
         result = self.convert_poly(type, map(self.convert, type.params))
 
-        self.polytypes[type] = result
+        # self.polytypes[type] = result # TODO: Check for type mutability
         return result
+
+    def __repr__(self):
+        return "TypeConverter(%s -> %s)" % (self.domain.domain_name,
+                                            self.codomain.domain_name)
 
 #------------------------------------------------------------------------
 # Type Classes
@@ -205,6 +215,7 @@ class Type(object):
 
     # slots = ("kind", "params", "is_mono", "metadata", "_metadata", "typename")
     # __slots__ = slots + ("__weakref__",)
+    metadata = None
 
     def __init__(self, kind, *params, **kwds):
         self.kind = kind    # Type kind
