@@ -1305,7 +1305,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
     def visit_MathCallNode(self, node):
         lfunc_type = node.signature.to_llvm(self.context)
-        lfunc = self.llvm_module.get_or_insert_function(lfunc_type, node.name)
+        name = node.name
+        if node.type.is_complex:
+            name = 'c_' + name
+        lfunc = self.llvm_module.get_or_insert_function(
+            lfunc_type, 'numba.' + name)
 
         node.llvm_func = lfunc
         return self.visit_NativeCallNode(node)

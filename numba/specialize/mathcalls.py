@@ -101,11 +101,6 @@ def resolve_libc_math(args, py_func, type):
                                 py_func=py_func, name=name)
     return nodes.CoercionNode(result, type)
 
-def resolve_math_call(call_node, py_func):
-    "Resolve calls to math functions to llvm.log.f32() etc"
-    signature = call_node.type(call_node.type)
-    return nodes.MathNode(py_func, signature, call_node.args[0])
-
 def filter_math_funcs(math_func_names):
     if is_win32:
         dll = ctypes.cdll.msvcrt

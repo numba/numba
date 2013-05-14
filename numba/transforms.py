@@ -81,9 +81,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 import ast
 import ctypes
-from numba.specialize.mathcalls import (is_intrinsic, is_math_function,
-                                        resolve_intrinsic, resolve_libc_math,
-                                        resolve_math_call)
+from numba.specialize.mathcalls import get_funcname
 
 if __debug__:
     import pprint
@@ -146,15 +144,11 @@ class BuiltinResolverMixinBase(object):
 
         return nodes.CoercionNode(result, node.type)
 
-def resolve_pow(type, args):
-    have_mod = len(args) == 3
+def math_call(name, arg, dst_type):
+    return nodes.MathCallNode(dst_type(arg.type), [arg], None, name=name)
 
-    if (type.is_int or type.is_float) and not have_mod and not is_win32:
-        result = resolve_intrinsic(args, pow, type)
-    else:
-        result = nodes.call_pyfunc(pow, args)
-
-    return nodes.CoercionNode(result, type)
+def math_call2(name, call_node):
+    return math_call(name, call_node.args[0], call_node.type)
 
 class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
     """
@@ -162,33 +156,14 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
     """
 
     def _resolve_abs(self, func, node, argtype):
-        is_math = is_math_function(node.args, abs)
+        if argtype.is_int and not argtype.signed:
+            # abs() on unsigned integral value
+            return node.args[0]
 
-        # TODO: generate efficient inline code
-        if is_math and argtype.is_float:
-            return resolve_math_call(node, abs)
-        elif is_math and argtype.is_int:
-            if argtype.signed:
-                type = promote_closest(self.env.crnt.typesystem,
-                                       argtype, [long_, longlong])
-                funcs = {long_: 'labs', longlong: 'llabs'}
-                return function_util.external_call(
-                                            self.context,
-                                            self.llvm_module,
-                                            funcs[type],
-                                            args=[node.args[0]])
-            else:
-                # abs() on unsigned integral value
-                return node.args[0]
-
-        return None
+        return math_call2('abs', node)
 
     def _resolve_round(self, func, node, argtype):
-        if is_math_function(node.args, round):
-            # round() always returns a float
-            return resolve_math_call(node, round)
-
-        return None
+        return math_call2('round', node)
 
     def _resolve_pow(self, func, node, argtype):
         return resolve_pow(node.type, node.args)
@@ -577,22 +552,6 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
         return ast.Suite(body=self.visitlist(result))
 
-    def visit_Call(self, node):
-        func_type = node.func.type
-
-        if self.query(node, "is_math"):
-            assert node.func.type.is_known_value
-            result = resolve_math_call(node, node.func.type.value)
-            return self.visit(result)
-
-        elif func_type.is_builtin:
-            result = self._resolve_builtin_call_or_object(node, func_type.func)
-            result =  self.visit(result)
-            return result
-
-        self.generic_visit(node)
-        return node
-
     def visit_Tuple(self, node):
         self.check_context(node)
 
@@ -630,23 +589,34 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         node.kwargs_dict = self.visit(node.kwargs_dict)
         return nodes.ObjectTempNode(node)
 
+    def visit_Call(self, node):
+        func_type = node.func.type
+
+        if self.query(node, "is_math"):
+            assert node.func.type.is_known_value
+            name = get_funcname(node.func.type.value)
+            result = math_call(name, node.args[0], node.type)
+            return self.visit(result)
+
+        elif func_type.is_builtin:
+            result = self._resolve_builtin_call_or_object(node, func_type.func)
+            result =  self.visit(result)
+            return result
+
+        self.generic_visit(node)
+        return node
+
     def visit_MathNode(self, math_node):
         "Translate a nodes.MathNode to an intrinsic or libc math call"
-        from numba.type_inference.modules import mathmodule
-        lowerable = is_math_function([math_node.arg], math_node.py_func)
-
-        if math_node.type.is_array or not lowerable:
+        if math_node.type.is_array:
             # Generate a Python call
             assert math_node.py_func is not None
             result = nodes.call_pyfunc(math_node.py_func, [math_node.arg])
             result = result.coerce(math_node.type)
         else:
             # Lower to intrinsic or libc math call
-            args = [math_node.arg], math_node.py_func, math_node.type
-            if is_intrinsic(math_node.py_func):
-                result = resolve_intrinsic(*args)
-            else:
-                result = resolve_libc_math(*args)
+            name = get_funcname(math_node.py_func)
+            result = math_call(name, math_node.arg, math_node.type)
 
         return self.visit(result)
 
