@@ -500,6 +500,13 @@ class CodeGen(PipelineStage):
         func_env.lfunc = func_env.translator.lfunc
         return ast
 
+class PostPass(PipelineStage):
+    def transform(self, ast, env):
+        for postpass_cls in env.crnt.postpasses:
+            postpass = self.make_specializer(postpass_cls, ast, env)
+            ast = postpass.visit(ast)
+        return ast
+
 class LinkingStage(PipelineStage):
     """
     Link the resulting LLVM function into the global fat module.

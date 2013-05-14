@@ -67,6 +67,7 @@ default_pipeline_order = [
     'FixASTLocations',
     'cleanup_symtab',
     'CodeGen',
+    'PostPass',
     'LinkingStage',
     'WrapperStage',
     'ErrorReporting',
@@ -336,6 +337,11 @@ class FunctionEnvironment(object):
         default='fancy'
     )
 
+    postpasses = TypedProperty(
+        list,
+        "List of passes that should run on the final llvm ir before linking",
+    )
+
     kwargs = TypedProperty(
         dict,
         'Additional keyword arguments.  Deprecated, but kept for backward '
@@ -357,7 +363,7 @@ class FunctionEnvironment(object):
              is_closure=False, closures=None, closure_scope=None,
              refcount_args=True,
              ast_metadata=None, warn=True, warnstyle='fancy',
-             typesystem=None,
+             typesystem=None, postpasses=None,
              **kws):
 
         self.parent = parent
@@ -409,6 +415,7 @@ class FunctionEnvironment(object):
 
         self.refcount_args = refcount_args
         self.typesystem = typesystem or numba_typesystem
+        self.postpasses = postpasses or []
 
         if ast_metadata is not None:
             self.ast_metadata = ast_metadata
@@ -441,6 +448,7 @@ class FunctionEnvironment(object):
             closure_scope=self.closure_scope,
             warn=self.warn,
             warnstyle=self.warnstyle,
+            postpasses=self.postpasses,
         )
         return state
 
