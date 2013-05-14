@@ -61,9 +61,10 @@ _config_logger()
 
 
 from . import special
+from numba.typesystem import template
 from numba.typesystem import *
 from numba.typesystem import struct_ as struct # don't export this in __all__
-from numba.typesystem import FunctionType
+from numba.typesystem import function
 from numba.error import *
 
 from numba.containers.typedlist import typedlist

@@ -45,20 +45,18 @@ class _TemplateType(NumbaType):
         return self.name
 
 
-class TemplateType(_TemplateType):
+class template(_TemplateType):
 
-    typename = "template"
-    argnames = ["name"]
+    argnames = [("name", None)]
     flags    = ["object"]
-    defaults = { "name": None }
 
     template_count = 0
 
     def __init__(self, name):
-        super(TemplateType, self).__init__(name)
+        super(template, self).__init__(name)
         if name is None:
             name = "T%d" % self.template_count
-            TemplateType.template_count += 1
+            template.template_count += 1
 
         self.name = name
 
@@ -179,10 +177,10 @@ def resolve_template_type(ty, template_context):
     After the template context is known, resolve functions on template types
     E.g.
 
-        T[:]                -> ArrayType(dtype=T)
-        void(T)             -> FunctionType(args=[T])
+        T[:]                -> array_(dtype=T)
+        void(T)             -> function(args=[T])
         Struct { T arg }    -> struct(fields={'arg': T})
-        T *                 -> PointerType(base_type=T)
+        T *                 -> pointer(base_type=T)
 
     Any other compound types?
     """

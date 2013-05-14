@@ -152,7 +152,7 @@ def module_attribute_type(obj):
     result = module_registry.lookup_module_attribute(obj)
     if result is not None:
         module, attr = result
-        return typesystem.ModuleAttributeType(module=module, attr=attr)
+        return typesystem.module_attribute(module=module, attr=attr)
 
     return None
 
@@ -250,7 +250,7 @@ def resolve_call(context, call_node, obj_call_node, func_type):
         obj_call_node: the nodes.ObjectCallNode that would replace the
                        ast.Call unless we override that with another node.
 
-        func_type: ModuleAttributeType
+        func_type: module_attribute
             |__________> module: Python module
             |__________> attr: Attribute name
             |__________> value: Attribute value
@@ -305,7 +305,7 @@ def register(module, **kws):
 
 def register_callable(signature):
     """
-    signature := FunctionType | typeset(signature *)
+    signature := function | typeset(signature *)
 
     @register_callable(signature)
     def my_function(...):

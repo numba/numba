@@ -44,8 +44,8 @@ Some requirements:
 
   * Conversion code should be written with minimal effort:
 
-        - monotypes should map immediately between domains of the same level
-        - polytypes should naturally re-construct in domains of the same level
+        - unit types should map immediately between domains of the same level
+        - parametric types should naturally re-construct in domains of the same level
 
   * Converting a type to a lower-level domain constitutes a one-way
     conversion. This should, where possible, constitute a lowering in the
@@ -69,8 +69,9 @@ from functools import partial
 
 from numba.utils import is_builtin
 
+_reserved = ('string', 'struct', 'array')
 def reserved(name):
-    return is_builtin(name) or keyword.iskeyword(name) or name in ('string',)
+    return is_builtin(name) or keyword.iskeyword(name) or name in _reserved
 
 def tyname(name):
     return name + "_" if reserved(name) else name
@@ -148,20 +149,20 @@ class ConstantTyper(object):
 # Type Conversion between type domains
 #------------------------------------------------------------------------
 
-def convert_mono(domain, codomain, type):
-    name = tyname(type.typename)
+def get_ctor(codomain, kind):
+    name = tyname(kind)
     if not hasattr(codomain, name):
-        raise AttributeError("Codomain '%s' has no attribute '%s'" % (codomain, name))
+        raise AttributeError(
+            "Codomain '%s' has no attribute '%s'" % (codomain, name))
     return getattr(codomain, name)
 
-def convert_poly(domain, codomain, type, coparams):
-    # Get codomain constructor
-    if not hasattr(codomain, type.kind):
-        raise AttributeError(
-            "Codomain %s has no type %s" % (codomain.__name__, type.kind))
-    constructor = getattr(codomain, type.kind)
-    # Construct type in codomain
-    return constructor(*coparams)
+def convert_unit(domain, codomain, type):
+    return get_ctor(codomain, type.typename)
+
+def convert_para(domain, codomain, type, coparams):
+    return get_ctor(codomain, type.kind)(*coparams) # Construct type in codomain
+
+# ______________________________________________________________________
 
 class TypeConverter(object):
     """
@@ -169,11 +170,11 @@ class TypeConverter(object):
     """
 
     def __init__(self, domain, codomain,
-                 convert_mono=convert_mono, convert_poly=convert_poly):
+                 convert_unit=convert_unit, convert_para=convert_para):
         self.domain, self.codomain = domain, codomain
-        self.convert_mono = partial(convert_mono, domain, codomain)
-        self.convert_poly = partial(convert_poly, domain, codomain)
-        self.polytypes = weakref.WeakKeyDictionary()
+        self.convert_unit = partial(convert_unit, domain, codomain)
+        self.convert_para = partial(convert_para, domain, codomain)
+        self.partypes = weakref.WeakKeyDictionary()
 
     def convert(self, type):
         "Return an LLVM type for the given type."
@@ -181,19 +182,19 @@ class TypeConverter(object):
             return tuple(map(self.convert, type))
         elif not isinstance(type, Type):
             return type
-        elif type.is_mono:
-            return self.convert_mono(type)
+        elif type.is_unit:
+            return self.convert_unit(type)
         else:
-            return self.convert_polytype(type)
+            return self.convert_parametrized(type)
 
-    def convert_polytype(self, type):
-        if type in self.polytypes:
-            return self.polytypes[type]
+    def convert_parametrized(self, type):
+        if type in self.partypes:
+            return self.partypes[type]
 
-        # Construct polytype in codomain
-        result = self.convert_poly(type, map(self.convert, type.params))
+        # Construct parametrized type in codomain
+        result = self.convert_para(type, map(self.convert, type.params))
 
-        # self.polytypes[type] = result # TODO: Check for type mutability
+        # self.partypes[type] = result # TODO: Check for type mutability
         return result
 
     def __repr__(self):
@@ -212,18 +213,15 @@ class Type(object):
     """
     Base of all types.
     """
-
-    # slots = ("kind", "params", "is_mono", "metadata", "_metadata", "typename")
-    # __slots__ = slots + ("__weakref__",)
     metadata = None
 
     def __init__(self, kind, *params, **kwds):
         self.kind = kind    # Type kind
 
-        # don't call this 'args' since we already use that in FunctionType
+        # don't call this 'args' since we already use that in function
         self.params = list(params)
-        self.is_mono = kwds.get("is_mono", False)
-        if self.is_mono:
+        self.is_unit = kwds.get("is_unit", False)
+        if self.is_unit:
             self.typename = params[0]
         else:
             self.typename = kind
@@ -232,37 +230,25 @@ class Type(object):
         self.metadata = kwds.get("metadata", frozenset())
         self._metadata = self.metadata and dict(self.metadata)
 
-    # __________________________________________________________________
-    # Type instantiation
-
     @classmethod
-    def mono(cls, kind, name, flags=(), **kwds):
+    def unit(cls, kind, name, flags=(), **kwds):
         """
         Nullary type constructor creating the most elementary of types.
-        Does not compose any other type (in this domain).
+        Does not compose any other type.
         """
-        type = cls(kind, name, is_mono=True,
+        type = cls(kind, name, is_unit=True,
                    metadata=frozenset(kwds.iteritems()))
         add_flags(type, flags)
         type.flags = flags
         return type
 
     @classmethod
-    def poly(cls, kind, *args):
-        """
-        A type that composes other types.
-        """
-        return cls(kind, args)
-
-    @classmethod
     def default_args(cls, args, kwargs):
         "Add defaults to a given args tuple for type construction"
         return args
 
-    # __________________________________________________________________
-
     def __repr__(self):
-        if self.is_mono:
+        if self.is_unit:
             return self.params[0].rstrip("_")
         else:
             return "%s(%s)" % (self.kind, ", ".join(map(str, self.params)))
@@ -309,15 +295,15 @@ class Conser(object):
 
 class TypeConser(object):
 
-    def __init__(self, polytype):
-        assert isinstance(polytype, type), polytype
-        assert issubclass(polytype, Type), polytype.__mro__
-        self.polytype = polytype
-        self.conser = Conser(polytype)
+    def __init__(self, type):
+        assert isinstance(type, type), type
+        assert issubclass(type, Type), type.__mro__
+        self.type = type
+        self.conser = Conser(type)
 
     def get(self, *args, **kwargs):
         # Add defaults to the arguments to ensure consing correctness
-        args = self.polytype.default_args(args, kwargs)
+        args = self.type.default_args(args, kwargs)
         return self.conser.get(*args)
 
 def get_conser(ctor):

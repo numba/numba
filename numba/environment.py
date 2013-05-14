@@ -12,7 +12,7 @@ from numba import pipeline, naming, error, reporting, PY3
 from numba.control_flow.control_flow import ControlFlow
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
 from numba import functions, symtab
-from numba.typesystem import TypeSystem, numba_typesystem, FunctionType
+from numba.typesystem import TypeSystem, numba_typesystem, function
 from numba.utility.cbuilder import library
 from numba.nodes import metadata
 from numba.codegen import translate
@@ -193,7 +193,7 @@ class FunctionEnvironment(object):
         'Abstract syntax tree for the function being translated.')
 
     func_signature = TypedProperty(
-        FunctionType,
+        function,
         'Type signature for the function being translated.')
 
     is_partial = TypedProperty(
@@ -269,7 +269,7 @@ class FunctionEnvironment(object):
         '({ "local_var_name" : local_var_type } for @autojit(locals=...))')
 
     template_signature = TypedProperty(
-        (FunctionType, NoneType),
+        (function, NoneType),
         'Template signature for @autojit.  E.g. T(T[:, :]).  See '
         'numba.typesystem.templatetypes.')
 

@@ -101,7 +101,7 @@ def _infer_types2(env, func, restype=None, argtypes=None, **kwargs):
 
 def infer_types2(env, func, restype=None, argtypes=None, **kwargs):
     """
-    Like run_pipeline, but takes restype and argtypes instead of a FunctionType
+    Like run_pipeline, but takes restype and argtypes instead of a function
     """
     pipeline, (sig, symtab, ast) = _infer_types2(
         env, func, restype, argtypes, pipeline_name='type_infer', **kwargs)

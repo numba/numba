@@ -103,7 +103,7 @@ cdef class NumbaCompiledWrapper(NumbaWrapper):
     """
     Temporary numba wrapper function for @jit, only used for recursion.
 
-        signature: minitype FunctionType signature
+        signature: minitype function signature
         lfunc: LLVM function
     """
 

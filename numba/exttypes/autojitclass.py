@@ -394,7 +394,7 @@ def create_extension(env, py_class, flags, argtypes):
 
     flags.pop('llvm_module', None)
 
-    ext_type = etypes.AutojitExtensionType(py_class)
+    ext_type = etypes.autojit_exttype(py_class)
 
     class_dict = dict(utils.get_class_dict(py_class))
 

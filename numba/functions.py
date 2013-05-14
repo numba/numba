@@ -166,7 +166,7 @@ class FunctionCache(object):
         )
 
         # Sanity check
-        assert isinstance(func_env.func_signature, typesystem.FunctionType)
+        assert isinstance(func_env.func_signature, typesystem.function)
         assert isinstance(func_env.lfunc, llvm.core.Function)
 
         argtypes_flags = tuple(argtypes), None

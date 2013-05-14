@@ -9,7 +9,7 @@ def typematch(pattern, ty):
     """
     Match a type pattern to a type.
 
-    >>> type = ListType(object_, 2)
+    >>> type = list_(object_, 2)
     >>> typematch("list(*, 2)", type)
     True
     >>> typematch("list(*)", type)

@@ -52,7 +52,7 @@ def _dtype(a, dtype, static_dtype):
 
 def numba_type_from_sig(ufunc_signature):
     """
-    Convert ufunc type signature string (e.g. 'dd->d') to a FunctionType
+    Convert ufunc type signature string (e.g. 'dd->d') to a function
     """
     args, ret = ufunc_signature.split('->')
     to_numba = lambda c: numpy_support.map_dtype(np.dtype(c))

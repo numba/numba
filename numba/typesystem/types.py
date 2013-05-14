@@ -6,14 +6,12 @@ User-facing numba types.
 
 from __future__ import print_function, division, absolute_import
 
+import ctypes
 from itertools import imap
 from functools import partial
-try:
-    import __builtin__ as builtins
-except ImportError:
-    import builtins
 
-from numba.typesystem.itypesystem import Type, Conser, TypeConser, add_flags
+from numba import odict
+from numba.typesystem.itypesystem import Type, Conser, add_flags, tyname
 
 import numpy as np
 
@@ -21,20 +19,8 @@ import numpy as np
 # Type metaclass
 #------------------------------------------------------------------------
 
-class Registry(object):
-    def __init__(self):
-        self.registry = {}
-        self.order = []
-
-    def register(self, name, obj):
-        assert name not in self.registry, name
-        self.registry[name] = obj
-        self.order.append(name)
-
-    def items(self):
-        return self.registry.items()
-
-numba_type_registry = Registry()
+numba_type_registry = odict.OrderedDict()
+register = numba_type_registry.__setitem__
 
 class Accessor(object):
     def __init__(self, idx):
@@ -52,17 +38,11 @@ class Accessor(object):
 class TypeMetaClass(type):
     "Metaclass for numba types, conses immutable types."
 
-    registry = numba_type_registry
-
-    def __new__(cls, name, bases, dict):
-        # if not any(getattr(b, "mutable", 0) for b in bases):
-        #     base_attrs = getattr(bases[0], "attrs", ())
-        #     dict["__slots__"] = Type.slots + tuple(dict.get("atts", base_attrs))
-        return super(TypeMetaClass, cls).__new__(cls, name, bases, dict)
-
     def __init__(self, name, bases, dict):
+        if dict.get('typename') is None and name[0].islower():
+            self.typename = name.rstrip("_")
         if self.typename is not None:
-            self.registry.register(self.typename, self)
+            register(self.typename, self)
         _update_class(self)
         self.conser = Conser(partial(type.__call__, self))
 
@@ -70,13 +50,22 @@ class TypeMetaClass(type):
         args = self.default_args(args, kwds)
         if not self.mutable:
             return self.conser.get(*args)
-        return super(TypeMetaClass, self).__call__(*args)
+        return type.__call__(self, *args)
 
 #------------------------------------------------------------------------
 # Type Decorators
 #------------------------------------------------------------------------
 
 def _update_class(cls):
+    # Build defaults dict { argname : default_value }
+    if 'defaults' not in vars(cls):
+        cls.defaults = {}
+        for i, argname in enumerate(cls.argnames):
+            if isinstance(argname, (list, tuple)):
+                name, default = argname
+                cls.argnames[i] = name
+                cls.defaults[name] = default
+
     # Create accessors
     for i, arg in enumerate(vars(cls).get("argnames", ())):
         assert not getattr(cls, arg, False), (cls, arg)
@@ -142,10 +131,10 @@ class _NumbaType(Type):
     # User functionality
 
     def pointer(self):
-        return PointerType(self)
+        return pointer(self)
 
     def ref(self):
-        return ReferenceType(self)
+        return reference(self)
 
     def qualify(self, *qualifiers):
         return self # TODO: implement
@@ -153,8 +142,8 @@ class _NumbaType(Type):
     def unqualify(self, *qualifiers):
         return self # TODO: implement
 
+    # TODO: Remove context argument in favour of typesystem argument
     def to_llvm(self, context):
-        # raise NotImplementedError("use typesystem.llvm(type) instead")
         from . import defaults
         return defaults.numba_typesystem.convert("llvm", self)
 
@@ -162,9 +151,11 @@ class _NumbaType(Type):
         from . import defaults
         return defaults.numba_typesystem.convert("ctypes", self)
 
-    def get_dtype(self):
+    def to_numpy(self):
         from numba.typesystem import numpy_support
         return numpy_support.to_dtype(self)
+
+    get_dtype = to_numpy
 
     # ______________________________________________________________________
     # Special methods (user functionality)
@@ -195,12 +186,12 @@ class _NumbaType(Type):
                 if s.step == 1:
                     step_idx = idx
 
-            return ArrayType(self, len(item),
+            return array_(self, len(item),
                              is_c_contig=step_idx == len(item) - 1,
                              is_f_contig=step_idx == 0)
         else:
             verify_slice(item)
-            return ArrayType(self, 1, is_c_contig=bool(item.step))
+            return array_(self, 1, is_c_contig=bool(item.step))
 
     def __call__(self, *args):
         """
@@ -213,10 +204,7 @@ class _NumbaType(Type):
             #       minivect)
             return args[0]
 
-        return FunctionType(self, args)
-
-
-mono, poly = _NumbaType.mono, _NumbaType.poly
+        return function(self, args)
 
 @notconsing
 class NumbaType(_NumbaType):
@@ -249,17 +237,16 @@ class NumbaType(_NumbaType):
             elif name in cls.defaults:
                 args.append(cls.defaults[name])
             else:
-                raise TypeError(
-                    "Constructor '%s' requires %d arguments (got %d)" % (
-                        cls.typename, len(names), len(args)))
+                raise TypeError("Constructor '%s' requires %d arguments "
+                                "(got %d)" % (cls.typename, len(names), len(args)))
 
         return tuple(args)
 
 #------------------------------------------------------------------------
-# Low-level polytypes
+# Low-level parametrized types
 #------------------------------------------------------------------------
 
-def pass_by_ref(type):
+def pass_by_ref(type): # TODO: Get rid of this
     return type.is_struct or type.is_complex
 
 class Function(object):
@@ -289,10 +276,9 @@ class Function(object):
         raise TypeError("Not a callable function")
 
 @consing
-class FunctionType(NumbaType):
+class function(NumbaType):
     typename = "function"
-    argnames = ['return_type', 'args', 'name', 'is_vararg']
-    defaults = {"name": None, "is_vararg": False}
+    argnames = ['return_type', 'args', ('name', None), ('is_vararg', False)]
 
     def add_arg(self, i, arg):
         args = list(self.args)
@@ -328,7 +314,7 @@ class FunctionType(NumbaType):
                 return_type = ts.void
                 args.append(self.return_type.pointer())
 
-            self = FunctionType(return_type, args)
+            self = function(return_type, args)
 
         return self
 
@@ -336,7 +322,9 @@ class FunctionType(NumbaType):
     def struct_return_type(self):
         # Function returns a struct.
         return self.return_type.pointer()
+
     # ______________________________________________________________________
+
     def __repr__(self):
         args = [str(arg) for arg in self.args]
         if self.is_vararg:
@@ -350,7 +338,7 @@ class FunctionType(NumbaType):
 
     def __call__(self, *args):
         if len(args) != 1 or isinstance(args[0], Type):
-            return super(FunctionType, self).__call__(*args)
+            return super(function, self).__call__(*args)
 
         assert self.return_type is not None
         assert self.argnames is not None
@@ -361,8 +349,7 @@ class FunctionType(NumbaType):
 # Pointers
 
 @consing
-class PointerType(NumbaType):
-    typename = "pointer"
+class pointer(NumbaType):
     argnames = ['base_type']
 
     @property
@@ -375,7 +362,7 @@ class PointerType(NumbaType):
         return "%s%s*" % (self.base_type, space)
 
 @consing
-class SizedPointerType(NumbaType):
+class sized_pointer(NumbaType):
     """
     A pointer with knowledge of its range.
 
@@ -396,19 +383,16 @@ class SizedPointerType(NumbaType):
         return hash(self.base_type.pointer())
 
 @consing
-class CArrayType(NumbaType):
-    typename = "carray"
+class carray(NumbaType):
     argnames = ["base_type", "size"]
 
 # ______________________________________________________________________
 # Structs
 
 @consing
-class StructType(NumbaType):
+class istruct(NumbaType):
 
-    typename = "istruct"
-    argnames = ["fields", "name", "readonly", "packed"]
-    defaults = dict.fromkeys(argnames[1:])
+    argnames = ["fields", ("name", None), ("readonly", False), ("packed", False)]
 
     @property
     def subtypes(self):
@@ -440,12 +424,11 @@ class StructType(NumbaType):
         return getattr(ctype, field_name).offset
 
 @notconsing
-class MutableStructType(StructType):
+class struct_(istruct):
     """
     Create a struct type. Fields may be ordered or unordered. Unordered fields
     will be ordered from big types to small types (for better alignment).
     """
-    typename = "struct_"
     mutable = True
 
     def __eq__(self, other):
@@ -471,9 +454,9 @@ class MutableStructType(StructType):
 #------------------------------------------------------------------------
 
 @consing
-class ArrayType(NumbaType):
+class array_(NumbaType):
     """
-    An array type. ArrayType may be sliced to obtain a subtype:
+    An array type. array_ may be sliced to obtain a subtype:
 
     >>> double[:, :, ::1][1:]
     double[:, ::1]
@@ -486,7 +469,6 @@ class ArrayType(NumbaType):
     double[:, :]
     """
 
-    typename = "array"
     argnames = ["dtype", "ndim", "is_c_contig", "is_f_contig", "inner_contig"]
     defaults = dict.fromkeys(argnames[-3:], False)
     flags = ["object"]
@@ -496,7 +478,7 @@ class ArrayType(NumbaType):
 
     @property
     def strided(self):
-        return ArrayType(self.dtype, self.ndim)
+        return array_(self.dtype, self.ndim)
 
     def __repr__(self):
         axes = [":"] * self.ndim
@@ -529,66 +511,26 @@ class ArrayType(NumbaType):
         else:
             raise IndexError(index, ndim)
 
-@consing # TODO: remove this type
-class KnownValueType(NumbaType):
-    """
-    Type which is associated with a known value or well-defined symbolic
-    expression:
-
-        np.add          => np.add
-        np.add.reduce   => (np.add, "reduce")
-
-    (Remember that unbound methods like np.add.reduce are transient, i.e.
-     np.add.reduce is not np.add.reduce).
-    """
-    typename = "known_value"
-    argnames = ["value"]
-
 @consing
-class ModuleType(KnownValueType):
-    """
-    Represents a type for modules.
-
-    Attributes:
-        is_numpy_module: whether the module is the numpy module
-        module: in case of numpy, the numpy module or a submodule
-    """
-    typename = "module"
-    flags = ["object"]
-
-    # TODO: Get rid of these
-    is_numpy_module = property(lambda self: self.module is np)
-    is_numba_module = property(lambda self: self.module is np)
-    is_math_module = property(lambda self: self.module is np)
-
-    @property
-    def module(self):
-        return self.value
-
-@consing
-class AutojitFunctionType(NumbaType):
+class autojit_function(NumbaType):
     "Type for autojit functions"
-    typename = "autojit_function"
     argnames = ["autojit_func"]
     flags = ["object"]
 
 @consing
-class JitFunctionType(NumbaType):
+class jit_function(NumbaType):
     "Type for jit functions"
-    typename = "jit_function"
     argnames = ["jit_func"]
     flags = ["object"]
 
 @consing
-class NumpyDtypeType(NumbaType):
+class numpy_dtype(NumbaType):
     "Type of numpy dtypes"
-    typename = "numpy_dtype"
     argnames = ["dtype"]
     flags = ["object"]
 
 @consing
-class ComplexType(NumbaType):
-    typename = "complex"
+class complex_(NumbaType):
     argnames = ["base_type"]
     flags = ["numeric"]
 
@@ -600,31 +542,16 @@ class ComplexType(NumbaType):
         return "complex%d" % (self.itemsize * 8,)
 
 @consing
-class MetaType(NumbaType):
+class meta(NumbaType):
     """
     A type instance in user code. e.g. double(value). The Name node will have
     a cast-type with dst_type 'double'.
     """
-    typename = "meta"
     argnames = ["dst_type"]
     flags = [
         "object",
         "cast",     # backwards compat
     ]
-
-@notconsing
-class GlobalType(KnownValueType): # TODO: Remove
-    typename = "global_"
-
-@consing
-class BuiltinType(KnownValueType):
-    typename = "builtin"
-    argnames = ["name", "value"]
-    flags = ["object"]
-
-    @property
-    def func(self):
-        return self.value
 
 #------------------------------------------------------------------------
 # Container Types
@@ -645,14 +572,12 @@ class ContainerListType(NumbaType):
         return self.size >= 0
 
 @consing
-class TupleType(ContainerListType):
-    typename = "tuple_type"
-    flags = ["tuple", "object"]
+class tuple_(ContainerListType):
+    "tuple(base_type, size)"
 
 @consing
-class ListType(ContainerListType):
-    typename = "list_type"
-    flags = ["list", "object"]
+class list_(ContainerListType):
+    "list(base_type, size)"
 
 @consing
 class MapContainerType(NumbaType):
@@ -660,16 +585,14 @@ class MapContainerType(NumbaType):
     flags = ["object"]
 
 @consing
-class DictType(MapContainerType):
-    typename = "dict_type"
-    flags = ["dict", "object"]
+class dict_(MapContainerType):
+    "dict(key, value, size)"
 
 #------------------------------------------------------------------------
 # Types to be removed
 #------------------------------------------------------------------------
 
-class NumpyAttributeType(NumbaType):
-    typename = "numpy_attribute"
+class numpy_attribute(NumbaType): # TODO: remove
     argnames = ["module", "attr"]
     flags = ["object", "known_value"]
 
@@ -677,8 +600,7 @@ class NumpyAttributeType(NumbaType):
     def value(self):
         return getattr(self.module, self.attr)
 
-class ModuleAttributeType(NumbaType):
-    typename = "module_attribute"
+class module_attribute(NumbaType): # TODO: remove
     argnames = ["module", "attr"]
     flags = ["object", "known_value"]
 
@@ -687,28 +609,26 @@ class ModuleAttributeType(NumbaType):
         return getattr(self.module, self.attr)
 
 @consing
-class ReferenceType(NumbaType):
+class reference(NumbaType): # TODO: remove ?
     """
     A reference to an (primitive or Python) object. This is passed as a
     pointer and dereferences automatically.
 
     Currently only supported for structs.
     """
-    typename = "reference"
     argnames = ["referenced_type"]
 
 @consing
-class MethodType(NumbaType):
+class method(NumbaType): # TODO: remove
     """
     Method of something.
 
         base_type: the object type the attribute was accessed on
     """
-    typename = "method"
     argnames = ["base_type", "attr_name"]
     flags = ["object"]
 
-class PointerFunctionType(NumbaType):
+class pointer_to_function(NumbaType): # TODO: remove
     """
     Pointer to a function at a known address represented by some Python
         object (e.g. a ctypes or CFFI function).
@@ -718,6 +638,94 @@ class PointerFunctionType(NumbaType):
     flags = ["object"]
 
 @consing
-class KnownPointerType(PointerType): # TODO: remove
-    typename = "known_pointer"
+class known_value(NumbaType): # TODO: remove
+    """
+    Type which is associated with a known value or well-defined symbolic
+    expression:
+
+        np.add          => np.add
+        np.add.reduce   => (np.add, "reduce")
+
+    (Remember that unbound methods like np.add.reduce are transient, i.e.
+     np.add.reduce is not np.add.reduce).
+    """
+    argnames = ["value"]
+
+@consing
+class known_pointer(pointer): # TODO: remove
     argnames = ["base_type", "address"]
+
+@notconsing
+class global_(known_value): # TODO: Remove
+    "Global type"
+
+@consing
+class builtin_(known_value): # TODO: remove
+    argnames = ["name", "value"]
+    flags = ["object"]
+
+    @property
+    def func(self):
+        return self.value
+
+@consing
+class module(known_value): # TODO: remove
+    """
+    Represents a type for modules.
+
+    Attributes:
+        is_numpy_module: whether the module is the numpy module
+        module: in case of numpy, the numpy module or a submodule
+    """
+    flags = ["object"]
+
+    # TODO: Get rid of these
+    is_numpy_module = property(lambda self: self.module is np)
+    is_numba_module = property(lambda self: self.module is np)
+    is_math_module = property(lambda self: self.module is np)
+
+    @property
+    def module(self):
+        return self.value
+
+#------------------------------------------------------------------------
+# Convenience functions...
+#------------------------------------------------------------------------
+
+unit = _NumbaType.unit
+_array = array_
+_struct = struct_
+
+def from_numpy_dtype(np_dtype):
+    """
+    :param np_dtype: the NumPy dtype (e.g. np.dtype(np.double))
+    :return: a dtype type representation
+    """
+    from numba.typesystem import numpy_support
+    return numpy_dtype(numpy_support.map_dtype(np_dtype))
+
+def array(dtype, ndim, is_c_contig=False, is_f_contig=False, inner_contig=False):
+    """
+    :param dtype: the Numba dtype type (e.g. double)
+    :param ndim: the array dimensionality (int)
+    :return: an array type representation
+    """
+    if ndim == 0:
+        return dtype
+    return _array(dtype, ndim, is_c_contig, is_f_contig, inner_contig)
+
+# ______________________________________________________________________
+
+sort_key = lambda (n, ty): ctypes.sizeof(ty.to_ctypes())
+
+def struct_(fields=(), name=None, readonly=False, packed=False, **kwargs):
+    "Create a mutable struct type"
+    if fields and kwargs:
+        raise TypeError("The struct must be either ordered or unordered")
+    elif kwargs:
+        import ctypes
+        fields = sorted(kwargs.iteritems(), key=sort_key, reverse=True)
+        # fields = sort_types(kwargs)
+        # fields = list(kwargs.iteritems())
+
+    return _struct(fields, name, readonly, packed)

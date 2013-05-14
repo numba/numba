@@ -5,10 +5,10 @@ from .types import *
 from .itypesystem import *
 from .closuretypes import *
 from .templatetypes import *
+from numba.exttypes.types.extensiontype import *
 from numba.exttypes.types.methods import *
 
 from . import numbatypes
-numbatypes.register_constructors()
 from .numbatypes import *
 
 from .ssatypes import *

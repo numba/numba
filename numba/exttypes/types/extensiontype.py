@@ -60,10 +60,8 @@ class ExtensionType(NumbaType):
 # ______________________________________________________________________
 # @jit
 
-class JitExtensionType(ExtensionType):
+class jit_exttype(ExtensionType):
     "Type for @jit extension types"
-
-    typename = "jit_exttype"
 
     def __repr__(self):
         return "<JitExtension %s>" % self.name
@@ -77,10 +75,8 @@ class JitExtensionType(ExtensionType):
 # ______________________________________________________________________
 # @autojit
 
-class AutojitExtensionType(ExtensionType):
+class autojit_exttype(ExtensionType):
     "Type for @autojit extension types"
-
-    typename = "autojit_exttype"
 
     def __repr__(self):
         return "<AutojitExtension %s>" % self.name

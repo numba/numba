@@ -74,7 +74,7 @@ def get_dtype(dtype_arg, default_dtype=None):
 def promote_to_array(dtype):
     "Promote scalar to 0d array type"
     if not dtype.is_array:
-        dtype = typesystem.ArrayType(dtype, 0)
+        dtype = typesystem.array_(dtype, 0)
     return dtype
 
 def demote_to_scalar(type):
@@ -197,9 +197,9 @@ def nonzero(a):
 
 def _nonzero(type):
     if type.is_array:
-        return typesystem.TupleType(index_array_t, type.ndim)
+        return typesystem.tuple_(index_array_t, type.ndim)
     else:
-        return typesystem.TupleType(index_array_t)
+        return typesystem.tuple_(index_array_t)
 
 @register(np)
 def where(typesystem, condition, x, y):

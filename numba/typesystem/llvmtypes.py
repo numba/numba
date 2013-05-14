@@ -42,14 +42,14 @@ def lfloat(name, itemsize):
 
 size = universe.default_type_sizes.__getitem__
 
-monotypes = {}
+unittypes = {}
 for typename in universe.int_typenames:
-    monotypes[typename] = lint(typename, size(typename))
+    unittypes[typename] = lint(typename, size(typename))
 for typename in universe.float_typenames:
-    monotypes[typename] = lfloat(typename, size(typename))
-monotypes["void"] = llvm.core.Type.void()
+    unittypes[typename] = lfloat(typename, size(typename))
+unittypes["void"] = llvm.core.Type.void()
 
-globals().update((tyname(name), ty) for name, ty in monotypes.iteritems())
+globals().update((tyname(name), ty) for name, ty in unittypes.iteritems())
 
 #------------------------------------------------------------------------
 # Exposed types

@@ -87,12 +87,12 @@ def get_default_typing_rules(u, typeof, promote):
         if isinstance(value, dict):
             key_type = type_container(value.keys(), promote, typeof)
             value_type = type_container(value.values(), promote, typeof)
-            return u.dict_type(key_type, value_type, size=len(value))
+            return u.dict_(key_type, value_type, size=len(value))
 
         if isinstance(value, tuple):
-            container_type = u.tuple_type
+            container_type = u.tuple_
         else:
-            container_type = u.list_type
+            container_type = u.list_
 
         if 0 < len(value) < 30:
             # Figure out base type if the container is not too large
@@ -154,7 +154,7 @@ def from_typefunc(value, u):
     if result is not None:
         return result
     else:
-        return u.KnownValueType(value)
+        return u.known_value(value)
 
 is_numba_exttype = lambda value: hasattr(type(value), '__numba_ext_type')
 is_NULL = lambda value: value is numba.NULL

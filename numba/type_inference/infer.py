@@ -110,7 +110,7 @@ class TypeInferer(visitors.NumbaTransformer):
             self.return_type = self.promote_types(ret_type, self.return_type)
 
         restype, argtypes = self.return_type, self.func_signature.args
-        self.func_signature = typesystem.FunctionType(return_type=restype,
+        self.func_signature = typesystem.function(return_type=restype,
                                                      args=argtypes)
 
     #------------------------------------------------------------------------
@@ -725,15 +725,15 @@ class TypeInferer(visitors.NumbaTransformer):
         # Determine the type of the global, i.e. a builtin, global
         # or (numpy) module
         if is_builtin:
-            type = typesystem.BuiltinType(global_name, getattr(builtins, global_name))
+            type = typesystem.builtin_(global_name, getattr(builtins, global_name))
         else:
             # FIXME: analyse the bytecode of the entire module, to determine
             # overriding of builtins
             if isinstance(globals.get(global_name), types.ModuleType):
-                type = typesystem.ModuleType(globals.get(global_name))
+                type = typesystem.module(globals.get(global_name))
             else:
                 value = lookup_global(self.env, global_name, name_node)
-                type = typesystem.GlobalType(value) # do away with this
+                type = typesystem.global_(value) # do away with this
 
         variable = Variable(type, name=global_name, is_constant=True,
                             is_global=is_global, is_builtin=is_builtin,
@@ -1130,7 +1130,7 @@ class TypeInferer(visitors.NumbaTransformer):
         if constant_value is not None:
             constant_value = tuple(constant_value)
         # TODO: determine element type of node.elts
-        type = typesystem.TupleType(object_, size=len(node.elts))
+        type = typesystem.tuple_(object_, size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node
@@ -1139,7 +1139,7 @@ class TypeInferer(visitors.NumbaTransformer):
         node.elts = self.visitlist(node.elts)
         constant_value = self._get_constant_list(node)
         # TODO: determine element type of node.elts
-        type = typesystem.ListType(object_, size=len(node.elts))
+        type = typesystem.list_(object_, size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node
@@ -1155,13 +1155,13 @@ class TypeInferer(visitors.NumbaTransformer):
                                       for key in constant_keys))
             value_type = reduce(unify, (self.type_from_pyval(key)
                                         for key in constant_keys))
-            type = typesystem.DictType(key_type, value_type, size=len(node.keys))
+            type = typesystem.dict_(key_type, value_type, size=len(node.keys))
 
             variable = Variable(type, is_constant=True,
                                 constant_value=dict(zip(constant_keys,
                                                         constant_values)))
         else:
-            type = typesystem.DictType(object_, object_, size=len(node.keys))
+            type = typesystem.dict_(object_, object_, size=len(node.keys))
             variable = Variable(type)
 
         node.variable = variable
@@ -1208,7 +1208,7 @@ class TypeInferer(visitors.NumbaTransformer):
                                                          func_type, new_node)
         elif self.function_cache.is_registered(py_func):
             py_func = py_func.py_func
-            signature = typesystem.FunctionType(None, arg_types)
+            signature = typesystem.function(None, arg_types)
 
             jitted_func = numba.jit(signature)(py_func)
             signature = jitted_func.signature
@@ -1423,7 +1423,7 @@ class TypeInferer(visitors.NumbaTransformer):
         elif attribute is numba.NULL:
             return typesystem.null
         elif type.is_numpy_module or type.is_numpy_attribute:
-            result_type = typesystem.NumpyAttributeType(module=type.module,
+            result_type = typesystem.numpy_attribute(module=type.module,
                                                          attr=node.attr)
         elif type.is_numba_module or type.is_math_module:
             result_type = self.context.typemapper.from_python(attribute)
@@ -1437,7 +1437,7 @@ class TypeInferer(visitors.NumbaTransformer):
                 if result_type != object_:
                     return result_type
 
-            result_type = typesystem.ModuleAttributeType(module=type.module,
+            result_type = typesystem.module_attribute(module=type.module,
                                                          attr=node.attr)
 
         return result_type
@@ -1515,7 +1515,7 @@ class TypeInferer(visitors.NumbaTransformer):
         node.value = self.visit(node.value)
         type = node.value.variable.type
         if node.attr == 'conjugate' and (type.is_complex or type.is_float):
-            result_type = typesystem.MethodType(type, 'conjugate')
+            result_type = typesystem.method(type, 'conjugate')
         elif type.is_complex:
             result_type = self._resolve_complex_attribute(node, type)
         elif type.is_struct or (type.is_reference and
@@ -1526,7 +1526,7 @@ class TypeInferer(visitors.NumbaTransformer):
         elif (type.is_known_value and
                   module_type_inference.is_registered((type.value, node.attr))):
             # Unbound method call, e.g. np.add.reduce
-            result_type = typesystem.KnownValueType((type.value, node.attr),
+            result_type = typesystem.known_value((type.value, node.attr),
                                                     is_object=True)
         elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):
             # handle shape/strides/ndim etc

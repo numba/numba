@@ -603,7 +603,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         args = [n] + objs
         new_node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
         # TODO: determine element type of node.elts
-        new_node.type = typesystem.TupleType(object_, size=len(node.elts))
+        new_node.type = typesystem.tuple_(object_, size=len(node.elts))
         return nodes.ObjectTempNode(new_node)
 
     def visit_List(self, node):
@@ -1004,7 +1004,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
     def visit_ConstNode(self, node):
         constant = node.pyval
         if node.type.is_known_value:
-            node.type = object_ # TODO: Get rid of KnownValueType
+            node.type = object_ # TODO: Get rid of known_value
 
         if node.type.is_complex:
             real = nodes.ConstNode(constant.real, node.type.base_type)

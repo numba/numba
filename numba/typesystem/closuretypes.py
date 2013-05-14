@@ -15,10 +15,8 @@ class ClosureType(NumbaType):
     """
 
     typename = "closure"
-    argnames = ["signature", "closure"]
-    defaults = { "closure": None }
+    argnames = ["signature", ("closure", None)]
     flags = ["object"]
-    mutable = True
 
     def add_scope_arg(self, scope_type):
         self.signature = self.signature.add_arg(0, scope_type)
@@ -33,7 +31,6 @@ class ClosureScopeType(ExtensionType):
     """
 
     typename = "closure_scope"
-    mutable = True
     is_final = True
 
     def __init__(self, py_class, parent_scope):

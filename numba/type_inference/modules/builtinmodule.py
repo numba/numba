@@ -123,7 +123,7 @@ def round_(typesystem, node, number, ndigits):
 
 @register_builtin(0)
 def globals_(typesystem, node):
-    return typesystem.dict_
+    return typesystem.dict_of_obj
     # return nodes.ObjectInjectNode(func.__globals__)
 
 @register_builtin(0)

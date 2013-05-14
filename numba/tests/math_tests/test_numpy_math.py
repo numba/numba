@@ -62,7 +62,7 @@ def test_math_funcs():
         # func_name = 'sqrt'
         func = functions[func_name]
         for dest_type in dest_types:
-            signature = numba.FunctionType(None, [dest_type, dest_type])
+            signature = numba.function(None, [dest_type, dest_type])
             print(("executing...", func_name, signature))
 
             try:

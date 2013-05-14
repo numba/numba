@@ -180,9 +180,9 @@ class TestTypeInference(unittest.TestCase):
 
     def test_empty_arg(self):
         from numba import typesystem as nt
-        empty_t = nt.ModuleAttributeType(module=np, attr='empty')
-        zeros_t = nt.ModuleAttributeType(module=np, attr='zeros')
-        ones_t = nt.ModuleAttributeType(module=np, attr='ones')
+        empty_t = nt.module_attribute(module=np, attr='empty')
+        zeros_t = nt.module_attribute(module=np, attr='zeros')
+        ones_t = nt.module_attribute(module=np, attr='ones')
 
         sig, symtab = infer(_empty_arg, functype(None, [int_, empty_t,
                                                         zeros_t, ones_t]))

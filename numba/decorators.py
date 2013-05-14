@@ -270,7 +270,7 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
         return jit_extension_class(cls, kws, env)
 
     # Called with f8(f8) syntax which returns a dictionary of argtypes and restype
-    if isinstance(restype, typesystem.FunctionType):
+    if isinstance(restype, typesystem.function):
         if argtypes is not None:
             raise TypeError("Cannot use both calling syntax and argtypes keyword")
         argtypes = restype.args

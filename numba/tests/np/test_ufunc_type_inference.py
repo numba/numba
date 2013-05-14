@@ -4,7 +4,7 @@ import numba
 from numba import *
 from numba import typesystem
 
-tup_t = typesystem.TupleType
+tup_t = typesystem.tuple_
 
 #------------------------------------------------------------------------
 # Test data

@@ -3,7 +3,7 @@ import numpy as np
 import numba
 from numba import *
 from numba import typesystem
-from numba.typesystem import tuple_type
+from numba.typesystem import tuple_
 
 #------------------------------------------------------------------------
 # Test functions
@@ -93,15 +93,15 @@ def test_array():
 
 def test_nonzero():
     equals(nonzero(np.array([1, 2, 3], dtype=np.double)),
-           tuple_type(npy_intp[:], 1))
+           tuple_(npy_intp[:], 1))
     equals(nonzero(np.array([[1, 2, 3]], dtype=np.double)),
-           tuple_type(npy_intp[:], 2))
+           tuple_(npy_intp[:], 2))
     equals(nonzero(np.array((((1, 2, 3),),), dtype=np.double)),
-           tuple_type(npy_intp[:], 3))
+           tuple_(npy_intp[:], 3))
 
 def test_where():
     equals(where(np.array([1, 2, 3], dtype=np.double)),
-           tuple_type(npy_intp[:], 1))
+           tuple_(npy_intp[:], 1))
 
     equals(where3(np.array([True, False, True]),
                   np.array([1, 2, 3], dtype=np.double),

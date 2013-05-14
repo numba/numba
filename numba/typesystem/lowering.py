@@ -42,26 +42,26 @@ def create_type_lowerer(table, domain, codomain):
     """
     Create a type lowerer from a domain to a codomain given a lowering table.
     """
-    def convert_mono(domain, codomain, type):
+    def convert_unit(domain, codomain, type):
         func = find_func(table, type.typename, type.flags)
         if func:
             return func(domain, codomain, type, ())
         else:
-            return itypesystem.convert_mono(domain, codomain, type)
+            return itypesystem.convert_unit(domain, codomain, type)
 
-    def convert_poly(domain, codomain, type, params):
-        ctor = find_func(table, type.kind, type.flags, itypesystem.convert_poly)
+    def convert_para(domain, codomain, type, params):
+        ctor = find_func(table, type.kind, type.flags, itypesystem.convert_para)
         # print("lowering...", type, ctor)
         return ctor(domain, codomain, type, params)
 
-    return itypesystem.TypeConverter(domain, codomain, convert_mono, convert_poly)
+    return itypesystem.TypeConverter(domain, codomain, convert_unit, convert_para)
 
 #------------------------------------------------------------------------
 # Lowering functions
 #------------------------------------------------------------------------
 
 # ______________________________________________________________________
-# mono types
+# unit types
 
 def lower_object(domain, codomain, type, params):
     from numba import typedefs # hurr
@@ -71,7 +71,7 @@ def lower_string(domain, codomain, type, params):
     return codomain.pointer(codomain.char)
 
 # ______________________________________________________________________
-# poly types
+# parametrized types
 
 def lower_function(domain, codomain, type, params):
     restype, args, name, is_vararg = params
@@ -110,7 +110,7 @@ def lower_to_pointer(domain, codomain, type, params):
 
 default_numba_lowering_table = {
     "object":           lower_object,
-    # polytypes
+    # parametrized types
     "function":         lower_function,
     "complex":          lower_complex,
     "array":            lower_array,

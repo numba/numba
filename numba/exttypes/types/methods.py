@@ -11,12 +11,11 @@ from numba.typesystem import types, numbatypes
 # Extension Method Types
 #------------------------------------------------------------------------
 
-class ExtMethodType(types.FunctionType):
+class ExtMethodType(types.function):
     typename = "extmethod"
-    argnames = ["return_type", "args", "name",
-                "is_vararg", "is_class_method", "is_static_method"]
+    argnames = ["return_type", "args", ("name", None), ("is_vararg", False),
+                ("is_class_method", False), ("is_static_method", False)]
     flags = ["function", "object"]
-    defaults = dict({'name': None}, **dict.fromkeys(argnames[3:], False))
 
     @property
     def is_bound_method(self):
