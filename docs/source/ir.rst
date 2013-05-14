@@ -364,10 +364,6 @@ This approach uses partial function application to build closures.
 The resulting representation affords opportunities for optimizations
 such as rewriting ``partial(fn, [x])(y)`` to ``fn(x, y)``.
 
-.. NOTE:: This binds values lexically at closure definition time,
-          but we want to bind them dynamically at "closure call time".
-          It will also not work with the ``nonlocal`` declaration.
-
 Default, variable, and keyword arguments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
