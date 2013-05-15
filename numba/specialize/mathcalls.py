@@ -38,16 +38,7 @@ def is_intrinsic(py_func):
     return is_intrinsic and not is_win32
 
 
-def math_suffix(name, type):
-    if name == 'abs':
-        name = 'fabs'
 
-    if type.is_float and type.itemsize == 4:
-        name += 'f' # sinf(float)
-    elif type.is_int and type.itemsize == 16:
-        name += 'l' # sinl(long double)
-
-    return name
 
 def have_impl(math_name):
     return filter_math_funcs([math_name])
