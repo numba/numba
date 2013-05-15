@@ -143,7 +143,7 @@ class _NumbaType(Type):
         return self # TODO: implement
 
     # TODO: Remove context argument in favour of typesystem argument
-    def to_llvm(self, context):
+    def to_llvm(self, context=None):
         from . import defaults
         return defaults.numba_typesystem.convert("llvm", self)
 
