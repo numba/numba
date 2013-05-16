@@ -338,7 +338,7 @@ class FunctionEnvironment(object):
     )
 
     postpasses = TypedProperty(
-        list,
+        dict,
         "List of passes that should run on the final llvm ir before linking",
     )
 
@@ -415,7 +415,9 @@ class FunctionEnvironment(object):
 
         self.refcount_args = refcount_args
         self.typesystem = typesystem or numba_typesystem
-        self.postpasses = postpasses or []
+
+        import numba.postpasses
+        self.postpasses = postpasses or numba.postpasses.default_postpasses
 
         if ast_metadata is not None:
             self.ast_metadata = ast_metadata

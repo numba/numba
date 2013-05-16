@@ -502,9 +502,11 @@ class CodeGen(PipelineStage):
 
 class PostPass(PipelineStage):
     def transform(self, ast, env):
-        for postpass_cls in env.crnt.postpasses:
-            postpass = self.make_specializer(postpass_cls, ast, env)
-            ast = postpass.visit(ast)
+        for postpass_name, postpass in env.crnt.postpasses.iteritems():
+            env.crnt.lfunc = postpass(env,
+                                      env.llvm_context.execution_engine,
+                                      env.crnt.llvm_module,
+                                      env.crnt.lfunc)
         return ast
 
 class LinkingStage(PipelineStage):
