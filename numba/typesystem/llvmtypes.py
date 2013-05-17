@@ -2,6 +2,7 @@ import llvm.core
 
 from numba.typesystem.itypesystem import consing, tyname
 from numba.typesystem import universe
+from numba.support.math_support.ltypes import l_longdouble
 
 domain_name = "llvm"
 
@@ -30,15 +31,7 @@ def lfloat(name, itemsize):
     elif itemsize == 8:
         return llvm.core.Type.double()
     else:
-        is_ppc, is_x86 = get_target_triple()
-        if itemsize == 16:
-            if is_ppc:
-                return llvm.core.Type.ppc_fp128()
-            else:
-                return llvm.core.Type.fp128()
-        else:
-            assert itemsize == 10 and is_x86, itemsize
-            return llvm.core.Type.x86_fp80()
+        return l_longdouble
 
 size = universe.default_type_sizes.__getitem__
 
