@@ -23,6 +23,15 @@ def register_default(name):
 @register_default('math')
 def postpass_link_math(env, ee, lmod, lfunc):
     "numba.math.* -> mathcode.*"
+    replacements = {}
+    for lf in lmod.functions:
+        if lf.name.startswith('numba.math.'):
+            _, _, name = lf.name.rpartition('.')
+            replacements[lf.name] = name
+    del lf # this is dead after linking below
+
     math_support.link_llvm_math_intrinsics(ee, lmod, libs.math_library,
-                                           math_support.link_llvm_asm)
+                                           math_support.link_llvm_asm,
+                                           replacements)
+    print(lfunc)
     return lfunc

@@ -8,6 +8,7 @@ import llvm.core
 
 from numba.llvm_types import _int1, _int32, _LLVMCaster
 from numba.multiarray_api import MultiarrayAPI # not used
+from numba.typesystem import llvmtypes
 from numba import typesystem
 
 from numba import *
@@ -1305,6 +1306,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
     def visit_MathCallNode(self, node):
         lfunc_type = node.signature.to_llvm(self.context)
+        # Make sure we don't pass anything by reference
+        # lfunc_type = llvmtypes.function(node.signature.return_type.to_llvm(),
+        #                                 [a.to_llvm() for a in node.signature.args])
         lfunc = self.llvm_module.get_or_insert_function(
             lfunc_type, 'numba.math.%s' % (node.name,))
 
