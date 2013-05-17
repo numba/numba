@@ -31,7 +31,7 @@ def postpass_link_math(env, ee, lmod, lfunc):
     del lf # this is dead after linking below
 
     math_support.link_llvm_math_intrinsics(ee, lmod, libs.math_library,
-                                           math_support.link_llvm_asm,
+                                           math_support.LLVMLinker(),
                                            replacements)
-    print(lfunc)
+
     return lfunc
