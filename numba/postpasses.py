@@ -23,5 +23,6 @@ def register_default(name):
 @register_default('math')
 def postpass_link_math(env, ee, lmod, lfunc):
     "numba.math.* -> mathcode.*"
-    math_support.link_llvm_math_intrinsics(ee, lmod, math_support.llvm_library)
+    math_support.link_llvm_math_intrinsics(ee, lmod, math_support.math_library,
+                                           math_support.link_llvm_asm)
     return lfunc
