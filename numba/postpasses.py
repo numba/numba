@@ -7,7 +7,7 @@ The signature of each postpass is postpass(env, ee, lmod, lfunc) -> lfunc
 
 from __future__ import print_function, division, absolute_import
 
-from numba.support.math_support import math_support, libs
+from numba.support.math_support import linking, libs
 
 default_postpasses = {}
 
@@ -30,8 +30,8 @@ def postpass_link_math(env, ee, lmod, lfunc):
             replacements[lf.name] = name
     del lf # this is dead after linking below
 
-    math_support.link_llvm_math_intrinsics(ee, lmod, libs.math_library,
-                                           math_support.LLVMLinker(),
+    linking.link_llvm_math_intrinsics(ee, lmod, libs.math_library,
+                                           linking.LLVMLinker(),
                                            replacements)
 
     return lfunc
