@@ -125,7 +125,7 @@ Release Notes
 .. toctree::
     :maxdepth: 1
 
-    releases
+    release-notes
 
 License Agreement
 -----------------
