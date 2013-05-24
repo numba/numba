@@ -15,7 +15,7 @@ import numba
 from numba import *
 from numba import error, control_flow, visitors, nodes
 from numba import oset, odict
-from numba.specialize.mathcalls import is_math_function
+from numba.type_inference.modules import mathmodule
 from numba.type_inference import module_type_inference, infer_call, deferred
 from numba import utils, typesystem
 from numba.control_flow import ssa
@@ -1213,9 +1213,6 @@ class TypeInferer(visitors.NumbaTransformer):
             jitted_func = numba.jit(signature)(py_func)
             signature = jitted_func.signature
             llvm_func = jitted_func.lfunc
-        #elif not call_node.keywords and self._is_math_function(call_node.args,
-        #                                                       py_func):
-        #    new_node = self._resolve_math_call(call_node, py_func)
         else:
             # This should not be a function-cache method
             # signature = self.function_cache.get_signature(arg_types)
@@ -1251,14 +1248,9 @@ class TypeInferer(visitors.NumbaTransformer):
     def _infer_complex_math(self, func_type, new_node, node, argtype):
         "Infer types for cmath.somefunc()"
         # Check for cmath.{sqrt,sin,etc}
-        # FIXME: This is not visited when the input is a non-complex scalar.
-        #        In that case, Numba will bypass the cmath and generate
-        #        a LLVM math intrinsic call.
-        if not argtype.is_array:
-            args = [nodes.const(1.0, float_)]
-            is_math = is_math_function(args, func_type.value)
-            if len(node.args) == 1 and is_math:
-                new_node = nodes.CoercionNode(new_node, complex128)
+        if (len(node.args) == 1 and
+                func_type.value.__name__ in mathmodule.mathsyms):
+            new_node = nodes.CoercionNode(new_node, complex128)
 
         return new_node
 
@@ -1268,8 +1260,7 @@ class TypeInferer(visitors.NumbaTransformer):
         to infer a more specific return value than 'object'.
         """
         if ((func_type.is_module_attribute and func_type.module is cmath) or
-                 (func_type.is_numpy_attribute and len(argtypes) == 1 and
-                  argtypes[0].is_complex)):
+                 (func_type.is_numpy_attribute and len(argtypes) == 1)):
             new_node = self._infer_complex_math(
                     func_type, new_node, node, argtypes[0])
 

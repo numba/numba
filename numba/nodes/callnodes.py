@@ -82,20 +82,6 @@ class LLMacroNode (NativeCallNode):
         super(LLMacroNode, self).__init__(signature, args, None, None, **kw)
         self.macro = macro
 
-class MathNode(ExprNode):
-    """
-    Represents a high-level call to a math function.
-    """
-
-    _fields = ['arg']
-
-    def __init__(self, py_func, signature, arg, **kwargs):
-        super(MathNode, self).__init__(**kwargs)
-        self.py_func = py_func
-        self.signature = signature
-        self.arg = arg
-        self.type = signature.return_type
-
 class LLVMExternalFunctionNode(ExprNode):
     '''For calling an external llvm function where you only have the
     signature and the function name.

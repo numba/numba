@@ -2,7 +2,7 @@
 """
 Resolve calls to math functions.
 
-During type inference this produces MathNode nodes, and during
+During type inference this annotates math calls, and during
 final specialization it produces LLVMIntrinsicNode and MathCallNode
 nodes.
 """
@@ -23,7 +23,6 @@ from numba.symtab import Variable
 from numba.typesystem import get_type, rank
 from numba.type_inference.modules import utils
 
-
 #----------------------------------------------------------------------------
 # Utilities
 #----------------------------------------------------------------------------
@@ -41,7 +40,7 @@ def binop_type(typesystem, x, y):
 #----------------------------------------------------------------------------
 
 # sin(double), sinf(float), sinl(long double)
-unary_libc_math_funcs = [
+mathsyms = [
     'sin',
     'cos',
     'tan',
@@ -49,7 +48,6 @@ unary_libc_math_funcs = [
     'acos',
     'asin',
     'atan',
-    'atan2',
     'sinh',
     'cosh',
     'tanh',
@@ -59,7 +57,6 @@ unary_libc_math_funcs = [
     'log',
     'log2',
     'log10',
-    'fabs',
     'erfc',
     'floor',
     'ceil',
@@ -70,12 +67,18 @@ unary_libc_math_funcs = [
     'log1p',
 ]
 
-n_ary_libc_math_funcs = [
-    'pow',
-    'round',
-]
+math2ufunc = {
+    'asin' : 'arcsin',
+    'acos' : 'arccos',
+    'atan' : 'arctan',
+    'asinh': 'arcsinh',
+    'acosh': 'arccosh',
+    'atanh': 'arctanh',
+    'atan2': 'arctan2',
+    'pow'  : 'power',
+}
 
-all_libc_math_funcs = unary_libc_math_funcs + n_ary_libc_math_funcs
+ufunc2math = dict((v, k) for k, v in math2ufunc.items())
 
 #----------------------------------------------------------------------------
 # Math Type Inferers
@@ -84,14 +87,18 @@ all_libc_math_funcs = unary_libc_math_funcs + n_ary_libc_math_funcs
 # TODO: Move any rewriting parts to lowering phases
 
 def infer_unary_math_call(typesystem, call_node, arg, default_result_type=double):
-    "Resolve calls to math functions to llvm.log.f32() etc"
+    "Resolve calls to llvmmath math calls"
     # signature is a generic signature, build a correct one
     type = get_type(call_node.args[0])
 
+    print("infer...", arg)
     if type.is_numeric and rank(type) < rank(default_result_type):
         type = default_result_type
     elif type.is_array and type.dtype.is_int:
         type = typesystem.array(double, type.ndim)
+
+    call_node.args[0] = nodes.CoercionNode(call_node.args[0], type)
+
     # TODO: Remove the abuse below
     nodes.annotate(typesystem.env, call_node, is_math=True)
     call_node.variable = Variable(type)
@@ -145,17 +152,19 @@ def register_cmath(nargs, value):
     register = register_math_typefunc(nargs)
     register(infer_unary_cmath_call, value)
 
+def npy_name(name):
+    return math2ufunc.get(name, name)
+
 def register_typefuncs():
     modules = [builtins, math, cmath, np]
-    # print all_libc_math_funcs
-    for libc_math_func in unary_libc_math_funcs:
-        for module in modules:
-            if hasattr(module, libc_math_func):
-                if module is cmath:
-                    register = register_cmath
-                else:
-                    register = register_math
+    register_funcs = [register_math, register_math,
+                      register_cmath, register_math]
+    id = lambda x: x
+    namefuncs = [id, id, id, npy_name]
 
-                register(1, getattr(module, libc_math_func))
+    for libc_math_func in mathsyms:
+        for module, register, namefunc in zip(modules, register_funcs, namefuncs):
+            if hasattr(module, namefunc(libc_math_func)):
+                register(1, getattr(module, namefunc(libc_math_func)))
 
 register_typefuncs()

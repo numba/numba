@@ -81,20 +81,19 @@ from __future__ import print_function, division, absolute_import
 import sys
 import ast
 import ctypes
-from numba.specialize.mathcalls import get_funcname
 
 if __debug__:
     import pprint
 
 import numba
 from numba import *
-from numba import error, closures
+from numba import error
 from .minivect import codegen
 from numba import macros, utils, typesystem
-from numba.symtab import Variable
-from numba import visitors, nodes, error, functions
-from numba import stdio_util, function_util
-from numba.typesystem import is_obj, promote_closest, promote_to_native
+from numba import visitors, nodes
+from numba import function_util
+from numba.typesystem import is_obj, promote_to_native
+from numba.type_inference.modules import mathmodule
 from numba.nodes import constnodes
 from numba.external import utility
 from numba.utils import dump
@@ -105,8 +104,6 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 from numba.external import pyapi
-
-is_win32 = sys.platform == 'win32'
 
 class BuiltinResolverMixinBase(object):
     """
@@ -144,11 +141,23 @@ class BuiltinResolverMixinBase(object):
 
         return nodes.CoercionNode(result, node.type)
 
+# ______________________________________________________________________
+
+def get_funcname(py_func):
+    if py_func in (abs, np.abs):
+        return 'fabs'
+    elif py_func is np.round:
+        return 'round'
+
+    return mathmodule.ufunc2math.get(py_func.__name__, py_func.__name__)
+
 def math_call(name, arg, dst_type):
     return nodes.MathCallNode(dst_type(arg.type), [arg], None, name=name)
 
 def math_call2(name, call_node):
     return math_call(name, call_node.args[0], call_node.type)
+
+# ______________________________________________________________________
 
 class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
     """
@@ -605,20 +614,6 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
         self.generic_visit(node)
         return node
-
-    def visit_MathNode(self, math_node):
-        "Translate a nodes.MathNode to an intrinsic or libc math call"
-        if math_node.type.is_array:
-            # Generate a Python call
-            assert math_node.py_func is not None
-            result = nodes.call_pyfunc(math_node.py_func, [math_node.arg])
-            result = result.coerce(math_node.type)
-        else:
-            # Lower to intrinsic or libc math call
-            name = get_funcname(math_node.py_func)
-            result = math_call(name, math_node.arg, math_node.type)
-
-        return self.visit(result)
 
     def _c_string_slice(self, node):
         ret_val = node

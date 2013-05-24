@@ -32,7 +32,7 @@ def postpass_link_math(env, ee, lmod, lfunc):
     del lf # this is dead after linking below
 
     default_math_lib = llvmmath.get_default_math_lib()
+    linker = linking.get_linker(default_math_lib)
     linking.link_llvm_math_intrinsics(ee, lmod, default_math_lib,
-                                      linking.get_linker(default_math_lib),
-                                      replacements)
+                                      linker, replacements)
     return lfunc
