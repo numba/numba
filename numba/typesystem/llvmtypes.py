@@ -2,7 +2,7 @@ import llvm.core
 
 from numba.typesystem.itypesystem import consing, tyname
 from numba.typesystem import universe
-from numba.support.math_support.ltypes import l_longdouble
+from llvmmath.ltypes import l_longdouble
 
 domain_name = "llvm"
 

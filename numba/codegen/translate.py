@@ -1251,7 +1251,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
 
     def visit_NativeCallNode(self, node, largs=None):
-        # print node.py_func, node.llvm_func
         if largs is None:
             largs = self.visitlist(node.args)
 
@@ -1305,15 +1304,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self.visit_NativeCallNode(node, largs=largs)
 
     def visit_MathCallNode(self, node):
-        lfunc_type = node.signature.to_llvm(self.context)
         # Make sure we don't pass anything by reference
-        # lfunc_type = llvmtypes.function(node.signature.return_type.to_llvm(),
-        #                                 [a.to_llvm() for a in node.signature.args])
+        lfunc_type = llvmtypes.function(node.signature.return_type.to_llvm(),
+                                        [a.to_llvm() for a in node.signature.args])
         lfunc = self.llvm_module.get_or_insert_function(
             lfunc_type, 'numba.math.%s' % (node.name,))
 
         node.llvm_func = lfunc
-        return self.visit_NativeCallNode(node)
+        largs = self.visitlist(node.args)
+        return self.builder.call(lfunc, largs)
 
     def visit_IntrinsicNode(self, node):
         args = self.visitlist(node.args)
