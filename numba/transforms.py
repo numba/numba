@@ -151,6 +151,15 @@ def get_funcname(py_func):
 
     return mathmodule.ufunc2math.get(py_func.__name__, py_func.__name__)
 
+def resolve_pow(type, args):
+    have_mod = len(args) == 3
+    if type.is_numeric and not have_mod:
+        signature = type(*[a.type for a in args])
+        result = nodes.MathCallNode(signature, args, None, name='pow')
+    else:
+        result = nodes.call_pyfunc(pow, args)
+    return nodes.CoercionNode(result, type)
+
 def math_call(name, arg, dst_type):
     return nodes.MathCallNode(dst_type(arg.type), [arg], None, name=name)
 
@@ -601,19 +610,18 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
     def visit_Call(self, node):
         func_type = node.func.type
 
-        if self.query(node, "is_math"):
+        if self.query(node, "is_math") and node.type.is_numeric:
             assert node.func.type.is_known_value
             name = get_funcname(node.func.type.value)
             result = math_call(name, node.args[0], node.type)
-            return self.visit(result)
 
         elif func_type.is_builtin:
             result = self._resolve_builtin_call_or_object(node, func_type.func)
-            result =  self.visit(result)
-            return result
 
-        self.generic_visit(node)
-        return node
+        else:
+            result = nodes.call_obj(node)
+
+        return self.visit(result)
 
     def _c_string_slice(self, node):
         ret_val = node

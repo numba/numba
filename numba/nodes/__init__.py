@@ -30,7 +30,7 @@ def call_pyfunc(py_func, args):
     func = ObjectInjectNode(py_func)
     return ObjectCallNode(None, func, args)
 
-def call_obj(call_node, py_func):
+def call_obj(call_node, py_func=None):
     nargs = len(call_node.args)
     signature = typesystem.pyfunc_signature(nargs)
     node = ObjectCallNode(signature, call_node.func,

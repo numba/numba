@@ -6,8 +6,7 @@ obtaining the pointer and numba signature.
 from __future__ import print_function, division, absolute_import
 
 import numba
-from numba import *
-from numba import error
+from numba.typesystem import *
 
 try:
     import cffi

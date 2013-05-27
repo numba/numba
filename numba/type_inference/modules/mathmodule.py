@@ -91,7 +91,6 @@ def infer_unary_math_call(typesystem, call_node, arg, default_result_type=double
     # signature is a generic signature, build a correct one
     type = get_type(call_node.args[0])
 
-    print("infer...", arg)
     if type.is_numeric and rank(type) < rank(default_result_type):
         type = default_result_type
     elif type.is_array and type.dtype.is_int:

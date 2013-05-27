@@ -4,10 +4,9 @@ Shorthands for type constructing, promotions, etc.
 """
 from __future__ import print_function, division, absolute_import
 
-import ctypes
 import inspect
 
-from numba.typesystem import types, universe, itypesystem
+from numba.typesystem import types, universe
 from numba.typesystem.types import *
 
 __all__ = [] # set below
