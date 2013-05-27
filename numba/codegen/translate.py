@@ -1190,6 +1190,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             val = self.builder.inttoptr(val, ldst_type)
         elif (dst_type.is_pointer or
               dst_type.is_reference) and node_type.is_pointer:
+            if (dst_type.pointee.kind, val.pointee.kind) == (lc.TYPE_FUNCTION,
+                                                             lc.TYPE_FUNCTION):
+                assert dst_type == val.type, (dst_type, val.type)
             val = self.builder.bitcast(val, ldst_type)
         elif dst_type.is_complex and node_type.is_complex:
             val = self._promote_complex(node_type, dst_type, val)

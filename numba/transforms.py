@@ -151,14 +151,16 @@ def get_funcname(py_func):
 
     return mathmodule.ufunc2math.get(py_func.__name__, py_func.__name__)
 
-def resolve_pow(type, args):
+def resolve_pow(env, restype, args):
+    promote = env.crnt.typesystem.promote
     have_mod = len(args) == 3
-    if type.is_numeric and not have_mod:
-        signature = type(*[a.type for a in args])
+    if restype.is_numeric and not have_mod:
+        type = reduce(promote, [double, restype] + [a.type for a in args])
+        signature = type(*[type] * len(args))
         result = nodes.MathCallNode(signature, args, None, name='pow')
     else:
         result = nodes.call_pyfunc(pow, args)
-    return nodes.CoercionNode(result, type)
+    return nodes.CoercionNode(result, restype)
 
 def math_call(name, arg, dst_type):
     return nodes.MathCallNode(dst_type(arg.type), [arg], None, name=name)
@@ -184,7 +186,7 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
         return math_call2('round', node)
 
     def _resolve_pow(self, func, node, argtype):
-        return resolve_pow(node.type, node.args)
+        return resolve_pow(self.env, node.type, node.args)
 
     def _resolve_int_number(self, func, node, argtype, dst_type, ext_name):
         assert len(node.args) == 2
@@ -921,7 +923,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
     def visit_BinOp(self, node):
         if isinstance(node.op, ast.Pow):
-            return self.visit(resolve_pow(node.type, [node.left, node.right]))
+            return self.visit(resolve_pow(self.env, node.type, [node.left,
+                                                                node.right]))
 
         self.generic_visit(node)
         if is_obj(node.left.type) or is_obj(node.right.type):
