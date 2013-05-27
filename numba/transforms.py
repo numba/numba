@@ -105,42 +105,6 @@ logger = logging.getLogger(__name__)
 
 from numba.external import pyapi
 
-class BuiltinResolverMixinBase(object):
-    """
-    Base class for mixins resolving calls to built-in functions.
-
-    Methods called _resolve_<built-in name> are called to handle calls
-    to the built-in of that name.
-    """
-
-    def _resolve_builtin_call(self, node, func):
-        """
-        Resolve an ast.Call() of a built-in function.
-
-        Returns None if no specific transformation is applied.
-        """
-        resolver = getattr(self, '_resolve_' + func.__name__, None)
-        if resolver is not None:
-            # Pass in the first argument type
-            argtype = None
-            if len(node.args) >= 1:
-                argtype = node.args[0].variable.type
-
-            return resolver(func, node, argtype)
-
-        return None
-
-    def _resolve_builtin_call_or_object(self, node, func):
-        """
-        Resolve an ast.Call() of a built-in function, or call the built-in
-        through the object layer otherwise.
-        """
-        result = self._resolve_builtin_call(node, func)
-        if result is None:
-            result = nodes.call_pyfunc(func, node.args)
-
-        return nodes.CoercionNode(result, node.type)
-
 # ______________________________________________________________________
 
 def get_funcname(py_func):
@@ -170,10 +134,42 @@ def math_call2(name, call_node):
 
 # ______________________________________________________________________
 
-class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
+class BuiltinResolver(object):
     """
     Perform final low-level transformations such as abs(value) -> fabs(value)
     """
+
+    def __init__(self, env):
+        self.env = env
+
+    def resolve_builtin_call(self, node, func):
+        """
+        Resolve an ast.Call() of a built-in function.
+
+        Returns None if no specific transformation is applied.
+        """
+        resolver = getattr(self, '_resolve_' + func.__name__, None)
+        if resolver is not None:
+            # Pass in the first argument type
+            argtype = None
+            if len(node.args) >= 1:
+                argtype = node.args[0].variable.type
+
+            return resolver(func, node, argtype)
+
+        return None
+
+    def resolve_builtin_call_or_object(self, node, func):
+        """
+        Resolve an ast.Call() of a built-in function, or call the built-in
+        through the object layer otherwise.
+        """
+        result = self.resolve_builtin_call(node, func)
+        if result is None:
+            result = nodes.call_pyfunc(func, node.args)
+
+        return nodes.CoercionNode(result, node.type)
+
 
     def _resolve_abs(self, func, node, argtype):
         if argtype.is_int and not argtype.signed:
@@ -196,8 +192,8 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
             return nodes.CoercionNode(
                 nodes.ObjectTempNode(
                     function_util.external_call(
-                        self.context,
-                        self.llvm_module,
+                        self.env.context,
+                        self.env.crnt.llvm_module,
                         ext_name,
                         args=[arg1, nodes.NULL, arg2])),
                 dst_type=dst_type)
@@ -449,10 +445,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
         return new_node
 
 
-class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
-                      visitors.NoPythonContextMixin):
+class LateSpecializer(ResolveCoercions, visitors.NoPythonContextMixin):
 
     def visit_FunctionDef(self, node):
+        self.builtin_resolver = BuiltinResolver(self.env)
         node.decorator_list = self.visitlist(node.decorator_list)
 
         # Make sure to visit the entry block (not part of the CFG) and the
@@ -618,7 +614,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
             result = math_call(name, node.args[0], node.type)
 
         elif func_type.is_builtin:
-            result = self._resolve_builtin_call_or_object(node, func_type.func)
+            result = self.builtin_resolver.resolve_builtin_call_or_object(
+                node, func_type.func)
 
         else:
             result = nodes.call_obj(node)
