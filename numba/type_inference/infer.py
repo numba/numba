@@ -236,7 +236,7 @@ class TypeInferer(visitors.NumbaTransformer):
         if len(incoming_types) > 1:
             promoted_type = typesystem.PromotionType(
                 node.variable, partial(ssatypes.promote, self.env.crnt.typesystem),
-                incoming_types, assignment=True)
+                incoming_types, True)
             promoted_type.simplify()
             node.variable.type = promoted_type.resolve()
         else:

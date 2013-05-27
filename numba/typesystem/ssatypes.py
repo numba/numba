@@ -751,7 +751,7 @@ def promote_arrays(array_types, non_array_types, types,
 
     return result_type, []
 
-def __UNUSED_promote_for_assignment(promote, types, unresolved_types, var_name):
+def promote_for_assignment(promote, types, unresolved_types, var_name):
     """
     Promote a list of types for assignment (e.g. in a phi node).
 
