@@ -502,7 +502,6 @@ class CodeGen(PipelineStage):
 
 class PostPass(PipelineStage):
     def transform(self, ast, env):
-        print(env.crnt.lfunc)
         for postpass_name, postpass in env.crnt.postpasses.iteritems():
             env.crnt.lfunc = postpass(env,
                                       env.llvm_context.execution_engine,
