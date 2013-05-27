@@ -85,7 +85,7 @@ def complex_(typesystem, node, a, b):
 
 def abstype(argtype):
     if argtype.is_complex:
-        result_type = double
+        result_type = argtype.base_type
     elif argtype.is_float or argtype.is_int:
         result_type = argtype
     else:

@@ -175,11 +175,13 @@ class BuiltinResolver(object):
         if argtype.is_int and not argtype.signed:
             # abs() on unsigned integral value
             return node.args[0]
-
-        return math_call2('abs', node)
+        elif not node.type.is_numeric:
+            result = nodes.call_pyfunc(func, node.args)
+        else:
+            return math_call2('abs', node)
 
     def _resolve_round(self, func, node, argtype):
-        return math_call2('round', node)
+        return nodes.call_pyfunc(round, node.args)
 
     def _resolve_pow(self, func, node, argtype):
         return resolve_pow(self.env, node.type, node.args)
