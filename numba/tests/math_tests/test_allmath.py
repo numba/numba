@@ -12,6 +12,7 @@ import collections
 
 import numba as nb
 import numpy as np
+from numpy.testing import assert_almost_equal
 
 # ______________________________________________________________________
 # Common
@@ -57,11 +58,12 @@ def run_np_arc(mod, x):
 
 def run_np_misc(mod, x):
     "np only"
-    y1  = mod.log2(x)
-    y2  = mod.exp2(x)
-    y3  = mod.rint(x)
-    mod.power
-    mod.absolute
+    y0  = mod.log2(x)
+    y1  = mod.exp2(x)
+    y2  = mod.rint(x)
+    y3  = mod.power(x, x)
+    y4  = mod.absolute(x * -1) # TODO: USub for some types
+    return (y0, y1, y2, y3, y4)
 
 # ______________________________________________________________________
 # Python
@@ -116,6 +118,9 @@ def run():
                     print("running:", test.__name__)
                     r1 = test(suite.mod, data)
                     r2 = nb.autojit(test)(suite.mod, data)
+                    # print(r1, r2)
                     assert np.allclose(r1, r2)
 
+                    r3 = nb.autojit(nopython=True)(test)(suite.mod, data)
+                    assert np.allclose(r1, r3)
 run()
