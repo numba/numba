@@ -172,5 +172,5 @@ def link_module(engine, src_module, dst_module, preserve=False):
 
     # Update other global symbols' mapping
     for src_gv in src_module.global_variables:
-        dst_gv = dst_module.get_global_named(src_gv.name)
+        dst_gv = dst_module.get_global_variable_named(src_gv.name)
         update_gv(src_gv, dst_gv)
