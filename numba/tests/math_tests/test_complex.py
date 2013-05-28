@@ -178,7 +178,7 @@ class TestASTComplex(test_support.ASTTestCase):
         self.assertAlmostEqual(self.autojit(exp)(m, n), exp(m, n), places=4)
         self.assertAlmostEqual(self.autojit(sin)(m, n), sin(m, n))
         self.assertAlmostEqual(self.autojit(cos)(m, n), cos(m, n))
-        self.assertAlmostEqual(self.autojit(cosh)(m, n), cosh(m, n))
+        self.assertAlmostEqual(self.autojit(cosh)(m, n), cosh(m, n), places=4)
         self.assertAlmostEqual(self.autojit(atan)(m, n), atan(m, n))
         self.assertAlmostEqual(self.autojit(asinh)(m, n), asinh(m, n))
         self.assertAlmostEqual(self.autojit(absolute)(m, n), absolute(m, n))
