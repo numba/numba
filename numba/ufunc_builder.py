@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 import ast
 import types
 
-from numba import visitors, nodes, error, functions
+from numba import visitors, nodes, error, functions, traits
 
 class UFuncBuilder(object):
     """
@@ -13,8 +13,7 @@ class UFuncBuilder(object):
 
     ufunc_counter = 0
 
-    def __init__(self, *args, **kwargs):
-        super(UFuncBuilder, self).__init__(*args, **kwargs)
+    def __init__(self):
         self.operands = []
 
     def register_operand(self, node):
@@ -80,12 +79,19 @@ class UFuncBuilder(object):
         "Restore saved state"
         self.operands = state
 
-
-class UFuncConverter(UFuncBuilder, ast.NodeVisitor):
+@traits.traits
+class UFuncConverter(ast.NodeVisitor):
     """
     Convert a Python array expression AST to a scalar ufunc kernel by demoting
     array types to scalar types.
     """
+
+    build_ufunc_ast = traits.Delegate('ufunc_builder')
+    operands = traits.Delegate('ufunc_builder')
+
+    def __init__(self, env):
+        self.ufunc_builder = UFuncBuilder()
+        self.env = env
 
     def demote_type(self, node):
         node.type = self.demote(node.type)
@@ -108,14 +114,12 @@ class UFuncConverter(UFuncBuilder, ast.NodeVisitor):
         node.op = self.visit(node.op)
         return node
 
-    def visit_MathNode(self, node):
-        self.demote_type(node)
-        node.arg = self.visit(node.arg)
-
-        # Demote math signature
-        argtypes = [self.demote(argtype) for argtype in node.signature.args]
-        signature = self.demote(node.signature.return_type)(*argtypes)
-        node.signature = signature
+    def visit_Call(self, node):
+        if nodes.query(self.env, node, "is_math") and node.type.is_array:
+            self.demote_type(node)
+            node.args = map(self.visit, node.args)
+        else:
+            node = self.generic_visit(node)
 
         return node
 
@@ -129,7 +133,7 @@ class UFuncConverter(UFuncBuilder, ast.NodeVisitor):
         """
         Register Name etc as operands to the ufunc
         """
-        result = self.register_operand(node)
+        result = self.ufunc_builder.register_operand(node)
         result.type = node.type
         self.demote_type(result)
         return result

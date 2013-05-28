@@ -55,7 +55,7 @@ def build_kernel_call(func_name, signature, miniargs, builder):
     kernel_args = [arg.variable for arg in miniargs[1:]]
     funccall = builder.funccall(funcname, kernel_args, inline=True)
     assmt = builder.assign(lhs, funccall)
-    if lhs.type.is_object:
+    if lhs.type.is_object and not lhs.type.is_array:
         assmt = builder.stats(builder.decref(lhs), assmt)
 
     return assmt
