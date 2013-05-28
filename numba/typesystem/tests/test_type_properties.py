@@ -13,9 +13,7 @@ assert double.is_numeric
 assert not double.is_double
 
 assert object_.is_object
-assert list_.is_list
-assert list_.is_object
-assert list_type(int_, 2).is_list
-assert list_type(int_, 2).is_object
+assert list_(int_, 2).is_list
+assert list_(int_, 2).is_object
 
 assert function(void, [double]).is_function
