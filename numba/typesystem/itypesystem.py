@@ -69,9 +69,8 @@ from functools import partial
 
 from numba.utils import is_builtin
 
-_reserved = ('string', 'struct', 'array')
-def reserved(name):
-    return is_builtin(name) or keyword.iskeyword(name) or name in _reserved
+reserved = set(['bool', 'int', 'long', 'float', 'complex',
+                'string', 'struct', 'array']).__contains__
 
 def tyname(name):
     return name + "_" if reserved(name) else name
@@ -188,13 +187,13 @@ class TypeConverter(object):
             return self.convert_parametrized(type)
 
     def convert_parametrized(self, type):
-        if type in self.partypes:
-            return self.partypes[type]
+        # if type in self.partypes: # TODO: Check for type mutability
+        #     return self.partypes[type]
 
         # Construct parametrized type in codomain
         result = self.convert_para(type, map(self.convert, type.params))
 
-        # self.partypes[type] = result # TODO: Check for type mutability
+        # self.partypes[type] = result
         return result
 
     def __repr__(self):
@@ -237,7 +236,7 @@ class Type(object):
         Does not compose any other type.
         """
         type = cls(kind, name, is_unit=True,
-                   metadata=frozenset(kwds.iteritems()))
+                   metadata=frozenset(kwds.items()))
         add_flags(type, flags)
         type.flags = flags
         return type
@@ -253,16 +252,12 @@ class Type(object):
         else:
             return "%s(%s)" % (self.kind, ", ".join(map(str, self.params)))
 
-    # Hash by identity
-    __eq__ = object.__eq__
-    __hash__ = object.__hash__
-
     def __getattr__(self, attr):
         if attr.startswith("is_"):
             return self.kind == attr[3:]
         elif self.metadata and attr in self._metadata:
             return self._metadata[attr]
-        raise AttributeError(self, attr)
+        raise AttributeError( attr)
 
 #------------------------------------------------------------------------
 # Type Memoization
@@ -285,7 +280,6 @@ class Conser(object):
     def get(self, *args):
         args = tuple(tuple(arg) if isinstance(arg, list) else arg
                          for arg in args)
-        # wargs = WeakrefTuple(args)
         result = self._entries.get(args)
         if result is None:
             result = self.constructor(*args)

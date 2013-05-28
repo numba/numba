@@ -6,6 +6,8 @@ User-facing numba types.
 
 from __future__ import print_function, division, absolute_import
 
+import numba
+
 import ctypes
 from itertools import imap
 from functools import partial
@@ -716,7 +718,9 @@ def array(dtype, ndim, is_c_contig=False, is_f_contig=False, inner_contig=False)
 
 # ______________________________________________________________________
 
-sort_key = lambda (n, ty): ctypes.sizeof(ty.to_ctypes())
+def sort_key(t):
+    n, ty = t
+    return ctypes.sizeof(ty.to_ctypes())
 
 def struct_(fields=(), name=None, readonly=False, packed=False, **kwargs):
     "Create a mutable struct type"

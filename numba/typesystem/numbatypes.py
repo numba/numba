@@ -130,6 +130,6 @@ c8 = complex64
 c16 = complex128
 c32 = complex256
 
-for name, value in globals().items(): # TODO: Do this better
+for name, value in list(globals().iteritems()): # TODO: Do this better
     if not inspect.ismodule(value) and not name.startswith("_"):
         __all__.append(name)
