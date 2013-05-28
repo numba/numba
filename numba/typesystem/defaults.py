@@ -6,15 +6,11 @@ Type defaults
 
 from __future__ import print_function, division, absolute_import
 
-from numba.typesystem import universe
-from numba.typesystem.itypesystem import TypeConverter, TypeSystem
-from numba.typesystem import promotion
-from numba.typesystem import constants
-from numba.typesystem import lowering
-
-from numba.typesystem import numbatypes as numba_domain
-from numba.typesystem import llvmtypes as llvm_domain
-from numba.typesystem import ctypestypes as ctypes_domain
+from . itypesystem import TypeConverter, TypeSystem
+from . import promotion, constants, lowering
+from . import numbatypes as numba_domain
+from . import llvmtypes as llvm_domain
+from . import ctypestypes as ctypes_domain
 
 #------------------------------------------------------------------------
 # Defaults initialization
