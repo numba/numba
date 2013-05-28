@@ -126,11 +126,12 @@ def resolve_pow(env, restype, args):
         result = nodes.call_pyfunc(pow, args)
     return nodes.CoercionNode(result, restype)
 
-def math_call(name, arg, dst_type):
-    return nodes.MathCallNode(dst_type(arg.type), [arg], None, name=name)
+def math_call(name, args, dst_type):
+    signature = dst_type(*[a.type for a in args])
+    return nodes.MathCallNode(signature, args, None, name=name)
 
 def math_call2(name, call_node):
-    return math_call(name, call_node.args[0], call_node.type)
+    return math_call(name, [call_node.args[0]], call_node.type)
 
 # ______________________________________________________________________
 
@@ -613,7 +614,7 @@ class LateSpecializer(ResolveCoercions, visitors.NoPythonContextMixin):
         if self.query(node, "is_math") and node.type.is_numeric:
             assert node.func.type.is_known_value
             name = get_funcname(node.func.type.value)
-            result = math_call(name, node.args[0], node.type)
+            result = math_call(name, node.args, node.type)
 
         elif func_type.is_builtin:
             result = self.builtin_resolver.resolve_builtin_call_or_object(

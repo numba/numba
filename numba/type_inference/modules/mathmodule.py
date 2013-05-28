@@ -10,6 +10,7 @@ from __future__ import print_function, division, absolute_import
 
 import math
 import cmath
+import collections
 try:
     import __builtin__ as builtins
 except ImportError:
@@ -67,6 +68,13 @@ mathsyms = [
     'log1p',
 ]
 
+n_ary_mathsyms = {
+    'hypot'     : 2,
+    'atan2'     : 2,
+    'logaddexp' : 2,
+    'logaddexp2': 2,
+}
+
 math2ufunc = {
     'asin' : 'arcsin',
     'acos' : 'arccos',
@@ -86,28 +94,28 @@ ufunc2math = dict((v, k) for k, v in math2ufunc.items())
 
 # TODO: Move any rewriting parts to lowering phases
 
-def infer_unary_math_call(typesystem, call_node, arg, default_result_type=double):
-    "Resolve calls to llvmmath math calls"
-    # signature is a generic signature, build a correct one
-    type = get_type(call_node.args[0])
+def mk_infer_math_call(default_result_type):
+    def infer(typesystem, call_node, *args):
+        "Resolve calls to llvmmath math calls"
+        # signature is a generic signature, build a correct one
+        type = reduce(typesystem.promote, map(get_type, call_node.args))
 
-    if type.is_numeric and rank(type) < rank(default_result_type):
-        type = default_result_type
-    elif type.is_array and type.dtype.is_int:
-        type = typesystem.array(double, type.ndim)
+        if type.is_numeric and rank(type) < rank(default_result_type):
+            type = default_result_type
+        elif type.is_array and type.dtype.is_int:
+            type = typesystem.array(double, type.ndim)
 
-    call_node.args[0] = nodes.CoercionNode(call_node.args[0], type)
+        call_node.args[:] = nodes.CoercionNode.coerce(call_node.args, type)
 
-    # TODO: Remove the abuse below
-    nodes.annotate(typesystem.env, call_node, is_math=True)
-    call_node.variable = Variable(type)
-    return call_node
+        # TODO: Remove the abuse below
+        nodes.annotate(typesystem.env, call_node, is_math=True)
+        call_node.variable = Variable(type)
+        return call_node
 
-def infer_unary_cmath_call(typesystem, call_node, arg):
-    result = infer_unary_math_call(typesystem, call_node, arg,
-                                   default_result_type=complex128)
-    nodes.annotate(typesystem.env, call_node, is_cmath=True)
-    return result
+    return infer
+
+infer_math_call = mk_infer_math_call(double)
+infer_cmath_call = mk_infer_math_call(complex128)
 
 # ______________________________________________________________________
 # pow()
@@ -143,27 +151,23 @@ register_math_typefunc(1, np.abs)
 # Register Type Functions
 #----------------------------------------------------------------------------
 
-def register_math(nargs, value):
+def register_math(infer_math_call, nargs, value):
     register = register_math_typefunc(nargs)
-    register(infer_unary_math_call, value)
-
-def register_cmath(nargs, value):
-    register = register_math_typefunc(nargs)
-    register(infer_unary_cmath_call, value)
+    register(infer_math_call, value)
 
 def npy_name(name):
     return math2ufunc.get(name, name)
 
-def register_typefuncs():
-    modules = [builtins, math, cmath, np]
-    register_funcs = [register_math, register_math,
-                      register_cmath, register_math]
-    id = lambda x: x
-    namefuncs = [id, id, id, npy_name]
+id_name = lambda x: x
 
-    for libc_math_func in mathsyms:
-        for module, register, namefunc in zip(modules, register_funcs, namefuncs):
-            if hasattr(module, namefunc(libc_math_func)):
-                register(1, getattr(module, namefunc(libc_math_func)))
+# ______________________________________________________________________
 
-register_typefuncs()
+def reg(mod, register, getname):
+    nargs = lambda f: n_ary_mathsyms.get(f, 1)
+    for symname in mathsyms + list(n_ary_mathsyms):
+        if hasattr(mod, getname(symname)):
+            register(nargs(symname), getattr(mod, getname(symname)))
+
+reg(math, partial(register_math, infer_math_call), id_name)
+reg(cmath, partial(register_math, infer_cmath_call), id_name)
+reg(np, partial(register_math, infer_math_call), npy_name)

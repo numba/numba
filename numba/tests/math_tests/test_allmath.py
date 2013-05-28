@@ -41,7 +41,8 @@ def run_commonf(mod, x):
     "np and math"
     y0  = mod.floor(x)
     y1  = mod.ceil(x)
-    return (y0, y1)
+    y2  = mod.hypot(x, x)
+    return (y0, y1, y2)
 
 # ______________________________________________________________________
 # NumPy
@@ -53,8 +54,7 @@ def run_np_arc(mod, x):
     y2  = mod.arctan(x)
     y3  = mod.arcsinh(x)
     y4  = mod.arccosh(1.0/x)
-    y5  = mod.arctanh(x)
-    return (y0, y1, y2, y3, y4, y5)
+    return (y0, y1, y2, y3, y4)
 
 def run_np_misc(mod, x):
     "np only"
@@ -78,10 +78,14 @@ def run_py_arc(mod, x):
     y5  = mod.atanh(x)
     return (y0, y1, y2, y3, y4, y5)
 
-def run_py_math(mod, x):
+def misc_floating(mod, x):
     "math only"
-    y0  = mod.erfc(x)
-    return (y0,)
+    # y0  = math.erfc(x)
+    y1  = math.atan2(x, x)
+    y2  = np.arctan2(x, x)
+    y3  = np.logaddexp(x, x)
+    y4  = np.logaddexp2(x, x)
+    return (y1, y2, y3, y4) #(y0, y1)
 
 # ______________________________________________________________________
 # Run tests
