@@ -153,16 +153,16 @@ class LLVMContextManager(object):
 
 handle = lambda llvm_value: llvm_value._ptr
 
-def link_module(engine, src_module, dst_module):
+def link_module(engine, src_module, dst_module, preserve=False):
     """
     Link a source module into a destination module while preserving the
     execution engine's global mapping of pointers.
     """
-    dst_module.link_in(src_module, preserve=False)
+    dst_module.link_in(src_module, preserve=preserve)
     ptr = lambda gv: handle(engine).getPointerToGlobalIfAvailable(handle(gv))
 
     def update_gv(src_gv, dst_gv):
-        if ptr(src_gv) != 0:
+        if ptr(src_gv) != 0 and ptr(dst_gv) == 0:
             engine.add_global_mapping(dst_gv, ptr(src_gv))
 
     # Update function mapping
