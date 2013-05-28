@@ -55,7 +55,7 @@ globals().update((tyname(name), ty) for name, ty in unittypes.iteritems())
 # Exposed types
 #------------------------------------------------------------------------
 
-@consing
+# @consing # llvm types don't hash in python 3 in llvmpy 0.11.2
 def struct_(fields, name=None, readonly=False, packed=False):
     if packed:
         struct = llvm.core.Type.packed_struct
@@ -64,12 +64,12 @@ def struct_(fields, name=None, readonly=False, packed=False):
 
     return struct([field_type for field_name, field_type in fields])
 
-@consing
+# @consing
 def pointer(base_type):
     if base_type.kind == llvm.core.TYPE_VOID:
         base_type = llvm.core.Type.int(8)
     return llvm.core.Type.pointer(base_type)
 
-@consing
+# @consing
 def function(rettype, argtypes, name=None, is_vararg=False):
     return llvm.core.Type.function(rettype, argtypes, is_vararg)
