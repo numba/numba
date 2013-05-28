@@ -31,9 +31,12 @@ def run_common(mod, x):
     y9  = mod.exp(x)
     return (y0, y1, y2, y3, y4, y5, y6, y7, y8, y9)
 
-def run_npmath(mod, x):
+def run_np_math(mod, x):
     "np (floating, complex) and math (floating)"
-    y0  = mod.expm1(x)
+    if hasattr(mod, 'expm1'):
+        y0  = mod.expm1(x)
+    else:
+        y0 = 0.0
     y1  = mod.log1p(x)
     return (y0, y1)
 
@@ -79,8 +82,9 @@ def run_py_arc(mod, x):
     return (y0, y1, y2, y3, y4, y5)
 
 def misc_floating(mod, x):
-    "math only"
+    "miscellaneous"
     # y0  = math.erfc(x)
+
     y1  = math.atan2(x, x)
     y2  = np.arctan2(x, x)
     y3  = np.logaddexp(x, x)
@@ -106,12 +110,13 @@ arc_data  = dict(arc_fdata, **arc_cdata)
 
 tests = {
     run_common  : [Suite(math, fdata), Suite(cmath, cdata)],
-    run_npmath  : [Suite(np, data), Suite(math, fdata)],
+    run_np_math : [Suite(np, data), Suite(math, fdata)],
     run_commonf : [Suite(np, fdata), Suite(math, fdata)],
     run_np_arc  : [Suite(np, arc_data)],
     run_py_arc  : [Suite(math, arc_fdata), Suite(cmath, arc_cdata)],
     run_np_misc : [Suite(np, data)],
     # run_py_math : [Suite(math, fdata)],
+    misc_floating : [Suite(math, fdata)]
 }
 
 def run():
