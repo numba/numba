@@ -1305,10 +1305,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
     def visit_MathCallNode(self, node):
         # Make sure we don't pass anything by reference
-        lfunc_type = llvmtypes.function(node.signature.return_type.to_llvm(),
-                                        [a.to_llvm() for a in node.signature.args])
+        resty = node.signature.return_type.to_llvm()
+        argtys = [a.to_llvm() for a in node.signature.args]
+        lfunc_type = llvmtypes.function(resty, argtys)
+
+        type_namespace = map(str, argtys)
         lfunc = self.llvm_module.get_or_insert_function(
-            lfunc_type, 'numba.math.%s' % (node.name,))
+            lfunc_type, 'numba.math.%s.%s' % (type_namespace, node.name))
 
         node.llvm_func = lfunc
         largs = self.visitlist(node.args)
