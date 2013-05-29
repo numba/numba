@@ -100,11 +100,11 @@ integral = nb.short, nb.int_, nb.uint, nb.long_, nb.ulong, nb.longlong, nb.ulong
 floating = nb.float_, nb.double, nb.longdouble
 complexes = nb.complex64, nb.complex128, nb.complex256
 
-fdata     = { integral : 6, floating: 6.0 }
+fdata     = { integral : 6, floating: 6.0, (nb.object_,): 6.0 }
 cdata     = { complexes: 6.0+4.0j }
 data      = dict(fdata, **cdata)
 
-arc_fdata = { floating: 0.6 }
+arc_fdata = { floating: 0.6, (nb.object_,): 0.6 }
 arc_cdata = { complexes: 0.6+0.4j }
 arc_data  = dict(arc_fdata, **arc_cdata)
 
@@ -124,12 +124,15 @@ def run():
         for suite in suites:
             for types, data in suite.types.iteritems():
                 for ty in types:
-                    print("running:", test.__name__)
+                    print("running:", test.__name__, ty)
+                    jitter = nb.jit(nb.object_(nb.typeof(suite.mod), ty))
+                    jitted = jitter(test)
+
                     r1 = test(suite.mod, data)
-                    r2 = nb.autojit(test)(suite.mod, data)
+                    r2 = jitted(suite.mod, data)
                     # print(r1, r2)
                     assert np.allclose(r1, r2)
 
-                    r3 = nb.autojit(nopython=True)(test)(suite.mod, data)
+                    r3 = jitted(suite.mod, data)
                     assert np.allclose(r1, r3)
 run()
