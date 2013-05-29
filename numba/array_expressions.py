@@ -234,7 +234,7 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         ast.fix_missing_locations(ufunc_ast)
         func_env, (_, _, _) = pipeline.run_pipeline2(
             self.env, None, ufunc_ast, signature,
-            function_globals={},
+            function_globals={}, nopython=True,
         )
 
         # Manual linking
