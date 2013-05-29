@@ -861,6 +861,10 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         return self.visit(result)
 
     def visit_ArrayNewEmptyNode(self, node):
+        if self.nopython:
+            raise error.NumbaError(
+                node, "Cannot yet allocate new empty array in nopython context")
+
         ndim = nodes.const(node.type.ndim, int_)
         dtype = nodes.const(node.type.dtype.get_dtype(), object_).cloneable
         is_fortran = nodes.const(node.is_fortran, int_)
