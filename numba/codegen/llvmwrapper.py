@@ -274,7 +274,7 @@ def build_wrapper_function(env):
             env.crnt.func,
             env.crnt.func_name,
             env.crnt.func_doc,
-            env.crnt.translator.module_name,
+            env.crnt.module_name,
             func_pointer,                       # Wrapper
             env.crnt.translator.lfunc_pointer,  # Wrapped
             env.crnt.func_signature)

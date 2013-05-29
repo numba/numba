@@ -213,6 +213,7 @@ class FunctionEnvironment(object):
         False)
 
     func_name = TypedProperty(str, 'Target function name.')
+    module_name = TypedProperty(str, 'Name of the function module.')
 
     mangled_name = TypedProperty(str, 'Mangled name of compiled function.')
 
@@ -398,6 +399,11 @@ class FunctionEnvironment(object):
         else:
             qname = name
 
+
+        if self.func:
+            self.module_name = self.func.__module__
+        else:
+            self.module_name = self.function_globals.get("__name__", "")
         if mangled_name is None:
             mangled_name = naming.specialized_mangle(qname,
                                                      self.func_signature.args)
