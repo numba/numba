@@ -207,7 +207,7 @@ def _jit(restype=None, argtypes=None, nopython=False,
             return_type = restype.return_type
             argtys = restype.args
         elif argtys is None:
-            assert func.func_code.co_argcount == 0, func
+            assert func.__code__.co_argcount == 0, func
             return_type = None
             argtys = []
         else:
