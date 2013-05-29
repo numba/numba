@@ -147,11 +147,17 @@ class _LLVMCaster(object):
 
         (lc.TYPE_INTEGER, lc.TYPE_FLOAT)    : build_int_to_float_cast,
         (lc.TYPE_INTEGER, lc.TYPE_DOUBLE)   : build_int_to_float_cast,
+        (lc.TYPE_INTEGER, lc.TYPE_FP128)    : build_int_to_float_cast,
+        (lc.TYPE_INTEGER, lc.TYPE_PPC_FP128): build_int_to_float_cast,
+        (lc.TYPE_INTEGER, lc.TYPE_X86_FP80) : build_int_to_float_cast,
 
         (lc.TYPE_FLOAT, lc.TYPE_INTEGER)    : build_float_to_int_cast,
         (lc.TYPE_DOUBLE, lc.TYPE_INTEGER)   : build_float_to_int_cast,
+        (lc.TYPE_FP128, lc.TYPE_INTEGER)    : build_float_to_int_cast,
+        (lc.TYPE_PPC_FP128, lc.TYPE_INTEGER): build_float_to_int_cast,
+        (lc.TYPE_X86_FP80, lc.TYPE_INTEGER) : build_float_to_int_cast,
 
-    }
+        }
 
     @classmethod
     def build_cast(cls, builder, lval1, lty2, *args, **kws):
