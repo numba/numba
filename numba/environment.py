@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+
+import os
 import weakref
 import ast as ast_module
 import types
@@ -9,12 +11,12 @@ import pprint
 import llvm.core
 
 from numba import pipeline, naming, error, reporting, PY3
-from numba.control_flow.control_flow import ControlFlow
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
 from numba.minivect.minitypes import FunctionType
 from numba import functions, symtab
 from numba.utility.cbuilder import library
 from numba.nodes import metadata
+from numba.control_flow import flow
 from numba.codegen import translate
 from numba.codegen import globalconstants
 
@@ -34,20 +36,25 @@ else:
     NoneType = types.NoneType
     name_types = (str, unicode)
 
-default_pipeline_order = [
+default_normalize_order = [
     'ast3to2',
     'resolve_templates',
     'validate_signature',
     'update_signature',
     'create_lfunc1',
+    'ValidateASTStage',
     'NormalizeASTStage',
+]
+
+default_pipeline_order = default_normalize_order + [
     'ControlFlowAnalysis',
+    'dump_cfg',
     #'ConstFolding',
+    # 'dump_ast',
     'TypeInfer',
     'update_signature',
     'create_lfunc2',
     'TypeSet',
-    'dump_cfg',
     'ClosureTypeInference',
     'create_lfunc3',
     'TransformFor',
@@ -66,15 +73,19 @@ default_pipeline_order = [
     'SpecializeExceptions',
     'FixASTLocations',
     'cleanup_symtab',
+    # 'dump_ast',
     'CodeGen',
     'LinkingStage',
     'WrapperStage',
     'ErrorReporting',
 ]
 
-default_type_infer_pipeline_order = [
+default_cf_pipeline_order = [
     'ast3to2',
     'ControlFlowAnalysis',
+]
+
+default_type_infer_pipeline_order = default_cf_pipeline_order + [
     'TypeInfer',
 ]
 
@@ -143,7 +154,7 @@ class FunctionErrorEnvironment(object):
     enable_post_mortem = TypedProperty(
         bool,
         "Enable post-mortem debugging for the Numba compiler",
-        False,
+        False
     )
 
     collection = TypedProperty(
@@ -277,8 +288,9 @@ class FunctionEnvironment(object):
         object,
         'Metadata for AST nodes of the function being compiled.')
 
+    warn = True
     flow = TypedProperty(
-        (NoneType, ControlFlow),
+        (NoneType, object), #ControlFlow),
         "Control flow graph. See numba.control_flow.",
         default=None)
 
@@ -288,6 +300,18 @@ class FunctionEnvironment(object):
         object, # Should be ControlFlowAnalysis.
         'The Control Flow Analysis transform object '
         '(control_flow.ControlFlowAnalysis). Set during the cfg pass.')
+    cfdirectives = TypedProperty(
+        dict, "Directives for control flow.",
+        default={
+            'warn.maybe_uninitialized': warn,
+            'warn.unused_result': False,
+            'warn.unused': warn,
+            'warn.unused_arg': warn,
+            # Set the below flag to a path to generate CFG dot files
+            'control_flow.dot_output': os.path.expanduser("~/cfg.dot"),
+            'control_flow.dot_annotate_defs': False,
+        },
+    )
 
     # FIXME: Get rid of this property; pipeline stages are users and
     # transformers of the environment.  Any state needed beyond a
@@ -743,6 +767,10 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
             default_pipeline_order)
         self.pipelines = {
             self.default_pipeline : actual_default_pipeline,
+            'normalize' : pipeline.ComposedPipelineStage(
+                default_normalize_order),
+            'cf' : pipeline.ComposedPipelineStage(
+                default_cf_pipeline_order),
             'type_infer' : pipeline.ComposedPipelineStage(
                 default_type_infer_pipeline_order),
             'dummy_type_infer' : pipeline.ComposedPipelineStage(

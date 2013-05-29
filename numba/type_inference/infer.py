@@ -690,11 +690,7 @@ class TypeInferer(visitors.NumbaTransformer):
     #------------------------------------------------------------------------
 
     def visit_With(self, node):
-        if (not isinstance(node.context_expr, ast.Name) or
-                node.context_expr.id not in ('python', 'nopython')):
-            raise error.NumbaError(
-                node, "only 'with nopython' and 'with python' is supported "
-                      "in with statements")
+        assert isinstance(node.context_expr, ast.Name), node.context_expr
 
         if node.context_expr.id == 'nopython':
             node = self.visit(nodes.WithNoPythonNode(

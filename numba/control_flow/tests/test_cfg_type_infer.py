@@ -4,10 +4,10 @@ from numba.testing.test_support import *
 from numba.minivect import minitypes
 from numba import pipeline, environment, functions, error
 
+
 def construct_infer_pipeline():
-    order = environment.default_pipeline_order
-    dump_cfg_index = order.index('dump_cfg')
-    return pipeline.ComposedPipelineStage(order[:dump_cfg_index+1])
+    env = environment.NumbaEnvironment.get_environment()
+    return env.get_pipeline('type_infer')
 
 def functype(restype=None, argtypes=()):
     return minitypes.FunctionType(return_type=restype, args=list(argtypes))

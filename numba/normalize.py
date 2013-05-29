@@ -8,6 +8,7 @@ from __future__ import print_function, division, absolute_import
 
 import ast
 import copy
+import types
 
 from numba import error
 from numba import nodes
@@ -20,24 +21,10 @@ class NormalizeAST(visitors.NumbaTransformer):
 
     function_level = 0
 
-    #------------------------------------------------------------------------
-    # Validation
-    #------------------------------------------------------------------------
-
-    def visit_GeneratorExp(self, node):
-        raise error.NumbaError(
-                node, "Generator comprehensions are not yet supported")
-
-    def visit_SetComp(self, node):
-        raise error.NumbaError(
-                node, "Set comprehensions are not yet supported")
-
-    def visit_DictComp(self, node):
-        raise error.NumbaError(
-                node, "Dict comprehensions are not yet supported")
-
-    def visit_Raise(self, node):
-        raise error.NumbaError(node, "Raise statement not implemented yet")
+    # TODO: Actually use numba.ir.normalized
+    ir = types.ModuleType('numba.ir.normalized')
+    vars(ir).update(vars(ast))
+    vars(ir).update(vars(nodes))
 
     #------------------------------------------------------------------------
     # Normalization
@@ -140,33 +127,40 @@ class NormalizeAST(visitors.NumbaTransformer):
         rhs_target.ctx = ast.Load()
         ast.fix_missing_locations(rhs_target)
 
-        bin_op = ast.BinOp(rhs_target, node.op, node.value)
-        assignment = ast.Assign([target], bin_op)
+        bin_op = self.ir.BinOp(rhs_target, node.op, node.value)
+        assignment = self.ir.Assign([target], bin_op)
         assignment.inplace_op = node.op
         return self.visit(assignment)
 
+    def DISABLED_visit_Compare(self, node):
+        "Reduce cascaded comparisons into single comparisons"
 
-    ######## Sync with cf2 branch in validators.py ###########
+        # Process children
+        self.generic_visit(node)
 
-    def visit_With(self, node):
-        node.context_expr = self.visit(node.context_expr)
-        if node.optional_vars:
-            raise error.NumbaError(
-                node.context_expr,
-                "Only 'with python' and 'with nopython' is "
-                "supported at this moment")
+        # TODO: We can't generate temporaries from subexpressions since
+        # this may invalidate execution order. For now, set the type so
+        # we can clone
+        for c in node.comparators:
+            c.type = None
 
-        self.visitlist(node.body)
-        return node
+        compare_nodes = []
+        comparators = [nodes.CloneableNode(c) for c in node.comparators]
 
+        # Build comparison nodes
+        left = node.left
+        for op, right in zip(node.ops, comparators):
+            node = self.ir.Compare(left=left, ops=[op], comparators=[right])
+            # We shouldn't need to type this...
+            node = nodes.typednode(node, typesystem.bool_)
 
-    def visit_For(self, node):
-        if not isinstance(node.target, (ast.Name, ast.Attribute)):
-            raise error.NumbaError(
-                node.target, "Only a single target iteration variable is "
-                             "supported at the moment")
+            left = right.clone
+            compare_nodes.append(node)
 
-        self.visitchildren(node)
+        # AND the comparisons together
+        boolop = lambda left, right: self.ir.BoolOp(ast.And(), [left, right])
+        node = reduce(boolop, reversed(compare_nodes))
+
         return node
 
 #------------------------------------------------------------------------

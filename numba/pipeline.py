@@ -5,6 +5,7 @@ define the transformations and the order in which they run on the AST.
 """
 from __future__ import print_function, division, absolute_import
 
+import os
 import ast as ast_module
 import logging
 import pprint
@@ -22,6 +23,8 @@ from numba import optimize
 from numba import closures
 from numba import reporting
 from numba import normalize
+from numba import validate
+from numba.viz import cfgviz
 from numba.codegen import llvmwrapper
 from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
@@ -307,11 +310,34 @@ def create_lfunc3(tree, env):
     create_lfunc(tree, env)
     return tree
 
+# ______________________________________________________________________
+
+def dump_ast(ast, env):
+    # astviz.render_ast(ast, os.path.expanduser("~/ast.dot"))
+    return ast
+
+def dump_cfg(ast, env):
+    # dotfile = env.crnt.cfdirectives['control_flow.dot_output']
+    # cfgviz.render_cfg(env.crnt.cfg, dotfile)
+    # for block in env.crnt.cfg.blocks:
+    #     print(block)
+    #     print("    ", block.parents)
+    #     print("    ", block.children)
+    return ast
+
+# ______________________________________________________________________
+
+class ValidateASTStage(PipelineStage):
+    def transform(self, ast, env):
+        validate.ValidateAST().visit(ast)
+        return ast
 
 class NormalizeASTStage(PipelineStage):
     def transform(self, ast, env):
         transform = self.make_specializer(normalize.NormalizeAST, ast, env)
         return transform.visit(ast)
+
+# ______________________________________________________________________
 
 class ControlFlowAnalysis(PipelineStage):
     _pre_condition_schema = None
@@ -334,12 +360,6 @@ class ControlFlowAnalysis(PipelineStage):
         ast.flow = transform.flow
         env.translation.crnt.ast.cfg_transform = transform
         return ast
-
-
-def dump_cfg(ast, env):
-    if env.translation.crnt.cfg_transform.graphviz:
-        env.translation.crnt.cfg_transform.render_gv(ast)
-    return ast
 
 
 class ConstFolding(PipelineStage):
