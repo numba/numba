@@ -115,7 +115,7 @@ default_numba_lowering_table = {
     "complex":          lower_complex,
     "array":            lower_array,
     "string":           lower_string,
-    "carray":           lower_to_pointer,
+    # "carray":           lower_to_pointer,
     "sized_pointer":    lower_to_pointer,
     "reference":        lower_to_pointer,
     "extmethod":        lower_extmethod,

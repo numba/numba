@@ -1586,7 +1586,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         """
         Slice an array. Allocate fake PyArray and allocate shape/strides
         """
-        shape_ltype = npy_intp.pointer().to_llvm(self.context)
+        llvmtype = lambda t: t.to_llvm()
+        shape_ltype = llvmtype(npy_intp.pointer())
 
         # Create PyArrayObject accessors
         view = self.visit(node.value)
@@ -1595,7 +1596,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # TODO: change this attribute name to stack_allocate or something
         if node.nopython:
             # Stack-allocate array object
-            array_struct_ltype = float_[:].to_llvm(self.context).pointee
+            array_struct_ltype = llvmtype(float_[:]).pointee
             view_copy = self.llvm_alloca(array_struct_ltype)
             array_struct = self.builder.load(view)
             self.builder.store(array_struct, view_copy)

@@ -66,3 +66,5 @@ def pointer(base_type):
 # @consing
 def function(rettype, argtypes, name=None, is_vararg=False):
     return llvm.core.Type.function(rettype, argtypes, is_vararg)
+
+carray = llvm.core.Type.array
