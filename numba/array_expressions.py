@@ -179,7 +179,8 @@ class NumbaStaticArgsContext(utils.NumbaContext):
     "Use a static argument list: shape, data1, strides1, data2, strides2, ..."
 
     astbuilder_cls = miniast.ASTBuilder
-    debug = True
+    # optimize_llvm = False
+    # debug = True
     # debug_elements = True
 
     def init(self):

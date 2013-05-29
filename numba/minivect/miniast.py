@@ -111,6 +111,7 @@ class Context(object):
     debug_elements = False
 
     use_llvm = False
+    optimize_llvm = True
     optimize_broadcasting = True
 
     shape_type = minitypes.Py_ssize_t.pointer()

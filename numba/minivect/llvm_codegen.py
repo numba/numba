@@ -128,16 +128,17 @@ class LLVMCodeGen(codegen.CodeGen):
 
         # print self.lfunc
         self.lfunc.verify()
-        self.optimize()
-        # print self.lfunc
+        if self.context.optimize_llvm:
+            self.optimize()
 
+        # print self.lfunc
         self.code.write(self.lfunc)
 
-        from numba.codegen.llvmcontext import LLVMContextManager
-        ctypes_func = ctypes_conversion.get_ctypes_func(
-                    node, self.lfunc, LLVMContextManager().execution_engine,
-                                                        self.context)
-        self.code.write(ctypes_func)
+        # from numba.codegen.llvmcontext import LLVMContextManager
+        # ctypes_func = ctypes_conversion.get_ctypes_func(
+        #             node, self.lfunc, LLVMContextManager().execution_engine,
+        #                                                 self.context)
+        # self.code.write(ctypes_func)
 
     def add_arguments(self, function):
         "Insert function arguments into the symtab"
