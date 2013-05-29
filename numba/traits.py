@@ -39,10 +39,18 @@ class Delegate(TraitBase):
         super(Delegate, self).__init__(value, doc=doc)
         self.delegate_attr_name = delegate_attr_name
 
+    def obj(self, instance):
+        return getattr(instance, self.value)
+
+    @property
+    def attr(self):
+        return self.delegate_attr_name or self.attr_name
+
     def __get__(self, instance, owner):
-        obj = getattr(instance, self.value)
-        return getattr(obj, self.delegate_attr_name or self.attr_name)
+        return getattr(self.obj(instance), self.attr)
 
     def __set__(self, instance, value):
-        obj = getattr(instance, self.value)
-        return setattr(obj, self.delegate_attr_name or self.attr_name, value)
+        return setattr(self.obj(instance), self.attr, value)
+
+    def __delete__(self, instance):
+        delattr(self.obj(instance), self.attr)
