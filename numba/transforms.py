@@ -828,9 +828,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
     def visit_ArrayNewNode(self, node):
         if self.nopython:
-            # Give the codegen (subclass) a chance to handle this
-            self.generic_visit(node)
-            return node
+            raise error.NumbaError(
+                node, "Cannot yet allocate new array in nopython context")
 
         PyArray_Type = nodes.ObjectInjectNode(np.ndarray)
         descr = nodes.ObjectInjectNode(node.type.dtype.get_dtype()).cloneable
