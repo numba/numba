@@ -86,6 +86,7 @@ default_cf_pipeline_order = [
 ]
 
 default_type_infer_pipeline_order = default_cf_pipeline_order + [
+    'resolve_templates',
     'TypeInfer',
 ]
 
