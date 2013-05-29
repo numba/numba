@@ -751,7 +751,7 @@ class TypeInferer(visitors.NumbaTransformer):
     def visit_Name(self, node):
         node.name = node.id
 
-        var = self.current_scope.lookup(node.id)
+        var = self.env.crnt.symtab.lookup(node.id)
         is_none = var and node.id in ('None', 'True', 'False')
         in_closure_scope = self.closure_scope and node.id in self.closure_scope
         if var and (var.is_local or is_none):

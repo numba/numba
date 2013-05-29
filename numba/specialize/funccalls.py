@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 from numba.external import pyapi
 
 class FunctionCallSpecializer(visitors.NumbaTransformer,
-                              visitors.NoPythonContextMixin,
                               transforms.BuiltinResolverMixinBase):
 
     def visit_NativeCallNode(self, node):

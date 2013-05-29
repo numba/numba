@@ -447,8 +447,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
         return new_node
 
 
-class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
-                      visitors.NoPythonContextMixin):
+class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin):
 
     def visit_FunctionDef(self, node):
         node.decorator_list = self.visitlist(node.decorator_list)
