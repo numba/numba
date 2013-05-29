@@ -67,6 +67,7 @@ import weakref
 import keyword
 from functools import partial
 
+import numba
 from numba.utils import is_builtin
 
 reserved = set(['bool', 'int', 'long', 'float', 'complex',
@@ -87,6 +88,8 @@ if struct_.pack('i', 1)[0] == '\1':
 else:
     nbo = '>' # big endian
 
+if numba.PY3:
+    map = lambda f, xs, map=map: list(map(f, xs))
 
 class TypeSystem(object):
 
