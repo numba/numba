@@ -376,8 +376,8 @@ class FunctionEnvironment(object):
              llvm_module=None, wrap=True, link=True,
              symtab=None,
              error_env=None, function_globals=None, locals=None,
-             template_signature=None, cfg_transform=None,
-             is_closure=False, closures=None, closure_scope=None,
+             template_signature=None, is_closure=False,
+             closures=None, closure_scope=None,
              refcount_args=True,
              ast_metadata=None, warn=True, warnstyle='fancy',
              **kws):
@@ -399,11 +399,16 @@ class FunctionEnvironment(object):
         else:
             qname = name
 
+        if function_globals is not None:
+            self.function_globals = function_globals
+        else:
+            self.function_globals = self.func.__globals__
 
         if self.func:
             self.module_name = self.func.__module__
         else:
             self.module_name = self.function_globals.get("__name__", "")
+
         if mangled_name is None:
             mangled_name = naming.specialized_mangle(qname,
                                                      self.func_signature.args)
@@ -422,14 +427,9 @@ class FunctionEnvironment(object):
                                                                self.ast,
                                                                warnstyle)
 
-        if function_globals is not None:
-            self.function_globals = function_globals
-        else:
-            self.function_globals = self.func.__globals__
 
         self.locals = locals if locals is not None else {}
         self.template_signature = template_signature
-        self.cfg_transform = cfg_transform
         self.is_closure = is_closure
         self.closures = closures if closures is not None else {}
         self.closure_scope = closure_scope
@@ -461,7 +461,6 @@ class FunctionEnvironment(object):
             function_globals=self.function_globals,
             locals=self.locals,
             template_signature=self.template_signature,
-            cfg_transform=self.cfg_transform,
             is_closure=self.is_closure,
             closures=self.closures,
             closure_scope=self.closure_scope,
