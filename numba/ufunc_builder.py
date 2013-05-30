@@ -80,7 +80,7 @@ class UFuncBuilder(object):
         self.operands = state
 
 @traits.traits
-class UFuncConverter(ast.NodeVisitor):
+class UFuncConverter(ast.NodeTransformer):
     """
     Convert a Python array expression AST to a scalar ufunc kernel by demoting
     array types to scalar types.
@@ -104,9 +104,12 @@ class UFuncConverter(ast.NodeVisitor):
         return type
 
     def visit_BinOp(self, node):
-        self.demote_type(node)
-        node.left = self.visit(node.left)
-        node.right = self.visit(node.right)
+        if node.type.is_array:
+            self.demote_type(node)
+            node.left = self.visit(node.left)
+            node.right = self.visit(node.right)
+        else:
+            node = self.generic_visit(node)
         return node
 
     def visit_UnaryOp(self, node):
@@ -117,10 +120,9 @@ class UFuncConverter(ast.NodeVisitor):
     def visit_Call(self, node):
         if nodes.query(self.env, node, "is_math") and node.type.is_array:
             self.demote_type(node)
-            node.args = map(self.visit, node.args)
+            node.args = list(map(self.visit_scalar_or_array, node.args))
         else:
             node = self.generic_visit(node)
-
         return node
 
     def visit_CoercionNode(self, node):
@@ -128,6 +130,14 @@ class UFuncConverter(ast.NodeVisitor):
 
     def _generic_visit(self, node):
         super(UFuncBuilder, self).generic_visit(node)
+
+    def visit_scalar_or_array(self, node):
+        if node.type.is_array:
+            node =  self.visit(node)
+            self.demote_type(node)
+            return node
+        else:
+            return self.generic_visit(node)
 
     def generic_visit(self, node):
         """
