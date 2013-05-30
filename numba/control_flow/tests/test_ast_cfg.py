@@ -4,7 +4,7 @@ from numba import *
 if not numba.PY3:
     #@jit(void(int_)) # directives={'control_flow.dot_output': 'out.dot'})
     #@jit(void, [int_], backend='bytecode')
-    @jit(void(int_), nopython=True)
+    @jit(void(int_))
     def func(x):
         i = 0
         #y = 12

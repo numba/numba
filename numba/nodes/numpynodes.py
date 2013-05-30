@@ -2,9 +2,11 @@
 from __future__ import print_function, division, absolute_import
 import collections
 
+import llvm.core
+
 from numba import typesystem
+from numba.typesystem import tbaa
 from numba.nodes import *
-import numba.nodes
 from numba.ndarray_helpers import PyArrayAccessor
 
 #----------------------------------------------------------------------------
@@ -31,9 +33,9 @@ def is_ellipsis(node):
 def _const_int(X):
     return llvm.core.Constant.int(llvm.core.Type.int(), X)
 
-def get_shape(builder, tbaa, shape_pointer, ndim):
+def get_shape(builder, tbaa_metadata, shape_pointer, ndim):
     "Load the shape values from an ndarray"
-    shape_metadata = tbaa.get_metadata(typesystem.numpy_shape)
+    shape_metadata = tbaa_metadata.get_metadata(tbaa_metadata.numpy_shape)
 
     for i in range(ndim):
         shape_ptr = builder.gep(shape_pointer, [_const_int(i)])
@@ -41,9 +43,9 @@ def get_shape(builder, tbaa, shape_pointer, ndim):
         extent.set_metadata("tbaa", shape_metadata)
         yield extent
 
-def get_strides(builder, tbaa, strides_pointer, ndim):
+def get_strides(builder, tbaa_metadata, strides_pointer, ndim):
     "Load the stride values from an ndarray"
-    stride_metadata = tbaa.get_metadata(typesystem.numpy_strides)
+    stride_metadata = tbaa_metadata.get_metadata(tbaa.numpy_strides)
 
     for i in range(ndim):
         stride_ptr = builder.gep(strides_pointer, [_const_int(i)])
@@ -193,9 +195,9 @@ class ArrayAttributeNode(ExprNode):
 
         self.array_type = array.variable.type
         if attribute_name == 'ndim':
-            type = minitypes.int_
+            type = int_
         elif attribute_name in ('shape', 'strides'):
-            type = typesystem.SizedPointerType(typesystem.intp,
+            type = typesystem.sized_pointer(typesystem.npy_intp,
                                                 size=self.array_type.ndim)
         elif attribute_name == 'data':
             type = self.array_type.dtype.pointer()
@@ -215,9 +217,9 @@ class ShapeAttributeNode(ArrayAttributeNode):
     def __init__(self, array):
         super(ShapeAttributeNode, self).__init__('shape', array)
         self.array = array
-        self.element_type = typesystem.intp
-        self.type = minitypes.CArrayType(self.element_type,
-                                         array.variable.type.ndim)
+        self.element_type = typesystem.npy_intp
+        self.type = typesystem.carray(self.element_type,
+                                      array.variable.type.ndim)
 
 #----------------------------------------------------------------------------
 # NumPy Array Creation
@@ -292,7 +294,7 @@ def PyArray_UpdateFlags(args):
 
 def PyArray_Empty(args, name='PyArray_Empty'):
     nd, shape, dtype, fortran = args
-    return_type = minitypes.ArrayType(dtype, nd)
+    return_type = typesystem.array(dtype, nd)
     signature = return_type(
                 int_,                   # nd
                 npy_intp.pointer(),     # shape

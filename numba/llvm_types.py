@@ -12,6 +12,7 @@ import llvm.core as lc
 
 from numba import utils
 from numba.typedefs import _trace_refs_, PyObject_HEAD
+from numba.typesystem import numba_typesystem
 
 import logging
 
@@ -43,7 +44,8 @@ _complex128 = lc.Type.struct([_double, _double])
 
 
 def to_llvm(type):
-    return type.to_llvm(utils.context)
+    return numba_typesystem.convert("llvm", type)
+    # return type.to_llvm(utils.context)
 
 _pyobject_head = [to_llvm(ty) for name, ty in PyObject_HEAD.fields]
 _pyobject_head_struct = to_llvm(PyObject_HEAD)
@@ -133,19 +135,29 @@ class _LLVMCaster(object):
         lc.TYPE_POINTER : build_pointer_cast,
         lc.TYPE_INTEGER: build_int_cast,
 
-        (lc.TYPE_FLOAT, lc.TYPE_DOUBLE) : build_float_ext,
-        (lc.TYPE_DOUBLE, lc.TYPE_FP128) : build_float_ext,
+        (lc.TYPE_FLOAT, lc.TYPE_DOUBLE)     : build_float_ext,
+        (lc.TYPE_DOUBLE, lc.TYPE_FP128)     : build_float_ext,
+        (lc.TYPE_DOUBLE, lc.TYPE_PPC_FP128) : build_float_ext,
+        (lc.TYPE_DOUBLE, lc.TYPE_X86_FP80)  : build_float_ext,
 
-        (lc.TYPE_DOUBLE, lc.TYPE_FLOAT) : build_float_trunc,
-        (lc.TYPE_FP128, lc.TYPE_DOUBLE) : build_float_trunc,
+        (lc.TYPE_DOUBLE, lc.TYPE_FLOAT)     : build_float_trunc,
+        (lc.TYPE_FP128, lc.TYPE_DOUBLE)     : build_float_trunc,
+        (lc.TYPE_PPC_FP128, lc.TYPE_DOUBLE) : build_float_trunc,
+        (lc.TYPE_X86_FP80, lc.TYPE_DOUBLE)  : build_float_trunc,
 
-        (lc.TYPE_INTEGER, lc.TYPE_FLOAT) : build_int_to_float_cast,
-        (lc.TYPE_INTEGER, lc.TYPE_DOUBLE) : build_int_to_float_cast,
+        (lc.TYPE_INTEGER, lc.TYPE_FLOAT)    : build_int_to_float_cast,
+        (lc.TYPE_INTEGER, lc.TYPE_DOUBLE)   : build_int_to_float_cast,
+        (lc.TYPE_INTEGER, lc.TYPE_FP128)    : build_int_to_float_cast,
+        (lc.TYPE_INTEGER, lc.TYPE_PPC_FP128): build_int_to_float_cast,
+        (lc.TYPE_INTEGER, lc.TYPE_X86_FP80) : build_int_to_float_cast,
 
-        (lc.TYPE_FLOAT, lc.TYPE_INTEGER) : build_float_to_int_cast,
-        (lc.TYPE_DOUBLE, lc.TYPE_INTEGER) : build_float_to_int_cast,
+        (lc.TYPE_FLOAT, lc.TYPE_INTEGER)    : build_float_to_int_cast,
+        (lc.TYPE_DOUBLE, lc.TYPE_INTEGER)   : build_float_to_int_cast,
+        (lc.TYPE_FP128, lc.TYPE_INTEGER)    : build_float_to_int_cast,
+        (lc.TYPE_PPC_FP128, lc.TYPE_INTEGER): build_float_to_int_cast,
+        (lc.TYPE_X86_FP80, lc.TYPE_INTEGER) : build_float_to_int_cast,
 
-    }
+        }
 
     @classmethod
     def build_cast(cls, builder, lval1, lty2, *args, **kws):

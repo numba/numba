@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+
 import numba
 from numba import *
-from numba import visitors, nodes, error, functions, transforms
-from numba.typesystem import is_obj, promote_closest, promote_to_native
+from numba import visitors, nodes, error, transforms
+from numba.typesystem import is_obj
 
 logger = logging.getLogger(__name__)
 
 from numba.external import pyapi
 
-class FunctionCallSpecializer(visitors.NumbaTransformer,
-                              transforms.BuiltinResolverMixinBase):
+class FunctionCallSpecializer(visitors.NumbaTransformer):
 
     def visit_NativeCallNode(self, node):
         if is_obj(node.signature.return_type):

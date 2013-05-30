@@ -22,11 +22,11 @@ def error_func():
 
 # TODO: struct pointer support
 
-before_computed_column = struct([
+before_computed_column = struct_([
     ('x', float32),
     ('y', float32)])
 
-with_computed_column = struct([
+with_computed_column = struct_([
     ('mean', float32),
     ('x', float32),
     ('y', float32)])

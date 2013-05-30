@@ -5,35 +5,25 @@ Extension method types.
 """
 
 from __future__ import print_function, division, absolute_import
-
-from numba.typesystem import *
+from numba.typesystem import types, numbatypes
 
 #------------------------------------------------------------------------
 # Extension Method Types
 #------------------------------------------------------------------------
 
-class ExtMethodType(NumbaType, minitypes.FunctionType):
-    """
-    Extension method type, a FunctionType plus the following fields:
+class ExtMethodType(types.function):
+    typename = "extmethod"
+    argnames = ["return_type", "args", ("name", None), ("is_vararg", False),
+                ("is_class_method", False), ("is_static_method", False)]
+    flags = ["function", "object"]
 
-        is_class_method: is classmethod?
-        is_static_method: is staticmethod?
-        is_bound_method: is bound method?
-    """
+    @property
+    def is_bound_method(self):
+        return not (self.is_class_method or self.is_static_method)
 
-    is_extension_method = True
-
-    def __init__(self, return_type, args, name=None,
-                 is_class=False, is_static=False, **kwds):
-        super(ExtMethodType, self).__init__(return_type, args, name, **kwds)
-
-        self.is_class_method = is_class
-        self.is_static_method = is_static
-        self.is_bound_method = not (is_class or is_static)
-
-class AutojitMethodType(NumbaType):
-
-    is_autojit_method = True
+class AutojitMethodType(types.NumbaType):
+    typename = "autojit_extmethod"
+    flags = ["object"]
 
 #------------------------------------------------------------------------
 # Method Signature Comparison
@@ -43,7 +33,7 @@ def drop_self(type):
     if type.is_static_method or type.is_class_method:
         return type.args
 
-    assert len(type.args) >= 1 and type.args[0].is_extension
+    assert len(type.args) >= 1 and type.args[0].is_extension, type
     return type.args[1:]
 
 def equal_signature_args(t1, t2):
@@ -60,3 +50,6 @@ def equal_signature_args(t1, t2):
 def equal_signatures(t1, t2):
     return (equal_signature_args(t1, t2) and
             t1.return_type == t2.return_type)
+
+def extmethod_to_function(ty):
+    return numbatypes.function(ty.return_type, ty.args, ty.name)

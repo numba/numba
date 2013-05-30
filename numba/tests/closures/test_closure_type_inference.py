@@ -5,7 +5,8 @@
 import numpy as np
 
 from numba import *
-from numba.testing.test_support import *
+from numba import error
+from numba.testing.test_support import testmod
 
 @autojit
 def test_cellvar_promotion(a):
@@ -34,9 +35,9 @@ def test_cellvar_promotion_error(a):
     >>> from numba.minivect import minierror
     >>> try:
     ...     test_cellvar_promotion_error(10)
-    ... except minierror.UnpromotableTypeError as e:
+    ... except error.UnpromotableTypeError as e:
     ...     print(sorted(e.args, key=str))
-    [(int, const char *)]
+    [(int, string)]
     """
     b = int(a) * 2
 

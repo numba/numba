@@ -7,7 +7,7 @@ import ctypes
 
 import numba
 from numba import error
-from numba.minivect import minitypes
+from numba.typesystem import itypesystem
 from numba.support import ctypes_support, cffi_support
 
 import numpy as np
@@ -78,7 +78,7 @@ if cffi_support.ffi is not None:
     support_classes += (cffi_support.cffi_func_type,)
 
 cdef tuple hash_on_value_types = (
-    minitypes.Type,
+    itypesystem.Type,
     np.ufunc,
     np.dtype,
     np.generic,
@@ -103,7 +103,7 @@ cdef class NumbaCompiledWrapper(NumbaWrapper):
     """
     Temporary numba wrapper function for @jit, only used for recursion.
 
-        signature: minitype FunctionType signature
+        signature: minitype function signature
         lfunc: LLVM function
     """
 

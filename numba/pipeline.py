@@ -25,6 +25,7 @@ from numba import reporting
 from numba import normalize
 from numba import validate
 from numba.viz import cfgviz
+from numba import typesystem
 from numba.codegen import llvmwrapper
 from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
@@ -33,7 +34,6 @@ from numba import utils
 from numba.missing import FixMissingLocations
 from numba.type_inference import infer as type_inference
 from numba.asdl import schema
-from numba.minivect import minitypes
 import numba.visitors
 
 from numba.specialize import comparisons
@@ -99,13 +99,12 @@ def run_env(env, func_env, **kwargs):
 
 def _infer_types2(env, func, restype=None, argtypes=None, **kwargs):
     ast = functions._get_ast(func)
-    func_signature = minitypes.FunctionType(return_type=restype,
-                                            args=argtypes)
+    func_signature = typesystem.function(restype, argtypes)
     return run_pipeline2(env, func, ast, func_signature, **kwargs)
 
 def infer_types2(env, func, restype=None, argtypes=None, **kwargs):
     """
-    Like run_pipeline, but takes restype and argtypes instead of a FunctionType
+    Like run_pipeline, but takes restype and argtypes instead of a function
     """
     pipeline, (sig, symtab, ast) = _infer_types2(
         env, func, restype, argtypes, pipeline_name='type_infer', **kwargs)
@@ -127,8 +126,7 @@ def compile2(env, func, restype=None, argtypes=None, ctypes=False,
     kwds['llvm_module'] = lc.Module.new(module_name(func))
     logger.debug(kwds)
     func_ast = functions._get_ast(func)
-    func_signature = minitypes.FunctionType(return_type=restype,
-                                            args=argtypes)
+    func_signature = typesystem.function(restype, argtypes)
     #pipeline, (func_signature, symtab, ast) = _infer_types2(
     #            env, func, restype, argtypes, codegen=True, **kwds)
     with env.TranslationContext(env, func, func_ast, func_signature,
@@ -233,11 +231,9 @@ def resolve_templates(ast, env):
         argnames = [name.id for name in ast.args.args]
         argtypes = list(crnt.func_signature.args)
 
-        typesystem.resolve_templates(crnt.locals, crnt.template_signature,
-                                     argnames, argtypes)
-        crnt.func_signature = minitypes.FunctionType(
-            return_type=crnt.func_signature.return_type,
-            args=tuple(argtypes))
+        template_context, signature = typesystem.resolve_templates(
+            crnt.locals, crnt.template_signature, argnames, argtypes)
+        crnt.func_signature = signature
 
     return ast
 
@@ -262,7 +258,6 @@ def update_signature(tree, env):
         # signatures taking a pointer argument to a complex number
         # or struct
         func_signature = func_signature.return_type(*func_signature.args)
-        func_signature.struct_by_reference = True
         func_env.func_signature = func_signature
 
     return tree
@@ -524,6 +519,15 @@ class CodeGen(PipelineStage):
         func_env.lfunc = func_env.translator.lfunc
         return ast
 
+class PostPass(PipelineStage):
+    def transform(self, ast, env):
+        for postpass_name, postpass in env.crnt.postpasses.iteritems():
+            env.crnt.lfunc = postpass(env,
+                                      env.llvm_context.execution_engine,
+                                      env.crnt.llvm_module,
+                                      env.crnt.lfunc)
+        return ast
+
 class LinkingStage(PipelineStage):
     """
     Link the resulting LLVM function into the global fat module.
@@ -537,12 +541,14 @@ class LinkingStage(PipelineStage):
         # env.context.cbuilder_library.link(func_env.lfunc.module)
         env.constants_manager.link(func_env.lfunc.module)
 
+        lfunc_pointer = 0
         if func_env.link:
             # Link function into fat LLVM module
             func_env.lfunc = env.llvm_context.link(func_env.lfunc)
             func_env.translator.lfunc = func_env.lfunc
+            lfunc_pointer = func_env.translator.lfunc_pointer
 
-        func_env.lfunc_pointer = func_env.translator.lfunc_pointer
+        func_env.lfunc_pointer = lfunc_pointer
 
         return ast
 

@@ -4,7 +4,9 @@ Autojit template types.
 """
 from __future__ import print_function, division, absolute_import
 
-from numba.typesystem import *
+import numba as nb
+from numba import error
+from numba.typesystem import Type, NumbaType
 
 # type_attribute => [type_assertions]
 VALID_TYPE_ATTRIBUTES = {
@@ -17,17 +19,7 @@ VALID_TYPE_ATTRIBUTES = {
     "fielddict": ["is_struct"],
 }
 
-class TemplateType(NumbaType):
-
-    is_template = True
-    template_count = 0
-
-    def __init__(self, name=None, **kwds):
-        if name is None:
-            name = "T%d" % self.template_count
-            TemplateType.template_count += 1
-
-        self.name = name
+class _TemplateType(NumbaType):
 
     def resolve_template(self, template_context):
         if self not in template_context:
@@ -36,7 +28,7 @@ class TemplateType(NumbaType):
 
     def __getitem__(self, index):
         if isinstance(index, (tuple, slice)):
-            return super(TemplateType, self).__getitem__(index)
+            return super(_TemplateType, self).__getitem__(index)
 
         return TemplateIndexType(self, index)
 
@@ -44,7 +36,7 @@ class TemplateType(NumbaType):
         if attr in VALID_TYPE_ATTRIBUTES:
             return TemplateAttributeType(self, attr)
 
-        return super(TemplateType, self).__getattr__(attr)
+        return super(_TemplateType, self).__getattr__(attr)
 
     def __repr__(self):
         return "template(%s)" % self.name
@@ -53,15 +45,30 @@ class TemplateType(NumbaType):
         return self.name
 
 
-class TemplateAttributeType(TemplateType):
+class template(_TemplateType):
 
-    is_template_attribute = True
-    subtypes = ['template_type']
+    argnames = [("name", None)]
+    flags    = ["object"]
+
+    template_count = 0
+
+    def __init__(self, name):
+        super(template, self).__init__(name)
+        if name is None:
+            name = "T%d" % self.template_count
+            template.template_count += 1
+
+        self.name = name
+
+
+class TemplateAttributeType(_TemplateType):
+
+    typename = "template_attribute"
+    argnames = ["template_type", "attribute_name"]
+    flags = ["object", "template"]
 
     def __init__(self, template_type, attribute_name, **kwds):
-        self.template_type = template_type
-        self.attribute_name = attribute_name
-
+        super(TemplateAttributeType, self).__init__(template_type, attribute_name)
         assert attribute_name in VALID_TYPE_ATTRIBUTES
 
     def resolve_template(self, template_context):
@@ -82,14 +89,11 @@ class TemplateAttributeType(TemplateType):
     def __str__(self):
         return "%s.%s" % (self.template_type, self.attribute_name)
 
-class TemplateIndexType(TemplateType):
+class TemplateIndexType(_TemplateType):
 
-    is_template_index = True
-    subtypes = ['template_type']
-
-    def __init__(self, template_type, index, **kwds):
-        self.template_type = template_type
-        self.index = index
+    typename = "template_index"
+    argnames = ["template_type", "index"]
+    flags = ["object", "template"]
 
     def resolve_template(self, template_context):
         attrib = self.template_type.resolve_template(template_context)
@@ -102,9 +106,6 @@ class TemplateIndexType(TemplateType):
     def __str__(self):
         return "%s[%r]" % (self.template_type, self.index)
 
-
-
-template = TemplateType
 
 def validate_template(concrete_type, template_type):
     if not isinstance(template_type, type(concrete_type)):
@@ -163,55 +164,56 @@ def match_template(template_type, concrete_type, template_context):
     else:
         validate_template(concrete_type, template_type)
 
-        for t1, t2 in zip(template_type.subtype_list,
-                          concrete_type.subtype_list):
+        for t1, t2 in zip(subtype_list(template_type),
+                          subtype_list(concrete_type)):
             if not isinstance(t1, (list, tuple)):
                 t1, t2 = [t1], [t2]
 
             for t1, t2 in zip(t1, t2):
                 match_template(t1, t2, template_context)
 
-def resolve_template_type(template_type, template_context):
+def resolve_template_type(ty, template_context):
     """
     After the template context is known, resolve functions on template types
     E.g.
 
-        T[:]                -> ArrayType(dtype=T)
-        void(T)             -> FunctionType(args=[T])
+        T[:]                -> array_(dtype=T)
+        void(T)             -> function(args=[T])
         Struct { T arg }    -> struct(fields={'arg': T})
-        T *                 -> PointerType(base_type=T)
+        T *                 -> pointer(base_type=T)
 
     Any other compound types?
     """
     r = lambda t: resolve_template_type(t, template_context)
 
-    if template_type.is_template:
-        template_type = template_type.resolve_template(template_context)
-    elif template_type.is_array:
-        template_type = template_type.copy()
-        template_type.dtype = r(template_type.dtype)
-    elif template_type.is_function:
-        template_type = r(template_type.return_type)(*map(r, template_type.args))
-    elif template_type.is_struct:
-        S = template_type
+    if ty.is_template:
+        ty = ty.resolve_template(template_context)
+    elif ty.is_array:
+        ty = nb.array(r(ty.dtype), ty.ndim)
+    elif ty.is_function:
+        ty = r(ty.return_type)(*map(r, ty.args))
+    elif ty.is_struct:
+        S = ty
         fields = []
         for field_name, field_type in S.fields:
             fields.append((field_name, r(field_type)))
-        template_type = numba.struct(fields, name=S.name, readonly=S.readonly,
-                                     packed=S.packed)
-    elif template_type.is_pointer:
-        template_type = r(template_type.base_type).pointer()
+        ty = nb.struct_(fields, name=S.name, readonly=S.readonly, packed=S.packed)
+    elif ty.is_pointer:
+        ty = r(ty.base_type).pointer()
 
-    return template_type
+    return ty
 
 def is_template_list(types):
     return any(is_template(type) for type in types)
+
+def subtype_list(T):
+    return T.subtypes
 
 def is_template(T):
     if isinstance(T, (list, tuple)):
         return is_template_list(T)
 
-    return T.is_template or is_template_list(T.subtype_list)
+    return T.is_template or is_template_list(subtype_list(T))
 
 def resolve_templates(locals, template_signature, arg_names, arg_types):
     """

@@ -1,9 +1,13 @@
-from numba import *
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
 
-import math
+from numba import *
 import numpy as np
 
-def a(dtype=np.double):
+# ______________________________________________________________________
+# NumPy
+
+def array_of_type(dtype=np.double):
     return np.arange(1, 10, dtype=dtype)
 
 def expected(a):
@@ -32,12 +36,15 @@ def test_numpy_math():
     for dtype in dtypes:
         print(dtype)
 
-        array = a(dtype)
+        array = array_of_type(dtype)
         result = numpy_math(array)
         assert np.allclose(result, expected(array)), (result, expected(array))
 
         result = numpy_math2(array)
         assert np.allclose(result, expected2(array))
+
+# ______________________________________________________________________
+# Pow
 
 @autojit(backend='ast')
 def power(x, y):
@@ -46,6 +53,9 @@ def power(x, y):
 def test_power():
     assert power(5.0, 2.0) == 25.0
     assert power(5, 2) == 25
+
+# ______________________________________________________________________
+# Mod
 
 @autojit(backend='ast')
 def modulo(x, y):
@@ -62,12 +72,7 @@ def test_modulo():
             int_rhs = rsign * 2
             assert modulo(int_lhs, int_rhs) == (int_lhs % int_rhs)
 
-@autojit
-def sin(a):
-    return np.sin(a)
-
 if __name__ == "__main__":
-    # print sin(10)
    test_numpy_math()
    test_power()
    test_modulo()

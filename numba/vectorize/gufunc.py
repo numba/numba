@@ -1,17 +1,13 @@
 from . import _common
 
-from numba import *
 from numba import llvm_types
 
-from llvm.core import Type, inline_function, ATTR_NO_ALIAS, ATTR_NO_CAPTURE
 from llvm_cbuilder import *
 from llvm_cbuilder import shortnames as C
-from llvm_cbuilder import builder
 
 from numba.codegen.llvmcontext import LLVMContextManager
 from numba.vectorize import _internal
 from numba import decorators
-from numba.minivect import minitypes
 
 import numpy as np
 
@@ -112,8 +108,9 @@ class GUFuncASTVectorize(object):
             dtype_nums = []
             types_lists.append(dtype_nums)
             for arg_type in self.get_argtypes(numba_func):
-                dtype = minitypes.map_minitype_to_dtype(arg_type)
-                dtype_nums.append(dtype)
+                if arg_type.is_array:
+                    arg_type = arg_type.dtype
+                dtype_nums.append(arg_type.get_dtype())
 
         return types_lists
 

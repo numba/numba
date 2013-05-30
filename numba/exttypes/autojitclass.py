@@ -70,14 +70,10 @@ Compiling @autojit extension classes works as follows:
         an autojit method).
 """
 
-import copy
-from functools import partial
-
 from numba import error
 from numba import pipeline
-from numba import typesystem
 from numba import numbawrapper
-from numba.minivect import minitypes
+from numba import typesystem
 
 from numba.exttypes import types as etypes
 from numba.exttypes import utils
@@ -324,7 +320,7 @@ def make_delegations(py_class):
     """
     class_dict = vars(py_class)
     for name, func in class_dict.iteritems():
-        if isinstance(func, (minitypes.Function, staticmethod, classmethod)):
+        if isinstance(func, (typesystem.Function, staticmethod, classmethod)):
             method = signatures.process_signature(func, name)
             if method.is_class or method.is_static:
                 # Class or static method: use the pure Python function wrapped
@@ -398,7 +394,7 @@ def create_extension(env, py_class, flags, argtypes):
 
     flags.pop('llvm_module', None)
 
-    ext_type = etypes.AutojitExtensionType(py_class)
+    ext_type = etypes.autojit_exttype(py_class)
 
     class_dict = dict(utils.get_class_dict(py_class))
 

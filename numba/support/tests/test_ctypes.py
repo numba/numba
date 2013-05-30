@@ -4,9 +4,8 @@ Test support for ctypes. See also numba.tests.foreign_call.test_ctypes_call.
 
 import ctypes
 
+import numba as nb
 from numba import *
-from numba import environment
-from numba.support import ctypes_support
 
 try:
     from numba.tests.support import ctypes_values
@@ -17,9 +16,7 @@ except ImportError:
 # Utilities
 #-------------------------------------------------------------------
 
-env = environment.NumbaEnvironment.get_environment()
-context = env.context
-from_python = context.typemapper.from_python
+from_python = nb.typeof
 
 def get_cast_type(type):
     assert type.is_cast

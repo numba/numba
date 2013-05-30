@@ -1,4 +1,4 @@
-from numba.minivect import minitypes
+import numba
 from numba import *
 
 tests = []
@@ -7,7 +7,7 @@ def _make_test(f):
     def test():
         for argtype in [object_, float_, double]:
             # f_ = autojit(f)
-            f_ = jit(minitypes.FunctionType(None, [argtype]))(f)
+            f_ = jit(numba.function(None, [argtype]))(f)
             for v in range(-10,10):
                 assert f_(v)==f(v)
                 assert f_(float(v))==f(float(v))

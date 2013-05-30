@@ -111,6 +111,7 @@ class Context(object):
     debug_elements = False
 
     use_llvm = False
+    optimize_llvm = True
     optimize_broadcasting = True
 
     shape_type = minitypes.Py_ssize_t.pointer()
@@ -484,7 +485,7 @@ class ASTBuilder(object):
     def funccall(self, func_or_pointer, args, inline=False):
         """
         Generate a call to the given function (a :py:class:`FuncNameNode`) of
-        :py:class:`minivect.minitypes.FunctionType` or a
+        :py:class:`minivect.minitypes.function` or a
         pointer to a function type and the given arguments.
         """
         type = func_or_pointer.type

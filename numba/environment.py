@@ -12,8 +12,8 @@ import llvm.core
 
 from numba import pipeline, naming, error, reporting, PY3
 from numba.utils import TypedProperty, WriteOnceTypedProperty, NumbaContext
-from numba.minivect.minitypes import FunctionType
 from numba import functions, symtab
+from numba.typesystem import TypeSystem, numba_typesystem, function
 from numba.utility.cbuilder import library
 from numba.nodes import metadata
 from numba.control_flow import ControlFlow
@@ -75,6 +75,7 @@ default_pipeline_order = default_normalize_order + [
     'cleanup_symtab',
     # 'dump_ast',
     'CodeGen',
+    'PostPass',
     'LinkingStage',
     'WrapperStage',
     'ErrorReporting',
@@ -89,9 +90,6 @@ default_type_infer_pipeline_order = default_cf_pipeline_order + [
     'resolve_templates',
     'TypeInfer',
 ]
-
-compile_idx = default_pipeline_order.index('TypeInfer') + 1
-default_compile_pipeline_order = default_pipeline_order[compile_idx:]
 
 default_dummy_type_infer_pipeline_order = [
     'ast3to2',
@@ -113,6 +111,13 @@ default_numba_late_translate_pipeline_order = \
     default_numba_lower_pipeline_order + [
     'CodeGen',
 ]
+
+upto = lambda order, x: order[:order.index(x)+1]
+upfr = lambda order, x: order[order.index(x)+1:]
+
+default_compile_pipeline_order = upfr(default_pipeline_order, 'TypeInfer')
+default_codegen_pipeline = upto(default_pipeline_order, 'CodeGen')
+default_post_codegen_pipeline = upfr(default_pipeline_order, 'CodeGen')
 
 # ______________________________________________________________________
 # Convenience functions
@@ -205,7 +210,7 @@ class FunctionEnvironment(object):
         'Abstract syntax tree for the function being translated.')
 
     func_signature = TypedProperty(
-        FunctionType,
+        function,
         'Type signature for the function being translated.')
 
     is_partial = TypedProperty(
@@ -282,9 +287,11 @@ class FunctionEnvironment(object):
         '({ "local_var_name" : local_var_type } for @autojit(locals=...))')
 
     template_signature = TypedProperty(
-        object, # FIXME
+        (function, NoneType),
         'Template signature for @autojit.  E.g. T(T[:, :]).  See '
         'numba.typesystem.templatetypes.')
+
+    typesystem = TypedProperty(TypeSystem, "Typesystem for this compilation")
 
     ast_metadata = TypedProperty(
         object,
@@ -360,6 +367,11 @@ class FunctionEnvironment(object):
         default='fancy'
     )
 
+    postpasses = TypedProperty(
+        dict,
+        "List of passes that should run on the final llvm ir before linking",
+    )
+
     kwargs = TypedProperty(
         dict,
         'Additional keyword arguments.  Deprecated, but kept for backward '
@@ -381,6 +393,7 @@ class FunctionEnvironment(object):
              closures=None, closure_scope=None,
              refcount_args=True,
              ast_metadata=None, warn=True, warnstyle='fancy',
+             typesystem=None, postpasses=None,
              **kws):
 
         self.parent = parent
@@ -436,6 +449,10 @@ class FunctionEnvironment(object):
         self.closure_scope = closure_scope
 
         self.refcount_args = refcount_args
+        self.typesystem = typesystem or numba_typesystem
+
+        import numba.postpasses
+        self.postpasses = postpasses or numba.postpasses.default_postpasses
 
         if ast_metadata is not None:
             self.ast_metadata = ast_metadata
@@ -467,6 +484,7 @@ class FunctionEnvironment(object):
             closure_scope=self.closure_scope,
             warn=self.warn,
             warnstyle=self.warnstyle,
+            postpasses=self.postpasses,
         )
         return state
 
@@ -789,6 +807,10 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
                 default_numba_lower_pipeline_order),
             'late_translate' : pipeline.ComposedPipelineStage(
                 default_numba_late_translate_pipeline_order),
+            'codegen' : pipeline.ComposedPipelineStage(
+                default_codegen_pipeline),
+            'post_codegen' : pipeline.ComposedPipelineStage(
+                default_post_codegen_pipeline),
             }
         self.context = NumbaContext()
         self.specializations = functions.FunctionCache(env=self)

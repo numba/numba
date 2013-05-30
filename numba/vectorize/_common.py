@@ -2,9 +2,9 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
 
+import numba
 from numba import decorators
 from numba.codegen.llvmcontext import LLVMContextManager
-from numba.minivect import minitypes
 from . import _internal
 
 try:
@@ -124,7 +124,7 @@ class GenericASTVectorize(object):
             dtype_nums = []
             types_lists.append(dtype_nums)
             for arg_type in self.get_argtypes(numba_func):
-                dtype = minitypes.map_minitype_to_dtype(arg_type)
+                dtype = arg_type.get_dtype()
                 dtype_nums.append(dtype)
 
         return types_lists

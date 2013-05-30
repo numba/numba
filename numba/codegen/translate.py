@@ -8,6 +8,7 @@ import llvm.core
 
 from numba.llvm_types import _int1, _int32, _LLVMCaster
 from numba.multiarray_api import MultiarrayAPI # not used
+from numba.typesystem import llvmtypes
 from numba import typesystem
 
 from numba import *
@@ -27,6 +28,7 @@ from numba import metadata
 from numba.control_flow import ssa
 from numba.support.numpy_support import sliceutils
 from numba.nodes import constnodes
+from numba.typesystem import llvm_typesystem as lts
 
 from llvm_cbuilder import shortnames as C
 
@@ -437,8 +439,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # Assign to this value which will be returned
         self.is_void_return = \
                 self.func_signature.actual_signature.return_type.is_void
-        if self.func_signature.struct_by_reference:
+        ret_by_ref = minitypes.pass_by_ref(self.func_signature.return_type)
+        if self.func_signature.struct_by_reference and ret_by_ref:
             self.return_value = self.lfunc.args[-1]
+            assert self.return_value.type.kind == llvm.core.TYPE_POINTER
         elif not self.is_void_return:
             llvm_ret_type = self.func_signature.return_type.to_llvm(self.context)
             self.return_value = self.builder.alloca(llvm_ret_type,
@@ -577,6 +581,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             assert tbaa_type is not None
             tbaa_node = self.tbaa.get_metadata(tbaa_type)
 
+        assert tbaa_node
         self.tbaa.set_metadata(instr, tbaa_node)
 
     def preload_attributes(self, var, value):
@@ -914,7 +919,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
     def visit_Subscript(self, node):
         value_type = node.value.type
-        if not (value_type.is_carray or value_type.is_c_string or
+        if not (value_type.is_carray or value_type.is_string or
                     value_type.is_pointer):
             raise error.InternalError(node, "Unsupported type:", node.value.type)
 
@@ -1011,7 +1016,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         operand_ltype = operand.type
         op = node.op
         if isinstance(op, ast.Not) and (operand_type.is_bool or
-                                        operand_type.is_int_like):
+                                        operand_type.is_int):
             bb_false = self.builder.basic_block
             bb_true = self.append_basic_block('not.true')
             bb_done = self.append_basic_block('not.done')
@@ -1030,12 +1035,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             if operand_type.is_float:
                 return self.builder.fsub(lc.Constant.null(operand_ltype),
                                          operand)
-            elif operand_type.is_int_like and operand_type.signed:
+            elif operand_type.is_int and operand_type.signed:
                 return self.builder.sub(lc.Constant.null(operand_ltype),
                                         operand)
         elif isinstance(op, ast.UAdd) and operand_type.is_numeric:
             return operand
-        elif isinstance(op, ast.Invert) and operand_type.is_int_like:
+        elif isinstance(op, ast.Invert) and operand_type.is_int:
             return self.builder.xor(lc.Constant.int(operand_ltype, -1), operand)
         raise error.NumbaError(node, "Unary operator %s" % node.op)
 
@@ -1249,7 +1254,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
 
     def visit_NativeCallNode(self, node, largs=None):
-        # print node.py_func, node.llvm_func
         if largs is None:
             largs = self.visitlist(node.args)
 
@@ -1303,11 +1307,18 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self.visit_NativeCallNode(node, largs=largs)
 
     def visit_MathCallNode(self, node):
-        lfunc_type = node.signature.to_llvm(self.context)
-        lfunc = self.llvm_module.get_or_insert_function(lfunc_type, node.name)
+        # Make sure we don't pass anything by reference
+        resty = node.signature.return_type.to_llvm()
+        argtys = [a.to_llvm() for a in node.signature.args]
+        lfunc_type = llvmtypes.function(resty, argtys)
+
+        type_namespace = map(str, argtys)
+        lfunc = self.llvm_module.get_or_insert_function(
+            lfunc_type, 'numba.math.%s.%s' % (type_namespace, node.name))
 
         node.llvm_func = lfunc
-        return self.visit_NativeCallNode(node)
+        largs = self.visitlist(node.args)
+        return self.builder.call(lfunc, largs)
 
     def visit_IntrinsicNode(self, node):
         args = self.visitlist(node.args)
@@ -1391,6 +1402,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_ComplexAttributeNode(self, node):
         result = self.visit(node.value)
         if node.value.type.is_complex:
+            assert result.type.kind == llvm.core.TYPE_STRUCT, result.type
             if node.attr == 'real':
                 return self.builder.extract_value(result, 0)
             elif node.attr == 'imag':
@@ -1577,7 +1589,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         """
         Slice an array. Allocate fake PyArray and allocate shape/strides
         """
-        shape_ltype = npy_intp.pointer().to_llvm(self.context)
+        llvmtype = lambda t: t.to_llvm()
+        shape_ltype = llvmtype(npy_intp.pointer())
 
         # Create PyArrayObject accessors
         view = self.visit(node.value)
@@ -1586,7 +1599,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # TODO: change this attribute name to stack_allocate or something
         if node.nopython:
             # Stack-allocate array object
-            array_struct_ltype = float_[:].to_llvm(self.context).pointee
+            array_struct_ltype = llvmtype(float_[:]).pointee
             view_copy = self.llvm_alloca(array_struct_ltype)
             array_struct = self.builder.load(view)
             self.builder.store(array_struct, view_copy)
@@ -1741,16 +1754,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 lvalue = llvm.core.Constant.int_signextend(ltype, constant)
             else:
                 lvalue = llvm.core.Constant.int(ltype, constant)
-        elif type.is_c_string:
+        elif type.is_string:
             lvalue = self.env.constants_manager.get_string_constant(constant)
-            type_char_p = typesystem.c_string_type.to_llvm(self.context)
+            type_char_p = lts.pointer(lts.char)
             lvalue = self.builder.bitcast(lvalue, type_char_p)
         elif type.is_bool:
             return self._bool_constants[constant]
         elif type.is_function:
             # lvalue = map_to_function(constant, type, self.mod)
             raise NotImplementedError
-        elif type.is_object and not constnodes.is_null_constant(pyval):
+        elif type.is_object and not constnodes.is_null_constant(constant):
             raise NotImplementedError("Use ObjectInjectNode")
         else:
             raise NotImplementedError("Constant %s of type %s" %

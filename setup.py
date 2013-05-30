@@ -88,7 +88,7 @@ def run_2to3():
     from distutils.command.build_py import build_py_2to3 as build_py
     print("Installing 2to3 fixers")
     # need to convert sources to Py3 on installation
-    fixes = 'dict imports imports2 unicode ' \
+    fixes = 'dict imports imports2 unicode metaclass basestring reduce ' \
             'xrange itertools itertools_imports long types'.split()
     fixes = ['lib2to3.fixes.fix_' + fix 
              for fix in fixes]

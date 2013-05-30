@@ -41,7 +41,7 @@ def typedlist(item_type, iterable=None):
 
 def compile_typedlist(item_type, _list_cache=_list_cache):
     # item_type_t = typesystem.CastType(item_type)
-    # dtype_t = typesystem.NumpyDtypeType(item_type)
+    # dtype_t = typesystem.numpy_dtype(item_type)
 
     if item_type in _list_cache:
         return _list_cache[item_type]

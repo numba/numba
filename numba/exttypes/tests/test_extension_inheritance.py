@@ -114,10 +114,9 @@ def test_derivedclass(compiler):
 
     obj = Derived(4.0)
     obj.value2 = 3.0
-    assert obj.method() == 12.0
+    result = obj.method()
+    assert result == 12.0, result
 
 
 if __name__ == '__main__':
-    test_baseclass(autojit)
-    # test_derivedclass(autojit)
     main()

@@ -175,10 +175,10 @@ class TestASTComplex(test_support.ASTTestCase):
         self.assertAlmostEqual(self.autojit(sqrt)(m, n), sqrt(m, n))
         self.assertAlmostEqual(self.autojit(log)(m, n), log(m, n))
         self.assertAlmostEqual(self.autojit(log10)(m, n), log10(m, n))
-        self.assertAlmostEqual(self.autojit(exp)(m, n), exp(m, n))
+        self.assertAlmostEqual(self.autojit(exp)(m, n), exp(m, n), places=4)
         self.assertAlmostEqual(self.autojit(sin)(m, n), sin(m, n))
         self.assertAlmostEqual(self.autojit(cos)(m, n), cos(m, n))
-        self.assertAlmostEqual(self.autojit(cosh)(m, n), cosh(m, n))
+        self.assertAlmostEqual(self.autojit(cosh)(m, n), cosh(m, n), places=4)
         self.assertAlmostEqual(self.autojit(atan)(m, n), atan(m, n))
         self.assertAlmostEqual(self.autojit(asinh)(m, n), asinh(m, n))
         self.assertAlmostEqual(self.autojit(absolute)(m, n), absolute(m, n))
@@ -205,10 +205,15 @@ class TestASTComplex(test_support.ASTTestCase):
 # ______________________________________________________________________
 
 if __name__ == "__main__":
-#    m, n = .12, .32
-#    print autojit(add)(m, n)
-#    print autojit(cosh)(m, n), cosh(m, n)
-    unittest.main()
+    # m, n = .12, .32
+    # print autojit(add)(m, n)
+    # print autojit(cosh)(m, n), cosh(m, n)
+    # print(autojit(sqrt)(m, n))
+    # num0 = 0 - 2j
+    # num1 = numpy.complex128(num0)
+    # compiled_get_imag_fn = jit(argtypes = [complex128])(get_imag_fn)
+    # compiled_get_imag_fn(num0)
+    unittest.main() #verbosity=3)
 
 # ______________________________________________________________________
 # End of test_complex.py

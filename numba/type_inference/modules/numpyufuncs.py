@@ -7,8 +7,8 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 
 from numba import *
-from numba.minivect import minitypes
 from numba import typesystem
+from numba.typesystem import numpy_support
 from numba.type_inference.module_type_inference import (module_registry,
                                                         register,
                                                         register_inferer,
@@ -29,10 +29,10 @@ def array_of_dtype(a, dtype, static_dtype, out):
         return out
 
     a = array_from_type(a)
-    if not a.is_object:
+    if a.is_array:
         dtype = _dtype(a, dtype, static_dtype)
         if dtype is not None:
-            return a.copy(dtype=dtype)
+            return a.add('dtype', dtype)
 
 def _dtype(a, dtype, static_dtype):
     if static_dtype:
@@ -52,10 +52,10 @@ def _dtype(a, dtype, static_dtype):
 
 def numba_type_from_sig(ufunc_signature):
     """
-    Convert ufunc type signature string (e.g. 'dd->d') to a FunctionType
+    Convert ufunc type signature string (e.g. 'dd->d') to a function
     """
     args, ret = ufunc_signature.split('->')
-    to_numba = lambda c: minitypes.map_dtype(np.dtype(c))
+    to_numba = lambda c: numpy_support.map_dtype(np.dtype(c))
 
     signature = to_numba(ret)(*map(to_numba, args))
     return signature
@@ -65,7 +65,7 @@ def find_signature(args, signatures):
         if signature.args == args:
             return signature
 
-def find_ufunc_signature(context, argtypes, signatures):
+def find_ufunc_signature(typesystem, argtypes, signatures):
     """
     Map (float_, double) and [double(double, double),
                               int_(int_, int_),
@@ -77,7 +77,7 @@ def find_ufunc_signature(context, argtypes, signatures):
     if signature is not None:
         return signature
 
-    argtype = reduce(context.promote_types, argtypes)
+    argtype = reduce(typesystem.promote, argtypes)
     if not argtype.is_object:
         args = (argtype,) * len(argtypes)
         return find_signature(args, signatures)
@@ -91,8 +91,8 @@ class UfuncTypeInferer(object):
         self.ufunc = ufunc
         self.signatures = set(map(numba_type_from_sig, ufunc.types))
 
-    def infer(self, context, argtypes):
-        signature = find_ufunc_signature(context, argtypes, self.signatures)
+    def infer(self, typesystem, argtypes):
+        signature = find_ufunc_signature(typesystem, argtypes, self.signatures)
         if signature is None:
             return None
         else:
@@ -102,13 +102,13 @@ def register_arbitrary_ufunc(ufunc):
     "Type inference for arbitrary ufuncs"
     ufunc_infer = UfuncTypeInferer(ufunc)
 
-    def infer(context, *args, **kwargs):
+    def infer(typesystem, *args, **kwargs):
         if len(args) != ufunc.nin:
             return object_
 
         # Find the right ufunc signature
         argtypes = [type.dtype if type.is_array else type for type in args]
-        result_type = ufunc_infer.infer(context, argtypes)
+        result_type = ufunc_infer.infer(typesystem, argtypes)
 
         if result_type is None:
             return object_
@@ -128,16 +128,16 @@ def register_arbitrary_ufunc(ufunc):
 # Ufunc type inference
 #----------------------------------------------------------------------------
 
-def binary_map(context, a, b, out):
+def binary_map(typesystem, a, b, out):
     if out is not None:
         return out
 
-    return promote(context, a, b)
+    return promote(typesystem, a, b)
 
-def binary_map_bool(context, a, b, out):
-    type = binary_map(context, a, b, out)
+def binary_map_bool(typesystem, a, b, out):
+    type = binary_map(typesystem, a, b, out)
     if type.is_array:
-        return type.copy(dtype=bool_)
+        return type.add('dtype', bool_)
     else:
         return bool_
 
@@ -178,13 +178,13 @@ def reduceat(a, indices, axis, dtype, out, static_dtype=None):
 def reduceat_bool(a, indices, axis, dtype, out):
     return reduceat(a, indices, axis, dtype, out, bool_)
 
-def outer(context, a, b, static_dtype=None):
+def outer(typesystem, a, b, static_dtype=None):
     a = array_of_dtype(a, None, static_dtype, out=None)
     if a and a.is_array:
         return a.dtype[:, :]
 
-def outer_bool(context, a, b):
-    return outer(context, a, b, bool_)
+def outer_bool(typesystem, a, b):
+    return outer(typesystem, a, b, bool_)
 
 #------------------------------------------------------------------------
 # Binary Ufuncs

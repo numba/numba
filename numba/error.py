@@ -2,9 +2,7 @@
 from __future__ import print_function, division, absolute_import
 import traceback
 
-from numba.minivect.minierror import Error
-
-__all__ = ["Error", "NumbaError", "InternalError", "InvalidTemplateError"]
+__all__ = ["NumbaError", "InternalError", "InvalidTemplateError"]
 
 def format_pos(node):
     if node is not None and hasattr(node, 'lineno'):
@@ -16,7 +14,7 @@ def format_postup(tup):
     lineno, col_offset = tup
     return "%s:%s: " % (lineno - 1, col_offset)
 
-class NumbaError(Error):
+class NumbaError(Exception):
     "Some error happened during compilation"
 
     def __init__(self, node, msg=None, *args, **kwds):
@@ -40,11 +38,16 @@ class NumbaError(Error):
             return "<internal error creating numba error message>"
 
 
-class InternalError(Error):
+class InternalError(Exception):
     "Indicates a compiler bug"
 
-class _UnknownAttribute(Error):
+class _UnknownAttribute(Exception):
     pass
 
-class InvalidTemplateError(Error):
+class InvalidTemplateError(Exception):
     "Raised for invalid template type specifications"
+
+class UnpromotableTypeError(TypeError):
+    "Raised when we can't promote two given types"
+    def __str__(self):
+        return "Cannot promote types %s and %s" % self.args[0]

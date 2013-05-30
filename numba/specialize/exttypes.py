@@ -9,7 +9,6 @@ from numba import nodes
 from numba import function_util
 from numba.exttypes import virtual
 from numba.traits import traits, Delegate
-from numba.typesystem import is_obj, promote_closest, promote_to_native
 
 class ExtensionTypeLowerer(visitors.NumbaTransformer):
     """
@@ -17,9 +16,10 @@ class ExtensionTypeLowerer(visitors.NumbaTransformer):
     """
 
     def get_handler(self, ext_type):
-        if ext_type.is_jit_extension:
+        if ext_type.is_extension and not ext_type.is_autojit_exttype:
             return StaticExtensionHandler()
         else:
+            assert ext_type.is_autojit_exttype, ext_type
             return DynamicExtensionHandler()
 
     # ______________________________________________________________________
@@ -163,7 +163,7 @@ class DynamicExtensionHandler(object):
         node.value = nodes.CloneableNode(node.value)
 
         ext_type = node.ext_type
-        func_signature = node.type
+        func_signature = node.type #typesystem.extmethod_to_function(node.type)
         offset = ext_type.vtab_offset
 
         # __________________________________________________________________

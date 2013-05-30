@@ -9,7 +9,7 @@ import numpy as np
 # Structs as locals
 #------------------------------------------------------------------------
 
-struct_type = struct(a=char.pointer(), b=int_)
+struct_type = struct_(a=char.pointer(), b=int_)
 
 @autojit(backend='ast', locals=dict(value=struct_type))
 def struct_local():
@@ -84,7 +84,7 @@ def record_array(array):
     array[0].b = 5.0
 
 def test_record_array():
-    struct_type = struct([('a', int32), ('b', double)])
+    struct_type = struct_([('a', int32), ('b', double)])
     struct_dtype = struct_type.get_dtype()
 
     array = np.empty((1,), dtype=struct_dtype)
@@ -96,7 +96,7 @@ def test_record_array():
 # Object Coercion
 #------------------------------------------------------------------------
 
-struct_type = struct([('a', int_), ('b', double)])
+struct_type = struct_([('a', int_), ('b', double)])
 
 @autojit(backend='ast', locals=dict(value=struct_type))
 def coerce_to_obj():

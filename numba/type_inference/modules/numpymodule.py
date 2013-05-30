@@ -17,7 +17,6 @@ from functools import reduce
 import numpy as np
 
 from numba import *
-from numba.minivect import minitypes
 from numba import typesystem, error
 from numba.type_inference.module_type_inference import (register,
                                                         register_inferer,
@@ -35,8 +34,8 @@ index_array_t = npy_intp[:]
 # Some utilities
 #------------------------------------------------------------------------
 
-def promote(context, *types):
-    return reduce(context.promote_types, map(array_from_type, types))
+def promote(typesystem, *types):
+    return reduce(typesystem.promote, map(array_from_type, types))
 
 def resolve_attribute_dtype(dtype, default=None):
     "Resolve the type for numpy dtype attributes"
@@ -68,14 +67,14 @@ def get_dtype(dtype_arg, default_dtype=None):
         if default_dtype is None:
             return None
 
-        return typesystem.dtype(default_dtype)
+        return typesystem.numpy_dtype(default_dtype)
     else:
         return resolve_attribute_dtype(dtype_arg)
 
 def promote_to_array(dtype):
     "Promote scalar to 0d array type"
     if not dtype.is_array:
-        dtype = minitypes.ArrayType(dtype, 0)
+        dtype = typesystem.array_(dtype, 0)
     return dtype
 
 def demote_to_scalar(type):
@@ -98,11 +97,9 @@ def array_from_type(type):
     elif type.is_tuple or type.is_list:
         dtype = array_from_type(type.base_type)
         if dtype.is_array:
-            type = dtype.copy()
-            type.ndim += 1
-            return type
+            return dtype.add('ndim', type.ndim + 1)
     elif not type.is_object:
-        return minitypes.ArrayType(dtype=type, ndim=0)
+        return typesystem.array(dtype=type, ndim=0)
 
     return object_
 
@@ -170,7 +167,7 @@ def arange(start, stop, step, dtype):
         return dtype_type.dtype[:]
 
 @register(np)
-def dot(context, a, b, out):
+def dot(typesystem, a, b, out):
     "Resolve a call to np.dot()"
     if out is not None:
         return out
@@ -178,7 +175,7 @@ def dot(context, a, b, out):
     lhs_type = promote_to_array(a)
     rhs_type = promote_to_array(b)
 
-    dtype = context.promote_types(lhs_type.dtype, rhs_type.dtype)
+    dtype = typesystem.promote(lhs_type.dtype, rhs_type.dtype)
     dst_ndim = lhs_type.ndim + rhs_type.ndim - 2
 
     result_type = typesystem.array(dtype, dst_ndim)
@@ -188,7 +185,7 @@ def dot(context, a, b, out):
 def array(object, dtype, order, subok):
     type = array_from_type(object)
     if type.is_array and dtype is not None:
-        type = type.copy(dtype=dtype)
+        type = type.add('dtype', dtype)
     elif dtype is not None:
         return dtype
     else:
@@ -200,29 +197,29 @@ def nonzero(a):
 
 def _nonzero(type):
     if type.is_array:
-        return typesystem.TupleType(index_array_t, type.ndim)
+        return typesystem.tuple_(index_array_t, type.ndim)
     else:
-        return typesystem.TupleType(index_array_t)
+        return typesystem.tuple_(index_array_t)
 
 @register(np)
-def where(context, condition, x, y):
+def where(typesystem, condition, x, y):
     if x is None and y is None:
         return nonzero(condition)
 
-    return promote(context, x, y)
+    return promote(typesystem, x, y)
 
 @register(np)
-def vdot(context, a, b):
+def vdot(typesystem, a, b):
     lhs_type = promote_to_array(a)
     rhs_type = promote_to_array(b)
-    dtype = context.promote_types(lhs_type.dtype, rhs_type.dtype)
+    dtype = typesystem.promote(lhs_type.dtype, rhs_type.dtype)
     return dtype
 
 @register(np)
-def inner(context, a, b):
+def inner(typesystem, a, b):
     lhs_type = promote_to_array(a)
     rhs_type = promote_to_array(b)
-    dtype = context.promote_types(lhs_type.dtype, rhs_type.dtype)
+    dtype = typesystem.promote(lhs_type.dtype, rhs_type.dtype)
     if lhs_type.ndim == 0:
         result_ndim = rhs_type.ndim
     elif rhs_type.ndim == 0:
@@ -236,15 +233,15 @@ def inner(context, a, b):
     return result_type
 
 @register(np)
-def outer(context, a, b):
-    result_type = promote(context, a, b)
+def outer(typesystem, a, b):
+    result_type = promote(typesystem, a, b)
     # promote() converts scalar types to 0-dim arrays, so it should
     # always return an array type.  Ensure this continues to hold...
     assert result_type.is_array
     return result_type.dtype[:, :]
 
 @register(np, pass_in_types=False)
-def tensordot(context, a, b, axes):
+def tensordot(typesystem, a, b, axes):
     '''Typing function for numpy.tensordot().
 
     Defaults to Python object for any caller that isn't using the
@@ -267,7 +264,7 @@ def tensordot(context, a, b, axes):
     elif rhs_type.ndim < 1:
         raise error.NumbaError(b, 'First argument to numpy.tensordot() '
                                'requires array of dimensionality >= 1.')
-    dtype = context.promote_types(lhs_type.dtype, rhs_type.dtype)
+    dtype = typesystem.promote(lhs_type.dtype, rhs_type.dtype)
     if axes is None:
         result_ndim = lhs_type.ndim + rhs_type.ndim - 4
         if result_ndim < 0:
@@ -281,18 +278,18 @@ def tensordot(context, a, b, axes):
     return result_type
 
 @register(np)
-def einsum(context, subs, operands, kws):
+def einsum(typesystem, subs, operands, kws):
     # XXX Issue warning to user?
     # XXX Attempt type inference in case where subs is a string?
     return object_
 
 @register(np)
-def kron(context, a, b):
+def kron(typesystem, a, b):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np)
-def trace(context, a, offset, axis1, axis2, dtype, out):
+def trace(typesystem, a, offset, axis1, axis2, dtype, out):
     #raise NotImplementedError("XXX")
     return object_
 
@@ -301,96 +298,96 @@ def trace(context, a, offset, axis1, axis2, dtype, out):
 #------------------------------------------------------------------------
 
 @register(np.linalg)
-def cholesky(context, a):
+def cholesky(typesystem, a):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def cond(context, x, p):
+def cond(typesystem, x, p):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def det(context, a):
+def det(typesystem, a):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def eig(context, a):
+def eig(typesystem, a):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def eigh(context, a, UPLO):
+def eigh(typesystem, a, UPLO):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def eigvals(context, a):
+def eigvals(typesystem, a):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def eigvalsh(context, a, UPLO):
+def eigvalsh(typesystem, a, UPLO):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def inv(context, a):
+def inv(typesystem, a):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def lstsq(context, a, b, rcond):
+def lstsq(typesystem, a, b, rcond):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def matrix_power(context, M, n):
+def matrix_power(typesystem, M, n):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def matrix_rank(context, M, tol):
+def matrix_rank(typesystem, M, tol):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def norm(context, x, ord):
+def norm(typesystem, x, ord):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def pinv(context, a, rcond):
+def pinv(typesystem, a, rcond):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def qr(context, a, mode):
+def qr(typesystem, a, mode):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def slogdet(context, a):
+def slogdet(typesystem, a):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def solve(context, a, b):
+def solve(typesystem, a, b):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def svd(context, a, full_matrices, compute_uv):
+def svd(typesystem, a, full_matrices, compute_uv):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def tensorinv(context, a, ind):
+def tensorinv(typesystem, a, ind):
     #raise NotImplementedError("XXX")
     return object_
 
 @register(np.linalg)
-def tensorsolve(context, a, b, axes):
+def tensorsolve(typesystem, a, b, axes):
     #raise NotImplementedError("XXX")
     return object_

@@ -9,17 +9,17 @@ try:
 except ImportError:
     import builtins
 
-from functools import reduce
+from functools import reduce, partial
 
 import numba
 from numba import *
 from numba import error, control_flow, visitors, nodes
 from numba import oset, odict
-from numba.specialize.mathcalls import is_math_function
+from numba.type_inference.modules import mathmodule
 from numba.type_inference import module_type_inference, infer_call, deferred
-from numba.minivect import minitypes
 from numba import utils, typesystem
 from numba.control_flow import ssa
+from numba.typesystem import ssatypes
 from numba.typesystem.ssatypes import kosaraju_strongly_connected
 from numba.symtab import Variable
 from numba import closures as closures
@@ -27,8 +27,7 @@ import numba.wrapping.compiler
 from numba.support import numpy_support
 from numba.exttypes.variable import ExtensionAttributeVariable
 
-from numba.typesystem import is_obj, promote_closest, get_type
-from numba.utils import dump
+from numba.typesystem import get_type
 
 import llvm.core
 import numpy
@@ -111,7 +110,7 @@ class TypeInferer(visitors.NumbaTransformer):
             self.return_type = self.promote_types(ret_type, self.return_type)
 
         restype, argtypes = self.return_type, self.func_signature.args
-        self.func_signature = minitypes.FunctionType(return_type=restype,
+        self.func_signature = typesystem.function(return_type=restype,
                                                      args=argtypes)
 
     #------------------------------------------------------------------------
@@ -162,8 +161,7 @@ class TypeInferer(visitors.NumbaTransformer):
         self.initialize_argtypes(arg_types)
         self.initialize_ssa()
 
-        self.func_signature.args = tuple(arg_types)
-
+        self.func_signature = self.func_signature.add('args', arg_types)
         self.have_cfg = hasattr(self.ast, 'flow')
         if self.have_cfg:
             self.deferred_types = []
@@ -183,8 +181,8 @@ class TypeInferer(visitors.NumbaTransformer):
     def is_object(self, type):
         return type.is_object or type.is_array
 
-    def promote_types(self, t1, t2):
-        return self.context.promote_types(t1, t2)
+    def promote_types(self, type1, type2):
+        return ssatypes.promote(self.env.crnt.typesystem, type1, type2)
 
     def promote_types_numeric(self, t1, t2):
         "Type promotion but demote objects to numeric types"
@@ -204,7 +202,7 @@ class TypeInferer(visitors.NumbaTransformer):
         self.promote_types(dst_type, src_type)
 
     def type_from_pyval(self, pyval):
-        return self.context.typemapper.from_python(pyval)
+        return self.env.crnt.typesystem.typeof(pyval)
 
     #------------------------------------------------------------------------
     # SSA-based type inference
@@ -237,7 +235,8 @@ class TypeInferer(visitors.NumbaTransformer):
         incoming_types = [v.type for v in incoming]
         if len(incoming_types) > 1:
             promoted_type = typesystem.PromotionType(
-                node.variable, self.context,incoming_types, assignment=True)
+                node.variable, partial(ssatypes.promote, self.env.crnt.typesystem),
+                incoming_types, True)
             promoted_type.simplify()
             node.variable.type = promoted_type.resolve()
         else:
@@ -631,9 +630,9 @@ class TypeInferer(visitors.NumbaTransformer):
     def visit_booltest(self, node):
         if isinstance(node.test, control_flow.ControlBlock):
             node.test.body[0] = nodes.CoercionNode(
-                node.test.body[0], minitypes.bool_)
+                node.test.body[0], typesystem.bool_)
         else:
-            node.test = nodes.CoercionNode(node.test, minitypes.bool_)
+            node.test = nodes.CoercionNode(node.test, typesystem.bool_)
 
     def visit_While(self, node):
         self.generic_visit(node)
@@ -646,7 +645,7 @@ class TypeInferer(visitors.NumbaTransformer):
         self.generic_visit(node)
         type_ = self.promote(node.body.variable, node.orelse.variable)
         node.variable = Variable(type_)
-        node.test = nodes.CoercionNode(node.test, minitypes.bool_)
+        node.test = nodes.CoercionNode(node.test, typesystem.bool_)
         node.orelse = nodes.CoercionNode(node.orelse, type_)
         node.body = nodes.CoercionNode(node.body, type_)
         return node
@@ -670,7 +669,7 @@ class TypeInferer(visitors.NumbaTransformer):
             # When returning None, set the return type to void.
             # That way, we don't have to deal with the PyObject reference.
             if self.return_variable.type is None:
-                self.return_variable.type = minitypes.VoidType()
+                self.return_variable.type = typesystem.void
             value = None
         elif self.return_variable.type is None:
             self.return_variable.type = type
@@ -722,15 +721,15 @@ class TypeInferer(visitors.NumbaTransformer):
         # Determine the type of the global, i.e. a builtin, global
         # or (numpy) module
         if is_builtin:
-            type = typesystem.BuiltinType(name=global_name)
+            type = typesystem.builtin_(global_name, getattr(builtins, global_name))
         else:
             # FIXME: analyse the bytecode of the entire module, to determine
             # overriding of builtins
             if isinstance(globals.get(global_name), types.ModuleType):
-                type = typesystem.ModuleType(globals.get(global_name))
+                type = typesystem.module(globals.get(global_name))
             else:
                 value = lookup_global(self.env, global_name, name_node)
-                type = typesystem.GlobalType(global_name, value)
+                type = typesystem.global_(value) # do away with this
 
         variable = Variable(type, name=global_name, is_constant=True,
                             is_global=is_global, is_builtin=is_builtin,
@@ -804,8 +803,8 @@ class TypeInferer(visitors.NumbaTransformer):
         #     raise AssertionError
         assert len(node.values) >= 2
         node.values = self.visitlist(node.values)
-        node.values[:] = nodes.CoercionNode.coerce(node.values, minitypes.bool_)
-        node.variable = Variable(minitypes.bool_)
+        node.values[:] = nodes.CoercionNode.coerce(node.values, typesystem.bool_)
+        node.variable = Variable(typesystem.bool_)
         return node
 
     def _handle_floordiv(self, node):
@@ -846,18 +845,18 @@ class TypeInferer(visitors.NumbaTransformer):
                 ["is_int", 'is_object', 'is_bool'])
 
         v1, v2 = node.left.variable, node.right.variable
-        promotion_type = self.promote(v1, v2)
+        promoted_type = self.promote(v1, v2)
 
-        if (v1.type.is_pointer or v2.type.is_pointer):
+        if promoted_type.is_pointer:
             self._verify_pointer_type(node, v1, v2)
         elif not ((v1.type.is_array and v2.type.is_array) or
                   (v1.type.is_unresolved or v2.type.is_unresolved)):
             # Don't coerce arrays to lesser or higher dimensionality
             # Broadcasting transforms should take care of this
             node.left, node.right = nodes.CoercionNode.coerce(
-                                [node.left, node.right], promotion_type)
+                                [node.left, node.right], promoted_type)
 
-        node.variable = Variable(promotion_type)
+        node.variable = Variable(promoted_type)
         if isinstance(node.op, ast.FloorDiv):
             node = self._handle_floordiv(node)
 
@@ -866,8 +865,8 @@ class TypeInferer(visitors.NumbaTransformer):
     def visit_UnaryOp(self, node):
         node.operand = self.visit(node.operand)
         if isinstance(node.op, ast.Not):
-            node.operand = nodes.CoercionNode(node.operand, minitypes.bool_)
-            node.variable = Variable(minitypes.bool_)
+            node.operand = nodes.CoercionNode(node.operand, typesystem.bool_)
+            node.variable = Variable(typesystem.bool_)
         else:
             node.variable = Variable(node.operand.variable.type)
 
@@ -885,7 +884,7 @@ class TypeInferer(visitors.NumbaTransformer):
         result_type = bool_
 
         if len(set(types)) != 1:
-            type = reduce(self.context.promote_types, types)
+            type = reduce(self.promote_types, types)
             if type.is_array:
                 result_type = typesystem.array(bool_, type.ndim)
             else:
@@ -904,7 +903,7 @@ class TypeInferer(visitors.NumbaTransformer):
         slice_type = node.slice.variable.type
 
         if not isinstance(node.slice, ast.Index) or not (
-                slice_type.is_int or slice_type.is_c_string):
+                slice_type.is_int or slice_type.is_string):
             raise error.NumbaError(node.slice,
                                    "Struct index must be a single string "
                                    "or integer")
@@ -983,9 +982,9 @@ class TypeInferer(visitors.NumbaTransformer):
                 if slice_type.is_tuple:
                     # result_type = value_type[slice_type.size:]
                     # TODO: use slice_variable.constant_value if available
-                    result_type = minitypes.object_
+                    result_type = typesystem.object_
                 else:
-                    result_type = minitypes.object_
+                    result_type = typesystem.object_
             elif any(slice_node.variable.type.is_unresolved for slice_node in slices):
                 for slice_node in slices:
                     if slice_node.variable.type.is_unresolved:
@@ -1019,7 +1018,7 @@ class TypeInferer(visitors.NumbaTransformer):
         elif value_type.is_object:
             result_type = object_
 
-        elif value_type.is_c_string:
+        elif value_type.is_string:
             # Handle string indexing
             if slice_type.is_int:
                 result_type = char
@@ -1050,17 +1049,17 @@ class TypeInferer(visitors.NumbaTransformer):
         type = variable.type
         if (type.is_object and variable.is_constant and
                 variable.constant_value is None):
-            type = typesystem.NewAxisType()
+            type = typesystem.newaxis
 
         node.variable = Variable(type)
         return node
 
     def visit_Ellipsis(self, node):
-        return nodes.ConstNode(Ellipsis, typesystem.EllipsisType())
+        return nodes.ConstNode(Ellipsis, typesystem.ellipsis)
 
     def visit_Slice(self, node):
         self.generic_visit(node)
-        type = typesystem.SliceType()
+        type = typesystem.slice_
 
         is_constant = False
         const = None
@@ -1084,7 +1083,7 @@ class TypeInferer(visitors.NumbaTransformer):
 
     def visit_ExtSlice(self, node):
         self.generic_visit(node)
-        node.variable = Variable(minitypes.object_)
+        node.variable = Variable(typesystem.object_)
         return node
 
     #------------------------------------------------------------------------
@@ -1127,7 +1126,7 @@ class TypeInferer(visitors.NumbaTransformer):
         if constant_value is not None:
             constant_value = tuple(constant_value)
         # TODO: determine element type of node.elts
-        type = typesystem.TupleType(object_, size=len(node.elts))
+        type = typesystem.tuple_(object_, size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node
@@ -1136,7 +1135,7 @@ class TypeInferer(visitors.NumbaTransformer):
         node.elts = self.visitlist(node.elts)
         constant_value = self._get_constant_list(node)
         # TODO: determine element type of node.elts
-        type = typesystem.ListType(object_, size=len(node.elts))
+        type = typesystem.list_(object_, size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node
@@ -1152,13 +1151,13 @@ class TypeInferer(visitors.NumbaTransformer):
                                       for key in constant_keys))
             value_type = reduce(unify, (self.type_from_pyval(key)
                                         for key in constant_keys))
-            type = typesystem.DictType(key_type, value_type, size=len(node.keys))
+            type = typesystem.dict_(key_type, value_type, size=len(node.keys))
 
             variable = Variable(type, is_constant=True,
                                 constant_value=dict(zip(constant_keys,
                                                         constant_values)))
         else:
-            type = typesystem.DictType(object_, object_, size=len(node.keys))
+            type = typesystem.dict_(object_, object_, size=len(node.keys))
             variable = Variable(type)
 
         node.variable = variable
@@ -1205,14 +1204,11 @@ class TypeInferer(visitors.NumbaTransformer):
                                                          func_type, new_node)
         elif self.function_cache.is_registered(py_func):
             py_func = py_func.py_func
-            signature = minitypes.FunctionType(None, arg_types)
+            signature = typesystem.function(None, arg_types)
 
             jitted_func = numba.jit(signature)(py_func)
             signature = jitted_func.signature
             llvm_func = jitted_func.lfunc
-        #elif not call_node.keywords and self._is_math_function(call_node.args,
-        #                                                       py_func):
-        #    new_node = self._resolve_math_call(call_node, py_func)
         else:
             # This should not be a function-cache method
             # signature = self.function_cache.get_signature(arg_types)
@@ -1248,14 +1244,9 @@ class TypeInferer(visitors.NumbaTransformer):
     def _infer_complex_math(self, func_type, new_node, node, argtype):
         "Infer types for cmath.somefunc()"
         # Check for cmath.{sqrt,sin,etc}
-        # FIXME: This is not visited when the input is a non-complex scalar.
-        #        In that case, Numba will bypass the cmath and generate
-        #        a LLVM math intrinsic call.
-        if not argtype.is_array:
-            args = [nodes.const(1.0, float_)]
-            is_math = is_math_function(args, func_type.value)
-            if len(node.args) == 1 and is_math:
-                new_node = nodes.CoercionNode(new_node, complex128)
+        if (len(node.args) == 1 and
+                func_type.value.__name__ in mathmodule.mathsyms):
+            new_node = nodes.CoercionNode(new_node, complex128)
 
         return new_node
 
@@ -1265,8 +1256,7 @@ class TypeInferer(visitors.NumbaTransformer):
         to infer a more specific return value than 'object'.
         """
         if ((func_type.is_module_attribute and func_type.module is cmath) or
-                 (func_type.is_numpy_attribute and len(argtypes) == 1 and
-                  argtypes[0].is_complex)):
+                 (func_type.is_numpy_attribute and len(argtypes) == 1)):
             new_node = self._infer_complex_math(
                     func_type, new_node, node, argtypes[0])
 
@@ -1340,11 +1330,11 @@ class TypeInferer(visitors.NumbaTransformer):
         # TODO: Resolve variable types based on how they are used as arguments
         # TODO: in calls with known signatures
         new_node = None
-        if func_type.is_autojit_method:
+        if func_type.is_autojit_extmethod:
             assert isinstance(node.func, nodes.ExtensionMethod)
             new_node = self._resolve_autojit_method_call(
                 node, node.func.ext_type, node.func.attr)
-        if func_type.is_function:
+        if func_type.is_function or func_type.is_extmethod:
             # Native function call
             no_keywords(node)
             new_node = nodes.NativeFunctionCallNode(
@@ -1367,8 +1357,7 @@ class TypeInferer(visitors.NumbaTransformer):
             new_node = nodes.PointerCallNode(
                     func_type.signature,
                     node.args,
-                    func_type.pointer,
-                    py_func=func_type.obj)
+                    func_type.ptr)
 
         elif func_type.is_cast:
             # Call of a numba type
@@ -1417,11 +1406,11 @@ class TypeInferer(visitors.NumbaTransformer):
 
         result_type = None
         if attribute is numpy.newaxis:
-            result_type = typesystem.NewAxisType()
+            result_type = typesystem.newaxis
         elif attribute is numba.NULL:
-            return typesystem.null_type
+            return typesystem.null
         elif type.is_numpy_module or type.is_numpy_attribute:
-            result_type = typesystem.NumpyAttributeType(module=type.module,
+            result_type = typesystem.numpy_attribute(module=type.module,
                                                          attr=node.attr)
         elif type.is_numba_module or type.is_math_module:
             result_type = self.context.typemapper.from_python(attribute)
@@ -1435,7 +1424,7 @@ class TypeInferer(visitors.NumbaTransformer):
                 if result_type != object_:
                     return result_type
 
-            result_type = typesystem.ModuleAttributeType(module=type.module,
+            result_type = typesystem.module_attribute(module=type.module,
                                                          attr=node.attr)
 
         return result_type
@@ -1513,7 +1502,7 @@ class TypeInferer(visitors.NumbaTransformer):
         node.value = self.visit(node.value)
         type = node.value.variable.type
         if node.attr == 'conjugate' and (type.is_complex or type.is_float):
-            result_type = typesystem.MethodType(type, 'conjugate')
+            result_type = typesystem.method(type, 'conjugate')
         elif type.is_complex:
             result_type = self._resolve_complex_attribute(node, type)
         elif type.is_struct or (type.is_reference and
@@ -1524,14 +1513,14 @@ class TypeInferer(visitors.NumbaTransformer):
         elif (type.is_known_value and
                   module_type_inference.is_registered((type.value, node.attr))):
             # Unbound method call, e.g. np.add.reduce
-            result_type = typesystem.KnownValueType((type.value, node.attr),
+            result_type = typesystem.known_value((type.value, node.attr),
                                                     is_object=True)
         elif type.is_array and node.attr in ('data', 'shape', 'strides', 'ndim'):
             # handle shape/strides/ndim etc
             return nodes.ArrayAttributeNode(node.attr, node.value)
         elif type.is_array and node.attr == "dtype":
             # TODO: resolve as constant at compile time?
-            result_type = typesystem.dtype(type.dtype)
+            result_type = typesystem.numpy_dtype(type.dtype)
         elif type.is_extension:
             return self._resolve_extension_attribute(node, type)
         else:
@@ -1642,7 +1631,7 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
         self.generic_visit(node)
         types = [n.type for n in node.dims]
         if all(type.is_int for type in types):
-            node.type = reduce(self.context.promote_types, types)
+            node.type = reduce(self.env.crnt.typesystem.promote, types)
         else:
             node.type = object_
 

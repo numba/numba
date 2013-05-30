@@ -20,7 +20,7 @@ exception: (see below)
 --------------------- Numba Encountered Errors or Warnings ---------------------
     if x:
 -------^
-Error 6:7: No global named 'x'
+Error ...: No global named 'x'
 --------------------------------------------------------------------------------
 """
 
@@ -39,7 +39,7 @@ exception: (see below)
 --------------------- Numba Encountered Errors or Warnings ---------------------
     print(10[20])
 ----------^
-Error 29:10: object of type int cannot be indexed
+Error ...: object of type int cannot be indexed
 --------------------------------------------------------------------------------
 """
 
@@ -59,7 +59,7 @@ exception: (see below)
 --------------------- Numba Encountered Errors or Warnings ---------------------
     print(10[20])
 ----------^
-Error 48:10: object of type int cannot be indexed
+Error ...: object of type int cannot be indexed
 --------------------------------------------------------------------------------
 """
 
@@ -68,7 +68,7 @@ def warn_and_error(a, b):
     1[2]
 
 __doc__ += """
->>> autojit(warn_and_error)(1, 2)
+>>> autojit(warn=False)(warn_and_error)(1, 2)
 Traceback (most recent call last):
     ...
 NumbaError: (see below)
@@ -77,22 +77,19 @@ NumbaError: (see below)
 ----^
 Error 68:4: object of type int cannot be indexed
 <BLANKLINE>
-def warn_and_error(a, b):
-----------------------^
-Warning 66:22: Unused argument 'b'
 --------------------------------------------------------------------------------
 
 >>> autojit(warnstyle='simple')(warn_and_error)(1, 2)
 Traceback (most recent call last):
     ...
 NumbaError: (see below)
-Error 68:4: object of type int cannot be indexed
-Warning 66:22: Unused argument 'b'
+Error ...: object of type int cannot be indexed
+Warning ...: Unused argument 'b'
 
 >>> autojit(func_decorated.py_func, warnstyle='simple')()
 Traceback (most recent call last):
     ...
-NumbaError: 48:10: object of type int cannot be indexed
+NumbaError: ...: object of type int cannot be indexed
 """
 
 if __name__ == '__main__':
