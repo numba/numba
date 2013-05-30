@@ -2,5 +2,5 @@
 
 
 from numba.exttypes.types.extensiontype import (
-    ExtensionType, JitExtensionType, AutojitExtensionType)
+    ExtensionType, jit_exttype, autojit_exttype)
 from numba.exttypes.types.methods import ExtMethodType

@@ -10,8 +10,8 @@ from itertools import starmap
 
 from itertools import izip
 
-from numba.typesystem import basetypes
-from numba.minivect import minitypes
+from numba import typesystem
+from numba.typesystem import types
 
 __all__ = [ 'typeset', 'numeric', 'integral', 'floating', 'complextypes' ]
 
@@ -30,7 +30,7 @@ def _build_position_table(signature):
 
     return table
 
-def get_effective_argtypes(context, signature, argtypes):
+def get_effective_argtypes(promote, signature, argtypes):
     """
     Get promoted argtypes for typeset arguments, e.g.
 
@@ -51,7 +51,7 @@ def get_effective_argtypes(context, signature, argtypes):
             types = [args[i] for i in poslist]
 
             # Promote corresponding argument types
-            result_type = reduce(context.promote_types, types)
+            result_type = reduce(promote, types)
 
             # Update promotion table
             type_set = signature.args[poslist[-1]]
@@ -63,13 +63,13 @@ def get_effective_argtypes(context, signature, argtypes):
 
     return promotion_table, args
 
-def match(context, signature, argtypes):
+def match(promote, signature, argtypes):
     """
     See whether a specialization matches the given function signature.
     """
     if len(signature.args) == len(argtypes):
         promotion_table, args = get_effective_argtypes(
-                            context, signature, argtypes)
+            promote, signature, argtypes)
 
         if all(starmap(_match_argtype, izip(signature.args, args))):
             restype = signature.return_type
@@ -83,19 +83,19 @@ def match(context, signature, argtypes):
 # Type sets
 #----------------------------------------------------------------------------
 
-class typeset(minitypes.Type):
+class typeset(types.NumbaType):
     """
     Holds a set of types that can be used to specify signatures for
     type inference.
     """
 
-    is_typeset = True
+    typename = "typeset"
+    argnames = ["types", "name"]
+    defaults = {"name": None}
+    flags = ["object"]
 
-    def __init__(self, types, name=None):
-        super(typeset, self).__init__()
-
-        self.types = frozenset(types)
-        self.name = name
+    def __init__(self, types, name):
+        super(typeset, self).__init__(frozenset(types), name)
         self.first_type = types[0]
 
         self._from_argtypes = {}
@@ -103,13 +103,13 @@ class typeset(minitypes.Type):
             if type.is_function:
                 self._from_argtypes[type.args] = type
 
-    def find_match(self, context, argtypes):
+    def find_match(self, promote, argtypes):
         argtypes = tuple(argtypes)
         if argtypes in self._from_argtypes:
             return self._from_argtypes[argtypes]
 
         for type in self.types:
-            signature = match(context, type, argtypes)
+            signature = match(promote, type, argtypes)
             if signature:
                 return signature
 
@@ -125,7 +125,7 @@ class typeset(minitypes.Type):
         return hash(id(self))
 
 
-numeric = typeset(minitypes.numeric)
-integral = typeset(minitypes.integral)
-floating = typeset(minitypes.floating)
-complextypes = typeset(minitypes.complextypes)
+numeric = typeset(typesystem.numeric)
+integral = typeset(typesystem.integral)
+floating = typeset(typesystem.floating)
+complextypes = typeset(typesystem.complextypes)

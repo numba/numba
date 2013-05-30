@@ -94,7 +94,7 @@ class NormalizeAST(visitors.NumbaTransformer):
         # Create innermost body, i.e. list.append(expr)
         # TODO: size hint for PyList_New
         list_create = ast.List(elts=[], ctx=ast.Load())
-        list_create.type = typesystem.object_ # typesystem.ListType()
+        list_create.type = typesystem.object_ # typesystem.list_()
         list_create = nodes.CloneableNode(list_create)
         list_value = nodes.CloneNode(list_create)
         list_append = ast.Attribute(list_value, "append", ast.Load())
@@ -145,6 +145,29 @@ class NormalizeAST(visitors.NumbaTransformer):
         assignment.inplace_op = node.op
         return self.visit(assignment)
 
+
+    ######## Sync with cf2 branch in validators.py ###########
+
+    def visit_With(self, node):
+        node.context_expr = self.visit(node.context_expr)
+        if node.optional_vars:
+            raise error.NumbaError(
+                node.context_expr,
+                "Only 'with python' and 'with nopython' is "
+                "supported at this moment")
+
+        self.visitlist(node.body)
+        return node
+
+
+    def visit_For(self, node):
+        if not isinstance(node.target, (ast.Name, ast.Attribute)):
+            raise error.NumbaError(
+                node.target, "Only a single target iteration variable is "
+                             "supported at the moment")
+
+        self.visitchildren(node)
+        return node
 
 #------------------------------------------------------------------------
 # Nodes

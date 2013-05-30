@@ -8,14 +8,14 @@ unordered (hash-based) fields.
 from __future__ import print_function, division, absolute_import
 
 import numba
-from numba.typesystem import NumbaType, is_obj
+from numba.typesystem import is_obj
 from numba.exttypes import ordering
 
 #------------------------------------------------------------------------
 # Extension Attributes Type
 #------------------------------------------------------------------------
 
-class AttributeTable(NumbaType):
+class AttributeTable(object):
     """
     Type for extension type attributes.
     """

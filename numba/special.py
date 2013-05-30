@@ -51,15 +51,14 @@ def addressof(obj, propagate=True):
 # Types
 #------------------------------------------------------------------------
 
-def typeof(variable):
+def typeof(value):
     """
-    Get the type of a variable.
+    Get the type of a variable or value.
 
     Used outside of Numba code, infers the type for the object.
     """
-    from numba.environment import NumbaEnvironment
-    context = NumbaEnvironment.get_environment().context
-    return context.typemapper.from_python(variable)
+    from numba import typesystem
+    return typesystem.numba_typesystem.typeof(value)
 
 #------------------------------------------------------------------------
 # python/nopython context managers

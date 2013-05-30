@@ -3,6 +3,8 @@ from __future__ import print_function, division, absolute_import
 from .external import ExternalFunction
 from numba import *
 
+c_string_type = char.pointer()
+
 class printf(ExternalFunction):
     arg_types = [void.pointer()]
     return_type = int32

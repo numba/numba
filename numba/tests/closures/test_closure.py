@@ -1,5 +1,9 @@
-import numba; from numba import *; from numba.error import NumbaError
-from numba.testing.test_support import rewrite_doc
+import numba
+from numba import *
+from numba.error import NumbaError
+
+autojit = autojit(warn=False, warnstyle='simple')
+
 @autojit
 def error1():
     def inner():
@@ -35,7 +39,7 @@ def error5():
 
     inner(10, a=20, b=30)
 
-@autojit(warnstyle='simple')
+@autojit
 def closure1():
     a = 10
     @jit(restype=void, argtypes=[int_])
@@ -99,19 +103,19 @@ __doc__ = """
 >>> error1()
 Traceback (most recent call last):
     ...
-NumbaError: 5:4: Closure must be decorated with 'jit' or 'autojit'
+NumbaError: ...: Closure must be decorated with 'jit' or 'autojit'
 >>> error2()
 Traceback (most recent call last):
     ...
-NumbaError: 10:5: Dynamic closures not yet supported, use @jit
+NumbaError: ...: Dynamic closures not yet supported, use @jit
 >>> error3()
 Traceback (most recent call last):
     ...
-NumbaError: 16:4: local variable 'inner' referenced before assignment
+NumbaError: ...: local variable 'inner' referenced before assignment
 >>> error4()
 Traceback (most recent call last):
     ...
-NumbaError: 28:4: Expected 3 arguments, got 4
+NumbaError: ...: Expected 3 arguments, got 4
 >>> error5()
 Traceback (most recent call last):
     ...
@@ -120,7 +124,6 @@ NumbaError: Got multiple values for positional argument 'a'
 Test closures
 
 >>> closure1().__name__
-Warning 40:4: Unused variable 'a'
 'inner'
 >>> closure1()()
 Traceback (most recent call last):
@@ -160,10 +163,6 @@ inner
 >>> c3()
 21
 """
-
-
-
-
 
 @autojit
 def closure_arg(a):
@@ -266,15 +265,8 @@ def wrong_signature(s):
 
 __doc__ += """
 >>> try_(wrong_signature, "foo")
---------------------- Numba Encountered Errors or Warnings ---------------------
-    @jit('object_(object_)')
------^
-Error 262:5: Expected 1 arguments type(s), got 0
---------------------------------------------------------------------------------
-NumbaError: 262:5: Expected 1 arguments type(s), got 0
+NumbaError: ...: Expected 1 arguments type(s), got 0
 """
-
-
 
 @autojit
 def wrong_restype():
@@ -285,12 +277,7 @@ def wrong_restype():
 
 __doc__ += """
 >>> try_(wrong_restype)
---------------------- Numba Encountered Errors or Warnings ---------------------
-    @jit('object_()')
-----^
-Error 281:4: Function with non-void return does not return a value
---------------------------------------------------------------------------------
-NumbaError: 281:4: Function with non-void return does not return a value
+NumbaError: ...: Function with non-void return does not return a value
 """
 
 #
@@ -317,12 +304,7 @@ def wrong_signature2(s):
 
 __doc__ += """
 >>> try_(wrong_signature2, "foo")
---------------------- Numba Encountered Errors or Warnings ---------------------
-    @object_(object_)
------^
-Error 313:5: Expected 1 arguments type(s), got 0
---------------------------------------------------------------------------------
-NumbaError: 313:5: Expected 1 arguments type(s), got 0
+NumbaError: ...: Expected 1 arguments type(s), got 0
 """
 
 @autojit
@@ -387,7 +369,7 @@ def test_closure_loop():
 
     inner()
 
-@autojit(locals=dict(var=int_), warn=False)
+@numba.autojit(locals=dict(var=int_), warn=False)
 def test_closure_outer_locals():
     """
     >>> test_closure_outer_locals()

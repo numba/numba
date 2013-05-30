@@ -6,11 +6,12 @@ try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
+
 import types
 from numba import functions, PY3
 from numba import nodes
 from numba.nodes.metadata import annotate, query
-from numba.typesystem.typemapper import have_properties
+from numba.typesystem.promotion import have_properties
 
 try:
     import numbers
@@ -95,7 +96,7 @@ class NumbaVisitorMixin(CooperativeBase):
 
                 recurse_co_consts(f_code)
 
-            self.argnames = self.varnames[:f_code.co_argcount]
+            self.argnames = tuple(self.varnames[:f_code.co_argcount])
 
             if f_code.co_cellvars:
                 self.varnames.extend(

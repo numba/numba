@@ -6,17 +6,9 @@ Test the Numba compiler on a simple for loop over an iterable object.
 '''
 # ______________________________________________________________________
 
-import numba
-from numba import *
-from numba.decorators import autojit
-
-from numba.minivect import minitypes
-hash(minitypes.double[:])
-
-import numpy
-import numpy as np
-
 import unittest
+from numba import autojit
+import numpy as np
 
 # ______________________________________________________________________
 

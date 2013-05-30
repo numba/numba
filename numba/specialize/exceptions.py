@@ -2,14 +2,12 @@
 from __future__ import print_function, division, absolute_import
 import ast
 
-import numba
 from numba import *
-from numba import visitors, nodes, error, functions, function_util
+from numba import visitors, nodes, error, function_util
 
 logger = logging.getLogger(__name__)
 
-from numba.external import pyapi
-from numba.typesystem import is_obj, promote_closest, promote_to_native
+from numba.typesystem import is_obj
 
 #------------------------------------------------------------------------
 # Specialize Error Checking and Raising

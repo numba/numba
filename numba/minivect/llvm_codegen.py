@@ -81,24 +81,13 @@ class LLVMCodeGen(codegen.CodeGen):
         self.blocks.append(bb)
         return bb
 
-    def optimize(self):
-        "Run llvm optimizations on the generated LLVM code (using the old llvm-py)"
-        llvm_fpm = llvm.passes.FunctionPassManager.new(self.llvm_module)
-        for llvm_pass in self.context.llvm_passes():
-            llvm_fpm.add(llvm_pass)
-
-        llvm_fpm.initialize()
-        llvm_fpm.run(self.lfunc)
-        llvm_fpm.finalize()
-
-        # self.context.llvm_fpm.run(self.lfunc)
-
-    def optimize(self):
-        "Run llvm optimizations on the generated LLVM code"
+    def inline_funcs(self):
         for call_instr in self.inline_calls:
             # print 'inlining...', call_instr
             llvm.core.inline_function(call_instr)
 
+    def optimize(self):
+        "Run llvm optimizations on the generated LLVM code"
         llvm_fpm = llvm.passes.FunctionPassManager.new(self.llvm_module)
         # target_data = llvm.ee.TargetData(self.context.llvm_ee)
         #llvm_fpm.add(self.context.llvm_ee.target_data.clone())
@@ -108,6 +97,16 @@ class LLVMCodeGen(codegen.CodeGen):
 
         pmb.populate(llvm_fpm)
         llvm_fpm.run(self.lfunc)
+
+    def optimize2(self, opt=3, cg=3, inline=1000):
+        features = '-avx'
+        tm = self.__machine = llvm.ee.TargetMachine.new(
+            opt=cg, cm=llvm.ee.CM_JITDEFAULT, features=features)
+        has_loop_vectorizer = llvm.version >= (3, 2)
+        passmanagers = llvm.passes.build_pass_managers(
+            tm, opt=opt, inline_threshold=inline,
+            loop_vectorize=has_loop_vectorizer, fpm=False)
+        passmanagers.pm.run(self.llvm_module)
 
     def visit_FunctionNode(self, node):
         self.specializer = node.specializer
@@ -119,6 +118,7 @@ class LLVMCodeGen(codegen.CodeGen):
 
         lfunc_type = node.type.to_llvm(self.context)
         self.lfunc = self.llvm_module.add_function(lfunc_type, node.mangled_name)
+        # self.lfunc.linkage = llvm.core.LINKAGE_LINKONCE_ODR
 
         self.entry_bb = self.append_basic_block('entry')
         self.builder = llvm.core.Builder.new(self.entry_bb)
@@ -127,17 +127,18 @@ class LLVMCodeGen(codegen.CodeGen):
         self.visit(node.body)
 
         # print self.lfunc
-        self.lfunc.verify()
-        self.optimize()
-        # print self.lfunc
+        self.llvm_module.verify()
+        self.inline_funcs()
+        if self.context.optimize_llvm:
+            self.optimize2()
 
         self.code.write(self.lfunc)
 
-        from numba.codegen.llvmcontext import LLVMContextManager
-        ctypes_func = ctypes_conversion.get_ctypes_func(
-                    node, self.lfunc, LLVMContextManager().execution_engine,
-                                                        self.context)
-        self.code.write(ctypes_func)
+        # from numba.codegen.llvmcontext import LLVMContextManager
+        # ctypes_func = ctypes_conversion.get_ctypes_func(
+        #             node, self.lfunc, LLVMContextManager().execution_engine,
+        #                                                 self.context)
+        # self.code.write(ctypes_func)
 
     def add_arguments(self, function):
         "Insert function arguments into the symtab"

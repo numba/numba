@@ -4,11 +4,12 @@ from __future__ import print_function, division, absolute_import
 import sys
 from numba import *
 import numpy as np
-
+import numba
 @jit(object_(double[:, :]))
 def func2(A):
     L = []
     n = A.shape[0]
+
     for i in range(10):
         for j in range(10):
             temp = A[i-n : i+n+1, j-2 : j+n+1]

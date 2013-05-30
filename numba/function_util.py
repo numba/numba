@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-from numba.external import utility
 
 def external_call(context, llvm_module, name, args=(), temp_name=None):
     extfn = context.external_library.get(name)

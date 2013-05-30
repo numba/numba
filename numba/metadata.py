@@ -113,7 +113,7 @@ class TBAAMetadata(object):
             root = self.find_root(type)
 
         node = self.make_metadata(typename(type), root,
-                                  is_constant="const" in type.qualifiers)
+                                  ) #is_constant="const" in type.qualifiers)
 
         # Cache result
         self.metadata_cache[type] = node

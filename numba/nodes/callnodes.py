@@ -82,20 +82,6 @@ class LLMacroNode (NativeCallNode):
         super(LLMacroNode, self).__init__(signature, args, None, None, **kw)
         self.macro = macro
 
-class MathNode(ExprNode):
-    """
-    Represents a high-level call to a math function.
-    """
-
-    _fields = ['arg']
-
-    def __init__(self, py_func, signature, arg, **kwargs):
-        super(MathNode, self).__init__(**kwargs)
-        self.py_func = py_func
-        self.signature = signature
-        self.arg = arg
-        self.type = signature.return_type
-
 class LLVMExternalFunctionNode(ExprNode):
     '''For calling an external llvm function where you only have the
     signature and the function name.
@@ -133,8 +119,7 @@ class ObjectCallNode(FunctionCallNode):
         if py_func and not kw.get('name', None):
             kw['name'] = py_func.__name__
         if signature is None:
-            signature = minitypes.FunctionType(return_type=object_,
-                                               args=[object_] * len(args))
+            signature = numba.function(object_, [object_] * len(args))
             if keywords:
                 signature.args.extend([object_] * len(keywords))
 
@@ -145,13 +130,13 @@ class ObjectCallNode(FunctionCallNode):
 
         self.args_tuple = ast.Tuple(elts=list(args), ctx=ast.Load())
         self.args_tuple.variable = Variable(
-                typesystem.TupleType(object_, size=len(args)))
+                typesystem.tuple_(object_, size=len(args)))
 
         if keywords:
             keywords = [(ConstNode(k.arg), k.value) for k in keywords]
             keys, values = zip(*keywords)
             self.kwargs_dict = ast.Dict(list(keys), list(values))
-            self.kwargs_dict.variable = Variable(minitypes.object_)
+            self.kwargs_dict.variable = Variable(object_)
         else:
             self.kwargs_dict = NULL_obj
 

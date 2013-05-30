@@ -12,7 +12,7 @@ from __future__ import print_function, division, absolute_import
 #    } PyArrayObject;
 
 from numba import *
-from numba import typesystem
+from numba.typesystem import tbaa
 from numba.llvm_types import _head_len, _int32
 import llvm.core as lc
 
@@ -82,29 +82,29 @@ class PyArrayAccessor(object):
         ltype = self.dtype.pointer().to_llvm(context)
         return self.builder.bitcast(data, ltype)
 
-    @make_property(typesystem.numpy_ndim)
+    @make_property(tbaa.numpy_ndim)
     def ndim(self):
         return self._get_element(1)
 
-    @make_property(typesystem.numpy_shape.pointer().qualify("const"))
+    @make_property(tbaa.numpy_shape.pointer().qualify("const"))
     def dimensions(self):
         return self._get_element(2)
 
     shape = dimensions
 
-    @make_property(typesystem.numpy_strides.pointer().qualify("const"))
+    @make_property(tbaa.numpy_strides.pointer().qualify("const"))
     def strides(self):
         return self._get_element(3)
 
-    @make_property(typesystem.numpy_base)
+    @make_property(tbaa.numpy_base)
     def base(self):
         return self._get_element(4)
 
-    @make_property(typesystem.numpy_dtype)
+    @make_property(tbaa.numpy_dtype)
     def descr(self):
         return self._get_element(5)
 
-    @make_property(typesystem.numpy_flags)
+    @make_property(tbaa.numpy_flags)
     def flags(self):
         return self._get_element(6)
     

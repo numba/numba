@@ -1025,7 +1025,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         # Create innermost body, i.e. list.append(expr)
         # TODO: size hint for PyList_New
         list_create = ast.List(elts=[], ctx=ast.Load())
-        list_create.type = object_ # typesystem.ListType()
+        list_create.type = object_ # typesystem.list_()
         list_create = nodes.CloneableNode(list_create)
         list_value = nodes.CloneNode(list_create)
         list_append = ast.Attribute(list_value, "append", ast.Load())
@@ -1072,6 +1072,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         node.context_expr = self.visit(node.context_expr)
         if node.optional_vars:
             # TODO: Mark these as assignments!
+            # Note: This is current caught in validators.py !
             node.optional_vars = self.visit(node.optional_vars)
 
         self.visitlist(node.body)

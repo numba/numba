@@ -6,7 +6,7 @@ See numba.function_util on how to call them.
 """
 from __future__ import print_function, division, absolute_import
 
-from numba.minivect import minitypes
+import numba
 
 class ExternalFunction(object):
     _attributes = ('func_name', 'arg_types', 'return_type', 'is_vararg',
@@ -41,9 +41,9 @@ class ExternalFunction(object):
 
     @property
     def signature(self):
-        return minitypes.FunctionType(return_type=self.return_type,
-                                      args=self.arg_types,
-                                      is_vararg=self.is_vararg)
+        return numba.function(return_type=self.return_type,
+                              args=self.arg_types,
+                              is_vararg=self.is_vararg)
 
     @property
     def name(self):

@@ -115,6 +115,6 @@ class IndexingIteratorImpl(IteratorImpl):
 # Register Loop Implementations
 #------------------------------------------------------------------------
 
-register_iterator_implementation("object_", NativeIteratorImpl("PyObject_GetIter",
-                                                               "PyIter_Next"))
+register_iterator_implementation("object", NativeIteratorImpl("PyObject_GetIter",
+                                                              "PyIter_Next"))
 

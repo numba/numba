@@ -2,7 +2,7 @@
 """
 Resolve calls to math functions.
 
-During type inference this produces MathNode nodes, and during
+During type inference this annotates math calls, and during
 final specialization it produces LLVMIntrinsicNode and MathCallNode
 nodes.
 """
@@ -10,6 +10,7 @@ from __future__ import print_function, division, absolute_import
 
 import math
 import cmath
+import collections
 try:
     import __builtin__ as builtins
 except ImportError:
@@ -20,9 +21,8 @@ import numpy as np
 from numba import *
 from numba import nodes
 from numba.symtab import Variable
-from numba.typesystem import get_type
+from numba.typesystem import get_type, rank
 from numba.type_inference.modules import utils
-
 
 #----------------------------------------------------------------------------
 # Utilities
@@ -30,18 +30,18 @@ from numba.type_inference.modules import utils
 
 register_math_typefunc = utils.register_with_argchecking
 
-def binop_type(context, x, y):
+def binop_type(typesystem, x, y):
     "Binary result type for math operations"
     x_type = get_type(x)
     y_type = get_type(y)
-    return context.promote_types(x_type, y_type)
+    return typesystem.promote(x_type, y_type)
 
 #----------------------------------------------------------------------------
 # Determine math functions
 #----------------------------------------------------------------------------
 
 # sin(double), sinf(float), sinl(long double)
-unary_libc_math_funcs = [
+mathsyms = [
     'sin',
     'cos',
     'tan',
@@ -49,7 +49,6 @@ unary_libc_math_funcs = [
     'acos',
     'asin',
     'atan',
-    'atan2',
     'sinh',
     'cosh',
     'tanh',
@@ -59,8 +58,8 @@ unary_libc_math_funcs = [
     'log',
     'log2',
     'log10',
-    'fabs',
     'erfc',
+    'floor',
     'ceil',
     'exp',
     'exp2',
@@ -69,12 +68,25 @@ unary_libc_math_funcs = [
     'log1p',
 ]
 
-n_ary_libc_math_funcs = [
-    'pow',
-    'round',
-]
+n_ary_mathsyms = {
+    'hypot'     : 2,
+    'atan2'     : 2,
+    'logaddexp' : 2,
+    'logaddexp2': 2,
+}
 
-all_libc_math_funcs = unary_libc_math_funcs + n_ary_libc_math_funcs
+math2ufunc = {
+    'asin' : 'arcsin',
+    'acos' : 'arccos',
+    'atan' : 'arctan',
+    'asinh': 'arcsinh',
+    'acosh': 'arccosh',
+    'atanh': 'arctanh',
+    'atan2': 'arctan2',
+    'pow'  : 'power',
+}
+
+ufunc2math = dict((v, k) for k, v in math2ufunc.items())
 
 #----------------------------------------------------------------------------
 # Math Type Inferers
@@ -82,33 +94,34 @@ all_libc_math_funcs = unary_libc_math_funcs + n_ary_libc_math_funcs
 
 # TODO: Move any rewriting parts to lowering phases
 
-def infer_unary_math_call(context, call_node, arg, default_result_type=double):
-    "Resolve calls to math functions to llvm.log.f32() etc"
-    # signature is a generic signature, build a correct one
-    type = get_type(call_node.args[0])
+def mk_infer_math_call(default_result_type):
+    def infer(typesystem, call_node, *args):
+        "Resolve calls to llvmmath math calls"
+        # signature is a generic signature, build a correct one
+        type = reduce(typesystem.promote, map(get_type, call_node.args))
 
-    if type.is_numeric and type.kind < default_result_type.kind:
-        type = default_result_type
-    elif type.is_array and type.dtype.is_int:
-        type = type.copy(dtype=double)
+        if type.is_numeric and rank(type) < rank(default_result_type):
+            type = default_result_type
+        elif type.is_array and type.dtype.is_int:
+            type = typesystem.array(double, type.ndim)
 
-    # signature = minitypes.FunctionType(return_type=type, args=[type])
-    # result = nodes.MathNode(py_func, signature, call_node.args[0])
-    nodes.annotate(context.env, call_node, is_math=True)
-    call_node.variable = Variable(type)
-    return call_node
+        call_node.args[:] = nodes.CoercionNode.coerce(call_node.args, type)
 
-def infer_unary_cmath_call(context, call_node, arg):
-    result = infer_unary_math_call(context, call_node, arg,
-                                   default_result_type=complex128)
-    nodes.annotate(context.env, call_node, is_cmath=True)
-    return result
+        # TODO: Remove the abuse below
+        nodes.annotate(typesystem.env, call_node, is_math=True)
+        call_node.variable = Variable(type)
+        return call_node
+
+    return infer
+
+infer_math_call = mk_infer_math_call(double)
+infer_cmath_call = mk_infer_math_call(complex128)
 
 # ______________________________________________________________________
 # pow()
 
-def pow_(context, call_node, node, power, mod=None):
-    dst_type = binop_type(context, node, power)
+def pow_(typesystem, call_node, node, power, mod=None):
+    dst_type = binop_type(typesystem, node, power)
     call_node.variable = Variable(dst_type)
     return call_node
 
@@ -118,7 +131,7 @@ register_math_typefunc(2, np.power)
 # ______________________________________________________________________
 # abs()
 
-def abs_(context, node, x):
+def abs_(typesystem, node, x):
     import builtinmodule
 
     argtype = get_type(x)
@@ -126,11 +139,11 @@ def abs_(context, node, x):
     if argtype.is_array and argtype.is_numeric:
         # Handle np.abs() on arrays
         dtype = builtinmodule.abstype(argtype.dtype)
-        result_type = argtype.copy(dtype=dtype)
+        result_type = argtype.add('dtype', dtype)
         node.variable = Variable(result_type)
         return node
 
-    return builtinmodule.abs_(context, node, x)
+    return builtinmodule.abs_(typesystem, node, x)
 
 register_math_typefunc(1, np.abs)
 
@@ -138,25 +151,23 @@ register_math_typefunc(1, np.abs)
 # Register Type Functions
 #----------------------------------------------------------------------------
 
-def register_math(nargs, value):
+def register_math(infer_math_call, nargs, value):
     register = register_math_typefunc(nargs)
-    register(infer_unary_math_call, value)
+    register(infer_math_call, value)
 
-def register_cmath(nargs, value):
-    register = register_math_typefunc(nargs)
-    register(infer_unary_cmath_call, value)
+def npy_name(name):
+    return math2ufunc.get(name, name)
 
-def register_typefuncs():
-    modules = [builtins, math, cmath, np]
-    # print all_libc_math_funcs
-    for libc_math_func in unary_libc_math_funcs:
-        for module in modules:
-            if hasattr(module, libc_math_func):
-                if module is cmath:
-                    register = register_cmath
-                else:
-                    register = register_math
+id_name = lambda x: x
 
-                register(1, getattr(module, libc_math_func))
+# ______________________________________________________________________
 
-register_typefuncs()
+def reg(mod, register, getname):
+    nargs = lambda f: n_ary_mathsyms.get(f, 1)
+    for symname in mathsyms + list(n_ary_mathsyms):
+        if hasattr(mod, getname(symname)):
+            register(nargs(symname), getattr(mod, getname(symname)))
+
+reg(math, partial(register_math, infer_math_call), id_name)
+reg(cmath, partial(register_math, infer_cmath_call), id_name)
+reg(np, partial(register_math, infer_math_call), npy_name)

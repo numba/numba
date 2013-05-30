@@ -61,7 +61,7 @@ class RaiseNode(ExprNode):
             self.exception_type = exc_type
             exc_type = const(exc_type, object_)
         if isinstance(exc_msg, (str, unicode)):
-            exc_msg = const(exc_msg, c_string_type)
+            exc_msg = const(exc_msg, char.pointer())
 
         self.exc_type = exc_type
         self.exc_msg = exc_msg

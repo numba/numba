@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+
+from numba import PY3
+
 from .external import ExternalFunction
-from numba import *
+from numba.typesystem import *
+
+c_string_type = char.pointer()
 
 class ofunc(ExternalFunction):
     arg_types = [object_]

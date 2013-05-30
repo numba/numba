@@ -11,9 +11,8 @@ import inspect
 
 import numba
 from numba import *
-from numba.minivect import minitypes
 from numba import typesystem, error, nodes
-from numba.typesystem import get_type, typeset
+from numba.typesystem import get_type, typeset, Type
 
 import logging
 
@@ -153,7 +152,7 @@ def module_attribute_type(obj):
     result = module_registry.lookup_module_attribute(obj)
     if result is not None:
         module, attr = result
-        return typesystem.ModuleAttributeType(module=module, attr=attr)
+        return typesystem.module_attribute(module=module, attr=attr)
 
     return None
 
@@ -182,7 +181,7 @@ def _build_arg(pass_in_types, node):
         return get_type(node)
     return node
 
-def dispatch_on_value(context, call_node, func_type):
+def dispatch_on_value(context, call_node, func_type): # TODO: Pass in typesystem here
     """
     Dispatch a call of a module attribute by value.
 
@@ -203,9 +202,11 @@ def dispatch_on_value(context, call_node, func_type):
 
     # Pass in additional arguments (context and call_node)
     argnames = argspec.args
-    if argnames and argnames[0] == "context":
+    if argnames and argnames[0] in ("context", "typesystem"):
         argnames.pop(0)
-        args = [context]
+        # TODO: Remove this and reference in mathmodule.infer_unary_math_call
+        context.env.crnt.typesystem.env = context.env
+        args = [context.env.crnt.typesystem]
     else:
         args = []
 
@@ -249,7 +250,7 @@ def resolve_call(context, call_node, obj_call_node, func_type):
         obj_call_node: the nodes.ObjectCallNode that would replace the
                        ast.Call unless we override that with another node.
 
-        func_type: ModuleAttributeType
+        func_type: module_attribute
             |__________> module: Python module
             |__________> attr: Attribute name
             |__________> value: Attribute value
@@ -260,7 +261,7 @@ def resolve_call(context, call_node, obj_call_node, func_type):
     result = dispatch_on_value(context, call_node, func_type)
 
     if result is not None and not isinstance(result, ast.AST):
-        assert isinstance(result, minitypes.Type)
+        assert isinstance(result, Type), (Type, result)
         type = result
         result = obj_call_node
         # result.variable = symtab.Variable(type)
@@ -304,20 +305,18 @@ def register(module, **kws):
 
 def register_callable(signature):
     """
-    signature := FunctionType | typeset(signature *)
+    signature := function | typeset(signature *)
 
     @register_callable(signature)
     def my_function(...):
         ...
     """
-    assert isinstance(signature, (typeset.typeset, minitypes.Type))
+    assert isinstance(signature, (typeset.typeset, Type))
 
     # convert void return type to object_ (None)
     def convert_void_to_object(sig):
-        from copy import copy
         if sig.return_type == void:
-            sig = copy(sig)
-            sig.return_type = object_
+            sig = sig.add('return_type', object_)
         return sig
 
     if isinstance(signature, typeset.typeset):
@@ -325,16 +324,16 @@ def register_callable(signature):
                                      for x in signature.types],
                                     name=signature.name)
     else:
-        assert isinstance(signature, minitypes.Type)
+        assert isinstance(signature, Type)
         signature = convert_void_to_object(signature)
 
 
     def decorator(function):
-        def infer(context, *args):
+        def infer(typesystem, *args):
             if signature.is_typeset:
-                specialization = signature.find_match(context, args)
+                specialization = signature.find_match(typesystem.promote, args)
             else:
-                specialization = typeset.match(context, signature, args)
+                specialization = typeset.match(typesystem.promote, signature, args)
 
             if specialization is None:
                 raise UnmatchedTypeError(

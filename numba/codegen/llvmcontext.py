@@ -126,11 +126,7 @@ class LLVMContextManager(object):
                         # We assume this is a utility function.
                         assert func.linkage == lc.LINKAGE_LINKONCE_ODR, func.name
 
-            self.module.link_in(lfunc_module, preserve=False)
-            #
-            #            print 'linked'.center(80, '='), lfunc.module, lfunc.name
-            #            print self.module
-
+            link_module(self.execution_engine, lfunc_module, self.module)
             lfunc = self.module.get_function_named(func_name)
 
         assert lfunc.module is self.module
@@ -151,3 +147,30 @@ class LLVMContextManager(object):
                     if callee is not None:
                         assert callee.module is lfunc.module,\
                         "Inter module call for call to %s" % callee.name
+
+
+# ______________________________________________________________________
+
+handle = lambda llvm_value: llvm_value._ptr
+
+def link_module(engine, src_module, dst_module, preserve=False):
+    """
+    Link a source module into a destination module while preserving the
+    execution engine's global mapping of pointers.
+    """
+    dst_module.link_in(src_module, preserve=preserve)
+    ptr = lambda gv: handle(engine).getPointerToGlobalIfAvailable(handle(gv))
+
+    def update_gv(src_gv, dst_gv):
+        if ptr(src_gv) != 0 and ptr(dst_gv) == 0:
+            engine.add_global_mapping(dst_gv, ptr(src_gv))
+
+    # Update function mapping
+    for function in src_module.functions:
+        dst_lfunc = dst_module.get_function_named(function.name)
+        update_gv(function, dst_lfunc)
+
+    # Update other global symbols' mapping
+    for src_gv in src_module.global_variables:
+        dst_gv = dst_module.get_global_variable_named(src_gv.name)
+        update_gv(src_gv, dst_gv)

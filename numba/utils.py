@@ -5,10 +5,17 @@ import opcode
 import ast
 import pprint
 
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
+
 import numba
 from .minivect.complex_support import Complex64, Complex128, Complex256
 from .minivect import miniast, minitypes
-from numba.typesystem.typemapper import NumbaTypeMapper
+
+def is_builtin(name):
+    return hasattr(builtins, name)
 
 def itercode(code):
     """Return a generator of byte-offset, opcode, and argument
@@ -57,12 +64,11 @@ def process_signature(sigstr, name=None):
     #   and ret(arg1, arg2) or ret ( arg1, arg2 )
     if len(parts) < 2 or '(' in parts[0] or '[' in parts[0] or '('==parts[1][0]:
         signature = eval(sigstr, loc, types_dict)
-        signature.name = None
     else: # Signature has a name
         signature = eval(' '.join(parts[1:]), loc, types_dict)
-        signature.name = parts[0]
+        signature = signature.add('name', parts[0])
     if name is not None:
-        signature.name = name
+        signature = signature.add('name', name)
     return signature
 
 def process_sig(sigstr, name=None):
@@ -82,13 +88,13 @@ class NumbaContext(miniast.LLVMContext):
 
     def init(self):
         self.astbuilder = self.astbuilder_cls(self)
-        self.typemapper = NumbaTypeMapper(self)
+        self.typemapper = None
 
     def is_object(self, type):
         return super(NumbaContext, self).is_object(type) or type.is_array
 
-    def promote_types(self, *args, **kwargs):
-        return self.typemapper.promote_types(*args, **kwargs)
+    # def promote_types(self, *args, **kwargs):
+    #     return self.typemapper.promote_types(*args, **kwargs)
 
 def get_minivect_context():
     return NumbaContext()
@@ -113,6 +119,33 @@ def ast2tree (node, include_attrs = True):
     if not isinstance(node, ast.AST):
         raise TypeError('expected AST, got %r' % node.__class__.__name__)
     return _transform(node)
+
+def tree2ast(node, namespace):
+    '''Given an AST represented as tuples and lists, attempt to
+    reconstruct the AST object, given a namespace that defines the
+    node constructors.'''
+    def _construct(node):
+        if isinstance(node, tuple):
+            node_len = len(node)
+            if node_len in (2, 3) and hasattr(namespace, node[0]):
+                ctor = getattr(namespace, node[0])
+                assert dict == type(node[1])
+                kwargs = dict((k, _construct(v))
+                              for k, v in node[1].items())
+                if node_len == 3:
+                    kwargs.update((k, _construct(v))
+                                  for k, v in node[2].items())
+                try:
+                    node = ctor(**kwargs)
+                except Exception as exn:
+                    raise Exception('Could not construct %s given %r: %r' %
+                                    (node[0], kwargs, exn))
+            else:
+                node = tuple(_construct(x) for x in node)
+        elif isinstance(node, list):
+            node = [_construct(x) for x in node]
+        return node
+    return _construct(node)
 
 def pformat_ast (node, include_attrs = True, **kws):
     '''Transform a Python AST object into nested tuples and lists, and

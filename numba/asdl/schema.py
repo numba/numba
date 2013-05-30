@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-import sys
+
 import ast
-from . import asdl
+import keyword
 from collections import defaultdict, namedtuple
 import contextlib
+
+from . import asdl
+from .asdl import pyasdl
 
 def load(name):
     '''Load a ASDL Schema by name; e.g. "Python.asdl".
@@ -14,16 +17,20 @@ def load(name):
     This tries to load from the version-specific directory, first.
     If it failed, it loads from the common-directory.
     '''
-    python_asdl = asdl.load(name)
+    parser, loader = asdl.load_pyschema(name)
+    python_asdl = loader.load()
+    return build_schema(python_asdl)
+
+def build_schema(asdl_tree):
     schblr = SchemaBuilder()
-    schblr.visit(python_asdl)
+    schblr.visit(asdl_tree)
     return schblr.schema
 
 class _rule(namedtuple('rule', ['kind', 'fields'])):
     __slots__ = ()
 
-    SUM = 0
-    PROD = 1
+    SUM = 0     # sums, e.g. Foo | Bar
+    PROD = 1    # producs, e.g. (Foo, Bar)
 
     @classmethod
     def sum(cls, fields):
@@ -76,10 +83,15 @@ class Schema(object):
     def __init__(self, name):
         # name of the asdl module
         self.name = name
+
         # a dictionary of {type name -> fields}
         self.types = defaultdict(list)
+
         # a dictionary of {definition name -> _rule}
         self.dfns = {}
+
+        # { type name -> fields }
+        self.attributes = defaultdict(list)
 
     def verify(self, ast, context=None):
         '''Check against an AST raises SchemaError upon error.
@@ -89,6 +101,14 @@ class Schema(object):
         '''
         context = context if context is not None else SchemaContext()
         return SchemaVerifier(self, context).visit(ast)
+
+    def __str__(self):
+        return "%s(name=%s, types=%s, rules=%s, attributes=%s)" % (
+            type(self).__name__,
+            self.name,
+            self.types,
+            self.dfns,
+            self.attributes)
 
     def debug(self):
         print(("Schema %s" % self.name))
@@ -237,13 +257,14 @@ class SchemaVerifier(ast.NodeVisitor):
         name = (cls_or_name
                 if isinstance(cls_or_name, str)
                 else type(cls_or_name).__name__)
-        ret = self.schema.types.get(name)
-        if ret is None:
+        fields = self.schema.types.get(name)
+        attrs = self.schema.attributes.get(name)
+        if fields is None or attrs is None:
             raise SchemaError(self._debug_context,
                               "Unknown AST node type: %s" % name)
-        return ret
+        return fields + attrs
 
-class SchemaBuilder(asdl.VisitorBase):
+class SchemaBuilder(pyasdl.VisitorBase):
     '''A single instance of SchemaBuilder can be used build different 
     Schema from different ASDL.
 
@@ -259,7 +280,7 @@ class SchemaBuilder(asdl.VisitorBase):
         super(SchemaBuilder, self).__init__()
 
     def visitModule(self, mod):
-        self.__schema = Schema(str(mod.name))
+        self._schema = Schema(str(mod.name))
         for dfn in mod.dfns:
             self.visit(dfn)
 
@@ -269,17 +290,15 @@ class SchemaBuilder(asdl.VisitorBase):
     def visitSum(self, sum, name):
         self.schema.dfns[str(name)] = _rule.sum([str(t.name)
                                                  for t in sum.types])
+        self.schema.attributes[name].extend(sum.attributes)
+
         for t in sum.types:
             self.visit(t, name, sum.attributes)
 
-    def visitConstructor(self, cons, name, attr=[]):
+    def visitConstructor(self, cons, name, attrs=[]):
         typename = str(cons.name)
-        fields = self.schema.types[typename]
-        for f in cons.fields:
-            fields.append(f)
-        for f in attr:
-            fields.append(f)
-
+        self.schema.types[typename].extend(cons.fields)
+        self.schema.attributes[typename].extend(attrs)
 
     def visitField(self, field, name):
         key = str(field.type)
@@ -292,7 +311,7 @@ class SchemaBuilder(asdl.VisitorBase):
 
     @property
     def schema(self):
-        return self.__schema
+        return self._schema
 
 #
 # Builtin types handler
@@ -323,3 +342,17 @@ def _is_iterable(value):
         return False
     else:
         return True
+
+def verify_names(names):
+    for name in names:
+        if keyword.iskeyword(name):
+            raise ValueError("%r is a keyword" % (name,))
+
+def verify_schema_keywords(schema):
+    """
+    Verify schema, checking for the use of any Python keywords.
+    """
+    verify_names(schema.dfns)
+    verify_names(schema.types)
+    verify_names([field.name for fields in schema.types.itervalues()
+                                 for field in fields])

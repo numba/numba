@@ -1,27 +1,32 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+
+from numba import error
 from numba.typesystem import *
 
 #------------------------------------------------------------------------
 # Utilities
 #------------------------------------------------------------------------
 
+ts = numba_typesystem
+
 def is_obj(type):
     return type.is_object or type.is_array
 
 native_type_dict = {}
-for native_type in minitypes.native_integral:
-    native_type_dict[(native_type.itemsize, native_type.signed)] = native_type
+for native_type in native_integral:
+    if native_type not in (Py_ssize_t, npy_intp, Py_uintptr_t, size_t): # TODO: do this better
+        native_type_dict[(native_type.itemsize, native_type.signed)] = native_type
 
 def promote_to_native(int_type):
     return native_type_dict[int_type.itemsize, int_type.signed]
 
-def promote_closest(context, int_type, candidates):
+def promote_closest(ts, int_type, candidates):
     """
     promote_closest(Py_ssize_t, [int_, long_, longlong]) -> longlong
     """
     for candidate in candidates:
-        promoted = context.promote_types(int_type, candidate)
+        promoted = ts.promote(int_type, candidate)
         if promoted.itemsize == candidate.itemsize and promoted.signed == candidate.signed:
             return candidate
 
@@ -43,10 +48,7 @@ def error_index(type):
 def index_type(type):
     "Result of indexing a value of the given type with an integer index"
     if type.is_array:
-        result = type.copy()
-        result.ndim -= 1
-        if result.ndim == 0:
-            result = result.dtype
+        result = array(type.dtype, type.ndim - 1)
     elif type.is_container or type.is_pointer:
         result = type.base_type
     elif type.is_dict:
@@ -70,7 +72,7 @@ def element_type(type):
         return index_type(type)
 
 def require(ast_nodes, properties):
-    "Assert that the types of the given nodes meets a certainrequirement"
+    "Assert that the types of the given nodes meets a certain requirement"
     for ast_node in ast_nodes:
         if not any(getattr(get_type(ast_node), p) for p in properties):
             typenames = ", or ".join(p[3:] for p in properties) # remove 'is_' prefix
@@ -78,6 +80,4 @@ def require(ast_nodes, properties):
 
 def pyfunc_signature(nargs):
     "Signature of a python function with N arguments"
-    signature = minitypes.FunctionType(args=(object_,) * nargs,
-                                       return_type=object_)
-    return signature
+    return function(args=(object_,) * nargs, return_type=object_)

@@ -508,7 +508,7 @@ class Type(miniutils.ComparableObjectMixin):
         return getattr(type(self), attr)
 
     def __call__(self, *args):
-        """Return a FunctionType with return_type and args set
+        """Return a function with return_type and args set
         """
         if len(args) == 1 and not isinstance(args[0], Type):
             # Cast in Python space

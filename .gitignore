@@ -10,6 +10,9 @@ extension_types.c
 numba/external/utilities/generated_conversions.[ch]
 numba/external/utilities/generated_conversions.c
 numba/numbawrapper.[ch]
+numba/ir/normalized
+numba/ir/typed
+numba/ir/untyped
 numba/pyconsts.c
 intern.c
 methodtable.c

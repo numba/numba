@@ -16,7 +16,7 @@ class Variable(object):
     so, that when used in an operation, the correct LLVM type can be inserted.
 
     Attributes:
-        type: the Numba type (see numba.typesystem and minivect/minitypes)
+        type: the Numba type (see numba.typesystem)
         is_local/is_global/is_constant
         name: name of local or global
         lvalue: LLVM Value
@@ -137,10 +137,10 @@ class Variable(object):
 
     def _type_set(self, type):
         assert not (self.type and type is None)
-        from numba.minivect import minitypes
+        from numba import typesystem
         if type is None:
             print('Setting None type!')
-        elif not isinstance(type, minitypes.Type):
+        elif not isinstance(type, typesystem.Type):
             print(type)
         self._type = type
 

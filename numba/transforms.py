@@ -81,22 +81,19 @@ from __future__ import print_function, division, absolute_import
 import sys
 import ast
 import ctypes
-from numba.specialize.mathcalls import (is_intrinsic, is_math_function,
-                                        resolve_intrinsic, resolve_libc_math,
-                                        resolve_math_call)
 
 if __debug__:
     import pprint
 
 import numba
 from numba import *
-from numba import error, closures
-from .minivect import minierror, minitypes, codegen
+from numba import error
+from .minivect import codegen
 from numba import macros, utils, typesystem
-from numba.symtab import Variable
-from numba import visitors, nodes, error, functions
-from numba import stdio_util, function_util
-from numba.typesystem import is_obj, promote_closest, promote_to_native
+from numba import visitors, nodes
+from numba import function_util
+from numba.typesystem import is_obj, promote_to_native
+from numba.type_inference.modules import mathmodule
 from numba.nodes import constnodes
 from numba.external import utility
 from numba.utils import dump
@@ -108,17 +105,45 @@ logger = logging.getLogger(__name__)
 
 from numba.external import pyapi
 
-is_win32 = sys.platform == 'win32'
+# ______________________________________________________________________
 
-class BuiltinResolverMixinBase(object):
+def get_funcname(py_func):
+    if py_func in (abs, np.abs):
+        return 'fabs'
+    elif py_func is np.round:
+        return 'round'
+
+    return mathmodule.ufunc2math.get(py_func.__name__, py_func.__name__)
+
+def resolve_pow(env, restype, args):
+    promote = env.crnt.typesystem.promote
+    have_mod = len(args) == 3
+    if restype.is_numeric and not have_mod:
+        type = reduce(promote, [double, restype] + [a.type for a in args])
+        signature = type(*[type] * len(args))
+        result = nodes.MathCallNode(signature, args, None, name='pow')
+    else:
+        result = nodes.call_pyfunc(pow, args)
+    return nodes.CoercionNode(result, restype)
+
+def math_call(name, args, dst_type):
+    signature = dst_type(*[a.type for a in args])
+    return nodes.MathCallNode(signature, args, None, name=name)
+
+def math_call2(name, call_node):
+    return math_call(name, [call_node.args[0]], call_node.type)
+
+# ______________________________________________________________________
+
+class BuiltinResolver(object):
     """
-    Base class for mixins resolving calls to built-in functions.
-
-    Methods called _resolve_<built-in name> are called to handle calls
-    to the built-in of that name.
+    Perform final low-level transformations such as abs(value) -> fabs(value)
     """
 
-    def _resolve_builtin_call(self, node, func):
+    def __init__(self, env):
+        self.env = env
+
+    def resolve_builtin_call(self, node, func):
         """
         Resolve an ast.Call() of a built-in function.
 
@@ -135,73 +160,43 @@ class BuiltinResolverMixinBase(object):
 
         return None
 
-    def _resolve_builtin_call_or_object(self, node, func):
+    def resolve_builtin_call_or_object(self, node, func):
         """
         Resolve an ast.Call() of a built-in function, or call the built-in
         through the object layer otherwise.
         """
-        result = self._resolve_builtin_call(node, func)
+        result = self.resolve_builtin_call(node, func)
         if result is None:
             result = nodes.call_pyfunc(func, node.args)
 
         return nodes.CoercionNode(result, node.type)
 
-def resolve_pow(type, args):
-    have_mod = len(args) == 3
-
-    if (type.is_int or type.is_float) and not have_mod and not is_win32:
-        result = resolve_intrinsic(args, pow, type)
-    else:
-        result = nodes.call_pyfunc(pow, args)
-
-    return nodes.CoercionNode(result, type)
-
-class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
-    """
-    Perform final low-level transformations such as abs(value) -> fabs(value)
-    """
 
     def _resolve_abs(self, func, node, argtype):
-        is_math = is_math_function(node.args, abs)
-
-        # TODO: generate efficient inline code
-        if is_math and argtype.is_float:
-            return resolve_math_call(node, abs)
-        elif is_math and argtype.is_int:
-            if argtype.signed:
-                type = promote_closest(self.context, argtype, [long_, longlong])
-                funcs = {long_: 'labs', longlong: 'llabs'}
-                return function_util.external_call(
-                                            self.context,
-                                            self.llvm_module,
-                                            funcs[type],
-                                            args=[node.args[0]])
-            else:
-                # abs() on unsigned integral value
-                return node.args[0]
-
-        return None
+        if argtype.is_int and not argtype.signed:
+            # abs() on unsigned integral value
+            return node.args[0]
+        elif not node.type.is_numeric:
+            result = nodes.call_pyfunc(func, node.args)
+        else:
+            return math_call2('abs', node)
 
     def _resolve_round(self, func, node, argtype):
-        if is_math_function(node.args, round):
-            # round() always returns a float
-            return resolve_math_call(node, round)
-
-        return None
+        return nodes.call_pyfunc(round, node.args)
 
     def _resolve_pow(self, func, node, argtype):
-        return resolve_pow(node.type, node.args)
+        return resolve_pow(self.env, node.type, node.args)
 
     def _resolve_int_number(self, func, node, argtype, dst_type, ext_name):
         assert len(node.args) == 2
 
         arg1, arg2 = node.args
-        if arg1.variable.type.is_c_string:
+        if arg1.variable.type.is_string:
             return nodes.CoercionNode(
                 nodes.ObjectTempNode(
                     function_util.external_call(
-                        self.context,
-                        self.llvm_module,
+                        self.env.context,
+                        self.env.crnt.llvm_module,
                         ext_name,
                         args=[arg1, nodes.NULL, arg2])),
                 dst_type=dst_type)
@@ -213,7 +208,6 @@ class LateBuiltinResolverMixin(BuiltinResolverMixinBase):
 
     def _resolve_long(self, func, node, argtype, dst_type=int_):
         return self._resolve_int_number(func, node, argtype, long_, 'PyLong_FromString')
-
 
 class ResolveCoercions(visitors.NumbaTransformer):
 
@@ -229,11 +223,14 @@ class ResolveCoercions(visitors.NumbaTransformer):
             logger.debug('coercion: %s --> %s\n%s',
                          node_type, dst_type, utils.pformat_ast(node))
 
-        if self.nopython and (is_obj(node_type) ^ is_obj(dst_type)):
+        # TODO: the below is a problem due to implicit string <-> int coercions!
+        if (node_type.is_string and dst_type.is_numeric and not
+            (node_type.is_pointer or node_type.is_null)):
+            result = self.str_to_int(dst_type, node)
+        elif self.nopython and (is_obj(node_type) ^ is_obj(dst_type)):
             raise error.NumbaError(node, "Cannot coerce to or from object in "
                                          "nopython context")
-
-        if is_obj(node.dst_type) and not is_obj(node_type):
+        elif is_obj(node.dst_type) and not is_obj(node_type):
             node = nodes.ObjectTempNode(nodes.CoerceToObject(
                     node.node, node.dst_type, name=node.name))
             result = self.visit(node)
@@ -252,35 +249,6 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                   [nodes.const(0, node_type)])
             to_bool = nodes.typednode(to_bool, bool_)
             result = self.visit(to_bool)
-        elif node_type.is_c_string and dst_type.is_numeric:
-            # TODO: int <-> string conversions are explicit, this should not
-            # TODO: be a coercion
-            if self.nopython:
-                node = nodes.CoercionNode(
-                    function_util.external_call(
-                                self.context,
-                                self.llvm_module,
-                                ('atol' if dst_type.is_int else 'atof'),
-                                args=[node.node]),
-                    dst_type, name=node.name,)
-            else:
-                if dst_type.is_int:
-                    cvtobj = function_util.external_call(
-                                              self.context,
-                                              self.llvm_module,
-                                              'PyInt_FromString' if not PY3 else 'PyLong_FromString',
-                                              args=[node.node, nodes.NULL,
-                                                    nodes.const(10, int_)])
-                else:
-                    cvtobj = function_util.external_call(
-                                          self.context,
-                                          self.llvm_module,
-                                          'PyFloat_FromString',
-                                          args=[node.node,
-                                                nodes.const(0, Py_ssize_t)])
-                node = nodes.CoerceToNative(nodes.ObjectTempNode(cvtobj),
-                                            dst_type, name=node.name)
-            result = self.visit(node)
         else:
             self.generic_visit(node)
 
@@ -292,6 +260,37 @@ class ResolveCoercions(visitors.NumbaTransformer):
         if __debug__ and self.env and self.env.debug_coercions:
             logger.debug('result = %s', utils.pformat_ast(result))
 
+        return result
+
+    def str_to_int(self, dst_type, node):
+        # TODO: int <-> string conversions are explicit, this should not
+        # TODO: be a coercion
+        if self.nopython:
+            node = nodes.CoercionNode(
+                function_util.external_call(
+                    self.context,
+                    self.llvm_module,
+                    ('atol' if dst_type.is_int else 'atof'),
+                    args=[node.node]),
+                dst_type, name=node.name, )
+        else:
+            if dst_type.is_int:
+                cvtobj = function_util.external_call(
+                    self.context,
+                    self.llvm_module,
+                    'PyInt_FromString' if not PY3 else 'PyLong_FromString',
+                    args=[node.node, nodes.NULL,
+                          nodes.const(10, int_)])
+            else:
+                cvtobj = function_util.external_call(
+                    self.context,
+                    self.llvm_module,
+                    'PyFloat_FromString',
+                    args=[node.node,
+                          nodes.const(0, Py_ssize_t)])
+            node = nodes.CoerceToNative(nodes.ObjectTempNode(cvtobj),
+                                        dst_type, name=node.name)
+        result = self.visit(node)
         return result
 
     def _get_int_conversion_func(self, type, funcs_dict):
@@ -338,7 +337,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                        self.llvm_module,
                                                        cls.__name__,
                                                        args=args)
-        elif node_type.is_pointer and not node_type.is_string():
+        elif node_type.is_pointer and not node_type == char.pointer():
             # Create ctypes pointer object
             ctypes_pointer_type = node_type.to_ctypes()
             args = [nodes.CoercionNode(node.node, int64),
@@ -359,7 +358,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
         version).
         """
         dst_type = promote_to_native(dst_type)
-        assert dst_type in utility.object_to_numeric
+        assert dst_type in utility.object_to_numeric, (dst_type, utility.object_to_numeric)
         utility_func = utility.object_to_numeric[dst_type]
         result = function_util.external_call_func(self.context,
                                                   self.llvm_module,
@@ -419,13 +418,13 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                        self.llvm_module,
                                                        cls.__name__,
                                                        args=[node.node])
-        elif node_type.is_pointer:
+        elif node_type.is_pointer and not node_type.is_string:
             if from_type.is_jit_function and node_type.base_type.is_function:
                 new_node = self.coerce_to_function_pointer(
                     node, from_type, node_type)
             else:
                 raise error.NumbaError(node, "Obtaining pointers from objects "
-                                             "is not yet supported")
+                                             "is not yet supported (%s)" % node_type)
         elif node_type.is_void:
             raise error.NumbaError(node, "Cannot coerce %s to void" %
                                    (from_type,))
@@ -448,10 +447,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
         return new_node
 
 
-class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
-                      visitors.NoPythonContextMixin):
+class LateSpecializer(ResolveCoercions, visitors.NoPythonContextMixin):
 
     def visit_FunctionDef(self, node):
+        self.builtin_resolver = BuiltinResolver(self.env)
         node.decorator_list = self.visitlist(node.decorator_list)
 
         # Make sure to visit the entry block (not part of the CFG) and the
@@ -550,7 +549,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
     def visit_Print(self, node):
         if self.nopython:
             printfunc = self._print_nopython
-            dst_type = c_string_type
+            dst_type = string_
         else:
             printfunc = self._print
             dst_type = object_
@@ -571,33 +570,17 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
         return ast.Suite(body=self.visitlist(result))
 
-    def visit_Call(self, node):
-        func_type = node.func.type
-
-        if self.query(node, "is_math"):
-            assert node.func.type.is_known_value
-            result = resolve_math_call(node, node.func.type.value)
-            return self.visit(result)
-
-        elif func_type.is_builtin:
-            result = self._resolve_builtin_call_or_object(node, func_type.func)
-            result =  self.visit(result)
-            return result
-
-        self.generic_visit(node)
-        return node
-
     def visit_Tuple(self, node):
         self.check_context(node)
 
         sig, lfunc = self.context.external_library.declare(self.llvm_module,
                                                            'PyTuple_Pack')
         objs = self.visitlist(nodes.CoercionNode.coerce(node.elts, object_))
-        n = nodes.ConstNode(len(node.elts), minitypes.Py_ssize_t)
+        n = nodes.ConstNode(len(node.elts), Py_ssize_t)
         args = [n] + objs
         new_node = nodes.NativeCallNode(sig, args, lfunc, name='tuple')
         # TODO: determine element type of node.elts
-        new_node.type = typesystem.TupleType(object_, size=len(node.elts))
+        new_node.type = typesystem.tuple_(object_, size=len(node.elts))
         return nodes.ObjectTempNode(new_node)
 
     def visit_List(self, node):
@@ -624,23 +607,20 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         node.kwargs_dict = self.visit(node.kwargs_dict)
         return nodes.ObjectTempNode(node)
 
-    def visit_MathNode(self, math_node):
-        "Translate a nodes.MathNode to an intrinsic or libc math call"
-        from numba.type_inference.modules import mathmodule
-        lowerable = is_math_function([math_node.arg], math_node.py_func)
+    def visit_Call(self, node):
+        func_type = node.func.type
 
-        if math_node.type.is_array or not lowerable:
-            # Generate a Python call
-            assert math_node.py_func is not None
-            result = nodes.call_pyfunc(math_node.py_func, [math_node.arg])
-            result = result.coerce(math_node.type)
+        if self.query(node, "is_math") and node.type.is_numeric:
+            assert node.func.type.is_known_value
+            name = get_funcname(node.func.type.value)
+            result = math_call(name, node.args, node.type)
+
+        elif func_type.is_builtin:
+            result = self.builtin_resolver.resolve_builtin_call_or_object(
+                node, func_type.func)
+
         else:
-            # Lower to intrinsic or libc math call
-            args = [math_node.arg], math_node.py_func, math_node.type
-            if is_intrinsic(math_node.py_func):
-                result = resolve_intrinsic(*args)
-            else:
-                result = resolve_libc_math(*args)
+            result = nodes.call_obj(node)
 
         return self.visit(result)
 
@@ -683,8 +663,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
         # Short-circuit visiting a Slice child if this is a nopython
         # string slice.
-        if (self.nopython and node.value.type.is_c_string and
-                node.type.is_c_string):
+        if (self.nopython and node.value.type.is_string and
+                node.type.is_string):
             return self.visit(self._c_string_slice(node))
 
         # logging.debug(ast.dump(node))
@@ -692,8 +672,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         self.generic_visit(node)
 
         node_type = node.value.type
-        if node_type.is_object or (node_type.is_array and
-                                   node.slice.type.is_object):
+        if ((node_type.is_object and not node_type.is_array) or
+            (node_type.is_array and node.slice.type.is_object)):
             # Array or object slicing
             if isinstance(node.ctx, ast.Load):
                 result = function_util.external_call(self.context,
@@ -710,7 +690,7 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
                   node.slice.type.is_int):
             # Array index with integer indices
             node = nodes.DataPointerNode(node.value, node.slice, node.ctx)
-        elif node.value.type.is_c_string and node.type.is_c_string:
+        elif node.value.type.is_string and node.type.is_string:
             node.value = nodes.CoercionNode(node.value, dst_type = object_)
             node.type = object_
             node = nodes.CoercionNode(nodes.ObjectTempNode(node),
@@ -829,9 +809,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
     def visit_ArrayNewNode(self, node):
         if self.nopython:
-            # Give the codegen (subclass) a chance to handle this
-            self.generic_visit(node)
-            return node
+            raise error.NumbaError(
+                node, "Cannot yet allocate new array in nopython context")
 
         PyArray_Type = nodes.ObjectInjectNode(np.ndarray)
         descr = nodes.ObjectInjectNode(node.type.dtype.get_dtype()).cloneable
@@ -863,11 +842,17 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
         return self.visit(result)
 
     def visit_ArrayNewEmptyNode(self, node):
+        if self.nopython:
+            raise error.NumbaError(
+                node, "Cannot yet allocate new empty array in nopython context")
+
         ndim = nodes.const(node.type.ndim, int_)
-        dtype = nodes.const(node.type.dtype.get_dtype(), object_)
+        dtype = nodes.const(node.type.dtype.get_dtype(), object_).cloneable
         is_fortran = nodes.const(node.is_fortran, int_)
         result = nodes.PyArray_Empty([ndim, node.shape, dtype, is_fortran])
-        return self.visit(result)
+        result = nodes.ObjectTempNode(result)
+        incref_descr = nodes.IncrefNode(dtype)
+        return self.visit(nodes.ExpressionNode([incref_descr], result))
 
     def visit_Name(self, node):
         if node.variable.is_constant:
@@ -942,7 +927,8 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
     def visit_BinOp(self, node):
         if isinstance(node.op, ast.Pow):
-            return self.visit(resolve_pow(node.type, [node.left, node.right]))
+            return self.visit(resolve_pow(self.env, node.type, [node.left,
+                                                                node.right]))
 
         self.generic_visit(node)
         if is_obj(node.left.type) or is_obj(node.right.type):
@@ -997,13 +983,15 @@ class LateSpecializer(ResolveCoercions, LateBuiltinResolverMixin,
 
     def visit_ConstNode(self, node):
         constant = node.pyval
+        if node.type.is_known_value:
+            node.type = object_ # TODO: Get rid of known_value
 
         if node.type.is_complex:
             real = nodes.ConstNode(constant.real, node.type.base_type)
             imag = nodes.ConstNode(constant.imag, node.type.base_type)
             node = nodes.ComplexNode(real, imag)
 
-        elif node.type.is_pointer:
+        elif node.type.is_pointer and not node.type.is_string:
             addr_int = constnodes.get_pointer_address(constant, node.type)
             node = nodes.ptrfromint(addr_int, node.type)
 

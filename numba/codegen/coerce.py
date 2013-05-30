@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import llvm
 
 from numba import *
+from numba import string_ as c_string_type
 from numba import nodes
 from numba.typesystem import is_obj, promote_to_native
 from numba.codegen.codeutils import llvm_alloca, if_badval
@@ -38,8 +39,9 @@ class ObjectCoercer(object):
 
         object_: "O",
         bool_: "b", # ?
-        c_string_type: "s",
+        char.pointer(): "s",
         char.pointer() : "s",
+        c_string_type: "s",
     }
 
     def __init__(self, translator):
@@ -87,7 +89,7 @@ class ObjectCoercer(object):
                   callback=lambda b, *args: b.branch(self.translator.error_label))
 
     def _create_llvm_string(self, str):
-        return self.translator.visit(nodes.ConstNode(str, c_string_type))
+        return self.translator.visit(nodes.ConstNode(str, char.pointer()))
 
     def lstr(self, types, fmt=None):
         "Get an llvm format string for the given types"
@@ -136,19 +138,9 @@ class ObjectCoercer(object):
         return result
 
     def npy_intp_to_py_ssize_t(self, llvm_result, type):
-    #        if type == minitypes.npy_intp:
-    #            lpy_ssize_t = minitypes.Py_ssize_t.to_llvm(self.context)
-    #            llvm_result = self.translator.caster.cast(llvm_result, lpy_ssize_t)
-    #            type = minitypes.Py_ssize_t
-
         return llvm_result, type
 
     def py_ssize_t_to_npy_intp(self, llvm_result, type):
-    #        if type == minitypes.npy_intp:
-    #            lnpy_intp = minitypes.npy_intp.to_llvm(self.context)
-    #            llvm_result = self.translator.caster.cast(llvm_result, lnpy_intp)
-    #            type = minitypes.Py_ssize_t
-
         return llvm_result, type
 
     def convert_single_struct(self, llvm_result, type):

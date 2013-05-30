@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 import llvm.core
-from numba.minivect import minitypes
+from numba.typesystem import function
 
 from collections import namedtuple
 
@@ -32,9 +32,7 @@ class Intrinsic(object):
 
     @property
     def signature(self):
-        return minitypes.FunctionType(return_type=self.return_type,
-                                      args=self.arg_types,
-                                      is_vararg=self.is_vararg)
+        return function(self.return_type, self.arg_types, self.is_vararg)
 
     @property
     def name(self):

@@ -76,6 +76,7 @@ def find_packages(where='.', exclude=()):
 
     for pat in list(exclude) + ['ez_setup', 'distribute_setup']:
         out = [item for item in out if not fnmatchcase(item, pat)]
+
     return out
 
 #------------------------------------------------------------------------
@@ -87,7 +88,7 @@ def run_2to3():
     from distutils.command.build_py import build_py_2to3 as build_py
     print("Installing 2to3 fixers")
     # need to convert sources to Py3 on installation
-    fixes = 'dict imports imports2 unicode ' \
+    fixes = 'dict imports imports2 unicode metaclass basestring reduce ' \
             'xrange itertools itertools_imports long types'.split()
     fixes = ['lib2to3.fixes.fix_' + fix 
              for fix in fixes]
@@ -143,6 +144,10 @@ if sys.version_info[0] >= 3:
 # setup
 #------------------------------------------------------------------------
 
+exclude_packages = (
+    '*deps*', 'numba.ir.normalized', 'numba.ir.untyped', 'numba.ir.typed',
+)
+
 setup(
     name="numba",
     version=versioneer.get_version(),
@@ -161,7 +166,7 @@ setup(
         "Topic :: Utilities",
     ],
     description="compiling Python code using LLVM",
-    packages=find_packages(exclude=('*deps*',)),
+    packages=find_packages(exclude=exclude_packages),
     entry_points = {
         'console_scripts': [
             'pycc = numba.pycc:main',
@@ -170,6 +175,7 @@ setup(
     package_data={
         '': ['*.md'],
         'numba.minivect': ['include/*'],
+        'numba.ir.generator.tests': ['*.asdl'],
         'numba.asdl.common': ['*.asdl'],
         'numba.asdl.py2_7': ['*.asdl'],
         'numba.asdl.py3_2': ['*.asdl'],

@@ -4,7 +4,6 @@ import sys
 import unittest
 import StringIO
 
-from numba.minivect import minitypes
 from numba import *
 
 @autojit(backend='ast')
@@ -55,5 +54,5 @@ if __name__ == "__main__":
     #(https://github.com/numba/numba/issues/147).
 
     #print_nopython(10)
-
+    TestPrint('test_print_stream').debug()
     unittest.main()

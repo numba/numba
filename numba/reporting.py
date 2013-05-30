@@ -75,6 +75,7 @@ class MessageCollection(object):
 
     def __init__(self, ast=None, source_lines=None, file=None):
         # (node, is_error, message)
+        self.buf = []
         self.file = file or sys.stdout
         self.ast = ast
         self.source_lines = source_lines
@@ -95,7 +96,7 @@ class MessageCollection(object):
         pass
 
     def report_message(self, message, node, type):
-        self.file.write(format_msg_simple(type, node, message))
+        self.buf.append(format_msg_simple(type, node, message))
 
     def report(self, post_mortem=False):
         self.messages.sort(key=sort_message)
@@ -114,22 +115,33 @@ class MessageCollection(object):
             self.report_message(message, node, type)
 
         if self.messages:
+            self.buf[-1] = self.buf[-1].rstrip() + '\n'
             self.footer()
 
-        if errors and not post_mortem:
-            raise error.NumbaError(*errors[0])
+        message = "".join(self.buf)
 
+        # clear buffer
+        del self.messages[:]
+        del self.buf[:]
+
+        if errors and not post_mortem:
+            if len(message.splitlines()) == 1:
+                raise error.NumbaError(*errors[0])
+            raise error.NumbaError("(see below)\n" + message.strip(), has_report=True)
+        else:
+            self.file.write(message)
 
 class FancyMessageCollection(MessageCollection):
 
     def header(self):
-        self.file.write(" Numba Encountered Errors or Warnings ".center(80, "-") + '\n')
+        self.buf.append(
+            " Numba Encountered Errors or Warnings ".center(80, "-") + '\n')
 
     def footer(self):
-        self.file.write("-" * 80 + '\n')
+        self.buf.append("-" * 80 + '\n')
 
     def report_message(self, message, node, type):
-        self.file.write(format_msg(type, self.source_lines, node, message))
+        self.buf.append(format_msg(type, self.source_lines, node, message))
 
 # ______________________________________________________________________
 
@@ -141,13 +153,10 @@ def format_msg(type, source_lines, node, msg):
             line = source_lines[lineno]
             ret = line + '\n' + "%s^" % ("-" * colno) + '\n'
 
-    return ret + format_msg_simple(type, node, msg)
+    return ret + format_msg_simple(type, node, msg) + "\n"
 
 def format_msg_simple(type, node, message):
-    "Issue a warning"
-    # printing allows us to test the code
     return "%s %s%s\n" % (type, error.format_pos(node), message)
-    # logger.warning("Warning %s: %s", error.format_postup(getpos(node)), message)
 
 # ______________________________________________________________________
 
@@ -165,8 +174,7 @@ def report(env, exc=None):
     try:
         function_error_env.collection.report(post_mortem)
     except error.NumbaError as e:
-        if exc is None:
-            exc = e
+        exc = e
 
     if exc is not None and not post_mortem:
         # Shorten traceback

@@ -6,9 +6,9 @@ from __future__ import print_function, division, absolute_import
 
 import ast
 
+import numba
 from numba import *
 from numba import nodes
-from numba.minivect import minitypes
 
 class SliceDimNode(nodes.ExprNode):
     """
@@ -57,7 +57,7 @@ class BroadcastNode(nodes.ExprNode):
         super(BroadcastNode, self).__init__(**kwargs)
         self.operands = operands
 
-        self.shape_type = minitypes.CArrayType(npy_intp, array_type.ndim)
+        self.shape_type = numba.carray(npy_intp, array_type.ndim)
         self.array_type = array_type
         self.type = npy_intp.pointer()
 
@@ -104,7 +104,7 @@ class NativeSliceNode(nodes.ExprNode):
         self.value = value
         self.subslices = subslices
 
-        self.shape_type = minitypes.CArrayType(npy_intp, type.ndim)
+        self.shape_type = numba.carray(npy_intp, type.ndim)
         self.nopython = nopython
         if not nopython:
             self.build_array_node = self.build_array()

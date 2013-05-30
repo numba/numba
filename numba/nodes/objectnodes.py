@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+
+from numba import typesystem
 from numba.nodes import *
 
 class ObjectInjectNode(ExprNode):
@@ -43,7 +45,7 @@ class NoneNode(ExprNode):
     Return None.
     """
 
-    type = typesystem.NoneType()
+    type = typesystem.none
     variable = Variable(type)
 
 class ObjectTempRefNode(ExprNode):
