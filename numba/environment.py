@@ -432,6 +432,7 @@ class FunctionEnvironment(object):
         self.qualified_name = qualified_name or name
         self.llvm_module = (llvm_module if llvm_module
                                  else self.numba.llvm_context.module)
+
         self.wrap = wrap
         self.link = link
         self.llvm_wrapper_func = None

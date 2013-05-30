@@ -334,11 +334,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
             # Verify code generation
             self.llvm_module.verify()  # only Module level verification checks everything.
-
-            # Reove reference to self.llvm_module
-            # This may be destroyed later due to linkage
-            del self.llvm_module
-
         except:
             # Delete the function to prevent an invalid function from living in the module
             if self.lfunc is not None:
