@@ -62,7 +62,8 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
 
 class LLVMCodeGenerator(visitors.NumbaVisitor,
                         complexsupport.ComplexSupportMixin,
-                        refcounting.RefcountingMixin):
+                        refcounting.RefcountingMixin,
+                        visitors.NoPythonContextMixin):
     """
     Translate a Python AST to LLVM. Each visit_* method should directly
     return an LLVM value.
@@ -148,10 +149,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         stackspace.name = name
         self.builder.store(larg, stackspace)
         return stackspace
-
-    @property
-    def have_cfg(self):
-        return hasattr(self.ast, 'flow')
 
     def renameable(self, variable):
         renameable = self.have_cfg and (not variable or variable.renameable)
