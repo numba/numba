@@ -66,7 +66,7 @@ def test_invalid_node_instantiation():
     >>> m.Foo()
     Traceback (most recent call last):
       ...
-    TypeError: __init__() takes exactly 2 arguments (1 given)
+    TypeError: ...
     >>> m.Bar(None, e2)
     Traceback (most recent call last):
       ...
@@ -80,4 +80,5 @@ def test_invalid_node_instantiation():
 
 if __name__ == '__main__':
     import doctest
-    sys.exit(0 if doctest.testmod().failed == 0 else 1)
+    optionflags = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE
+    sys.exit(0 if doctest.testmod(optionflags=optionflags).failed == 0 else 1)
