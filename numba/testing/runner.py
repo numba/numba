@@ -106,7 +106,13 @@ else:
 # ______________________________________________________________________
 # Test running
 
-def test(whitelist=None, blacklist=None, print_failures_only=False):
+def test(whitelist=None, blacklist=None, print_failures_only=False, loop=False):
+    while True:
+        exit_status = _test(whitelist, blacklist, print_failures_only)
+        if exit_status != 0 or not loop:
+            return exit_status
+
+def _test(whitelist, blacklist, print_failures_only):
     # FIXME
     # temporarily disable pycc test on win32
     if sys.platform.startswith('win32'):
