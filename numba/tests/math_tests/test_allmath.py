@@ -9,6 +9,7 @@ from __future__ import print_function, division, absolute_import
 import math
 import cmath
 import collections
+from itertools import chain
 
 import numba as nb
 import numpy as np
@@ -95,6 +96,7 @@ def misc_floating(mod, x):
 # Run tests
 
 Suite = collections.namedtuple('Suite', ['mod', 'types'])
+merge = lambda d1, d2: dict(chain(d1.items(), d2.items()))
 
 integral = nb.short, nb.int_, nb.uint, nb.long_, nb.ulong, nb.longlong, nb.ulonglong
 floating = nb.float_, nb.double, nb.longdouble
@@ -102,11 +104,11 @@ complexes = nb.complex64, nb.complex128, nb.complex256
 
 fdata     = { integral : 6, floating: 6.0, (nb.object_,): 6.0 }
 cdata     = { complexes: 6.0+4.0j }
-data      = dict(fdata, **cdata)
+data      = merge(fdata, cdata)
 
 arc_fdata = { floating: 0.6, (nb.object_,): 0.6 }
 arc_cdata = { complexes: 0.6+0.4j }
-arc_data  = dict(arc_fdata, **arc_cdata)
+arc_data  = merge(arc_fdata, arc_cdata)
 
 tests = {
     run_common  : [Suite(math, fdata), Suite(cmath, cdata)],

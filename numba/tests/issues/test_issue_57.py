@@ -53,7 +53,8 @@ class TestIssue57(unittest.TestCase):
         lat = np.deg2rad(np.ones((5, 5), dtype=np.float32) * 45.)
         control_arr = ra_numpy(120, lat)
         test_arr = test_fn(120, lat)
-        self.assertTrue(np.allclose(test_arr, control_arr))
+        self.assertTrue(np.allclose(test_arr, control_arr),
+                        test_arr - control_arr)
 
 def benchmark(test_fn=None, control_fn=None):
     if test_fn is None:
@@ -69,7 +70,7 @@ def benchmark(test_fn=None, control_fn=None):
     dt0 = t1 - t0
     dt1 = t2 - t1
     logger.info('Control time %0.6fs, test time %0.6fs' % (dt0, dt1))
-    assert np.allclose(test_arr, control_arr)
+    assert np.allclose(test_arr, control_arr), (test_arr - control_arr)
     return dt0, dt1
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ def test_mutability():
     ty.args
     try:
         ty.args = [1, 2]
-    except AttributeError, e:
+    except AttributeError as e:
         pass
     else:
         raise Exception(

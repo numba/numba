@@ -346,7 +346,7 @@ def test_delayed_string_indexing2():
 def test_string_indexing_error():
     """
     >>> try: test_string_indexing_error()
-    ... except Exception, e: print(e)
+    ... except Exception as e: print(e)
     Cannot promote types string and char
     """
     for i in range(4):
@@ -362,7 +362,7 @@ def test_string_indexing_error():
 def test_string_indexing_error2():
     """
     >>> try: chr(test_string_indexing_error2())
-    ... except Exception, e: print(e)
+    ... except Exception as e: print(e)
     Cannot promote types string and char
     """
     for i in range(4):
