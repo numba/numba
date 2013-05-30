@@ -13,7 +13,6 @@ import textwrap
 from numba import void
 from numba import utils
 from numba.viz import graphviz
-from numba.control_flow import entrypoints
 
 # ______________________________________________________________________
 # Utilities

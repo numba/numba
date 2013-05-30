@@ -16,7 +16,7 @@ from numba.minivect.minitypes import FunctionType
 from numba import functions, symtab
 from numba.utility.cbuilder import library
 from numba.nodes import metadata
-from numba.control_flow import flow
+from numba.control_flow import ControlFlow
 from numba.codegen import translate
 from numba.codegen import globalconstants
 
@@ -292,7 +292,7 @@ class FunctionEnvironment(object):
 
     warn = True
     flow = TypedProperty(
-        (NoneType, object), #ControlFlow),
+        (NoneType, ControlFlow),
         "Control flow graph. See numba.control_flow.",
         default=None)
 
