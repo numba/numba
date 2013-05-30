@@ -114,7 +114,7 @@ class UFuncConverter(ast.NodeTransformer):
 
     def visit_UnaryOp(self, node):
         self.demote_type(node)
-        node.op = self.visit(node.op)
+        node.operand = self.visit(node.operand)
         return node
 
     def visit_Call(self, node):
