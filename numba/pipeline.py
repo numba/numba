@@ -522,12 +522,14 @@ class LinkingStage(PipelineStage):
         # env.context.cbuilder_library.link(func_env.lfunc.module)
         env.constants_manager.link(func_env.lfunc.module)
 
+        lfunc_pointer = 0
         if func_env.link:
             # Link function into fat LLVM module
             func_env.lfunc = env.llvm_context.link(func_env.lfunc)
             func_env.translator.lfunc = func_env.lfunc
+            lfunc_pointer = func_env.translator.lfunc_pointer
 
-        func_env.lfunc_pointer = func_env.translator.lfunc_pointer
+        func_env.lfunc_pointer = lfunc_pointer
 
         return ast
 

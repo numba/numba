@@ -79,9 +79,6 @@ default_type_infer_pipeline_order = [
     'TypeInfer',
 ]
 
-compile_idx = default_pipeline_order.index('TypeInfer') + 1
-default_compile_pipeline_order = default_pipeline_order[compile_idx:]
-
 default_dummy_type_infer_pipeline_order = [
     'ast3to2',
     'TypeInfer',
@@ -102,6 +99,13 @@ default_numba_late_translate_pipeline_order = \
     default_numba_lower_pipeline_order + [
     'CodeGen',
 ]
+
+upto = lambda order, x: order[:order.index(x)+1]
+upfr = lambda order, x: order[order.index(x)+1:]
+
+default_compile_pipeline_order = upfr(default_pipeline_order, 'TypeInfer')
+default_codegen_pipeline = upto(default_pipeline_order, 'CodeGen')
+default_post_codegen_pipeline = upfr(default_pipeline_order, 'CodeGen')
 
 # ______________________________________________________________________
 # Convenience functions
@@ -769,6 +773,10 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
                 default_numba_lower_pipeline_order),
             'late_translate' : pipeline.ComposedPipelineStage(
                 default_numba_late_translate_pipeline_order),
+            'codegen' : pipeline.ComposedPipelineStage(
+                default_codegen_pipeline),
+            'post_codegen' : pipeline.ComposedPipelineStage(
+                default_post_codegen_pipeline),
             }
         self.context = NumbaContext()
         self.specializations = functions.FunctionCache(env=self)
