@@ -31,7 +31,7 @@ if numba.PY3:
         doc = re.sub(r'(\d+)L', r'\1', doc)
         doc = re.sub(r'([^\.])NumbaError', r'\1numba.error.NumbaError', doc)
         doc = re.sub(r'([^\.])InvalidTemplateError', r'\1numba.error.InvalidTemplateError', doc)
-        doc = re.sub(r'([^\.])UnpromotableTypeError', r'\1numba.minivect.minierror.UnpromotableTypeError', doc)
+        doc = re.sub(r'([^\.])UnpromotableTypeError', r'\1numba.error.UnpromotableTypeError', doc)
         return doc
     def autojit_py3doc(*args, **kwargs):
         if kwargs:

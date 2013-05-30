@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
+
 from numba.decorators import jit
 from numba import *
 import numpy as np
@@ -83,8 +86,7 @@ def main():
         test_numba()
         test_gufunc()
         test_gufunc_array_expressions()
-    print 'ok'
+    print('ok')
 
 if __name__ == '__main__':
     main()
-
