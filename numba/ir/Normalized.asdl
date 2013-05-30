@@ -79,7 +79,7 @@ module Normalized version "0.1"
                 expr? starargs, expr? kwargs)
          | Num(object n) -- a number as a PyObject.
          | Str(string s) -- need to specify raw, unicode, etc?
-         | Bytes(bytes s)
+         | Bytes(object s)
          | Ellipsis
          -- other literals? bools?
 

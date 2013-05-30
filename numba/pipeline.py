@@ -188,7 +188,7 @@ class PipelineStage(object):
                 if func_env.is_closure:
                     flags, parent_func_env = env.translation.stack[-2]
                     error_env.merge_in(parent_func_env.error_env)
-                else:
+                elif not e.has_report:
                     reporting.report(env, exc=e)
                 raise
 

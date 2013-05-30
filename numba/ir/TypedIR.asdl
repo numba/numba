@@ -1,6 +1,6 @@
 -- Typed IR with expression trees.
 
-module Typed (type) version "0.1"
+module Typed version "0.1"
 {
 
     -- Import everything except 'expr'

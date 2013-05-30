@@ -21,32 +21,34 @@ from numba import *
 
 myglobal = 20
 
-@autojit(backend='ast')
+autojit = autojit(warn=False, warnstyle="simple")
+
+@autojit
 def get_globals():
     return globals()['myglobal']
 
-@autojit(backend='ast')
+@autojit
 def get_locals():
     x = 2
     return locals()['x']
 
-@autojit(backend='ast')
+@autojit
 def get_sum(x):
     return sum([1, 2, x])
 
-@autojit(backend='ast')
+@autojit
 def eval_something(s):
     return eval(s)
 
-@autojit(backend='ast')
+@autojit
 def enumerate_list():
     return enumerate([1, 2, 3])
 
-@autojit(backend='ast')
+@autojit
 def max_(x):
     return max(1, 2.0, x, 14)
 
-@autojit(backend='ast')
+@autojit
 def min_(x):
     return min(1, 2.0, x, 14)
 

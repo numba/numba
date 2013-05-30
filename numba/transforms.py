@@ -209,7 +209,6 @@ class BuiltinResolver(object):
     def _resolve_long(self, func, node, argtype, dst_type=int_):
         return self._resolve_int_number(func, node, argtype, long_, 'PyLong_FromString')
 
-
 class ResolveCoercions(visitors.NumbaTransformer):
 
     def visit_CoercionNode(self, node):
@@ -810,9 +809,8 @@ class LateSpecializer(ResolveCoercions, visitors.NoPythonContextMixin):
 
     def visit_ArrayNewNode(self, node):
         if self.nopython:
-            # Give the codegen (subclass) a chance to handle this
-            self.generic_visit(node)
-            return node
+            raise error.NumbaError(
+                node, "Cannot yet allocate new array in nopython context")
 
         PyArray_Type = nodes.ObjectInjectNode(np.ndarray)
         descr = nodes.ObjectInjectNode(node.type.dtype.get_dtype()).cloneable
@@ -844,11 +842,17 @@ class LateSpecializer(ResolveCoercions, visitors.NoPythonContextMixin):
         return self.visit(result)
 
     def visit_ArrayNewEmptyNode(self, node):
+        if self.nopython:
+            raise error.NumbaError(
+                node, "Cannot yet allocate new empty array in nopython context")
+
         ndim = nodes.const(node.type.ndim, int_)
-        dtype = nodes.const(node.type.dtype.get_dtype(), object_)
+        dtype = nodes.const(node.type.dtype.get_dtype(), object_).cloneable
         is_fortran = nodes.const(node.is_fortran, int_)
         result = nodes.PyArray_Empty([ndim, node.shape, dtype, is_fortran])
-        return self.visit(result)
+        result = nodes.ObjectTempNode(result)
+        incref_descr = nodes.IncrefNode(dtype)
+        return self.visit(nodes.ExpressionNode([incref_descr], result))
 
     def visit_Name(self, node):
         if node.variable.is_constant:

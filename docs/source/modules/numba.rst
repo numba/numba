@@ -1,6 +1,0 @@
-=====
-numba
-=====
-
-.. automodule:: numba
-   :members:

@@ -10,12 +10,19 @@ import os
 import types
 import codecs
 import textwrap
-import cStringIO
 
+from numba import PY3
 from numba.asdl import asdl
 from numba.asdl import schema
 from numba.asdl import processor
 from numba.asdl.asdl import pyasdl
+
+if PY3:
+    import io
+    BytesIO = io.BytesIO
+else:
+    import cStringIO
+    BytesIO = cStringIO.StringIO
 
 root = os.path.dirname(os.path.abspath(__file__))
 
@@ -136,7 +143,7 @@ class DiskFileAllocator(FileAllocator):
 class MemoryFileAllocator(FileAllocator):
 
     def open_sourcefile(self, name):
-        file = StreamWriter(cStringIO.StringIO())
+        file = StreamWriter(BytesIO())
         self.allocated_files[name] = file
         return file
 
@@ -193,7 +200,12 @@ class SimpleCodegen(Codegen):
         self.emit_preamble(emitter, schema)
 
         for rulename, rule in schema.dfns.iteritems():
-            self.emit_rule(emitter, schema, rulename, rule)
+            if rule.is_sum:
+                self.emit_nonterminal(emitter, schema, rulename, rule)
+
+        for rulename, rule in schema.dfns.iteritems():
+            if rule.is_product:
+                self.emit_product(emitter, schema, rulename, rule)
 
         for rulename, rule in schema.dfns.iteritems():
             if rule.is_sum:
@@ -203,12 +215,14 @@ class SimpleCodegen(Codegen):
     def emit_preamble(self, emitter, schema):
         pass
 
-    def emit_rule(self, emitter, schema, rulename, rule):
+    def emit_nonterminal(self, emitter, schema, rulename, rule):
+        pass
+
+    def emit_product(self, emitter, schema, rulename, rule):
         pass
 
     def emit_sum(self, emitter, schema, rulename, rule, sumtype):
         pass
-
 
 if __name__ == '__main__':
     schema_def = textwrap.dedent("""
@@ -220,10 +234,13 @@ if __name__ == '__main__':
             foo = Add | Mul
             expr = X | Y
                  attributes (int lineno)
+
+            alias = (int foo, int bar)
         }
     """)
     asdl_tree = get_asdl("MyASDL.asdl", schema_def)
-    print(asdl_tree)
+    print("asdl", asdl_tree)
     print ("-------------")
     s = schema.build_schema(asdl_tree)
-    print(s.types)
+    print("dfns", s.dfns)
+    print("types", s.types)

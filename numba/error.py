@@ -17,16 +17,19 @@ def format_postup(tup):
 class NumbaError(Exception):
     "Some error happened during compilation"
 
-    def __init__(self, node, msg=None, *args):
+    def __init__(self, node, msg=None, *args, **kwds):
         if msg is None:
             node, msg = None, node
 
         self.node = node
         self.msg = msg
         self.args = args
+        self.has_report = kwds.get("has_report", False)
 
     def __str__(self):
         try:
+            if self.has_report:
+                return self.msg.strip()
             pos = format_pos(self.node)
             msg = "%s%s %s" % (pos, self.msg, " ".join(map(str, self.args)))
             return msg.rstrip()

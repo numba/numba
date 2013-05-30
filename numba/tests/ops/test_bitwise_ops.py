@@ -1,9 +1,9 @@
 import sys
-
 import numba
-
 from numba.testing.test_support import autojit_py3doc
 # NOTE: See also issues/test_issue_56
+
+autojit_py3doc = autojit_py3doc(warn=False, warnstyle='simple')
 
 @autojit_py3doc
 def test_bitwise_and(a, b):

@@ -7,7 +7,10 @@ module MyModule version "0.1"
     expr = SomeExpr(object n)
          | SomeOtherExpr(object n)
          | Bar(expr e1, expr? e2)
+         | Product(myproduct p)
 
     -- test builtin types
     builtin = Expr(object o, string s, identifier id, int i, bool b)
+
+    myproduct = (expr foo, int bar)
 }

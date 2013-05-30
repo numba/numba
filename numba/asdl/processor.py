@@ -106,23 +106,18 @@ def apply_imports(asdlmod, imports, import_path):
 
 def handle_import(tree, import_names, subtrees, types):
     for import_name in import_names:
-        subtrees.append(from_import(tree, import_name))
-        types[import_name] = tree.types[import_name]
+        dfns = from_import(tree, import_name)
+        subtrees.extend(dfns)
+        for dfn in dfns:
+            print(dfn.name, tree.types.keys())
+            types[dfn.name] = tree.types[str(dfn.name)]
 
 def from_import(tree, import_name):
+    if import_name == '*':
+        return tree.dfns #[dfn for dfn in tree.dfns if dfn.name in tree.types]
+
     for definition in tree.dfns:
         if str(definition.name) == import_name:
-            return definition
+            return [definition]
 
     raise ImportError("Module %r has no rule %r" % (tree.name, import_name))
-
-
-if __name__ == '__main__':
-    s1 = 'from foo import bar, baz'
-    s2 = 'from foo import bar'
-    s3 = 'from foo import *'
-
-    for s in (s1, s2, s3):
-        m = re.match(pattern, s)
-        print(m.group(0))
-        print(m.groups())

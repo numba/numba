@@ -14,13 +14,13 @@ def smoketest():
     # assert x != -10 # 'abc'
     return result, x
 
-@autojit_py3doc
+@autojit_py3doc(warnstyle="simple")
 def list_genexp():
     """
     >>> list_genexp()
     Traceback (most recent call last):
         ...
-    NumbaError: 26:18: Generator comprehensions are not yet supported
+    NumbaError: ...: Generator comprehensions are not yet supported
     """
     x = -10 # 'abc'
     result = list(x*2 for x in range(5) if x % 2 == 0)

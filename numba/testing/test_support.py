@@ -6,9 +6,14 @@ import sys
 import types
 import unittest
 import functools
+try:
+    from nose.tools import nottest
+except ImportError:
+    def nottest(fn):
+        def _nottest(*args, **kws):
+            raise Exception("nose not available")
+        return _nottest
 
-from nose.tools import nottest
-import nose.plugins.skip
 import numba
 from numba import *
 from numba.testing import doctest_support

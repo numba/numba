@@ -40,5 +40,8 @@ class CythonFormatter(Formatter):
 
         return defaults.get(type, type)
 
+def format_fields(fields):
+    return ", ".join("%s %s" % (f.type, f.name) for f in fields)
+
 py_formatter = PythonFormatter()
 cy_formatter = CythonFormatter()

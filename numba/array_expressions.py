@@ -269,8 +269,8 @@ class ArrayExpressionRewriteNative(ArrayExpressionRewrite):
         func_env, (_, _, _) = pipeline.run_pipeline2(
             self.env, None, ufunc_ast, signature,
             function_globals=self.env.crnt.function_globals,
-            wrap=False, link=False, #llvm_module=llvm_module,
-            # pipeline_name='codegen',
+            wrap=False, link=False, nopython=True,
+            #llvm_module=llvm_module, # pipeline_name='codegen',
         )
         llvm_module = func_env.llvm_module
 
