@@ -385,6 +385,9 @@ Compiler = CompilerPy3 if PY3 else CompilerPy2
 
 # XXX: hack
 def _hack_strip_python_ref(mod):
+    if int(os.environ.get('NO_PYCC_SYMBOL_STRIP', False)):
+        return # do nothing if the environment variable is set
+
     removeglobals = ['PyArray_API']
     for g in removeglobals:
         try:
