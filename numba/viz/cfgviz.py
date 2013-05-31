@@ -29,7 +29,7 @@ def cf_from_source(source, func_globals):
     func_env, _ = pipeline.run_pipeline2(env, None, func_ast, void(),
                                          pipeline_name='cf',
                                          function_globals=dict(func_globals))
-    return func_env.symtab, func_env.cfg
+    return func_env.symtab, func_env.flow #func_env.cfg
 
 # ______________________________________________________________________
 # Adaptor
