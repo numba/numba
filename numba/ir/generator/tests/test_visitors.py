@@ -6,6 +6,12 @@ import sys
 from .testutils import generate_in_memory
 from .. import generator, visitorgen, astgen, naming
 
+try:
+    import cython
+    have_cython = True
+except ImportError:
+    have_cython = False
+
 #------------------------------------------------------------------------
 # Load modules
 #------------------------------------------------------------------------
@@ -28,7 +34,16 @@ def load_testschema1():
 
     return nodes, visitor, transformer
 
-nodes, visitor, transformer = load_testschema1()
+if have_cython:
+    nodes, visitor, transformer = load_testschema1()
+else:
+    class visitor(object):
+        class Visitor(object):
+            pass
+
+    class transformer(object):
+        class Transformer(object):
+            pass
 
 #------------------------------------------------------------------------
 # Visitor testers
@@ -80,4 +95,5 @@ def test_transformer():
 
 if __name__ == '__main__':
     import doctest
-    sys.exit(0 if doctest.testmod().failed == 0 else 1)
+    if have_cython:
+        sys.exit(0 if doctest.testmod().failed == 0 else 1)

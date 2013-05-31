@@ -68,4 +68,9 @@ def test_package_compilation():
 
 if __name__ == '__main__':
     import doctest
-    sys.exit(0 if doctest.testmod().failed == 0 else 1)
+    try:
+        import cython
+    except ImportError:
+        print("Skipping test, cython not installed")
+    else:
+        sys.exit(0 if doctest.testmod().failed == 0 else 1)

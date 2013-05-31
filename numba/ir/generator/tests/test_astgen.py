@@ -81,4 +81,9 @@ def test_invalid_node_instantiation():
 if __name__ == '__main__':
     import doctest
     optionflags = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE
-    sys.exit(0 if doctest.testmod(optionflags=optionflags).failed == 0 else 1)
+    try:
+        import cython
+    except ImportError:
+        print("Skipping test, cython not installed")
+    else:
+        sys.exit(0 if doctest.testmod(optionflags=optionflags).failed == 0 else 1)
