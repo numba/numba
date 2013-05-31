@@ -132,6 +132,8 @@ class _Compiler(object):
         self._process_inputs(**kws)
         lmod = self._cull_exports()
         tm = le.TargetMachine.new(reloc=le.RELOC_PIC, features='-avx')
+        if not kws.get('wrap'):
+            _hack_strip_python_ref(lmod)
         with open(output, 'wb') as fout:
             objfile = tm.emit_object(lmod)
             fout.write(objfile)
@@ -379,3 +381,27 @@ class CompilerPy3(_Compiler):
 
 
 Compiler = CompilerPy3 if PY3 else CompilerPy2
+
+
+# XXX: hack
+def _hack_strip_python_ref(mod):
+    removeglobals = ['PyArray_API']
+    for g in removeglobals:
+        try:
+            gv = mod.get_global_variable_named(g)
+        except:
+            pass
+        else:
+            if not gv.uses:
+                gv.delete()
+    removethese = ['IndexAxis', 'NewAxis', 'Broadcast']
+    while True:
+        for func in mod.functions:
+            if func.name.startswith('Py') and not func.uses:
+                func.delete()
+                break
+            elif func.name in removethese and not func.uses:
+                func.delete()
+                break
+        else:
+            break
