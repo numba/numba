@@ -645,9 +645,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             # Not a renamed but an alloca'd variable
             return self.load_tbaa(var.lvalue, var.type)
         else:
+            # node.lineno is always off by one for some reason
             if not node.lineno-1 in self.annotations:
                 self.annotations[node.lineno-1] = []
-            self.annotations[node.lineno-1].append(Annotation(A_type, (node.name, str(node.type))))
+            annotation = Annotation(A_type, (node.name, str(node.type)))
+            self.annotations[node.lineno-1].append(annotation)
             return var.lvalue
 
     #------------------------------------------------------------------------
@@ -916,6 +918,24 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             ret_type = self.func_signature.return_type
             if is_obj(rettype):
                 self.xincref_temp(self.return_value)
+
+            # Visitor class for looking for node with valid line number
+            class LineNumVisitor(ast.NodeVisitor):
+                lineno = -1
+                def generic_visit(self, node):
+                    if hasattr(node, 'lineno'):
+                        if node.lineno > -1:
+                            self.lineno = node.lineno
+                    
+            v = LineNumVisitor()
+            v.visit(node)
+            if v.lineno > -1:
+                # node.lineno is always off by one for some reason
+                lineno = v.lineno - 1
+                if not lineno in self.annotations:
+                    self.annotations[lineno] = []
+                annotation = Annotation(A_type, ('return', str(node.value.type)))
+                self.annotations[lineno].append(annotation)
 
         if not self.is_block_terminated():
             self.builder.branch(self.cleanup_label)
