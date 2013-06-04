@@ -108,10 +108,14 @@ def render_text(program, emit=sys.stdout.write,
     indent = 8
     emitline = lambda indent, s: emit(u" " * indent + s + u"\n")
     emitter = Emitter(emit, emitline)
-    irs = list(render_intermediates(program, intermediate_names))
+    if program.intermediates:
+        irs = list(render_intermediates(program, intermediate_names))
+    else:
+        irs = None
 
     # Render main source
-    render_source(program.python_source, emitter, indent, irs if inline else [])
+    render_source(program.python_source, emitter, indent,
+        irs if inline and irs else [])
 
     if not inline and irs:
         # Render IRs seperately
@@ -136,10 +140,10 @@ def render_source(source, emitter, indent, intermediates, linenomap=None):
 
 
 def _render_source(source, emitter, indent, intermediates, header=None):
-    for lineno, sourceline in source.linemap.items():
+    for lineno in sorted(source.linemap.iterkeys()):
         if header:
             emitter.emit(header(lineno))
-        emitter.emitline(0, u"%4d    %s" % (lineno, sourceline))
+        emitter.emitline(0, u"%4d    %s" % (lineno, source.linemap[lineno]))
 
         annots = _gather_text_annotations(source.annotations.get(lineno, []))
         irs = _gather_text_intermediates(intermediates, lineno)
@@ -148,7 +152,7 @@ def _render_source(source, emitter, indent, intermediates, header=None):
             continue
 
         # Print out annotations
-        linestart = indent + len(sourceline) - len(sourceline.lstrip())
+        linestart = indent + len(source.linemap[lineno]) - len(source.linemap[lineno].lstrip())
         emitter.emitline(linestart + 2, u"||".center(WIDTH, ANNOT_SEP))
         for line in lines:
             emitter.emitline(linestart + 2, line)

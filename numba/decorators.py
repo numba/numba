@@ -19,6 +19,8 @@ from numba.codegen import llvmwrapper
 from numba import environment
 import llvm.core as _lc
 from numba.wrapping import compiler
+from numba.annotate.annotate import Source, Program, render_text
+from StringIO import StringIO
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +137,7 @@ def compile_function(env, func, argtypes, restype=None, **kwds):
     function_cache.register_specialization(func_env)
     return (func_env.func_signature,
             func_env.lfunc,
-            func_env.numba_wrapper_func)
+            func_env.numba_wrapper_func, func_env)
 
 
 def _autojit(template_signature, target, nopython, env_name=None, env=None,
@@ -218,8 +220,34 @@ def _jit(restype=None, argtypes=None, nopython=False,
 
         assert kwargs.get('llvm_module') is None # TODO link to user module
         assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
-        sig, lfunc, wrapper = compile_function(
+        sig, lfunc, wrapper, func_env = compile_function(
             env, func, argtys, restype=return_type, nopython=nopython, **kwargs)
+
+        import inspect
+        import textwrap
+        source = inspect.getsource(func)
+        source = textwrap.dedent(source)
+        lines = source.split('\n')
+        if lines[-1] == '':
+            lines = lines[0:-1]
+        decorators = 0
+        while not source.lstrip().startswith('def'): # decorator can have multiple lines
+            assert source
+            decorator, sep, source = source.partition('\n')
+            decorators += 1
+
+        lineno = func.func_code.co_firstlineno + decorators
+        linemap = {}
+        for line in lines[decorators:]:
+            linemap[lineno] = line
+            lineno += 1
+
+        p = Program(Source(linemap, func_env.translator.annotations), [])
+        f = StringIO()
+        render_text(p, emit=f.write)
+        src = f.getvalue()
+        print(src)
+        
         return numbawrapper.create_numba_wrapper(func, wrapper, sig, lfunc)
 
     return _jit_decorator

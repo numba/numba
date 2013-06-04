@@ -29,6 +29,7 @@ from numba.control_flow import ssa
 from numba.support.numpy_support import sliceutils
 from numba.nodes import constnodes
 from numba.typesystem import llvm_typesystem as lts
+from numba.annotate.annotate import Annotation, A_type
 
 from llvm_cbuilder import shortnames as C
 
@@ -106,6 +107,20 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         # internal states
         self._nodes = []  # for tracking parent nodes
+
+        import inspect
+        import textwrap
+        source = inspect.getsource(func)
+        source = textwrap.dedent(source)
+        decorators = 0
+        while not source.lstrip().startswith('def'): # decorator can have multiple lines
+            assert source
+            decorator, sep, source = source.partition('\n')
+            decorators += 1
+
+        self.annotations = {}
+        for argname, argtype in zip(self.argnames, self.func_signature.args):
+            self.annotations[func.__code__.co_firstlineno + decorators] = [Annotation(A_type, (argname, str(argtype)))]
 
     # ________________________ visitors __________________________
 
@@ -632,6 +647,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             # Not a renamed but an alloca'd variable
             return self.load_tbaa(var.lvalue, var.type)
         else:
+            if not node.lineno-1 in self.annotations:
+                self.annotations[node.lineno-1] = []
+            self.annotations[node.lineno-1].append(Annotation(A_type, (node.name, str(node.type))))
             return var.lvalue
 
     #------------------------------------------------------------------------
