@@ -20,6 +20,24 @@ Annotation = namedtuple("Annotation", ["type", "value"])
 
 # ______________________________________________________________________
 
+def build_linemap(func):
+    import inspect
+    import textwrap
+    source = inspect.getsource(func)
+    source = textwrap.dedent(source)
+    lines = source.split('\n')
+    if lines[-1] == '':
+        lines = lines[0:-1]
+    
+    lineno = func.func_code.co_firstlineno
+    linemap = {}
+    for line in lines:
+        linemap[lineno] = line
+        lineno += 1
+
+    return linemap
+
+# ______________________________________________________________________
 class Renderer(object):
     """
     Render an intermediate source.
