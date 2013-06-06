@@ -82,3 +82,6 @@ Filterbank Correlation
 ----------------------
 .. literalinclude:: /../../examples/fbcorr.py
 
+Multi threading
+---------------
+.. literalinclude:: /../../examples/multithread.py
