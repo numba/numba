@@ -58,11 +58,27 @@ def ctypes_data_values():
     ctypes_double_p = ctypes.POINTER(ctypes.c_double)(ctypes.c_double(10))
     assert from_python(ctypes_double_p) == double.pointer()
 
+def ctypes_c_void_p():
+    savethread = ctypes.pythonapi.PyEval_SaveThread
+    savethread.argtypes = []
+    savethread.restype = ctypes.c_void_p
+
+    restorethread = ctypes.pythonapi.PyEval_RestoreThread
+    restorethread.argtypes = [ctypes.c_void_p]
+    restorethread.restype = None
+    
+    @autojit(nopython=True)
+    def test_gil():
+        threadstate = savethread()
+        restorethread(threadstate)
+
+    test_gil()
+    
 def test():
     if ctypes_values is not None:
         ctypes_func_values()
         ctypes_data_values()
-
+    ctypes_c_void_p()
 
 if __name__ == '__main__':
     test()
