@@ -1,16 +1,17 @@
 from timeit import repeat
 import threading
 from ctypes import pythonapi, c_void_p
+from math import exp
 
 import numpy as np
-from numba import autojit
+from numba import jit, void, double
 
 nthreads = 2
 size = 1e6
 
-def timefunc(correct, func, *args, **kwargs):
-    print func.__name__.ljust(20),
-    # Make sure the function is compiled before we time
+def timefunc(correct, s, func, *args, **kwargs):
+    print s.ljust(20),
+    # Make sure the function is compiled before we start the benchmark
     res = func(*args, **kwargs)
     if correct is not None:
         assert np.allclose(res, correct)
@@ -36,10 +37,9 @@ def make_multithread(inner_func, numthreads):
         chunks = [[arg[i * chunklen:(i + 1) * chunklen] for arg in args]
                   for i in range(numthreads)]
 
-        # make sure inner_func is compiled at this point, because the
-        # compilation must happen on the main thread. This is the case in
-        # this example because we call the single threaded example before the
-        # multithread example and they share the same inner_func.
+        # You should make sure inner_func is compiled at this point, because
+        # the compilation must happen on the main thread. This is the case
+        # in this example because we use jit().
         threads = [threading.Thread(target=inner_func, args=chunk)
                    for chunk in chunks[:-1]]
         for thread in threads:
@@ -61,27 +61,24 @@ restorethread = pythonapi.PyEval_RestoreThread
 restorethread.argtypes = [c_void_p]
 restorethread.restype = None
 
-def inner_func(result, a, b, c):
+def inner_func(result, a, b):
     threadstate = savethread()
     for i in range(len(result)):
-        result[i] = 2.1 * a[i] + 3.2 * b[i] * b[i] + 4.3 * c[i] * c[i] * c[i]
+        result[i] = exp(2.1 * a[i] + 3.2 * b[i])
     restorethread(threadstate)
 
-inner_func_nb = autojit(inner_func, nopython=True)
+signature = void(double[:], double[:], double[:])
+inner_func_nb = jit(signature, nopython=True)(inner_func)
 func_nb = make_singlethread(inner_func_nb)
 func_nb_mt = make_multithread(inner_func_nb, nthreads)
             
-def func_np(a, b, c):
-    return 2.1 * a + 3.2 * b * b + 4.3 * c * c * c
-  
+def func_np(a, b):
+    return np.exp(2.1 * a + 3.2 * b)
+
 a = np.random.rand(size)
 b = np.random.rand(size)
 c = np.random.rand(size)
 
-print "using 1 thread"
-correct = timefunc(None, func_np, a, b, c)
-timefunc(correct, func_nb, a, b, c)
-
-print
-print "using {} threads".format(nthreads)
-timefunc(correct, func_nb_mt, a, b, c)
+correct = timefunc(None, "numpy (1 thread)", func_np, a, b)
+timefunc(correct, "numba (1 thread)", func_nb, a, b)
+timefunc(correct, "numba (%d threads)" % nthreads, func_nb_mt, a, b)
