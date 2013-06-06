@@ -1,3 +1,8 @@
+"""
+Example of multithreading by releasing the GIL through ctypes.
+"""
+from __future__ import print_function, division, absolute_import
+
 from timeit import repeat
 import threading
 from ctypes import pythonapi, c_void_p
@@ -10,14 +15,14 @@ nthreads = 2
 size = 1e6
 
 def timefunc(correct, s, func, *args, **kwargs):
-    print s.ljust(20),
+    print(s.ljust(20), end=" ")
     # Make sure the function is compiled before we start the benchmark
     res = func(*args, **kwargs)
     if correct is not None:
         assert np.allclose(res, correct)
     # time it
-    print '{:>5.0f} ms'.format(min(repeat(lambda: func(*args, **kwargs),
-                                          number=5, repeat=2)) * 1000)
+    print('{:>5.0f} ms'.format(min(repeat(lambda: func(*args, **kwargs),
+                                          number=5, repeat=2)) * 1000))
     return res
 
 def make_singlethread(inner_func):
