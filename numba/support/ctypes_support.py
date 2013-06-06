@@ -52,6 +52,8 @@ def from_ctypes_type(ctypes_type):
     """
     if numba.utils.hashable(ctypes_type) and ctypes_type in ctypes_map:
         return ctypes_map[ctypes_type]
+    elif ctypes_type is ctypes.c_void_p:
+        return from_ctypes_type(None).pointer()
     elif isinstance(ctypes_type, _ctypes_pointer_type):
         return from_ctypes_type(ctypes_type._type_).pointer()
     elif isinstance(ctypes_type, _ctypes_array_type):
