@@ -6,3 +6,4 @@ cython
 llvmpy
 cffi
 argparse
+llvmmath
