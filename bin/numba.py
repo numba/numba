@@ -12,17 +12,9 @@ from numba import environment
 
 # ______________________________________________________________________
 
-def action(fn):
-    class Action(argparse.Action):
-        def __call__(self, parser, namespace, values, option_string=None):
-            fn(values)
-    return Action
-
-# ______________________________________________________________________
-
-def annotate(filename):
+def run(filename, cmdopts):
     numba_env = environment.NumbaEnvironment.get_environment()
-    numba_env.annotate = True
+    numba_env.cmdopts = cmdopts
     modname, ext = splitext(dirname(filename))
     globals = { '__file__': '__main__', '__name__': modname }
     code = compile(open(filename).read(), filename, 'exec', dont_inherit=True)
@@ -33,17 +25,25 @@ def annotate(filename):
 def make_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--annotate',  help='Annotate source',
-                        action=action(annotate)) #action="store_true")
+                        action='store_true')
     parser.add_argument('--dump-llvm', action="store_true",
                         help='Print generated llvm assembly')
-    parser.add_argument('--dump-optimized', action="store_true",
+    parser.add_argument('--dump-optimized', action='store_true',
                         help='Dump the optimized llvm assembly')
     parser.add_argument('--dump-cfg', action="store_true",
                         help='Dump the control flow graph')
     parser.add_argument('--time-compile', action="store_true",
                         help='Time the compilation process')
+    parser.add_argument('filename', help='Python source filename')
     return parser
 
 if __name__ == "__main__":
     parser = make_parser()
-    parser.parse_args()
+    args = parser.parse_args()
+    cmdopts = {
+        'dump-llvm': args.dump_llvm,
+        'dump-optimized': args.dump_optimized,
+        'dump_cfg': args.dump_cfg,
+        'time_compile': args.time_compile,
+    }
+    run(args.filename, cmdopts)

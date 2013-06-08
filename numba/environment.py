@@ -514,7 +514,7 @@ class FunctionEnvironment(object):
     @property
     def annotate(self):
         "Whether we need to annotate the source"
-        return self._annotate or self.numba.annotate
+        return self._annotate or self.numba.cmdopts.get('annotate')
 
     @property
     def func_doc(self):
@@ -791,8 +791,8 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         default=globalconstants.LLVMConstantsManager(),
     )
 
-    annotate = TypedProperty(
-        bool, "Whether to annotate all functions", False,
+    cmdopts = TypedProperty(
+        dict, "Dict of command line options from bin/numba.py", {},
     )
 
     # ____________________________________________________________

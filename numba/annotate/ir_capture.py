@@ -41,7 +41,7 @@ class IRBuilder(object):
 # ______________________________________________________________________
 
 def get_intermediate(ir_builder):
-    "Get annotations from an IR builder"
+    "Get IR source from an IR builder as a SourceIntermediate"
     linenomap = collections.defaultdict(list)
     linemap = {}
     ir_lineno = 1
