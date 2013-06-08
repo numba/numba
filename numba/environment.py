@@ -322,9 +322,6 @@ class FunctionEnvironment(object):
         },
     )
 
-    annotate = TypedProperty(
-        bool, "Whether we need to annotate the source", False)
-
     # FIXME: Get rid of this property; pipeline stages are users and
     # transformers of the environment.  Any state needed beyond a
     # given stage should be put in the environment instead of keeping
@@ -436,7 +433,7 @@ class FunctionEnvironment(object):
         self.llvm_module = (llvm_module if llvm_module
                                  else self.numba.llvm_context.module)
 
-        self.annotate = annotate
+        self._annotate = annotate
         self.wrap = wrap
         self.link = link
         self.llvm_wrapper_func = None
@@ -502,6 +499,11 @@ class FunctionEnvironment(object):
         state = self.getstate()
         state.update(kwds)
         return type(self)(**state)
+
+    @property
+    def annotate(self):
+        "Whether we need to annotate the source"
+        return self._annotate or self.numba.annotate
 
     @property
     def func_doc(self):
@@ -776,6 +778,10 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         globalconstants.LLVMConstantsManager,
         "Holds constant values in an LLVM module.",
         default=globalconstants.LLVMConstantsManager(),
+    )
+
+    annotate = TypedProperty(
+        bool, "Whether to annotate all functions", False,
     )
 
     # ____________________________________________________________
