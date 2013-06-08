@@ -71,10 +71,11 @@ default_pipeline_order = default_normalize_order + [
     'ExtensionTypeLowerer',
     'SpecializeFunccalls',
     'SpecializeExceptions',
-    'FixASTLocations',
     'cleanup_symtab',
-    # 'dump_ast',
+    'dump_ast',
+    'FixASTLocations',
     'CodeGen',
+    'dump_annotations',
     'PostPass',
     'LinkingStage',
     'WrapperStage',
@@ -160,7 +161,7 @@ class FunctionErrorEnvironment(object):
     enable_post_mortem = TypedProperty(
         bool,
         "Enable post-mortem debugging for the Numba compiler",
-        False,
+        1|False,
     )
 
     collection = TypedProperty(
@@ -361,6 +362,14 @@ class FunctionEnvironment(object):
         'Flag that enables control flow warnings on a per-function level.',
         True)
 
+    annotations = TypedProperty(
+        dict, "Annotation dict { lineno : Annotation }"
+    )
+
+    intermediates = TypedProperty(
+        list, "list of Intermediate objects for annotation",
+    )
+
     warnstyle = TypedProperty(
         str if PY3 else basestring,
         'Warning style, currently available: simple, fancy',
@@ -461,6 +470,8 @@ class FunctionEnvironment(object):
         else:
             self.ast_metadata = metadata.create_metadata_env()
 
+        self.annotations = {}
+        self.intermediates = []
         self.warn = warn
         self.warnstyle = warnstyle
         self.kwargs = kws

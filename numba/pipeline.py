@@ -6,6 +6,7 @@ define the transformations and the order in which they run on the AST.
 from __future__ import print_function, division, absolute_import
 
 import os
+import sys
 import ast as ast_module
 import logging
 import pprint
@@ -29,6 +30,7 @@ from numba import typesystem
 from numba.codegen import llvmwrapper
 from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
+from numba.annotate.annotate import Source, Program, render_text, build_linemap
 from numba.codegen import translate
 from numba import utils
 from numba.missing import FixMissingLocations
@@ -318,6 +320,12 @@ def dump_cfg(ast, env):
     #     print(block)
     #     print("    ", block.parents)
     #     print("    ", block.children)
+    return ast
+
+def dump_annotations(ast, env):
+    p = Program(Source(build_linemap(env.crnt.func), env.crnt.annotations),
+                env.crnt.intermediates)
+    render_text(p, emit=sys.stdout.write, intermediate_names=["llvm"])
     return ast
 
 # ______________________________________________________________________

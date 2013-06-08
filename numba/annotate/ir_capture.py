@@ -11,13 +11,18 @@ from .annotate import SourceIntermediate, Source
 
 # ______________________________________________________________________
 
-class LLVMIRBuilder(object):
-    def __init__(self, builder):
+class IRBuilder(object):
+    def __init__(self, name, builder):
+        self.name = name
         self.builder = builder
         self.captured = collections.defaultdict(list)
+        self.pos = None
 
     def update_pos(self, pos):
         self.pos = pos
+
+    def get_pos(self):
+        return self.pos
 
     def __getattr__(self, attr):
         m = getattr(self.builder, attr)
@@ -33,7 +38,7 @@ class LLVMIRBuilder(object):
 
 # ______________________________________________________________________
 
-def get_annotations(ir_builder):
+def get_intermediate(ir_builder):
     "Get annotations from an IR builder"
     linenomap = collections.defaultdict(list)
     linemap = {}
@@ -46,6 +51,6 @@ def get_annotations(ir_builder):
             ir_lineno += 1
 
     source = Source(linemap, annotations=[])
-    return SourceIntermediate(linenomap, source)
+    return SourceIntermediate(ir_builder.name, linenomap, source)
 
 # ______________________________________________________________________

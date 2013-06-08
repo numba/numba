@@ -19,8 +19,6 @@ from numba.codegen import llvmwrapper
 from numba import environment
 import llvm.core as _lc
 from numba.wrapping import compiler
-from numba.annotate.annotate import Source, Program, render_text, build_linemap
-from StringIO import StringIO
 
 logger = logging.getLogger(__name__)
 
@@ -224,13 +222,6 @@ def _jit(restype=None, argtypes=None, nopython=False,
         sig, lfunc, wrapper, translator = compile_function(
             env, func, argtys, restype=return_type, nopython=nopython, **kwargs)
 
-        if 'annotate' in kwargs and kwargs['annotate'] is True:
-            p = Program(Source(build_linemap(func), translator.annotations), [])
-            f = StringIO()
-            render_text(p, emit=f.write)
-            src = f.getvalue()
-            print(src)
-            
         return numbawrapper.create_numba_wrapper(func, wrapper, sig, lfunc)
 
     return _jit_decorator

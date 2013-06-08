@@ -14,8 +14,9 @@ from collections import namedtuple
 # ______________________________________________________________________
 
 Program = namedtuple("Program", ["python_source", "intermediates"])
-SourceIntermediate = namedtuple("SourceIntermediate", ["linenomap", "source"])
-DotIntermediate = namedtuple("DotIntermediate", ["dotcode"]) # graphviz
+SourceIntermediate = namedtuple("SourceIntermediate", ["name", "linenomap",
+                                                       "source"])
+DotIntermediate = namedtuple("DotIntermediate", ["name", "dotcode"]) # graphviz
 Source = namedtuple("Source", ["linemap", "annotations"])
 Annotation = namedtuple("Annotation", ["type", "value"])
 
@@ -66,10 +67,8 @@ def render_intermediates(program, intermediate_names, capability='source'):
     intermediates = dict((i.name, i) for i in program.intermediates)
     for intermediate_name in intermediate_names:
         intermediate = intermediates[intermediate_name]
-        renderer = intermediate.renderer
-        if capability in renderer.capabilities:
-            linenomap, source = renderer.render(capability)
-            yield intermediate_name, linenomap, source
+        if isinstance(intermediate, SourceIntermediate):
+            yield intermediate
 
 #------------------------------------------------------------------------
 # Text Rendering
