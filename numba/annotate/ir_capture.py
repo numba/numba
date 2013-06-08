@@ -7,6 +7,7 @@ Capture IR emissions.
 from __future__ import print_function, division, absolute_import
 
 import collections
+from functools import partial
 import llvm.core
 from .annotate import SourceIntermediate, Source
 
@@ -46,7 +47,7 @@ def get_intermediate(ir_builder):
     ir_lineno = 1
 
     filterer = filters.get(ir_builder.name, lambda x: x)
-    ir_builder.captured = filterer(ir_builder.captured)
+    ir_builder.captured = filterer(filter_unique(ir_builder.captured))
 
     for pos, instrs in sorted(ir_builder.captured.iteritems()):
         for instr in instrs:
@@ -62,7 +63,26 @@ def get_intermediate(ir_builder):
 def filter_llvm(captured):
     for values in captured.values():
         fn = lambda llvm_value: isinstance(llvm_value, llvm.core.Instruction)
-        values[:] = filter(fn, values)
+        newvals = []
+        block = None
+        for llvm_value in filter(fn, values):
+            if llvm_value.basic_block != block:
+                newvals.append(llvm_value.basic_block.name + ":")
+                block = llvm_value.basic_block
+            newvals.append(llvm_value)
+            # if llvm_value.opcode_name == 'br':
+            #     print(llvm_value.basic_block)
+        values[:] = newvals
+    return captured
+
+def findoradd(seen, val):
+    found = val in seen
+    seen.add(val)
+    return not found
+
+def filter_unique(captured):
+    for values in captured.values():
+        values[:] = filter(partial(findoradd, set()), values)
     return captured
 
 # ______________________________________________________________________
