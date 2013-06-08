@@ -20,7 +20,8 @@ def convert(ts1, ts2, conversion_type, typenames):
     for typename in typenames:
         t1 = getattr(ts1, tyname(typename))
         t2 = getattr(ts2, tyname(typename))
-        assert ts.convert(conversion_type, t1) == t2, (t1, t2)
+        converted = ts.convert(conversion_type, t1)
+        assert converted == t2, (t1, str(converted), str(t2))
 
 #-------------------------------------------------------------------
 # Numba -> LLVM
