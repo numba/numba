@@ -322,6 +322,9 @@ class FunctionEnvironment(object):
         },
     )
 
+    annotate = TypedProperty(
+        bool, "Whether we need to annotate the source", False)
+
     # FIXME: Get rid of this property; pipeline stages are users and
     # transformers of the environment.  Any state needed beyond a
     # given stage should be put in the environment instead of keeping
@@ -393,7 +396,7 @@ class FunctionEnvironment(object):
              closures=None, closure_scope=None,
              refcount_args=True,
              ast_metadata=None, warn=True, warnstyle='fancy',
-             typesystem=None, postpasses=None,
+             typesystem=None, postpasses=None, annotate=False,
              **kws):
 
         self.parent = parent
@@ -433,6 +436,7 @@ class FunctionEnvironment(object):
         self.llvm_module = (llvm_module if llvm_module
                                  else self.numba.llvm_context.module)
 
+        self.annotate = annotate
         self.wrap = wrap
         self.link = link
         self.llvm_wrapper_func = None
