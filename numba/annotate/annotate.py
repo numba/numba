@@ -14,7 +14,8 @@ from collections import namedtuple
 # ______________________________________________________________________
 
 Program = namedtuple("Program", ["python_source", "intermediates"])
-Intermediate = namedtuple("Intermediate", ["name", "renderer"])
+SourceIntermediate = namedtuple("SourceIntermediate", ["linenomap", "source"])
+DotIntermediate = namedtuple("DotIntermediate", ["dotcode"]) # graphviz
 Source = namedtuple("Source", ["linemap", "annotations"])
 Annotation = namedtuple("Annotation", ["type", "value"])
 
@@ -36,24 +37,6 @@ def build_linemap(func):
         lineno += 1
 
     return linemap
-
-# ______________________________________________________________________
-class Renderer(object):
-    """
-    Render an intermediate source.
-
-    Capabilities: Set of capabilities as strings. Capabilities include:
-
-        "dot":
-            return a graphviz dot representation as string
-        "source":
-            return a two-tuple of ({ python lineno : source lineno }, Source)
-    """
-
-    capabilities = frozenset()
-
-    def render(self, capability):
-        raise NotImplementedError
 
 # ______________________________________________________________________
 
