@@ -7,6 +7,7 @@ Capture IR emissions.
 from __future__ import print_function, division, absolute_import
 
 import collections
+import llvm.core
 from .annotate import SourceIntermediate, Source
 
 # ______________________________________________________________________
@@ -44,6 +45,9 @@ def get_intermediate(ir_builder):
     linemap = {}
     ir_lineno = 1
 
+    filterer = filters.get(ir_builder.name, lambda x: x)
+    ir_builder.captured = filterer(ir_builder.captured)
+
     for pos, instrs in sorted(ir_builder.captured.iteritems()):
         for instr in instrs:
             linenomap[pos].append(ir_lineno)
@@ -54,3 +58,15 @@ def get_intermediate(ir_builder):
     return SourceIntermediate(ir_builder.name, linenomap, source)
 
 # ______________________________________________________________________
+
+def filter_llvm(captured):
+    for values in captured.values():
+        fn = lambda llvm_value: isinstance(llvm_value, llvm.core.Instruction)
+        values[:] = filter(fn, values)
+    return captured
+
+# ______________________________________________________________________
+
+filters = {
+    "llvm": filter_llvm,
+}
