@@ -30,6 +30,7 @@ from numba.support.numpy_support import sliceutils
 from numba.nodes import constnodes
 from numba.typesystem import llvm_typesystem as lts
 from numba.annotate.annotate import Annotation, A_type
+from numba.annotate.ir_capture import LLVMIRBuilder
 
 from llvm_cbuilder import shortnames as C
 
@@ -277,6 +278,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         entry = self.append_basic_block('entry')
 
         self.builder = lc.Builder.new(entry)
+        if self.env.crnt.annotate:
+            self.builder = LLVMIRBuilder(self.builder)
         self.caster = _LLVMCaster(self.builder)
         self.object_coercer = coerce.ObjectCoercer(self)
         self.multiarray_api.set_PyArray_API(self.llvm_module)
