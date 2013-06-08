@@ -22,12 +22,20 @@ install:
   - $LLVM_CONFIG_PATH --cflags # test llvm-config
   - export LLVMPY_DYNLINK=1
   - export CFLAGS="-Wno-strict-aliasing -Wno-unused -Wno-write-strings -Wno-unused-function"
+  # Install llvmpy
   - git clone git://github.com/llvmpy/llvmpy.git -q
   - cd llvmpy ; python setup.py install -q >/dev/null ; cd ..
+  # Install cython
   - pip -q install cython --install-option="--no-cython-compile" # This takes long
-  - pip install -r requirements.txt --use-mirrors
+  # Install llvmmath
   - git clone git://github.com/ContinuumIO/llvmmath.git -q
-  - cd llvmmath ; python setup.py install -q ; cd ..
+  - cd llvmmath
+  - pip install -r requirements.txt --use-mirrors
+  - python setup.py install -q
+  - cd ..
+  # Install miscellaneous dependencies
+  - pip install -r requirements.txt --use-mirrors
+  # Install numba
   - python setup.py install -q >/dev/null
 
 script: cd ~; python -c "import sys;import numba;sys.exit(0 if numba.test([]) == 0 else 1)"
