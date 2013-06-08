@@ -172,6 +172,7 @@ setup(
             'pycc = numba.pycc:main',
             ]
     },
+    scripts=["bin/numba"],
     package_data={
         '': ['*.md'],
         'numba.minivect': ['include/*'],
