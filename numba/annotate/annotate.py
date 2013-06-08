@@ -159,3 +159,7 @@ def _render_source(source, emitter, indent, intermediates, header=None):
         emitter.emitline(linestart + 2, u"||".center(WIDTH, ANNOT_SEP))
 
 # ______________________________________________________________________
+
+def render_webpage(program, emit=sys.stdout.write,
+                   intermediate_names=(), inline=True):
+    raise NotImplementedError

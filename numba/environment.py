@@ -76,8 +76,10 @@ default_pipeline_order = default_normalize_order + [
     'FixASTLocations',
     'CodeGen',
     'dump_annotations',
+    'dump_llvm',
     'PostPass',
     'LinkingStage',
+    'dump_optimized',
     'WrapperStage',
     'ErrorReporting',
 ]

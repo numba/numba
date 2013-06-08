@@ -34,6 +34,8 @@ def make_parser():
                         help='Dump the control flow graph')
     parser.add_argument('--time-compile', action="store_true",
                         help='Time the compilation process')
+    parser.add_argument('--fancy', action='store_true',
+                        help='Try to output fancy files (.dot or .html)')
     parser.add_argument('filename', help='Python source filename')
     return parser
 
@@ -41,9 +43,11 @@ if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
     cmdopts = {
+        'annotate': args.annotate,
         'dump-llvm': args.dump_llvm,
         'dump-optimized': args.dump_optimized,
-        'dump_cfg': args.dump_cfg,
-        'time_compile': args.time_compile,
+        'dump-cfg': args.dump_cfg,
+        'time-compile': args.time_compile,
+        'fancy': args.fancy,
     }
     run(args.filename, cmdopts)

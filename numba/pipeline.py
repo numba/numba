@@ -25,17 +25,17 @@ from numba import closures
 from numba import reporting
 from numba import normalize
 from numba import validate
-from numba.viz import cfgviz
 from numba import typesystem
 from numba.codegen import llvmwrapper
 from numba import ast_constant_folding as constant_folding
 from numba.control_flow import ssa
-from numba.annotate.annotate import Source, Program, render_text, build_linemap
 from numba.codegen import translate
 from numba import utils
 from numba.missing import FixMissingLocations
 from numba.type_inference import infer as type_inference
 from numba.asdl import schema
+from numba.prettyprint import (dump_ast, dump_cfg, dump_annotations,
+                               dump_llvm, dump_optimized)
 import numba.visitors
 
 from numba.specialize import comparisons
@@ -306,27 +306,6 @@ def create_lfunc3(tree, env):
     func_env = env.translation.crnt
     create_lfunc(tree, env)
     return tree
-
-# ______________________________________________________________________
-
-def dump_ast(ast, env):
-    # astviz.render_ast(ast, os.path.expanduser("~/ast.dot"))
-    return ast
-
-def dump_cfg(ast, env):
-    # dotfile = env.crnt.cfdirectives['control_flow.dot_output']
-    # cfgviz.render_cfg(env.crnt.cfg, dotfile)
-    # for block in env.crnt.cfg.blocks:
-    #     print(block)
-    #     print("    ", block.parents)
-    #     print("    ", block.children)
-    return ast
-
-def dump_annotations(ast, env):
-    p = Program(Source(build_linemap(env.crnt.func), env.crnt.annotations),
-                env.crnt.intermediates)
-    render_text(p, emit=sys.stdout.write, intermediate_names=["llvm"])
-    return ast
 
 # ______________________________________________________________________
 
