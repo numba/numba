@@ -13,8 +13,7 @@ from numba import *
 from numba import nodes
 
 from numba.annotate import annotate
-from numba.annotate.annotate import (Source, Annotation, Intermediate, Program,
-                                     A_type, render_text, Renderer)
+from numba.annotate.annotate import Annotation
 
 logger = logging.getLogger(__name__)
 

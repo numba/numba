@@ -9,6 +9,7 @@ from __future__ import print_function, division, absolute_import
 import os
 import sys
 
+from numba.lexing import lex_source
 from numba.viz import cfgviz, astviz
 from numba.annotate import annotators
 from numba.annotate import render_text, render_html
@@ -58,8 +59,8 @@ def dump_annotations(ast, env, fancy):
 
 @dumppass("dump-llvm")
 def dump_llvm(ast, env, fancy):
-    print(env.crnt.lfunc)
+    print(lex_source(str(env.crnt.lfunc), "llvm", "console"))
 
 @dumppass("dump-optimized")
 def dump_optimized(ast, env, fancy):
-    print(env.crnt.lfunc)
+    print(lex_source(str(env.crnt.lfunc), "llvm", "console"))

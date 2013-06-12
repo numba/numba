@@ -1,13 +1,20 @@
 # -*- coding: UTF-8 -*-
 from __future__ import print_function, division, absolute_import
 import sys
+from functools import partial
 from itertools import chain
 from collections import namedtuple
+
+from numba.lexing import lex_source
 from .annotate import format_annotations
 
 WIDTH = 40
 ANNOT_SEP = "-"
+
 Emitter = namedtuple("Emitter", ["emit", "emitline"])
+lex = partial(lex_source, output="console")
+
+# ______________________________________________________________________
 
 def render(program, emit=sys.stdout.write,
            intermediate_names=(), inline=True):
@@ -58,7 +65,8 @@ def _render_source(source, emitter, indent, intermediates, header=None):
     for lineno in sorted(source.linemap.iterkeys()):
         if header:
             emitter.emit(header(lineno))
-        emitter.emitline(0, u"%4d    %s" % (lineno, source.linemap[lineno]))
+        line = lex(source.linemap[lineno])
+        emitter.emitline(0, u"%4d    %s" % (lineno, line))
 
         annots = format_annotations(source.annotations.get(lineno, []))
         irs = _gather_text_intermediates(intermediates, lineno)
@@ -80,4 +88,4 @@ def _gather_text_intermediates(intermediates, lineno):
             continue
         yield irname.center(WIDTH, "_")
         for ir_lineno in ir_linenos:
-            yield ir_source.linemap[ir_lineno]
+            yield lex(ir_source.linemap[ir_lineno], irname)
