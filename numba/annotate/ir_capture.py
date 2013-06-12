@@ -69,7 +69,7 @@ def filter_llvm(captured):
             if llvm_value.basic_block != block:
                 newvals.append(llvm_value.basic_block.name + ":")
                 block = llvm_value.basic_block
-            newvals.append(llvm_value)
+            newvals.append(str(llvm_value))
             # if llvm_value.opcode_name == 'br':
             #     print(llvm_value.basic_block)
         values[:] = newvals
