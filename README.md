@@ -23,6 +23,7 @@ Dependencies
 
   * LLVM 3.1 or 3.2
   * llvmpy (from llvmpy/llvmpy fork)
+  * llvmmath
   * numpy (version 1.6 or higher)
   * Meta (from numba/Meta fork (optional))
   * Cython (build dependency only)
