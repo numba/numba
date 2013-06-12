@@ -10,8 +10,9 @@ import os
 import sys
 
 from numba.viz import cfgviz, astviz
-from numba.annotate.annotate import (Source, Program, render_text,
-                                     render_webpage, build_linemap)
+from numba.annotate import annotators
+from numba.annotate import render_text, render_html
+from numba.annotate.annotate import Source, Program, build_linemap
 
 # ______________________________________________________________________
 
@@ -47,9 +48,12 @@ def dump_cfg(ast, env, fancy):
 
 @dumppass("annotate")
 def dump_annotations(ast, env, fancy):
+    llvm_intermediate, = [i for i in env.crnt.intermediates if i.name == "llvm"]
+    annotators.annotate_pyapi(llvm_intermediate, env.crnt.annotations)
+
     p = Program(Source(build_linemap(env.crnt.func), env.crnt.annotations),
                 env.crnt.intermediates)
-    render = render_webpage if fancy else render_text
+    render = render_html if fancy else render_text
     render(p, emit=sys.stdout.write, intermediate_names=["llvm"])
 
 @dumppass("dump-llvm")
