@@ -191,7 +191,7 @@ def cast_penalty(fromty, toty):
 class Infer(object):
     '''Provide type inference and freeze the type of global values.
     '''
-    def __init__(self, blocks, known, globals, intp):
+    def __init__(self, blocks, known, globals, intp, extended_globals={}):
         self.blocks = blocks
         self.argtys = known.copy()
         self.retty = self.argtys.pop('')
@@ -199,6 +199,7 @@ class Infer(object):
         self.globals.update(vars(__builtin__))
         self.intp = ScalarType('i%d' % intp)
         self.possible_types = scalar_set | set(self.argtys.itervalues())
+        self.extended_globals = extended_globals
 
         self.callrules = {}
         self.callrules.update(BUILTIN_RULES)
@@ -364,13 +365,19 @@ class Infer(object):
         pass
 
     def visit_Global(self, value):
-        obj = self.globals[value.args.name]
+        gname = value.args.name
+        parts = gname.split('.')
+        obj = self.globals[parts[0]]
+        for part in parts[1:]:
+            obj = getattr(obj, part)
         assert not hasattr(obj, '_npm_func_')
         if isinstance(obj, (int, float, complex)):
             tymap = {int:       self.intp,
                      float:     float64,
                      complex:   complex128}
             self.rules[value].add(MustBe(tymap[type(obj)]))
+        elif obj in self.extended_globals:
+            self.extended_globals[obj](self.rules, value)
         else:
             msg = "only support global value of int, float or complex"
             raise TypeInferError(value, msg)

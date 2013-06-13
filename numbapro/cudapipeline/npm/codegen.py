@@ -8,13 +8,16 @@ from . import typing, symbolic
 GlobalVar = namedtuple('GlobalVar', ['type', 'gvar'])
 
 class CodeGen(object):
-    def __init__(self, name, blocks, typemap, args, return_type, intp):
+    def __init__(self, name, blocks, typemap, consts, args, return_type, intp,
+                 extended_globals={}):
         self.blocks = blocks
         self.typemap = typemap
         self.args = args
         self.return_type = return_type
         self.typesetter = TypeSetter(intp)
-        self.globals = {} # {name: GlobalVar}
+        self.consts = consts                    # global values at compile time
+        self.extern_globals = {}                # {name: GlobalVar}
+        self.extended_globals = extended_globals # codegen for special globals
 
         self.bbmap = {}
         self.valmap = {}
@@ -193,17 +196,23 @@ class CodeGen(object):
 
     def expr_Global(self, expr):
         name = expr.args.name
-        if name not in self.globals:
-            ty = self.typemap[expr]
-            lty = self.to_llvm(ty)
-            gvar = self.lmod.add_global_variable(lty,
-                                                 name='npm.global.%s' % name)
+        value = expr.args.value
+        if value is not None:
+            self.valmap[expr] = self.extended_globals[value](self, expr)
+        else:
+            # handle regular global value
+            if name not in self.extern_globals:
+                # first time reference to a global
+                ty = self.typemap[expr]
+                lty = self.to_llvm(ty)
+                gvar = self.lmod.add_global_variable(lty,
+                                             name='__npm_global_%s' % name)
 
-            gvar.initializer = Constant.undef(gvar.type.pointee)
-#            gvar.global_constant = True
-            self.globals[name] = GlobalVar(type=ty, gvar=gvar)
+                gvar.initializer = Constant.undef(gvar.type.pointee)
+                self.extern_globals[name] = GlobalVar(type=ty, gvar=gvar)
 
-        self.valmap[expr] = self.builder.load(self.globals[name].gvar)
+            self.valmap[expr] = self.builder.load(
+                                                self.extern_globals[name].gvar)
 
 
     def expr_Const(self, expr):

@@ -9,7 +9,7 @@ from .utils import SortedMap
 
 Arg = namedtuple('Arg', ['num', 'name'])
 Call = namedtuple('Call', ['func', 'args', 'kws'])
-Global = namedtuple('Global', ['name'])
+Global = namedtuple('Global', ['name', 'value'])
 Phi = namedtuple('Phi', ['name', 'incomings'])
 Const = namedtuple('Const', ['value'])
 For = namedtuple('For', ['index', 'stop', 'step'])
@@ -27,6 +27,7 @@ ArrayAttr = namedtuple('ArrayAttr', ['obj', 'attr', 'idx'])
 Jump = namedtuple('Jump', ['target'])
 Branch = namedtuple('Branch', ['cmp', 'false', 'true'])
 Ret = namedtuple('Ret', ['value'])
+
 
 '''MEMORY_OP
 
@@ -260,7 +261,7 @@ class SymbolicExecution(object):
 
     def visit_LOAD_GLOBAL(self, inst):
         name = self.names[inst.arg]
-        expr = Expr('Global', inst, Global(name=name))
+        expr = Expr('Global', inst, Global(name=name, value=None))
         self.push(self.insert(expr))
 
     def visit_STORE_FAST(self, inst):
@@ -408,8 +409,7 @@ class SymbolicExecution(object):
         gv = ref.value
         attr = self.names[inst.arg]
         if gv.kind == 'Global':
-            assert len(gv.args) == 1
-            gv.args = ('%s.%s' % (gv.args[0], attr),)
+            gv.replace(name=('%s.%s' % (gv.args[0], attr)))
             self.push(ref)
         elif attr in ('imag', 'real'):
             expr = self.insert(Expr('ComplexGetAttr', inst,

@@ -26,10 +26,10 @@ def compile(func, retty, argtys):
 
     # code generation
     name = get_func_name(func)
-    cg = codegen.CodeGen(name, se.blocks, typemap,
+    cg = codegen.CodeGen(name, se.blocks, typemap, globals,
                          argtys, retty, intp=addrsize)
     lfunc = cg.generate()
-    gvars = cg.globals
+    gvars = cg.extern_globals
     # execution
     return execution.JIT(lfunc, retty, argtys, gvars, globals)
 

@@ -278,8 +278,7 @@ class CompilationUnit(finalizer.OwnerMixin):
 data_layout = {32 : 'e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64',
 64: 'e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64'}
 
-default_data_layout = data_layout[sizeof(c_void_p) * 8]
-
+default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
 def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
