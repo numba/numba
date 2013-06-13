@@ -322,7 +322,7 @@ def perform_reductions(context, prange_node):
 # prange nodes and types
 #------------------------------------------------------------------------
 
-class PrangeType(typesystem.RangeType):
+class PrangeType(typesystem.range_):
     is_prange = True
 
 class PrangeNode(nodes.ExprNode):
