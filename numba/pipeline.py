@@ -490,10 +490,10 @@ def cleanup_symtab(ast, env):
 
 class FixASTLocations(PipelineStage):
     def transform(self, ast, env):
-        fixer = self.make_specializer(FixMissingLocations, ast, env)
-        fixer.visit(ast)
+        lineno = getattr(ast, 'lineno', 1)
+        col_offset = getattr(ast, 'col_offset', 1)
+        FixMissingLocations(lineno, col_offset).visit(ast)
         return ast
-
 
 class CodeGen(PipelineStage):
     def transform(self, ast, env):
