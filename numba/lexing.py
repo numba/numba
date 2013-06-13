@@ -28,6 +28,10 @@ formatters = {
 }
 
 def lex_source(code, lexer="python", output='html', inline_css=True):
+    """
+    >>> lex_source("print 'hello world'", "python", "html")
+    <div ...> ... </div>
+    """
     if not config.colour:
         return code
 

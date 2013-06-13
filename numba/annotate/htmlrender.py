@@ -8,8 +8,7 @@ from __future__ import print_function, division, absolute_import
 
 import sys
 import cgi
-from itertools import chain
-import collections
+from numba.lexing import lex_source
 from .annotate import format_annotations, groupdict, A_c_api
 
 css = u"""
@@ -75,14 +74,15 @@ def render_lines(py_source, llvm_intermediate, emit):
              u"onclick='toggleDiv(\"line%s\")'>\n" % (color, lineno))
 
         emit(u" %d: " % lineno)
-        emit(cgi.escape(line.rstrip()) + u"\n")
+        # emit(lex_source(line, "python", "html") + u"\n")
+        emit(cgi.escape(line) + u"\n")
         emit(u'</pre>\n')
 
         llvm_lines = [llvm_intermediate.source.linemap[llineno]
                           for llineno in llvm_intermediate.linenomap[lineno]]
         emit(u"<pre id='line%s' class='code' "
              u"style='background-color: #%s'>\n%s</pre>\n" %
-                (lineno, color, cgi.escape(u"\n".join(llvm_lines))))
+                (lineno, color, lex_source(u"\n".join(llvm_lines), "llvm", "html")))
 
 def render(program, emit=sys.stdout.write,
            intermediate_names=(), inline=True):
