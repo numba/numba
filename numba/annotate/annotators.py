@@ -13,7 +13,7 @@ from numba import *
 from numba import nodes
 
 from numba.annotate import annotate
-from numba.annotate.annotate import Annotation
+from numba.annotate.annotate import Annotation, A_c_api
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,11 @@ def annotate_pyapi(llvm_intermediate, py_annotations):
     Produce annotations for CPython C API calls from an LLVM SourceIntermediate
     """
     for py_lineno in llvm_intermediate.linenomap:
+        count = 0
         for llvm_lineno in llvm_intermediate.linenomap[py_lineno]:
             line = llvm_intermediate.source.linemap[llvm_lineno]
             if re.search(py_c_api, line):
-                py_annotations[line] = Annotation()
+                count += 1
+
+        if count:
+            py_annotations[py_lineno].append(Annotation(A_c_api, count))
