@@ -1630,8 +1630,12 @@ class TypeSettingVisitor(visitors.NumbaTransformer):
     def visit_ExtSlice(self, node):
         self.generic_visit(node)
         types = [n.type for n in node.dims]
-        if all(type.is_int for type in types):
+        if all(type.is_numeric for type in types):
             node.type = reduce(self.env.crnt.typesystem.promote, types)
+            if not node.type.is_int:
+                self.warn(node, "Truncating result index type %s "
+                                "to Py_ssize_t" % node.type)
+                node.type = Py_ssize_t
         else:
             node.type = object_
 

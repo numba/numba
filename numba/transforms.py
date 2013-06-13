@@ -704,6 +704,8 @@ class LateSpecializer(ResolveCoercions,
         if node.type.is_object:
             return self.visit(ast.Tuple(elts=node.dims, ctx=ast.Load()))
         else:
+            if node.type.is_float:
+                self.warn(node, "Using a float for indexing")
             self.generic_visit(node)
             return node
 
