@@ -60,3 +60,5 @@ def format_annotations(annotations):
 
 groupdict = lambda xs, attr: dict(
     (k, list(v)) for k, v in groupby(xs, operator.attrgetter(attr)))
+
+# ______________________________________________________________________

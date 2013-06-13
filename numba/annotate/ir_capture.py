@@ -63,27 +63,46 @@ def get_intermediate(ir_builder):
 def filter_llvm(captured):
     for values in captured.values():
         fn = lambda llvm_value: isinstance(llvm_value, llvm.core.Instruction)
-        newvals = []
-        block = None
+        blocks = collections.defaultdict(list)
         for llvm_value in filter(fn, values):
-            if llvm_value.basic_block != block:
-                newvals.append(llvm_value.basic_block.name + ":")
-                block = llvm_value.basic_block
-            newvals.append(str(llvm_value))
-            # if llvm_value.opcode_name == 'br':
-            #     print(llvm_value.basic_block)
-        values[:] = newvals
+            blocks[llvm_value.basic_block].append(llvm_value)
+        values[:] = order_llvm(blocks)
     return captured
-
-def findoradd(seen, val):
-    found = val in seen
-    seen.add(val)
-    return not found
 
 def filter_unique(captured):
     for values in captured.values():
-        values[:] = filter(partial(findoradd, set()), values)
+        def unique(item, seen=set()):
+            found = item in seen
+            seen.add(item)
+            return not found
+
+        values[:] = filter(unique, values)
     return captured
+
+# ______________________________________________________________________
+
+def order_llvm(blocks):
+    """
+    Put llvm instructions and basic blocks in the right order.
+
+    :param blocks: { llvm_block : [llvm_instr] }
+    :return: [llvm_line]
+    """
+    result = []
+    if blocks:
+        block, values = blocks.popitem()
+        blocks[block] = values
+        lfunc = block.function
+
+        for block in lfunc.basic_blocks:
+            if block in blocks:
+                instrs = blocks[block]
+                instrpos = dict(
+                    (instr, i) for i, instr in enumerate(block.instructions))
+                result.append(str(block.name) + ":")
+                result.extend(sorted(instrs, key=instrpos.get))
+
+    return result
 
 # ______________________________________________________________________
 
