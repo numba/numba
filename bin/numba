@@ -52,5 +52,6 @@ if __name__ == "__main__":
         'dump-ast': args.dump_ast,
         'time-compile': args.time_compile,
         'fancy': args.fancy,
+        'filename': args.filename,
     }
     run(args.filename, cmdopts)

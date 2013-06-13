@@ -54,8 +54,16 @@ def dump_annotations(ast, env, fancy):
 
     p = Program(Source(build_linemap(env.crnt.func), env.crnt.annotations),
                 env.crnt.intermediates)
-    render = render_html if fancy else render_text
-    render(p, emit=sys.stdout.write, intermediate_names=["llvm"])
+    if fancy:
+        render = render_html
+        fn, ext = os.path.splitext(env.cmdopts["filename"])
+        out = open(fn + '.html', 'w')
+        print("Writing", fn + '.html')
+    else:
+        render = render_text
+        out = sys.stdout
+
+    render(p, emit=out.write, intermediate_names=["llvm"])
 
 @dumppass("dump-llvm")
 def dump_llvm(ast, env, fancy):
