@@ -16,14 +16,15 @@ True
 True
 
 >>> c1, c2 = 1.2 + 4.1j, 0.6 + 0.5j
->>> pow2(c1, c2) == pow(c1, c2)
+>>> allclose(pow2(c1, c2), pow(c1, c2))
 True
 
 >>> d1, d2 = 4.2, 5.1
->>> pow2(d1, d2) == pow(d1, d2)
+>>> allclose(pow2(d1, d2), pow(d1, d2))
 True
 """
 
+from numpy import allclose
 from numba import *
 
 @autojit(backend='ast')
@@ -46,3 +47,4 @@ if __name__ == '__main__':
 #    import logging; logging.getLogger().setLevel(0)
     import numba
     numba.testing.testmod()
+

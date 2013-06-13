@@ -9,7 +9,7 @@ import numpy as np
 # Structs as locals
 #------------------------------------------------------------------------
 
-struct_type = struct_(a=char.pointer(), b=int_)
+struct_type = struct_([('a', char.pointer()), ('b', int_)])
 
 @autojit(backend='ast', locals=dict(value=struct_type))
 def struct_local():

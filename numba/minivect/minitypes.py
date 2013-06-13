@@ -297,9 +297,9 @@ def create_dtypes():
         uint32   : np.uint32,
         uint64   : np.uint64,
 
-        float_   : np.float32,
-        double   : np.float64,
         longdouble: np.longdouble,
+        double   : np.float64,
+        float_   : np.float32,
 
         short    : np.dtype('h'),
         int_     : np.dtype('i'),

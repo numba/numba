@@ -20,7 +20,8 @@ def test_ctypes_calls():
     ceil = libm.ceil
     ceil.argtypes = [ctypes.c_double]
     ceil.restype = ctypes.c_double
-    assert call_ctypes_func(ceil, 10.1) == 11.0
+    result = call_ctypes_func(ceil, 10.1)
+    assert result == 11.0, result
 
 def test_str_return():
     try:
@@ -36,7 +37,7 @@ def test_str_return():
 
     expected = os.strerror(errno.EACCES)
     got = call_ctypes_func(strerror, errno.EACCES)
-    assert expected == got
+    assert expected == got, (expected, got)
 
 if __name__ == "__main__":
     test_ctypes_calls()
