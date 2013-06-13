@@ -1,4 +1,5 @@
-import os
+from __future__ import print_function
+import os, tempfile, sys
 from ctypes import *
 from numba.pycc import find_shared_ending, main
 
@@ -32,18 +33,22 @@ def test_pycc():
         if os.path.exists(cdll_modulename):
             os.unlink(cdll_modulename)
 
-    out_modulename = (os.path.join(base_path, 'compiled_with_pycc')
+    tmpdir = tempfile.gettempdir()
+    print('tmpdir: %s' % tmpdir)
+    out_modulename = (os.path.join(tmpdir, 'compiled_with_pycc')
                       + find_shared_ending())
     main(args=['--python', '-o', out_modulename, modulename + '.py'])
+
+    sys.path.append(tmpdir)
     try:
-        import numba.tests.compiled_with_pycc as lib
+        import compiled_with_pycc as lib
         try:
             res = lib.mult(123, 321)
             print('lib.mult(123, 321) = %f' % res)
             assert res == 123 * 321
 
             res = lib.multf(987, 321)
-            print('lib.multf(987, 321) = %f', res)
+            print('lib.multf(987, 321) = %f' % res)
             assert res == 987 * 321
         finally:
             del lib
