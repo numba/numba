@@ -8,8 +8,10 @@ from __future__ import print_function, division, absolute_import
 
 import sys
 import cgi
+import os
 from numba.lexing import lex_source
 from .annotate import format_annotations, groupdict, A_c_api
+from .step import Template
 
 css = u"""
 <style type="text/css">
@@ -89,9 +91,34 @@ def render(program, emit=sys.stdout.write,
     """
     Render a Program as html.
     """
-    emit(head.format(css=css, script=script))
-    emit(u"<body>")
-    irs = groupdict(program.intermediates, "name")
-    llvm_intermediate, = irs["llvm"]
-    render_lines(program.python_source, llvm_intermediate, emit)
-    emit(u"</body></html>")
+    #emit(head.format(css=css, script=script))
+    #emit(u"<body>")
+    #irs = groupdict(program.intermediates, "name")
+    #llvm_intermediate, = irs["llvm"]
+    #render_lines(program.python_source, llvm_intermediate, emit)
+    #emit(u"</body></html>")
+
+    root = os.path.join(os.path.dirname(__file__))
+    templatefile = os.path.join(root, 'annotate_template.html')
+
+    with open(templatefile, 'r') as f:
+        template = f.read()
+
+    html_codes = [('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;'),
+                  ('"', '&quot;'), ("'", '&#39;'), (' ', '&nbsp;')]
+
+    data = {'python_lines': [], 'llvm_lines': []}
+
+    for num, source in sorted(program.python_source.linemap.items()):
+        for code in html_codes:
+            source = source.replace(code[0], code[1])
+        data['python_lines'].append({'num':num, 'source':source})
+
+    for num, source in sorted(program.intermediates[0].source.linemap.items()):
+        for code in html_codes:
+            source = source.replace(code[0], code[1])
+        data['llvm_lines'].append({'num':num, 'source':source})
+   
+    html = Template(template).expand(data)
+
+    emit(html)

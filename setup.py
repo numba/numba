@@ -184,6 +184,7 @@ setup(
         'numba.external.utilities': ['*.c', '*.h'],
         'numba': ['*.c', '*.h', 'include/*', '*.pxd'],
         'numba.vectorize': ['*.h'],
+        'numba.annotate': ['annotate_template.html'],
     },
     ext_modules=extensibletype_extensions + [
         Extension(
