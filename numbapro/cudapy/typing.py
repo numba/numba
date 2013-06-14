@@ -1,6 +1,6 @@
 from numbapro import cuda
-from numbapro.cudapipeline.npm.types import *
-from numbapro.cudapipeline.npm.typing import (cast_penalty, Restrict,
+from numbapro.npm.types import *
+from numbapro.npm.typing import (cast_penalty, Restrict,
                                               Conditional, int_set, float_set)
 
 

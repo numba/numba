@@ -1,7 +1,7 @@
 from .support import testcase, main, run
 from numbapro import cuda
-from numbapro.cudapipeline import cudapy
-from numbapro.cudapipeline.npm.types import *
+from numbapro import cudapy
+from numbapro.npm.types import *
 
 def threadidx(ary):
     i = cuda.threadIdx.x

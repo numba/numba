@@ -1,7 +1,7 @@
 from llvm.core import Type
 
 from numbapro import cuda
-from numbapro.cudapipeline.npm.types import *
+from numbapro.npm.types import *
 from numbapro.cudapipeline.special_values import sreg
 
 def cg_threadIdx_x(cg, value):

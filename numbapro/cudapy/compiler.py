@@ -1,6 +1,6 @@
 import inspect
-from numbapro.cudapipeline.npm import symbolic, typing, codegen, execution
-from numbapro.cudapipeline.npm.compiler import get_func_name
+from numbapro.npm import symbolic, typing, codegen, execution
+from numbapro.npm.compiler import get_func_name
 from numbapro.cudapipeline import nvvm, driver
 
 from .typing import cudapy_typing_ext
