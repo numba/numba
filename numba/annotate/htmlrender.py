@@ -99,7 +99,10 @@ def render(program, emit=sys.stdout.write,
     #emit(u"</body></html>")
 
     root = os.path.join(os.path.dirname(__file__))
-    templatefile = os.path.join(root, 'annotate_template.html')
+    if inline:
+        templatefile = os.path.join(root, 'annotate_inline_template.html')
+    else:
+        templatefile = os.path.join(root, 'annotate_template.html')
 
     with open(templatefile, 'r') as f:
         template = f.read()
@@ -107,18 +110,23 @@ def render(program, emit=sys.stdout.write,
     html_codes = [('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;'),
                   ('"', '&quot;'), ("'", '&#39;'), (' ', '&nbsp;')]
 
-    data = {'python_lines': [], 'llvm_lines': []}
+    data = {'lines': []}
 
-    for num, source in sorted(program.python_source.linemap.items()):
+    for num, python_source in sorted(program.python_source.linemap.items()):
         for code in html_codes:
-            source = source.replace(code[0], code[1])
-        data['python_lines'].append({'num':num, 'source':source})
+            python_source = python_source.replace(code[0], code[1])
 
-    for num, source in sorted(program.intermediates[0].source.linemap.items()):
-        for code in html_codes:
-            source = source.replace(code[0], code[1])
-        data['llvm_lines'].append({'num':num, 'source':source})
-   
+        llvm_nums = program.intermediates[0].linenomap[num]
+        llvm_source = ''
+        for llvm_num in llvm_nums:
+            source = program.intermediates[0].source.linemap[llvm_num]
+            for code in html_codes:
+                source = source.replace(code[0], code[1])
+            llvm_source += source + '<br/>'
+        data['lines'].append({'num':num,
+                              'python_source':python_source,
+                              'llvm_source':llvm_source})
+
     html = Template(template).expand(data)
 
     emit(html)
