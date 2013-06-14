@@ -42,9 +42,14 @@ class TestSupport(object):
         kws: depends on version of python
             2.6: verbosity[int], descriptions[bool], stream[file]
             2.7: + buffer[bool]
+            
+        NOTE: for use to run the entire test suite.
         '''
         self.discover()
         suite = self.get_test_suite()
+        
+        if sys.version_info[:2] <= (2, 6):
+            cfg.pop('buffer', None) # remove unsupported kw
         runner = unittest.TextTestRunner(**kws)
 
         result = runner.run(suite)
@@ -52,7 +57,11 @@ class TestSupport(object):
         return result.wasSuccessful()
 
     def main(self):
-        runner = unittest.TextTestRunner(verbosity=3)
+        '''
+        NOT: for use to run a single test script.
+        '''
+        cfg = dict(verbosity=3, descriptions=True)
+        runner = unittest.TextTestRunner(**cfg)
         tests = [self.tests[name] for name in sys.argv[1:]]
         if tests:
             suite = unittest.TestSuite(tests)
