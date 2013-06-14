@@ -1,13 +1,14 @@
 import inspect
 from numbapro.npm import symbolic, typing, codegen, execution
 from numbapro.npm.compiler import get_func_name
-from numbapro.cudapipeline import nvvm, driver
-
+from numbapro.npm.execution import (to_ctype, prepare_args, Complex64,
+                                    Complex128, ArrayBase)
+from numbapro.cudapipeline import nvvm, driver, devicearray
+from .execution import CUDAKernel
 from .typing import cudapy_typing_ext
 from .codegen import cudapy_codegen_ext
 
 CUDA_ADDR_SIZE = tuple.__itemsize__ * 8     # matches host
-
 
 def compile_kernel(func, argtys):
     # symbolic interpretation
@@ -44,6 +45,11 @@ def compile_kernel(func, argtys):
     lfunc.module.verify()
 
     # PTX-ization
+    cudakernel = CUDAKernel(lfunc.name, to_ptx(lfunc), argtys)
+    print cudakernel.ptx
+    return cudakernel
+
+def to_ptx(lfunc):
     context = driver.get_or_create_context()
     cc_major = context.device.COMPUTE_CAPABILITY[0]
 
@@ -52,5 +58,4 @@ def compile_kernel(func, argtys):
     nvvm.fix_data_layout(lfunc.module)
     nvvm.set_cuda_kernel(lfunc)
     ptx = nvvm.llvm_to_ptx(str(lfunc.module), opt=3, arch=arch)
-    print ptx
-
+    return ptx

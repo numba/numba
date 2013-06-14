@@ -187,11 +187,7 @@ def close():
     drv.release_context(drv.current_context())
 
 def _auto_device(ary, stream=0, copy=True):
-    if devicearray.is_cuda_ndarray(ary):
-        return ary, False
-    else:
-        return to_device(ary, copy=copy, stream=stream), True
-
+    return devicearray.auto_device(ary, stream=stream, copy=copy)
 
 #
 # Initialize the CUDA system

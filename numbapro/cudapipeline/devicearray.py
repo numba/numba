@@ -164,3 +164,11 @@ def from_array_like(ary, stream=0, gpu_head=None, gpu_data=None):
                          writeback=ary, stream=stream, gpu_head=gpu_head,
                          gpu_data=gpu_data)
 
+def auto_device(ary, stream=0, copy=True):
+    if _driver.is_device_memory(ary):
+        return ary, False
+    else:
+        devarray = from_array_like(ary, stream=stream)
+        if copy:
+            devarray.copy_to_device(ary, stream=stream)
+        return devarray, True

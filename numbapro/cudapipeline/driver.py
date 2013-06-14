@@ -910,9 +910,7 @@ CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES = 4
 
 class Module(finalizer.OwnerMixin):
     def __init__(self, ptx):
-        self.device = self.driver.current_context().device
         self.ptx = ptx
-
         self._handle = cu_module()
         ptx = c_char_p(self.ptx)
 
@@ -1357,4 +1355,3 @@ def device_memset(dst, val, size, stream=0):
 
     error = fn(device_pointer(dst), val, size, *varargs)
     driver.check_error(error, "Failed to memset")
-
