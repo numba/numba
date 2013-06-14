@@ -1,8 +1,8 @@
 import contextlib
 import numpy as np
 
+from .cudapy.ptx import *
 from .cudapipeline import initialize as _initialize
-from .cudapipeline.special_values import *
 from .cudapipeline.driver import require_context
 from .cudapipeline import devicearray, driver
 from .cudapipeline.decorators import jit, autojit

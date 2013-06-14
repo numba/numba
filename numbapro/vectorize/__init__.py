@@ -18,11 +18,12 @@ from numba.vectorize import install_vectorizer, _prepare_sig
 
 from .parallel import ParallelVectorize, ParallelASTVectorize
 from .stream import StreamVectorize, StreamASTVectorize
-from numbapro.cudapipeline.error import CudaSupportError
 
 GUFuncVectorize = GUVectorize
 GUFuncASTVectorize = GUVectorize
 
+
+from numbapro.cudapipeline.error import CudaSupportError
 try:
     from .cuda import  CudaASTVectorize, CudaGUFuncASTVectorize
 except CudaSupportError, e:
