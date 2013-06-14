@@ -133,7 +133,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def update_pos(self, node):
         "Update position for annotation"
         if self.env.crnt.annotate and hasattr(node, 'lineno'):
-            self.builder.update_pos(node.lineno - 1)
+            self.builder.update_pos(node.lineno)
             return self.builder.get_pos()
 
     def reset_pos(self, pos):
@@ -662,11 +662,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             # Not a renamed but an alloca'd variable
             return self.load_tbaa(var.lvalue, var.type)
         else:
-            # node.lineno is always off by one for some reason
-            if not node.lineno-1 in self.annotations:
-                self.annotations[node.lineno-1] = []
+            if not node.lineno in self.annotations:
+                self.annotations[node.lineno] = []
             annotation = Annotation(A_type, (node.name, str(node.type)))
-            self.annotations[node.lineno-1].append(annotation)
+            self.annotations[node.lineno].append(annotation)
             return var.lvalue
 
     #------------------------------------------------------------------------
@@ -947,8 +946,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             v = LineNumVisitor()
             v.visit(node)
             if v.lineno > -1:
-                # node.lineno is always off by one for some reason
-                lineno = v.lineno - 1
+                lineno = v.lineno
                 if not lineno in self.annotations:
                     self.annotations[lineno] = []
                 annotation = Annotation(A_type, ('return', str(node.value.type)))
