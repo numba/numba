@@ -17,7 +17,7 @@ def fill3d_threadidx(ary):
     j = cuda.threadIdx.y
     k = cuda.threadIdx.z
 
-    ary[i, j, k] = i + j * cuda.blockIdx.x + k * cuda.blockIdx.y
+    ary[i, j, k] = (i + 1) * (j + 1) * (k + 1)
 
 #------------------------------------------------------------------------------
 # simple_threadidx
@@ -53,16 +53,30 @@ def test_fill_threadidx():
 
 @testcase
 def test_fill3d_threadidx():
-    compiled = cudapy.compile_kernel(fill3d_threadidx,
-                                     [arraytype(int32, 3, 'C')])
-    compiled.bind()
-
     X, Y, Z = 4, 5, 6
-    ary = np.zeros((X, Y, Z), dtype=np.int32)
-    compiled[1, (X, Y, Z)](ary)
-    print ary
-#    assert np.all(ary == exp)
+    def c_contigous():
+        compiled = cudapy.compile_kernel(fill3d_threadidx,
+                                         [arraytype(int32, 3, 'C')])
+        compiled.bind()
 
+        ary = np.zeros((X, Y, Z), dtype=np.int32)
+        exp = ary.copy()
+        compiled[1, (X, Y, Z)](ary)
+        return ary
+
+    def f_contigous():
+        compiled = cudapy.compile_kernel(fill3d_threadidx,
+                                         [arraytype(int32, 3, 'F')])
+        compiled.bind()
+
+        ary = np.asfortranarray(np.zeros((X, Y, Z), dtype=np.int32))
+        exp = ary.copy()
+        compiled[1, (X, Y, Z)](ary)
+        return ary
+
+    c_res = c_contigous()
+    f_res = f_contigous()
+    assert np.all(c_res == f_res)
 
 
 if __name__ == '__main__':

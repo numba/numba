@@ -5,8 +5,8 @@ from . import ptx
 
 def rule_sreg(sreg_stub):
     def _rule(rules, value):
-        def cast_from_uint32(typemap, value):
-            return cast_penalty(uint32, typemap[value])
+        def cast_from_uint32(value):
+            return cast_penalty(uint32, value)
         rules[value].add(Conditional(cast_from_uint32))
         rules[value].add(Restrict(int_set))
         value.replace(value=sreg_stub)
