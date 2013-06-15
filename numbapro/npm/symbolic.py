@@ -17,7 +17,7 @@ For = namedtuple('For', ['index', 'stop', 'step'])
 BinOp = namedtuple('BinOp', ['lhs', 'rhs'])
 BoolOp = namedtuple('BoolOp', ['lhs', 'rhs'])
 UnaryOp = namedtuple('UnaryOp', ['value'])
-
+Unpack = namedtuple('Unpack', ['obj', 'offset'])
 GetItem = namedtuple('GetItem', ['obj', 'idx'])
 SetItem = namedtuple('SetItem', ['obj', 'idx', 'value'])
 
@@ -188,7 +188,7 @@ class SymbolicExecution(object):
                 blk.body.remove(expr)
 
     def generic_visit(self, inst):
-        raise NotImplementedError(inst)
+        raise TranslateError(inst, "unsupported bytecode %s" % inst)
 
     def enter_new_block(self, oldblock):
         '''Stuff to do when entering a new block.
@@ -454,6 +454,15 @@ class SymbolicExecution(object):
     def visit_BUILD_TUPLE(self, inst):
         ct = inst.arg
         self.push(tuple(reversed([self.pop() for i in range(ct)])))
+    
+    def visit_UNPACK_SEQUENCE(self, inst):
+        tos = self.pop()
+        if tos.value.kind != 'Call':
+            raise TranslateError(inst, "can only unpack from return value")
+        count = inst.arg
+        for i in reversed(range(count)):
+            ref = self.insert(Expr('Unpack', inst, Unpack(tos, i)))
+            self.push(ref)
 
     def visit_generic_binary(self, op, inst):
         rhs = self.pop()

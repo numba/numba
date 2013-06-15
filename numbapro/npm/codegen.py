@@ -174,7 +174,7 @@ class CodeGen(object):
         fn(expr)
 
     def generic_expr(self, expr):
-        raise CodeGenError(expr, "not implemented")
+        raise CodeGenError(expr, "%s not implemented" % expr)
 
     def generate_terminator(self, term):
         kind = term.kind
@@ -369,6 +369,14 @@ class CodeGen(object):
             self.extended_calls[func](self, expr)
         else:
             raise CodeGenError(expr, "function %s not implemented" % func)
+
+    def expr_Unpack(self, expr):
+        tuplevalue = expr.args.obj.value
+        tuty = self.typemap[tuplevalue]
+        package = self.valmap[tuplevalue]
+        offset = expr.args.offset
+        ty = self.typemap[expr]
+        self.valmap[expr] = self.do_cast(package[offset], tuty.element, ty)
 
     # -------- call ---------
     def call_complex(self, expr):

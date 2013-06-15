@@ -17,6 +17,7 @@ class KeywordNotSupported(TypeInferError):
 class ScalarType(namedtuple('ScalarType', ['code'])):
     is_array = False
     is_scalar = True
+    is_tuple = False
 
     @property
     def is_int(self):
@@ -88,6 +89,7 @@ class ScalarType(namedtuple('ScalarType', ['code'])):
 class ArrayType(namedtuple('ArrayType', ['element', 'ndim', 'order'])):
     is_array = True
     is_scalar = False
+    is_tuple = False
 
     def coerce(self, other):
         if isinstance(other, ArrayType) and self == other:
@@ -97,6 +99,11 @@ class ArrayType(namedtuple('ArrayType', ['element', 'ndim', 'order'])):
 
     def __repr__(self):
         return '[%s x %s %s]' % (self.element, self.ndim, self.order)
+
+class TupleType(namedtuple('TupleType', ['element', 'count'])):
+    is_tuple = True
+    is_scalar = False
+    is_array = False
 
 def coerce(*args):
     if len(args) == 1:
@@ -146,6 +153,10 @@ def arraytype(elemty, ndim, order):
     assert order in 'CFA'
     return ArrayType(elemty, ndim, order)
 
+
+def tupletype(elemty, count):
+    assert elemty.is_scalar
+    return TupleType(elemty, count)
 
 ###############################################################################
 # Infer
@@ -383,7 +394,9 @@ class Infer(object):
                      complex:   complex128}
             self.rules[value].add(MustBe(tymap[type(obj)]))
         elif obj in self.extended_globals:
-            self.extended_globals[obj](self.rules, value)
+            moretypes = self.extended_globals[obj](self.rules, value)
+            if moretypes:
+                self.possible_types |= set(moretypes)
         else:
             msg = "only support global value of int, float or complex"
             raise TypeInferError(value, msg)
@@ -551,7 +564,21 @@ class Infer(object):
             msg = "%s is not a regconized builtins"
             raise TypeInferError(value, msg % funcname)
         callrule = self.callrules[obj]
-        callrule(self.rules, value)
+        moretypes = callrule(self.rules, value)
+        if moretypes:
+            self.possible_types |= set(moretypes)
+
+    def visit_Unpack(self, value):
+        obj = value.args.obj
+
+        def must_be_tuple(value):
+            return value.is_tuple
+        self.rules[obj].add(Conditional(must_be_tuple))
+
+        def match_element(value, obj):
+            if obj.is_tuple:
+                return value == obj.element
+        self.rules[value].add(Conditional(match_element, obj))
 
 ###############################################################################
 # Rules

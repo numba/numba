@@ -62,6 +62,7 @@ BYTECODES = [
     ('STORE_FAST', 2),
 #    ('STORE_ATTR', 2), # not supported
     ('STORE_SUBSCR', 0),
+    ('UNPACK_SEQUENCE', 2),
 ] + BYTECODE_VERSION_SPECIFIC
 
 

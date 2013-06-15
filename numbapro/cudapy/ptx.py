@@ -1,6 +1,8 @@
 '''
 This scripts specifies all PTX special objects.
 '''
+from llvm.core import Type
+from numbapro.npm.types import *
 
 class Stub(object):
     '''A stub object to represent special objects which is meaningless
@@ -92,6 +94,9 @@ SREG_MAPPING = {
     gridDim.x: 'llvm.nvvm.read.ptx.sreg.nctaid.x',
     gridDim.y: 'llvm.nvvm.read.ptx.sreg.nctaid.y',
 }
+
+SREG_FUNCTION_TYPE = Type.function(Type.int(), [])
+SREG_TYPE = uint32
 
 #-------------------------------------------------------------------------------
 # Grid Macro
