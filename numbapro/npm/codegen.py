@@ -4,20 +4,26 @@ import llvm.core as lc
 from llvm.core import Type, Constant
 
 from . import typing, symbolic
+from .errors import CompileError
 
 GlobalVar = namedtuple('GlobalVar', ['type', 'gvar'])
 
+class CodeGenError(CompileError):
+    def __init__(self, value, msg):
+        super(CodeGenError, self).__init__(value.lineno, msg)
+
 class CodeGen(object):
     def __init__(self, name, blocks, typemap, consts, args, return_type, intp,
-                 extended_globals={}):
+                 extended_globals={}, extended_calls={}):
         self.blocks = blocks
         self.typemap = typemap
         self.args = args
         self.return_type = return_type
         self.typesetter = TypeSetter(intp)
-        self.consts = consts                    # global values at compile time
-        self.extern_globals = {}                # {name: GlobalVar}
+        self.consts = consts                     # global values at compile time
+        self.extern_globals = {}                 # {name: GlobalVar}
         self.extended_globals = extended_globals # codegen for special globals
+        self.extended_calls = extended_calls     # codegen for special functions
 
         self.bbmap = {}
         self.valmap = {}
@@ -168,7 +174,7 @@ class CodeGen(object):
         fn(expr)
 
     def generic_expr(self, expr):
-        raise NotImplementedError(expr)
+        raise CodeGenError(expr, "not implemented")
 
     def generate_terminator(self, term):
         kind = term.kind
@@ -176,7 +182,7 @@ class CodeGen(object):
         fn(term)
 
     def generic_term(self, term):
-        raise NotImplementedError(term)
+        raise CodeGenError(term, "not implemented")
 
     # -------- expr ---------
 
@@ -359,8 +365,10 @@ class CodeGen(object):
             self.call_max(expr)
         elif func is abs:
             self.call_abs(expr)
+        elif func in self.extended_calls:
+            self.extended_calls[func](self, expr)
         else:
-            raise NotImplementedError(expr.lineno, func)
+            raise CodeGenError(expr, "function %s not implemented" % func)
 
     # -------- call ---------
     def call_complex(self, expr):

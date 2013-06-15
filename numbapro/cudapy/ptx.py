@@ -93,9 +93,27 @@ SREG_MAPPING = {
     gridDim.y: 'llvm.nvvm.read.ptx.sreg.nctaid.y',
 }
 
+#-------------------------------------------------------------------------------
+# Grid Macro
+
+class grid(Stub):
+    '''grid(ndim)
+
+    ndim: [uint32] 1 or 2
+    
+        if ndim == 1:
+            return cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+        elif ndim == 2:
+            x = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+            y = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
+            return x, y
+    '''
+    _description_ = '<grid(ndim)>'
+
 __all__ = '''
 threadIdx
 blockIdx
 blockDim
 gridDim
+grid
 '''.split()

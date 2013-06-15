@@ -4,11 +4,11 @@ from pprint import pprint
 from collections import namedtuple, defaultdict, deque, Set, Mapping
 from .symbolic import OP_MAP
 from .utils import cache
+from .errors import CompileError
 
-class TypeInferError(TypeError):
+class TypeInferError(CompileError):
     def __init__(self, value, msg):
-        errmsg = 'at line %d: %s' % (value.lineno, msg)
-        super(TypeInferError, self).__init__(errmsg)
+        super(TypeInferError, self).__init__(value.lineno, msg)
 
 class KeywordNotSupported(TypeInferError):
     def __init__(self, value, msg="kwargs is not supported"):
@@ -191,7 +191,8 @@ def cast_penalty(fromty, toty):
 class Infer(object):
     '''Provide type inference and freeze the type of global values.
     '''
-    def __init__(self, blocks, known, globals, intp, extended_globals={}):
+    def __init__(self, blocks, known, globals, intp, extended_globals={},
+                 extended_calls={}):
         self.blocks = blocks
         self.argtys = known.copy()
         self.retty = self.argtys.pop('')
@@ -203,6 +204,7 @@ class Infer(object):
 
         self.callrules = {}
         self.callrules.update(BUILTIN_RULES)
+        self.callrules.update(extended_calls)
 
         self.rules = defaultdict(set)
         self.phis = defaultdict(set)
@@ -541,7 +543,10 @@ class Infer(object):
 
     def visit_Call(self, value):
         funcname = value.args.func
-        obj = self.globals[funcname]
+        parts = funcname.split('.')
+        obj = self.globals[parts[0]]
+        for attr in parts[1:]:
+            obj = getattr(obj, attr)
         if obj not in self.callrules:
             msg = "%s is not a regconized builtins"
             raise TypeInferError(value, msg % funcname)

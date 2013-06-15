@@ -6,6 +6,7 @@ from collections import defaultdict, namedtuple
 
 from .bytecode import ByteCode, BYTECODE_TABLE
 from .utils import SortedMap
+from .errors import CompileError
 
 Arg = namedtuple('Arg', ['num', 'name'])
 Call = namedtuple('Call', ['func', 'args', 'kws'])
@@ -66,10 +67,9 @@ OP_MAP.update(BINARYOP_MAP)
 OP_MAP.update(UNARYOP_MAP)
 OP_MAP.update(BOOLOP_MAP)
 
-class TranslateError(Exception):
+class TranslateError(CompileError):
     def __init__(self, inst, msg):
-        msg = "At line %d: %s" % (inst.lineno, msg)
-        super(TranslateError, self).__init__(msg)
+        super(TranslateError, self).__init__(inst.lineno, msg)
 
 PendingFor = namedtuple('PendingFor', ['prev', 'block', 'itername', 'iter'])
 

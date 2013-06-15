@@ -5,8 +5,8 @@ from numbapro.npm.execution import (to_ctype, prepare_args, Complex64,
                                     Complex128, ArrayBase)
 from numbapro.cudapipeline import nvvm, driver, devicearray
 from .execution import CUDAKernel
-from .typing import cudapy_typing_ext
-from .codegen import cudapy_codegen_ext
+from .typing import cudapy_global_typing_ext, cudapy_call_typing_ext
+from .codegen import cudapy_global_codegen_ext, cudapy_call_codegen_ext
 
 CUDA_ADDR_SIZE = tuple.__itemsize__ * 8     # matches host
 
@@ -28,7 +28,8 @@ def compile_kernel(func, argtys):
     addrsize = CUDA_ADDR_SIZE
     globals = func.func_globals
     infer = typing.Infer(se.blocks, tydict, globals, intp=addrsize,
-                         extended_globals=cudapy_typing_ext)
+                         extended_globals=cudapy_global_typing_ext,
+                         extended_calls=cudapy_call_typing_ext)
 
     typemap = infer.infer()
 
@@ -36,7 +37,8 @@ def compile_kernel(func, argtys):
     name = get_func_name(func)
     cg = codegen.CodeGen(name, se.blocks, typemap, globals,
                          argtys, None, intp=addrsize,
-                         extended_globals=cudapy_codegen_ext)
+                         extended_globals=cudapy_global_codegen_ext,
+                         extended_calls=cudapy_call_codegen_ext)
     lfunc = cg.generate()
     gvars = cg.extern_globals
 

@@ -19,6 +19,10 @@ def fill3d_threadidx(ary):
 
     ary[i, j, k] = (i + 1) * (j + 1) * (k + 1)
 
+def simple_grid1d(ary):
+    i = cuda.grid(1)
+    ary[i] = i
+
 #------------------------------------------------------------------------------
 # simple_threadidx
 
@@ -77,6 +81,21 @@ def test_fill3d_threadidx():
     c_res = c_contigous()
     f_res = f_contigous()
     assert np.all(c_res == f_res)
+
+#------------------------------------------------------------------------------
+# simple_grid1d
+
+@testcase
+def test_simple_grid1d():
+    compiled = cudapy.compile_kernel(simple_grid1d,
+                                     [arraytype(int32, 1, 'C')])
+    compiled.bind()
+    ntid, nctaid = 3, 7
+    nelem = ntid * nctaid
+    ary = np.empty(nelem, dtype=np.int32)
+    compiled[nctaid, ntid](ary)
+    assert np.all(ary == np.arange(nelem))
+
 
 
 if __name__ == '__main__':
