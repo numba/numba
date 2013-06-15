@@ -1,7 +1,7 @@
 import __builtin__
-import itertools
+import itertools, inspect
 from pprint import pprint
-from collections import namedtuple, defaultdict, deque, Set
+from collections import namedtuple, defaultdict, deque, Set, Mapping
 from .symbolic import OP_MAP
 from .utils import cache
 
@@ -186,7 +186,7 @@ for pairs in itertools.product(scalar_set, scalar_set):
     CAST_PENALTY[pairs] = calc_cast_penalty(*pairs)
 
 def cast_penalty(fromty, toty):
-    return CAST_PENALTY[(fromty, toty)]
+    return CAST_PENALTY.get((fromty, toty))
 
 class Infer(object):
     '''Provide type inference and freeze the type of global values.
@@ -216,8 +216,7 @@ class Infer(object):
 
         self.propagate_rules()
         possibles, conditions = self.deduce_possible_types()
-        good = self.find_solutions(possibles, conditions)
-        return self.select_solution(good)
+        return self.find_solutions(possibles, conditions)
 
     def propagate_rules(self):
         # propagate rules on PHIs
@@ -236,7 +235,7 @@ class Infer(object):
     def deduce_possible_types(self):
         # list possible types for each values
         possibles = {}
-        conditions = []
+        conditions = defaultdict(list)
         for v, rs in self.rules.iteritems():
             if v not in self.phis:
                 tset = self.possible_types
@@ -244,96 +243,102 @@ class Infer(object):
                     if r.require:
                         tset = set(filter(r, tset))
                     else:
-                        conditions.append((v, r))
+                        conditions[v].append(r)
                 possibles[v] = tset
         return possibles, conditions
 
     def find_solutions(self, possibles, conditions):
-
-        # find acceptable solutions
-
-        def fill_phis(soln, ordering=[]):
-            '''Propagate types for the PHI nodes
-            '''
-            if not ordering:
-                phiunfilled = deque(self.phis)
-                while phiunfilled:
-                    phi = phiunfilled.popleft()
-                    incs = self.phis[phi]
-
-                    for i in incs:
-                        if i in soln:
-                            soln[phi] = soln[i]
-                            ordering.append((phi, i))
-                            break
+        # TODO: this function can use some refactoring
+        # propagate phis
+        def propagate_phis(possibles):
+            changed = True
+            while changed:
+                changed = False
+                for phi, incs in self.phis.iteritems():
+                    if phi not in possibles:
+                        # default to all possible types
+                        possibles[phi] = self.possible_types
                     else:
-                        phiunfilled.append(phi)
-            else:
-                for dst, src in ordering:
-                    soln[dst] = soln[src]
+                        old = possibles[phi]
+                        tyset = possibles[phi]
+                        for i in incs:
+                            if i in possibles:
+                                orig = tyset
+                                tyset &= possibles[i]
+                                assert tyset, (orig, possibles[i])
+                        if tyset != old:
+                            possibles[phi] = tyset
+                            changed = True
 
-#        pprint(possibles)
-        good = []
-        ordering = []
+        def iterate():
+            for blk in self.blocks.itervalues():
+                for v in blk.body:
+                    yield v
 
-        lowest = 0
+        def find_good_solutions(clist, deps, deptysets):
+            for tys in itertools.product(*deptysets):
+                depmap = dict(zip(deps, tys))
 
-        # cycle through all possibilities and score each of them
-        for values in itertools.product(*possibles.itervalues()):
-            soln = dict(zip(possibles, values))
-            fill_phis(soln, ordering)
-
-            score = 1
-
-            for i, (v, r) in enumerate(conditions):
-                res = r(soln, v)
-                if not res:
-                    #print r.checker.func_code.co_firstlineno, v, soln[v]
-                    break
-
-                if isinstance(res, (int, float)):
-                    score += res
-                    if good and score > lowest:
+                penalty = 0
+                for cond in clist:
+                    args = [depmap[val]]
+                    for dep in cond.deps:
+                        args.append(depmap[dep])
+                    score = cond(*args)
+                    if not score:
                         break
-            else:
-                assert score != 0
-                if good:
-                    if score < lowest:      # new lowest score
-                        del good[:]           # reset good list
-                    elif score > lowest:    # score is not acceptable
-                        continue
-
-                lowest = score              # store the lowest score
-                good.append(soln)           # append the good solution
-
-            # rotate the conditions so that we can catch bad type earlier
-            conditions = conditions[i:] + conditions[:i]
-        
-
-        return good
-        #pprint(good)
-
-    def select_solution(self, good):
-        nsoln = len(good)
-        if nsoln == 0:
-            raise TypeError("No solution is found for type inference")
-        elif nsoln > 1:
-            # try to find the most generic solution
-            final = {}
-            for soln in good:
-                for k, v in soln.iteritems():
-                    if k in final:
-                        cty = coerce(v, final[k])
-                        if not cty:
-                            msg = "cannot determine type"
-                            raise TypeInferError(k, msg)
-                        final[k] = cty
                     else:
-                        final[k] = v
-            return final
+                        penalty += score
+                else:
+                    yield (penalty, tys)
 
-        else:
-            return good[0]
+        def build_depsets(clist, val, conditions):
+            depset = set([val])
+            for cond in clist:
+                for dep in cond.deps:
+                    depset.add(dep)
+            deps = list(depset)
+            deptysets = [possibles[d] for d in deps]
+            return deps, deptysets
+
+        propagate_phis(possibles)
+        changed = True
+        while changed:
+            changed = False
+
+            for val in iterate():
+                if val not in conditions: continue
+                clist = conditions[val]
+                deps, deptysets = build_depsets(clist, val, conditions)
+                good = list(sorted(find_good_solutions(clist, deps, deptysets)))
+                if not good:
+                    raise TypeInferError(val, "cannot infer type")
+                threshold = good[0][0]
+                best = itertools.takewhile(lambda x: x[0] == threshold, good)
+
+                resmap = defaultdict(set)
+                for _score, tys in best:
+                    for v, t in zip(deps, tys):
+                        resmap[v].add(t)
+
+                for v, ts in resmap.iteritems():
+                    if not ts:
+                        raise TypeInferError(v, "typeset is empty")
+                    elif possibles[v] != ts:
+                        changed = True
+                        possibles[v] &= ts
+
+                propagate_phis(possibles)
+
+        # pick the most generic type if the final type set has multiple types
+        soln = {}
+        for v, ts in possibles.iteritems():
+            r = coerce(*ts)
+            if not r:
+                msg = "cannot determine type: possible %s"
+                raise TypeInferError(v, msg % list(ts))
+            soln[v] = r
+        return soln
 
     def visit(self, value):
         kind = value.kind
@@ -349,11 +354,10 @@ class Infer(object):
 
     def visit_Ret(self, term):
         val = term.args.value.value
-        def rule(typemap, value):
+        def rule(value):
             if not self.retty:
                 raise TypeInferError(value, 'function has no return value')
-            p = cast_penalty(typemap[value], self.retty)
-            return p
+            return cast_penalty(value, self.retty)
         self.rules[val].add(Conditional(rule))
 
     def visit_Arg(self, value):
@@ -401,13 +405,13 @@ class Infer(object):
         lhs, rhs = value.args.lhs.value, value.args.rhs.value
 
         if value.kind == '/':
-            def rule(typemap, value):
-                rty = coerce(typemap[lhs], typemap[rhs])
+            def rule(value, lhs, rhs):
+                rty = coerce(lhs, rhs)
                 if rty.is_float or rty.is_int:
                     target = ScalarType('f%d' % max(rty.bitwidth, 32))
-                    return cast_penalty(typemap[value], target)
+                    return cast_penalty(value, target)
 
-            self.rules[value].add(Conditional(rule))
+            self.rules[value].add(Conditional(rule, lhs, rhs))
             self.rules[value].add(Restrict(float_set))
             self.rules[lhs].add(Restrict(int_set|float_set))
             self.rules[rhs].add(Restrict(int_set|float_set))
@@ -415,37 +419,35 @@ class Infer(object):
         
         elif value.kind == '//':
         
-            def rule(typemap, value):
-                rty = coerce(typemap[lhs], typemap[rhs])
+            def rule(value, lhs, rhs):
+                rty = coerce(lhs, rhs)
                 if rty.is_int or rty.is_float:
                     target = ScalarType('i%d' % max(rty.bitwidth, 32))
-                    return cast_penalty(typemap[value], target)
+                    return cast_penalty(value, target)
 
-            self.rules[value].add(Conditional(rule))
+            self.rules[value].add(Conditional(rule, lhs, rhs))
             self.rules[value].add(Restrict(int_set))
             self.rules[lhs].add(Restrict(int_set|float_set))
             self.rules[rhs].add(Restrict(int_set|float_set))
             
         elif value.kind in ['&', '|', '^']:
             
-            def rule(typemap, value):
-                rty = coerce(typemap[lhs], typemap[rhs])
+            def rule(value, lhs, rhs):
+                rty = coerce(lhs, rhs)
                 if rty.is_int:
-                    return cast_penalty(typemap[value], rty)
+                    return cast_penalty(value, rty)
 
-            self.rules[value].add(Conditional(rule))
+            self.rules[value].add(Conditional(rule, lhs, rhs))
             self.rules[value].add(Restrict(int_set))
             self.rules[lhs].add(Restrict(int_set))
             self.rules[rhs].add(Restrict(int_set))
         else:
             
-            def rule(typemap, value):
-                rty = coerce(typemap[lhs], typemap[rhs])
-                ty = typemap[value]
-                return cast_penalty(rty, ty)
+            def rule(value, lhs, rhs):
+                return cast_penalty(coerce(lhs, rhs), value)
 
             self.rules[value].add(Restrict(numeric_set))
-            self.rules[value].add(Conditional(rule))
+            self.rules[value].add(Conditional(rule, lhs, rhs))
             self.rules[lhs].add(Restrict(numeric_set))
             self.rules[rhs].add(Restrict(numeric_set))
 
@@ -496,9 +498,10 @@ class Infer(object):
 
         self.rules[value].add(Restrict(numeric_set))
 
-        def rule(typemap, value):
-            return cast_penalty(typemap[obj].element, typemap[value])
-        self.rules[value].add(Conditional(rule))
+        def rule(value, obj):
+            if obj.is_array:
+                return cast_penalty(obj.element, value)
+        self.rules[value].add(Conditional(rule, obj))
 
     def visit_SetItem(self, value):
         obj = value.args.obj.value
@@ -511,10 +514,11 @@ class Infer(object):
 
         self.rules[val].add(Restrict(numeric_set))
 
-        def rule(typemap, value):
-            return cast_penalty(typemap[value], typemap[obj].element)
+        def rule(value, obj):
+            if obj.is_array:
+                return cast_penalty(value, obj.element)
 
-        self.rules[val].add(Conditional(rule))
+        self.rules[val].add(Conditional(rule, obj))
 
     def visit_ArrayAttr(self, value):
         obj = value.args.obj.value
@@ -531,9 +535,9 @@ class Infer(object):
         obj = value.args.obj.value
         self.rules[obj].add(Restrict(complex_set))
         self.rules[value].add(Restrict(float_set))
-        def rule(typemap, value):
-            return cast_penalty(typemap[value], typemap[obj].complex_element)
-        self.rules[value].add(Conditional(rule))
+        def rule(value, obj):
+            return cast_penalty(value, obj.complex_element)
+        self.rules[value].add(Conditional(rule, obj))
 
     def visit_Call(self, value):
         funcname = value.args.func
@@ -562,8 +566,12 @@ class Require(Rule):
 
 class Conditional(Rule):
     conditional = True
-    def __call__(self, typemap, value):
-        return self.checker(typemap, value)
+    def __init__(self, checker, *deps):
+        super(Conditional, self).__init__(checker)
+        self.deps = deps
+
+    def __call__(self, *args):
+        return self.checker(*args)
 
 def MustBe(expect):
     def _mustbe(t):
@@ -585,10 +593,8 @@ def filter_array(ts):
 # Rules for builtin functions
 
 def call_complex_rule(rules, call):
-    def cond_to_float(typemap, value):
-        cty = typemap[call]
-        ety = cty.complex_element
-        return cast_penalty(typemap[value], ety)
+    def cond_to_float(value, call):
+        return cast_penalty(value, call.complex_element)
 
     args = call.args.args
     kws = call.args.kws
@@ -598,13 +604,13 @@ def call_complex_rule(rules, call):
     if nargs == 1:
         (real,) = args
         rules[real.value].add(Restrict(int_set|float_set))
-        rules[real.value].add(Conditional(cond_to_float))
+        rules[real.value].add(Conditional(cond_to_float, call))
     elif nargs == 2:
         (real, imag) = args
         rules[real.value].add(Restrict(int_set|float_set))
         rules[imag.value].add(Restrict(int_set|float_set))
-        rules[real.value].add(Conditional(cond_to_float))
-        rules[imag.value].add(Conditional(cond_to_float))
+        rules[real.value].add(Conditional(cond_to_float, call))
+        rules[imag.value].add(Conditional(cond_to_float, call))
     else:
         raise TypeInferError(call, "invalid use of complex(real[, imag])")
     rules[call].add(Restrict(complex_set))
@@ -654,11 +660,10 @@ def call_maxmin_rule(fname):
         for a in argvals:
             rules[a].add(Restrict(int_set|bool_set|float_set))
 
-        def rule(typemap, value):
-            tys = [typemap[a] for a in argvals]
+        def rule(value, *tys):
             rty = coerce(*tys)
-            return cast_penalty(rty, typemap[value])
-        rules[call].add(Conditional(rule))
+            return cast_penalty(rty, value)
+        rules[call].add(Conditional(rule, *argvals))
 
         call.replace(func={'min': min, 'max': max}[fname])
     return inner
@@ -675,10 +680,10 @@ def call_abs_rule(rules, call):
     arg = args[0].value
     rules[arg].add(Restrict(signed_set|float_set))
 
-    def prefer_same_as_arg(typemap, value):
-        return cast_penalty(typemap[value], typemap[arg])
+    def prefer_same_as_arg(value, arg):
+        return cast_penalty(value, arg)
 
-    rules[call].add(Conditional(prefer_same_as_arg))
+    rules[call].add(Conditional(prefer_same_as_arg, arg))
     call.replace(func=abs)
 
 BUILTIN_RULES = {
@@ -689,3 +694,4 @@ BUILTIN_RULES = {
     max:        call_maxmin_rule('max'),
     abs:        call_abs_rule,
 }
+

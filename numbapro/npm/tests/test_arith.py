@@ -21,6 +21,12 @@ def floordiv(a, b):
 def mod(a, b):
     return a % b
 
+def expr1(a, b, c):
+    ac = a * 2
+    bc = b * 5
+    cc = c * 3
+    return (ac + 1) * (bc + 1) * (cc + 1)
+
 iset = [int8, int16, int32, int64, uint8, uint16, uint32, uint64]
 fset = [float32, float64]
 cset = [complex64, complex128]
@@ -203,6 +209,23 @@ def test_mod_float():
 
     for ty in fset:
         run(ty, 432., 21.)
+
+
+#------------------------------------------------------------------------------
+# expr1
+
+@testcase
+def test_expr1_integer():
+    def run(ty, a, b, c):
+        cexpr1 = compile(expr1, ty, [ty, ty, ty])
+        got = cexpr1(a, b, c)
+        exp = expr1(a, b, c)
+        msg = 'expr1(%s, %s, %s) got = %s expect=%s'
+        assert got == exp, msg % (a, b, c, got, exp)
+
+    for ty in set([int32, int64]):
+        run(ty, 121, 11, 231)
+
 
 
 if __name__ == '__main__':
