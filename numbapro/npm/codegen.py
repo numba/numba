@@ -43,9 +43,7 @@ class CodeGen(object):
         return self.typesetter.to_llvm(ty)
 
     def sizeof(self, ty):
-        ptr = Type.pointer(ty)
-        null = Constant.null(ptr)
-        return self.builder.gep(null, [Constant.int(Type.int(), 1)])
+        return sizeof(self.builder, ty, self.typesetter.llvm_intp)
 
     def array_getpointer(self, ary, idx):
         aryty = self.typemap[ary]
@@ -591,16 +589,25 @@ def array_pointer(builder, data, shape, strides, order, indices):
     intp = shape[0].type
     if order in 'CF':
         # optimize for C and F contiguous
-        if order == 'F':
-            indices = list(reversed(indices))
-            subshape = shape[:-1]
+        steps = []
+        if order == 'C':
+            for i in range(len(shape)):
+                last = Constant.int(intp, 1)
+                for j in shape[i + 1:]:
+                    last = builder.mul(last, j)
+                steps.append(last)
+        elif order =='F':
+            for i in range(len(shape)):
+                last = Constant.int(intp, 1)
+                for j in shape[:i]:
+                    last = builder.mul(last, j)
+                steps.append(last)
         else:
-            subshape = shape[1:]
+            assert False
         loc = Constant.null(intp)
-        for ival, sval in zip(indices, subshape):
-            tmp = builder.mul(ival, sval)
+        for i, s in zip(indices, steps):
+            tmp = builder.mul(i, s)
             loc = builder.add(loc, tmp)
-        loc = builder.add(loc, indices[-1])
         ptr = builder.gep(data, [loc])
     else:
         # any order
@@ -630,3 +637,9 @@ def auto_int(x):
 
 def gep(builder, ptr, *idx):
     return builder.gep(ptr, [auto_int(x) for x in idx])
+
+def sizeof(builder, ty, intp):
+    ptr = Type.pointer(ty)
+    null = Constant.null(ptr)
+    offset = builder.gep(null, [Constant.int(Type.int(), 1)])
+    return builder.ptrtoint(offset, intp)
