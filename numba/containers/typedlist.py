@@ -75,6 +75,8 @@ def compile_typedlist(item_type, _list_cache=_list_cache):
         def pop(self):
             # TODO: Optional argument 'index'
             size = self.size - 1
+            if size<0:
+                [].pop()
             item = self.buf[size]
             self.size = size
 
