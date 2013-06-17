@@ -45,7 +45,7 @@ def simple_prange_lastprivate():
     for i in numba.prange(1):
         var = 10
 
-    print var
+    print(var)
 
 @autojit(warn=False)
 def simple_prange_reduction():
@@ -57,7 +57,7 @@ def simple_prange_reduction():
     for i in numba.prange(1):
         var += 5
 
-    print var
+    print(var)
 
 #----------------------------------------------------------------------------
 # Error Tests
@@ -119,7 +119,7 @@ def prange_lastprivate():
         j = i * 2
         sum += j
 
-    print j
+    print(j)
     return sum
 
 @autojit(warn=False)
@@ -152,7 +152,7 @@ def test_sum2d(A):
     sum = 0.0
     for i in numba.prange(A.shape[0]):
         for j in range(A.shape[1]):
-            # print i, j
+            # print(i, j)
             sum += A[i, j]
 
     return sum

@@ -112,7 +112,7 @@ def create_prange_closure(env, prange_node, body, target):
     # Update outlined prange body closure
 
     func_signature = void(privates_struct_type.ref())
-    func_signature.struct_by_reference = True
+    # func_signature.struct_by_reference = True
     need_closure_wrapper = False
     locals_dict = { '__numba_privates': privates_struct_type.ref() }
 
@@ -322,8 +322,9 @@ def perform_reductions(context, prange_node):
 # prange nodes and types
 #------------------------------------------------------------------------
 
-class PrangeType(typesystem.range_):
+class PrangeType(typesystem.NumbaType):
     is_prange = True
+    is_range = True
 
 class PrangeNode(nodes.ExprNode):
     """
@@ -434,8 +435,8 @@ def make_privates_struct_type(privates_struct_type, names):
     fielddict.update(privates_struct_type.fielddict)
     fields = numba.struct(**fielddict).fields
 
-    privates_struct_type.fields = fields
-    privates_struct_type.fielddict = fielddict
+    privates_struct_type.fields[:] = fields
+    # privates_struct_type.fielddict = fielddict
     privates_struct_type.update_mutated()
 
 
