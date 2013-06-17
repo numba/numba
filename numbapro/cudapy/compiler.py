@@ -7,6 +7,7 @@ from numbapro.cudapipeline import nvvm, driver, devicearray
 from .execution import CUDAKernel
 from .typing import cudapy_global_typing_ext, cudapy_call_typing_ext
 from .codegen import cudapy_global_codegen_ext, cudapy_call_codegen_ext
+from .passes import bind_scalar_constants
 
 CUDA_ADDR_SIZE = tuple.__itemsize__ * 8     # matches host
 
@@ -21,13 +22,16 @@ def compile_kernel(func, argtys):
     assert not argspec.varargs
     assert not argspec.defaults
 
+    globals = func.func_globals
+    
+    # bind scalar constants
+    bind_scalar_constants(se.blocks, globals, intp=CUDA_ADDR_SIZE)
+
     # type infernece
     tydict = dict(zip(argspec.args, argtys))
     tydict[''] = None
 
-    addrsize = CUDA_ADDR_SIZE
-    globals = func.func_globals
-    infer = typing.Infer(se.blocks, tydict, globals, intp=addrsize,
+    infer = typing.Infer(se.blocks, tydict, globals, intp=CUDA_ADDR_SIZE,
                          extended_globals=cudapy_global_typing_ext,
                          extended_calls=cudapy_call_typing_ext)
 
@@ -36,7 +40,7 @@ def compile_kernel(func, argtys):
     # code generation
     name = get_func_name(func)
     cg = codegen.CodeGen(name, se.blocks, typemap, globals,
-                         argtys, None, intp=addrsize,
+                         argtys, None, intp=CUDA_ADDR_SIZE,
                          extended_globals=cudapy_global_codegen_ext,
                          extended_calls=cudapy_call_codegen_ext)
     lfunc = cg.generate()
