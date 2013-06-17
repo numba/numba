@@ -29,6 +29,8 @@ class CodeGen(object):
         self.valmap = {}
         self.pending_phis = {}
 
+        self.link_later = set()
+
         self.lmod = lc.Module.new(repr(self))
 
         argtys = []
@@ -170,8 +172,12 @@ class CodeGen(object):
                 phi.add_incoming(val, blk)
 
         # verify
+        self.lfunc.verify()
+
+        # link
+        for lmod in self.link_later:
+            self.lmod.link_in(lmod, preserve=True)
         return self.lfunc
-        self.lmod.verify()
 
     def generate_expression(self, expr):
         kind = symbolic.OP_MAP.get(expr.kind, expr.kind)
@@ -371,6 +377,25 @@ class CodeGen(object):
             self.call_abs(expr)
         elif func in self.extended_calls:
             self.extended_calls[func](self, expr)
+        elif hasattr(func, '_npm_context_'):
+            lmod, lfunc, retty, argtys = func._npm_context_
+            self.link_later.add(lmod)
+            myfunc = self.lmod.get_or_insert_function(lfunc.type.pointee,
+                                                      name=lfunc.name)
+            args = expr.args.args
+            assert len(args) == len(argtys)
+
+            args = [self.cast(a.value, t) for a, t in zip(args, argtys)]
+
+            if retty:
+                retptr = self.builder.alloca(myfunc.args[-1].type.pointee)
+                args.append(retptr)
+                self.builder.call(myfunc, args)
+                retval = self.builder.load(retptr)
+                self.valmap[expr] = self.do_cast(retval, retty,
+                                                 self.typemap[expr])
+            else:
+                self.builder.call(myfunc, args)
         else:
             raise CodeGenError(expr, "function %s not implemented" % func)
 

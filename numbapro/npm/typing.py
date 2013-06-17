@@ -411,7 +411,7 @@ class Infer(object):
         obj = self.globals[parts[0]]
         for part in parts[1:]:
             obj = getattr(obj, part)
-        assert not hasattr(obj, '_npm_func_')
+
         if isinstance(obj, (int, float, complex)):
             tymap = {int:       self.intp,
                      float:     float64,
@@ -586,10 +586,30 @@ class Infer(object):
         for attr in parts[1:]:
             obj = getattr(obj, attr)
         if obj not in self.callrules:
-            msg = "%s is not a regconized builtins"
-            raise TypeInferError(value, msg % funcname)
-        callrule = self.callrules[obj]
-        callrule(self, value)
+            if not hasattr(obj, '_npm_context_'):
+                msg = "%s is not a regconized builtins"
+                raise TypeInferError(value, msg % funcname)
+            else:
+                _lmod, _lfunc, retty, argtys = obj._npm_context_
+                args = map(lambda x: x.value, value.args.args)
+                def can_cast_to(t):
+                    def wrapped(v):
+                        return cast_penalty(v, t)
+                    return wrapped
+
+                if len(args) != len(argtys):
+                    msg = "call to %s takes %d args but %d given"
+                    msgargs = obj, len(argtys), len(args)
+                    raise TypeInferError(value, msg % msgargs)
+
+                for aval, aty in zip(args, argtys):
+                    self.rules[aval].add(Conditional(can_cast_to(aty)))
+
+                self.rules[value].add(MustBe(retty))
+            value.replace(func=obj)
+        else:
+            callrule = self.callrules[obj]
+            callrule(self, value)
 
     def visit_Unpack(self, value):
         obj = value.args.obj.value
