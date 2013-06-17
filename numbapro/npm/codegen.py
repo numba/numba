@@ -49,7 +49,7 @@ class CodeGen(object):
         return self.typesetter.to_llvm(ty)
 
     def sizeof(self, ty):
-        return sizeof(self.builder, ty, self.typesetter.llvm_intp)
+        return sizeof(self.builder, self.to_llvm(ty), self.typesetter.llvm_intp)
 
     def array_getpointer(self, ary, idx):
         aryty = self.typemap[ary]
@@ -114,21 +114,26 @@ class CodeGen(object):
             raise NotImplementedError('casting %s -> %s' % (ty, destty))
 
     def define_const(self, ty, val):
-        assert isinstance(ty, typing.ScalarType)
-        if ty.kind == 'i':
-            lty = self.to_llvm(ty)
-            return Constant.int_signextend(lty, val)
-        elif ty.kind == 'u':
-            lty = self.to_llvm(ty)
-            return Constant.int(lty, val)
-        elif ty.kind == 'f':
-            lty = self.to_llvm(ty)
-            return Constant.real(lty, val)
-        elif ty.kind == 'c':
-            lty = self.to_llvm(ty.complex_element)
-            real = self.define_const(lty, val.real)
-            imag = self.define_const(lty, val.imag)
-            return Constant.struct([real, imag])
+        if ty.is_scalar:
+            if ty.kind == 'i':
+                lty = self.to_llvm(ty)
+                return Constant.int_signextend(lty, val)
+            elif ty.kind == 'u':
+                lty = self.to_llvm(ty)
+                return Constant.int(lty, val)
+            elif ty.kind == 'f':
+                lty = self.to_llvm(ty)
+                return Constant.real(lty, val)
+            elif ty.kind == 'c':
+                lty = self.to_llvm(ty.complex_element)
+                real = self.define_const(lty, val.real)
+                imag = self.define_const(lty, val.imag)
+                return Constant.struct([real, imag])
+        elif ty.is_tuple:
+            ev = [self.define_const(ty.element, v) for v in val]
+            return Constant.struct(ev)
+        else:
+            raise NotImplementedError
 
     def generate(self):
         # generate in the order of basic block offset
@@ -165,8 +170,8 @@ class CodeGen(object):
                 phi.add_incoming(val, blk)
 
         # verify
-        self.lmod.verify()
         return self.lfunc
+        self.lmod.verify()
 
     def generate_expression(self, expr):
         kind = symbolic.OP_MAP.get(expr.kind, expr.kind)

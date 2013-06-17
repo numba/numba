@@ -115,10 +115,38 @@ class grid(Stub):
     '''
     _description_ = '<grid(ndim)>'
 
+#-------------------------------------------------------------------------------
+# synthreads
+
+class syncthreads(Stub):
+    '''syncthreads() 
+    
+    Synchronizes all threads in the thread block.
+    '''
+    _description_ = '<syncthread()>'
+
+#-------------------------------------------------------------------------------
+# shared
+
+class shared(Stub):
+    '''shared namespace
+    '''
+    _description_ = '<shared>'
+
+    class array(Stub):
+        '''array(shape, dtype)
+        
+        Allocate shared array of shape and dtype
+        '''
+        _description_ = '<array>'
+
+
 __all__ = '''
 threadIdx
 blockIdx
 blockDim
 gridDim
 grid
+syncthreads
+shared
 '''.split()

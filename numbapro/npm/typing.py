@@ -18,7 +18,8 @@ class ScalarType(namedtuple('ScalarType', ['code'])):
     is_array = False
     is_scalar = True
     is_tuple = False
-
+    is_user = False
+    
     @property
     def is_int(self):
         return self.kind in 'iu'
@@ -90,6 +91,7 @@ class ArrayType(namedtuple('ArrayType', ['element', 'ndim', 'order'])):
     is_array = True
     is_scalar = False
     is_tuple = False
+    is_user = False
 
     def coerce(self, other):
         if isinstance(other, ArrayType) and self == other:
@@ -104,6 +106,26 @@ class TupleType(namedtuple('TupleType', ['element', 'count'])):
     is_tuple = True
     is_scalar = False
     is_array = False
+    is_user = False
+
+
+    def coerce(self, other):
+        if self == other: return self
+
+    def __repr__(self):
+        return '(%s x %d)' % (self.element, self.count)
+
+class UserType(namedtuple('UserType', ['name', 'object'])):
+    is_tuple = False
+    is_scalar = False
+    is_array = False
+    is_user = True
+
+    def coerce(self, other):
+        if self == other: return self
+
+    def __repr__(self):
+        return 'type(%s, %s)' % (self.name, self.object)
 
 def coerce(*args):
     if len(args) == 1:
@@ -315,6 +337,7 @@ class Infer(object):
             return deps, deptysets
 
         propagate_phis(possibles)
+        
         changed = True
         while changed:
             changed = False
@@ -345,6 +368,7 @@ class Infer(object):
 
         # pick the most generic type if the final type set has multiple types
         soln = {}
+
         for v, ts in possibles.iteritems():
             r = coerce(*ts)
             if not r:
@@ -394,7 +418,7 @@ class Infer(object):
                      complex:   complex128}
             self.rules[value].add(MustBe(tymap[type(obj)]))
         elif obj in self.extended_globals:
-            self.extended_globals[obj](self, value)
+            self.extended_globals[obj](self, value, obj)
         else:
             msg = "only support global value of int, float or complex"
             raise TypeInferError(value, msg)
@@ -403,16 +427,19 @@ class Infer(object):
     def visit_Const(self, value):
         const = value.args.value
         if isinstance(const, (int, long)):
-            expect = self.intp
+            self.rules[value].add(MustBe(self.intp))
         elif isinstance(const, float):
-            expect = float64
+            self.rules[value].add(MustBe(float64))
         elif isinstance(const, complex):
-            expect = complex128
+            self.rules[value].add(MustBe(complex128))
+        elif isinstance(const, tuple) and all(isinstance(x, (int, long))
+                                              for x in const):
+            tuty = tupletype(self.intp, len(const))
+            self.possible_types.add(tuty)
+            self.rules[value].add(MustBe(tuty))
         else:
             msg = 'invalid constant value of %s' % type(const)
             raise TypeInferError(value, msg)
-
-        self.rules[value].add(MustBe(expect))
 
     def visit_BinOp(self, value):
         lhs, rhs = value.args.lhs.value, value.args.rhs.value
@@ -565,7 +592,7 @@ class Infer(object):
         callrule(self, value)
 
     def visit_Unpack(self, value):
-        obj = value.args.obj
+        obj = value.args.obj.value
 
         def must_be_tuple(value):
             return value.is_tuple

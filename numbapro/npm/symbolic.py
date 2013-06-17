@@ -36,6 +36,7 @@ A set of expression kind that is memory store expression.
 These expressions is pardoned by the strip used.
 '''
 MEMORY_OP = frozenset(['SetItem'])
+SIDE_EFFECT = MEMORY_OP | set(['Call'])
 
 BINARYOP_MAP = {
      '+': 'BinOp',
@@ -182,7 +183,7 @@ class SymbolicExecution(object):
         for blk in self.blocks.itervalues():
             marked = set()
             for expr in blk.body:
-                if not expr.ref.uses and expr.kind not in MEMORY_OP:
+                if not expr.ref.uses and expr.kind not in SIDE_EFFECT:
                     marked.add(expr)
             for expr in marked:
                 blk.body.remove(expr)
@@ -232,6 +233,9 @@ class SymbolicExecution(object):
         return '\n'.join(buf)
 
     ### specialized visitors
+
+    def visit_POP_TOP(self, inst):
+        self.stack.pop()
 
     def visit_DUP_TOPX(self, inst):
         ct = inst.arg
