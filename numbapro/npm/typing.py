@@ -210,7 +210,7 @@ class Infer(object):
         self.globals = globals.copy()
         self.globals.update(vars(__builtin__))
         self.intp = ScalarType('i%d' % intp)
-        self.possible_types = scalar_set | set(self.argtys.itervalues())
+        self.possible_types = set(scalar_set | set(self.argtys.itervalues()))
         self.extended_globals = extended_globals
 
         self.callrules = {}
@@ -251,7 +251,7 @@ class Infer(object):
         conditions = defaultdict(list)
         for v, rs in self.rules.iteritems():
             if v not in self.phis:
-                tset = self.possible_types
+                tset = frozenset(self.possible_types)
                 for r in rs:
                     if r.require:
                         tset = set(filter(r, tset))
@@ -270,7 +270,7 @@ class Infer(object):
                 for phi, incs in self.phis.iteritems():
                     if phi not in possibles:
                         # default to all possible types
-                        possibles[phi] = self.possible_types
+                        possibles[phi] = frozenset(self.possible_types)
                     else:
                         old = possibles[phi]
                         tyset = possibles[phi]
@@ -394,9 +394,7 @@ class Infer(object):
                      complex:   complex128}
             self.rules[value].add(MustBe(tymap[type(obj)]))
         elif obj in self.extended_globals:
-            moretypes = self.extended_globals[obj](self.rules, value)
-            if moretypes:
-                self.possible_types |= set(moretypes)
+            self.extended_globals[obj](self, value)
         else:
             msg = "only support global value of int, float or complex"
             raise TypeInferError(value, msg)
@@ -564,9 +562,7 @@ class Infer(object):
             msg = "%s is not a regconized builtins"
             raise TypeInferError(value, msg % funcname)
         callrule = self.callrules[obj]
-        moretypes = callrule(self.rules, value)
-        if moretypes:
-            self.possible_types |= set(moretypes)
+        callrule(self, value)
 
     def visit_Unpack(self, value):
         obj = value.args.obj
@@ -624,7 +620,7 @@ def filter_array(ts):
 ###############################################################################
 # Rules for builtin functions
 
-def call_complex_rule(rules, call):
+def call_complex_rule(infer, call):
     def cond_to_float(value, call):
         return cast_penalty(value, call.complex_element)
 
@@ -635,20 +631,20 @@ def call_complex_rule(rules, call):
     nargs = len(args)
     if nargs == 1:
         (real,) = args
-        rules[real.value].add(Restrict(int_set|float_set))
-        rules[real.value].add(Conditional(cond_to_float, call))
+        infer.rules[real.value].add(Restrict(int_set|float_set))
+        infer.rules[real.value].add(Conditional(cond_to_float, call))
     elif nargs == 2:
         (real, imag) = args
-        rules[real.value].add(Restrict(int_set|float_set))
-        rules[imag.value].add(Restrict(int_set|float_set))
-        rules[real.value].add(Conditional(cond_to_float, call))
-        rules[imag.value].add(Conditional(cond_to_float, call))
+        infer.rules[real.value].add(Restrict(int_set|float_set))
+        infer.rules[imag.value].add(Restrict(int_set|float_set))
+        infer.rules[real.value].add(Conditional(cond_to_float, call))
+        infer.rules[imag.value].add(Conditional(cond_to_float, call))
     else:
         raise TypeInferError(call, "invalid use of complex(real[, imag])")
-    rules[call].add(Restrict(complex_set))
+    infer.rules[call].add(Restrict(complex_set))
     call.replace(func=complex)
 
-def call_int_rule(rules, call):
+def call_int_rule(infer, call):
     args = call.args.args
     kws = call.args.kws
     if kws:
@@ -656,13 +652,13 @@ def call_int_rule(rules, call):
     nargs = len(args)
     if nargs == 1:
         (num,) = args
-        rules[num.value].add(Restrict(int_set|float_set))
+        infer.rules[num.value].add(Restrict(int_set|float_set))
     else:
         raise TypeInferError(call, "invalid use of int(x)")
-    rules[call].add(Restrict(int_set))
+    infer.rules[call].add(Restrict(int_set))
     call.replace(func=int)
 
-def call_float_rule(rules, call):
+def call_float_rule(infer, call):
     args = call.args.args
     kws = call.args.kws
     if kws:
@@ -670,14 +666,14 @@ def call_float_rule(rules, call):
     nargs = len(args)
     if nargs == 1:
         (num,) = args
-        rules[num.value].add(Restrict(int_set|float_set))
+        infer.rules[num.value].add(Restrict(int_set|float_set))
     else:
         raise TypeInferError(call, "invalid use of float(x)")
-    rules[call].add(Restrict(float_set))
+    infer.rules[call].add(Restrict(float_set))
     call.replace(func=float)
 
 def call_maxmin_rule(fname):
-    def inner(rules, call):
+    def inner(infer, call):
         args = call.args.args
         kws = call.args.kws
         if kws:
@@ -690,17 +686,17 @@ def call_maxmin_rule(fname):
         argvals =[a.value for a in args]
 
         for a in argvals:
-            rules[a].add(Restrict(int_set|bool_set|float_set))
+            infer.rules[a].add(Restrict(int_set|bool_set|float_set))
 
         def rule(value, *tys):
             rty = coerce(*tys)
             return cast_penalty(rty, value)
-        rules[call].add(Conditional(rule, *argvals))
+        infer.rules[call].add(Conditional(rule, *argvals))
 
         call.replace(func={'min': min, 'max': max}[fname])
     return inner
 
-def call_abs_rule(rules, call):
+def call_abs_rule(infer, call):
     args = call.args.args
     kws = call.args.kws
     if kws:
@@ -710,12 +706,12 @@ def call_abs_rule(rules, call):
         raise TypeInferError(call, "abs(number) takes one argument only")
 
     arg = args[0].value
-    rules[arg].add(Restrict(signed_set|float_set))
+    infer.rules[arg].add(Restrict(signed_set|float_set))
 
     def prefer_same_as_arg(value, arg):
         return cast_penalty(value, arg)
 
-    rules[call].add(Conditional(prefer_same_as_arg, arg))
+    infer.rules[call].add(Conditional(prefer_same_as_arg, arg))
     call.replace(func=abs)
 
 BUILTIN_RULES = {

@@ -12,13 +12,13 @@ def cast_from_sregtype(value):
     return cast_penalty(ptx.SREG_TYPE, value)
 
 def rule_sreg(sreg_stub):
-    def _rule(rules, value):
-        rules[value].add(Conditional(cast_from_sregtype))
-        rules[value].add(Restrict(int_set))
+    def _rule(infer, value):
+        infer.rules[value].add(Conditional(cast_from_sregtype))
+        infer.rules[value].add(Restrict(int_set))
         value.replace(value=sreg_stub)
     return _rule
 
-def rule_grid_macro(rules, value):
+def rule_grid_macro(infer, value):
     args = value.args.args
     if len(args) != 1:
         raise CudaPyInferError(value, "grid() takes exactly 1 argument")
@@ -29,18 +29,19 @@ def rule_grid_macro(rules, value):
     if ndim not in [1, 2]:
         raise CudaPyInferError(value, "arg to grid() must be 1 or 2")
 
-    value.replace(func=ptx.grid)
     if ndim == 1:
-        rules[value].add(Conditional(cast_from_sregtype))
-        rules[value].add(Restrict(int_set))
-        return
+        infer.rules[value].add(Conditional(cast_from_sregtype))
+        infer.rules[value].add(Restrict(int_set))
     else:
         assert ndim == 2
         tuplety = tupletype(ptx.SREG_TYPE, 2)
         def ret_tuple(value):
              return value == tuplety
-        rules[value].add(Conditional(ret_tuple))
-        return [tuplety]
+        infer.rules[value].add(Conditional(ret_tuple))
+        infer.possible_types.add(tuplety)
+
+    value.replace(func=ptx.grid)
+
 #-------------------------------------------------------------------------------
 
 cudapy_global_typing_ext = {

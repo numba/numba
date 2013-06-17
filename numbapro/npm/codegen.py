@@ -351,7 +351,6 @@ class CodeGen(object):
 
     def expr_Call(self, expr):
         func = expr.args.func
-        assert callable(func)
         
         if func is complex:
             self.call_complex(expr)
