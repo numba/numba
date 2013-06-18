@@ -7,9 +7,9 @@
 <style>
 
 .block {
-width: 500px;
+/*width: 500px;
 margin: 0 auto;
-clear:left;
+clear:left;*/
 }
 
 .header {
@@ -54,6 +54,7 @@ padding-left: 10px;
 padding-right: 10px;
 padding-top: 5px;
 padding-bottom: 5px;
+white-space: pre;
 }
 
 .firstcode {
@@ -67,7 +68,8 @@ padding-bottom: 10px;
 .line {
 background-color: #666666;
 border:1px solid #666666;
-color: rgb(227, 206, 171);
+/*color: rgb(227, 206, 171);*/
+color: #ffffff;
 font-family: monospace;
 }
 
@@ -76,7 +78,7 @@ padding: 10px;
 }
 
 .type {
-color: rgb(204, 147, 147);
+/*color: rgb(204, 147, 147);*/
 }
 
 .python {
@@ -89,12 +91,34 @@ display: none;
 background-color: #999999;
 }
 
+.color0 {
+color: #ffffff;
+}
+
+.color1 {
+color: #ffffcc;
+}
+
+.color2 {
+color: #ffcc99;
+}
+
+.color3 {
+color: #ff9966;
+}
+
+.color4 {
+color: ff6666;
+}
+
 </style>
 
  <script>
 
 $(function() {
-$( document ).tooltip();
+    $( document ).tooltip({
+        track: true
+    });
 });
 
 $(document).ready(function() {
@@ -133,7 +157,7 @@ $(document).ready(function() {
 
 <table class="python-table">
     %for line in lines:
-    <tr class="id${line['num']} line python"><td class="linenum firstlinenum">${line['num']}</td><td class="code firstcode">${line['python_source']}</td></tr>
+    <tr class="id${line['num']} line python"><td class="linenum firstlinenum">${line['num']}</td><td class="code firstcode color${line['colorlevel']}" title="${line['types']}">${line['python_source']}</td></tr>
     <tr class="id${line['num']} line llvm"><td>&nbsp;</td><td class="code firstcode">${line['llvm_source']}</td></tr>
     %endfor
 </table>

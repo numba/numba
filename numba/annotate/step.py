@@ -36,7 +36,7 @@ class Template(object):
         """Initialize class"""
         super(Template, self).__init__()
         self.template = template
-        self.options = {"strip": True}
+        self.options = {"strip": False}
 
     def expand(self, namespace={}, **kw):
         """Return the expanded template string"""

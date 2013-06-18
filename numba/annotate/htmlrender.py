@@ -9,6 +9,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 import cgi
 import os
+import re
 from numba.lexing import lex_source
 from .annotate import format_annotations, groupdict, A_c_api
 from .step import Template
@@ -107,25 +108,38 @@ def render(program, emit=sys.stdout.write,
     with open(templatefile, 'r') as f:
         template = f.read()
 
-    html_codes = [('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;'),
-                  ('"', '&quot;'), ("'", '&#39;'), (' ', '&nbsp;')]
-
+    py_c_api = re.compile(u'(Py[A-Z][a-z]+_[A-Z][a-z][A-Za-z_]+)\(')
     data = {'lines': []}
 
     for num, python_source in sorted(program.python_source.linemap.items()):
-        for code in html_codes:
-            python_source = python_source.replace(code[0], code[1])
 
+        types = ''
+        if num in program.python_source.annotations.keys():
+            for a in program.python_source.annotations[num]:
+                if a.type == 'Types':
+                    name = a.value[0]
+                    type = a.value[1]
+                    types += '{0}:{1}, '.format(name, type)
+
+        python_calls = 0
         llvm_nums = program.intermediates[0].linenomap[num]
         llvm_source = ''
         for llvm_num in llvm_nums:
             source = program.intermediates[0].source.linemap[llvm_num]
-            for code in html_codes:
-                source = source.replace(code[0], code[1])
+            if re.search(py_c_api, source):
+                python_calls += 1
             llvm_source += source + '<br/>'
+
+        if python_calls > 4:
+            level = 4
+        else:
+            level = python_calls
+        
         data['lines'].append({'num':num,
                               'python_source':python_source,
-                              'llvm_source':llvm_source})
+                              'llvm_source':llvm_source,
+                              'colorlevel':level,
+                              'types':types})
 
     html = Template(template).expand(data)
 
