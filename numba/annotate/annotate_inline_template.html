@@ -117,7 +117,7 @@ color: ff6666;
 
 $(function() {
     $( document ).tooltip({
-        track: true
+        position: { my: "left", at: "center bottom+10" }
     });
 });
 
@@ -152,8 +152,6 @@ $(document).ready(function() {
 <body>
 
 <div class="block">
-
-<div class="meta">function call<br/>python file name</div>
 
 <table class="python-table">
     %for line in lines:
