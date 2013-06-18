@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import math
 from numba import *
-from numbapro.cudapipeline import nvvm
+from numbapro.cudadrv import nvvm
 from llvm.core import *
 import support
 #import logging; logging.getLogger().setLevel(1)

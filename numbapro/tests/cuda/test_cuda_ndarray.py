@@ -1,7 +1,7 @@
 import numpy as np
 import unittest 
-from numbapro.cudapipeline.driver import *
-from numbapro.cudapipeline import devicearray
+from numbapro.cudadrv.driver import *
+from numbapro.cudadrv import devicearray
 from numbapro import cuda
 from ctypes import *
 

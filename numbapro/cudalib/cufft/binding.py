@@ -3,7 +3,7 @@ import numpy as np
 from ctypes import *
 
 from numbapro.cudalib.libutils import Lib, ctype_function
-from numbapro.cudapipeline.driver import cu_stream, device_pointer
+from numbapro.cudadrv.driver import cu_stream, device_pointer
 from numbapro._utils import finalizer
 
 STATUS = {

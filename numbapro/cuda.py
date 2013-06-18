@@ -2,10 +2,10 @@ import contextlib
 import numpy as np
 
 from .cudapy.ptx import *
-from .cudapipeline import initialize as _initialize
-from .cudapipeline.driver import require_context
-from .cudapipeline import devicearray, driver
-from .cudapipeline.decorators import jit, autojit
+from .cudadrv import initialize as _initialize
+from .cudadrv.driver import require_context
+from .cudadrv import devicearray, driver
+from .cudadrv.decorators import jit, autojit
 
 # NDarray device helper
 @require_context

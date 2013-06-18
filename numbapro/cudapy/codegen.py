@@ -5,7 +5,7 @@ from llvm.core import Type, Constant, LINKAGE_EXTERNAL, LINKAGE_INTERNAL
 from numbapro.npm.types import *
 from numbapro.npm.errors import CompileError
 from . import ptx
-from numbapro.cudapipeline.nvvm import ADDRSPACE_SHARED
+from numbapro.cudadrv.nvvm import ADDRSPACE_SHARED
 
 
 class CudaPyCGError(CompileError):

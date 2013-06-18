@@ -22,16 +22,20 @@ from .stream import StreamVectorize, StreamASTVectorize
 GUFuncVectorize = GUVectorize
 GUFuncASTVectorize = GUVectorize
 
+CudaVectorize = BasicVectorize
+CUDAGUFuncVectorize = GUFuncVectorize
+CudaGUFuncASTVectorize = GUFuncVectorize
+CudaASTVectorize = BasicVectorize
 
-from numbapro.cudapipeline.error import CudaSupportError
-try:
-    from .cuda import  CudaASTVectorize, CudaGUFuncASTVectorize
-except CudaSupportError, e:
-    logging.warning("Cuda vectorizers not available, using fallbacks")
-    CudaVectorize = BasicVectorize
-    CUDAGUFuncVectorize = GUFuncVectorize
-    CudaGUFuncASTVectorize = GUFuncVectorize
-    CudaASTVectorize = BasicVectorize
+#from numbapro.cudadrv.error import CudaSupportError
+#try:
+#    from .cuda import  CudaASTVectorize, CudaGUFuncASTVectorize
+#except CudaSupportError, e:
+#    logging.warning("Cuda vectorizers not available, using fallbacks")
+#    CudaVectorize = BasicVectorize
+#    CUDAGUFuncVectorize = GUFuncVectorize
+#    CudaGUFuncASTVectorize = GUFuncVectorize
+#    CudaASTVectorize = BasicVectorize
 
 from .minivectorize import MiniVectorize, ParallelMiniVectorize
 

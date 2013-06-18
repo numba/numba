@@ -1,5 +1,5 @@
 import unittest
-from numbapro.cudapipeline.driver import *
+from numbapro.cudadrv.driver import *
 import support 
 ptx1 = '''
 	.version 1.4

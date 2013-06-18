@@ -1,6 +1,6 @@
 import numpy as np
 import unittest 
-from numbapro.cudapipeline.driver import *
+from numbapro.cudadrv.driver import *
 from numbapro import cuda
 from ctypes import *
 

@@ -1,7 +1,7 @@
 import numpy as np
 from ctypes import *
 
-from numbapro.cudapipeline.driver import cu_stream, device_pointer
+from numbapro.cudadrv.driver import cu_stream, device_pointer
 from numbapro.cudalib.libutils import Lib, ctype_function
 from numbapro._utils import finalizer
 

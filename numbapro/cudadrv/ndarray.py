@@ -1,7 +1,7 @@
 import sys
 import ctypes
 import numpy as np
-from numbapro.cudapipeline import driver
+from numbapro.cudadrv import driver
 from numbapro._utils import finalizer
 from numbapro.npm.execution import make_array_type
 

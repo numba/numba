@@ -104,7 +104,7 @@ class CPUComputeUnit(CU):
         # make
         module, wrapper = make_cpu_kernel_wrapper(lfunc)
         # fix pymodulo linkage
-        from numbapro.cudapipeline.environment import _hack_to_implement_pymodulo
+        from numbapro.cudadrv.environment import _hack_to_implement_pymodulo
         _hack_to_implement_pymodulo(module)
         # verify
         wrapper.module.verify()

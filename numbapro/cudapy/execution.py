@@ -1,7 +1,7 @@
 import copy
 from numbapro.npm.execution import (to_ctype, prepare_args, Complex64,
                                     Complex128, ArrayBase)
-from numbapro.cudapipeline import driver, devicearray
+from numbapro.cudadrv import driver, devicearray
 
 class CUDAKernel(object):
     '''A callable object representing a CUDA kernel.

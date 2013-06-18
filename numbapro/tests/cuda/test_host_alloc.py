@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from numbapro.cudapipeline import driver
+from numbapro.cudadrv import driver
 from numbapro import cuda
 import support
 class TestHostAlloc(support.CudaTestCase):

@@ -4,8 +4,8 @@ from numbapro.pipeline import numbapro_env
 def autojit(*args, **kwds):
     target = kwds.get('target')
     if target == 'gpu':
-        from numbapro.cudapipeline.environment import CudaEnvironment
-        from numbapro.cudapipeline.initialize import last_error
+        from numbapro.cudadrv.environment import CudaEnvironment
+        from numbapro.cudadrv.initialize import last_error
         if last_error is not None:
             raise last_error
         kwds.setdefault('env', CudaEnvironment.get_environment('numbapro.cuda'))
@@ -16,8 +16,8 @@ def autojit(*args, **kwds):
 def jit(*args, **kwds):
     target = kwds.get('target')
     if target == 'gpu':
-        from numbapro.cudapipeline.environment import CudaEnvironment
-        from numbapro.cudapipeline.initialize import last_error
+        from numbapro.cudadrv.environment import CudaEnvironment
+        from numbapro.cudadrv.initialize import last_error
         if last_error is not None:
             raise last_error
         kwds.setdefault('env', CudaEnvironment.get_environment('numbapro.cuda'))

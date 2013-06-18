@@ -1,7 +1,7 @@
 import unittest
 import ctypes
 import numpy
-from numbapro.cudapipeline import driver
+from numbapro.cudadrv import driver
 
 class TestCudaMemory(unittest.TestCase):
     def setUp(self):

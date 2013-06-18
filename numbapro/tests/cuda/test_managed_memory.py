@@ -1,6 +1,6 @@
 import unittest
-from numbapro.cudapipeline.ndarray import SmallMemoryManager
-from numbapro.cudapipeline import driver
+from numbapro.cudadrv.ndarray import SmallMemoryManager
+from numbapro.cudadrv import driver
 
 class TestManagedMemory(unittest.TestCase):
     def test_smallmemorymanager(self):

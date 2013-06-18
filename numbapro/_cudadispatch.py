@@ -3,8 +3,8 @@
 from llvm import core as _lc
 import numpy as np
 from ctypes import *
-from numbapro.cudapipeline import driver as _cuda
-from numbapro.cudapipeline import devicearray
+from numbapro.cudadrv import driver as _cuda
+from numbapro.cudadrv import devicearray
 from numbapro import cuda
 import math
 import re

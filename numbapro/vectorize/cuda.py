@@ -6,8 +6,8 @@ from numba import llvm_types, void
 from . import _common
 from numba.minivect import minitypes
 
-from numbapro.cudapipeline.error import CudaSupportError, CudaDriverError
-from numbapro.cudapipeline.decorators import CudaNumbaFunction
+from numbapro.cudadrv.error import CudaSupportError, CudaDriverError
+from numbapro.cudadrv.decorators import CudaNumbaFunction
 from numbapro import cuda
 from numbapro.vectorize.gufunc import PyArray
 

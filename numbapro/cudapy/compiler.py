@@ -4,7 +4,7 @@ from numbapro.npm import symbolic, typing, codegen, execution
 from numbapro.npm.compiler import get_func_name
 from numbapro.npm.execution import (to_ctype, prepare_args, Complex64,
                                     Complex128, ArrayBase)
-from numbapro.cudapipeline import nvvm, driver, devicearray
+from numbapro.cudadrv import nvvm, driver, devicearray
 from .execution import CUDAKernel
 from .typing import cudapy_global_typing_ext, cudapy_call_typing_ext
 from .codegen import cudapy_global_codegen_ext, cudapy_call_codegen_ext
