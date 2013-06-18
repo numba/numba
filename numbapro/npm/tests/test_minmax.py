@@ -65,7 +65,7 @@ def test_min3_integer():
     assert got == exp, (got, exp)
 
 @testcase
-def test_min2_float():
+def test_min3_float():
     compiled = compile(min2, float32, [float32, float32, float32])
     a, b, c = 32.1, 12.3, 2091.
     got = compiled(a, b, c)
@@ -84,7 +84,7 @@ def test_max3_integer():
     assert got == exp, (got, exp)
 
 @testcase
-def test_max2_float():
+def test_max3_float():
     compiled = compile(max3, float32, [float32, float32, float32])
     a, b, c = 32.1, 12.3, 2091.
     got = compiled(a, b, c)

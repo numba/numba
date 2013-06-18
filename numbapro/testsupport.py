@@ -6,12 +6,24 @@ class TestSupport(object):
         self.basefile = basefile
         self.tests = {}
 
-    def testcase(self, func):
+    def testcase(self, func, **kws):
         '''Create simple test case from a function and uses the docstring
         as the description of the test.
         '''
         testcase = unittest.FunctionTestCase(func, description=func.__doc__)
+        assert func.__name__ not in self.tests
         self.tests[func.__name__] = testcase
+        return testcase
+
+    def addtest(self, testcase):
+        assert testcase.__name__ not in self.tests
+        if hasattr(testcase, 'runTest'):
+            self.tests[testcase.__name__] = testcase()
+        else:
+            for meth in dir(testcase):
+                if meth.startswith('test'):
+                    fullname = '%s.%s' % (testcase.__name__, meth)
+                    self.tests[fullname] = testcase(meth)
         return testcase
 
     def get_test_suite(self):
@@ -74,5 +86,6 @@ def set_base(globals):
     basefile = globals['__file__']
     testsupport = TestSupport(basefile)
     globals['testcase'] = testsupport.testcase
+    globals['addtest'] = testsupport.addtest
     globals['run'] = testsupport.run
     globals['main'] = testsupport.main
