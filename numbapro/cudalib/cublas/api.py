@@ -69,6 +69,11 @@ def _auto_l2_functions(fname, tnames, argfmt, extras):
     def _dispatch(self, *args, **kws):
         prepare_args(args, kws)
         dtype = kws[devargs[0]].dtype
+        for i, darg in enumerate(devargs[1:]):
+            got = kws[darg].dtype
+            if got != dtype:
+                msg = "%dth array dtype mismatch: got %s but expect %s"
+                raise TypeError(msg % (i + 1, got, dtype))
         typecode = dtypemap[dtype]
         assert typecode in tnames
         fn = getattr(self._cublas, '%s%s' % (typecode, fname))
@@ -78,6 +83,9 @@ def _auto_l2_functions(fname, tnames, argfmt, extras):
             dmem.to_host(stream=self.stream)
         return res
 
+    # changes how user see this function through help()
+    _dispatch.__name__ = fname
+    _dispatch.__doc__ = "%s(%s)" % (fname, argfmt)
     return _dispatch
 
 class Blas(object):
