@@ -48,6 +48,7 @@ BINARYOP_MAP = {
      '&': 'BinOp',
      '|': 'BinOp',
      '^': 'BinOp',
+'ForInit': 'BinOp',
 }
 
 BOOLOP_MAP = {
@@ -118,10 +119,10 @@ class SymbolicExecution(object):
         for i, arg in enumerate(argspec.args):
             value = Expr('Arg', None, Arg(num=i, name=arg))
             self.curblock.varmap[arg].append(self.insert(value))
-        for var in self.varnames:
-            if var not in self.curblock.varmap:
-                undef = Expr('Undef', None)
-                self.curblock.varmap[var].append(self.insert(undef))
+#        for var in self.varnames:
+#            if var not in self.curblock.varmap:
+#                undef = Expr('Undef', None)
+#                self.curblock.varmap[var].append(self.insert(undef))
 
     def visit(self):
         for inst in self.bytecode:
@@ -152,32 +153,69 @@ class SymbolicExecution(object):
         assert not self.stack, self.stack
         self.complete_for()
         self.strip_dead_block()
+        self.doms = find_dominators(self.blocks)
+        self.idoms = find_immediate_dominator(self.blocks, self.doms)
         self.complete_phi_nodes()
         self.strip_unused()
     
 
     def strip_dead_block(self):
+        removed = set()
         for blk in list(self.blocks.itervalues()):
             if blk.offset != 0 and not blk.incomings:
+                removed.add(blk.offset)
                 del self.blocks[blk.offset]
+
+        for blk in self.blocks.itervalues():
+            blk.incomings -= removed
 
     def complete_for(self):
         for pf in self.pending_for:
             prev = self.blocks[pf.prev]
             step = pf.iter.step or prev.insert(Expr('Const', None, Const(1)))
             start = pf.iter.start or prev.insert(Expr('Const', None, Const(0)))
-            start = prev.insert(Expr('-', None, BinOp(lhs=start, rhs=step)))
+            start = prev.insert(Expr('ForInit', None, BinOp(lhs=start, rhs=step)))
             prev.varmap[pf.itername].append(start)
 
     def complete_phi_nodes(self):
-        for blk in self.blocks.itervalues():
-            for next in map(self.blocks.get, blk.edges):
-                for name, defs in blk.varmap.iteritems():
-                    # 1st var def of non-entry must be phi
-                    phi = next.varmap[name][0].value
-                    val = defs[-1]
-                    phi.args[1].add((blk.offset, val))
-                    update_uses(phi.ref, [val])
+        changed = True
+        while changed:
+            changed = False
+            for blk in self.blocks.itervalues():
+                for val in blk.body:
+                    if val.kind == 'Phi' and len(val.args.incomings) != len(blk.incomings):
+                        phi = val
+                        for inblkoff in blk.incomings:
+                            inblk = self.blocks[inblkoff]
+                            lastdefs = inblk.varmap[phi.args.name]
+                            if lastdefs:
+                                lastval = lastdefs[-1]
+                            else:
+                                # find the closest definition
+                                lastval = self.find_def(inblkoff, phi.args.name)
+                                if not lastval:
+                                    raise TranslateError(val, "variable %s can be undef" % phi.args.name)
+                                changed = True
+                            phi.args.incomings.add((inblkoff, lastval))
+                            if lastval:
+                                update_uses(phi.ref, [lastval])
+                    else:
+                        break
+
+    def find_def(self, blkoff, name):
+        '''Find variable definition in the IDOM of a block
+        '''
+        if blkoff == 0: return
+        idomoff = self.idoms[blkoff]
+        idomblk = self.blocks[idomoff]
+        if not idomblk.varmap[name]:
+            res = self.find_def(idomoff, name)
+        else:
+            res = idomblk.varmap[name][-1]
+        if res:
+            blk = self.blocks[blkoff]
+            phi = blk.get_last_def(name)
+            return phi
 
     def strip_unused(self):
         for blk in self.blocks.itervalues():
@@ -187,6 +225,7 @@ class SymbolicExecution(object):
                     marked.add(expr)
             for expr in marked:
                 blk.body.remove(expr)
+
 
     def generic_visit(self, inst):
         raise TranslateError(inst, "unsupported bytecode %s" % inst)
@@ -200,10 +239,10 @@ class SymbolicExecution(object):
             oldblock.terminator = Term('Jump', None, Jump(self.curblock.offset))
             oldblock.connect(self.curblock)
 
-        for name in self.varnames:
-            phi = self.insert(Expr('Phi', None,
-                              Phi(name=name, incomings=set())))
-            self.curblock.varmap[name].append(phi)
+#        for name in self.varnames:
+#            phi = self.insert(Expr('Phi', None,
+#                              Phi(name=name, incomings=set())))
+#            self.curblock.varmap[name].append(phi)
 
     def insert(self, expr):
         return self.curblock.insert(expr)
@@ -274,10 +313,10 @@ class SymbolicExecution(object):
 
     def visit_LOAD_FAST(self, inst):
         name = self.varnames[inst.arg]
-        defs = self.curblock.varmap[name]
-        if defs[-1].value.kind == 'Undef':
-            raise TranslateError(inst, 'variable %s is not defined' % name)
-        self.push(defs[-1])
+        defn = self.curblock.get_last_def(name)
+#        if defs[-1].value.kind == 'Undef':
+#            raise TranslateError(inst, 'variable %s is not defined' % name)
+        self.push(defn)
 
     def visit_CALL_FUNCTION(self, inst):
         argc = inst.arg & 0xff
@@ -331,7 +370,7 @@ class SymbolicExecution(object):
         itername = self.varnames[storefast.arg]
 
         step = iter.step or self.insert(Expr('Const', inst, Const(value=1)))
-        index0 = self.curblock.varmap[itername][-1]
+        index0 = self.curblock.get_last_def(itername) # varmap[itername][-1]
         index = self.insert(Expr('+', inst, BinOp(lhs=index0, rhs=step)))
         self.curblock.varmap[itername].append(index)
 
@@ -581,6 +620,13 @@ class Block(object):
         self.body.append(value)
         return Ref(self.valuemap, value)
 
+    def get_last_def(self, name):
+        if not self.varmap[name]:
+            phi = Expr('Phi', None, Phi(name, set()))
+            self.body.insert(0, phi)
+            self.varmap[name].append(Ref(self.valuemap, phi))
+        return self.varmap[name][-1]
+
     def dump(self):
         indent = ' ' * 4
         buf = []
@@ -680,7 +726,8 @@ def find_immediate_dominator(blocks, doms):
             dist = [(block_hop(blocks, blk, blocks[dom]), dom)
                     for dom in doms[blk.offset]
                     if dom is not blk.offset]
-            idoms[blk.offset] = min(dist)[1]
+            if dist:
+                idoms[blk.offset] = min(dist)[1]
     return idoms
 
 def find_dominator_frontiers(blocks, doms, idoms):

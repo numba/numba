@@ -2,7 +2,7 @@ import __builtin__
 import itertools, inspect
 from pprint import pprint
 from collections import namedtuple, defaultdict, deque, Set, Mapping
-from .symbolic import OP_MAP
+from .symbolic import OP_MAP, find_dominators
 from .utils import cache
 from .errors import CompileError
 
@@ -249,7 +249,7 @@ class Infer(object):
             if blk.terminator.kind == 'Ret':
                 self.visit_Ret(blk.terminator)
 
-        self.propagate_rules()
+#        self.propagate_rules()
         possibles, conditions = self.deduce_possible_types()
         return self.find_solutions(possibles, conditions)
 
@@ -283,98 +283,100 @@ class Infer(object):
         return possibles, conditions
 
     def find_solutions(self, possibles, conditions):
-        # TODO: this function can use some refactoring
-        # propagate phis
-        def propagate_phis(possibles):
-            changed = True
-            while changed:
-                changed = False
-                for phi, incs in self.phis.iteritems():
-                    if phi not in possibles:
-                        # default to all possible types
-                        possibles[phi] = frozenset(self.possible_types)
-                    else:
-                        old = possibles[phi]
-                        tyset = possibles[phi]
-                        for i in incs:
-                            if i in possibles:
-                                orig = tyset
-                                tyset &= possibles[i]
-                                assert tyset, (orig, possibles[i])
-                        if tyset != old:
-                            possibles[phi] = tyset
-                            changed = True
-
-        def iterate():
-            for blk in self.blocks.itervalues():
-                for v in blk.body:
-                    yield v
-
-        def find_good_solutions(clist, deps, deptysets):
-            for tys in itertools.product(*deptysets):
-                depmap = dict(zip(deps, tys))
-
-                penalty = 0
-                for cond in clist:
-                    args = [depmap[val]]
-                    for dep in cond.deps:
-                        args.append(depmap[dep])
-                    score = cond(*args)
-                    if not score:
-                        break
-                    else:
-                        penalty += score
+        '''
+        IDom dictates the type of values when they participate in a PHI.
+        '''
+        # find dominators
+        doms = find_dominators(self.blocks)
+        # topsort
+        def topsort_blocks(doms):
+            # make copy of doms
+            doms = dict((k, set(v)) for k, v in doms.iteritems())
+            topsorted = []
+            pending = deque(self.blocks.keys())
+            while pending:
+                tos = pending.popleft()
+                domset = doms[tos]
+                domset.discard(tos)
+                for x in list(domset):
+                    if x in topsorted:
+                        domset.remove(x)
+                if not domset:
+                    topsorted.append(tos)
                 else:
-                    yield (penalty, tys)
+                    pending.append(tos)
+            return topsorted
 
-        def build_depsets(clist, val, conditions):
-            depset = set([val])
-            for cond in clist:
-                for dep in cond.deps:
-                    depset.add(dep)
-            deps = list(depset)
-            deptysets = [possibles[d] for d in deps]
-            return deps, deptysets
+        topsorted = topsort_blocks(doms)
 
-        propagate_phis(possibles)
-        
-        changed = True
-        while changed:
-            changed = False
+        # infer block by block
+        processed_blocks = set()
+        for blknum in topsorted:
+            blk = self.blocks[blknum]
+            values = []
+            for value in blk.body:
+                if value.kind == 'Phi':
+                    # pickup the type from the previously inferred set
+                    for ib, iv in value.args.incomings:
+                        if ib in processed_blocks:
+                            possibles[value] = possibles[iv.value]
+                            break
+                elif value.ref.uses:
+                    # only process the values that are used.
+                    depset = set([value])
+                    clist = conditions[value]
+                    for cond in clist:
+                        depset |= set(cond.deps)
 
-            for val in iterate():
-                if val not in conditions: continue
-                clist = conditions[val]
-                deps, deptysets = build_depsets(clist, val, conditions)
-                good = list(sorted(find_good_solutions(clist, deps, deptysets)))
-                if not good:
-                    raise TypeInferError(val, "cannot infer type")
-                threshold = good[0][0]
-                best = itertools.takewhile(lambda x: x[0] == threshold, good)
+                    variables = list(depset)
+                    # earlier instruction has more heavier weight
+                    pool = []
+                    for v in variables:
+                        pool.append(possibles.get(v, self.possible_types))
 
-                resmap = defaultdict(set)
-                for _score, tys in best:
-                    for v, t in zip(deps, tys):
-                        resmap[v].add(t)
+                    chosen = []
+                    for selected in itertools.product(*pool):
+                        localmap = dict(zip(variables, selected))
+                        penalty = 1
+                        for cond in clist:
+                            deps = [value] + list(cond.deps)
+                            args = [localmap[x] for x in deps]
+                            res = cond(*args)
+                            if res and isinstance(res, int):
+                                penalty += res
+                            else:
+                                break
+                        else:
+                            if penalty:
+                                chosen.append((penalty, localmap))
 
-                for v, ts in resmap.iteritems():
-                    if not ts:
-                        raise TypeInferError(v, "typeset is empty")
-                    elif possibles[v] != ts:
-                        changed = True
-                        possibles[v] &= ts
+                    chosen_sorted = sorted(chosen)
+                    best_score = chosen_sorted[0][0]
+                    take_filter = lambda x: x[0] == best_score
+                    filterout = itertools.takewhile(take_filter, chosen_sorted)
+                    bests = [x for _, x in filterout]
 
-                propagate_phis(possibles)
 
-        # pick the most generic type if the final type set has multiple types
-        soln = {}
+                    if len(bests) > 1:
+                        # find the most generic solution
+                        temp = defaultdict(set)
+                        for b in bests:
+                            for v, t in b.iteritems():
+                                temp[v].add(t)
+                        soln = {}
+                        for v, ts in temp.iteritems():
+                            soln[v] = coerce(*ts)
 
-        for v, ts in possibles.iteritems():
-            r = coerce(*ts)
-            if not r:
-                msg = "cannot determine type: possible %s"
-                raise TypeInferError(v, msg % list(ts))
-            soln[v] = r
+                    elif len(bests) == 1:
+                        soln = bests[0]
+                    else:
+                        raise TypeInferError(value, "cannot infer value/operation not supported on input types")
+                    for k, v in soln.iteritems():
+                        possibles[k] = frozenset([v])
+            processed_blocks.add(blknum)
+
+        soln = dict((k, iter(vs).next()) for k, vs in possibles.iteritems())
+        pprint(soln)
         return soln
 
     def visit(self, value):
@@ -408,7 +410,11 @@ class Infer(object):
     def visit_Global(self, value):
         gname = value.args.name
         parts = gname.split('.')
-        obj = self.globals[parts[0]]
+        key = parts[0]
+        try:
+            obj = self.globals[key]
+        except KeyError:
+            raise TypeInferError(value, "global %s is not defined" % key)
         for part in parts[1:]:
             obj = getattr(obj, part)
 
@@ -481,7 +487,22 @@ class Infer(object):
             self.rules[value].add(Restrict(int_set))
             self.rules[lhs].add(Restrict(int_set))
             self.rules[rhs].add(Restrict(int_set))
+
+        elif value.kind == 'ForInit':
+            value.kind = '-'
+
+            self.rules[value].add(MustBe(self.intp))
+
+            def rule(value):
+                return cast_penalty(value, self.intp)
+
+            self.rules[lhs].add(Conditional(rule))
+            self.rules[rhs].add(Conditional(rule))
+            self.rules[lhs].add(Restrict(int_set))
+            self.rules[rhs].add(Restrict(int_set))
+
         else:
+            assert value.kind in '+-*%'
             
             def rule(value, lhs, rhs):
                 return cast_penalty(coerce(lhs, rhs), value)

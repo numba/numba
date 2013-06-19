@@ -53,7 +53,7 @@ def cg_grid_macro(cg, value):
         cg.valmap[value] = tidx, tidy
 
 def cg_syncthreads(cg, value):
-    assert value not in cg.typemap, "syncthread() should not no return type"
+    assert value not in cg.typemap, "syncthread() should have no return type"
     assert not value.args.args, "syncthread() takes no argument"
     fname = 'llvm.nvvm.barrier0'
     fnty = Type.function(Type.void(), ())
