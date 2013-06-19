@@ -312,7 +312,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                    self.llvm_module,
                                                    "PyBool_FromLong",
                                                    args=[node.node])
-        elif node_type.is_numeric:
+        elif node_type.is_numeric and node_type.typename not in ('char', 'uchar'):
             cls = None
             args = node.node,
             if node_type.is_int:

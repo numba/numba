@@ -19,7 +19,7 @@ class ObjectCoercer(object):
     # TODO: do all of this in a specializer
 
     type_to_buildvalue_str = {
-        char: "b",
+        char: "c",
         short: "h",
         int_: "i",
         long_: "l",
