@@ -769,7 +769,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         self.builder.position_at_end(node.cond_block.exit_block)
         # assert not self.is_block_terminated()
         self.builder.cbranch(test, bb_true, bb_false)
-        self.builder.position_at_end(node.exit_block.exit_block)
+
+        ### Gross hack, remove unparented basic blocks for which we track
+        ### no incoming phi
+        if (not node.exit_block.parents and node.exit_block.id >= 0 and
+                node.exit_block.exit_block):
+            node.exit_block.exit_block.delete()
+        else:
+            self.builder.position_at_end(node.exit_block.exit_block)
 
         # Swallow statements following the branch
         node.exit_block.exit_block = None

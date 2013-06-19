@@ -168,7 +168,7 @@ class _NumbaType(Type):
         a 2D strided array of doubles. The syntax is the same as for
         Cython memoryviews.
         """
-        assert isinstance(item, (tuple, slice))
+        assert isinstance(item, (tuple, slice)), item
 
         def verify_slice(s):
             if s.start or s.stop or s.step not in (None, 1):

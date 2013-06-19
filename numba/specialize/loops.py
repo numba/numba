@@ -119,8 +119,8 @@ class TransformForIterable(visitors.NumbaTransformer):
                 {{temp}} = 0
                 while {{temp_load}} < {{nsteps_load}}:
                     {{target}} = {{start}} + {{temp_load}} * {{step}}
-                    {{body}}
                     {{temp}} = {{temp_load}} + 1
+                    {{body}}
                 %s
             """) % (textwrap.dedent(compute_nsteps), else_clause)
 
@@ -150,13 +150,6 @@ class TransformForIterable(visitors.NumbaTransformer):
         while_node = result.body[-1]
         assert isinstance(while_node, ast.While)
 
-        target_increment = while_node.body[-1]
-        assert isinstance(target_increment, ast.Assign)
-
-        # Add target variable increment basic block
-        node.incr_block.body = [target_increment]
-        while_node.body[-1] = node.incr_block
-
         #--------------------------------------------------------------------
         # Create a While with the ForNode's cfg blocks merged in
         #--------------------------------------------------------------------
@@ -166,7 +159,7 @@ class TransformForIterable(visitors.NumbaTransformer):
         while_node = nodes.build_while(**vars(while_node))
 
         # Create the place to jump to for 'continue'
-        while_node.continue_block = node.incr_block
+        while_node.continue_block = node.cond_block
 
         # Set the new while loop in the templated Suite
         result.body[-1] = while_node
