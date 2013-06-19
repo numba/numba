@@ -4,10 +4,11 @@ from .support import testcase, main, run
 from numbapro import cuda
 from numbapro import cudapy
 from numbapro.npm.types import *
+import numbapro
 
 N = 100
 def simple_smem(ary):
-    sm = cuda.shared.array(N, np.int32)
+    sm = cuda.shared.array(N, numbapro.int32)
     i = cuda.grid(1)
     if i == 0:
         for j in range(N):
@@ -19,7 +20,7 @@ S0 = 10
 S1 = 20
 def coop_smem2d(ary):
     i, j = cuda.grid(2)
-    sm = cuda.shared.array((S0, S1), np.float32)
+    sm = cuda.shared.array((S0, S1), numbapro.float32)
     sm[i, j] = (i + 1) / (j + 1)
     cuda.syncthreads()
     ary[i, j] = sm[i, j]

@@ -5,7 +5,7 @@ from numbapro.npm.typing import (cast_penalty, Restrict, UserType, MustBe,
                                  filter_array)
 from numbapro.npm.errors import CompileError
 from . import ptx
-from .utils import extract_shape_arg
+import numbapro
 
 class CudaPyInferError(CompileError):
     def __init__(self, value, msg):
@@ -67,6 +67,9 @@ NP_DTYPE_MAP = {
     np.dtype(np.complex128): complex128,
 }
 
+def rule_numba_type(infer, value, obj):
+    value.replace(value=obj.get_dtype())
+
 def rule_shared_array(infer, value):
     nargs = len(value.args.args)
     if nargs != 2:
@@ -75,6 +78,7 @@ def rule_shared_array(infer, value):
     shape_argref, dtype_argref = value.args.args
 
     shape = extract_shape_arg(shape_argref)
+    value.args.args[0] = shape # normalize
 
     dtype_arg = dtype_argref.value
     if dtype_arg.kind != 'Global':
@@ -92,6 +96,28 @@ def rule_shared_array(infer, value):
     infer.possible_types.add(arytype)
 
     value.replace(func=ptx.shared.array)
+
+
+#-------------------------------------------------------------------------------
+
+def extract_shape_arg(shape_argref):
+    if not isinstance(shape_argref, tuple):
+        assert shape_argref.value.kind == 'Const'
+        if isinstance(shape_argref.value.args.value, tuple):
+            shape = shape_argref.value.args.value
+            assert all(isinstance(x, int) for x in shape)
+            return shape
+
+        shape_argref = (shape_argref,)
+
+
+    shape_args = tuple(x.value for x in shape_argref)
+    for sarg in shape_args:
+        if sarg.kind != 'Const':
+            msg = "shape must be a constant"
+            raise CudaPyInferError(sarg, msg)
+    shape = tuple(x.args.value for x in shape_args)
+    return shape
 
 #-------------------------------------------------------------------------------
 
@@ -125,6 +151,21 @@ npy_dtype_ext = {
     np.complex128: rule_np_dtype,
 }
 
+numba_type_ext = {
+    numbapro.int8:          rule_numba_type,
+    numbapro.int16:         rule_numba_type,
+    numbapro.int32:         rule_numba_type,
+    numbapro.int64:         rule_numba_type,
+    numbapro.uint8:         rule_numba_type,
+    numbapro.uint16:        rule_numba_type,
+    numbapro.uint32:        rule_numba_type,
+    numbapro.uint64:        rule_numba_type,
+    numbapro.float32:       rule_numba_type,
+    numbapro.float64:       rule_numba_type,
+    numbapro.complex64:     rule_numba_type,
+    numbapro.complex128:    rule_numba_type,
+}
+
 cudapy_call_typing_ext = {
     # grid:
     ptx.grid:           rule_grid_macro,
@@ -135,4 +176,7 @@ cudapy_call_typing_ext = {
 }
 
 cudapy_global_typing_ext.update(npy_dtype_ext)
+cudapy_global_typing_ext.update(numba_type_ext)
+
+
 

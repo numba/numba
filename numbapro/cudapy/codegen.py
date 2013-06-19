@@ -5,8 +5,8 @@ from llvm.core import Type, Constant, LINKAGE_EXTERNAL, LINKAGE_INTERNAL
 from numbapro.npm.types import *
 from numbapro.npm.errors import CompileError
 from . import ptx
-from .utils import extract_shape_arg
 from numbapro.cudadrv.nvvm import ADDRSPACE_SHARED
+import numbapro
 
 
 class CudaPyCGError(CompileError):
@@ -70,9 +70,7 @@ def cg_shared_array(cg, value):
     arytype = cg.typemap[value]
     elemtype = arytype.element
 
-    shape_argref, dtype_argref = args
-    shape = extract_shape_arg(shape_argref)
-    #dtype_arg = dtype_argref.value
+    shape, _dtype = args
 
     size = reduce(operator.mul, shape)
 
