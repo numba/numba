@@ -5,6 +5,7 @@ from numbapro.npm.typing import (cast_penalty, Restrict, UserType, MustBe,
                                  filter_array)
 from numbapro.npm.errors import CompileError
 from . import ptx
+from .utils import extract_shape_arg
 
 class CudaPyInferError(CompileError):
     def __init__(self, value, msg):
@@ -67,23 +68,18 @@ NP_DTYPE_MAP = {
 }
 
 def rule_shared_array(infer, value):
-    args = map(lambda x: x.value, value.args.args)
-    if len(args) != 2:
+    nargs = len(value.args.args)
+    if nargs != 2:
         msg = "cuda.shared.array() takes eactly two arguments"
         raise CudaPyInferError(value, msg)
-    shape_arg, dtype_arg = args
-    if shape_arg.kind != 'Const':
-        msg = "shape must be a constant"
-        raise CudaPyInferError(shape_arg, msg)
+    shape_argref, dtype_argref = value.args.args
+
+    shape = extract_shape_arg(shape_argref)
+
+    dtype_arg = dtype_argref.value
     if dtype_arg.kind != 'Global':
         msg = "dtype must be a global constant"
         raise CudaPyInferError(dtype_arg, msg)
-
-    shape_value = shape_arg.args.value
-    if isinstance(shape_value, tuple):
-        shape = shape_value
-    else:
-        shape = (shape_value,)
 
     dtype = dtype_arg.args.value
 

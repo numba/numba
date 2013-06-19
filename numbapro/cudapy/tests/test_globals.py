@@ -15,10 +15,11 @@ def simple_smem(ary):
     cuda.syncthreads()
     ary[i] = sm[i]
 
-S = (10, 20)
+S0 = 10
+S1 = 20
 def coop_smem2d(ary):
     i, j = cuda.grid(2)
-    sm = cuda.shared.array(S, np.float32)
+    sm = cuda.shared.array((S0, S1), np.float32)
     sm[i, j] = (i + 1) / (j + 1)
     cuda.syncthreads()
     ary[i, j] = sm[i, j]
