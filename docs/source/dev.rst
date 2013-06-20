@@ -61,14 +61,16 @@ The main stages are:
             for i in range(N):  # phi in condition block: x_1 = phi(x_0, x_2)
                 x = x + i # loop-carried dependency
 
-
+        The phi nodes are themselves variable definitions, and they define
+        the points where variables merge and need a unifyable type (e.g.
+        (int, int), or (int, float), as opposed to (int, string)).
 
     * Type inference: ``numba.type_inference``
 
         Infer types of all expressions, and fix the types of all local
         variables. This operates in two stages:
 
-            * Infer types for all local variable definitions
+            * Infer types for all local variable definitions (including phis)
 
                 For an overview of this see :ref:`dependence` below.
 
@@ -78,7 +80,7 @@ The main stages are:
 
         | When the type inferencer cannot determine a type, such as when it
         | calls a Python function or method that is not a Numba function, it
-        | assumes type object. Object variables may be coerced to and from
+        | assumes type ``object``. Object variables may be coerced to and from
         | most native types.
 
         | The type inferencer and other code insert CoercionNode nodes that
@@ -98,7 +100,10 @@ The main stages are:
 
             https://github.com/numba/numba/tree/devel/numba/type_inference/modules
 
-    * Specialization/Lowering
+        | This above sub-package is an important part of numba that
+        | infers (and sometimes grossly rewrites) calls to known functions.
+
+    * Specialization/Lowering: numba/specialize and numba/transforms.py
 
         What follows over the typed code are a series of transformations to
         lower the level of the code into something low-level - something
@@ -114,7 +119,7 @@ The main stages are:
               ``Py_BuildValue``/``PyArg_ParseTuple``.
             * Lower exception code into calls into the C-API and insert
               NULL pointer checks in places
-            * Normalize comparisons
+            * Normalize comparisons (e.g. ``a < b < c`` => ``a < b and b < c``)
             * Keep track of refcounts. This is mostly done with
               ObjectTempNode, which hold a temporary for an object (a new
               reference). These temporaries are decreffed at cleanup:
@@ -145,7 +150,7 @@ The main stages are:
                   ret %result                       ; return result
                 }
 
-    * Code generation
+    * Code generation: numba/codegen
 
         Generate LLVM code from the transformed AST. This is relatively
         straightforward at this point. One tricky problem is that the basic
@@ -153,80 +158,9 @@ The main stages are:
         of the CFG, since error checks have been inserted. This makes
         tracking phis harder than it should be.
 
-.. _dependence:
-
-Type Dependence Graph Construction
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-From the SSA graph we compute a type graph by inferring all variable
-assignments. This graph often has cycles, due to the back-edge in
-the CFG for loops. For instance we may have the following code::
-
-    x = 0
-    for i in range(10):
-        x = f(x)
-
-    y = x
-
-Where ``f`` is an external autojit function (i.e., it's output type depends
-on it's dynamic input type).
-
-We get the following type graph:
-
-.. digraph:: typegraph
-
-    x_0 -> int
-
-    x_1 -> x_0
-    x_1 -> x_2
-    x_2 -> f
-    f -> x_1
-
-    y_0 -> x_1
-
-    i_0 -> range
-    range -> int
-
-Below we show the correspondence of the SSA variable definitions to their
-basic blocks:
-
-.. digraph:: cfg
-
-    "entry: [ x_0, i_0 ]" -> "condition: [ x_1 ]" -> "body: [ x_2 ]"
-    "body: [ x_2 ]" -> "condition: [ x_1 ]"
-    "condition: [ x_1 ]" -> "exit: [ y_2 ]"
-
-.. entry -> x_0
-.. entry -> i_0
-.. condition -> x_1
-.. body -> x_2
-.. exit -> y_2
-
-Our goal is to resolve this type graph in topological order, such that
-we know the type for each variable definition (``x_0``, ``x_1``, etc).
-
-In order to do a topological sort, we compute the condensation graph
-by finding the strongly connected components and condensing them
-into single graph nodes. The resulting graph looks like this:
-
-.. digraph:: typegraph
-
-    x_0 -> int
-    SCC0 -> x_0
-    y_0 -> SCC0
-
-    i_0 -> range
-    range -> int
-
-And ``SCC0`` contains the cycle in the type graph. We now have a
-well-defined preorder for which we can process each node in topological
-order on the transpose graph, doing the following:
-
-    * If the node represents a concrete type, propagate result along edge
-    * If the node represents a function over an argument of the given input types,
-      infer the result type of this function
-    * For each SCC, process all internal nodes using fixpoint iteration
-      given all input types to the SCC. Update internal nodes with their result
-      types.
+        The code generator uses utility functions from numba/utility and
+        numba/external to do things like refcounting (``Py_INCREF``, etc)
+        and uses helpers to slice and broadcast arrays.
 
 .. _structure:
 
@@ -325,11 +259,86 @@ Package Structure
 
     Format ASTs and CFGs with graphviz. See also the 'annotate' branch
 
+.. _dependence:
+
+Type Dependence Graph Construction
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+From the SSA graph we compute a type graph by inferring all variable
+assignments. This graph often has cycles, due to the back-edge in
+the CFG for loops. For instance we may have the following code::
+
+    x = 0
+    for i in range(10):
+        x = f(x)
+
+    y = x
+
+Where ``f`` is an external autojit function (i.e., it's output type depends
+on it's dynamic input type).
+
+We get the following type graph:
+
+.. digraph:: typegraph
+
+    x_0 -> int
+
+    x_1 -> x_0
+    x_1 -> x_2
+    x_2 -> f
+    f -> x_1
+
+    y_0 -> x_1
+
+    i_0 -> range
+    range -> int
+
+Below we show the correspondence of the SSA variable definitions to their
+basic blocks:
+
+.. digraph:: cfg
+
+    "entry: [ x_0, i_0 ]" -> "condition: [ x_1 ]" -> "body: [ x_2 ]"
+    "body: [ x_2 ]" -> "condition: [ x_1 ]"
+    "condition: [ x_1 ]" -> "exit: [ y_2 ]"
+
+.. entry -> x_0
+.. entry -> i_0
+.. condition -> x_1
+.. body -> x_2
+.. exit -> y_2
+
+Our goal is to resolve this type graph in topological order, such that
+we know the type for each variable definition (``x_0``, ``x_1``, etc).
+
+In order to do a topological sort, we compute the condensation graph
+by finding the strongly connected components and condensing them
+into single graph nodes. The resulting graph looks like this:
+
+.. digraph:: typegraph
+
+    x_0 -> int
+    SCC0 -> x_0
+    y_0 -> SCC0
+
+    i_0 -> range
+    range -> int
+
+And ``SCC0`` contains the cycle in the type graph. We now have a
+well-defined preorder for which we can process each node in topological
+order on the transpose graph, doing the following:
+
+    * If the node represents a concrete type, propagate result along edge
+    * If the node represents a function over an argument of the given input types,
+      infer the result type of this function
+    * For each SCC, process all internal nodes using fixpoint iteration
+      given all input types to the SCC. Update internal nodes with their result
+      types.
+
 .. _closures:
 
 Closures
 ~~~~~~~~
-This module provides support for closures and inner functions::
+``numba/closures.py`` provides support for closures and inner functions::
 
     @autojit
     def outer():
@@ -376,18 +385,20 @@ But it does contain a freevar from scope_outer and scope_inner, so it gets
 scope_inner passed as first argument. scope_inner has a reference to scope
 outer, so all variables can be resolved.
 
-These scopes are instances of a numba extension class.
+These scopes are instances of dynamic numba extension classes.
 
 .. _extcls:
 
 Extension Classes
 ~~~~~~~~~~~~~~~~~
 
+Extension classes live in numba/exttypes.
+
 @jit
 ----
 Compiling @jit extension classes works as follows:
 
-    * Create an extension Numba type holding a symtab
+    * Create an extension Numba type holding a symbol table
     * Capture attribute types in the symtab ...
 
         * ... from the class attributes::
@@ -498,6 +509,10 @@ Compiling @autojit extension classes works as follows:
         object, and we quickly want to see whether it support such a
         perfect-hashing virtual method table:
 
+        NOTE: What we want is to actually use a separate attribute table
+              in addition to the virtual method table, giving all extension
+              objects a compatible layout.
+
         .. code-block:: c
 
             if (o->ob_type->tp_flags & NATIVELY_CALLABLE_TABLE) {
@@ -537,10 +552,11 @@ To isolate problems it's best to create an isolated test-case that is as
 small as possible yet still exhibits the problem, often using just a simple
 test script.
 
-Debugging compiler tracebacks are often simpler when using post-mortem
-debugging, which can help understand what's going wrong without modifying
-any code (and later tracking down print statements that you accidentally
-committed):
+Debugging compiler tracebacks can be handled through prints, but if the
+problem is less obvious (or the codebase unfamiliar) it is often simpler
+to use post-mortem debugging, which can help understand what's going wrong
+without modifying any code (and later tracking down print statements that
+you accidentally committed):
 
 .. code-block:: bash
 
