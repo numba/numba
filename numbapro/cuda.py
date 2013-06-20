@@ -1,11 +1,13 @@
 import contextlib
 import numpy as np
 
-from .cudapy.ptx import *
 from .cudadrv import initialize as _initialize
 from .cudadrv.driver import require_context
 from .cudadrv import devicearray, driver
-from .cudadrv.decorators import jit, autojit
+
+from .cudapy.ptx import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
+                         shared)
+from .cudapy import jit, autojit
 
 # NDarray device helper
 @require_context
