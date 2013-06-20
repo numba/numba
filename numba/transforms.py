@@ -226,6 +226,9 @@ class ResolveCoercions(visitors.NumbaTransformer):
         # TODO: the below is a problem due to implicit string <-> int coercions!
         if (node_type.is_string and dst_type.is_numeric and not
             (node_type.is_pointer or node_type.is_null)):
+            if dst_type.typename in ('char', 'uchar'):
+                raise error.NumbaError(
+                    node, "Conversion from string to (u)char not yet supported")
             result = self.str_to_int(dst_type, node)
         elif self.nopython and (is_obj(node_type) ^ is_obj(dst_type)):
             raise error.NumbaError(node, "Cannot coerce to or from object in "
@@ -312,7 +315,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                    self.llvm_module,
                                                    "PyBool_FromLong",
                                                    args=[node.node])
-        elif node_type.is_numeric:
+        elif node_type.is_numeric and node_type.typename not in ('char', 'uchar'):
             cls = None
             args = node.node,
             if node_type.is_int:

@@ -375,8 +375,8 @@ def test_string_indexing_error2():
 @autojit(warn=False, warnstyle='simple')
 def test_string_indexing_valid():
     """
-    >>> chr(test_string_indexing_valid())
-    'm'
+    >>> test_string_indexing_valid() == b'm'
+    True
     """
     for i in range(4):
         s = "spam ham eggs"

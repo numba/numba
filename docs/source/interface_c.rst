@@ -71,6 +71,8 @@ An example is shown below:
 
 .. literalinclude:: /../../examples/pointers.py
 
+.. _intrinsics:
+
 Using Intrinsics
 ================
 

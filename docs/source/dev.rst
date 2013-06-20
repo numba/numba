@@ -1,0 +1,635 @@
+===============================================
+Development crash course
+===============================================
+
+This document describes a short crash-course for numba development, where
+things are and where we want them at.
+
+Overview
+========
+
+We start with a Python AST, compiled from source code or decompiled from
+bytecode using meta. We run a series of stages that transform the program
+as an AST to something from which we can generate code. The pipeline and
+environment are central pieces in this story:
+
+    * https://github.com/numba/numba/blob/devel/numba/pipeline.py
+
+        The pipeline has a series of functions that mostly dispatch to
+        the actual transformations or visitors.
+
+    * https://github.com/numba/numba/blob/devel/numba/environment.py
+
+        The environment defines the pipeline order. Noteworthy is
+        :py-class:`numba.environment.FunctionEnvironment`
+
+Stages
+------
+
+The main stages are:
+
+    * Control flow analysis: ``numba/control_flow``
+
+        This builds a Control Flow Graph from the AST and computes the
+        SSA graph for the variable definitions. In this representation,
+        each variable assignment is a definition, e.g.::
+
+            x = 0         # definition 1
+            x = "hello"   # definition 2
+
+
+        Assignments and variable references are recorded as abstract
+        statements in the basic blocks of the CFG, such as
+
+            * numba.control_flow.cfstats.NameAssignment
+            * numba.control_flow.cfstats.NameReference
+            * numba.control_flow.cfstats.PhiNode
+
+        The phi node occurs at control flow joint points, e.g. after an
+        ``if``-statement, or in the condition block of a loop with a
+        loop-carried dependency for a variable::
+
+            if c:
+                x = 0
+            else:
+                x = 2
+            # phi here
+
+        and::
+
+            x = 0
+            for i in range(N):  # phi in condition block: x_1 = phi(x_0, x_2)
+                x = x + i # loop-carried dependency
+
+
+
+    * Type inference: ``numba.type_inference``
+
+        Infer types of all expressions, and fix the types of all local
+        variables. This operates in two stages:
+
+            * Infer types for all local variable definitions
+
+                For an overview of this see :ref:`dependence` below.
+
+            * Now that all variable definitions have a type, we can
+              easily infer types for all expressions by propagating
+              type information up the tree
+
+        | When the type inferencer cannot determine a type, such as when it
+        | calls a Python function or method that is not a Numba function, it
+        | assumes type object. Object variables may be coerced to and from
+        | most native types.
+
+        | The type inferencer and other code insert CoercionNode nodes that
+        | perform such coercions, as well as coercions between promotable
+        | native types.
+
+        | It also resolves the return type of many math functions called
+        | in the numpy, math and cmath modules.
+
+        | Each AST expression node has a Variable that holds the type of
+        | the expression, as well as any meta-data such as constant values
+        | that have been determined.
+
+        | To see how builtins, math and numpy callables are handled, have
+        | a read through :ref:`type_inference` in the user documentation,
+        | as well as ``numba.type_inference.modules``::
+
+            https://github.com/numba/numba/tree/devel/numba/type_inference/modules
+
+    * Specialization/Lowering
+
+        What follows over the typed code are a series of transformations to
+        lower the level of the code into something low-level - something
+        amenable to code generation:
+
+            * Rewrite loops over ``range`` or ``xrange`` into a ``while``
+              loop with a counter
+            * Rewrite iteration over arrays to a loop over ``range`` with
+              an index into the array
+            * Lower object conversions into calls into the Python C-API.
+              For instance it resolves coercions to and from object into
+              calls such as ``PyFloat_FromDouble``, with a fallback to
+              ``Py_BuildValue``/``PyArg_ParseTuple``.
+            * Lower exception code into calls into the C-API and insert
+              NULL pointer checks in places
+            * Normalize comparisons
+            * Keep track of refcounts. This is mostly done with
+              ObjectTempNode, which hold a temporary for an object (a new
+              reference). These temporaries are decreffed at cleanup:
+
+              .. code-block:: llvm
+
+                define double @func()  {
+                entry:
+                  %retval = alloca double           ; return value
+                  %tmp = alloca object              ; object temporary
+                  ...
+                  %obj = call PyObject_SomeNewObject()
+                  %have_error = cmp obj NULL        ; check return value
+                  cbranch %have_error, label %error, label %success
+
+                success:                            ; no error
+                  do something interesting with %obj
+                  store %something %retval          ; return some value
+                  br return_block                   ; ok, we're done
+
+                error:                              ; some error occurred :(
+                  store NaN retval
+                  br cleanup
+
+                return_block:                       ; clean up objects
+                  call void Py_XDECREF(%0)
+                  %result = load %retval
+                  ret %result                       ; return result
+                }
+
+    * Code generation
+
+        Generate LLVM code from the transformed AST. This is relatively
+        straightforward at this point. One tricky problem is that the basic
+        blocks from the LLVM code no longer correspond to the basic blocks
+        of the CFG, since error checks have been inserted. This makes
+        tracking phis harder than it should be.
+
+.. _dependence:
+
+Type Dependence Graph Construction
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+From the SSA graph we compute a type graph by inferring all variable
+assignments. This graph often has cycles, due to the back-edge in
+the CFG for loops. For instance we may have the following code::
+
+    x = 0
+    for i in range(10):
+        x = f(x)
+
+    y = x
+
+Where ``f`` is an external autojit function (i.e., it's output type depends
+on it's dynamic input type).
+
+We get the following type graph:
+
+.. digraph:: typegraph
+
+    x_0 -> int
+
+    x_1 -> x_0
+    x_1 -> x_2
+    x_2 -> f
+    f -> x_1
+
+    y_0 -> x_1
+
+    i_0 -> range
+    range -> int
+
+Below we show the correspondence of the SSA variable definitions to their
+basic blocks:
+
+.. digraph:: cfg
+
+    "entry: [ x_0, i_0 ]" -> "condition: [ x_1 ]" -> "body: [ x_2 ]"
+    "body: [ x_2 ]" -> "condition: [ x_1 ]"
+    "condition: [ x_1 ]" -> "exit: [ y_2 ]"
+
+.. entry -> x_0
+.. entry -> i_0
+.. condition -> x_1
+.. body -> x_2
+.. exit -> y_2
+
+Our goal is to resolve this type graph in topological order, such that
+we know the type for each variable definition (``x_0``, ``x_1``, etc).
+
+In order to do a topological sort, we compute the condensation graph
+by finding the strongly connected components and condensing them
+into single graph nodes. The resulting graph looks like this:
+
+.. digraph:: typegraph
+
+    x_0 -> int
+    SCC0 -> x_0
+    y_0 -> SCC0
+
+    i_0 -> range
+    range -> int
+
+And ``SCC0`` contains the cycle in the type graph. We now have a
+well-defined preorder for which we can process each node in topological
+order on the transpose graph, doing the following:
+
+    * If the node represents a concrete type, propagate result along edge
+    * If the node represents a function over an argument of the given input types,
+      infer the result type of this function
+    * For each SCC, process all internal nodes using fixpoint iteration
+      given all input types to the SCC. Update internal nodes with their result
+      types.
+
+.. _structure:
+
+Package Structure
+~~~~~~~~~~~~~~~~~
+
+* numba/type_inference
+
+    Type inference
+
+* numba/typesystem
+
+    Numba typesystem, see also :ref:`types`
+
+* numba/specialize
+
+    Lowering transformations, along with numba/transforms.py .
+    Coercions are in numba/transforms.py
+
+.. _nodes:
+
+* numba/nodes
+
+    Contains AST nodes. Some nodes that need some explaining:
+
+        - ObjectTempNode:
+
+            Holds a PyObject * temporary that it manages a refcount for
+
+        - CloneNode/CloneableNode:
+
+            These nodes are used for subtree sharing, to avoid re-evaluation
+            of the subtree. Consider e.g. the expression 'x * 2', which we
+            want to refer to twice, but evaluate once. We can do the
+            following::
+
+                cloneable = CloneableNode(<x * 2 expression>)
+                clone  = CloneNode(cloneable)
+
+            Here ``cloneable`` must be evaluated before ``clone``. We can
+            now generate as many clones as we want without re-evaluating
+            ``x * 2``
+
+* numba/exttypes
+
+    Numba extension types, have a read through :ref:`extclasses` first.
+    These are fairly well documented. To see how they work, see below
+    :ref:`extcls`
+
+* numba/closures
+
+    Implements closures for numba. See :ref:`closures` and
+    :ref:`closureimpl` below for how they work.
+
+* numba/support
+
+    Ctypes, CFFI and NumPy support (slicing, etc)
+
+* numba/array_expressions.py
+
+    Implements array expressions using minivect. Since we don't actually
+    use the tiling specializers or desperately need crazy optimizations
+    for special cases, we should really use lair's ``loop_nest`` instead
+    and throw away numba/minivect
+
+* numba/vectorize
+
+    The @vectorize functionality to build (generalized) ufuncs
+
+* numba/wrapping
+
+    Entry points to compile numba functions, classes and methods
+
+* numba/utility and numba/external
+
+    Runtime support utilities. And yes, you make a valid point,
+    this should really be one package.
+
+* numba/intrinsic
+
+    Intrinsics and instruction support for numba, as well as... internal
+    intrinsics. Merge internal stuff in numba/external :)
+
+    See :ref:`intrinsics` for what intrinsics do.
+
+* numba/containers
+
+    Numba typed containers, see :ref:`containers`
+
+* numba/asdl and numba/ir
+
+    Utilities to validate ASTs and generate fast visitors/AST implementations
+    from ASDL. This should be factored out into asdlpy or somesuch.
+
+* numba/viz
+
+    Format ASTs and CFGs with graphviz. See also the 'annotate' branch
+
+.. _closures:
+
+Closures
+~~~~~~~~
+This module provides support for closures and inner functions::
+
+    @autojit
+    def outer():
+        a = 10 # this is a cellvar
+
+        @jit('void()')
+        def inner():
+            print a # this is a freevar
+
+        inner()
+        a = 12
+        return inner
+
+The 'inner' function closes over the outer scope. Each function with
+cellvars packs them into a heap-allocated structure, the closure scope.
+
+The closure scope is passed into 'inner' when called from within outer.
+
+The execution of ``def`` creates a NumbaFunction, which has itself as the
+m_self attribute. So when 'inner' is invoked from Python, the numba
+wrapper function gets called with NumbaFunction object and the args
+tuple. The closure scope is then set in NumbaFunction.func_closure.
+
+The closure scope is an extension type with the cellvars as attributes.
+Closure scopes are chained together, since multiple inner scopes may need
+to share a single outer scope. E.g.::
+
+    def outer(a):
+        def inner(b):
+            def inner_inner():
+                print a, b
+            return inner_inner
+
+        return inner(1), inner(2)
+
+We have three live closure scopes here::
+
+    scope_outer = { 'a': a }  # call to 'outer'
+    scope_inner_1 = { 'scope_outer': scope_outer, 'b': 1 } # call to 'inner' with b=1
+    scope_inner_2 = { 'scope_outer': scope_outer, 'b': 2 } # call to 'inner' with b=2
+
+Function 'inner_inner' defines no new scope, since it contains no cellvars.
+But it does contain a freevar from scope_outer and scope_inner, so it gets
+scope_inner passed as first argument. scope_inner has a reference to scope
+outer, so all variables can be resolved.
+
+These scopes are instances of a numba extension class.
+
+.. _extcls:
+
+Extension Classes
+~~~~~~~~~~~~~~~~~
+
+@jit
+----
+Compiling @jit extension classes works as follows:
+
+    * Create an extension Numba type holding a symtab
+    * Capture attribute types in the symtab ...
+
+        * ... from the class attributes::
+
+            @jit
+            class Foo(object):
+                attr = double
+
+        * ... from __init__::
+
+            @jit
+            class Foo(object):
+                def __init__(self, attr):
+                    self.attr = double(attr)
+
+    * Type infer all methods
+    * Compile all extension methods
+
+        * Process signatures such as @void(double)
+        * Infer native attributes through type inference on __init__
+        * Path the extension type with a native attributes struct
+        * Infer types for all other methods
+        * Update the ext_type with a vtab type
+        * Compile all methods
+
+    * Create descriptors that wrap the native attributes
+    * Create an extension type:
+
+      {
+        PyObject_HEAD
+        ...
+        virtual function table (func **)
+        native attributes
+      }
+
+    The virtual function table (vtab) is a ctypes structure set as
+    attribute of the extension types. Objects have a direct pointer
+    for efficiency.
+
+@autojit
+--------
+Compiling @autojit extension classes works as follows:
+
+    * Create an extension Numba type holding a symtab
+    * Capture attribute types in the symtab in the same was as @jit
+    * Build attribute hash-based vtable, hashing on (attr_name, attr_type).
+
+        (attr_name, attr_type) is the only allowed key for that attribute
+        (i.e. this is fixed at compile time (for now). This means consumers
+        will always know the attribute type (and don't need to specialize
+        on different attribute types).
+
+        However, using a hash-based attribute table allows easy implementation
+        of multiple inheritance (virtual inheritance), without complicated
+        C++ dynamic offsets to base objects (see also virtual.py).
+
+    For all methods M with static input types:
+        * Compile M
+        * Register M in a list of compiled methods
+
+    * Build initial hash-based virtual method table from compiled methods
+
+        * Create pre-hash values for the signatures
+            * We use these values to look up methods at runtime
+
+        * Parametrize the virtual method table to build a final hash function:
+
+            .. code-block:: c
+
+                slot_index = (((prehash >> table.r) & self.table.m_f) ^
+                               self.displacements[prehash & self.table.m_g])
+
+            Note that for @jit classes, we do not support multiple inheritance with
+            incompatible base objects. We could use a dynamic offset to base classes,
+            and adjust object pointers for method calls, like in C++:
+
+                http://www.phpcompiler.org/articles/virtualinheritance.html
+
+            However, this is quite complicated, and still doesn't allow dynamic extension
+            for autojit classes. Instead we will use Dag Sverre Seljebotn's hash-based
+            virtual method tables:
+
+                https://github.com/numfocus/sep/blob/master/sep200.rst
+                https://github.com/numfocus/sep/blob/master/sep201.rst
+
+            The following paper helps understand the perfect hashing scheme:
+
+                Hash and Displace: Efficient Evaluation of Minimal Perfect
+                Hash Functions (1999) by Rasmus Pagn:
+
+                    http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.32.6530
+
+    * Create descriptors that wrap the native attributes
+    * Create an extension type:
+
+        .. code-block:: c
+
+            {
+                hash-based virtual method table (PyCustomSlots_Table **)
+                PyGC_HEAD
+                PyObject_HEAD
+                ...
+                native attributes
+            }
+
+        We precede the object with the table to make this work in a more
+        generic scheme, e.g. where a caller is dealing with an unknown
+        object, and we quickly want to see whether it support such a
+        perfect-hashing virtual method table:
+
+        .. code-block:: c
+
+            if (o->ob_type->tp_flags & NATIVELY_CALLABLE_TABLE) {
+                PyCustomSlots_Table ***slot_p = ((char *) o) - sizeof(PyGC_HEAD)
+                PyCustomSlots_Table *vtab = **slot_p
+                look up function
+            } else {
+                PyObject_Call(...)
+            }
+
+        We need to store a PyCustomSlots_Table ** in the object to allow
+        the producer of the table to replace the table with a new table
+        for all live objects (e.g. by adding a specialization for
+        an autojit method).
+
+Testing
+~~~~~~~
+Whenever you make changes to the code, you should see what impact this has
+on by running the test suite:
+
+.. code-block:: bash
+
+    $ python runtests.py                # run whole test suite
+    $ python runtests.py mypackage      # run tests under mypackage
+    $ python runtests.py mypkg.mymod    # run test(s) matched by mypkg.mymod
+
+The test runner matches by substring, i.e.:
+
+.. code-block:: bash
+
+    $ python runtests.py conv
+    Running tests in /home/mark/numba/numba/numba
+    numba.tests.test_object_conversion                                     SUCCESS
+    numba.typesystem.tests.test_conversion                                 SUCCESS
+
+To isolate problems it's best to create an isolated test-case that is as
+small as possible yet still exhibits the problem, often using just a simple
+test script.
+
+Debugging compiler tracebacks are often simpler when using post-mortem
+debugging, which can help understand what's going wrong without modifying
+any code (and later tracking down print statements that you accidentally
+committed):
+
+.. code-block:: bash
+
+    $ python -m pdb test.py
+
+Debugging
+~~~~~~~~~
+Depending on the nature of the problem, there are some tools available for
+debugging what's going on. In the annotate branch there is functionality
+to debug pretty-print to the terminal, create a graphviz visualization or
+generate a webpage:
+
+.. code-block:: bash
+
+    usage: numba [-h] [--annotate] [--dump-llvm] [--dump-optimized] [--dump-cfg]
+             [--dump-ast] [--time-compile] [--fancy]
+             filename
+
+    positional arguments:
+      filename          Python source filename
+
+    optional arguments:
+      -h, --help        show this help message and exit
+      --annotate        Annotate source
+      --dump-llvm       Print generated llvm assembly
+      --dump-optimized  Dump the optimized llvm assembly
+      --dump-cfg        Dump the control flow graph
+      --dump-ast        Dump the AST
+      --time-compile    Time the compilation process
+      --fancy           Try to output fancy files (.dot or .html)
+
+The ``--annotate`` feature also prints the types of each variable used in a
+certain expression.
+
+Debugging ASTs
+--------------
+You get more control over when the AST is dumped by adding the ``dump_ast``
+stage in ``numba.environment`` at the right place in the pipeline. If you
+just quickly want to debug print an AST from Python, there is:
+
+    * ``ast.dump(mynode)``
+    * ``utils.pformat_ast`` or ``utils.dump``
+
+It can also help sometimes to look at an instance of the data of certain
+piece of code is dealing with interactively, to try and make sense of what
+is happening. You can do this with a breakpoint using your favorite
+Python debugger, e.g. ``import pdb; pdb.set_trace()``.
+
+Debugging Types
+---------------
+Debugging types can be tricky, but something that is often valuable
+is ``numba.typeof``::
+
+    @jit(...)
+    def myfunc(...):
+        ...
+        print(numba.typeof(x))
+        print(numba.typeof(x + y))
+
+You can also always force types through casts or ``locals``::
+
+    @jit(..., locals={'x':double}) # locals
+    def myfunc(...):
+        print(double(y))           # cast
+
+Problems
+~~~~~~~~
+There are several problems with the codebase, stemming from our IR.
+The AST is too high level for most of the operations that we need to do,
+and has too much information, which leads to code having to deal with
+different in-memory formats that are doing similar things - which should
+be encoded in a uniform way. Consider e.g. the following code::
+
+    x = range(N)
+    for i in x:
+        ...
+
+    # And
+    for i in range(N):
+        ...
+
+The code that detects and transforms iteration over ``range`` should
+be written in a uniform way, depending on the flow of values irregardless
+of the syntax. Besides the level of information ASTs are not always
+amenable to transformations, e.g. when you want to execute some statements
+in the middle of an expression, or when you want to share a subtree (see
+the Clone(able)Node discussion above :ref:`nodes`).
+
+Another issue is that refcounting and the Python C-API
+as well as NumPy are baked into the transformations. Coupling these
+APIs like this can be a real problem when you want to switch to a different
+runtime environment or library (CPython, NumPy).

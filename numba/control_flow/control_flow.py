@@ -944,14 +944,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         self.visitlist(node.body)
         self.flow.loops.pop()
 
-        if is_for:
-            if self.flow.block:
-                self.flow.block.add_child(node.incr_block)
-            # Ensure topological dominator order
-            self.flow.blocks.pop(node.incr_block.id)
-            self.flow.blocks.append(node.incr_block)
-            self.flow.block = node.incr_block
-
         if self.flow.block:
             # Add back-edge
             self.flow.block.add_child(node.cond_block)
@@ -991,11 +983,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                                               pos=node.iter)
         node.exit_block = self.flow.exit_block(label='exit_for', pos=node)
 
-        # Increment temporary variable, continue should branch here
-        node.incr_block = self.flow.newblock(label="for_increment", pos=node)
-        node.incr_block.branch_here = True
-
-        self.flow.loops.append(LoopDescr(node.exit_block, node.incr_block))
+        self.flow.loops.append(LoopDescr(node.exit_block, node.cond_block))
 
         # Target assignment
         if_block = self.flow.nextblock(label='loop_body', pos=node.body[0])

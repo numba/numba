@@ -129,3 +129,18 @@ def globals_(typesystem, node):
 @register_builtin(0)
 def locals_(typesystem, node):
     raise error.NumbaError("locals() is not supported in numba functions")
+
+@register_builtin(1)
+def ord_(typesystem, node, expr):
+    type = get_type(expr)
+    if type.is_int and type.typename in ("char", "uchar"):
+        return nodes.CoercionNode(expr, int_)
+    elif type.is_string:
+        # TODO:
+        pass
+
+@register_builtin(1)
+def chr_(typesystem, node, expr):
+    type = get_type(expr)
+    if type.is_int:
+        return nodes.CoercionNode(expr, char)
