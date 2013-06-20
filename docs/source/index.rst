@@ -69,6 +69,7 @@ Developer Documentation
    architecture.rst
    ir.rst
    roadmap.rst
+   dev.rst
    modules/modules.rst
 
 

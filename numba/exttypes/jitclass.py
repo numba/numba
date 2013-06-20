@@ -1,7 +1,7 @@
 """
 Compiling @jit extension classes works as follows:
 
-    * Create an extension Numba/minivect type holding a symtab
+    * Create an extension Numba type holding a symtab
     * Capture attribute types in the symtab ...
 
         * ... from the class attributes:

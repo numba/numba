@@ -2,6 +2,8 @@
 Python Functionality
 ********************
 
+.. _extclasses:
+
 Extension Types (Classes)
 =========================
 Numba supports classes similar to Python classes and extension types.
