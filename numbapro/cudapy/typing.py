@@ -69,6 +69,12 @@ NP_DTYPE_MAP = {
 def rule_numba_type(infer, value, obj):
     value.replace(value=obj.get_dtype())
 
+def rule_numba_cast(obj, destty):
+    def _cast(infer, value):
+        infer.rules[value].add(MustBe(destty))
+        value.replace(func=obj)
+    return _cast
+
 def rule_shared_array(infer, value):
     # convert kws to args
     kws = dict(value.args.kws)
@@ -181,6 +187,21 @@ numba_type_ext = {
     numbapro.complex128:    rule_numba_type,
 }
 
+numba_cast_ext = {
+    numbapro.int8:          rule_numba_cast(numbapro.int8, types.int8),
+    numbapro.int16:         rule_numba_cast(numbapro.int16, types.int16),
+    numbapro.int32:         rule_numba_cast(numbapro.int32, types.int32),
+    numbapro.int64:         rule_numba_cast(numbapro.int64, types.int64),
+    numbapro.uint8:         rule_numba_cast(numbapro.uint8, types.uint8),
+    numbapro.uint16:        rule_numba_cast(numbapro.uint16, types.uint16),
+    numbapro.uint32:        rule_numba_cast(numbapro.uint32, types.uint32),
+    numbapro.uint64:        rule_numba_cast(numbapro.uint64, types.uint64),
+    numbapro.float32:       rule_numba_cast(numbapro.float32, types.float32),
+    numbapro.float64:       rule_numba_cast(numbapro.float64, types.float64),
+    numbapro.complex64:     rule_numba_cast(numbapro.complex64, types.complex64),
+    numbapro.complex128:    rule_numba_cast(numbapro.complex128, types.complex128),
+}
+
 cudapy_call_typing_ext = {
     # grid:
     ptx.grid:           rule_grid_macro,
@@ -189,6 +210,9 @@ cudapy_call_typing_ext = {
     # shared
     ptx.shared.array:   rule_shared_array,
 }
+
+cudapy_call_typing_ext.update(numba_cast_ext)
+
 
 cudapy_global_typing_ext.update(npy_dtype_ext)
 cudapy_global_typing_ext.update(numba_type_ext)

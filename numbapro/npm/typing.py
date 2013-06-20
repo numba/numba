@@ -1,6 +1,6 @@
 import __builtin__
 import itertools, inspect
-from pprint import pprint
+#from pprint import pprint
 from collections import namedtuple, defaultdict, deque, Set, Mapping
 from .symbolic import OP_MAP, find_dominators
 from .utils import cache
@@ -376,7 +376,6 @@ class Infer(object):
             processed_blocks.add(blknum)
 
         soln = dict((k, iter(vs).next()) for k, vs in possibles.iteritems())
-        pprint(soln)
         return soln
 
     def visit(self, value):

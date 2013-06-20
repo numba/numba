@@ -3,9 +3,10 @@ import numpy as np
 from llvm.core import Type, Constant, LINKAGE_EXTERNAL, LINKAGE_INTERNAL
 
 from numbapro.npm.errors import CompileError
+from numbapro.npm import types
 from . import ptx
 from numbapro.cudadrv.nvvm import ADDRSPACE_SHARED
-
+import numbapro
 
 class CudaPyCGError(CompileError):
     def __init__(self, value, msg):
@@ -61,6 +62,11 @@ def cg_syncthreads(cg, value):
 
 def cg_dtype(cg, value):
     pass # yup, no-op
+
+def cg_numba_cast(outty):
+    def _cast(cg, value):
+        cg.valmap[value] = cg.cast(value.args.args[0].value, outty)
+    return _cast
 
 def cg_shared_array(cg, value):
     args = value.args.args
@@ -156,3 +162,21 @@ cudapy_call_codegen_ext = {
     ptx.syncthreads:    cg_syncthreads,
     ptx.shared.array:   cg_shared_array,
 }
+
+numba_cast_ext = {
+    numbapro.int8:          cg_numba_cast(types.int8),
+    numbapro.int16:         cg_numba_cast(types.int16),
+    numbapro.int32:         cg_numba_cast(types.int32),
+    numbapro.int64:         cg_numba_cast(types.int64),
+    numbapro.uint8:         cg_numba_cast(types.uint8),
+    numbapro.uint16:        cg_numba_cast(types.uint16),
+    numbapro.uint32:        cg_numba_cast(types.uint32),
+    numbapro.uint64:        cg_numba_cast(types.uint64),
+    numbapro.float32:       cg_numba_cast(types.float32),
+    numbapro.float64:       cg_numba_cast(types.float64),
+    numbapro.complex64:     cg_numba_cast(types.complex64),
+    numbapro.complex128:    cg_numba_cast(types.complex128),
+}
+
+cudapy_call_codegen_ext.update(numba_cast_ext)
+
