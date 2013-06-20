@@ -71,7 +71,7 @@ def dump_annotations(ast, env, fancy):
     import traceback
     stack = traceback.extract_stack()
     for i in range(len(stack)-1, -1, -1):
-        if stack[i][0] == env.cmdopts['filename'] and stack[i][3].find(env.crnt.func_name) > 0:
+        if stack[i][0] == env.cmdopts['filename'] and stack[i][3].find(env.crnt.func_name) > -1:
             func_call = stack[i][3]
             func_call_lineno = str(stack[i][1])
             break
