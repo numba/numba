@@ -76,28 +76,25 @@ The main stages are:
               easily infer types for all expressions by propagating
               type information up the tree
 
+        | When the type inferencer cannot determine a type, such as when it
+        | calls a Python function or method that is not a Numba function, it
+        | assumes type object. Object variables may be coerced to and from
+        | most native types.
 
-        When the type inferencer cannot determine a type, such as when it
-        calls a Python function or method that is not a Numba function, it
-        assumes type object. Object variables may be coerced to and from
-        most native types.
+        | The type inferencer and other code insert CoercionNode nodes that
+        | perform such coercions, as well as coercions between promotable
+        | native types.
 
+        | It also resolves the return type of many math functions called
+        | in the numpy, math and cmath modules.
 
-        The type inferencer and other code insert CoercionNode nodes that
-        perform such coercions, as well as coercions between promotable
-        native types.
-        It also resolves the return type of many math functions called
-        in the numpy, math and cmath modules.
+        | Each AST expression node has a Variable that holds the type of
+        | the expression, as well as any meta-data such as constant values
+        | that have been determined.
 
-
-        Each AST expression node has a Variable that holds the type of
-        the expression, as well as any meta-data such as constant values
-        that have been determined.
-
-
-        To see how builtins, math and numpy callables are handled, have
-        a read through :ref:`type_inference` in the user documentation,
-        as well as ``numba.type_inference.modules``::
+        | To see how builtins, math and numpy callables are handled, have
+        | a read through :ref:`type_inference` in the user documentation,
+        | as well as ``numba.type_inference.modules``::
 
             https://github.com/numba/numba/tree/devel/numba/type_inference/modules
 
@@ -247,7 +244,7 @@ Package Structure
 * numba/specialize
 
     Lowering transformations, along with numba/transforms.py .
-    Coercions are in numba/transfroms.py
+    Coercions are in numba/transforms.py
 
 .. _nodes:
 
@@ -281,7 +278,8 @@ Package Structure
 
 * numba/closures
 
-    Implements closures for numba, see :ref:`closures` below.
+    Implements closures for numba. See :ref:`closures` and
+    :ref:`closureimpl` below for how they work.
 
 * numba/support
 
@@ -298,10 +296,6 @@ Package Structure
 
     The @vectorize functionality to build (generalized) ufuncs
 
-* numba/viz
-
-    Format ASTs and CFGs with graphviz. See also the 'annotate' branch
-
 * numba/wrapping
 
     Entry points to compile numba functions, classes and methods
@@ -316,16 +310,20 @@ Package Structure
     Intrinsics and instruction support for numba, as well as... internal
     intrinsics. Merge internal stuff in numba/external :)
 
-    See :ref:`intrinsics` for what intrinsics do
+    See :ref:`intrinsics` for what intrinsics do.
 
 * numba/containers
 
-    Numba typed containers
+    Numba typed containers, see :ref:`containers`
 
 * numba/asdl and numba/ir
 
     Utilities to validate ASTs and generate fast visitors/AST implementations
     from ASDL. This should be factored out into asdlpy or somesuch.
+
+* numba/viz
+
+    Format ASTs and CFGs with graphviz. See also the 'annotate' branch
 
 .. _closures:
 
@@ -462,12 +460,20 @@ Compiling @autojit extension classes works as follows:
                 slot_index = (((prehash >> table.r) & self.table.m_f) ^
                                self.displacements[prehash & self.table.m_g])
 
-            See also virtual.py and the following SEPs:
+            Note that for @jit classes, we do not support multiple inheritance with
+            incompatible base objects. We could use a dynamic offset to base classes,
+            and adjust object pointers for method calls, like in C++:
+
+                http://www.phpcompiler.org/articles/virtualinheritance.html
+
+            However, this is quite complicated, and still doesn't allow dynamic extension
+            for autojit classes. Instead we will use Dag Sverre Seljebotn's hash-based
+            virtual method tables:
 
                 https://github.com/numfocus/sep/blob/master/sep200.rst
                 https://github.com/numfocus/sep/blob/master/sep201.rst
 
-            And the following paper to understand the perfect hashing scheme:
+            The following paper helps understand the perfect hashing scheme:
 
                 Hash and Displace: Efficient Evaluation of Minimal Perfect
                 Hash Functions (1999) by Rasmus Pagn:
@@ -506,6 +512,99 @@ Compiling @autojit extension classes works as follows:
         the producer of the table to replace the table with a new table
         for all live objects (e.g. by adding a specialization for
         an autojit method).
+
+Testing
+~~~~~~~
+Whenever you make changes to the code, you should see what impact this has
+on by running the test suite:
+
+.. code-block:: bash
+
+    $ python runtests.py                # run whole test suite
+    $ python runtests.py mypackage      # run tests under mypackage
+    $ python runtests.py mypkg.mymod    # run test(s) matched by mypkg.mymod
+
+The test runner matches by substring, i.e.:
+
+.. code-block:: bash
+
+    $ python runtests.py conv
+    Running tests in /home/mark/numba/numba/numba
+    numba.tests.test_object_conversion                                     SUCCESS
+    numba.typesystem.tests.test_conversion                                 SUCCESS
+
+To isolate problems it's best to create an isolated test-case that is as
+small as possible yet still exhibits the problem, often using just a simple
+test script.
+
+Debugging compiler tracebacks are often simpler when using post-mortem
+debugging, which can help understand what's going wrong without modifying
+any code (and later tracking down print statements that you accidentally
+committed):
+
+.. code-block:: bash
+
+    $ python -m pdb test.py
+
+Debugging
+~~~~~~~~~
+Depending on the nature of the problem, there are some tools available for
+debugging what's going on. In the annotate branch there is functionality
+to debug pretty-print to the terminal, create a graphviz visualization or
+generate a webpage:
+
+.. code-block:: bash
+
+    usage: numba [-h] [--annotate] [--dump-llvm] [--dump-optimized] [--dump-cfg]
+             [--dump-ast] [--time-compile] [--fancy]
+             filename
+
+    positional arguments:
+      filename          Python source filename
+
+    optional arguments:
+      -h, --help        show this help message and exit
+      --annotate        Annotate source
+      --dump-llvm       Print generated llvm assembly
+      --dump-optimized  Dump the optimized llvm assembly
+      --dump-cfg        Dump the control flow graph
+      --dump-ast        Dump the AST
+      --time-compile    Time the compilation process
+      --fancy           Try to output fancy files (.dot or .html)
+
+The ``--annotate`` feature also prints the types of each variable used in a
+certain expression.
+
+Debugging ASTs
+--------------
+You get more control over when the AST is dumped by adding the ``dump_ast``
+stage in ``numba.environment`` at the right place in the pipeline. If you
+just quickly want to debug print an AST from Python, there is:
+
+    * ``ast.dump(mynode)``
+    * ``utils.pformat_ast`` or ``utils.dump``
+
+It can also help sometimes to look at an instance of the data of certain
+piece of code is dealing with interactively, to try and make sense of what
+is happening. You can do this with a breakpoint using your favorite
+Python debugger, e.g. ``import pdb; pdb.set_trace()``.
+
+Debugging Types
+---------------
+Debugging types can be tricky, but something that is often valuable
+is ``numba.typeof``::
+
+    @jit(...)
+    def myfunc(...):
+        ...
+        print(numba.typeof(x))
+        print(numba.typeof(x + y))
+
+You can also always force types through casts or ``locals``::
+
+    @jit(..., locals={'x':double}) # locals
+    def myfunc(...):
+        print(double(y))           # cast
 
 Problems
 ~~~~~~~~

@@ -128,6 +128,8 @@ unspecialized class::
     >>> isinstance(obj, MyAutojitExtension)
     True
 
+.. _closures:
+
 Closures
 ========
 
@@ -158,6 +160,8 @@ around the closure will still result in a native call in other places.
 
 Like Python closures, closures can be arbitrarily nested, and follow the same
 scoping rules.
+
+.. _containers:
 
 Typed Containers
 ================
