@@ -153,6 +153,8 @@ $(document).ready(function() {
 
 <div class="block">
 
+<div class="meta">${func_call}<br/>${func_call_filename}:${func_call_lineno}</div>
+
 <table class="python-table">
     %for line in lines:
     <tr class="id${line['num']} line python"><td class="linenum firstlinenum">${line['num']}</td><td class="code firstcode color${line['colorlevel']}" title="${line['types']}">${line['python_source']}</td></tr>

@@ -16,7 +16,7 @@ lex = partial(lex_source, output="console")
 
 # ______________________________________________________________________
 
-def render(program, emit=sys.stdout.write,
+def render(program, func_call, (func_call_filename, func_call_lineno), emit=sys.stdout.write,
            intermediate_names=(), inline=True):
     """
     Render a Program as text.

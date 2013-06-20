@@ -87,7 +87,7 @@ def render_lines(py_source, llvm_intermediate, emit):
              u"style='background-color: #%s'>\n%s</pre>\n" %
                 (lineno, color, lex_source(u"\n".join(llvm_lines), "llvm", "html")))
 
-def render(program, emit=sys.stdout.write,
+def render(program, (func_call, func_call_filename, func_call_lineno), emit=sys.stdout.write,
            intermediate_names=(), inline=True):
     """
     Render a Program as html.
@@ -135,6 +135,9 @@ def render(program, emit=sys.stdout.write,
         else:
             level = python_calls
         
+        data['func_call'] = func_call
+        data['func_call_filename'] = func_call_filename
+        data['func_call_lineno'] = func_call_lineno
         data['lines'].append({'num':num,
                               'python_source':python_source,
                               'llvm_source':llvm_source,

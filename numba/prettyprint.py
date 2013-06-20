@@ -63,7 +63,20 @@ def dump_annotations(ast, env, fancy):
         render = render_text
         out = sys.stdout
 
-    render(p, emit=out.write, intermediate_names=["llvm"])
+    # Look back through stack until we find the line of code that called our
+    # jitted function.
+    func_call = ''
+    func_call_filename = env.cmdopts['filename']
+    func_call_lineno = ''
+    import traceback
+    stack = traceback.extract_stack()
+    for i in range(len(stack)-1, -1, -1):
+        if stack[i][0] == env.cmdopts['filename'] and stack[i][3].find(env.crnt.func_name) > 0:
+            func_call = stack[i][3]
+            func_call_lineno = str(stack[i][1])
+            break
+
+    render(p, (func_call, func_call_filename, func_call_lineno), emit=out.write, intermediate_names=["llvm"])
 
 @dumppass("dump-llvm")
 def dump_llvm(ast, env, fancy):
