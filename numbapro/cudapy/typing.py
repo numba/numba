@@ -70,6 +70,22 @@ def rule_numba_type(infer, value, obj):
     value.replace(value=obj.get_dtype())
 
 def rule_shared_array(infer, value):
+    # convert kws to args
+    kws = dict(value.args.kws)
+    argorder = 'shape', 'dtype'
+
+    argvals = list(value.args.args)
+    for arg in argorder[len(argvals):]:
+        argvals.append(kws.pop(arg))
+
+    if kws:
+        errmsg = "duplicated keywords %s" % ','.join(kws.keys())
+        raise CudaPyInferError(value, errmsg)
+
+    # normalize the call so there will be no kws
+    value.replace(args=list(argvals), kws=())
+
+    # add typing rules
     nargs = len(value.args.args)
     if nargs != 2:
         msg = "cuda.shared.array() takes eactly two arguments"

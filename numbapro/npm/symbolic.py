@@ -320,7 +320,14 @@ class SymbolicExecution(object):
         argc = inst.arg & 0xff
         kwsc = (inst.arg >> 8) & 0xff
 
-        kws = list(reversed([self.pop() for i in range(kwsc)]))
+        def pop_kws():
+            val = self.pop()
+            key = self.pop()
+            assert key.value.kind == 'Const'
+            key = key.value.args.value
+            return key, val
+
+        kws = list(reversed([pop_kws() for i in range(kwsc)]))
         args = list(reversed([self.pop() for i in range(argc)]))
 
         func = self.pop()
