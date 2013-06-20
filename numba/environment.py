@@ -7,6 +7,7 @@ import ast as ast_module
 import types
 import logging
 import pprint
+import collections
 
 import llvm.core
 
@@ -472,7 +473,7 @@ class FunctionEnvironment(object):
         else:
             self.ast_metadata = metadata.create_metadata_env()
 
-        self.annotations = {}
+        self.annotations = collections.defaultdict(list)
         self.intermediates = []
         self.warn = warn
         self.warnstyle = warnstyle
