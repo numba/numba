@@ -1,10 +1,8 @@
 import inspect
 import llvm.core as lc
-from numbapro.npm import symbolic, typing, codegen, execution
+from numbapro.npm import symbolic, typing, codegen
 from numbapro.npm.compiler import get_func_name
-from numbapro.npm.execution import (to_ctype, prepare_args, Complex64,
-                                    Complex128, ArrayBase)
-from numbapro.cudadrv import nvvm, driver, devicearray
+from numbapro.cudadrv import nvvm, driver
 from .execution import CUDAKernel
 from .typing import cudapy_global_typing_ext, cudapy_call_typing_ext
 from .codegen import cudapy_global_codegen_ext, cudapy_call_codegen_ext
@@ -59,6 +57,7 @@ def compile_common(func, retty, argtys):
                          extended_calls=cudapy_call_codegen_ext)
     lfunc = cg.generate()
     gvars = cg.extern_globals
+    assert not gvars
 
     print lfunc.module
 

@@ -2,11 +2,9 @@ import operator
 import numpy as np
 from llvm.core import Type, Constant, LINKAGE_EXTERNAL, LINKAGE_INTERNAL
 
-from numbapro.npm.types import *
 from numbapro.npm.errors import CompileError
 from . import ptx
 from numbapro.cudadrv.nvvm import ADDRSPACE_SHARED
-import numbapro
 
 
 class CudaPyCGError(CompileError):

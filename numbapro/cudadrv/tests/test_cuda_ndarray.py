@@ -1,10 +1,6 @@
 import numpy as np
-import unittest 
-from numbapro.cudadrv.driver import *
 from numbapro.cudadrv import devicearray
 from numbapro import cuda
-from ctypes import *
-
 import support
 
 @support.addtest
@@ -24,8 +20,7 @@ class TestCudaNDArray(support.CudaTestCase):
 
     def test_devicearray_no_copy(self):
         array = np.arange(100, dtype=np.float32)
-        devarray = cuda.to_device(array, copy=False)
-        
+        cuda.to_device(array, copy=False)
 
     def test_devicearray(self):
         array = np.arange(100, dtype=np.int32)

@@ -1,8 +1,6 @@
 import numpy as np
-import unittest 
-from numbapro.cudadrv.driver import *
+from numbapro.cudadrv.driver import Event
 from numbapro import cuda
-from ctypes import *
 
 import support
 

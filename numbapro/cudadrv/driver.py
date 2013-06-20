@@ -3,13 +3,14 @@ This is more-or-less a object-oriented interface to the CUDA driver API.
 It properly has a lot of resemblence with PyCUDA.
 '''
 
-import sys, os, warnings
+import sys, os
 import contextlib
-from ctypes import *
-from .error import *
+from ctypes import (c_int, c_void_p, POINTER, c_size_t, byref, addressof,
+                    sizeof, c_uint, c_uint8, c_char_p, c_float, cast, c_char,)
+import ctypes
+from .error import CudaDriverError, CudaSupportError
 from numbapro._utils import finalizer, mviewbuf
 import threading
-from weakref import WeakValueDictionary
 
 #------------------
 # Configuration
@@ -171,7 +172,6 @@ CU_MEMORYTYPE_UNIFIED = 0x04
 
 
 def _build_reverse_error_map():
-    import sys
     prefix = 'CUDA_ERROR'
     module = sys.modules[__name__]
     return dict((getattr(module, i), i)
@@ -415,15 +415,15 @@ class Driver(object):
 
             # Determine DLL type
             if sys.platform == 'win32':
-                dlloader = WinDLL
+                dlloader = ctypes.WinDLL
                 dldir = ['\\windows\\system32']
                 dlname = 'nvcuda.dll'
             elif sys.platform == 'darwin':
-                dlloader = CDLL
+                dlloader = ctypes.CDLL
                 dldir = ['/usr/local/cuda/lib']
                 dlname = 'libcuda.dylib'
             else:
-                dlloader = CDLL
+                dlloader = ctypes.CDLL
                 dldir = ['/usr/lib', '/usr/lib64']
                 dlname = 'libcuda.so'
 
@@ -1292,9 +1292,6 @@ def host_to_device(dst, src, size, stream=0):
     else:
         fn = driver.cuMemcpyHtoD
 
-    devptr = device_pointer(dst)
-    hostptr = host_pointer(src)
-    
     error = fn(device_pointer(dst), host_pointer(src), size, *varargs)
     driver.check_error(error, "Failed to copy memory H->D")
 

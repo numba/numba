@@ -1,5 +1,4 @@
 from numbapro import cuda
-from numba import *
 import numpy as np
 import unittest
 from .support import addtest, main

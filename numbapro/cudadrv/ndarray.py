@@ -1,8 +1,5 @@
-import sys
 import ctypes
-import numpy as np
 from numbapro.cudadrv import driver
-from numbapro._utils import finalizer
 from numbapro.npm.execution import make_array_type
 
 def ndarray_device_allocate_head(nd):

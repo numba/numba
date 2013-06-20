@@ -1,8 +1,7 @@
 import numpy as np
-from numbapro.npm.types import *
-from numbapro.npm.typing import (cast_penalty, Restrict, UserType, MustBe,
-                                 Conditional, int_set, float_set,
-                                 filter_array)
+from numbapro.npm import types
+from numbapro.npm.typing import (cast_penalty, Restrict, MustBe,
+                                 Conditional, int_set)
 from numbapro.npm.errors import CompileError
 from . import ptx
 import numbapro
@@ -35,7 +34,7 @@ def rule_grid_macro(infer, value):
         infer.rules[value].add(Restrict(int_set))
     else:
         assert ndim == 2
-        tuplety = tupletype(ptx.SREG_TYPE, 2)
+        tuplety = types.tupletype(ptx.SREG_TYPE, 2)
         infer.rules[value].add(MustBe(tuplety))
         infer.possible_types.add(tuplety)
 
@@ -53,18 +52,18 @@ def rule_np_dtype(infer, value, obj):
     #infer.possible_types.add(nptype) # should not increase type set
 
 NP_DTYPE_MAP = {
-    np.dtype(np.int8): int8,
-    np.dtype(np.int16): int16,
-    np.dtype(np.int32): int32,
-    np.dtype(np.int64): int64,
-    np.dtype(np.uint8): uint8,
-    np.dtype(np.uint16): uint16,
-    np.dtype(np.uint32): uint32,
-    np.dtype(np.uint64): uint64,
-    np.dtype(np.float32): float32,
-    np.dtype(np.float64): float64,
-    np.dtype(np.complex64): complex64,
-    np.dtype(np.complex128): complex128,
+    np.dtype(np.int8):          types.int8,
+    np.dtype(np.int16):         types.int16,
+    np.dtype(np.int32):         types.int32,
+    np.dtype(np.int64):         types.int64,
+    np.dtype(np.uint8):         types.uint8,
+    np.dtype(np.uint16): 		types.uint16,
+    np.dtype(np.uint32):        types.uint32,
+    np.dtype(np.uint64):        types.uint64,
+    np.dtype(np.float32):       types.float32,
+    np.dtype(np.float64):       types.float64,
+    np.dtype(np.complex64):     types.complex64,
+    np.dtype(np.complex128):    types.complex128,
 }
 
 def rule_numba_type(infer, value, obj):
@@ -90,7 +89,7 @@ def rule_shared_array(infer, value):
     ndim = len(shape)
 
     elemtype = NP_DTYPE_MAP[dtype]
-    arytype = arraytype(elemtype, ndim, 'C')
+    arytype = types.arraytype(elemtype, ndim, 'C')
 
     infer.rules[value].add(MustBe(arytype))
     infer.possible_types.add(arytype)
@@ -137,18 +136,18 @@ cudapy_global_typing_ext = {
 }
 
 npy_dtype_ext = {
-    np.int8: rule_np_dtype,
-    np.int16: rule_np_dtype,
-    np.int32: rule_np_dtype,
-    np.int64: rule_np_dtype,
-    np.uint8: rule_np_dtype,
-    np.uint16: rule_np_dtype,
-    np.uint32: rule_np_dtype,
-    np.uint64: rule_np_dtype,
-    np.float32: rule_np_dtype,
-    np.float64: rule_np_dtype,
-    np.complex64: rule_np_dtype,
-    np.complex128: rule_np_dtype,
+    np.int8:        rule_np_dtype,
+    np.int16:       rule_np_dtype,
+    np.int32:       rule_np_dtype,
+    np.int64:       rule_np_dtype,
+    np.uint8:       rule_np_dtype,
+    np.uint16:      rule_np_dtype,
+    np.uint32:      rule_np_dtype,
+    np.uint64:      rule_np_dtype,
+    np.float32:     rule_np_dtype,
+    np.float64:     rule_np_dtype,
+    np.complex64: 	rule_np_dtype,
+    np.complex128:  rule_np_dtype,
 }
 
 numba_type_ext = {

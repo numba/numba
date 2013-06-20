@@ -278,20 +278,17 @@ class CodeGen(object):
         operand = expr.args.value.value
         ity = self.typemap[operand]
         res = INT_UNARY_OPMAP[expr.kind](self.builder, self.valmap[operand])
-        self.valmap[expr] = res
+        self.valmap[expr] = self.do_cast(res, ity, finalty)
 
     def expr_For(self, expr):
-        ty = self.typemap[expr]
-        lty = self.to_llvm(ty)
         index = expr.args.index.value
         stop = expr.args.stop.value
         step = expr.args.step.value
 
         index_ty = self.typemap[index]
-        stop_ty = self.typemap[stop]
         step_ty = self.typemap[step]
 
-        intp = self.typesetter.intp
+        intp = index_ty
         index = self.cast(index, intp)
 
         stop = self.cast(stop, intp)

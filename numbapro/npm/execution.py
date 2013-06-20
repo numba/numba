@@ -28,10 +28,10 @@ class JIT(object):
                 for t, v in zip(self.args, args)]
         if self.return_type:
             ret = self.return_type()
-            res = self.callable(*(args + [ctypes.byref(ret)]))
+            self.callable(*(args + [ctypes.byref(ret)]))
             return prepare_ret(self.return_type, ret)
         else:
-            res = self.callable(*args)
+            self.callable(*args)
 
 
 def prepare_args(ty, val):

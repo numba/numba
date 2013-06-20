@@ -1,10 +1,9 @@
 import __builtin__
 import dis
-import operator
 import inspect
 from collections import defaultdict, namedtuple
 
-from .bytecode import ByteCode, BYTECODE_TABLE
+from .bytecode import ByteCode
 from .utils import SortedMap
 from .errors import CompileError
 
@@ -252,7 +251,6 @@ class SymbolicExecution(object):
         self.curblock.terminator = term
 
     def make_subblock(self, offset):
-        oldblock = self.curblock
         self.blocks[offset] = Block(offset, self.valuemap)
 
     def push(self, value):
@@ -734,38 +732,10 @@ def find_dominator_frontiers(blocks, doms, idoms):
     frontiers = defaultdict(set)
     for blk in blocks.itervalues():
         if len(blk.incomings) >= 2:
-            fr = frontiers[blk.offset]
             for inc in map(blocks.get, blk.incomings):
                 runner = inc
                 while runner.offset != idoms[blk.offset]:
                     frontiers[runner.offset].add(blk.offset)
                     runner = blocks.get(idoms[runner.offset])
     return frontiers
-
-def load_store_elmination(varmap, valuemap, blocks):
-    doms = find_dominators(blocks)
-    idoms = find_immediate_dominator(blocks, doms)
-    assert False
-    frontiers = find_dominator_frontiers(blocks, doms, idoms)
-    philoc = reduce(set.union, frontiers.itervalues())
-    incvals = defaultdict(lambda:defaultdict(set))
-    incvals_entry = incvals[blocks[0]]
-#    for
-
-#    for blk in blocks.itervalues():
-#        for var in varmap:
-#            for next in blk.edges:
-#                incvals[next][var].add(
-
-
-#    # name -> block -> list of defs
-#    defmap = defaultdict(lambda:defaultdict(list))
-#    # name -> block -> list of uses
-#    usemap = defaultdict(lambda:defaultdict(list))
-#    for blk in blocks.itervalues():
-#        for i, value in enumerate(blk.body):
-#            if value.kind == 'Load':
-#                usemap[value.args[0]][blk].append((i, value))
-#            elif value.kind == 'Store':
-#                defmap[value.args[0]][blk].append((i, value))
 

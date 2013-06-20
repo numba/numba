@@ -40,7 +40,7 @@ class TestCudaMemory(unittest.TestCase):
 
 class TestCudaMemoryFunctions(unittest.TestCase):
     def setUp(self):
-        context = driver.get_or_create_context()
+        driver.get_or_create_context()
 
     def test_memcpy(self):
         hstary = numpy.arange(100, dtype=numpy.uint32)

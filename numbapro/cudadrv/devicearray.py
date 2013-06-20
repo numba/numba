@@ -8,7 +8,7 @@ strides, dtype and size attributes similar to a NumPy ndarray.
 import numpy as np
 import warnings
 import math
-from .ndarray import *
+from .ndarray import ndarray_device_allocate_head, ndarray_populate_head
 from . import driver as _driver
 
 def is_cuda_ndarray(obj):

@@ -69,7 +69,6 @@ def test_fill3d_threadidx():
         compiled.bind()
 
         ary = np.zeros((X, Y, Z), dtype=np.int32)
-        exp = ary.copy()
         compiled[1, (X, Y, Z)](ary)
         return ary
 
@@ -79,7 +78,6 @@ def test_fill3d_threadidx():
         compiled.bind()
 
         ary = np.asfortranarray(np.zeros((X, Y, Z), dtype=np.int32))
-        exp = ary.copy()
         compiled[1, (X, Y, Z)](ary)
         return ary
 
@@ -112,7 +110,6 @@ def test_simple_grid2d():
     ntid = (4, 3)
     nctaid = (5, 6)
     shape = (ntid[0] * nctaid[0], ntid[1] * nctaid[1])
-    nelem = shape[0] * shape[1]
     ary = np.empty(shape, dtype=np.int32)
     exp = ary.copy()
     compiled[nctaid, ntid](ary)

@@ -1,9 +1,5 @@
-import unittest
-import numpy as np
-import math
-from numba import *
 from numbapro.cudadrv import nvvm
-from llvm.core import *
+from llvm.core import Module, Type, Builder, InlineAsm
 import support
 #import logging; logging.getLogger().setLevel(1)
 

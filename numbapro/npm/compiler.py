@@ -1,4 +1,4 @@
-import inspect, pprint
+import inspect
 from . import symbolic, typing, codegen, execution
 
 def compile(func, retty, argtys):

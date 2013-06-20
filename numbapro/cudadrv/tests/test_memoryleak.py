@@ -1,5 +1,3 @@
-import unittest
-import gc
 import numpy as np
 from numbapro.cudadrv import driver as cudriver
 from numbapro import cuda

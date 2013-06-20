@@ -3,7 +3,8 @@ This is a direct translation of nvvm.h
 '''
 
 import sys, os
-from ctypes import *
+from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, CDLL, byref,
+                    c_char)
 from error import NvvmError, NvvmSupportError
 from numbapro._utils import finalizer
 
@@ -230,7 +231,7 @@ class CompilationUnit(finalizer.OwnerMixin):
         opts = []
 
         if options.get('target'):
-            opts.append('-%s=%s' % (target, options.pop('target')))
+            opts.append('-target=%s' % options.pop('target'))
 
         if options.get('debug'):
             opts.append('-g')

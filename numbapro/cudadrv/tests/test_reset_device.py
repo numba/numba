@@ -1,7 +1,6 @@
 from numbapro import cuda
 from numbapro.cudadrv import driver
 import unittest, threading
-import numpy as np
 
 from . import support
 

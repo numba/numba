@@ -1,5 +1,7 @@
-import unittest
-from numbapro.cudadrv.driver import *
+from numbapro.cudadrv.driver import (Stream, Driver, Module, Function, Device,
+                                     DeviceMemory, host_to_device,
+                                     device_to_host)
+from ctypes import c_int, sizeof
 import support
 
 ptx1 = '''

@@ -1,4 +1,3 @@
-from numbapro.npm.types import *
 from numbapro.npm.typing import ScalarType
 from numbapro.npm.symbolic import Const
 
