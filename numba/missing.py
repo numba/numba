@@ -11,11 +11,10 @@ class FixMissingLocations(ast.NodeVisitor):
         self.override = override
 
     def visit(self, node):
+        super(FixMissingLocations, self).visit(node)
         if not hasattr(node, 'lineno') or self.override:
             node.lineno = self.lineno
             node.col_offset = self.col_offset
         else:
             self.lineno = node.lineno
             self.col_offset = node.col_offset
-
-        super(FixMissingLocations, self).visit(node)
