@@ -561,7 +561,8 @@ class Infer(object):
 
         def rule(value, obj):
             if obj.is_array:
-                return cast_penalty(obj.element, value)
+                return obj.element == value
+                #return cast_penalty(obj.element, value)
         self.rules[value].add(Conditional(rule, obj))
 
     def visit_SetItem(self, value):
