@@ -65,7 +65,7 @@ class TestConversion(unittest.TestCase):
             # print dst_type
             if dst_type.is_int:
                 if dst_type.typename == 'char':
-                    expected = '\x02'
+                    expected = b'\x02'
                 else:
                     expected = 2
             else:
