@@ -139,3 +139,8 @@ def ord_(typesystem, node, expr):
         # TODO:
         pass
 
+@register_builtin(1)
+def chr_(typesystem, node, expr):
+    type = get_type(expr)
+    if type.is_int:
+        return nodes.CoercionNode(expr, char)
