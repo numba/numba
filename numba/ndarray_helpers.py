@@ -13,10 +13,21 @@ from __future__ import print_function, division, absolute_import
 
 from numba import *
 from numba.typesystem import tbaa
-from numba.llvm_types import _head_len, _int32
+from numba.llvm_types import _head_len, _int32, _LLVMCaster, constant_int
 import llvm.core as lc
 
-const_int = lambda X: lc.Constant.int(_int32, X)
+def _const_int(X):
+    return lc.Constant.int(lc.Type.int(), X)
+
+def ptr_at(builder, ptr, idx):
+    return builder.gep(ptr, [_const_int(idx)])
+
+def load_at(builder, ptr, idx):
+    return builder.load(ptr_at(builder, ptr, idx))
+
+def store_at(builder, ptr, idx, val):
+    builder.store(val, ptr_at(builder, ptr, idx))
+
 
 def set_metadata(tbaa, instr, type):
     if type is not None:
@@ -56,11 +67,11 @@ class PyArrayAccessor(object):
     def __init__(self, builder, pyarray_ptr, tbaa=None, dtype=None):
         self.builder = builder
         self.pyarray_ptr = pyarray_ptr
-        self.tbaa = tbaa # this maybe None
+        self.tbaa = tbaa # this may be None
         self.dtype = dtype
 
     def _get_element(self, idx):
-        indices = [const_int(0), const_int(_head_len + idx)]
+        indices = [constant_int(0), constant_int(_head_len + idx)]
         ptr = self.builder.gep(self.pyarray_ptr, indices)
         return ptr
 
@@ -107,4 +118,82 @@ class PyArrayAccessor(object):
     @make_property(tbaa.numpy_flags)
     def flags(self):
         return self._get_element(6)
-    
+
+class NumpyArray(object):
+    """
+    LLArray compatible inferface for NumPy's ndarray
+    """
+
+    _strides_ptr = None
+    _strides = None
+    _shape_ptr = None
+    _shape = None
+    _data_ptr = None
+    _freefuncs = []
+    _freedata = []
+
+    def __init__(self, pyarray_ptr, builder, tbaa=None, type=None):
+        self.type = type
+        self.nd = type.ndim
+
+        # LLVM attributes
+        self.arr = PyArrayAccessor(builder, pyarray_ptr, tbaa, type.dtype)
+        self.builder = builder
+        self._shape = None
+        self._strides = None
+        self.caster = _LLVMCaster(builder)
+
+    @property
+    def data(self):
+        if not self._data_ptr:
+            self._data_ptr = self.arr.get_data()
+        return self._data_ptr
+
+    @property
+    def shape_ptr(self):
+        return self._shape_ptr
+
+    @property
+    def strides_ptr(self):
+        return self._strides_ptr
+
+    @property
+    def shape(self):
+        if not self._shape:
+            self._shape_ptr = self.arr.shape
+            self._shape = self.preload(self._shape_ptr, self.nd)
+        return self._shape
+
+    @property
+    def strides(self):
+        if not self._strides:
+            self._strides_ptr = self.arr.strides
+            self._strides = self.preload(self._strides_ptr, self.nd)
+        return self._strides
+
+    # def setstrides(self, p_strides, strides=None):
+    #     self._strides_ptr = p_strides
+    #     self._strides = strides
+
+    @property
+    def itemsize(self):
+        raise NotImplementedError
+
+    def preload(self, ptr, count=None):
+        assert count is not None
+        return [load_at(self.builder, ptr, i) for i in range(count)]
+
+    def getptr(self, *indices):
+        offset = _const_int(0)
+        for i, (stride, index) in enumerate(zip(self.strides, indices)):
+            index = self.caster.cast(index, stride.type, unsigned=False)
+            offset = self.caster.cast(offset, stride.type, unsigned=False)
+            offset = self.builder.add(offset, self.builder.mul(index, stride))
+
+        data_ty = self.type.dtype.to_llvm()
+        data_ptr_ty = lc.Type.pointer(data_ty)
+
+        dptr_plus_offset = self.builder.gep(self.data, [offset])
+
+        ptr = self.builder.bitcast(dptr_plus_offset, data_ptr_ty)
+        return ptr

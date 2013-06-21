@@ -57,6 +57,14 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
                           '<=':lc.ICMP_ULE,
                           '!=':lc.ICMP_NE}
 
+def validate_array_representation(env, signature):
+    if not env.crnt.array is ndarray_helpers.NumpyArray:
+        types = (signature.return_type,) + signature.argtypes
+        for ty in types:
+            if not ty.is_array:
+                raise TypeError("Cannot pass array %s as NumPy array" %
+                                                        env.crnt.array)
+
 
 # TODO: use composition instead of mixins
 
@@ -1533,7 +1541,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         assert node.node.type.is_array
         lvalue = self.visit(node.node)
         lindices = self.visit(node.slice)
-        lptr = node.subscript(self, self.tbaa, lvalue, lindices)
+        ndarray = self.ndarray(lvalue, node.node.type)
+        lptr = ndarray.getptr(*lindices)
+        print("...............", lptr)
         return self._handle_ctx(node, lptr, node.type.pointer())
 
     #def visit_Index(self, node):
@@ -1543,6 +1553,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self.visitlist(node.dims)
 
     def visit_MultiArrayAPINode(self, node):
+        validate_array_representation(self.env, node.signature)
         meth = getattr(self.multiarray_api, 'load_' + node.func_name)
         lfunc = meth(self.llvm_module, self.builder)
         lsignature = node.signature.pointer().to_llvm(self.context)
@@ -1551,28 +1562,32 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return result
 
     def pyarray_accessor(self, llvm_array_ptr, dtype):
-        acc = ndarray_helpers.PyArrayAccessor(self.builder, llvm_array_ptr,
-                                              self.tbaa, dtype)
-        return acc
+        return ndarray_helpers.PyArrayAccessor(self.builder, llvm_array_ptr,
+                                               self.tbaa, dtype)
+
+    def ndarray(self, llvm_array_ptr, type):
+        if issubclass(self.env.crnt.array, ndarray_helpers.NumpyArray):
+            return ndarray_helpers.NumpyArray(llvm_array_ptr, self.builder,
+                                              self.tbaa, type)
+        else:
+            return self.env.crnt.array(llvm_array_ptr, self.builder)
 
     def visit_ArrayAttributeNode(self, node):
-        array = self.visit(node.array)
-        acc = self.pyarray_accessor(array, node.array_type.dtype)
+        l_array = self.visit(node.array)
+        ndarray = self.ndarray(l_array, node.array.type)
+        if node.attr_name in ('shape', 'strides'):
+            attr_name = node.attr_name + '_ptr'
+        else:
+            attr_name = node.attr_name
 
-        attr_name = node.attr_name
-        if attr_name == 'shape':
-            attr_name = 'dimensions'
-
-        result = getattr(acc, attr_name)
+        result = getattr(ndarray, attr_name)
         ltype = node.type.to_llvm(self.context)
         if node.attr_name == 'data':
             result = self.builder.bitcast(result, ltype)
 
         return result
 
-    def visit_ShapeAttributeNode(self, node):
-        # hurgh, no dispatch on superclasses?
-        return self.visit_ArrayAttributeNode(node)
+    visit_ShapeAttributeNode = visit_ArrayAttributeNode
 
     #------------------------------------------------------------------------
     # Array Slicing

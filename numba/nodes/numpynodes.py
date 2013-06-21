@@ -7,7 +7,7 @@ import llvm.core
 from numba import typesystem
 from numba.typesystem import tbaa
 from numba.nodes import *
-from numba.ndarray_helpers import PyArrayAccessor
+from numba.ndarray_helpers import PyArrayAccessor, NumpyArray
 
 #----------------------------------------------------------------------------
 # External Utilities
@@ -151,31 +151,6 @@ class DataPointerNode(ExprNode):
         assert strides is not None
 
         return dptr, strides
-
-    def subscript(self, translator, tbaa, llvm_value, indices):
-        builder = translator.builder
-        caster = translator.caster
-        context = translator.context
-
-        offset = _const_int(0)
-
-        if not isinstance(indices, collections.Iterable):
-            indices = (indices,)
-
-        dptr, strides = self.data_descriptors(builder, tbaa, llvm_value)
-
-        for i, (stride, index) in enumerate(zip(strides, indices)):
-            index = caster.cast(index, stride.type, unsigned=False)
-            offset = caster.cast(offset, stride.type, unsigned=False)
-            offset = builder.add(offset, builder.mul(index, stride))
-
-        data_ty = self.type.to_llvm(context)
-        data_ptr_ty = llvm.core.Type.pointer(data_ty)
-
-        dptr_plus_offset = builder.gep(dptr, [offset])
-
-        ptr = builder.bitcast(dptr_plus_offset, data_ptr_ty)
-        return ptr
 
     @property
     def ndim(self):

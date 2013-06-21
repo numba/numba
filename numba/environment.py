@@ -19,6 +19,7 @@ from numba.nodes import metadata
 from numba.control_flow import ControlFlow
 from numba.codegen import translate
 from numba.codegen import globalconstants
+from numba.ndarray_helpers import NumpyArray
 
 from numba.intrinsic import default_intrinsic_library
 from numba.external import default_external_library
@@ -292,6 +293,7 @@ class FunctionEnvironment(object):
         'numba.typesystem.templatetypes.')
 
     typesystem = TypedProperty(TypeSystem, "Typesystem for this compilation")
+    array = TypedProperty(object, "Array abstraction", NumpyArray)
 
     ast_metadata = TypedProperty(
         object,
@@ -393,7 +395,7 @@ class FunctionEnvironment(object):
              closures=None, closure_scope=None,
              refcount_args=True,
              ast_metadata=None, warn=True, warnstyle='fancy',
-             typesystem=None, postpasses=None,
+             typesystem=None, array=None, postpasses=None,
              **kws):
 
         self.parent = parent
@@ -451,6 +453,8 @@ class FunctionEnvironment(object):
 
         self.refcount_args = refcount_args
         self.typesystem = typesystem or numba_typesystem
+        if array:
+            self.array = array
 
         import numba.postpasses
         self.postpasses = postpasses or numba.postpasses.default_postpasses
