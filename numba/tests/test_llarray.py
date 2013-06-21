@@ -8,11 +8,12 @@ import llvm.core as lc
 
 # ______________________________________________________________________
 
-p = int_.pointer()
-ArrayType = numba.struct([('data', p), ('shape', p), ('strides', p)])
+ArrayType = numba.struct([('data', double.pointer()),
+                          ('shape', int64.pointer()),
+                          ('strides', int64.pointer())])
 
-Int = lc.Type.int()
-const = partial(lc.Constant.int, Int)
+Int32 = lc.Type.int(32)
+const = partial(lc.Constant.int, Int32)
 zero = const(0)
 one  = const(1)
 two  = const(2)
@@ -94,7 +95,7 @@ def use_array(A):
     """simple test function"""
     for i in range(A.shape[0]):
         for j in range(A.shape[1]):
-            A[i, j] = i * A.shape[0] + j
+            A[i, j] = i * A.shape[1] + j
 
 @jit(object_(double[:, :]), array=MyArray, wrap=False)
 def get_attributes(A):
@@ -106,37 +107,43 @@ def get_attributes(A):
 c_use_array      = numba.addressof(use_array)
 c_get_attributes = numba.addressof(get_attributes)
 
+c_use_array.argtypes      = [ctypes.POINTER(CtypesArray)]
+c_get_attributes.argtypes = [ctypes.POINTER(CtypesArray)]
+
 # ______________________________________________________________________
+# Utils
 
 Array = namedtuple('Array', ['handle', 'array', 'data', 'shape', 'strides'])
 
+def make_array():
+    """Make a double[*, 10] ctypes-allocated array"""
+    empty = lambda c_type, args: ctypes.cast(
+        (c_type * len(args))(*args), ctypes.POINTER(c_type))
+
+    data    = empty(ctypes.c_double, [0] * 50)
+    shape   = empty(ctypes.c_int64,  [5, 10])
+    strides = empty(ctypes.c_int64,  [10 * 8, 8]) # doubles!
+    array   = CtypesArray(data, shape, strides)
+
+    return Array(ctypes.pointer(array), array, data, shape, strides)
+
+# ______________________________________________________________________
+# Tests...
+
 class TestArray(unittest.TestCase):
 
-    def make_array(self):
-        """Make a double[*, 10] ctypes-allocated array"""
-        p_int = ctypes.POINTER(ctypes.c_int)
-        empty = lambda args: ctypes.cast((ctypes.c_int * len(args))(*args), p_int)
-
-        data    = empty([0] * 100)
-        shape   = empty([5, 10])
-        strides = empty([10 * 8, 8]) # doubles!
-        array   = CtypesArray(data, shape, strides)
-
-        return Array(ctypes.pointer(array), array, data, shape, strides)
-
     def test_indexing(self):
-        arr = self.make_array()
+        arr = make_array()
         c_use_array(arr.handle)
-        for i in range(100):
-            print arr.data[i],
-            # assert arr.data[i] == i, (arr.data[i], i)
+        for i in range(50):
+            assert arr.data[i] == float(i), (arr.data[i], i)
 
     def test_attributes(self):
-        arr = self.make_array()
+        arr = make_array()
         result = c_get_attributes(arr.handle)
         assert result == (5, 10, 80, 8), result
 
+
 if __name__ == "__main__":
-    # print get_attributes.lfunc
     # TestArray('test_attributes').debug()
     unittest.main()
