@@ -274,10 +274,56 @@ def get_arch_option(major, minor):
         minor = 0
     assert (major, minor) in SUPPORTED_CC
     arch = 'compute_%d%d' % (major, minor)
+    return arch
+
+MISSING_LIBDEVICE_MSG = '''
+Please define environment variable NUMBAPRO_LIBDEVICE=/path/to/libdevice 
+/path/to/libdevice -- is the path to the directory containing the libdevice.*.bc
+files in the installation of CUDA.  (requires CUDA >=5.5)
+'''
+
+class LibDevice(object):
+    _cache_ = {}
+    def __init__(self, arch):
+        '''
+        arch --- must be result from get_arch_option()
+        '''
+        if arch not in self._cache_:
+            try:
+                libdevice_dir = os.environ['NUMBAPRO_LIBDEVICE']
+            except KeyError:
+                # try the relative path to NUMBAPRO_NVVM
+                try:
+                    libnvvm_path = os.environ['NUMBAPRO_NVVM']
+                except KeyError:
+                    raise Exception(MISSING_LIBDEVICE_MSG)
+                else:
+                    rel = os.path.join(os.path.dirname(libnvvm_path),
+                                       '..', 'libdevice')
+                    libdevice_dir = os.path.abspath(rel)
+            prefix_template = 'libdevice.%s'
+            ext = '.bc'
+            for fname in os.listdir(libdevice_dir):
+                prefix = prefix_template % arch
+                if fname.startswith(prefix) and fname.endswith(ext):
+                    chosen = os.path.join(libdevice_dir, fname)
+                    break
+            else:
+                raise Exception(MISSING_LIBDEVICE_MSG)
+            with open(chosen, 'rb') as bcfile:
+                bc = bcfile.read()
+                self._cache_[arch] = bc
+
+        self.bc = self._cache_[arch]
+
+    def get(self):
+        return self.bc
 
 def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
+    libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
     cu.add_module(llvmir)
+    cu.add_module(libdevice.get())
     return cu.compile(**opts)
 
 def set_cuda_kernel(lfunc):
