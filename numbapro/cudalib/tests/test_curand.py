@@ -1,8 +1,10 @@
 import numpy as np
 import unittest
+from .support import addtest
 
 from numbapro import cuda
 
+@addtest
 class TestCURand(unittest.TestCase):
     def test_lib(self):
         from numbapro.cudalib.curand.binding import libcurand

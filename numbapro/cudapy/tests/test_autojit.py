@@ -11,8 +11,13 @@ def test_autojit():
         pass
 
     what(np.empty(1), 1.0, 21)
+    what(np.empty(1), 1.0, 21)
     what(np.empty(1), np.empty(1, dtype=np.int32), 21)
+    what(np.empty(1), np.empty(1, dtype=np.int32), 21)
+    what(np.empty(1), 1.0, 21)
 
+    print what.definitions
+    assert len(what.definitions) == 2
 
 if __name__ == '__main__':
     main()
