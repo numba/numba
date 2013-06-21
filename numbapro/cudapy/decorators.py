@@ -44,6 +44,11 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True):
     if isinstance(restype, str):
         restype, argtypes = _eval_type_string(restype)
 
+    if argtypes is None:
+        # must be a function then
+        argtypes = restype.args
+        restype = restype.return_type
+
     # convert Numba types to NPM types
     try:
         restype = (restype
@@ -62,7 +67,7 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True):
         return cukern
 
     def device_jit(func):
-        return compiler.compile_device_func(func, restype, argtypes,
+        return compiler.compile_device(func, restype, argtypes,
                                             inline=True)
 
     if device:

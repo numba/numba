@@ -356,7 +356,6 @@ class Infer(object):
                     filterout = itertools.takewhile(take_filter, chosen_sorted)
                     bests = [x for _, x in filterout]
 
-
                     if len(bests) > 1:
                         # find the most generic solution
                         temp = defaultdict(set)

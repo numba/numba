@@ -239,10 +239,18 @@ class SymbolicExecution(object):
             oldblock.terminator = Term('Jump', None, Jump(self.curblock.offset))
             oldblock.connect(self.curblock)
 
-#        for name in self.varnames:
-#            phi = self.insert(Expr('Phi', None,
-#                              Phi(name=name, incomings=set())))
-#            self.curblock.varmap[name].append(phi)
+    def unpack_const_tuple(self, idx):
+        if not isinstance(idx, tuple):
+            if (idx.value.kind == 'Const' and
+                    isinstance(idx.value.args.value, tuple)):
+                indices = []
+                for i in idx.value.args.value:
+                    ci = self.insert(Expr('Const', None, Const(i)))
+                    indices.append(ci)
+                idx = tuple(indices)
+            else:
+                idx = (idx,)
+        return idx
 
     def insert(self, expr):
         return self.curblock.insert(expr)
@@ -486,8 +494,7 @@ class SymbolicExecution(object):
             self.push(self.insert(Expr('ArrayAttr', inst, obj)))
         else:
             # get item on array
-            if not isinstance(idx, tuple):
-                idx = (idx,)
+            idx = self.unpack_const_tuple(idx)
             expr = Expr('GetItem', inst, GetItem(obj, idx))
             self.push(self.insert(expr))
 
@@ -495,9 +502,7 @@ class SymbolicExecution(object):
         idx = self.pop()
         obj = self.pop()
         val = self.pop()
-        
-        if not isinstance(idx, tuple):
-            idx = (idx,)
+        idx = self.unpack_const_tuple(idx)
         self.insert(Expr('SetItem', inst, SetItem(obj, idx, val)))
 
     def visit_BUILD_TUPLE(self, inst):
@@ -746,4 +751,3 @@ def find_dominator_frontiers(blocks, doms, idoms):
                     frontiers[runner.offset].add(blk.offset)
                     runner = blocks.get(idoms[runner.offset])
     return frontiers
-

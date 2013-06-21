@@ -22,6 +22,9 @@ def loop_case_1(a, b):
 
     return j
 
+def array_getset_1(A, B):
+    A[0, 0] = B[0, 0]
+
 
 def template(func, compiled, args, allclose=False):
     got = compiled(*args)
@@ -45,6 +48,19 @@ def test_loop_case_1():
 
     args = 0, 100
     template(func, cfunc, args)
+
+#------------------------------------------------------------------------------
+# test_array_getset_1
+
+@testcase
+def test_array_getset_1():
+    A = np.empty((2, 5), dtype=np.float64)
+    B = np.arange(10, dtype=np.float32).reshape(2, 5)
+    func = array_getset_1
+    cfunc = compile(func, None, [arraytype(float64, 2, 'C'),
+                                 arraytype(float32, 2, 'C')])
+    args = A, B
+    cfunc(*args)
 
 if __name__ == '__main__':
     main()
