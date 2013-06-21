@@ -1498,10 +1498,15 @@ class TypeInferer(visitors.NumbaTransformer):
 
         return result_type
 
-    def visit_Attribute(self, node):
-        node.value = self.visit(node.value)
+    def visit_Attribute(self, node, visitchildren=True):
+        if visitchildren:
+            node.value = self.visit(node.value)
+
         type = node.value.variable.type
-        if node.attr == 'conjugate' and (type.is_complex or type.is_float):
+        if type.is_unresolved:
+            result_type = deferred.create_deferred(self, node,
+                                                   typesystem.DeferredAttrType)
+        elif node.attr == 'conjugate' and (type.is_complex or type.is_float):
             result_type = typesystem.method(type, 'conjugate')
         elif type.is_complex:
             result_type = self._resolve_complex_attribute(node, type)

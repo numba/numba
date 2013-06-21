@@ -499,6 +499,27 @@ class DeferredIndexType(ReanalyzeCircularType):
         return "<deferred_index(%s, %s)" % (self.index_node,
                                             ", ".join(map(str, self.parents)))
 
+class DeferredAttrType(ReanalyzeCircularType):
+    """
+    Used when we don't know the type of the object of which we access an
+    attribute.
+    """
+
+    def __init__(self, variable, type_inferer, node, **kwds):
+        super(DeferredAttrType, self).__init__(variable, type_inferer, **kwds)
+        self.type_inferer = type_inferer
+        self.node = node
+
+    def retry_infer(self):
+        node = self.type_inferer.visit_Attribute(self.node,
+                                                 visitchildren=False)
+        return node.variable.type
+
+    def __repr__(self):
+        return "<deferred_attr(%s, %s)" % (self.node,
+                                           ", ".join(map(str, self.parents)))
+
+
 class DeferredCallType(ReanalyzeCircularType):
     """
     Used when we don't know the type of the expression being called, or when
