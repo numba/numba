@@ -558,9 +558,24 @@ to use post-mortem debugging, which can help understand what's going wrong
 without modifying any code (and later tracking down print statements that
 you accidentally committed):
 
+.. _post-mortem:
+
 .. code-block:: bash
 
     $ python -m pdb test.py
+
+When using post-mortem debugging it's useful to enable the post-mortem
+option in numba.environment.FunctionErrorEnvironment::
+
+    enable_post_mortem = TypedProperty(
+        bool,
+        "Enable post-mortem debugging for the Numba compiler",
+        False
+    )
+
+Set the default value to ``True`` there. This way exceptions are not
+swallowed and accumulated (and hence raised from the error reporter,
+instead of the failing place in the compiler).
 
 Debugging
 ~~~~~~~~~
@@ -621,6 +636,14 @@ You can also always force types through casts or ``locals``::
     @jit(..., locals={'x':double}) # locals
     def myfunc(...):
         print(double(y))           # cast
+
+Debugging the Translator
+------------------------
+To debug the translator, one can again stick with prints or post-mortem
+debugging. If the latter option is desirable, make absolutely sure that
+you enable the post-mortem debug option (see :ref:`post-mortem`). This
+makes sure numba does not delete the LLVM function, which means the LLVM
+values referenced in the translator will still be in a consistent state.
 
 Problems
 ~~~~~~~~
