@@ -65,7 +65,7 @@ def make_engine(lfunc):
     # optimize
     pms = lp.build_pass_managers(opt=2, tm=tm, fpm=False)
     pms.pm.run(lmod)
-    print lmod
+    #print lmod
     
     return eb.create()
 
