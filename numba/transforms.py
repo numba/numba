@@ -142,6 +142,9 @@ class BuiltinResolver(object):
 
     def __init__(self, env):
         self.env = env
+        self.external_call = partial(function_util.external_call,
+                                     self.env.context,
+                                     self.env.crnt.llvm_module)
 
     def resolve_builtin_call(self, node, func):
         """
@@ -194,11 +197,7 @@ class BuiltinResolver(object):
         if arg1.variable.type.is_string:
             return nodes.CoercionNode(
                 nodes.ObjectTempNode(
-                    function_util.external_call(
-                        self.env.context,
-                        self.env.crnt.llvm_module,
-                        ext_name,
-                        args=[arg1, nodes.NULL, arg2])),
+                    self.external_call(ext_name, args=[arg1, nodes.NULL, arg2])),
                 dst_type=dst_type)
 
     def _resolve_int(self, func, node, argtype, dst_type=int_):
@@ -208,6 +207,11 @@ class BuiltinResolver(object):
 
     def _resolve_long(self, func, node, argtype, dst_type=int_):
         return self._resolve_int_number(func, node, argtype, long_, 'PyLong_FromString')
+
+    def _resolve_len(self, func, node, argtype):
+        if argtype.is_string:
+            call = self.external_call('strlen', node.args)
+            return call # nodes.CoercionNode(call, Py_ssize_t)
 
 class ResolveCoercions(visitors.NumbaTransformer):
 

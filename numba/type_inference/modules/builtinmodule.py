@@ -53,8 +53,10 @@ def len_(typesystem, node, obj):
         shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
         new_node = nodes.index(shape_attr, 0)
         return new_node
+    elif argtype.is_string:
+        return nodes.CoercionNode(nodes.typednode(node, size_t), Py_ssize_t)
 
-    return Py_ssize_t
+    return Py_ssize_t # Object call
 
 @register_builtin((0, 1, 2), can_handle_deferred_types=True)
 def _int(typesystem, node, x, base, dst_type=int_):
