@@ -124,6 +124,14 @@ def math_isinf(A, B):
     i = cuda.grid(1)
     B[i] = math.isinf(A[i])
 
+def math_pow_binop(A, B, C):
+    i = cuda.grid(1)
+    C[i] = A[i] ** B[i]
+
+def math_mod_binop(A, B, C):
+    i = cuda.grid(1)
+    C[i] = A[i] % B[i]
+
 def unary_template_float32(func, npfunc, start=0, stop=1):
     unary_template(func, npfunc, np.float32, float32, start, stop)
 
@@ -131,7 +139,7 @@ def unary_template_float64(func, npfunc, start=0, stop=1):
     unary_template(func, npfunc, np.float64, float64, start, stop)
 
 def unary_template(func, npfunc, npdtype, npmtype, start, stop):
-    nelem = 100
+    nelem = 50
     A = np.linspace(start, stop, nelem).astype(npdtype)
     B = np.empty_like(A)
     arytype = arraytype(npmtype, 1, 'C')
@@ -147,7 +155,7 @@ def unary_bool_template_float64(func, npfunc, start=0, stop=1):
     unary_template(func, npfunc, np.float64, float64, start, stop)
 
 def unary_bool_template(func, npfunc, npdtype, npmtype, start, stop):
-    nelem = 100
+    nelem = 50
     A = np.linspace(start, stop, nelem).astype(npdtype)
     B = np.empty(A.shape, dtype=np.int32)
     iarytype = arraytype(A.dtype, 1, 'C')
@@ -166,7 +174,7 @@ def binary_template_float64(func, npfunc, start=0, stop=1):
     binary_template(func, npfunc, np.float64, float64, start, stop)
 
 def binary_template(func, npfunc, npdtype, npmtype, start, stop):
-    nelem = 100
+    nelem = 50
     A = np.linspace(start, stop, nelem).astype(npdtype)
     B = np.empty_like(A)
     arytype = arraytype(npmtype, 1, 'C')
@@ -349,6 +357,15 @@ def test_math_pow():
     binary_template_float32(math_pow, np.power)
     binary_template_float64(math_pow, np.power)
 
+
+#------------------------------------------------------------------------------
+# test_math_pow_binop
+
+@testcase
+def test_math_pow_binop():
+    binary_template_float32(math_pow_binop, np.power)
+    binary_template_float64(math_pow_binop, np.power)
+
 #------------------------------------------------------------------------------
 # test_math_ceil
 
@@ -380,6 +397,14 @@ def test_math_copysign():
 def test_math_fmod():
     binary_template_float32(math_fmod, np.fmod, start=1)
     binary_template_float64(math_fmod, np.fmod, start=1)
+
+#------------------------------------------------------------------------------
+# test_math_mod_binop
+
+@testcase
+def test_math_mod_binop():
+    binary_template_float32(math_mod_binop, np.fmod, start=1)
+    binary_template_float64(math_mod_binop, np.fmod, start=1)
 
 #------------------------------------------------------------------------------
 # test_math_isnan

@@ -14,4 +14,5 @@ def error_context(lineno):
     except Exception, e:
         if lineno < 0:
             lineno = "?"
-        raise Exception("At line %s: %s" % (lineno, e)), None, sys.exc_info()[2]
+        exc = Exception("Caused by input line %s: %s\n%s" % (lineno, type(e), e))
+        raise exc, None, sys.exc_info()[2]

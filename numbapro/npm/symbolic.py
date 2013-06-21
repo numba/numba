@@ -5,7 +5,7 @@ from collections import defaultdict, namedtuple
 
 from .bytecode import ByteCode
 from .utils import SortedMap
-from .errors import CompileError
+from . import errors
 
 Arg = namedtuple('Arg', ['num', 'name'])
 Call = namedtuple('Call', ['func', 'args', 'kws'])
@@ -45,6 +45,7 @@ BINARYOP_MAP = {
      '/': 'BinOp',
     '//': 'BinOp',
      '%': 'BinOp',
+     '**': 'BinOp',
      '&': 'BinOp',
      '|': 'BinOp',
      '^': 'BinOp',
@@ -69,9 +70,6 @@ OP_MAP.update(BINARYOP_MAP)
 OP_MAP.update(UNARYOP_MAP)
 OP_MAP.update(BOOLOP_MAP)
 
-class TranslateError(CompileError):
-    def __init__(self, inst, msg):
-        super(TranslateError, self).__init__(inst.lineno, msg)
 
 PendingFor = namedtuple('PendingFor', ['prev', 'block', 'itername', 'iter'])
 
@@ -148,7 +146,8 @@ class SymbolicExecution(object):
                     if inst.opname == 'POP_TOP':
                         continue # skipped
 
-            func(inst)
+            with errors.error_context(inst.lineno):
+                func(inst)
 
         assert not self.stack, self.stack
         self.complete_for()
@@ -183,24 +182,25 @@ class SymbolicExecution(object):
             changed = False
             for blk in self.blocks.itervalues():
                 for val in blk.body:
-                    if val.kind == 'Phi' and len(val.args.incomings) != len(blk.incomings):
-                        phi = val
-                        for inblkoff in blk.incomings:
-                            inblk = self.blocks[inblkoff]
-                            lastdefs = inblk.varmap[phi.args.name]
-                            if lastdefs:
-                                lastval = lastdefs[-1]
-                            else:
-                                # find the closest definition
-                                lastval = self.find_def(inblkoff, phi.args.name)
-                                if not lastval:
-                                    raise TranslateError(val, "variable %s can be undef" % phi.args.name)
-                                changed = True
-                            phi.args.incomings.add((inblkoff, lastval))
-                            if lastval:
-                                update_uses(phi.ref, [lastval])
-                    else:
-                        break
+                    with errors.error_context(val.lineno):
+                        if val.kind == 'Phi' and len(val.args.incomings) != len(blk.incomings):
+                            phi = val
+                            for inblkoff in blk.incomings:
+                                inblk = self.blocks[inblkoff]
+                                lastdefs = inblk.varmap[phi.args.name]
+                                if lastdefs:
+                                    lastval = lastdefs[-1]
+                                else:
+                                    # find the closest definition
+                                    lastval = self.find_def(inblkoff, phi.args.name)
+                                    if not lastval:
+                                        raise ValueError("variable %s can be undef" % phi.args.name)
+                                    changed = True
+                                phi.args.incomings.add((inblkoff, lastval))
+                                if lastval:
+                                    update_uses(phi.ref, [lastval])
+                        else:
+                            break
 
     def find_def(self, blkoff, name):
         '''Find variable definition in the IDOM of a block
@@ -228,7 +228,7 @@ class SymbolicExecution(object):
 
 
     def generic_visit(self, inst):
-        raise TranslateError(inst, "unsupported bytecode %s" % inst)
+        raise Exception("unsupported bytecode %s" % inst)
 
     def enter_new_block(self, oldblock):
         '''Stuff to do when entering a new block.
@@ -321,8 +321,6 @@ class SymbolicExecution(object):
     def visit_LOAD_FAST(self, inst):
         name = self.varnames[inst.arg]
         defn = self.curblock.get_last_def(name)
-#        if defs[-1].value.kind == 'Undef':
-#            raise TranslateError(inst, 'variable %s is not defined' % name)
         self.push(defn)
 
     def visit_CALL_FUNCTION(self, inst):
@@ -343,7 +341,7 @@ class SymbolicExecution(object):
 
         if func.value.kind != 'Global':
             msg = "can only call global functions"
-            raise TranslateError(inst, msg)
+            raise ValueError(msg)
 
         funcname = func.value.args[0]
 
@@ -352,10 +350,10 @@ class SymbolicExecution(object):
         if funcobj in [range, xrange]:
             if kws:
                 msg = "range/xrange do not accept keywords"
-                raise TranslateError(inst, msg)
+                raise ValueError(msg)
             if len(args) not in [1, 2, 3]:
                 msg = "invalid # of args to range/xrange"
-                raise TranslateError(inst, msg)
+                raise TypeError(msg)
             self.push(Range(args))
         else:
             expr = Expr('Call', inst, Call(func=funcname, args=args, kws=kws))
@@ -365,19 +363,19 @@ class SymbolicExecution(object):
         obj = self.pop()
         if not isinstance(obj, Range):
             msg = "can only get iterator to range/xrange"
-            raise TranslateError(inst, msg)
+            raise TypeError(msg)
         self.push(obj)
 
     def visit_FOR_ITER(self, inst):
         iter = self.pop()
         if not isinstance(iter, Range):
             msg = "for loop must loop over range/xrange"
-            raise TranslateError(inst, msg)
+            raise Exception(msg)
 
         storefast = self.peek(inst.next)
 
         if storefast.opname != 'STORE_FAST':
-            raise TranslateError(storefast, 'unexpected for loop pattern')
+            raise Exception('unexpected for loop pattern')
         itername = self.varnames[storefast.arg]
 
         step = iter.step or self.insert(Expr('Const', inst, Const(value=1)))
@@ -479,7 +477,7 @@ class SymbolicExecution(object):
         else:
             msg = ('can only get attribute from globals, '
                    'complex numbers or arrays')
-            raise TranslateError(inst, msg)
+            raise TypeError(msg)
 
 
     def visit_BINARY_SUBSCR(self, inst):
@@ -509,7 +507,7 @@ class SymbolicExecution(object):
     def visit_UNPACK_SEQUENCE(self, inst):
         tos = self.pop()
         if tos.value.kind != 'Call':
-            raise TranslateError(inst, "can only unpack from return value")
+            raise TypeError("can only unpack from return value")
         count = inst.arg
         for i in reversed(range(count)):
             ref = self.insert(Expr('Unpack', inst, Unpack(tos, i)))
@@ -538,6 +536,14 @@ class SymbolicExecution(object):
 
     def visit_BINARY_MODULO(self, inst):
         self.visit_generic_binary('%', inst)
+
+    def visit_BINARY_POWER(self, inst):
+        rhs = self.pop()
+        lhs = self.pop()
+
+        call = Expr('Call', inst, Call(func='math.pow', args=[lhs, rhs], kws=()))
+        ref = self.insert(call)
+        self.push(ref)
 
     def visit_BINARY_AND(self, inst):
         self.visit_generic_binary('&', inst)
@@ -571,6 +577,18 @@ class SymbolicExecution(object):
 
     def visit_INPLACE_FLOOR_DIVIDE(self, inst):
         self.visit_generic_inplace('//', inst)
+
+    def visit_INPLACE_POWER(self, inst):
+        self.visit_generic_inplace('**', inst)
+
+    def visit_INPLACE_AND(self, inst):
+        self.visit_generic_inplace('&', inst)
+
+    def visit_INPLACE_OR(self, inst):
+        self.visit_generic_inplace('|', inst)
+
+    def visit_INPLACE_XOR(self, inst):
+        self.visit_generic_inplace('^', inst)
 
     def visit_generic_unary(self, op, inst):
         tos = self.pop()

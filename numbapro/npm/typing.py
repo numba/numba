@@ -316,65 +316,66 @@ class Infer(object):
             blk = self.blocks[blknum]
             values = []
             for value in blk.body:
-                if value.kind == 'Phi':
-                    # pickup the type from the previously inferred set
-                    for ib, iv in value.args.incomings:
-                        if ib in processed_blocks:
-                            possibles[value] = possibles[iv.value]
-                            break
-                elif value.ref.uses:
-                    # only process the values that are used.
-                    depset = set([value])
-                    clist = conditions[value]
-                    for cond in clist:
-                        depset |= set(cond.deps)
-
-                    variables = list(depset)
-                    # earlier instruction has more heavier weight
-                    pool = []
-                    for v in variables:
-                        pool.append(possibles.get(v, self.possible_types))
-
-                    chosen = []
-                    for selected in itertools.product(*pool):
-                        localmap = dict(zip(variables, selected))
-                        penalty = 1
-                        for cond in clist:
-                            deps = [value] + list(cond.deps)
-                            args = [localmap[x] for x in deps]
-                            res = cond(*args)
-                            if res and isinstance(res, int):
-                                penalty += res
-                            else:
+                with errors.error_context(value.lineno):
+                    if value.kind == 'Phi':
+                        # pickup the type from the previously inferred set
+                        for ib, iv in value.args.incomings:
+                            if ib in processed_blocks:
+                                possibles[value] = possibles[iv.value]
                                 break
+                    elif value.ref.uses:
+                        # only process the values that are used.
+                        depset = set([value])
+                        clist = conditions[value]
+                        for cond in clist:
+                            depset |= set(cond.deps)
+
+                        variables = list(depset)
+                        # earlier instruction has more heavier weight
+                        pool = []
+                        for v in variables:
+                            pool.append(possibles.get(v, self.possible_types))
+
+                        chosen = []
+                        for selected in itertools.product(*pool):
+                            localmap = dict(zip(variables, selected))
+                            penalty = 1
+                            for cond in clist:
+                                deps = [value] + list(cond.deps)
+                                args = [localmap[x] for x in deps]
+                                res = cond(*args)
+                                if res and isinstance(res, int):
+                                    penalty += res
+                                else:
+                                    break
+                            else:
+                                if penalty:
+                                    chosen.append((penalty, localmap))
+
+                        chosen_sorted = sorted(chosen)
+                        best_score = chosen_sorted[0][0]
+                        take_filter = lambda x: x[0] == best_score
+                        filterout = itertools.takewhile(take_filter, chosen_sorted)
+                        bests = [x for _, x in filterout]
+
+                        if len(bests) > 1:
+                            # find the most generic solution
+                            temp = defaultdict(set)
+                            for b in bests:
+                                for v, t in b.iteritems():
+                                    temp[v].add(t)
+                            soln = {}
+                            for v, ts in temp.iteritems():
+                                soln[v] = coerce(*ts)
+
+                        elif len(bests) == 1:
+                            soln = bests[0]
                         else:
-                            if penalty:
-                                chosen.append((penalty, localmap))
-
-                    chosen_sorted = sorted(chosen)
-                    best_score = chosen_sorted[0][0]
-                    take_filter = lambda x: x[0] == best_score
-                    filterout = itertools.takewhile(take_filter, chosen_sorted)
-                    bests = [x for _, x in filterout]
-
-                    if len(bests) > 1:
-                        # find the most generic solution
-                        temp = defaultdict(set)
-                        for b in bests:
-                            for v, t in b.iteritems():
-                                temp[v].add(t)
-                        soln = {}
-                        for v, ts in temp.iteritems():
-                            soln[v] = coerce(*ts)
-
-                    elif len(bests) == 1:
-                        soln = bests[0]
-                    else:
-                        msg = ("cannot infer value/operation not supported on "
-                               "input types")
-                        raise TypeInferError(value, msg)
-                    for k, v in soln.iteritems():
-                        possibles[k] = frozenset([v])
+                            msg = ("cannot infer value/operation not supported on "
+                                   "input types")
+                            raise TypeInferError(value, msg)
+                        for k, v in soln.iteritems():
+                            possibles[k] = frozenset([v])
             processed_blocks.add(blknum)
 
         # ensure we have only one solution for each value
@@ -531,7 +532,7 @@ class Infer(object):
             self.rules[rhs].add(Restrict(int_set))
 
         else:
-            assert value.kind in '+-*%'
+            assert value.kind in ['+', '-', '*', '%']
             
             def rule(value, lhs, rhs):
                 return cast_penalty(coerce(lhs, rhs), value)
